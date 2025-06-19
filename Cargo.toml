@@ -1,0 +1,40 @@
+[package]
+name = "stree"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
+repository = "https://github.com/yourusername/smart-tree"
+license = "MIT"
+readme = "README.md"
+keywords = ["tree", "directory", "visualization", "ai", "cli"]
+categories = ["command-line-utilities", "filesystem"]
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+anyhow = "1.0"
+walkdir = "2.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+csv = "1.3"
+chrono = "0.4"
+flate2 = "1.0"
+colored = "2.1"
+globset = "0.4"
+regex = "1.10"
+humansize = "2.1"
+rayon = "1.10"
+indicatif = "0.17"
+hex = "0.4"
+atty = "0.2"
+
+[dev-dependencies]
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3
