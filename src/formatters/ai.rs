@@ -1,6 +1,8 @@
 use super::{Formatter, hex::HexFormatter, PathDisplayMode};
 use crate::scanner::{FileNode, TreeStats};
+use crate::context::detect_project_context;
 use anyhow::Result;
+use sha2::{Sha256, Digest};
 use std::io::Write;
 use std::path::Path;
 
@@ -9,12 +11,31 @@ pub struct AiFormatter {
 }
 
 impl AiFormatter {
-    pub fn new(no_emoji: bool, path_mode: PathDisplayMode) -> Self {
+    pub fn new(no_emoji: bool, _path_mode: PathDisplayMode) -> Self {
         Self {
             // AI format should always use PathDisplayMode::Off for maximum compactness
             // unless explicitly requested otherwise
             hex_formatter: HexFormatter::new(false, no_emoji, true, PathDisplayMode::Off),
         }
+    }
+    
+    /// Calculate a SHA256 hash of the tree structure for consistency verification
+    fn calculate_tree_hash(&self, nodes: &[FileNode]) -> String {
+        let mut hasher = Sha256::new();
+        
+        // Hash each node's key properties in a deterministic way
+        for node in nodes {
+            // Hash: depth, name, type (dir/file), size, permissions
+            hasher.update(node.depth.to_le_bytes());
+            hasher.update(node.path.file_name().unwrap_or_default().to_string_lossy().as_bytes());
+            hasher.update(&[if node.is_dir { 1 } else { 0 }]);
+            hasher.update(node.size.to_le_bytes());
+            hasher.update(node.permissions.to_le_bytes());
+        }
+        
+        // Return first 16 chars of hex for brevity
+        let result = hasher.finalize();
+        hex::encode(&result[..8])
     }
 }
 
@@ -28,6 +49,15 @@ impl Formatter for AiFormatter {
     ) -> Result<()> {
         // First print the hex tree header
         writeln!(writer, "TREE_HEX_V1:")?;
+        
+        // Optionally add project context if detected
+        if let Some(context) = detect_project_context(root_path) {
+            writeln!(writer, "CONTEXT: {}", context)?;
+        }
+        
+        // Calculate SHA256 hash of the tree structure
+        let tree_hash = self.calculate_tree_hash(nodes);
+        writeln!(writer, "HASH: {}", tree_hash)?;
         
         // Use hex formatter for the tree
         self.hex_formatter.format(writer, nodes, stats, root_path)?;

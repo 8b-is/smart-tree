@@ -19,6 +19,9 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 ### AI Optimization
 - **Compact Hex Format**: Fixed-width fields for easy parsing
 - **AI Mode**: Combines hex tree with statistics for optimal token usage
+- **Project Context Detection**: Automatically detects and includes project type/description
+- **SHA256 Hash**: Provides consistency verification for caching and change detection
+- **AI JSON Mode**: Optional JSON-wrapped output for programmatic consumption (--ai-json)
 - **Compression**: ~10x reduction in output size
 - **No Wasted Tokens**: Every byte counts for AI consumption
 
@@ -75,6 +78,7 @@ stree -z                       # Compress output
 # AI usage
 AI_TOOLS=1 stree               # Auto AI mode + compression
 stree -m ai -z                 # Manual AI mode + compression
+stree -m ai --ai-json          # AI mode with JSON wrapper
 ```
 
 ## 🏗️ Architecture
@@ -121,6 +125,8 @@ src/
 ### AI Mode (Optimal for LLMs)
 ```
 TREE_HEX_V1:
+CONTEXT: Rust: my-project - A blazingly fast web server
+HASH: 3d9a2f1cae6af9a5
 0 1fd 03e8 03e8 00000924 68538d0d d my-project
 1 1b4 03e8 03e8 000004b0 68538f4c f Cargo.toml
 ...
@@ -131,6 +137,33 @@ TYPES: rs:35 toml:3 md:2 txt:5
 LARGE: main.rs:15e0 lib.rs:c80 README.md:960
 DATES: 68536122-6853981a
 END_AI
+```
+
+### AI JSON Mode (--ai-json flag)
+```json
+{
+  "version": "AI_JSON_V1",
+  "context": "Rust: my-project - A blazingly fast web server",
+  "hash": "3d9a2f1cae6af9a5",
+  "hex_tree": [
+    "0 1fd 03e8 03e8 00000924 68538d0d d my-project",
+    "1 1b4 03e8 03e8 000004b0 68538f4c f Cargo.toml"
+  ],
+  "statistics": {
+    "files": 45,
+    "directories": 12,
+    "total_size": 2358272,
+    "total_size_mb": "2.3",
+    "file_types": [
+      {"extension": "rs", "count": 35},
+      {"extension": "toml", "count": 3}
+    ],
+    "largest_files": [
+      {"name": "main.rs", "size": 5600}
+    ],
+    "date_range": "68536122-6853981a"
+  }
+}
 ```
 
 ### Stats Mode (Hex values for counts and sizes)
@@ -223,6 +256,9 @@ All core features are now implemented:
 - ✅ JSON output with full metadata
 - ✅ CSV/TSV export formats
 - ✅ AI-optimized mode with compression
+- ✅ Project context auto-detection (Cargo.toml, package.json, etc.)
+- ✅ SHA256 hash for consistency verification
+- ✅ AI JSON mode with --ai-json flag
 - ✅ Statistics mode with hex values
 - ✅ File filtering (type, size, date)
 - ✅ Pattern matching with --find

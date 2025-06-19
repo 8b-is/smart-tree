@@ -11,8 +11,9 @@ use std::time::SystemTime;
 
 use stree::{
     formatters::{
-        ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, hex::HexFormatter,
-        json::JsonFormatter, stats::StatsFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode,
+        ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter, 
+        hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
+        Formatter, PathDisplayMode,
     },
     parse_size, Scanner, ScannerConfig,
 };
@@ -96,6 +97,10 @@ struct Args {
     /// When to use colors
     #[arg(long, value_enum, default_value = "auto")]
     color: ColorMode,
+
+    /// Embed AI output in JSON structure (only applies to AI mode)
+    #[arg(long)]
+    ai_json: bool,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -230,7 +235,13 @@ fn main() -> Result<()> {
         },
         OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, args.show_ignored, path_display_mode)),
         OutputMode::Json => Box::new(JsonFormatter::new(args.compact)),
-        OutputMode::Ai => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
+        OutputMode::Ai => {
+            if args.ai_json {
+                Box::new(AiJsonFormatter::new(args.no_emoji, path_display_mode))
+            } else {
+                Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
+            }
+        },
         OutputMode::Stats => Box::new(StatsFormatter::new()),
         OutputMode::Csv => Box::new(CsvFormatter::new()),
         OutputMode::Tsv => Box::new(TsvFormatter::new()),

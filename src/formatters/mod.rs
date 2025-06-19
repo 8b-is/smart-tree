@@ -2,6 +2,7 @@ pub mod hex;
 pub mod classic;
 pub mod json;
 pub mod ai;
+pub mod ai_json;
 pub mod stats;
 pub mod csv;
 pub mod tsv;
