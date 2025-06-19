@@ -6,6 +6,7 @@ pub mod ai_json;
 pub mod stats;
 pub mod csv;
 pub mod tsv;
+pub mod digest;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;

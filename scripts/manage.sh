@@ -277,6 +277,7 @@ ${CYAN}Output modes:${NC}
   $BINARY_NAME -m hex                   # Hexadecimal format (AI-friendly)
   $BINARY_NAME -m json                  # JSON output
   $BINARY_NAME -m ai                    # AI-optimized format
+  $BINARY_NAME -m digest                # Super compact digest (hash + stats)
   $BINARY_NAME -m stats                 # Statistics only
   
 ${CYAN}Filtering:${NC}
@@ -292,6 +293,7 @@ ${CYAN}Options:${NC}
   
 ${CYAN}AI usage:${NC}
   AI_TOOLS=1 $BINARY_NAME               # Auto AI mode + compression
+  $BINARY_NAME -m digest                # Quick digest for AI pre-check
   $BINARY_NAME -m ai -z | base64 -d    # Decode compressed output
 EOF
 }

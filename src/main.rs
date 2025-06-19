@@ -12,8 +12,8 @@ use std::time::SystemTime;
 use stree::{
     formatters::{
         ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter, 
-        hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
-        Formatter, PathDisplayMode,
+        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter, 
+        tsv::TsvFormatter, Formatter, PathDisplayMode,
     },
     parse_size, Scanner, ScannerConfig,
 };
@@ -139,6 +139,8 @@ enum OutputMode {
     Csv,
     /// TSV format
     Tsv,
+    /// Super compact digest format (hash + minimal stats)
+    Digest,
 }
 
 fn parse_date(date_str: &str) -> Result<SystemTime> {
@@ -161,6 +163,7 @@ fn main() -> Result<()> {
             "stats" => Some(OutputMode::Stats),
             "csv" => Some(OutputMode::Csv),
             "tsv" => Some(OutputMode::Tsv),
+            "digest" => Some(OutputMode::Digest),
             _ => None,
         });
 
@@ -245,6 +248,7 @@ fn main() -> Result<()> {
         OutputMode::Stats => Box::new(StatsFormatter::new()),
         OutputMode::Csv => Box::new(CsvFormatter::new()),
         OutputMode::Tsv => Box::new(TsvFormatter::new()),
+        OutputMode::Digest => Box::new(DigestFormatter::new()),
     };
 
     // Format output

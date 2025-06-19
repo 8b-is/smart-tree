@@ -7,7 +7,7 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 ## 🚀 Features
 
 ### Core Features
-- **Multiple Output Formats**: Classic tree, hex, JSON, CSV, TSV, and AI-optimized formats
+- **Multiple Output Formats**: Classic tree, hex, JSON, CSV, TSV, digest, and AI-optimized formats
 - **Intelligent Filtering**: By file type, size, date, with automatic `.gitignore` respect
 - **Permission Handling**: Shows inaccessible directories with `*` indicator
 - **Built-in Search**: `--find` for quick file location during traversal
@@ -19,6 +19,7 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 ### AI Optimization
 - **Compact Hex Format**: Fixed-width fields for easy parsing
 - **AI Mode**: Combines hex tree with statistics for optimal token usage
+- **Digest Mode**: Ultra-compact single-line summary (hash + stats) for AI pre-checks
 - **Project Context Detection**: Automatically detects and includes project type/description
 - **SHA256 Hash**: Provides consistency verification for caching and change detection
 - **AI JSON Mode**: Optional JSON-wrapped output for programmatic consumption (--ai-json)
@@ -58,6 +59,7 @@ stree /path/to/directory       # Specific directory
 stree -m hex                   # Hex format with file metadata
 stree -m json                  # JSON output
 stree -m ai                    # AI-optimized format
+stree -m digest                # Ultra-compact digest (one line)
 stree -m stats                 # Statistics only
 stree -m csv                   # CSV format
 stree -m tsv                   # TSV format
@@ -79,6 +81,10 @@ stree -z                       # Compress output
 AI_TOOLS=1 stree               # Auto AI mode + compression
 stree -m ai -z                 # Manual AI mode + compression
 stree -m ai --ai-json          # AI mode with JSON wrapper
+stree -m digest                # Quick digest for AI pre-check
+
+# Digest mode - perfect for AI to quickly check directories
+stree -m digest /large/project # Returns: HASH: 9b3b00cbcc1e8503 F:1623 D:89 S:ac39e7 TYPES: js:523 py:412...
 ```
 
 ## 🏗️ Architecture
@@ -93,6 +99,7 @@ src/
 │   ├── hex.rs
 │   ├── json.rs
 │   ├── ai.rs
+│   ├── digest.rs
 │   └── stats.rs
 ├── compression.rs    # Zlib compression
 └── utils.rs          # Helper functions
@@ -137,6 +144,11 @@ TYPES: rs:35 toml:3 md:2 txt:5
 LARGE: main.rs:15e0 lib.rs:c80 README.md:960
 DATES: 68536122-6853981a
 END_AI
+```
+
+### Digest Mode (Ultra-compact for AI pre-checks)
+```
+HASH: 9b3b00cbcc1e8503 F:45 D:12 S:23fc00 TYPES: rs:35 toml:3 md:2 txt:5 json:1
 ```
 
 ### AI JSON Mode (--ai-json flag)
