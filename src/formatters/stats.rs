@@ -25,11 +25,12 @@ impl Formatter for StatsFormatter {
         writeln!(writer, "{}", "=".repeat(60))?;
         writeln!(writer, "Directory Statistics for: {}", root_path.display())?;
         writeln!(writer, "{}", "=".repeat(60))?;
-        writeln!(writer, "Total Files: {}", stats.total_files)?;
-        writeln!(writer, "Total Directories: {}", stats.total_dirs)?;
+        writeln!(writer, "Total Files: {} ({:x} hex)", stats.total_files, stats.total_files)?;
+        writeln!(writer, "Total Directories: {} ({:x} hex)", stats.total_dirs, stats.total_dirs)?;
         writeln!(
             writer,
-            "Total Size: {} bytes ({})",
+            "Total Size: {} bytes ({:x} hex) ({})",
+            stats.total_size,
             stats.total_size,
             format_size(stats.total_size, BINARY)
         )?;
@@ -54,8 +55,10 @@ impl Formatter for StatsFormatter {
                 let rel_path = path.strip_prefix(root_path).unwrap_or(path);
                 writeln!(
                     writer,
-                    "  {:>12} bytes  {}",
+                    "  {:>12} bytes ({:>10x} hex) {:>8}  {}",
                     size,
+                    size,
+                    format_size(*size, BINARY),
                     rel_path.display()
                 )?;
             }

@@ -10,6 +10,13 @@ use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
 use std::io::Write;
 
+#[derive(Debug, Clone, Copy)]
+pub enum PathDisplayMode {
+    Off,
+    Relative,
+    Full,
+}
+
 pub trait Formatter {
     fn format(
         &self,

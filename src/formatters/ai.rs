@@ -1,4 +1,4 @@
-use super::{Formatter, hex::HexFormatter};
+use super::{Formatter, hex::HexFormatter, PathDisplayMode};
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
 use std::io::Write;
@@ -9,9 +9,11 @@ pub struct AiFormatter {
 }
 
 impl AiFormatter {
-    pub fn new(no_emoji: bool) -> Self {
+    pub fn new(no_emoji: bool, path_mode: PathDisplayMode) -> Self {
         Self {
-            hex_formatter: HexFormatter::new(false, no_emoji, true),
+            // AI format should always use PathDisplayMode::Off for maximum compactness
+            // unless explicitly requested otherwise
+            hex_formatter: HexFormatter::new(false, no_emoji, true, PathDisplayMode::Off),
         }
     }
 }
@@ -30,18 +32,18 @@ impl Formatter for AiFormatter {
         // Use hex formatter for the tree
         self.hex_formatter.format(writer, nodes, stats, root_path)?;
         
-        // Then print compact statistics
+        // Then print compact statistics - all in hex for consistency
         writeln!(writer, "\nSTATS:")?;
         writeln!(
             writer,
-            "F:{} D:{} S:{:x} ({:.1}MB)",
+            "F:{:x} D:{:x} S:{:x} ({:.1}MB)",
             stats.total_files,
             stats.total_dirs,
             stats.total_size,
             stats.total_size as f64 / (1024.0 * 1024.0)
         )?;
         
-        // File type summary (top 10)
+        // File type summary (top 10) - counts in hex
         if !stats.file_types.is_empty() {
             let mut types: Vec<_> = stats.file_types.iter().collect();
             types.sort_by(|a, b| b.1.cmp(a.1));
@@ -49,7 +51,7 @@ impl Formatter for AiFormatter {
             let types_str: Vec<String> = types
                 .iter()
                 .take(10)
-                .map(|(ext, count)| format!("{}:{}", ext, count))
+                .map(|(ext, count)| format!("{}:{:x}", ext, count))
                 .collect();
             
             writeln!(writer, "TYPES: {}", types_str.join(" "))?;

@@ -1,4 +1,4 @@
-use super::Formatter;
+use super::{Formatter, PathDisplayMode};
 use crate::scanner::{FileNode, FileType, TreeStats};
 use anyhow::Result;
 use std::io::Write;
@@ -8,14 +8,16 @@ pub struct HexFormatter {
     pub use_color: bool,
     pub no_emoji: bool,
     pub show_ignored: bool,
+    pub path_mode: PathDisplayMode,
 }
 
 impl HexFormatter {
-    pub fn new(use_color: bool, no_emoji: bool, show_ignored: bool) -> Self {
+    pub fn new(use_color: bool, no_emoji: bool, show_ignored: bool, path_mode: PathDisplayMode) -> Self {
         Self {
             use_color,
             no_emoji,
             show_ignored,
+            path_mode,
         }
     }
 
@@ -59,23 +61,36 @@ impl HexFormatter {
         
         let emoji = self.get_file_emoji(node.file_type);
         
-        // Get relative path or just the name
-        let name = if node.path == root_path {
-            node.path.file_name()
-                .unwrap_or(node.path.as_os_str())
-                .to_string_lossy()
-                .to_string()
-        } else if let Ok(rel_path) = node.path.strip_prefix(root_path) {
-            rel_path.to_string_lossy().to_string()
-        } else {
-            node.path.file_name()
-                .unwrap_or(node.path.as_os_str())
-                .to_string_lossy()
-                .to_string()
+        // Get name based on path mode
+        let name = match self.path_mode {
+            PathDisplayMode::Off => {
+                node.path.file_name()
+                    .unwrap_or(node.path.as_os_str())
+                    .to_string_lossy()
+                    .to_string()
+            },
+            PathDisplayMode::Relative => {
+                if node.path == root_path {
+                    node.path.file_name()
+                        .unwrap_or(node.path.as_os_str())
+                        .to_string_lossy()
+                        .to_string()
+                } else {
+                    node.path.strip_prefix(root_path)
+                        .unwrap_or(&node.path)
+                        .to_string_lossy()
+                        .to_string()
+                }
+            },
+            PathDisplayMode::Full => {
+                node.path.display().to_string()
+            }
         };
 
-        // Add brackets for permission denied
+        // Add brackets for permission denied or ignored
         let display_name = if node.permission_denied {
+            format!("[{}]", name)
+        } else if node.is_ignored {
             format!("[{}]", name)
         } else {
             name

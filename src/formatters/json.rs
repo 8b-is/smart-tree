@@ -1,7 +1,6 @@
 use super::Formatter;
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
-use chrono::{DateTime, Local};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Write;
@@ -34,9 +33,13 @@ impl JsonFormatter {
             children_map: &HashMap<PathBuf, Vec<&FileNode>>,
             root_path: &Path,
         ) -> Value {
+            let name = node.path.file_name()
+                .unwrap_or(node.path.as_os_str())
+                .to_string_lossy()
+                .to_string();
+            
             let mut obj = json!({
-                "name": node.path.file_name().unwrap_or(node.path.as_os_str()).to_string_lossy(),
-                "path": node.path.strip_prefix(root_path).unwrap_or(&node.path).to_string_lossy(),
+                "name": name,
                 "type": match node.file_type {
                     crate::scanner::FileType::Directory => "directory",
                     crate::scanner::FileType::RegularFile => "file",
@@ -47,17 +50,31 @@ impl JsonFormatter {
                     crate::scanner::FileType::BlockDevice => "block_device",
                     crate::scanner::FileType::CharDevice => "char_device",
                 },
-                "size": node.size,
-                "permissions": format!("{:o}", node.permissions),
-                "uid": node.uid,
-                "gid": node.gid,
-                "modified": DateTime::<Local>::from(node.modified).to_rfc3339(),
             });
             
+            // Only add size for files, not directories
+            if !node.is_dir {
+                obj["size"] = json!(node.size);
+            }
+            
+            // Add flags only if they're true
             if node.permission_denied {
                 obj["permission_denied"] = json!(true);
             }
             
+            if node.is_ignored {
+                obj["ignored"] = json!(true);
+            }
+            
+            if node.is_hidden {
+                obj["hidden"] = json!(true);
+            }
+            
+            if node.is_symlink {
+                obj["symlink"] = json!(true);
+            }
+            
+            // Add children for directories
             if let Some(children) = children_map.get(&node.path) {
                 let mut sorted_children = children.to_vec();
                 sorted_children.sort_by(|a, b| {

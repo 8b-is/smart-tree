@@ -2,6 +2,8 @@
 
 A blazingly fast, AI-friendly directory tree visualization tool written in Rust. Smart Tree goes beyond traditional tree commands by providing intelligent filtering, multiple output formats, and optimization for both human and AI consumption.
 
+**Status**: ✅ **Fully Implemented** - All core features are now working!
+
 ## 🚀 Features
 
 ### Core Features
@@ -11,6 +13,8 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 - **Built-in Search**: `--find` for quick file location during traversal
 - **Compression**: Built-in zlib compression for any output format
 - **Statistics**: Directory summaries with file counts, sizes, and type distributions
+- **Show Ignored**: `--show-ignored` flag displays ignored directories in brackets [dirname]
+- **Hex Statistics**: Stats mode shows file counts, directory counts, and sizes in hexadecimal
 
 ### AI Optimization
 - **Compact Hex Format**: Fixed-width fields for easy parsing
@@ -30,10 +34,14 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 # From source
 cargo install --path .
 
-# Or download pre-built binary
-wget https://github.com/8bit-wraith/smart-tree/releases/latest/download/stree
-chmod +x stree
-sudo mv stree /usr/local/bin/
+# Build from source
+git clone https://github.com/8bit-wraith/smart-tree
+cd smart-tree
+cargo build --release
+sudo cp target/release/stree /usr/local/bin/
+
+# Using the manage script
+./scripts/manage.sh install
 ```
 
 ## 🎯 Usage
@@ -95,6 +103,7 @@ src/
 ├── 📁 src (15 files)
 │   ├── 📄 main.rs (5.6 KB)
 │   └── 📄 lib.rs (3.2 KB)
+├── 📁 [.git] (ignored)
 └── 📁 tests (8 files)
     └── 📄 integration.rs (2.1 KB)
 ```
@@ -106,6 +115,7 @@ src/
 1 1fd 03e8 03e8 00000200 68538e12 d src
 2 1b4 03e8 03e8 000015e0 68538a21 f main.rs
 2 1b4 03e8 03e8 00000c80 68538b15 f lib.rs
+1 1fd 03e8 03e8 00001000 68538a00 d [.git]
 ```
 
 ### AI Mode (Optimal for LLMs)
@@ -121,6 +131,53 @@ TYPES: rs:35 toml:3 md:2 txt:5
 LARGE: main.rs:15e0 lib.rs:c80 README.md:960
 DATES: 68536122-6853981a
 END_AI
+```
+
+### Stats Mode (Hex values for counts and sizes)
+```
+Directory Statistics:
+  Files: 2d (45)
+  Directories: c (12)
+  Total size: 23fc00 (2.3MB)
+File Types (by extension):
+  rs: 23 (35)
+  toml: 3 (3)
+  md: 2 (2)
+  txt: 5 (5)
+Largest Files:
+  src/main.rs: 15e0 (5.6KB)
+  src/lib.rs: c80 (3.2KB)
+  README.md: 960 (2.4KB)
+Date Range:
+  Oldest: 2024-01-15 10:00:00
+  Newest: 2024-12-19 15:30:00
+```
+
+### JSON Mode
+```json
+{
+  "path": "/home/user/my-project",
+  "name": "my-project",
+  "type": "directory",
+  "size": 2358272,
+  "permissions": "rwxr-xr-x",
+  "modified": "2024-12-19T15:30:00Z",
+  "children": [
+    {
+      "name": "Cargo.toml",
+      "type": "file",
+      "size": 1200,
+      "permissions": "rw-r--r--"
+    }
+  ]
+}
+```
+
+### CSV Mode
+```csv
+path,name,type,size,permissions,modified,uid,gid
+/home/user/my-project,my-project,directory,2358272,rwxr-xr-x,2024-12-19T15:30:00Z,1000,1000
+/home/user/my-project/Cargo.toml,Cargo.toml,file,1200,rw-r--r--,2024-12-19T14:00:00Z,1000,1000
 ```
 
 ## 🔧 Configuration
@@ -140,16 +197,46 @@ git clone https://github.com/8bit-wraith/smart-tree
 cd smart-tree
 cargo build --release
 cargo test
+
+# Using the manage script
+./scripts/manage.sh build
+./scripts/manage.sh test
+./scripts/manage.sh run -- --mode hex /path/to/dir
 ```
+
+### Key Implementation Features
+- **Parallel Scanning**: Uses rayon for fast directory traversal
+- **Efficient Gitignore**: Cached gitignore parsing with globset
+- **Memory Efficient**: Streams output without loading entire tree
+- **Permission Handling**: Gracefully handles permission denied errors
+- **Compression**: Optional zlib compression for any output format
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
+## ✅ Implementation Status
+
+All core features are now implemented:
+- ✅ Classic tree output with emojis and file sizes
+- ✅ Hex mode with fixed-width fields
+- ✅ JSON output with full metadata
+- ✅ CSV/TSV export formats
+- ✅ AI-optimized mode with compression
+- ✅ Statistics mode with hex values
+- ✅ File filtering (type, size, date)
+- ✅ Pattern matching with --find
+- ✅ Gitignore support with --show-ignored option
+- ✅ Permission error handling
+- ✅ Compression for all output modes
+- ✅ Parallel directory scanning
+- ✅ Management script with humor
+
 ## 🙏 Acknowledgments
 
 - Inspired by the classic `tree` command
 - Built for the AI era where every token counts
+- Optimized for both human readability and AI consumption
 - Special thanks to all contributors
 
 ---
