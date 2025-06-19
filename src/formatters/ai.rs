@@ -1,4 +1,4 @@
-use super::{Formatter, hex::HexFormatter, PathDisplayMode};
+use super::{Formatter, StreamingFormatter, hex::HexFormatter, PathDisplayMode};
 use crate::scanner::{FileNode, TreeStats};
 use crate::context::detect_project_context;
 use anyhow::Result;
@@ -118,6 +118,89 @@ impl Formatter for AiFormatter {
         }
         
         writeln!(writer, "END_AI")?;
+        
+        Ok(())
+    }
+}
+
+impl StreamingFormatter for AiFormatter {
+    fn start_stream(&self, writer: &mut dyn Write, root_path: &Path) -> Result<()> {
+        // Print header
+        writeln!(writer, "TREE_HEX_V1:")?;
+        
+        // Optionally add project context if detected
+        if let Some(context) = detect_project_context(root_path) {
+            writeln!(writer, "CONTEXT: {}", context)?;
+        }
+        
+        // Note: We can't calculate hash in streaming mode
+        writeln!(writer, "HASH: STREAMING")?;
+        writer.flush()?;
+        Ok(())
+    }
+    
+    fn format_node(&self, writer: &mut dyn Write, node: &FileNode, root_path: &Path) -> Result<()> {
+        self.hex_formatter.format_node(writer, node, root_path)
+    }
+    
+    fn end_stream(&self, writer: &mut dyn Write, stats: &TreeStats, _root_path: &Path) -> Result<()> {
+        // Print statistics at the end
+        writeln!(writer, "\nSTATS:")?;
+        writeln!(
+            writer,
+            "F:{:x} D:{:x} S:{:x} ({:.1}MB)",
+            stats.total_files,
+            stats.total_dirs,
+            stats.total_size,
+            stats.total_size as f64 / (1024.0 * 1024.0)
+        )?;
+        
+        // File type summary (top 10) - counts in hex
+        if !stats.file_types.is_empty() {
+            let mut types: Vec<_> = stats.file_types.iter().collect();
+            types.sort_by(|a, b| b.1.cmp(a.1));
+            
+            let types_str: Vec<String> = types
+                .iter()
+                .take(10)
+                .map(|(ext, count)| format!("{}:{:x}", ext, count))
+                .collect();
+            
+            writeln!(writer, "TYPES: {}", types_str.join(" "))?;
+        }
+        
+        // Largest files (top 5)
+        if !stats.largest_files.is_empty() {
+            let large_str: Vec<String> = stats.largest_files
+                .iter()
+                .take(5)
+                .map(|(size, path)| {
+                    let name = path.file_name()
+                        .unwrap_or(path.as_os_str())
+                        .to_string_lossy();
+                    format!("{}:{:x}", name, size)
+                })
+                .collect();
+            
+            writeln!(writer, "LARGE: {}", large_str.join(" "))?;
+        }
+        
+        // Date range
+        if !stats.oldest_files.is_empty() && !stats.newest_files.is_empty() {
+            let oldest = stats.oldest_files[0].0
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let newest = stats.newest_files[0].0
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            
+            writeln!(writer, "DATES: {:x}-{:x}", oldest, newest)?;
+        }
+        
+        writeln!(writer, "END_AI")?;
+        writer.flush()?;
         
         Ok(())
     }

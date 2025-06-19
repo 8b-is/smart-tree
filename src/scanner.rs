@@ -5,7 +5,9 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 use std::time::SystemTime;
 use walkdir::{DirEntry, WalkDir};
 
@@ -29,6 +31,7 @@ pub struct FileNode {
     pub depth: usize,
     pub file_type: FileType,
     pub category: FileCategory,
+    pub search_matches: Option<Vec<usize>>, // Hex positions of search matches
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -148,6 +151,7 @@ pub struct ScannerConfig {
     pub newer_than: Option<SystemTime>,
     pub older_than: Option<SystemTime>,
     pub use_default_ignores: bool,
+    pub search_keyword: Option<String>,
 }
 
 // Default patterns to ignore - common directories that are usually not useful in tree output
@@ -443,6 +447,177 @@ impl Scanner {
         Ok(Some(builder.build()?))
     }
 
+    /// Stream nodes as they are discovered
+    pub fn scan_stream(&self, sender: mpsc::Sender<FileNode>) -> Result<TreeStats> {
+        let mut stats = TreeStats::default();
+        let mut ignored_dirs = std::collections::HashSet::new();
+        
+        let mut walker = WalkDir::new(&self.root)
+            .max_depth(self.config.max_depth)
+            .follow_links(self.config.follow_symlinks)
+            .into_iter();
+
+        // Process entries
+        while let Some(entry_result) = walker.next() {
+            match entry_result {
+                Ok(entry) => {
+                    let depth = entry.depth();
+                    let path = entry.path();
+                    
+                    // Check if this path should be ignored
+                    let is_ignored = self.should_ignore(path)?;
+                    
+                    if is_ignored {
+                        if self.config.show_ignored {
+                            // Process the entry to show it as ignored
+                            if let Some(mut node) = self.process_entry(&entry, depth)? {
+                                // Search in file contents if requested
+                                if !node.is_dir && self.should_search_file(&node) {
+                                    node.search_matches = self.search_in_file(&node.path);
+                                }
+                                
+                                // Send node immediately
+                                if sender.send(node.clone()).is_err() {
+                                    break; // Receiver dropped
+                                }
+                                
+                                if !node.permission_denied {
+                                    stats.update_file(&node);
+                                }
+                            }
+                            // If it's a directory, skip its contents
+                            if entry.file_type().is_dir() {
+                                ignored_dirs.insert(path.to_path_buf());
+                                walker.skip_current_dir();
+                            }
+                        } else {
+                            // Not showing ignored items
+                            if entry.file_type().is_dir() {
+                                walker.skip_current_dir();
+                            }
+                            continue;
+                        }
+                    } else {
+                        // Normal processing for non-ignored items
+                        if let Some(mut node) = self.process_entry(&entry, depth)? {
+                            // Search in file contents if requested
+                            if !node.is_dir && self.should_search_file(&node) {
+                                node.search_matches = self.search_in_file(&node.path);
+                            }
+                            
+                            // Apply filters before sending
+                            // Include files with search matches even if they don't match other filters
+                            let has_search_match = node.search_matches.as_ref().map(|m| !m.is_empty()).unwrap_or(false);
+                            if node.is_dir || has_search_match || self.should_include(&node) {
+                                if sender.send(node.clone()).is_err() {
+                                    break; // Receiver dropped
+                                }
+                                
+                                if !node.permission_denied {
+                                    stats.update_file(&node);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Handle permission denied gracefully
+                    if let Some(path) = e.path() {
+                        let depth = e.depth();
+                        let node = self.create_permission_denied_node(path, depth);
+                        if sender.send(node.clone()).is_err() {
+                            break; // Receiver dropped
+                        }
+                        stats.update_file(&node);
+                        // Skip the directory contents if permission denied
+                        walker.skip_current_dir();
+                    }
+                }
+            }
+        }
+
+        Ok(stats)
+    }
+
+    /// Check if we should search in this file
+    fn should_search_file(&self, node: &FileNode) -> bool {
+        if self.config.search_keyword.is_none() {
+            return false;
+        }
+        
+        // Only search in files matching the type filter if specified
+        if let Some(filter_ext) = &self.config.file_type_filter {
+            if let Some(ext) = node.path.extension() {
+                return ext.to_string_lossy() == *filter_ext;
+            }
+            return false;
+        }
+        
+        // Otherwise search in all text-like files
+        // Check by extension for common text files
+        if let Some(ext) = node.path.extension().and_then(|e| e.to_str()) {
+            match ext.to_lowercase().as_str() {
+                "txt" | "text" | "log" | "md" | "rst" | "tex" | "org" | "adoc" |
+                "ini" | "cfg" | "conf" | "config" | "properties" | "env" |
+                "csv" | "tsv" | "sql" | "graphql" | "proto" | "thrift" |
+                "vim" | "vimrc" | "bashrc" | "zshrc" | "gitconfig" | "editorconfig" => return true,
+                _ => {}
+            }
+        }
+        
+        // Check by category
+        matches!(node.category, 
+            FileCategory::Rust | FileCategory::Python | FileCategory::JavaScript |
+            FileCategory::TypeScript | FileCategory::Java | FileCategory::C |
+            FileCategory::Cpp | FileCategory::Go | FileCategory::Ruby | FileCategory::PHP |
+            FileCategory::Shell | FileCategory::Markdown | FileCategory::Html |
+            FileCategory::Css | FileCategory::Json | FileCategory::Yaml |
+            FileCategory::Xml | FileCategory::Toml | FileCategory::Makefile |
+            FileCategory::Dockerfile | FileCategory::GitConfig | FileCategory::Unknown
+        )
+    }
+
+    /// Search for keyword in file and return hex positions
+    fn search_in_file(&self, path: &Path) -> Option<Vec<usize>> {
+        let keyword = self.config.search_keyword.as_ref()?;
+        
+        // Try to open the file
+        let file = match fs::File::open(path) {
+            Ok(f) => f,
+            Err(_) => return None,
+        };
+        
+        let mut positions = Vec::new();
+        let reader = BufReader::new(file);
+        let mut byte_position = 0;
+        
+        // Search line by line for efficiency
+        for line in reader.lines() {
+            match line {
+                Ok(content) => {
+                    // Find all occurrences in this line
+                    for (idx, _) in content.match_indices(keyword) {
+                        positions.push(byte_position + idx);
+                    }
+                    // Update byte position (add line length + newline)
+                    byte_position += content.len() + 1;
+                }
+                Err(_) => break, // Stop on read error (e.g., binary file)
+            }
+            
+            // Limit search results to prevent memory issues
+            if positions.len() > 100 {
+                break;
+            }
+        }
+        
+        if positions.is_empty() {
+            None
+        } else {
+            Some(positions)
+        }
+    }
+
     /// Scan a directory and return all nodes with statistics
     pub fn scan(&self) -> Result<(Vec<FileNode>, TreeStats)> {
         let mut all_nodes = Vec::new();
@@ -483,7 +658,11 @@ impl Scanner {
                         }
                     } else {
                         // Normal processing for non-ignored items
-                        if let Some(node) = self.process_entry(&entry, depth)? {
+                        if let Some(mut node) = self.process_entry(&entry, depth)? {
+                            // Search in file contents if requested (for non-streaming mode)
+                            if !node.is_dir && self.should_search_file(&node) {
+                                node.search_matches = self.search_in_file(&node.path);
+                            }
                             all_nodes.push(node);
                         }
                     }
@@ -533,9 +712,10 @@ impl Scanner {
         let mut matching_files = Vec::new();
         let mut required_dirs = HashSet::new();
 
-        // Find all files that match the filters
+        // Find all files that match the filters or have search matches
         for node in &all_nodes {
-            if !node.is_dir && self.should_include(node) {
+            let has_search_match = node.search_matches.as_ref().map(|m| !m.is_empty()).unwrap_or(false);
+            if !node.is_dir && (has_search_match || self.should_include(node)) {
                 matching_files.push(node.clone());
                 stats.update_file(node);
 
@@ -625,6 +805,7 @@ impl Scanner {
             depth,
             file_type,
             category,
+            search_matches: None,
         }))
     }
 
@@ -671,6 +852,7 @@ impl Scanner {
             depth,
             file_type: FileType::Directory,
             category: FileCategory::Unknown,
+            search_matches: None,
         }
     }
 
@@ -894,6 +1076,7 @@ mod tests {
             newer_than: None,
             older_than: None,
             use_default_ignores: true,
+            search_keyword: None,
         };
         
         let scanner = Scanner::new(Path::new("."), config).unwrap();

@@ -28,3 +28,14 @@ pub trait Formatter {
         root_path: &std::path::Path,
     ) -> Result<()>;
 }
+
+pub trait StreamingFormatter {
+    /// Initialize the stream (e.g., write headers)
+    fn start_stream(&self, writer: &mut dyn Write, root_path: &std::path::Path) -> Result<()>;
+    
+    /// Format a single node as it arrives
+    fn format_node(&self, writer: &mut dyn Write, node: &FileNode, root_path: &std::path::Path) -> Result<()>;
+    
+    /// Finalize the stream (e.g., write stats, footers)
+    fn end_stream(&self, writer: &mut dyn Write, stats: &TreeStats, root_path: &std::path::Path) -> Result<()>;
+}

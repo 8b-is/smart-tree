@@ -1,4 +1,4 @@
-use super::{Formatter, PathDisplayMode};
+use super::{Formatter, StreamingFormatter, PathDisplayMode};
 use crate::scanner::{FileNode, FileType, TreeStats};
 use anyhow::Result;
 use std::io::Write;
@@ -95,6 +95,21 @@ impl HexFormatter {
         } else {
             name
         };
+        
+        // Add search matches if present
+        let display_name_with_search = if let Some(matches) = &node.search_matches {
+            if !matches.is_empty() {
+                let hex_positions: Vec<String> = matches.iter()
+                    .take(10) // Limit to first 10 matches
+                    .map(|pos| format!("{:x}", pos))
+                    .collect();
+                format!("{} [SEARCH:{:}]", display_name, hex_positions.join(","))
+            } else {
+                display_name
+            }
+        } else {
+            display_name
+        };
 
         if self.use_color {
             // ANSI color codes
@@ -112,12 +127,12 @@ impl HexFormatter {
                 MAGENTA, uid_hex, gid_hex, RESET,
                 GREEN, size_hex, RESET,
                 BLUE, time_hex, RESET,
-                emoji, display_name
+                emoji, display_name_with_search
             )
         } else {
             format!(
                 "{} {} {} {} {} {} {} {}",
-                depth_hex, perms_hex, uid_hex, gid_hex, size_hex, time_hex, emoji, display_name
+                depth_hex, perms_hex, uid_hex, gid_hex, size_hex, time_hex, emoji, display_name_with_search
             )
         }
     }
@@ -139,6 +154,24 @@ impl Formatter for HexFormatter {
             writeln!(writer, "{}", self.format_node(node, root_path))?;
         }
 
+        Ok(())
+    }
+}
+
+impl StreamingFormatter for HexFormatter {
+    fn start_stream(&self, _writer: &mut dyn Write, _root_path: &Path) -> Result<()> {
+        // No header needed for hex format
+        Ok(())
+    }
+    
+    fn format_node(&self, writer: &mut dyn Write, node: &FileNode, root_path: &Path) -> Result<()> {
+        writeln!(writer, "{}", self.format_node(node, root_path))?;
+        writer.flush()?; // Ensure immediate output
+        Ok(())
+    }
+    
+    fn end_stream(&self, _writer: &mut dyn Write, _stats: &TreeStats, _root_path: &Path) -> Result<()> {
+        // No footer needed for hex format
         Ok(())
     }
 }

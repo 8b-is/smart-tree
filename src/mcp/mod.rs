@@ -1,0 +1,268 @@
+//! MCP (Model Context Protocol) server implementation for Smart Tree
+//! 
+//! This module provides a JSON-RPC server that exposes Smart Tree's functionality
+//! through the Model Context Protocol, allowing AI assistants to analyze directories.
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::io::{self, BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+mod tools;
+mod resources;
+mod prompts;
+mod cache;
+
+use tools::*;
+use resources::*;
+use prompts::*;
+use cache::*;
+
+/// MCP server implementation
+pub struct McpServer {
+    context: Arc<McpContext>,
+}
+
+/// Shared context for MCP handlers
+#[derive(Clone)]
+pub struct McpContext {
+    /// Cache for analysis results
+    pub cache: Arc<AnalysisCache>,
+    /// Server configuration
+    pub config: Arc<McpConfig>,
+}
+
+/// MCP server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpConfig {
+    /// Enable caching
+    pub cache_enabled: bool,
+    /// Cache TTL in seconds
+    pub cache_ttl: u64,
+    /// Maximum cache size in bytes
+    pub max_cache_size: usize,
+    /// Allowed paths for security
+    pub allowed_paths: Vec<PathBuf>,
+    /// Blocked paths for security
+    pub blocked_paths: Vec<PathBuf>,
+}
+
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self {
+            cache_enabled: true,
+            cache_ttl: 300, // 5 minutes
+            max_cache_size: 100 * 1024 * 1024, // 100MB
+            allowed_paths: vec![],
+            blocked_paths: vec![
+                PathBuf::from("/etc"),
+                PathBuf::from("/sys"),
+                PathBuf::from("/proc"),
+            ],
+        }
+    }
+}
+
+/// JSON-RPC request structure
+#[derive(Debug, Deserialize)]
+struct JsonRpcRequest {
+    #[allow(dead_code)]
+    jsonrpc: String,
+    method: String,
+    params: Option<Value>,
+    id: Option<Value>,
+}
+
+/// JSON-RPC response structure
+#[derive(Debug, Serialize)]
+struct JsonRpcResponse {
+    jsonrpc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<JsonRpcError>,
+    id: Option<Value>,
+}
+
+/// JSON-RPC error structure
+#[derive(Debug, Serialize)]
+struct JsonRpcError {
+    code: i32,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<Value>,
+}
+
+impl McpServer {
+    /// Create a new MCP server
+    pub fn new(config: McpConfig) -> Self {
+        let context = Arc::new(McpContext {
+            cache: Arc::new(AnalysisCache::new(config.cache_ttl)),
+            config: Arc::new(config),
+        });
+
+        Self { context }
+    }
+
+    /// Run the MCP server on stdio
+    pub async fn run_stdio(&self) -> Result<()> {
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        let mut reader = BufReader::new(stdin);
+        let mut stdout = stdout.lock();
+
+        eprintln!("Smart Tree MCP server started");
+
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => break, // EOF
+                Ok(_) => {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
+                    }
+
+                    match self.handle_request(line).await {
+                        Ok(response) => {
+                            writeln!(stdout, "{}", response)?;
+                            stdout.flush()?;
+                        }
+                        Err(e) => {
+                            eprintln!("Error handling request: {}", e);
+                            let error_response = json!({
+                                "jsonrpc": "2.0",
+                                "error": {
+                                    "code": -32603,
+                                    "message": e.to_string()
+                                },
+                                "id": null
+                            });
+                            writeln!(stdout, "{}", error_response)?;
+                            stdout.flush()?;
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error reading input: {}", e);
+                    break;
+                }
+            }
+        }
+
+        eprintln!("Smart Tree MCP server stopped");
+        Ok(())
+    }
+
+    /// Handle a single JSON-RPC request
+    async fn handle_request(&self, request_str: &str) -> Result<String> {
+        // Parse JSON-RPC request
+        let request: JsonRpcRequest = serde_json::from_str(request_str)
+            .context("Failed to parse JSON-RPC request")?;
+
+        // Route the request
+        let result = match request.method.as_str() {
+            "initialize" => handle_initialize(request.params, self.context.clone()).await,
+            "tools/list" => handle_tools_list(request.params, self.context.clone()).await,
+            "tools/call" => handle_tools_call(request.params.unwrap_or(json!({})), self.context.clone()).await,
+            "resources/list" => handle_resources_list(request.params, self.context.clone()).await,
+            "resources/read" => handle_resources_read(request.params.unwrap_or(json!({})), self.context.clone()).await,
+            "prompts/list" => handle_prompts_list(request.params, self.context.clone()).await,
+            "prompts/get" => handle_prompts_get(request.params.unwrap_or(json!({})), self.context.clone()).await,
+            "notifications/cancelled" => handle_cancelled(request.params, self.context.clone()).await,
+            _ => Err(anyhow::anyhow!("Method not found: {}", request.method)),
+        };
+
+        // Build response
+        let response = match result {
+            Ok(result) => JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                result: Some(result),
+                error: None,
+                id: request.id,
+            },
+            Err(e) => JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                result: None,
+                error: Some(JsonRpcError {
+                    code: -32603,
+                    message: e.to_string(),
+                    data: None,
+                }),
+                id: request.id,
+            },
+        };
+
+        Ok(serde_json::to_string(&response)?)
+    }
+}
+
+// Handler implementations
+
+async fn handle_initialize(
+    _params: Option<Value>,
+    _ctx: Arc<McpContext>,
+) -> Result<Value> {
+    Ok(json!({
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+            "tools": {},
+            "resources": {},
+            "prompts": {}
+        },
+        "serverInfo": {
+            "name": "smart-tree",
+            "version": env!("CARGO_PKG_VERSION")
+        }
+    }))
+}
+
+async fn handle_cancelled(
+    _params: Option<Value>,
+    _ctx: Arc<McpContext>,
+) -> Result<Value> {
+    // TODO: Implement cancellation logic
+    Ok(json!({}))
+}
+
+/// Check if a path is allowed based on security configuration
+pub fn is_path_allowed(path: &Path, config: &McpConfig) -> bool {
+    // Check blocked paths first
+    for blocked in &config.blocked_paths {
+        if path.starts_with(blocked) {
+            return false;
+        }
+    }
+
+    // If allowed_paths is empty, allow all non-blocked paths
+    if config.allowed_paths.is_empty() {
+        return true;
+    }
+
+    // Otherwise, check if path is under an allowed path
+    for allowed in &config.allowed_paths {
+        if path.starts_with(allowed) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Load MCP configuration from file or use defaults
+pub fn load_config() -> Result<McpConfig> {
+    let config_path = dirs::home_dir()
+        .map(|d| d.join(".stree").join("mcp-config.toml"))
+        .unwrap_or_else(|| PathBuf::from(".stree/mcp-config.toml"));
+
+    if config_path.exists() {
+        let config_str = std::fs::read_to_string(&config_path)
+            .context("Failed to read MCP config file")?;
+        toml::from_str(&config_str)
+            .context("Failed to parse MCP config file")
+    } else {
+        Ok(McpConfig::default())
+    }
+}

@@ -97,22 +97,29 @@ command_exists() {
 # Build the project
 build() {
     local build_type="${1:-release}"
+    local features="${2:-}"
     print_header "Building $PROJECT_NAME in $build_type mode ${GEAR}"
     
     cd "$PROJECT_DIR"
     
+    local feature_flags=""
+    if [[ -n "$features" ]]; then
+        feature_flags="--features $features"
+        print_info "Building with features: $features"
+    fi
+    
     if [[ "$build_type" == "release" ]]; then
         print_info "Optimizing for maximum speed... ${ROCKET}"
         if [[ "$NON_INTERACTIVE" == "true" ]]; then
-            cargo build --release
+            cargo build --release $feature_flags
         else
-            cargo build --release &
+            cargo build --release $feature_flags &
             spinner $!
         fi
         print_success "Release build complete! Binary size: $(du -h target/release/$BINARY_NAME | cut -f1)"
     else
         print_info "Building debug version with all the debugging goodies..."
-        cargo build
+        cargo build $feature_flags
         print_success "Debug build complete!"
     fi
 }
@@ -264,6 +271,95 @@ completions() {
     print_info "For now, enjoy tab-completing the manage.sh commands!"
 }
 
+# MCP server functions
+mcp_build() {
+    print_header "Building $PROJECT_NAME with MCP support 🤖"
+    build release mcp
+}
+
+mcp_run() {
+    print_header "Running MCP server 🤖"
+    cd "$PROJECT_DIR"
+    
+    if [[ ! -f "target/release/$BINARY_NAME" ]] || ! ./target/release/$BINARY_NAME --help 2>&1 | grep -q "mcp"; then
+        print_warning "MCP features not found in binary. Building with MCP support..."
+        mcp_build
+    fi
+    
+    print_info "Starting MCP server on stdio..."
+    print_info "Press Ctrl+C to stop"
+    ./target/release/$BINARY_NAME --mcp
+}
+
+mcp_config() {
+    print_header "MCP Configuration 🤖"
+    cd "$PROJECT_DIR"
+    
+    if [[ ! -f "target/release/$BINARY_NAME" ]] || ! ./target/release/$BINARY_NAME --help 2>&1 | grep -q "mcp"; then
+        print_warning "Building with MCP support first..."
+        mcp_build
+    fi
+    
+    ./target/release/$BINARY_NAME --mcp-config
+}
+
+mcp_tools() {
+    print_header "MCP Tools Documentation 🤖"
+    cd "$PROJECT_DIR"
+    
+    if [[ ! -f "target/release/$BINARY_NAME" ]] || ! ./target/release/$BINARY_NAME --help 2>&1 | grep -q "mcp"; then
+        print_warning "Building with MCP support first..."
+        mcp_build
+    fi
+    
+    ./target/release/$BINARY_NAME --mcp-tools
+}
+
+# Demo streaming feature
+demo_stream() {
+    print_header "Demonstrating Streaming Mode ${ROCKET}"
+    cd "$PROJECT_DIR"
+    
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+    
+    print_info "Streaming the current project directory in hex format..."
+    print_info "Notice how output appears immediately as files are discovered!"
+    echo ""
+    ./target/release/$BINARY_NAME --stream -m hex . | head -20
+    echo "... (truncated for demo)"
+    
+    print_info "\nStreaming with AI format:"
+    ./target/release/$BINARY_NAME --stream -m ai . | head -25
+    echo "... (truncated for demo)"
+    
+    print_success "Streaming is perfect for large directories! ${SPARKLE}"
+}
+
+# Demo search feature
+demo_search() {
+    print_header "Demonstrating Search Feature 🔍"
+    cd "$PROJECT_DIR"
+    
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+    
+    print_info "Searching for 'Scanner' in the source code..."
+    ./target/release/$BINARY_NAME --search "Scanner" -m hex src | grep SEARCH || print_warning "No matches found"
+    
+    print_info "\nSearching for 'TODO' comments..."
+    ./target/release/$BINARY_NAME --search "TODO" -m hex . | grep SEARCH || print_info "Good news! No TODOs found!"
+    
+    print_info "\nSearch works great with streaming too:"
+    ./target/release/$BINARY_NAME --stream --search "fn" --type rs -m hex src | head -10
+    
+    print_success "Search helps you find content quickly! ${SPARKLE}"
+}
+
 # Show usage examples
 examples() {
     print_header "Usage Examples ${SPARKLE}"
@@ -291,10 +387,26 @@ ${CYAN}Options:${NC}
   $BINARY_NAME --depth 3                # Limit depth
   $BINARY_NAME -z                       # Compress output
   
+${CYAN}🆕 Streaming Mode:${NC}
+  $BINARY_NAME --stream                 # Stream output as files are found
+  $BINARY_NAME --stream -m hex /large   # Great for huge directories
+  $BINARY_NAME --stream -m ai           # Real-time AI format output
+  
+${CYAN}🆕 File Content Search:${NC}
+  $BINARY_NAME --search "TODO"          # Find TODO in all text files
+  $BINARY_NAME --type rs --search "fn"  # Search for "fn" in Rust files
+  $BINARY_NAME -m hex --search "error"  # Hex output with search positions
+  
 ${CYAN}AI usage:${NC}
   AI_TOOLS=1 $BINARY_NAME               # Auto AI mode + compression
   $BINARY_NAME -m digest                # Quick digest for AI pre-check
   $BINARY_NAME -m ai -z | base64 -d    # Decode compressed output
+  
+${CYAN}MCP (Model Context Protocol):${NC}
+  $0 mcp-build                          # Build with MCP support
+  $0 mcp-run                            # Run as MCP server
+  $0 mcp-config                         # Show Claude Desktop config
+  $0 mcp-tools                          # Show available MCP tools
 EOF
 }
 
@@ -306,7 +418,7 @@ ${CYAN}${TREE} Smart Tree Management Script ${TREE}${NC}
 ${YELLOW}Usage:${NC} $0 [command] [options]
 
 ${YELLOW}Commands:${NC}
-  ${GREEN}build${NC} [debug|release]  Build the project (default: release)
+  ${GREEN}build${NC} [debug|release] [features]  Build the project
   ${GREEN}run${NC} [args...]         Run stree with arguments
   ${GREEN}test${NC}                  Run tests, linting, and format check
   ${GREEN}format${NC}                Format code with rustfmt
@@ -317,7 +429,15 @@ ${YELLOW}Commands:${NC}
   ${GREEN}uninstall${NC} [dir]       Uninstall binary
   ${GREEN}completions${NC}           Setup shell completions
   ${GREEN}examples${NC}              Show usage examples
+  ${GREEN}demo-stream${NC}           Demo streaming feature
+  ${GREEN}demo-search${NC}           Demo search feature
   ${GREEN}help${NC}                  Show this help message
+
+${YELLOW}MCP Commands:${NC}
+  ${GREEN}mcp-build${NC}             Build with MCP support
+  ${GREEN}mcp-run${NC}               Run as MCP server
+  ${GREEN}mcp-config${NC}            Show Claude Desktop configuration
+  ${GREEN}mcp-tools${NC}             Show available MCP tools
 
 ${YELLOW}Environment Variables:${NC}
   ${PURPLE}NO_EMOJI=1${NC}           Disable emojis in output
@@ -325,9 +445,10 @@ ${YELLOW}Environment Variables:${NC}
 
 ${YELLOW}Examples:${NC}
   $0 build              # Build release version
+  $0 build release mcp  # Build with MCP support
   $0 run -- -m hex .    # Run with hex output on current dir
   $0 test               # Run all tests
-  $0 install            # Install to system
+  $0 mcp-run            # Start MCP server
 
 ${CYAN}Made with ${SPARKLE} and 🌳 by the Smart Tree team!${NC}
 EOF
@@ -377,6 +498,24 @@ main() {
             ;;
         examples|ex)
             examples
+            ;;
+        mcp-build)
+            mcp_build
+            ;;
+        mcp-run)
+            mcp_run
+            ;;
+        mcp-config)
+            mcp_config
+            ;;
+        mcp-tools)
+            mcp_tools
+            ;;
+        demo-stream)
+            demo_stream
+            ;;
+        demo-search)
+            demo_search
             ;;
         help|h|-h|--help)
             show_help
