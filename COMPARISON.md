@@ -27,6 +27,9 @@
 | **Permission indicators** | ❌ | ✅ |
 | **Parallel scanning** | ❌ | ✅ |
 | **Progress bars** | ❌ | ✅ |
+| **Content search** | ❌ | ✅ |
+| **Streaming output** | ❌ | ✅ |
+| **MCP server** | ❌ | ✅ |
 | **Single binary** | ❌ | ✅ |
 | **No dependencies** | ❌ | ✅ |
 

@@ -1,8 +1,26 @@
 # 🗺️ Smart Tree Roadmap
 
-## 🎉 Project Completed: 2025-06-19
+## 🎉 Project Status: Active Development
 
-All planned phases have been successfully implemented! Smart Tree is now a fully-featured, blazingly fast directory visualization tool that outperforms traditional tree commands while providing AI-friendly output formats.
+All originally planned phases have been successfully implemented! Smart Tree is now a fully-featured, blazingly fast directory visualization tool that outperforms traditional tree commands while providing AI-friendly output formats.
+
+## Recent Additions (Beyond Original Roadmap)
+
+### Phase 7: AI Integration & Advanced Features ✅
+- [x] **MCP (Model Context Protocol) Server**: Built-in server for AI assistant integration
+  - Tools for directory analysis, file finding, statistics, and digests
+  - Caching support for repeated queries
+  - Security configuration with allowed/blocked paths
+  - Direct integration with Claude Desktop
+- [x] **Content Search**: `--search` flag to find keywords within files
+  - Works with `--type` filter for targeted searches
+  - Efficient file content scanning
+- [x] **Streaming Mode**: `--stream` flag for real-time output on large directories
+  - Progressive output as directories are scanned
+  - Better user experience for massive file trees
+- [x] **AI JSON Wrapper**: `--ai-json` flag for structured AI output
+  - Embeds AI format in JSON structure
+  - Easier programmatic parsing
 
 ## Phase 1: Core Implementation (MVP) ✅
 - [x] Basic directory traversal with `walkdir`

@@ -11,10 +11,13 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 - **Intelligent Filtering**: By file type, size, date, with automatic `.gitignore` respect
 - **Permission Handling**: Shows inaccessible directories with `*` indicator
 - **Built-in Search**: `--find` for quick file location during traversal
+- **Content Search**: `--search` to find keywords within files (works with `--type` filter)
+- **Streaming Mode**: `--stream` for real-time output on large directories
 - **Compression**: Built-in zlib compression for any output format
 - **Statistics**: Directory summaries with file counts, sizes, and type distributions
 - **Show Ignored**: `--show-ignored` flag displays ignored directories in brackets [dirname]
 - **Hex Statistics**: Stats mode shows file counts, directory counts, and sizes in hexadecimal
+- **MCP Server**: Built-in Model Context Protocol server for AI assistant integration
 
 ### AI Optimization
 - **Compact Hex Format**: Fixed-width fields for easy parsing
@@ -76,12 +79,22 @@ stree --no-ignore              # Don't respect .gitignore
 stree --show-ignored           # Show ignored dirs in brackets
 stree --depth 3                # Limit depth
 stree -z                       # Compress output
+stree --stream                 # Stream output for large dirs
+
+# Content search
+stree --search "TODO"          # Find files containing "TODO"
+stree --search "TODO" --type rs # Search only in Rust files
 
 # AI usage
 AI_TOOLS=1 stree               # Auto AI mode + compression
 stree -m ai -z                 # Manual AI mode + compression
 stree -m ai --ai-json          # AI mode with JSON wrapper
 stree -m digest                # Quick digest for AI pre-check
+
+# MCP Server (Model Context Protocol)
+stree --mcp                    # Run as MCP server for AI assistants
+stree --mcp-tools              # List available MCP tools
+stree --mcp-config             # Show config for Claude Desktop
 
 # Digest mode - perfect for AI to quickly check directories
 stree -m digest /large/project # Returns: HASH: 9b3b00cbcc1e8503 F:1623 D:89 S:ac39e7 TYPES: js:523 py:412...
@@ -99,10 +112,20 @@ src/
 │   ├── hex.rs
 │   ├── json.rs
 │   ├── ai.rs
+│   ├── ai_json.rs
 │   ├── digest.rs
-│   └── stats.rs
+│   ├── stats.rs
+│   ├── csv.rs
+│   └── tsv.rs
 ├── compression.rs    # Zlib compression
-└── utils.rs          # Helper functions
+├── utils.rs          # Helper functions
+├── context.rs        # Project context detection
+└── mcp/              # Model Context Protocol server
+    ├── mod.rs
+    ├── tools.rs      # MCP tools implementation
+    ├── resources.rs  # MCP resources
+    ├── prompts.rs    # MCP prompts
+    └── cache.rs      # Analysis caching
 ```
 
 ## 🎨 Output Examples
@@ -232,6 +255,39 @@ Environment variables:
 - `STREE_DEFAULT_DEPTH`: Default depth limit
 - `AI_TOOLS=1`: Auto-enable AI mode with compression
 
+## 🤖 MCP Server (Model Context Protocol)
+
+Smart Tree includes a built-in MCP server that allows AI assistants like Claude to analyze directories directly:
+
+### Quick Setup for Claude Desktop
+
+1. Show the configuration command:
+```bash
+stree --mcp-config
+```
+
+2. Add the output to your Claude Desktop config file (`claude_desktop_config.json`)
+
+3. Restart Claude Desktop
+
+### Available MCP Tools
+
+- `analyze_directory`: Analyze a directory in various formats (classic, hex, json, ai, stats, etc.)
+- `find_files`: Find files matching specific criteria (pattern, size, date, type)
+- `get_statistics`: Get detailed statistics about a directory
+- `get_digest`: Get SHA256 digest of directory structure
+
+### MCP Configuration
+
+Create `~/.stree/mcp-config.toml` to customize:
+```toml
+cache_enabled = true
+cache_ttl = 300  # 5 minutes
+max_cache_size = 104857600  # 100MB
+allowed_paths = ["/home/user/projects"]
+blocked_paths = ["/etc", "/sys", "/proc"]
+```
+
 ## 🤝 Contributing
 
 Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
@@ -274,11 +330,14 @@ All core features are now implemented:
 - ✅ Statistics mode with hex values
 - ✅ File filtering (type, size, date)
 - ✅ Pattern matching with --find
+- ✅ Content search with --search keyword
+- ✅ Streaming output mode for large directories
 - ✅ Gitignore support with --show-ignored option
 - ✅ Permission error handling
 - ✅ Compression for all output modes
 - ✅ Parallel directory scanning
 - ✅ Management script with humor
+- ✅ MCP (Model Context Protocol) server for AI assistants
 
 ## 🙏 Acknowledgments
 
