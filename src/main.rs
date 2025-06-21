@@ -1,7 +1,11 @@
+// Aye, Aye, Captain! This is the main entry point for Smart Tree (stree).
+// It's where the magic begins, parsing user commands, configuring the scan,
+// and orchestrating the beautiful output that makes directory visualization a joy!
+// Trish from accounting helped us make sure even the command-line arguments are well-documented.
 use anyhow::Result;
 use chrono::NaiveDate;
 use clap::{Parser, ValueEnum};
-use colored;
+use colored; // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use regex::Regex;
@@ -9,194 +13,252 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+// Pulling in the brains of the operation from our library modules.
 use stree::{
     formatters::{
-        ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter, 
-        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter, 
+        ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
+        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter,
         tsv::TsvFormatter, Formatter, StreamingFormatter, PathDisplayMode,
     },
-    parse_size, Scanner, ScannerConfig,
+    parse_size, Scanner, ScannerConfig, // The mighty Scanner and its configuration.
 };
 
+/// Defines the command-line arguments that `stree` accepts.
+/// Each field here corresponds to an option or flag a user can provide.
+/// We're using the `clap` crate to make this as easy as pie (a very structured pie).
 #[derive(Parser, Debug)]
 #[command(
     name = "stree",
-    about = "Smart Tree - An intelligent directory visualization tool",
-    version,
-    author
+    about = "Smart Tree - An intelligent directory visualization tool. Not just a tree, it's a smart-tree!",
+    version, // Automatically pulls version from Cargo.toml
+    author   // Automatically pulls authors from Cargo.toml - "8bit-wraith" and "Claude" - what a team!
 )]
 struct Args {
-    /// Path to analyze
+    /// Path to the directory or file you want to analyze.
+    /// If you don't specify, it bravely defaults to the current directory (`.`).
     #[arg(default_value = ".")]
     path: PathBuf,
 
-    /// Output mode
+    /// Choose your adventure! Selects the output format.
+    /// From classic human-readable to AI-optimized hex, we've got options.
     #[arg(short, long, value_enum, default_value = "classic")]
     mode: OutputMode,
 
-    /// Find files/directories matching pattern
+    /// Feeling like a detective? Find files/directories matching this regex pattern.
+    /// Example: --find "README\\.md"
     #[arg(long)]
     find: Option<String>,
 
-    /// Filter by file extension
+    /// Filter by file extension. Show only files of this type (e.g., "rs", "txt").
+    /// No leading dot needed, just the extension itself.
     #[arg(long = "type")]
     filter_type: Option<String>,
 
-    /// Minimum file size (e.g., "1M", "500K")
+    /// Only show files larger than this size.
+    /// Accepts human-readable sizes like "1M" (1 Megabyte), "500K" (500 Kilobytes), "100B" (100 Bytes).
     #[arg(long)]
     min_size: Option<String>,
 
-    /// Maximum file size
+    /// Only show files smaller than this size.
+    /// Same format as --min-size. Let's find those tiny files!
     #[arg(long)]
     max_size: Option<String>,
 
-    /// Show files newer than date (YYYY-MM-DD)
+    /// Time traveler? Show files newer than this date (YYYY-MM-DD format).
     #[arg(long)]
     newer_than: Option<String>,
 
-    /// Show files older than date (YYYY-MM-DD)
+    /// Or perhaps you prefer antiques? Show files older than this date (YYYY-MM-DD format).
     #[arg(long)]
     older_than: Option<String>,
 
-    /// Maximum depth to traverse
-    #[arg(short, long, default_value = "10")]
+    /// How deep should we dig? Limits the traversal depth.
+    /// Default is 5 levels, which provides a good overview without getting lost in deep structures.
+    #[arg(short, long, default_value = "5")]
     depth: usize,
 
-    /// Don't respect .gitignore files
+    /// Daredevil mode: Ignores `.gitignore` files. See everything, even what Git tries to hide!
     #[arg(long)]
     no_ignore: bool,
 
-    /// Don't use default ignore patterns (node_modules, __pycache__, etc.)
+    /// Double daredevil: Ignores our built-in default ignore patterns too (like `node_modules`, `__pycache__`).
+    /// Use with caution, or you might see more than you bargained for!
     #[arg(long)]
     no_default_ignore: bool,
 
-    /// Show hidden files and directories (starting with .)
+    /// Show all files, including hidden ones (those starting with a `.`).
+    /// The `-a` is for "all", naturally.
     #[arg(long, short = 'a')]
     all: bool,
 
-    /// Show ignored directories in brackets
+    /// Want to see what's being ignored? This flag shows ignored directories in brackets `[dirname]`.
+    /// Useful for debugging your ignore patterns or just satisfying curiosity.
     #[arg(long)]
     show_ignored: bool,
 
-    /// Disable emoji in output
+    /// SHOW ME EVERYTHING! The nuclear option that combines --all, --no-ignore, and --no-default-ignore.
+    /// This reveals absolutely everything: hidden files, git directories, node_modules, the works!
+    /// Warning: May produce overwhelming output in large codebases.
+    #[arg(long)]
+    everything: bool,
+
+    /// Not a fan of emojis? This flag disables them for a plain text experience.
+    /// (But Trish loves the emojis, just saying!) 🌳✨
     #[arg(long)]
     no_emoji: bool,
 
-    /// Compress output with zlib
+    /// Compress the output using zlib. Great for sending large tree structures over the wire
+    /// or for AI models that appreciate smaller inputs. Output will be base64 encoded.
     #[arg(short = 'z', long)]
     compress: bool,
 
-    /// Compact JSON output (no pretty printing)
+    /// For JSON output, this makes it compact (one line) instead of pretty-printed.
+    /// Saves space, but might make Trish's eyes water if she tries to read it directly.
     #[arg(long)]
     compact: bool,
 
-    /// Path display mode
+    /// Controls how file paths are displayed in the output.
     #[arg(long = "path-mode", value_enum, default_value = "off")]
     path_mode: PathMode,
 
-    /// When to use colors
+    /// When should we splash some color on the output?
+    /// `auto` (default) uses colors if outputting to a terminal.
     #[arg(long, value_enum, default_value = "auto")]
     color: ColorMode,
 
-    /// Embed AI output in JSON structure (only applies to AI mode)
+    /// For AI mode, wraps the output in a JSON structure.
+    /// Makes it easier for programmatic consumption by our AI overlords (just kidding... mostly).
     #[arg(long)]
     ai_json: bool,
 
-    /// Stream output as we scan (for large directories)
+    /// Stream output as files are scanned. This is a game-changer for very large directories!
+    /// You'll see results trickling in, rather than waiting for the whole scan to finish.
+    /// Note: Compression is disabled in stream mode for now.
     #[arg(long)]
     stream: bool,
 
-    /// Search for keyword in file contents (with --type filter)
+    /// Search for a keyword within file contents.
+    /// Best used with `--type` to limit search to specific file types (e.g., `--type rs --search "TODO"`).
+    /// This is like having X-ray vision for your files!
     #[arg(long)]
     search: Option<String>,
 
-    /// Run as MCP (Model Context Protocol) server
+    /// Run `stree` as an MCP (Model Context Protocol) server.
+    /// This allows AI assistants (like our friend Claude) to use `stree` as a tool.
+    /// This option is only available if the "mcp" feature is compiled.
     #[cfg(feature = "mcp")]
     #[arg(long)]
     mcp: bool,
 
-    /// List available MCP tools
+    /// List the tools `stree` provides when running as an MCP server.
+    /// Helpful for understanding what capabilities are exposed to AI.
     #[cfg(feature = "mcp")]
     #[arg(long)]
     mcp_tools: bool,
 
-    /// Show MCP configuration for Claude Desktop
+    /// Show the configuration snippet needed to add `stree` as an MCP server in Claude Desktop.
+    /// Makes setup a breeze!
     #[cfg(feature = "mcp")]
     #[arg(long)]
     mcp_config: bool,
 }
 
+/// Enum defining how color should be used in the output.
+/// Because life's too short for monochrome (unless you ask for it).
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum ColorMode {
-    /// Always use colors
+    /// Always use colors, no matter what. Go vibrant!
     Always,
-    /// Never use colors
+    /// Never use colors. For the minimalists.
     Never,
-    /// Use colors if output is a terminal (default)
+    /// Use colors if the output is a terminal (tty), otherwise disable. This is the default smart behavior.
     Auto,
 }
 
+/// Enum defining how paths should be displayed.
+/// Sometimes you want the full story, sometimes just the filename.
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum PathMode {
-    /// Show only filenames (default)
+    /// Show only filenames (default). Clean and simple.
     Off,
-    /// Show relative paths from scan root
+    /// Show paths relative to the scan root. Good for context within the project.
     Relative,
-    /// Show full absolute paths
+    /// Show full absolute paths. Leaves no doubt where things are.
     Full,
 }
 
+/// Enum defining the available output modes.
+/// Each mode tailors the output for a specific purpose or audience.
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum OutputMode {
-    /// Classic tree format with metadata
+    /// Classic tree format, human-readable with metadata and emojis (unless disabled). Our beloved default.
     Classic,
-    /// Hexadecimal format with fixed-width fields
+    /// Hexadecimal format with fixed-width fields. Excellent for AI parsing or detailed analysis.
     Hex,
-    /// JSON output
+    /// JSON output. Structured data for easy programmatic use.
     Json,
-    /// AI-optimized format (hex + stats)
+    /// AI-optimized format. A special blend of hex tree and statistics, designed for LLMs.
     Ai,
-    /// Directory statistics only
+    /// Directory statistics only. Get a summary without the full tree.
     Stats,
-    /// CSV format
+    /// CSV (Comma Separated Values) format. Spreadsheet-friendly.
     Csv,
-    /// TSV format
+    /// TSV (Tab Separated Values) format. Another spreadsheet favorite.
     Tsv,
-    /// Super compact digest format (hash + minimal stats)
+    /// Super compact digest format. A single line with a hash and minimal stats, perfect for quick AI pre-checks.
     Digest,
 }
 
+/// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
+/// This is used for the `--newer-than` and `--older-than` filters.
+/// If the date string is invalid, it returns an error.
 fn parse_date(date_str: &str) -> Result<SystemTime> {
+    // Attempt to parse the date string.
     let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-    let datetime = date.and_hms_opt(0, 0, 0).unwrap();
+    // Assume midnight (00:00:00) for the given date.
+    let datetime = date.and_hms_opt(0, 0, 0).unwrap(); // This unwrap is safe as 00:00:00 is always valid.
+    // Convert to SystemTime.
     Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.and_utc().timestamp() as u64))
 }
 
+/// The main function where all the action happens!
+/// It parses arguments, sets up the scanner, chooses a formatter,
+/// performs the scan, and prints the output.
+/// Returns a `Result` to indicate success or failure.
 fn main() -> Result<()> {
+    // Parse the command-line arguments provided by the user.
     let args = Args::parse();
 
-    // Handle MCP-specific commands
+    // --- MCP (Model Context Protocol) Handling ---
+    // If the "mcp" feature is enabled, check for MCP-specific commands first.
+    // These commands don't perform a regular scan but interact with the MCP system.
     #[cfg(feature = "mcp")]
     {
         if args.mcp_config {
+            // If --mcp-config is passed, print the config for Claude Desktop and exit.
             print_mcp_config();
-            return Ok(());
+            return Ok(()); // Successfully printed config, task done.
         }
 
         if args.mcp_tools {
+            // If --mcp-tools is passed, print the list of available MCP tools and exit.
             print_mcp_tools();
-            return Ok(());
+            return Ok(()); // Successfully listed tools, task done.
         }
 
         if args.mcp {
-            return run_mcp_server();
+            // If --mcp is passed, run stree as an MCP server and exit.
+            // This function will block and handle MCP communication.
+            return run_mcp_server(); // The server itself will handle its lifecycle.
         }
     }
 
-    // Check environment variables for defaults
-    let default_mode = std::env::var("STREE_DEFAULT_MODE")
-        .ok()
-        .and_then(|m| match m.to_lowercase().as_str() {
+    // --- Environment Variable Overrides ---
+    // Check for STREE_DEFAULT_MODE environment variable to override the default output mode.
+    // This allows users to set a persistent preference.
+    let default_mode_env = std::env::var("STREE_DEFAULT_MODE")
+        .ok() // Convert Result to Option
+        .and_then(|m| match m.to_lowercase().as_str() { // Match on the lowercase string value
             "classic" => Some(OutputMode::Classic),
             "hex" => Some(OutputMode::Hex),
             "json" => Some(OutputMode::Json),
@@ -205,129 +267,169 @@ fn main() -> Result<()> {
             "csv" => Some(OutputMode::Csv),
             "tsv" => Some(OutputMode::Tsv),
             "digest" => Some(OutputMode::Digest),
-            _ => None,
+            _ => None, // Unknown mode string, ignore.
         });
 
-    // Check for AI_TOOLS environment variable (highest priority)
-    let (mode, compress) = if std::env::var("AI_TOOLS").is_ok() {
+    // Determine the final mode and compression settings.
+    // The AI_TOOLS environment variable takes highest precedence.
+    // Then, the command-line --mode flag.
+    // Then, STREE_DEFAULT_MODE environment variable.
+    // Finally, the default mode from clap.
+    let (mode, compress) = if std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true") {
+        // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
         (OutputMode::Ai, true)
-    } else if let Some(default) = default_mode {
-        (default, args.compress)
+    } else if let Some(env_mode) = default_mode_env {
+        // If STREE_DEFAULT_MODE is set, use it. Compression comes from args or its default.
+        (env_mode, args.compress)
     } else {
+        // Otherwise, use the mode and compression from command-line arguments (or their defaults).
         (args.mode, args.compress)
     };
-
-    // Check color settings (command line takes precedence over env vars)
+    
+    // --- Color Configuration ---
+    // Determine if colors should be used in the output.
+    // Command-line --color flag takes precedence.
+    // Then, STREE_COLOR or NO_COLOR environment variables.
+    // Finally, auto-detect based on whether stdout is a TTY.
     let use_color = match args.color {
         ColorMode::Always => true,
         ColorMode::Never => false,
         ColorMode::Auto => {
+            // Check environment variables first for explicit overrides.
             if std::env::var("STREE_COLOR").as_deref() == Ok("always") {
                 true
             } else if std::env::var("NO_COLOR").is_ok() || std::env::var("STREE_COLOR").as_deref() == Ok("never") {
                 false
             } else {
+                // If no env var override, check if stdout is a terminal.
                 atty::is(atty::Stream::Stdout)
             }
         }
     };
     
+    // If colors are disabled, globally turn them off for the `colored` crate.
     if !use_color {
         colored::control::set_override(false);
     }
 
-    // Build scanner configuration
-    // For AI mode, automatically enable show_ignored to give full context
-    let show_ignored = args.show_ignored || matches!(mode, OutputMode::Ai);
+    // --- Scanner Configuration ---
+    // Build the configuration for the directory scanner.
+    // Handle the --everything flag which overrides other visibility settings
+    let (no_ignore_final, no_default_ignore_final, all_final) = if args.everything {
+        (true, true, true)  // Override all ignore/hide settings
+    } else {
+        (args.no_ignore, args.no_default_ignore, args.all)
+    };
     
-    let config = ScannerConfig {
+    // For AI mode, we automatically enable `show_ignored` to provide maximum context to the AI,
+    // unless the user explicitly set `show_ignored` (which `args.show_ignored` would capture).
+    let show_ignored_final = args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
+    
+    let scanner_config = ScannerConfig {
         max_depth: args.depth,
-        follow_symlinks: false,
-        respect_gitignore: !args.no_ignore,
-        show_hidden: args.all,
-        show_ignored,
+        follow_symlinks: false, // Symlink following is generally off for safety and simplicity.
+        respect_gitignore: !no_ignore_final,
+        show_hidden: all_final,
+        show_ignored: show_ignored_final,
+        // Attempt to compile the find pattern string into a Regex.
         find_pattern: args.find.as_ref().map(|p| Regex::new(p)).transpose()?,
         file_type_filter: args.filter_type.clone(),
+        // Parse human-readable size strings (e.g., "1M") into u64 bytes.
         min_size: args.min_size.as_ref().map(|s| parse_size(s)).transpose()?,
         max_size: args.max_size.as_ref().map(|s| parse_size(s)).transpose()?,
+        // Parse date strings (YYYY-MM-DD) into SystemTime.
         newer_than: args.newer_than.as_ref().map(|d| parse_date(d)).transpose()?,
         older_than: args.older_than.as_ref().map(|d| parse_date(d)).transpose()?,
-        use_default_ignores: !args.no_default_ignore,
+        use_default_ignores: !no_default_ignore_final,
         search_keyword: args.search.clone(),
     };
 
-    // Create scanner
-    let scanner = Scanner::new(&args.path, config)?;
+    // Create the scanner instance with the specified root path and configuration.
+    let scanner = Scanner::new(&args.path, scanner_config)?;
     
-    // Convert PathMode to PathDisplayMode
+    // Convert the command-line PathMode enum to the formatter's PathDisplayMode enum.
     let path_display_mode = match args.path_mode {
         PathMode::Off => PathDisplayMode::Off,
         PathMode::Relative => PathDisplayMode::Relative,
         PathMode::Full => PathDisplayMode::Full,
     };
 
-    // Handle streaming vs normal mode
+    // --- Output Generation ---
+    // Decide whether to use streaming mode or normal (scan-all-then-format) mode.
+    // Streaming is enabled by --stream flag AND if compression is NOT requested (as zlib needs the whole buffer).
     if args.stream && !compress {
-        // Streaming mode - only supported for certain formatters and without compression
+        // Streaming mode is only supported for certain formatters that implement StreamingFormatter.
         match mode {
             OutputMode::Hex | OutputMode::Ai => {
-                use std::sync::mpsc;
+                // For streaming, we use threads: one for scanning, one for formatting/printing.
+                // A channel is used for communication between them.
+                use std::sync::mpsc; // Multi-producer, single-consumer channel.
                 use std::thread;
                 
-                let (tx, rx) = mpsc::channel();
-                let scanner_path = args.path.clone();
+                let (tx, rx) = mpsc::channel(); // Create the communication channel.
+                let scanner_path_clone = args.path.clone(); // Clone path for the scanner thread.
                 
-                // Spawn scanner thread
+                // Spawn the scanner thread. It will send FileNode objects through the channel.
                 let scanner_thread = thread::spawn(move || {
-                    scanner.scan_stream(tx)
+                    // The scanner's scan_stream method takes the sender part of the channel.
+                    scanner.scan_stream(tx) 
                 });
                 
-                // Create streaming formatter
+                // Create the appropriate streaming formatter based on the selected mode.
                 let streaming_formatter: Box<dyn StreamingFormatter> = match mode {
-                    OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, args.show_ignored, path_display_mode)),
+                    OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, show_ignored_final, path_display_mode)),
                     OutputMode::Ai => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
-                    _ => unreachable!(),
+                    _ => unreachable!(), // Should not happen due to the outer match.
                 };
                 
-                // Start stream
+                // Get a lock on stdout for writing.
                 let stdout = io::stdout();
                 let mut handle = stdout.lock();
-                streaming_formatter.start_stream(&mut handle, &scanner_path)?;
+
+                // Initialize the stream with the formatter (e.g., print headers).
+                streaming_formatter.start_stream(&mut handle, &scanner_path_clone)?;
                 
-                // Process nodes as they arrive
-                while let Ok(node) = rx.recv() {
-                    streaming_formatter.format_node(&mut handle, &node, &scanner_path)?;
+                // Receive and format nodes as they arrive from the scanner thread.
+                while let Ok(node) = rx.recv() { // Loop until the channel is closed.
+                    streaming_formatter.format_node(&mut handle, &node, &scanner_path_clone)?;
                 }
                 
-                // Wait for scanner to finish and get stats
+                // Wait for the scanner thread to finish and get the final statistics.
+                // The `??` propagates errors from thread panic and from the scan_stream result.
                 let stats = scanner_thread.join().map_err(|_| anyhow::anyhow!("Scanner thread panicked"))??;
                 
-                // End stream with stats
-                streaming_formatter.end_stream(&mut handle, &stats, &scanner_path)?;
+                // Finalize the stream with the formatter (e.g., print footers or summary stats).
+                streaming_formatter.end_stream(&mut handle, &stats, &scanner_path_clone)?;
             }
             _ => {
-                eprintln!("Streaming mode is only supported for hex and ai output modes");
-                std::process::exit(1);
+                // If streaming is requested for an unsupported mode, print an error and exit.
+                // Trish says clear error messages are important!
+                eprintln!("Streaming mode is currently only supported for 'hex' and 'ai' output modes when not using compression.");
+                std::process::exit(1); // Exit with a non-zero status code to indicate an error.
             }
         }
     } else {
-        // Normal mode - scan all at once
+        // Normal (non-streaming) mode or when compression is enabled.
+        // Scan the entire directory structure first.
         let (nodes, stats) = scanner.scan()?;
 
-        // Create appropriate formatter
-        // For classic mode, auto-switch to relative paths when using find (unless user specified otherwise)
+        // Create the appropriate formatter based on the selected mode.
         let formatter: Box<dyn Formatter> = match mode {
             OutputMode::Classic => {
+                // Special handling for classic mode with --find: default to relative paths
+                // if user hasn't explicitly set a path_mode other than 'off'.
+                // This makes --find output more useful by showing where found items are.
                 let classic_path_mode = if args.find.is_some() && matches!(args.path_mode, PathMode::Off) {
                     PathDisplayMode::Relative
                 } else {
-                    path_display_mode
+                    path_display_mode // Use the user-specified or default path_mode.
                 };
                 Box::new(ClassicFormatter::new(args.no_emoji, use_color, classic_path_mode))
             },
-            OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, args.show_ignored, path_display_mode)),
+            OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, show_ignored_final, path_display_mode)),
             OutputMode::Json => Box::new(JsonFormatter::new(args.compact)),
             OutputMode::Ai => {
+                // AI mode can optionally be wrapped in JSON.
                 if args.ai_json {
                     Box::new(AiJsonFormatter::new(args.no_emoji, path_display_mode))
                 } else {
@@ -340,91 +442,120 @@ fn main() -> Result<()> {
             OutputMode::Digest => Box::new(DigestFormatter::new()),
         };
 
-        // Format output
-        let mut output = Vec::new();
-        formatter.format(&mut output, &nodes, &stats, &args.path)?;
+        // Format the collected nodes and stats into a byte vector.
+        let mut output_buffer = Vec::new();
+        formatter.format(&mut output_buffer, &nodes, &stats, &args.path)?;
 
-        // Handle compression if requested
+        // Handle compression if requested.
         if compress {
-            let compressed = compress_output(&output)?;
-            println!("COMPRESSED_V1:{}", hex::encode(&compressed));
+            let compressed_data = compress_output(&output_buffer)?;
+            // Print the compressed data as a base64 encoded string, prefixed for identification.
+            // Using hex encoding for binary data to make it printable.
+            println!("COMPRESSED_V1:{}", hex::encode(&compressed_data));
         } else {
-            io::stdout().write_all(&output)?;
+            // If not compressing, write the formatted output directly to stdout.
+            io::stdout().write_all(&output_buffer)?;
         }
     }
 
+    // If we've reached here, everything went well!
     Ok(())
 }
 
+/// Compresses the given data using Zlib.
+/// Returns a `Result` containing the compressed data or an error.
 fn compress_output(data: &[u8]) -> Result<Vec<u8>> {
+    // Create a Zlib encoder with default compression level.
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    // Write all input data to the encoder.
     encoder.write_all(data)?;
+    // Finalize the compression and return the resulting byte vector.
     Ok(encoder.finish()?)
 }
 
-// MCP-specific functions
+// --- MCP Helper Functions (only compiled if "mcp" feature is enabled) ---
+
+/// Prints the JSON configuration snippet for adding `stree` as an MCP server
+/// to Claude Desktop. This helps users easily integrate `stree`.
 #[cfg(feature = "mcp")]
 fn print_mcp_config() {
+    // Try to get the current executable's path. Fallback to "stree" if it fails.
     let exe_path = std::env::current_exe()
-        .unwrap_or_else(|_| PathBuf::from("stree"));
+        .unwrap_or_else(|_| PathBuf::from("stree")); // Graceful fallback.
     
-    println!("Add this to your Claude Desktop configuration:");
-    println!();
-    println!("{{");
+    // Print the JSON structure, making it easy for users to copy-paste.
+    // Using println! for each line for clarity.
+    println!("Add this to your Claude Desktop configuration (claude_desktop_config.json):");
+    println!(); // Blank line for spacing.
+    println!("{{"); // Start of JSON object.
     println!("  \"mcpServers\": {{");
-    println!("    \"smart-tree\": {{");
-    println!("      \"command\": \"{}\",", exe_path.display());
-    println!("      \"args\": [\"--mcp\"],");
-    println!("      \"env\": {{}}");
+    println!("    \"smart-tree\": {{"); // Server name: "smart-tree".
+    println!("      \"command\": \"{}\",", exe_path.display()); // Path to the stree executable.
+    println!("      \"args\": [\"--mcp\"],"); // Arguments to run stree in MCP server mode.
+    println!("      \"env\": {{}}"); // Optional environment variables for the server process.
     println!("    }}");
     println!("  }}");
-    println!("}}");
+    println!("}}"); // End of JSON object.
     println!();
-    println!("Location: ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)");
-    println!("          %APPDATA%\\Claude\\claude_desktop_config.json (Windows)");
-    println!("          ~/.config/Claude/claude_desktop_config.json (Linux)");
+    // Provide common locations for the Claude Desktop config file.
+    println!("Default locations for claude_desktop_config.json:");
+    println!("  macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json");
+    println!("  Windows: %APPDATA%\\Claude\\claude_desktop_config.json");
+    println!("  Linux:   ~/.config/Claude/claude_desktop_config.json");
 }
 
+/// Prints a list of available MCP tools that `stree` provides.
+/// This helps users (or AI) understand what actions can be performed via MCP.
 #[cfg(feature = "mcp")]
 fn print_mcp_tools() {
-    println!("Smart Tree MCP Server Tools:");
+    println!("Smart Tree MCP Server - Available Tools:");
     println!();
     println!("1. analyze_directory");
-    println!("   Analyze a directory and return its structure in various formats");
-    println!("   - path: Directory path to analyze");
-    println!("   - mode: Output format (classic, hex, json, ai, stats, csv, tsv, digest)");
-    println!("   - max_depth: Maximum traversal depth");
-    println!("   - compress: Compress output with zlib");
+    println!("   Description: Analyzes a directory and returns its structure and metadata.");
+    println!("   Parameters:");
+    println!("     - path (string, required): The directory path to analyze.");
+    println!("     - mode (string, optional, default: 'ai'): Output format. Options: classic, hex, json, ai, stats, csv, tsv, digest.");
+    println!("     - max_depth (integer, optional, default: 10): Maximum traversal depth.");
+    println!("     - compress (boolean, optional, default: false): Whether to compress the output (zlib + hex).");
+    println!("     - find (string, optional): Regex pattern to find file/directory names.");
+    println!("     - filter_type (string, optional): Filter by file extension (e.g., 'rs').");
+    println!("     - min_size (string, optional): Minimum file size (e.g., '1M').");
+    println!("     - max_size (string, optional): Maximum file size (e.g., '100K').");
+    println!("     - newer_than (string, optional): Files newer than date (YYYY-MM-DD).");
+    println!("     - older_than (string, optional): Files older than date (YYYY-MM-DD).");
+    println!("     - no_ignore (boolean, optional, default: false): If true, .gitignore files are ignored.");
+    println!("     - show_hidden (boolean, optional, default: false): If true, hidden files/dirs are shown.");
+    println!("     - show_ignored (boolean, optional, default: false): If true, ignored files/dirs are shown (in brackets).");
+    println!("     - search (string, optional): Keyword to search within file contents.");
     println!();
-    println!("2. find_files");
-    println!("   Find files matching specific criteria");
-    println!("   - path: Directory to search in");
-    println!("   - pattern: Regex pattern for names");
-    println!("   - file_type: Filter by extension");
-    println!("   - min_size/max_size: Size filters");
-    println!("   - newer_than/older_than: Date filters");
-    println!();
-    println!("3. get_statistics");
-    println!("   Get detailed statistics about a directory");
-    println!("   - path: Directory to analyze");
-    println!("   - show_hidden: Include hidden files");
-    println!();
-    println!("4. get_digest");
-    println!("   Get SHA256 digest of directory structure");
-    println!("   - path: Directory to analyze");
+    println!("2. get_digest");
+    println!("   Description: Quickly gets a compact digest (hash + minimal stats) for a directory.");
+    println!("   Parameters:");
+    println!("     - path (string, required): The directory path to analyze.");
+    // Add more tools here if they are implemented.
+    // For example, a more focused `find_files` tool or `get_statistics` could be useful.
+    // The current `analyze_directory` is quite versatile due to its parameters.
 }
 
+/// Runs `stree` as an MCP server. This function initializes and starts the
+/// Tokio runtime and the MCP server logic.
+/// This is the entry point for the `--mcp` flag.
 #[cfg(feature = "mcp")]
 fn run_mcp_server() -> Result<()> {
-    use stree::mcp::{McpServer, load_config};
+    // Import MCP server components. These are only available if "mcp" feature is enabled.
+    use stree::mcp::{McpServer, load_mcp_config}; // Assuming load_mcp_config exists for server-side config.
     
-    // Create tokio runtime
+    // Create a Tokio runtime. MCP server might use async operations.
+    // Using `new()` creates a multi-threaded runtime by default.
     let runtime = tokio::runtime::Runtime::new()?;
     
-    // Run the server
+    // Run the MCP server logic within the Tokio runtime.
+    // `block_on` runs an async block to completion on the current thread.
     runtime.block_on(async {
-        let config = load_config()?;
-        let server = McpServer::new(config);
-        server.run_stdio().await
+        // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
+        let mcp_config = load_mcp_config().unwrap_or_default(); // Load or use defaults.
+        let server = McpServer::new(mcp_config);
+        // `run_stdio` would handle communication over stdin/stdout.
+        server.run_stdio().await 
     })
 }

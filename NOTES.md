@@ -2,6 +2,14 @@
 
 ## Recent Changes (December 2024)
 
+### Performance and Usability Improvements (Dec 21)
+- **Fixed O(n²) performance bug** in classic formatter that caused hanging with deep directories
+- **Changed default depth from 10 to 5** to prevent excessive processing on deep structures
+- **Added `--everything` flag** - master switch that enables --all, --no-ignore, and --no-default-ignore
+- **Clarified size calculations** - stree reports actual file sizes, while `du` reports disk blocks
+
+## Recent Changes (December 2024)
+
 ### MCP (Model Context Protocol) Server Integration
 We've added a built-in MCP server that allows AI assistants like Claude to directly analyze directories:
 - `--mcp` flag runs Smart Tree as an MCP server on stdio

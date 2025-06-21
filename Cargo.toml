@@ -2,9 +2,9 @@
 name = "stree"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["8bit-wraith", "Claude"] # Updated authors
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
-repository = "https://github.com/yourusername/smart-tree"
+repository = "https://github.com/8bit-wraith/smart-tree" # Updated repository
 license = "MIT"
 readme = "README.md"
 keywords = ["tree", "directory", "visualization", "ai", "cli"]

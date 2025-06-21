@@ -76,8 +76,10 @@ stree --newer-than 2024-01-01  # Recently modified files
 # Options
 stree --no-emoji               # Plain text output
 stree --no-ignore              # Don't respect .gitignore
+stree --no-default-ignore      # Show node_modules, .git, etc.
 stree --show-ignored           # Show ignored dirs in brackets
-stree --depth 3                # Limit depth
+stree --depth 3                # Limit depth (default: 5)
+stree --everything             # Show EVERYTHING (--all --no-ignore --no-default-ignore)
 stree -z                       # Compress output
 stree --stream                 # Stream output for large dirs
 

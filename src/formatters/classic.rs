@@ -63,15 +63,19 @@ impl ClassicFormatter {
         let mut children_map: HashMap<PathBuf, Vec<usize>> = HashMap::new();
         let mut parent_indices: Vec<Option<usize>> = vec![None; sorted_nodes.len()];
         
+        // Create a path-to-index map for O(1) parent lookups
+        let path_to_index: HashMap<PathBuf, usize> = sorted_nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| (node.path.clone(), i))
+            .collect();
+        
         for (i, node) in sorted_nodes.iter().enumerate() {
             if let Some(parent_path) = node.path.parent() {
-                // Find parent node index
-                for (j, other) in sorted_nodes.iter().enumerate() {
-                    if other.path == parent_path {
-                        parent_indices[i] = Some(j);
-                        children_map.entry(parent_path.to_path_buf()).or_default().push(i);
-                        break;
-                    }
+                // Find parent node index using HashMap lookup (O(1) instead of O(n))
+                if let Some(&parent_idx) = path_to_index.get(parent_path) {
+                    parent_indices[i] = Some(parent_idx);
+                    children_map.entry(parent_path.to_path_buf()).or_default().push(i);
                 }
             }
         }
