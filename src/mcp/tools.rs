@@ -259,6 +259,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         older_than: None,
         use_default_ignores: true,
         search_keyword: None,
+        show_filesystems: false,
     };
 
     // Scan directory
@@ -275,7 +276,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     // Create formatter
     let formatter: Box<dyn Formatter> = match args.mode.as_str() {
         "classic" => Box::new(ClassicFormatter::new(args.no_emoji, true, path_display_mode)),
-        "hex" => Box::new(HexFormatter::new(true, args.no_emoji, args.show_ignored, path_display_mode)),
+        "hex" => Box::new(HexFormatter::new(true, args.no_emoji, args.show_ignored, path_display_mode, false)),
         "json" => Box::new(JsonFormatter::new(false)),
         "ai" => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
         "stats" => Box::new(StatsFormatter::new()),
@@ -363,6 +364,7 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         older_than: args.older_than.as_ref().map(|d| parse_date(d)).transpose()?,
         use_default_ignores: true,
         search_keyword: None,
+        show_filesystems: false,
     };
 
     // Scan directory
@@ -421,6 +423,7 @@ async fn get_statistics(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         older_than: None,
         use_default_ignores: true,
         search_keyword: None,
+        show_filesystems: false,
     };
 
     // Scan directory
@@ -466,6 +469,7 @@ async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         older_than: None,
         use_default_ignores: true,
         search_keyword: None,
+        show_filesystems: false,
     };
 
     // Scan directory

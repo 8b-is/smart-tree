@@ -63,6 +63,8 @@ pub struct FileNode {
     /// For content search: A list of byte offsets (hex positions) where the search keyword was found.
     /// `None` if no search was performed or no matches.
     pub search_matches: Option<Vec<usize>>,
+    /// The filesystem type this file resides on
+    pub filesystem_type: FilesystemType,
 }
 
 /// # FileType: Distinguishing Different Kinds of Filesystem Objects
@@ -79,6 +81,112 @@ pub enum FileType {
     Pipe,           // A named pipe (FIFO).
     BlockDevice,    // A block special file (e.g., /dev/sda).
     CharDevice,     // A character special file (e.g., /dev/tty).
+}
+
+/// # FilesystemType: Identifying the underlying filesystem
+///
+/// This enum represents different filesystem types with single-character codes
+/// for compact display. The mapping is designed to be memorable and intuitive.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FilesystemType {
+    Ext4,       // '4' - The most common Linux filesystem
+    Ext3,       // '3' - Older ext filesystem
+    Ext2,       // '2' - Even older ext filesystem
+    Xfs,        // 'X' - XFS filesystem
+    Btrfs,      // 'B' - Btrfs (B-tree filesystem)
+    Zfs,        // 'Z' - ZFS filesystem
+    Ntfs,       // 'N' - Windows NTFS
+    Fat32,      // 'F' - FAT32
+    ExFat,      // 'E' - exFAT
+    Apfs,       // 'A' - Apple File System
+    Hfs,        // 'H' - HFS+ (older Mac)
+    Nfs,        // 'R' - Remote NFS mount
+    Smb,        // 'S' - SMB/CIFS network filesystem
+    Tmpfs,      // 'T' - Temporary filesystem (RAM)
+    Procfs,     // 'P' - /proc virtual filesystem
+    Sysfs,      // 'Y' - /sys virtual filesystem
+    Devfs,      // 'D' - /dev virtual filesystem
+    Mem8,       // 'M' - Mem8 filesystem (custom!)
+    Unknown,    // '?' - Unknown filesystem
+}
+
+impl FilesystemType {
+    /// Get the single-character code for this filesystem type
+    pub fn to_char(&self) -> char {
+        match self {
+            FilesystemType::Ext4 => '4',
+            FilesystemType::Ext3 => '3',
+            FilesystemType::Ext2 => '2',
+            FilesystemType::Xfs => 'X',
+            FilesystemType::Btrfs => 'B',
+            FilesystemType::Zfs => 'Z',
+            FilesystemType::Ntfs => 'N',
+            FilesystemType::Fat32 => 'F',
+            FilesystemType::ExFat => 'E',
+            FilesystemType::Apfs => 'A',
+            FilesystemType::Hfs => 'H',
+            FilesystemType::Nfs => 'R',
+            FilesystemType::Smb => 'S',
+            FilesystemType::Tmpfs => 'T',
+            FilesystemType::Procfs => 'P',
+            FilesystemType::Sysfs => 'Y',
+            FilesystemType::Devfs => 'D',
+            FilesystemType::Mem8 => 'M',
+            FilesystemType::Unknown => '?',
+        }
+    }
+    
+    /// Check if this is a virtual filesystem that should be skipped
+    pub fn is_virtual(&self) -> bool {
+        matches!(self, 
+            FilesystemType::Procfs | 
+            FilesystemType::Sysfs | 
+            FilesystemType::Devfs |
+            FilesystemType::Tmpfs
+        )
+    }
+    
+    /// Check if this filesystem type should be shown by default
+    /// (only "interesting" filesystems based on platform)
+    pub fn should_show_by_default(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            matches!(self,
+                FilesystemType::Ext4 |
+                FilesystemType::Ext3 |
+                FilesystemType::Xfs |
+                FilesystemType::Btrfs |
+                FilesystemType::Zfs |
+                FilesystemType::Nfs |
+                FilesystemType::Smb |
+                FilesystemType::Mem8
+            )
+        }
+        #[cfg(target_os = "macos")]
+        {
+            matches!(self,
+                FilesystemType::Apfs |
+                FilesystemType::Hfs |
+                FilesystemType::Nfs |
+                FilesystemType::Smb |
+                FilesystemType::Mem8
+            )
+        }
+        #[cfg(target_os = "windows")]
+        {
+            matches!(self,
+                FilesystemType::Ntfs |
+                FilesystemType::Fat32 |
+                FilesystemType::ExFat |
+                FilesystemType::Mem8
+            )
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            // Show all non-virtual filesystems on other platforms
+            !self.is_virtual()
+        }
+    }
 }
 
 /// # FileCategory: Adding Semantic Flavor to Files
@@ -227,6 +335,8 @@ pub struct ScannerConfig {
     pub use_default_ignores: bool,
     /// An optional keyword to search for within file contents.
     pub search_keyword: Option<String>,
+    /// Should filesystem type indicators be shown?
+    pub show_filesystems: bool,
 }
 
 // --- Default Ignore Patterns: Keeping the Clutter Away ---
@@ -1056,7 +1166,96 @@ impl Scanner {
             file_type,
             category,
             search_matches: None, // Search matches are added later by the caller if needed.
+            filesystem_type: Self::get_filesystem_type(path),
         }))
+    }
+
+    /// ## `get_filesystem_type`
+    /// 
+    /// Detects the filesystem type for a given path using statfs on Unix systems
+    #[cfg(unix)]
+    fn get_filesystem_type(path: &Path) -> FilesystemType {
+        use libc::{statfs, c_char};
+        use std::ffi::CString;
+        use std::mem;
+        
+        // Filesystem magic numbers from statfs.h
+        const EXT4_SUPER_MAGIC: i64 = 0xef53;
+        const EXT3_SUPER_MAGIC: i64 = 0xef53;  // Same as ext4, need to check features
+        const EXT2_SUPER_MAGIC: i64 = 0xef53;  // Same as ext4, need to check features
+        const XFS_SUPER_MAGIC: i64 = 0x58465342;
+        const BTRFS_SUPER_MAGIC: i64 = 0x9123683e;
+        const ZFS_SUPER_MAGIC: i64 = 0x2fc12fc1;
+        const NTFS_SB_MAGIC: i64 = 0x5346544e;
+        const MSDOS_SUPER_MAGIC: i64 = 0x4d44;     // FAT
+        const EXFAT_SUPER_MAGIC: i64 = 0x2011bab0;
+        const APFS_SUPER_MAGIC: i64 = 0x42535041;  // 'APFS'
+        const HFS_SUPER_MAGIC: i64 = 0x482b;       // HFS+
+        const NFS_SUPER_MAGIC: i64 = 0x6969;
+        const SMB_SUPER_MAGIC: i64 = 0x517b;
+        const TMPFS_MAGIC: i64 = 0x01021994;
+        const PROC_SUPER_MAGIC: i64 = 0x9fa0;
+        const SYSFS_MAGIC: i64 = 0x62656572;
+        const DEVFS_SUPER_MAGIC: i64 = 0x1373;
+        
+        let path_cstr = match CString::new(path.to_string_lossy().as_bytes()) {
+            Ok(s) => s,
+            Err(_) => return FilesystemType::Unknown,
+        };
+        
+        let mut stat_buf: libc::statfs = unsafe { mem::zeroed() };
+        let result = unsafe { statfs(path_cstr.as_ptr(), &mut stat_buf) };
+        
+        if result != 0 {
+            // statfs failed, fall back to path-based detection for virtual filesystems
+            if let Some(path_str) = path.to_str() {
+                if path_str.starts_with("/proc") {
+                    return FilesystemType::Procfs;
+                } else if path_str.starts_with("/sys") {
+                    return FilesystemType::Sysfs;
+                } else if path_str.starts_with("/dev") {
+                    return FilesystemType::Devfs;
+                }
+            }
+            return FilesystemType::Unknown;
+        }
+        
+        // Check for Mem8 filesystem by looking for .mem8 marker files
+        if path.join(".mem8").exists() || path.to_string_lossy().contains("mem8") {
+            return FilesystemType::Mem8;
+        }
+        
+        match stat_buf.f_type as i64 {
+            EXT4_SUPER_MAGIC => FilesystemType::Ext4, // TODO: Distinguish ext2/3/4
+            XFS_SUPER_MAGIC => FilesystemType::Xfs,
+            BTRFS_SUPER_MAGIC => FilesystemType::Btrfs,
+            ZFS_SUPER_MAGIC => FilesystemType::Zfs,
+            NTFS_SB_MAGIC => FilesystemType::Ntfs,
+            MSDOS_SUPER_MAGIC => FilesystemType::Fat32,
+            EXFAT_SUPER_MAGIC => FilesystemType::ExFat,
+            APFS_SUPER_MAGIC => FilesystemType::Apfs,
+            HFS_SUPER_MAGIC => FilesystemType::Hfs,
+            NFS_SUPER_MAGIC => FilesystemType::Nfs,
+            SMB_SUPER_MAGIC => FilesystemType::Smb,
+            TMPFS_MAGIC => FilesystemType::Tmpfs,
+            PROC_SUPER_MAGIC => FilesystemType::Procfs,
+            SYSFS_MAGIC => FilesystemType::Sysfs,
+            DEVFS_SUPER_MAGIC => FilesystemType::Devfs,
+            _ => FilesystemType::Unknown,
+        }
+    }
+    
+    #[cfg(not(unix))]
+    fn get_filesystem_type(_path: &Path) -> FilesystemType {
+        // On non-Unix systems, we can't easily detect filesystem type
+        FilesystemType::Unknown
+    }
+    
+    /// ## `is_virtual_filesystem`
+    /// 
+    /// Checks if a path is on a virtual filesystem
+    fn is_virtual_filesystem(path: &Path) -> bool {
+        Self::get_filesystem_type(path).is_virtual()
     }
 
     /// ## `is_special_virtual_file`
@@ -1115,6 +1314,7 @@ impl Scanner {
             file_type: FileType::Directory, // Assume directory.
             category: FileCategory::Unknown,
             search_matches: None,
+            filesystem_type: Self::get_filesystem_type(path),
         }
     }
 
@@ -1134,7 +1334,14 @@ impl Scanner {
             return Ok(true); // Matches a specific problematic file.
         }
 
-        // --- Rule 2: Check against system paths (e.g., /proc, /sys) and their children ---
+        // --- Rule 2: ALWAYS skip virtual filesystems like /proc, /sys, /dev ---
+        // These are checked regardless of use_default_ignores because they're not real files
+        // and can cause issues (huge fake sizes, hangs, etc.)
+        if Self::is_virtual_filesystem(path) {
+            return Ok(true);
+        }
+        
+        // --- Rule 3: Check against other system paths if using default ignores ---
         if self.config.use_default_ignores {
             // Check for exact match of a system path.
             if self.system_paths.contains(path) {
@@ -1143,7 +1350,7 @@ impl Scanner {
             // Check if the current path is a child of any registered system path.
             for system_root_path in &self.system_paths {
                 if path.starts_with(system_root_path) {
-                    return Ok(true); // It's inside /proc, /sys, etc.
+                    return Ok(true); // It's inside /tmp, /var/tmp, etc.
                 }
             }
         }

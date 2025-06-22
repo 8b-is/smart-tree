@@ -15,7 +15,7 @@ impl AiFormatter {
         Self {
             // AI format should always use PathDisplayMode::Off for maximum compactness
             // unless explicitly requested otherwise
-            hex_formatter: HexFormatter::new(false, no_emoji, true, PathDisplayMode::Off),
+            hex_formatter: HexFormatter::new(false, no_emoji, true, PathDisplayMode::Off, false),
         }
     }
     

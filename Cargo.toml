@@ -30,6 +30,7 @@ atty = "0.2"
 sha2 = "0.10.9"
 toml = "0.8.23"
 dirs = "5.0"
+libc = "0.2"
 
 # MCP (Model Context Protocol) support
 tokio = { version = "1.42", features = ["full"], optional = true }

@@ -102,6 +102,12 @@ struct Args {
     #[arg(long)]
     everything: bool,
 
+    /// Show filesystem type indicators in output (e.g., X=XFS, 4=ext4, B=Btrfs).
+    /// Each file/directory gets a single character showing what filesystem it's on.
+    /// Great for understanding storage layout and mount points!
+    #[arg(long)]
+    show_filesystems: bool,
+
     /// Not a fan of emojis? This flag disables them for a plain text experience.
     /// (But Trish loves the emojis, just saying!) 🌳✨
     #[arg(long)]
@@ -342,6 +348,7 @@ fn main() -> Result<()> {
         older_than: args.older_than.as_ref().map(|d| parse_date(d)).transpose()?,
         use_default_ignores: !no_default_ignore_final,
         search_keyword: args.search.clone(),
+        show_filesystems: args.show_filesystems,
     };
 
     // Create the scanner instance with the specified root path and configuration.
@@ -377,7 +384,7 @@ fn main() -> Result<()> {
                 
                 // Create the appropriate streaming formatter based on the selected mode.
                 let streaming_formatter: Box<dyn StreamingFormatter> = match mode {
-                    OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, show_ignored_final, path_display_mode)),
+                    OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, show_ignored_final, path_display_mode, args.show_filesystems)),
                     OutputMode::Ai => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
@@ -426,7 +433,7 @@ fn main() -> Result<()> {
                 };
                 Box::new(ClassicFormatter::new(args.no_emoji, use_color, classic_path_mode))
             },
-            OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, show_ignored_final, path_display_mode)),
+            OutputMode::Hex => Box::new(HexFormatter::new(use_color, args.no_emoji, show_ignored_final, path_display_mode, args.show_filesystems)),
             OutputMode::Json => Box::new(JsonFormatter::new(args.compact)),
             OutputMode::Ai => {
                 // AI mode can optionally be wrapped in JSON.
@@ -543,7 +550,7 @@ fn print_mcp_tools() {
 #[cfg(feature = "mcp")]
 fn run_mcp_server() -> Result<()> {
     // Import MCP server components. These are only available if "mcp" feature is enabled.
-    use stree::mcp::{McpServer, load_mcp_config}; // Assuming load_mcp_config exists for server-side config.
+    use stree::mcp::{McpServer, load_config};
     
     // Create a Tokio runtime. MCP server might use async operations.
     // Using `new()` creates a multi-threaded runtime by default.
@@ -553,7 +560,7 @@ fn run_mcp_server() -> Result<()> {
     // `block_on` runs an async block to completion on the current thread.
     runtime.block_on(async {
         // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
-        let mcp_config = load_mcp_config().unwrap_or_default(); // Load or use defaults.
+        let mcp_config = load_config().unwrap_or_default(); // Load or use defaults.
         let server = McpServer::new(mcp_config);
         // `run_stdio` would handle communication over stdin/stdout.
         server.run_stdio().await 

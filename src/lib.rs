@@ -18,4 +18,4 @@ pub mod mcp;
 // Re-export key items from the `scanner` module for easier access.
 // This means users of the `stree` library can use `stree::Scanner`
 // instead of `stree::scanner::Scanner`, for example. It's all about convenience!
-pub use scanner::{Scanner, ScannerConfig, FileNode, FileCategory, TreeStats, parse_size};
+pub use scanner::{Scanner, ScannerConfig, FileNode, FileCategory, FilesystemType, TreeStats, parse_size};

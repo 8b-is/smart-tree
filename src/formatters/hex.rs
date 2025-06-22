@@ -1,5 +1,5 @@
 use super::{Formatter, StreamingFormatter, PathDisplayMode};
-use crate::scanner::{FileNode, FileType, TreeStats};
+use crate::scanner::{FileNode, FileType, FilesystemType, TreeStats};
 use anyhow::Result;
 use std::io::Write;
 use std::path::Path;
@@ -9,15 +9,17 @@ pub struct HexFormatter {
     pub no_emoji: bool,
     pub show_ignored: bool,
     pub path_mode: PathDisplayMode,
+    pub show_filesystems: bool,
 }
 
 impl HexFormatter {
-    pub fn new(use_color: bool, no_emoji: bool, show_ignored: bool, path_mode: PathDisplayMode) -> Self {
+    pub fn new(use_color: bool, no_emoji: bool, show_ignored: bool, path_mode: PathDisplayMode, show_filesystems: bool) -> Self {
         Self {
             use_color,
             no_emoji,
             show_ignored,
             path_mode,
+            show_filesystems,
         }
     }
 
@@ -60,6 +62,13 @@ impl HexFormatter {
         let time_hex = format!("{:08x}", node.modified.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
         
         let emoji = self.get_file_emoji(node.file_type);
+        
+        // Add filesystem indicator if enabled
+        let fs_indicator = if self.show_filesystems && node.filesystem_type.should_show_by_default() {
+            format!("{} ", node.filesystem_type.to_char())
+        } else {
+            String::new()
+        };
         
         // Get name based on path mode
         let name = match self.path_mode {
@@ -121,18 +130,18 @@ impl HexFormatter {
             const RESET: &str = "\x1b[0m";
 
             format!(
-                "{}{}{} {}{}{} {}{} {}{} {}{}{} {}{}{} {} {}",
+                "{}{}{} {}{}{} {}{} {}{} {}{}{} {}{}{} {}{} {}",
                 CYAN, depth_hex, RESET,
                 YELLOW, perms_hex, RESET,
                 MAGENTA, uid_hex, gid_hex, RESET,
                 GREEN, size_hex, RESET,
                 BLUE, time_hex, RESET,
-                emoji, display_name_with_search
+                fs_indicator, emoji, display_name_with_search
             )
         } else {
             format!(
-                "{} {} {} {} {} {} {} {}",
-                depth_hex, perms_hex, uid_hex, gid_hex, size_hex, time_hex, emoji, display_name_with_search
+                "{} {} {} {} {} {} {}{} {}",
+                depth_hex, perms_hex, uid_hex, gid_hex, size_hex, time_hex, fs_indicator, emoji, display_name_with_search
             )
         }
     }
