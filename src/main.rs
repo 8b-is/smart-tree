@@ -10,7 +10,8 @@
 // -----------------------------------------------------------------------------
 use anyhow::Result;
 use chrono::NaiveDate;
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
+use clap_complete::{generate, Shell};
 use colored; // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -31,8 +32,6 @@ use st::{
     ScannerConfig, // The mighty Scanner and its configuration.
 };
 
-/// Defines the command-line arguments that `st` accepts.
-/// Each field here corresponds to an option or flag a user can provide.
 /// We're using the `clap` crate to make this as easy as pie.
 /// Why write an argument parser from scratch when you can `clap`? *ba-dum-tss*
 #[derive(Parser, Debug)]
@@ -42,7 +41,26 @@ use st::{
     version, // Automatically pulls version from Cargo.toml
     author   // Automatically pulls authors from Cargo.toml - "8bit-wraith" and "Claude" - what a team!
 )]
-struct Args {
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+
+    #[command(flatten)]
+    scan: ScanArgs,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Generate shell completion scripts.
+    Completions {
+        /// The shell to generate completions for.
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+}
+
+#[derive(Parser, Debug)]
+struct ScanArgs {
     /// Path to the directory or file you want to analyze.
     /// If you don't specify, it bravely defaults to the current directory (`.`).
     #[arg(default_value = ".")]
@@ -244,7 +262,16 @@ fn parse_date(date_str: &str) -> Result<SystemTime> {
 /// It returns a `Result` because sometimes, even rockstars hit a wrong note.
 fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
-    let args = Args::parse();
+    let cli = Cli::parse();
+
+    if let Some(Commands::Completions { shell }) = cli.command {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let bin_name = cmd.get_name().to_string();
+        generate(shell, &mut cmd, bin_name, &mut io::stdout());
+        return Ok(());
+    }
+
+    let args = cli.scan;
 
     // --- MCP (Model Context Protocol) Handling ---
     // If the "mcp" feature is enabled, check for MCP-specific commands first.

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude"] # Updated authors
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
-repository = "https://github.com/8bit-wraith/smart-tree" # Updated repository
+repository = "https://github.com/8b-is/smart-tree" # Updated repository
 license = "MIT"
 readme = "README.md"
 keywords = ["tree", "directory", "visualization", "ai", "cli"]
@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "filesystem"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
 anyhow = "1.0"
 walkdir = "2.5"
 serde = { version = "1.0", features = ["derive"] }
