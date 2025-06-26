@@ -35,14 +35,39 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 - Minimal memory footprint
 - Handles massive directory trees with ease
 
+## 🚀 Quick Start
+
+```bash
+# One-line installer (recommended)
+curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install-smart-tree.sh | bash
+```
+
+This installer will:
+- Build and install Smart Tree (`st` command)
+- Set up aliases for `stree` and `smart-tree`
+- Optionally configure AI mode for Claude Desktop/Code
+- Create a preferences file with your settings
+- Add colorful terminal integration (courtesy of Trisha from Accounting! ✨)
+
 ## 📦 Installation
+
+### Using the Quick Installer (Recommended)
+
+```bash
+# Clone and run the installer
+git clone https://github.com/8b-is/smart-tree
+cd smart-tree
+./scripts/install-smart-tree.sh
+```
+
+### Manual Installation
 
 ```bash
 # From source
 cargo install --path .
 
 # Build from source
-git clone https://github.com/8bit-wraith/smart-tree
+git clone https://github.com/8b-is/smart-tree
 cd smart-tree
 cargo build --release
 sudo cp target/release/st /usr/local/bin/
