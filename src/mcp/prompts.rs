@@ -20,10 +20,7 @@ struct PromptArgument {
     required: bool,
 }
 
-pub async fn handle_prompts_list(
-    _params: Option<Value>,
-    _ctx: Arc<McpContext>,
-) -> Result<Value> {
+pub async fn handle_prompts_list(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let prompts = vec![
         PromptDefinition {
             name: "analyze_codebase".to_string(),
@@ -101,10 +98,7 @@ pub async fn handle_prompts_list(
     }))
 }
 
-pub async fn handle_prompts_get(
-    params: Value,
-    _ctx: Arc<McpContext>,
-) -> Result<Value> {
+pub async fn handle_prompts_get(params: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     let name = params["name"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing prompt name"))?;
@@ -125,21 +119,19 @@ fn get_analyze_codebase_prompt(args: Value) -> Result<Value> {
         .ok_or_else(|| anyhow::anyhow!("Missing path argument"))?;
     let include_hidden = args["include_hidden"].as_bool().unwrap_or(false);
 
-    let messages = vec![
-        json!({
-            "role": "user",
-            "content": {
-                "type": "text",
-                "text": format!(
-                    "Please analyze the codebase at {} using Smart Tree. \
-                    Use the analyze_directory tool with mode='ai' and compress=true for optimal token efficiency. \
-                    {}",
-                    path,
-                    if include_hidden { "Include hidden files." } else { "" }
-                )
-            }
-        }),
-    ];
+    let messages = vec![json!({
+        "role": "user",
+        "content": {
+            "type": "text",
+            "text": format!(
+                "Please analyze the codebase at {} using Smart Tree. \
+                Use the analyze_directory tool with mode='ai' and compress=true for optimal token efficiency. \
+                {}",
+                path,
+                if include_hidden { "Include hidden files." } else { "" }
+            )
+        }
+    })];
 
     Ok(json!({
         "description": "Analyzes a codebase with AI-optimized output",
@@ -154,19 +146,17 @@ fn get_find_large_files_prompt(args: Value) -> Result<Value> {
     let min_size = args["min_size"].as_str().unwrap_or("10M");
     let limit = args["limit"].as_u64().unwrap_or(10);
 
-    let messages = vec![
-        json!({
-            "role": "user",
-            "content": {
-                "type": "text",
-                "text": format!(
-                    "Find the {} largest files in {} that are at least {} in size. \
-                    Use the find_files tool with appropriate size filters, then sort and limit the results.",
-                    limit, path, min_size
-                )
-            }
-        }),
-    ];
+    let messages = vec![json!({
+        "role": "user",
+        "content": {
+            "type": "text",
+            "text": format!(
+                "Find the {} largest files in {} that are at least {} in size. \
+                Use the find_files tool with appropriate size filters, then sort and limit the results.",
+                limit, path, min_size
+            )
+        }
+    })];
 
     Ok(json!({
         "description": "Finds large files in a directory tree",
@@ -185,19 +175,17 @@ fn get_recent_changes_prompt(args: Value) -> Result<Value> {
     let date = Local::now() - Duration::days(days as i64);
     let date_str = date.format("%Y-%m-%d").to_string();
 
-    let messages = vec![
-        json!({
-            "role": "user",
-            "content": {
-                "type": "text",
-                "text": format!(
-                    "Find all files modified in the last {} days (since {}) in {}. \
-                    Use the find_files tool with newer_than='{}' parameter.",
-                    days, date_str, path, date_str
-                )
-            }
-        }),
-    ];
+    let messages = vec![json!({
+        "role": "user",
+        "content": {
+            "type": "text",
+            "text": format!(
+                "Find all files modified in the last {} days (since {}) in {}. \
+                Use the find_files tool with newer_than='{}' parameter.",
+                days, date_str, path, date_str
+            )
+        }
+    })];
 
     Ok(json!({
         "description": "Finds recently modified files",
@@ -211,20 +199,18 @@ fn get_project_structure_prompt(args: Value) -> Result<Value> {
         .ok_or_else(|| anyhow::anyhow!("Missing path argument"))?;
     let max_depth = args["max_depth"].as_u64().unwrap_or(3);
 
-    let messages = vec![
-        json!({
-            "role": "user",
-            "content": {
-                "type": "text",
-                "text": format!(
-                    "Generate a clean project structure overview for {}. \
-                    Use the analyze_directory tool with mode='classic', max_depth={}, \
-                    and show_ignored=false to get a clear view of the project layout.",
-                    path, max_depth
-                )
-            }
-        }),
-    ];
+    let messages = vec![json!({
+        "role": "user",
+        "content": {
+            "type": "text",
+            "text": format!(
+                "Generate a clean project structure overview for {}. \
+                Use the analyze_directory tool with mode='classic', max_depth={}, \
+                and show_ignored=false to get a clear view of the project layout.",
+                path, max_depth
+            )
+        }
+    })];
 
     Ok(json!({
         "description": "Gets a clean project structure overview",

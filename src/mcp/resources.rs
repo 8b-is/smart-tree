@@ -15,10 +15,7 @@ struct ResourceDefinition {
     mime_type: String,
 }
 
-pub async fn handle_resources_list(
-    _params: Option<Value>,
-    _ctx: Arc<McpContext>,
-) -> Result<Value> {
+pub async fn handle_resources_list(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let resources = vec![
         ResourceDefinition {
             uri: "cache://directory_cache".to_string(),
@@ -45,10 +42,7 @@ pub async fn handle_resources_list(
     }))
 }
 
-pub async fn handle_resources_read(
-    params: Value,
-    ctx: Arc<McpContext>,
-) -> Result<Value> {
+pub async fn handle_resources_read(params: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let uri = params["uri"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing resource URI"))?;
@@ -64,7 +58,7 @@ pub async fn handle_resources_read(
 async fn read_directory_cache(ctx: Arc<McpContext>) -> Result<Value> {
     // Get cache statistics
     let cache_size = ctx.cache.len();
-    
+
     // Clean up expired entries
     ctx.cache.cleanup().await;
     let active_size = ctx.cache.len();

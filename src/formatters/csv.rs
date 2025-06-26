@@ -23,7 +23,7 @@ impl Formatter for CsvFormatter {
         root_path: &Path,
     ) -> Result<()> {
         let mut csv_writer = Writer::from_writer(writer);
-        
+
         // Write header
         csv_writer.write_record(&[
             "path",
@@ -35,11 +35,11 @@ impl Formatter for CsvFormatter {
             "modified",
             "depth",
         ])?;
-        
+
         // Sort nodes by path
         let mut sorted_nodes = nodes.to_vec();
         sorted_nodes.sort_by(|a, b| a.path.cmp(&b.path));
-        
+
         for node in &sorted_nodes {
             let rel_path = if node.path == root_path {
                 ".".to_string()
@@ -50,10 +50,10 @@ impl Formatter for CsvFormatter {
                     .to_string_lossy()
                     .to_string()
             };
-            
+
             let file_type = if node.is_dir { "d" } else { "f" };
             let datetime = DateTime::<Local>::from(node.modified);
-            
+
             csv_writer.write_record(&[
                 rel_path,
                 file_type.to_string(),
@@ -65,7 +65,7 @@ impl Formatter for CsvFormatter {
                 node.depth.to_string(),
             ])?;
         }
-        
+
         csv_writer.flush()?;
         Ok(())
     }

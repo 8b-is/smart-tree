@@ -25,14 +25,12 @@ struct ToolDefinition {
     input_schema: Value,
 }
 
-pub async fn handle_tools_list(
-    _params: Option<Value>,
-    _ctx: Arc<McpContext>,
-) -> Result<Value> {
+pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let tools = vec![
         ToolDefinition {
             name: "analyze_directory".to_string(),
-            description: "Analyze a directory and return its structure in various formats".to_string(),
+            description: "Analyze a directory and return its structure in various formats"
+                .to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -164,10 +162,7 @@ pub async fn handle_tools_list(
     }))
 }
 
-pub async fn handle_tools_call(
-    params: Value,
-    ctx: Arc<McpContext>,
-) -> Result<Value> {
+pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let tool_name = params["name"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
@@ -275,8 +270,18 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
     // Create formatter
     let formatter: Box<dyn Formatter> = match args.mode.as_str() {
-        "classic" => Box::new(ClassicFormatter::new(args.no_emoji, true, path_display_mode)),
-        "hex" => Box::new(HexFormatter::new(true, args.no_emoji, args.show_ignored, path_display_mode, false)),
+        "classic" => Box::new(ClassicFormatter::new(
+            args.no_emoji,
+            true,
+            path_display_mode,
+        )),
+        "hex" => Box::new(HexFormatter::new(
+            true,
+            args.no_emoji,
+            args.show_ignored,
+            path_display_mode,
+            false,
+        )),
         "json" => Box::new(JsonFormatter::new(false)),
         "ai" => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
         "stats" => Box::new(StatsFormatter::new()),
@@ -346,7 +351,8 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         use chrono::NaiveDate;
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
         let datetime = date.and_hms_opt(0, 0, 0).unwrap();
-        Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.and_utc().timestamp() as u64))
+        Ok(SystemTime::UNIX_EPOCH
+            + std::time::Duration::from_secs(datetime.and_utc().timestamp() as u64))
     };
 
     // Build scanner configuration
@@ -360,8 +366,16 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         file_type_filter: args.file_type,
         min_size: args.min_size.as_ref().map(|s| parse_size(s)).transpose()?,
         max_size: args.max_size.as_ref().map(|s| parse_size(s)).transpose()?,
-        newer_than: args.newer_than.as_ref().map(|d| parse_date(d)).transpose()?,
-        older_than: args.older_than.as_ref().map(|d| parse_date(d)).transpose()?,
+        newer_than: args
+            .newer_than
+            .as_ref()
+            .map(|d| parse_date(d))
+            .transpose()?,
+        older_than: args
+            .older_than
+            .as_ref()
+            .map(|d| parse_date(d))
+            .transpose()?,
         use_default_ignores: true,
         search_keyword: None,
         show_filesystems: false,

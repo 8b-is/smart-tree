@@ -1,4 +1,4 @@
-use super::{Formatter, StreamingFormatter, PathDisplayMode};
+use super::{Formatter, PathDisplayMode, StreamingFormatter};
 use crate::scanner::{FileNode, FileType, FilesystemType, TreeStats};
 use anyhow::Result;
 use std::io::Write;
@@ -13,7 +13,13 @@ pub struct HexFormatter {
 }
 
 impl HexFormatter {
-    pub fn new(use_color: bool, no_emoji: bool, show_ignored: bool, path_mode: PathDisplayMode, show_filesystems: bool) -> Self {
+    pub fn new(
+        use_color: bool,
+        no_emoji: bool,
+        show_ignored: bool,
+        path_mode: PathDisplayMode,
+        show_filesystems: bool,
+    ) -> Self {
         Self {
             use_color,
             no_emoji,
@@ -59,41 +65,48 @@ impl HexFormatter {
         } else {
             format!("{:08x}", node.size)
         };
-        let time_hex = format!("{:08x}", node.modified.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
-        
+        let time_hex = format!(
+            "{:08x}",
+            node.modified
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        );
+
         let emoji = self.get_file_emoji(node.file_type);
-        
+
         // Add filesystem indicator if enabled
-        let fs_indicator = if self.show_filesystems && node.filesystem_type.should_show_by_default() {
+        let fs_indicator = if self.show_filesystems && node.filesystem_type.should_show_by_default()
+        {
             format!("{} ", node.filesystem_type.to_char())
         } else {
             String::new()
         };
-        
+
         // Get name based on path mode
         let name = match self.path_mode {
-            PathDisplayMode::Off => {
-                node.path.file_name()
-                    .unwrap_or(node.path.as_os_str())
-                    .to_string_lossy()
-                    .to_string()
-            },
+            PathDisplayMode::Off => node
+                .path
+                .file_name()
+                .unwrap_or(node.path.as_os_str())
+                .to_string_lossy()
+                .to_string(),
             PathDisplayMode::Relative => {
                 if node.path == root_path {
-                    node.path.file_name()
+                    node.path
+                        .file_name()
                         .unwrap_or(node.path.as_os_str())
                         .to_string_lossy()
                         .to_string()
                 } else {
-                    node.path.strip_prefix(root_path)
+                    node.path
+                        .strip_prefix(root_path)
                         .unwrap_or(&node.path)
                         .to_string_lossy()
                         .to_string()
                 }
-            },
-            PathDisplayMode::Full => {
-                node.path.display().to_string()
             }
+            PathDisplayMode::Full => node.path.display().to_string(),
         };
 
         // Add brackets for permission denied or ignored
@@ -104,11 +117,12 @@ impl HexFormatter {
         } else {
             name
         };
-        
+
         // Add search matches if present
         let display_name_with_search = if let Some(matches) = &node.search_matches {
             if !matches.is_empty() {
-                let hex_positions: Vec<String> = matches.iter()
+                let hex_positions: Vec<String> = matches
+                    .iter()
                     .take(10) // Limit to first 10 matches
                     .map(|pos| format!("{:x}", pos))
                     .collect();
@@ -131,17 +145,38 @@ impl HexFormatter {
 
             format!(
                 "{}{}{} {}{}{} {}{} {}{} {}{}{} {}{}{} {}{} {}",
-                CYAN, depth_hex, RESET,
-                YELLOW, perms_hex, RESET,
-                MAGENTA, uid_hex, gid_hex, RESET,
-                GREEN, size_hex, RESET,
-                BLUE, time_hex, RESET,
-                fs_indicator, emoji, display_name_with_search
+                CYAN,
+                depth_hex,
+                RESET,
+                YELLOW,
+                perms_hex,
+                RESET,
+                MAGENTA,
+                uid_hex,
+                gid_hex,
+                RESET,
+                GREEN,
+                size_hex,
+                RESET,
+                BLUE,
+                time_hex,
+                RESET,
+                fs_indicator,
+                emoji,
+                display_name_with_search
             )
         } else {
             format!(
                 "{} {} {} {} {} {} {}{} {}",
-                depth_hex, perms_hex, uid_hex, gid_hex, size_hex, time_hex, fs_indicator, emoji, display_name_with_search
+                depth_hex,
+                perms_hex,
+                uid_hex,
+                gid_hex,
+                size_hex,
+                time_hex,
+                fs_indicator,
+                emoji,
+                display_name_with_search
             )
         }
     }
@@ -172,14 +207,19 @@ impl StreamingFormatter for HexFormatter {
         // No header needed for hex format
         Ok(())
     }
-    
+
     fn format_node(&self, writer: &mut dyn Write, node: &FileNode, root_path: &Path) -> Result<()> {
         writeln!(writer, "{}", self.format_node(node, root_path))?;
         writer.flush()?; // Ensure immediate output
         Ok(())
     }
-    
-    fn end_stream(&self, _writer: &mut dyn Write, _stats: &TreeStats, _root_path: &Path) -> Result<()> {
+
+    fn end_stream(
+        &self,
+        _writer: &mut dyn Write,
+        _stats: &TreeStats,
+        _root_path: &Path,
+    ) -> Result<()> {
         // No footer needed for hex format
         Ok(())
     }

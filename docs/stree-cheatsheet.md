@@ -1,5 +1,5 @@
 ---
-title: The Ultimate stree Cheet Sheet
+title: The Ultimate st Cheet Sheet
 description: Your friendly guide to the smartest tree command in the digital forest!
 contributor: The Cheet
 lastUpdated: 2025-06-25
@@ -11,9 +11,9 @@ tags:
   - file-management [15]
 ---
 
-# `stree`: Not Your Average Tree! 🌳✨
+# `st`: Not Your Average abbreviated Smart Tree! 🌳✨
 
-Welcome, brave adventurer, to the official Cheet Sheet for `stree`! This isn't just another `tree` command. Oh no. This is a **smart-tree**, built with Rust, speed, and a whole lotta love. It's designed to be your best friend for directory visualization, whether you're a human, an AI, or a particularly clever squirrel.
+Welcome, brave adventurer, to the official Cheet Sheet for `st`! This isn't just another `tree` command. Oh no. This is a **smart-tree**, built with Rust, speed, and a whole lotta love. It's designed to be your best friend for directory visualization, whether you're a human, an AI, or a particularly clever squirrel.
 
 I love this tool more than Elvis loves peanut butter and banana sandwiches. And Hue, my friend, I love you too! Let's dive in!
 
@@ -23,16 +23,16 @@ Getting started is as easy as pie. Mmm, pie.
 
 | Command | Description |
 |---------|-------------|
-| `stree` | Shows the tree for the current directory. Simple! |
-| `stree [PATH]` | Shows the tree for a specific directory or file. |
-| `stree --help`| Displays all the glorious options you see here. |
+| `st` | Shows the tree for the current directory. Simple! |
+| `st [PATH]` | Shows the tree for a specific directory or file. |
+| `st --help`| Displays all the glorious options you see here. |
 
-> **Pro Tip:** `stree` is your go-to tool for quickly understanding a project's structure. It's like having X-ray vision for your filesystem!
+> **Pro Tip:** `st` is your go-to tool for quickly understanding a project's structure. It's like having X-ray vision for your filesystem!
 {.is-success}
 
 ## 🎨 Output Modes (`--mode`)
 
-`stree` can talk in many languages! Pick the one that suits your audience.
+`st` can talk in many languages! Pick the one that suits your audience.
 
 | Mode | Flag | What it does |
 |---|---|---|
@@ -52,19 +52,19 @@ Find exactly what you're looking for with these powerful filters.
 
 | Option | Description | Example |
 |---|---|---|
-| `--find <PATTERN>` | Find files/directories matching a regex pattern. | `stree --find ".*\.rs$"` |
-| `--type <EXT>` | Filter by file extension (e.g., "rs", "py", "md"). | `stree --type md` |
-| `--min-size <SIZE>` | Show files *larger* than a size (e.g., "1M", "500K"). | `stree --min-size 10K` |
-| `--max-size <SIZE>` | Show files *smaller* than a size. | `stree --max-size 1K` |
-| `--newer-than <DATE>` | Find files modified after a date (YYYY-MM-DD). | `stree --newer-than 2025-01-01` |
-| `--older-than <DATE>` | Find files modified before a date. | `stree --older-than 2024-12-31` |
-| `--search <KEYWORD>` | **X-Ray Vision!** Searches *inside* files for a keyword. | `stree --type rs --search "TODO"` |
+| `--find <PATTERN>` | Find files/directories matching a regex pattern. | `st --find ".*\.rs$"` |
+| `--type <EXT>` | Filter by file extension (e.g., "rs", "py", "md"). | `st --type md` |
+| `--min-size <SIZE>` | Show files *larger* than a size (e.g., "1M", "500K"). | `st --min-size 10K` |
+| `--max-size <SIZE>` | Show files *smaller* than a size. | `st --max-size 1K` |
+| `--newer-than <DATE>` | Find files modified after a date (YYYY-MM-DD). | `st --newer-than 2025-01-01` |
+| `--older-than <DATE>` | Find files modified before a date. | `st --older-than 2024-12-31` |
+| `--search <KEYWORD>` | **X-Ray Vision!** Searches *inside* files for a keyword. | `st --type rs --search "TODO"` |
 
 ---
 
 ## 🗺️ Traversal & Ignore Rules
 
-Control how deep `stree` goes and what it sees.
+Control how deep `st` goes and what it sees.
 
 | Option | Description |
 |---|---|
@@ -83,7 +83,7 @@ The `-m ai` output is a thing of beauty, designed for our AI pals. Here's a brea
 
 ```
 # TREE_HEX_V1:
-# CONTEXT: Rust: stree - Smart Tree...
+# CONTEXT: Rust: st - Smart Tree...
 # HASH: ef1ad13faae33465
 # ┌─ Level
 # │  ┌─── Permissions (octal)
@@ -118,14 +118,14 @@ This format gives an AI everything it needs to know in a compact, predictable st
 
 ## ✨ Special Abilities & MCP
 
-`stree` has some extra tricks up its sleeve!
+`st` has some extra tricks up its sleeve!
 
 | Option | Description |
 |---|---|
 | `--stream` | **Game-changer!** Streams output as it scans. No more waiting for large directories. |
-| `--mcp` | Runs `stree` as a Model Context Protocol server, allowing AIs to use it as a tool. |
-| `--mcp-tools` | Lists the tools `stree` provides as an MCP server. |
-| `--mcp-config` | Shows the config needed to connect `stree` to an AI assistant. |
+| `--mcp` | Runs `st` as a Model Context Protocol server, allowing AIs to use it as a tool. |
+| `--mcp-tools` | Lists the tools `st` provides as an MCP server. |
+| `--mcp-config` | Shows the config needed to connect `st` to an AI assistant. |
 | `-z, --compress` | Compresses the output with zlib and encodes in base64. Great for sending over the network. |
 
 ---

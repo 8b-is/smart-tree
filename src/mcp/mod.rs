@@ -1,5 +1,5 @@
 //! MCP (Model Context Protocol) server implementation for Smart Tree
-//! 
+//!
 //! This module provides a JSON-RPC server that exposes Smart Tree's functionality
 //! through the Model Context Protocol, allowing AI assistants to analyze directories.
 
@@ -10,15 +10,15 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-mod tools;
-mod resources;
-mod prompts;
 mod cache;
+mod prompts;
+mod resources;
+mod tools;
 
-use tools::*;
-use resources::*;
-use prompts::*;
 use cache::*;
+use prompts::*;
+use resources::*;
+use tools::*;
 
 /// MCP server implementation
 pub struct McpServer {
@@ -53,7 +53,7 @@ impl Default for McpConfig {
     fn default() -> Self {
         Self {
             cache_enabled: true,
-            cache_ttl: 300, // 5 minutes
+            cache_ttl: 300,                    // 5 minutes
             max_cache_size: 100 * 1024 * 1024, // 100MB
             allowed_paths: vec![],
             blocked_paths: vec![
@@ -159,19 +159,28 @@ impl McpServer {
     /// Handle a single JSON-RPC request
     async fn handle_request(&self, request_str: &str) -> Result<String> {
         // Parse JSON-RPC request
-        let request: JsonRpcRequest = serde_json::from_str(request_str)
-            .context("Failed to parse JSON-RPC request")?;
+        let request: JsonRpcRequest =
+            serde_json::from_str(request_str).context("Failed to parse JSON-RPC request")?;
 
         // Route the request
         let result = match request.method.as_str() {
             "initialize" => handle_initialize(request.params, self.context.clone()).await,
             "tools/list" => handle_tools_list(request.params, self.context.clone()).await,
-            "tools/call" => handle_tools_call(request.params.unwrap_or(json!({})), self.context.clone()).await,
+            "tools/call" => {
+                handle_tools_call(request.params.unwrap_or(json!({})), self.context.clone()).await
+            }
             "resources/list" => handle_resources_list(request.params, self.context.clone()).await,
-            "resources/read" => handle_resources_read(request.params.unwrap_or(json!({})), self.context.clone()).await,
+            "resources/read" => {
+                handle_resources_read(request.params.unwrap_or(json!({})), self.context.clone())
+                    .await
+            }
             "prompts/list" => handle_prompts_list(request.params, self.context.clone()).await,
-            "prompts/get" => handle_prompts_get(request.params.unwrap_or(json!({})), self.context.clone()).await,
-            "notifications/cancelled" => handle_cancelled(request.params, self.context.clone()).await,
+            "prompts/get" => {
+                handle_prompts_get(request.params.unwrap_or(json!({})), self.context.clone()).await
+            }
+            "notifications/cancelled" => {
+                handle_cancelled(request.params, self.context.clone()).await
+            }
             _ => Err(anyhow::anyhow!("Method not found: {}", request.method)),
         };
 
@@ -201,10 +210,7 @@ impl McpServer {
 
 // Handler implementations
 
-async fn handle_initialize(
-    _params: Option<Value>,
-    _ctx: Arc<McpContext>,
-) -> Result<Value> {
+async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     Ok(json!({
         "protocolVersion": "2024-11-05",
         "capabilities": {
@@ -219,10 +225,7 @@ async fn handle_initialize(
     }))
 }
 
-async fn handle_cancelled(
-    _params: Option<Value>,
-    _ctx: Arc<McpContext>,
-) -> Result<Value> {
+async fn handle_cancelled(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     // TODO: Implement cancellation logic
     Ok(json!({}))
 }
@@ -254,14 +257,13 @@ pub fn is_path_allowed(path: &Path, config: &McpConfig) -> bool {
 /// Load MCP configuration from file or use defaults
 pub fn load_config() -> Result<McpConfig> {
     let config_path = dirs::home_dir()
-        .map(|d| d.join(".stree").join("mcp-config.toml"))
-        .unwrap_or_else(|| PathBuf::from(".stree/mcp-config.toml"));
+        .map(|d| d.join(".st").join("mcp-config.toml"))
+        .unwrap_or_else(|| PathBuf::from(".st/mcp-config.toml"));
 
     if config_path.exists() {
-        let config_str = std::fs::read_to_string(&config_path)
-            .context("Failed to read MCP config file")?;
-        toml::from_str(&config_str)
-            .context("Failed to parse MCP config file")
+        let config_str =
+            std::fs::read_to_string(&config_path).context("Failed to read MCP config file")?;
+        toml::from_str(&config_str).context("Failed to parse MCP config file")
     } else {
         Ok(McpConfig::default())
     }

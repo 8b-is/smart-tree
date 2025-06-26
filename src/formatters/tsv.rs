@@ -26,11 +26,11 @@ impl Formatter for TsvFormatter {
             writer,
             "path\ttype\tsize\tpermissions\tuid\tgid\tmodified\tdepth"
         )?;
-        
+
         // Sort nodes by path
         let mut sorted_nodes = nodes.to_vec();
         sorted_nodes.sort_by(|a, b| a.path.cmp(&b.path));
-        
+
         for node in &sorted_nodes {
             let rel_path = if node.path == root_path {
                 ".".to_string()
@@ -41,10 +41,10 @@ impl Formatter for TsvFormatter {
                     .to_string_lossy()
                     .to_string()
             };
-            
+
             let file_type = if node.is_dir { "d" } else { "f" };
             let datetime = DateTime::<Local>::from(node.modified);
-            
+
             writeln!(
                 writer,
                 "{}\t{}\t{}\t{:o}\t{}\t{}\t{}\t{}",
@@ -58,7 +58,7 @@ impl Formatter for TsvFormatter {
                 node.depth
             )?;
         }
-        
+
         Ok(())
     }
 }

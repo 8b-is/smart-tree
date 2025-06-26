@@ -25,8 +25,16 @@ impl Formatter for StatsFormatter {
         writeln!(writer, "{}", "=".repeat(60))?;
         writeln!(writer, "Directory Statistics for: {}", root_path.display())?;
         writeln!(writer, "{}", "=".repeat(60))?;
-        writeln!(writer, "Total Files: {} ({:x} hex)", stats.total_files, stats.total_files)?;
-        writeln!(writer, "Total Directories: {} ({:x} hex)", stats.total_dirs, stats.total_dirs)?;
+        writeln!(
+            writer,
+            "Total Files: {} ({:x} hex)",
+            stats.total_files, stats.total_files
+        )?;
+        writeln!(
+            writer,
+            "Total Directories: {} ({:x} hex)",
+            stats.total_dirs, stats.total_dirs
+        )?;
         writeln!(
             writer,
             "Total Size: {} bytes ({:x} hex) ({})",
@@ -35,19 +43,19 @@ impl Formatter for StatsFormatter {
             format_size(stats.total_size, BINARY)
         )?;
         writeln!(writer)?;
-        
+
         // File types by count
         if !stats.file_types.is_empty() {
             writeln!(writer, "File Types (by count):")?;
             let mut types: Vec<_> = stats.file_types.iter().collect();
             types.sort_by(|a, b| b.1.cmp(a.1));
-            
+
             for (ext, count) in types.iter().take(20) {
                 writeln!(writer, "  .{}: {}", ext, count)?;
             }
             writeln!(writer)?;
         }
-        
+
         // Largest files
         if !stats.largest_files.is_empty() {
             writeln!(writer, "Largest Files:")?;
@@ -64,7 +72,7 @@ impl Formatter for StatsFormatter {
             }
             writeln!(writer)?;
         }
-        
+
         // Newest files
         if !stats.newest_files.is_empty() {
             writeln!(writer, "Newest Files:")?;
@@ -80,7 +88,7 @@ impl Formatter for StatsFormatter {
             }
             writeln!(writer)?;
         }
-        
+
         // Oldest files
         if !stats.oldest_files.is_empty() {
             writeln!(writer, "Oldest Files:")?;
@@ -95,7 +103,7 @@ impl Formatter for StatsFormatter {
                 )?;
             }
         }
-        
+
         Ok(())
     }
 }

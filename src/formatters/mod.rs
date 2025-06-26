@@ -1,12 +1,12 @@
-pub mod hex;
-pub mod classic;
-pub mod json;
 pub mod ai;
 pub mod ai_json;
-pub mod stats;
+pub mod classic;
 pub mod csv;
-pub mod tsv;
 pub mod digest;
+pub mod hex;
+pub mod json;
+pub mod stats;
+pub mod tsv;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
@@ -32,10 +32,20 @@ pub trait Formatter {
 pub trait StreamingFormatter {
     /// Initialize the stream (e.g., write headers)
     fn start_stream(&self, writer: &mut dyn Write, root_path: &std::path::Path) -> Result<()>;
-    
+
     /// Format a single node as it arrives
-    fn format_node(&self, writer: &mut dyn Write, node: &FileNode, root_path: &std::path::Path) -> Result<()>;
-    
+    fn format_node(
+        &self,
+        writer: &mut dyn Write,
+        node: &FileNode,
+        root_path: &std::path::Path,
+    ) -> Result<()>;
+
     /// Finalize the stream (e.g., write stats, footers)
-    fn end_stream(&self, writer: &mut dyn Write, stats: &TreeStats, root_path: &std::path::Path) -> Result<()>;
+    fn end_stream(
+        &self,
+        writer: &mut dyn Write,
+        stats: &TreeStats,
+        root_path: &std::path::Path,
+    ) -> Result<()>;
 }

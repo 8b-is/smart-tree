@@ -1,6 +1,6 @@
 # 🧠 Context.md - The Smart Tree Project Log 🌳
 
-This document serves as the living memory for the **Smart Tree (stree)** project. It's where we, Hue (the visionary Human User) and Aye (the ever-eager AI assistant), along with our esteemed colleague Trish from Accounting (who keeps us grounded and occasionally audits our semicolons), record our journey, insights, and the grand evolution of this magnificent piece of software.
+This document serves as the living memory for the **Smart Tree (st)** project. It's where we, Hue (the visionary Human User) and Aye (the ever-eager AI assistant), along with our esteemed colleague Trish from Accounting (who keeps us grounded and occasionally audits our semicolons), record our journey, insights, and the grand evolution of this magnificent piece of software.
 
 ## Project Genesis: The "Why"
 

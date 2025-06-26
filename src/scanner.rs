@@ -1,11 +1,17 @@
-//! # Directory Scanning and Traversal Engine (The Heart of Smart Tree!)
-//!
-//! Aye, Aye! Welcome to `scanner.rs`, the module that does the heavy lifting for `stree`.
-//! This is where we dive deep into the filesystem, meticulously examining every nook and cranny
-//! (or at least, every file and directory you tell us to!). We gather metadata, apply filters,
-//! respect `.gitignore` files (like a well-behaved pirate respecting the code of conduct),
-//! and categorize files so our formatters can make them look pretty.
-//! Trish says this module is like the chief explorer of our data jungle!
+//
+// -----------------------------------------------------------------------------
+//  WELCOME TO THE JUNGLE! ...The filesystem jungle, that is. 🌴
+//
+//  You've found scanner.rs, the intrepid explorer and engine room of st.
+//  This module is the Indiana Jones of our codebase. It bravely dives into
+//  the deepest, darkest directories, dodges `.gitignore` traps, inspects
+//  every file for treasure (metadata), and reports back its findings.
+//
+//  So grab your hat, and let's go on an adventure!
+//
+//  Brought to you by The Cheet - making filesystem traversal a rock concert! 🥁🧻
+// -----------------------------------------------------------------------------
+//
 
 use anyhow::Result;
 use globset::{Glob, GlobSet, GlobSetBuilder}; // For powerful gitignore-style pattern matching.
@@ -23,11 +29,12 @@ use walkdir::{DirEntry, WalkDir}; // The excellent `walkdir` crate does the actu
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-/// # FileNode: Our Digital Representation of a Filesystem Entry
+/// # FileNode: The Ultimate Backstage Pass
 ///
-/// This struct holds all the juicy details we collect about each file or directory
-/// during our grand traversal. It's the fundamental unit of data that `stree` works with.
-/// Think of it as a detailed dossier for every item encountered.
+/// Every file and directory we meet gets one of these. It's a VIP pass that
+/// holds all the juicy details: its name, size, when it was last cool (modified),
+/// and whether it's on the super-secret "ignored" list. It's the atom of our
+/// `st` universe.
 #[derive(Debug, Clone)]
 pub struct FileNode {
     /// The full path to the file or directory. The source of truth for location!
@@ -73,14 +80,14 @@ pub struct FileNode {
 /// It's especially useful on Unix-like systems where you have sockets, pipes, etc.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FileType {
-    Directory,      // A folder, a container of other things.
-    RegularFile,    // Your everyday, garden-variety file.
-    Symlink,        // A pointer to another file or directory.
-    Executable,     // A file that can be run (has execute permissions).
-    Socket,         // A Unix domain socket.
-    Pipe,           // A named pipe (FIFO).
-    BlockDevice,    // A block special file (e.g., /dev/sda).
-    CharDevice,     // A character special file (e.g., /dev/tty).
+    Directory,   // A folder, a container of other things.
+    RegularFile, // Your everyday, garden-variety file.
+    Symlink,     // A pointer to another file or directory.
+    Executable,  // A file that can be run (has execute permissions).
+    Socket,      // A Unix domain socket.
+    Pipe,        // A named pipe (FIFO).
+    BlockDevice, // A block special file (e.g., /dev/sda).
+    CharDevice,  // A character special file (e.g., /dev/tty).
 }
 
 /// # FilesystemType: Identifying the underlying filesystem
@@ -89,25 +96,25 @@ pub enum FileType {
 /// for compact display. The mapping is designed to be memorable and intuitive.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FilesystemType {
-    Ext4,       // '4' - The most common Linux filesystem
-    Ext3,       // '3' - Older ext filesystem
-    Ext2,       // '2' - Even older ext filesystem
-    Xfs,        // 'X' - XFS filesystem
-    Btrfs,      // 'B' - Btrfs (B-tree filesystem)
-    Zfs,        // 'Z' - ZFS filesystem
-    Ntfs,       // 'N' - Windows NTFS
-    Fat32,      // 'F' - FAT32
-    ExFat,      // 'E' - exFAT
-    Apfs,       // 'A' - Apple File System
-    Hfs,        // 'H' - HFS+ (older Mac)
-    Nfs,        // 'R' - Remote NFS mount
-    Smb,        // 'S' - SMB/CIFS network filesystem
-    Tmpfs,      // 'T' - Temporary filesystem (RAM)
-    Procfs,     // 'P' - /proc virtual filesystem
-    Sysfs,      // 'Y' - /sys virtual filesystem
-    Devfs,      // 'D' - /dev virtual filesystem
-    Mem8,       // 'M' - Mem8 filesystem (custom!)
-    Unknown,    // '?' - Unknown filesystem
+    Ext4,    // '4' - The most common Linux filesystem
+    Ext3,    // '3' - Older ext filesystem
+    Ext2,    // '2' - Even older ext filesystem
+    Xfs,     // 'X' - XFS filesystem
+    Btrfs,   // 'B' - Btrfs (B-tree filesystem)
+    Zfs,     // 'Z' - ZFS filesystem
+    Ntfs,    // 'N' - Windows NTFS
+    Fat32,   // 'F' - FAT32
+    ExFat,   // 'E' - exFAT
+    Apfs,    // 'A' - Apple File System
+    Hfs,     // 'H' - HFS+ (older Mac)
+    Nfs,     // 'R' - Remote NFS mount
+    Smb,     // 'S' - SMB/CIFS network filesystem
+    Tmpfs,   // 'T' - Temporary filesystem (RAM)
+    Procfs,  // 'P' - /proc virtual filesystem
+    Sysfs,   // 'Y' - /sys virtual filesystem
+    Devfs,   // 'D' - /dev virtual filesystem
+    Mem8,    // 'M' - Mem8 filesystem (custom!)
+    Unknown, // '?' - Unknown filesystem
 }
 
 impl FilesystemType {
@@ -135,50 +142,54 @@ impl FilesystemType {
             FilesystemType::Unknown => '?',
         }
     }
-    
+
     /// Check if this is a virtual filesystem that should be skipped
     pub fn is_virtual(&self) -> bool {
-        matches!(self, 
-            FilesystemType::Procfs | 
-            FilesystemType::Sysfs | 
-            FilesystemType::Devfs |
-            FilesystemType::Tmpfs
+        matches!(
+            self,
+            FilesystemType::Procfs
+                | FilesystemType::Sysfs
+                | FilesystemType::Devfs
+                | FilesystemType::Tmpfs
         )
     }
-    
+
     /// Check if this filesystem type should be shown by default
     /// (only "interesting" filesystems based on platform)
     pub fn should_show_by_default(&self) -> bool {
         #[cfg(target_os = "linux")]
         {
-            matches!(self,
-                FilesystemType::Ext4 |
-                FilesystemType::Ext3 |
-                FilesystemType::Xfs |
-                FilesystemType::Btrfs |
-                FilesystemType::Zfs |
-                FilesystemType::Nfs |
-                FilesystemType::Smb |
-                FilesystemType::Mem8
+            matches!(
+                self,
+                FilesystemType::Ext4
+                    | FilesystemType::Ext3
+                    | FilesystemType::Xfs
+                    | FilesystemType::Btrfs
+                    | FilesystemType::Zfs
+                    | FilesystemType::Nfs
+                    | FilesystemType::Smb
+                    | FilesystemType::Mem8
             )
         }
         #[cfg(target_os = "macos")]
         {
-            matches!(self,
-                FilesystemType::Apfs |
-                FilesystemType::Hfs |
-                FilesystemType::Nfs |
-                FilesystemType::Smb |
-                FilesystemType::Mem8
+            matches!(
+                self,
+                FilesystemType::Apfs
+                    | FilesystemType::Hfs
+                    | FilesystemType::Nfs
+                    | FilesystemType::Smb
+                    | FilesystemType::Mem8
             )
         }
         #[cfg(target_os = "windows")]
         {
-            matches!(self,
-                FilesystemType::Ntfs |
-                FilesystemType::Fat32 |
-                FilesystemType::ExFat |
-                FilesystemType::Mem8
+            matches!(
+                self,
+                FilesystemType::Ntfs
+                    | FilesystemType::Fat32
+                    | FilesystemType::ExFat
+                    | FilesystemType::Mem8
             )
         }
         #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
@@ -198,53 +209,53 @@ impl FilesystemType {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FileCategory {
     // --- Programming Languages ---
-    Rust,         // .rs
-    Python,       // .py, .pyw, .pyx, .pyi
-    JavaScript,   // .js, .mjs, .cjs
-    TypeScript,   // .ts, .tsx
-    Java,         // .java, .class, .jar
-    C,            // .c, .h
-    Cpp,          // .cpp, .cc, .cxx, .hpp, .hxx
-    Go,           // .go
-    Ruby,         // .rb
-    PHP,          // .php
-    Shell,        // .sh, .bash, .zsh, .fish
+    Rust,       // .rs
+    Python,     // .py, .pyw, .pyx, .pyi
+    JavaScript, // .js, .mjs, .cjs
+    TypeScript, // .ts, .tsx
+    Java,       // .java, .class, .jar
+    C,          // .c, .h
+    Cpp,        // .cpp, .cc, .cxx, .hpp, .hxx
+    Go,         // .go
+    Ruby,       // .rb
+    PHP,        // .php
+    Shell,      // .sh, .bash, .zsh, .fish
 
     // --- Markup & Data Formats ---
-    Markdown,     // .md, .markdown
-    Html,         // .html, .htm
-    Css,          // .css, .scss, .sass, .less
-    Json,         // .json, .jsonc
-    Yaml,         // .yaml, .yml
-    Xml,          // .xml, .svg (SVG is XML-based)
-    Toml,         // .toml
+    Markdown, // .md, .markdown
+    Html,     // .html, .htm
+    Css,      // .css, .scss, .sass, .less
+    Json,     // .json, .jsonc
+    Yaml,     // .yaml, .yml
+    Xml,      // .xml, .svg (SVG is XML-based)
+    Toml,     // .toml
 
     // --- Build Systems & Configuration ---
-    Makefile,     // Makefile, makefile, GNUmakefile
-    Dockerfile,   // Dockerfile, .dockerfile
-    GitConfig,    // .gitignore, .gitconfig, .gitmodules
+    Makefile,   // Makefile, makefile, GNUmakefile
+    Dockerfile, // Dockerfile, .dockerfile
+    GitConfig,  // .gitignore, .gitconfig, .gitmodules
 
     // --- Archives & Compressed Files ---
-    Archive,      // .zip, .tar, .gz, .bz2, .xz, .7z, .rar
+    Archive, // .zip, .tar, .gz, .bz2, .xz, .7z, .rar
 
     // --- Media Files ---
-    Image,        // .jpg, .jpeg, .png, .gif, .bmp, .ico, .webp
-    Video,        // .mp4, .avi, .mkv, .mov, .wmv, .flv, .webm
-    Audio,        // .mp3, .wav, .flac, .aac, .ogg, .wma
+    Image, // .jpg, .jpeg, .png, .gif, .bmp, .ico, .webp
+    Video, // .mp4, .avi, .mkv, .mov, .wmv, .flv, .webm
+    Audio, // .mp3, .wav, .flac, .aac, .ogg, .wma
 
     // --- System & Binary Files ---
-    SystemFile,   // Special system files like swap.img, vmlinuz
-    Binary,       // Executables, shared libraries (.exe, .dll, .so, .dylib, .o, .a)
+    SystemFile, // Special system files like swap.img, vmlinuz
+    Binary,     // Executables, shared libraries (.exe, .dll, .so, .dylib, .o, .a)
 
     // --- Default/Fallback ---
-    Unknown,      // If we can't categorize it, it's a mysterious Unknown!
+    Unknown, // If we can't categorize it, it's a mysterious Unknown!
 }
 
-/// # TreeStats: Summarizing the Forest
+/// # TreeStats: The Final Scoreboard
 ///
-/// This struct accumulates statistics as we scan the directory tree.
-/// It gives us a bird's-eye view of what we've found: counts, sizes, types, etc.
-/// Perfect for the `stats` and `ai` output modes.
+/// After the concert is over, this is where we see how we did. It's the
+/// scoreboard that tracks total files, total directories, the biggest hits
+/// (largest files), and more. It's the answer to "So, how was the show?"
 #[derive(Debug, Default)]
 pub struct TreeStats {
     /// Total number of files encountered (excluding directories).
@@ -302,11 +313,12 @@ impl TreeStats {
     }
 }
 
-/// # ScannerConfig: Tailoring the Scan to Your Whims
+/// # ScannerConfig: The Rider for our Rock Star Scanner
 ///
-/// This struct holds all the configuration options that control how the `Scanner` behaves.
-/// It's populated from the command-line arguments parsed in `main.rs`.
-/// It's like the mission briefing for our directory explorer.
+/// This is the list of demands for our scanner. "Don't show me hidden files,"
+/// "I only want to see files bigger than a tour bus," "Ignore the messy backstage
+/// area (`.gitignore`)." We build this from the user's command-line arguments
+/// to make sure the scanner puts on the exact show the user wants to see.
 pub struct ScannerConfig {
     /// Maximum depth to traverse into subdirectories.
     pub max_depth: usize,
@@ -339,58 +351,119 @@ pub struct ScannerConfig {
     pub show_filesystems: bool,
 }
 
-// --- Default Ignore Patterns: Keeping the Clutter Away ---
-// These are common directories and file patterns that are usually not interesting
-// in a directory tree view. They help provide a cleaner, more focused output by default.
-// Hue appreciates a tidy tree!
+// --- Default Ignore Patterns: The "Please Don't Play These Songs" List ---
+// Every band has songs they'd rather not play. This is our list of files and
+// directories (`node_modules`, `target/`, etc.) that we usually skip to keep
+// the show clean and focused on the hits. A tidy tree is a happy tree!
 const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
     // Version control systems (but not all hidden dirs like .ssh)
-    ".git", ".svn", ".hg", ".bzr", "_darcs",
+    ".git",
+    ".svn",
+    ".hg",
+    ".bzr",
+    "_darcs",
     // Python artifacts
-    "__pycache__", "*.pyc", "*.pyo", "*.pyd", ".Python", ".pytest_cache", ".tox", ".coverage", "*.egg-info", ".eggs",
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    ".Python",
+    ".pytest_cache",
+    ".tox",
+    ".coverage",
+    "*.egg-info",
+    ".eggs",
     // Node.js / JavaScript artifacts
-    "node_modules", ".npm", ".yarn", ".pnpm-store", "bower_components", ".next", ".nuxt",
+    "node_modules",
+    ".npm",
+    ".yarn",
+    ".pnpm-store",
+    "bower_components",
+    ".next",
+    ".nuxt",
     // General cache directories often found in projects
     ".cache", // Common cache dir name
     // Virtual environments
-    "venv", "env", "ENV", "virtualenv", ".venv", ".env", "conda-meta",
+    "venv",
+    "env",
+    "ENV",
+    "virtualenv",
+    ".venv",
+    ".env",
+    "conda-meta",
     // Build/compilation artifacts from various languages/systems
     "target", // Rust
-    "build", "dist", "out", "bin", "obj", // Common build output dirs
-    "*.o", "*.a", "*.so", "*.dll", "*.dylib", // Object files, libraries
+    "build",
+    "dist",
+    "out",
+    "bin",
+    "obj", // Common build output dirs
+    "*.o",
+    "*.a",
+    "*.so",
+    "*.dll",
+    "*.dylib", // Object files, libraries
     // Package manager caches/data
-    ".cargo", ".rustup", // Rust
-    ".gem", ".bundle", // Ruby
+    ".cargo",
+    ".rustup", // Rust
+    ".gem",
+    ".bundle", // Ruby
     // IDEs and editor-specific files/directories
-    ".idea", ".vscode", ".vs", // Common IDE metadata
-    "*.swp", "*.swo", "*~", // Vim/editor backup/swap files
-    ".project", ".classpath", ".settings", // Eclipse/Java
+    ".idea",
+    ".vscode",
+    ".vs", // Common IDE metadata
+    "*.swp",
+    "*.swo",
+    "*~", // Vim/editor backup/swap files
+    ".project",
+    ".classpath",
+    ".settings", // Eclipse/Java
     // Development tool caches
-    ".mypy_cache", ".ruff_cache", ".hypothesis", ".pytest_cache", ".tox", ".coverage", ".sass-cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".hypothesis",
+    ".pytest_cache",
+    ".tox",
+    ".coverage",
+    ".sass-cache",
     // OS-specific junk files
     ".DS_Store",    // macOS
     "Thumbs.db",    // Windows
     "desktop.ini",  // Windows
     "$RECYCLE.BIN", // Windows recycle bin
     // Common temporary file/directory names and patterns
-    "tmp", "temp", ".tmp", ".temp",
-    "*.tmp", "*.temp", "*.log", // Often temporary or verbose
+    "tmp",
+    "temp",
+    ".tmp",
+    ".temp",
+    "*.tmp",
+    "*.temp",
+    "*.log", // Often temporary or verbose
     // More cache directories
     ".sass-cache", // Sass CSS preprocessor
     "__MACOSX",    // macOS archive metadata
     // System directories that are almost never useful to traverse deeply from a user's project root.
-    // These are more aggressively ignored if `stree` is run on `/`.
+    // These are more aggressively ignored if `st` is run on `/`.
     // "proc", "sys", "dev", "lost+found", "mnt", "media", // Handled by DEFAULT_SYSTEM_PATHS
     // Other common ignores
-    ".vagrant", ".terraform",
+    ".vagrant",
+    ".terraform",
 ];
 
 // Default paths that are almost always too noisy or problematic to scan,
-// especially if `stree` is run from `/` or a very high-level directory.
+// especially if `st` is run from `/` or a very high-level directory.
 // These are typically mount points for virtual filesystems or system-critical areas.
 const DEFAULT_SYSTEM_PATHS: &[&str] = &[
-    "/proc", "/sys", "/dev", "/run", "/tmp", "/var/tmp",
-    "/lost+found", "/mnt", "/media", "/snap", // Common mount points or special dirs
+    "/proc",
+    "/sys",
+    "/dev",
+    "/run",
+    "/tmp",
+    "/var/tmp",
+    "/lost+found",
+    "/mnt",
+    "/media",
+    "/snap", // Common mount points or special dirs
 ];
 
 // Specific individual files (absolute paths) that should always be ignored
@@ -401,10 +474,11 @@ const DEFAULT_IGNORE_FILES: &[&str] = &[
     "/proc/kallsyms", // Kernel symbols, can be large.
 ];
 
-/// # Scanner: The Grand Explorer of Directories
+/// # Scanner: The Rock Star of our Show
 ///
-/// This struct encapsulates the logic for scanning a directory tree.
-/// It holds the configuration, loaded ignore patterns, and the root path for the scan.
+/// BEHOLD! The `Scanner` itself! This is the main act. It takes the config,
+/// the ignore lists, and a path, and it puts on a spectacular show of directory
+/// traversal. It's fast, it's smart, and it knows all the best moves.
 pub struct Scanner {
     /// The configuration for this scanning operation.
     config: ScannerConfig,
@@ -434,7 +508,11 @@ impl Scanner {
 
         // First, check for some very specific system file names.
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name == "swap.img" || name == "swapfile" || name.starts_with("vmlinuz") || name.starts_with("initrd") {
+            if name == "swap.img"
+                || name == "swapfile"
+                || name.starts_with("vmlinuz")
+                || name.starts_with("initrd")
+            {
                 return FileCategory::SystemFile;
             }
         }
@@ -454,7 +532,7 @@ impl Scanner {
                 "rb" => FileCategory::Ruby,
                 "php" => FileCategory::PHP,
                 "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd" => FileCategory::Shell,
-                
+
                 // --- Markup/Data ---
                 "md" | "markdown" => FileCategory::Markdown,
                 "html" | "htm" => FileCategory::Html,
@@ -463,22 +541,27 @@ impl Scanner {
                 "yaml" | "yml" => FileCategory::Yaml,
                 "xml" | "svg" | "plist" | "kml" | "gpx" => FileCategory::Xml, // SVG and others are XML-based
                 "toml" => FileCategory::Toml,
-                
+
                 // --- Build/Config (some are also by name) ---
                 "dockerfile" => FileCategory::Dockerfile, // Extension variant
                 // .gitignore, .gitconfig are usually by name, handled below
-                
+
                 // --- Archives ---
-                "zip" | "tar" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "7z" | "rar" | "iso" | "dmg" => FileCategory::Archive,
-                
+                "zip" | "tar" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "7z" | "rar"
+                | "iso" | "dmg" => FileCategory::Archive,
+
                 // --- Media ---
-                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "ico" | "webp" | "tiff" | "tif" | "heic" | "heif" => FileCategory::Image,
-                "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" | "webm" | "mpeg" | "mpg" => FileCategory::Video,
+                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "ico" | "webp" | "tiff" | "tif"
+                | "heic" | "heif" => FileCategory::Image,
+                "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" | "webm" | "mpeg" | "mpg" => {
+                    FileCategory::Video
+                }
                 "mp3" | "wav" | "flac" | "aac" | "ogg" | "wma" | "m4a" => FileCategory::Audio,
-                
+
                 // --- Binary/Executable (some overlap with system, but these are common distributable/object formats) ---
-                "exe" | "dll" | "so" | "dylib" | "o" | "a" | "lib" | "msi" | "deb" | "rpm" | "app" => FileCategory::Binary,
-                
+                "exe" | "dll" | "so" | "dylib" | "o" | "a" | "lib" | "msi" | "deb" | "rpm"
+                | "app" => FileCategory::Binary,
+
                 _ => FileCategory::Unknown, // Extension not recognized
             }
         } else {
@@ -487,7 +570,9 @@ impl Scanner {
                 match name {
                     "Makefile" | "makefile" | "GNUmakefile" => FileCategory::Makefile,
                     "Dockerfile" => FileCategory::Dockerfile, // Filename variant
-                    ".gitignore" | ".gitconfig" | ".gitattributes" | ".gitmodules" => FileCategory::GitConfig,
+                    ".gitignore" | ".gitconfig" | ".gitattributes" | ".gitmodules" => {
+                        FileCategory::GitConfig
+                    }
                     // If it's marked as executable by the OS, and we haven't categorized it yet, call it Binary.
                     _ => {
                         if matches!(file_type, FileType::Executable) {
@@ -529,7 +614,8 @@ impl Scanner {
 
         // Initialize the set of system paths to ignore (e.g., /proc, /sys).
         let system_paths: HashSet<PathBuf> = if config.use_default_ignores {
-            DEFAULT_SYSTEM_PATHS.iter()
+            DEFAULT_SYSTEM_PATHS
+                .iter()
                 .map(|p_str| PathBuf::from(p_str)) // Convert string slices to PathBufs
                 .collect() // Collect into a HashSet for quick lookups.
         } else {
@@ -538,7 +624,8 @@ impl Scanner {
 
         // Initialize the set of specific files to ignore (e.g., /proc/kcore).
         let ignore_files: HashSet<PathBuf> = if config.use_default_ignores {
-            DEFAULT_IGNORE_FILES.iter()
+            DEFAULT_IGNORE_FILES
+                .iter()
                 .map(|p_str| PathBuf::from(p_str))
                 .collect()
         } else {
@@ -564,7 +651,7 @@ impl Scanner {
     /// or an `Err` if glob compilation fails (very unlikely for our hardcoded patterns).
     fn build_default_ignores() -> Result<Option<GlobSet>> {
         let mut builder = GlobSetBuilder::new(); // Start with an empty builder.
-        
+
         // Add each default pattern to the builder.
         for pattern_str in DEFAULT_IGNORE_PATTERNS {
             // Glob::new can fail if the pattern is malformed, but ours should be fine.
@@ -573,7 +660,7 @@ impl Scanner {
             }
             // Silently ignore malformed default patterns, though this shouldn't occur.
         }
-        
+
         // Build the GlobSet from the accumulated patterns.
         // This can fail if, for example, the set is empty or patterns are incompatible,
         // but again, highly unlikely for our predefined set.
@@ -595,12 +682,12 @@ impl Scanner {
 
         let mut builder = GlobSetBuilder::new();
         // Read the entire .gitignore file into a string.
-        let content = fs::read_to_string(&gitignore_path)?; 
-        
+        let content = fs::read_to_string(&gitignore_path)?;
+
         // Process each line of the .gitignore file.
         for line in content.lines() {
             let trimmed_line = line.trim(); // Remove leading/trailing whitespace.
-            // Ignore empty lines and lines that are comments (start with '#').
+                                            // Ignore empty lines and lines that are comments (start with '#').
             if !trimmed_line.is_empty() && !trimmed_line.starts_with('#') {
                 // Attempt to compile the line as a glob pattern.
                 // If successful, add it to our GlobSet builder.
@@ -630,34 +717,37 @@ impl Scanner {
         // Configure it with max_depth and whether to follow symlinks from our ScannerConfig.
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
-            .follow_links(self.config.follow_symlinks) // Usually false for stree
+            .follow_links(self.config.follow_symlinks) // Usually false for st
             .into_iter(); // Get an iterator over directory entries.
 
         // Loop through each entry provided by WalkDir.
         while let Some(entry_result) = walker.next() {
             match entry_result {
-                Ok(entry) => { // Successfully read a directory entry.
+                Ok(entry) => {
+                    // Successfully read a directory entry.
                     let depth = entry.depth();
                     let path = entry.path();
-                    
+
                     // Determine if this entry should be ignored based on various rules.
                     let is_ignored_by_rules = self.should_ignore(path)?;
-                    
+
                     if is_ignored_by_rules {
                         // The entry matches an ignore rule.
                         if self.config.show_ignored {
                             // If we're showing ignored items, process it but mark as ignored.
-                            if let Some(mut node) = self.process_entry(&entry, depth, is_ignored_by_rules)? {
+                            if let Some(mut node) =
+                                self.process_entry(&entry, depth, is_ignored_by_rules)?
+                            {
                                 // Perform content search if applicable, even for ignored files being shown.
                                 if !node.is_dir && self.should_search_file(&node) {
                                     node.search_matches = self.search_in_file(&node.path);
                                 }
-                                
+
                                 // Send the (ignored) node through the channel.
                                 if sender.send(node.clone()).is_err() {
                                     break; // Receiver has disconnected, stop scanning.
                                 }
-                                
+
                                 // Update stats for ignored items if they aren't permission-denied.
                                 // This ensures `show_ignored` gives a full picture.
                                 if !node.permission_denied {
@@ -679,21 +769,25 @@ impl Scanner {
                         }
                     } else {
                         // The entry is NOT ignored by rules. Process it normally.
-                        if let Some(mut node) = self.process_entry(&entry, depth, false)? { // `is_ignored` is false here
+                        if let Some(mut node) = self.process_entry(&entry, depth, false)? {
+                            // `is_ignored` is false here
                             // Perform content search if applicable.
                             if !node.is_dir && self.should_search_file(&node) {
                                 node.search_matches = self.search_in_file(&node.path);
                             }
-                            
+
                             // Apply filters (size, date, type, find pattern).
                             // A file is included if it's a directory, or it matches filters, or it has a search match.
-                            let has_search_match = node.search_matches.as_ref().map_or(false, |m| !m.is_empty());
+                            let has_search_match = node
+                                .search_matches
+                                .as_ref()
+                                .map_or(false, |m| !m.is_empty());
                             if node.is_dir || has_search_match || self.should_include(&node) {
                                 // Send the processed node through the channel.
                                 if sender.send(node.clone()).is_err() {
                                     break; // Receiver disconnected.
                                 }
-                                
+
                                 // Update statistics for included, non-permission-denied items.
                                 if !node.permission_denied {
                                     stats.update_file(&node);
@@ -702,8 +796,10 @@ impl Scanner {
                         }
                     }
                 }
-                Err(e) => { // An error occurred trying to access a directory entry (e.g., permission denied).
-                    if let Some(path) = e.path() { // If the error is associated with a path.
+                Err(e) => {
+                    // An error occurred trying to access a directory entry (e.g., permission denied).
+                    if let Some(path) = e.path() {
+                        // If the error is associated with a path.
                         let depth = e.depth();
                         // Create a special node representing the permission-denied entry.
                         let node = self.create_permission_denied_node(path, depth);
@@ -711,7 +807,7 @@ impl Scanner {
                             break; // Receiver disconnected.
                         }
                         // Still update stats (e.g., directory count) for permission-denied entries if shown.
-                        stats.update_file(&node); 
+                        stats.update_file(&node);
                         // Tell WalkDir not to try to descend into this unreadable directory.
                         walker.skip_current_dir();
                     }
@@ -736,7 +832,7 @@ impl Scanner {
         if self.config.search_keyword.is_none() {
             return false;
         }
-        
+
         // If a specific file type filter is active (e.g., --type rs),
         // only search files matching that extension.
         if let Some(filter_ext) = &self.config.file_type_filter {
@@ -745,7 +841,7 @@ impl Scanner {
                 None => false, // No extension, doesn't match.
             };
         }
-        
+
         // If no specific type filter, apply a heuristic: search in files that are likely text-based.
         // This is determined by checking common text file extensions first for speed,
         // then by checking the broader `FileCategory`.
@@ -777,10 +873,11 @@ impl Scanner {
                 _ => {} // Not a common plain text extension, fall through to category check.
             }
         }
-        
+
         // Fallback to checking the pre-determined FileCategory.
         // This covers source code files and other structured text formats.
-        matches!(node.category, 
+        matches!(
+            node.category,
             FileCategory::Rust | FileCategory::Python | FileCategory::JavaScript |
             FileCategory::TypeScript | FileCategory::Java | FileCategory::C | // Most source code
             FileCategory::Cpp | FileCategory::Go | FileCategory::Ruby | FileCategory::PHP |
@@ -805,18 +902,20 @@ impl Scanner {
     fn search_in_file(&self, path: &Path) -> Option<Vec<usize>> {
         // Ensure there's a keyword to search for.
         let keyword = self.config.search_keyword.as_ref()?;
-        if keyword.is_empty() { return None; } // Don't search for empty string.
+        if keyword.is_empty() {
+            return None;
+        } // Don't search for empty string.
 
         // Attempt to open the file for reading.
         let file = match fs::File::open(path) {
             Ok(f) => f,
             Err(_) => return None, // Cannot open file, so cannot search.
         };
-        
+
         let mut positions = Vec::new(); // Store byte offsets of matches.
         let reader = BufReader::new(file); // Use a buffered reader for efficiency.
         let mut current_byte_offset: usize = 0; // Track our position in the file.
-        
+
         // Read and process the file line by line.
         // This is generally more memory-efficient than reading the whole file,
         // and allows us to stop early if it seems like a binary file or too many matches.
@@ -827,11 +926,11 @@ impl Scanner {
                     // `match_indices` gives (byte_offset_in_line, matched_string).
                     for (match_start_in_line, _matched_str) in line_content.match_indices(keyword) {
                         positions.push(current_byte_offset + match_start_in_line);
-                        
+
                         // Performance guard: If we find too many matches, stop early.
                         // This prevents using too much memory or time on files with dense matches.
                         // The limit (e.g., 100) can be adjusted.
-                        if positions.len() > 100 { 
+                        if positions.len() > 100 {
                             // Adding a special marker or logging could indicate truncation.
                             // For now, just return the matches found so far.
                             return Some(positions);
@@ -844,20 +943,20 @@ impl Scanner {
                     // A more robust way might involve tracking bytes read from the BufReader if precision is critical
                     // across OSes, but for typical text files and search, this is a common approach.)
                     // Let's assume `+1` is a reasonable approximation for line terminator length.
-                    current_byte_offset += line_content.len() + 1; 
+                    current_byte_offset += line_content.len() + 1;
                 }
                 Err(_) => {
                     // An error occurred reading a line (e.g., invalid UTF-8 in a binary file).
                     // Stop searching this file.
-                    break; 
+                    break;
                 }
             }
-            
+
             // Another performance guard: if the file is excessively large and we're still reading,
             // perhaps cap the total bytes processed or lines read. For now, relies on match limit.
             // e.g., if current_byte_offset > SOME_LARGE_THRESHOLD { break; }
         }
-        
+
         // Return the collected positions if any matches were found.
         if positions.is_empty() {
             None
@@ -875,10 +974,17 @@ impl Scanner {
     /// are active to ensure that directories are only included if they (or their subdirectories)
     /// contain files that match the filters.
     /// Returns a tuple: `(Vec<FileNode>, TreeStats)`.
+    /// ## `scan` - The "Scan-It-All-Then-Sort-It-Out" Method
+    ///
+    /// This is the classic way to scan. It's a two-act show:
+    /// 1. **Act I**: Walk through every single file and directory, collecting a huge list of `FileNode`s.
+    /// 2. **Act II**: If there are filters, go through that huge list and pick out only the ones that
+    ///    match, making sure to keep their parent directories so the tree still makes sense.
+    /// It's thorough and great for when you need the whole picture before making decisions.
     pub fn scan(&self) -> Result<(Vec<FileNode>, TreeStats)> {
         let mut all_nodes_collected = Vec::new(); // Stores all nodes initially encountered.
-        // `ignored_dirs` was here, but its primary use with `skip_current_dir` is within the loop.
-        // If we need to track them for other reasons post-loop, it could be reinstated.
+                                                  // `ignored_dirs` was here, but its primary use with `skip_current_dir` is within the loop.
+                                                  // If we need to track them for other reasons post-loop, it could be reinstated.
 
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
@@ -914,19 +1020,22 @@ impl Scanner {
                     } else {
                         // Not ignored by rules, process normally.
                         if let Some(mut node) = self.process_entry(&entry, depth, false)? {
-                             if !node.is_dir && self.should_search_file(&node) {
+                            if !node.is_dir && self.should_search_file(&node) {
                                 node.search_matches = self.search_in_file(&node.path);
                             }
                             all_nodes_collected.push(node);
                         }
                     }
                 }
-                Err(e) => { // Handle errors like permission denied.
+                Err(e) => {
+                    // Handle errors like permission denied.
                     if let Some(path) = e.path() {
                         let depth = e.depth();
                         all_nodes_collected.push(self.create_permission_denied_node(path, depth));
-                        if e.io_error().map_or(false, |io_err| io_err.kind() == std::io::ErrorKind::PermissionDenied) {
-                             walker.skip_current_dir(); // Skip unreadable directory.
+                        if e.io_error().map_or(false, |io_err| {
+                            io_err.kind() == std::io::ErrorKind::PermissionDenied
+                        }) {
+                            walker.skip_current_dir(); // Skip unreadable directory.
                         }
                     }
                 }
@@ -962,12 +1071,12 @@ impl Scanner {
     /// Note: `search_keyword` is handled slightly differently; it can make a file appear
     /// even if other filters would exclude it, so it's part of `should_include` logic.
     fn has_active_filters(&self) -> bool {
-        self.config.find_pattern.is_some() ||
-        self.config.file_type_filter.is_some() ||
-        self.config.min_size.is_some() ||
-        self.config.max_size.is_some() ||
-        self.config.newer_than.is_some() ||
-        self.config.older_than.is_some()
+        self.config.find_pattern.is_some()
+            || self.config.file_type_filter.is_some()
+            || self.config.min_size.is_some()
+            || self.config.max_size.is_some()
+            || self.config.newer_than.is_some()
+            || self.config.older_than.is_some()
         // `search_keyword` isn't a primary filter in this sense; it's an inclusion criterion.
     }
 
@@ -981,28 +1090,43 @@ impl Scanner {
     /// It then calculates `TreeStats` based on this final, filtered list of nodes.
     /// This replaces the older `filter_nodes_with_ancestors` to integrate stat calculation
     /// and clarify the logic for directory inclusion with `--find`.
-    fn filter_nodes_and_calculate_stats(&self, all_nodes_collected: Vec<FileNode>) -> (Vec<FileNode>, TreeStats) {
+    fn filter_nodes_and_calculate_stats(
+        &self,
+        all_nodes_collected: Vec<FileNode>,
+    ) -> (Vec<FileNode>, TreeStats) {
         let mut final_stats = TreeStats::default();
         let mut included_files_and_matching_dirs = Vec::new(); // Files that pass filters, and Dirs that match --find
         let mut required_ancestor_dirs = HashSet::new(); // Ancestors of included_files
 
         // --- Pass 1: Identify matching files and directories that directly match --find ---
         for node in &all_nodes_collected {
-            if node.permission_denied { // Skip permission denied entries for filtering logic
+            if node.permission_denied {
+                // Skip permission denied entries for filtering logic
                 continue;
             }
 
-            let has_search_match = node.search_matches.as_ref().map_or(false, |m| !m.is_empty());
+            let has_search_match = node
+                .search_matches
+                .as_ref()
+                .map_or(false, |m| !m.is_empty());
 
             if node.is_dir {
                 // For directories, only the --find pattern applies directly.
                 // Other filters (size, date, type) don't apply to directories themselves.
-                if self.config.find_pattern.as_ref().map_or(false, |p| p.is_match(&node.path.to_string_lossy())) {
+                if self
+                    .config
+                    .find_pattern
+                    .as_ref()
+                    .map_or(false, |p| p.is_match(&node.path.to_string_lossy()))
+                {
                     included_files_and_matching_dirs.push(node.clone());
                     // Add ancestors of this directly matched directory
                     let mut current = node.path.parent();
                     while let Some(parent_path) = current {
-                        if parent_path == self.root || required_ancestor_dirs.contains(parent_path) { break; }
+                        if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                        {
+                            break;
+                        }
                         required_ancestor_dirs.insert(parent_path.to_path_buf());
                         current = parent_path.parent();
                     }
@@ -1015,7 +1139,8 @@ impl Scanner {
                     let mut current = node.path.parent();
                     while let Some(parent_path) = current {
                         // Stop if we reach the root or an already added ancestor.
-                        if parent_path == self.root || required_ancestor_dirs.contains(parent_path) {
+                        if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                        {
                             break;
                         }
                         required_ancestor_dirs.insert(parent_path.to_path_buf());
@@ -1037,12 +1162,15 @@ impl Scanner {
                 }
             }
         }
-        
+
         // Add required ancestor directories and directly matching directories from `all_nodes_collected`.
         for node in &all_nodes_collected {
-            if node.permission_denied { // Also include permission denied nodes if they are part of the path
-                if required_ancestor_dirs.contains(&node.path) || node.path == self.root && !final_node_list.is_empty() {
-                     if added_paths.insert(node.path.clone()) {
+            if node.permission_denied {
+                // Also include permission denied nodes if they are part of the path
+                if required_ancestor_dirs.contains(&node.path)
+                    || node.path == self.root && !final_node_list.is_empty()
+                {
+                    if added_paths.insert(node.path.clone()) {
                         final_node_list.push(node.clone());
                     }
                 }
@@ -1051,9 +1179,15 @@ impl Scanner {
 
             if node.is_dir {
                 // Is it a required ancestor OR a directory that itself matched --find?
-                let is_find_match = self.config.find_pattern.as_ref().map_or(false, |p| p.is_match(&node.path.to_string_lossy()));
-                if required_ancestor_dirs.contains(&node.path) || (is_find_match && node.path != self.root) {
-                     if added_paths.insert(node.path.clone()) {
+                let is_find_match = self
+                    .config
+                    .find_pattern
+                    .as_ref()
+                    .map_or(false, |p| p.is_match(&node.path.to_string_lossy()));
+                if required_ancestor_dirs.contains(&node.path)
+                    || (is_find_match && node.path != self.root)
+                {
+                    if added_paths.insert(node.path.clone()) {
                         final_node_list.push(node.clone());
                     }
                 }
@@ -1068,27 +1202,29 @@ impl Scanner {
                 if added_paths.insert(node.path.clone()) {
                     final_node_list.push(node);
                 }
-            } else { // It's a directory that matched --find
+            } else {
+                // It's a directory that matched --find
                 if added_paths.insert(node.path.clone()) {
                     final_node_list.push(node);
                 }
             }
         }
-        
+
         // Sort the final list by path for consistent output.
         final_node_list.sort_by(|a, b| a.path.cmp(&b.path));
 
         // --- Pass 3: Calculate stats on the final_node_list ---
         for node in &final_node_list {
             // Update stats, ensuring not to double-count or miscount permission-denied entries.
-            if !node.permission_denied || node.is_dir { // Dirs (even denied) contribute to dir count.
+            if !node.permission_denied || node.is_dir {
+                // Dirs (even denied) contribute to dir count.
                 final_stats.update_file(node);
             }
         }
-        
+
         (final_node_list, final_stats)
     }
-    
+
     /// ## `process_entry`
     ///
     /// Converts a `walkdir::DirEntry` into our `FileNode` struct.
@@ -1097,14 +1233,20 @@ impl Scanner {
     /// Returns `Ok(Some(FileNode))` on success, `Ok(None)` if the entry should be skipped
     /// (e.g., hidden and not showing hidden), or an `Err` if metadata access fails.
     /// The `is_ignored_by_rules` parameter tells this function if `should_ignore` already determined this node is ignored.
-    fn process_entry(&self, entry: &DirEntry, depth: usize, is_ignored_by_rules: bool) -> Result<Option<FileNode>> {
+    fn process_entry(
+        &self,
+        entry: &DirEntry,
+        depth: usize,
+        is_ignored_by_rules: bool,
+    ) -> Result<Option<FileNode>> {
         let path = entry.path();
-        
+
         // Determine if the file is hidden (starts with '.').
-        let is_hidden = path.file_name()
+        let is_hidden = path
+            .file_name()
             .and_then(|name_osstr| name_osstr.to_str()) // Convert OsStr to &str
             .map_or(false, |name_str| name_str.starts_with('.'));
-        
+
         // Skip if hidden and we are not configured to show hidden files,
         // UNLESS it's an ignored item that we *are* configured to show (is_ignored_by_rules = true, config.show_ignored = true).
         // The `is_ignored_by_rules` flag takes precedence for display if `config.show_ignored` is true.
@@ -1135,13 +1277,13 @@ impl Scanner {
                 // Let's assume the main loops catch this via `Err(e)` from `walker.next()`.
                 // If `process_entry` is called on an entry that `WalkDir` gave Ok for, but `metadata()` fails,
                 // it's an edge case. We'll return a basic node marked as permission denied.
-                 return Ok(Some(self.create_permission_denied_node(path, depth)));
+                return Ok(Some(self.create_permission_denied_node(path, depth)));
             }
         };
 
         let file_type = self.determine_file_type(&metadata);
         let category = Self::get_file_category(path, file_type);
-        
+
         // Determine the size. For special virtual files (like in /proc or /sys),
         // reported size can be misleading (e.g., 0 or huge). We mark these as size 0.
         let size = if self.is_special_virtual_file(path, &metadata) {
@@ -1149,7 +1291,7 @@ impl Scanner {
         } else {
             metadata.len()
         };
-        
+
         Ok(Some(FileNode {
             path: path.to_path_buf(),
             is_dir: metadata.is_dir(),
@@ -1157,7 +1299,9 @@ impl Scanner {
             permissions: Self::get_permissions(&metadata),
             uid: Self::get_uid(&metadata),
             gid: Self::get_gid(&metadata),
-            modified: metadata.modified().unwrap_or_else(|_| SystemTime::UNIX_EPOCH), // Fallback for modified time
+            modified: metadata
+                .modified()
+                .unwrap_or_else(|_| SystemTime::UNIX_EPOCH), // Fallback for modified time
             is_symlink: metadata.file_type().is_symlink(), // Use file_type() for symlink check
             is_hidden,
             permission_denied: false, // If we got metadata, assume no permission error *for this node itself*.
@@ -1171,41 +1315,41 @@ impl Scanner {
     }
 
     /// ## `get_filesystem_type`
-    /// 
+    ///
     /// Detects the filesystem type for a given path using statfs on Unix systems
     #[cfg(unix)]
     fn get_filesystem_type(path: &Path) -> FilesystemType {
-        use libc::{statfs, c_char};
+        use libc::{c_char, statfs};
         use std::ffi::CString;
         use std::mem;
-        
+
         // Filesystem magic numbers from statfs.h
         const EXT4_SUPER_MAGIC: i64 = 0xef53;
-        const EXT3_SUPER_MAGIC: i64 = 0xef53;  // Same as ext4, need to check features
-        const EXT2_SUPER_MAGIC: i64 = 0xef53;  // Same as ext4, need to check features
+        const EXT3_SUPER_MAGIC: i64 = 0xef53; // Same as ext4, need to check features
+        const EXT2_SUPER_MAGIC: i64 = 0xef53; // Same as ext4, need to check features
         const XFS_SUPER_MAGIC: i64 = 0x58465342;
         const BTRFS_SUPER_MAGIC: i64 = 0x9123683e;
         const ZFS_SUPER_MAGIC: i64 = 0x2fc12fc1;
         const NTFS_SB_MAGIC: i64 = 0x5346544e;
-        const MSDOS_SUPER_MAGIC: i64 = 0x4d44;     // FAT
+        const MSDOS_SUPER_MAGIC: i64 = 0x4d44; // FAT
         const EXFAT_SUPER_MAGIC: i64 = 0x2011bab0;
-        const APFS_SUPER_MAGIC: i64 = 0x42535041;  // 'APFS'
-        const HFS_SUPER_MAGIC: i64 = 0x482b;       // HFS+
+        const APFS_SUPER_MAGIC: i64 = 0x42535041; // 'APFS'
+        const HFS_SUPER_MAGIC: i64 = 0x482b; // HFS+
         const NFS_SUPER_MAGIC: i64 = 0x6969;
         const SMB_SUPER_MAGIC: i64 = 0x517b;
         const TMPFS_MAGIC: i64 = 0x01021994;
         const PROC_SUPER_MAGIC: i64 = 0x9fa0;
         const SYSFS_MAGIC: i64 = 0x62656572;
         const DEVFS_SUPER_MAGIC: i64 = 0x1373;
-        
+
         let path_cstr = match CString::new(path.to_string_lossy().as_bytes()) {
             Ok(s) => s,
             Err(_) => return FilesystemType::Unknown,
         };
-        
+
         let mut stat_buf: libc::statfs = unsafe { mem::zeroed() };
         let result = unsafe { statfs(path_cstr.as_ptr(), &mut stat_buf) };
-        
+
         if result != 0 {
             // statfs failed, fall back to path-based detection for virtual filesystems
             if let Some(path_str) = path.to_str() {
@@ -1219,12 +1363,12 @@ impl Scanner {
             }
             return FilesystemType::Unknown;
         }
-        
+
         // Check for Mem8 filesystem by looking for .mem8 marker files
         if path.join(".mem8").exists() || path.to_string_lossy().contains("mem8") {
             return FilesystemType::Mem8;
         }
-        
+
         match stat_buf.f_type as i64 {
             EXT4_SUPER_MAGIC => FilesystemType::Ext4, // TODO: Distinguish ext2/3/4
             XFS_SUPER_MAGIC => FilesystemType::Xfs,
@@ -1244,15 +1388,15 @@ impl Scanner {
             _ => FilesystemType::Unknown,
         }
     }
-    
+
     #[cfg(not(unix))]
     fn get_filesystem_type(_path: &Path) -> FilesystemType {
         // On non-Unix systems, we can't easily detect filesystem type
         FilesystemType::Unknown
     }
-    
+
     /// ## `is_virtual_filesystem`
-    /// 
+    ///
     /// Checks if a path is on a virtual filesystem
     fn is_virtual_filesystem(path: &Path) -> bool {
         Self::get_filesystem_type(path).is_virtual()
@@ -1266,15 +1410,17 @@ impl Scanner {
     fn is_special_virtual_file(&self, path: &Path, metadata: &fs::Metadata) -> bool {
         // Check if the path starts with known virtual filesystem prefixes.
         if let Some(path_str) = path.to_str() {
-            if path_str.starts_with("/proc/") || 
-               path_str.starts_with("/sys/") || 
-               path_str.starts_with("/dev/") {
+            if path_str.starts_with("/proc/")
+                || path_str.starts_with("/sys/")
+                || path_str.starts_with("/dev/")
+            {
                 return true;
             }
         }
-        
+
         // Check for specific problematic files by absolute path.
-        if self.ignore_files.contains(path) { // Uses the pre-built HashSet of specific problem files.
+        if self.ignore_files.contains(path) {
+            // Uses the pre-built HashSet of specific problem files.
             return true;
         }
 
@@ -1288,7 +1434,7 @@ impl Scanner {
                 return true;
             }
         }
-        
+
         false // Not determined to be a special virtual file by these checks.
     }
 
@@ -1307,9 +1453,9 @@ impl Scanner {
             gid: 0,       // No GID info.
             modified: SystemTime::UNIX_EPOCH, // Default timestamp.
             is_symlink: false,
-            is_hidden: false, // Cannot determine if hidden.
+            is_hidden: false,        // Cannot determine if hidden.
             permission_denied: true, // Mark as permission denied.
-            is_ignored: false,    // Not ignored by rules, but inaccessible.
+            is_ignored: false,       // Not ignored by rules, but inaccessible.
             depth,
             file_type: FileType::Directory, // Assume directory.
             category: FileCategory::Unknown,
@@ -1318,16 +1464,12 @@ impl Scanner {
         }
     }
 
-    /// ## `should_ignore`
+    /// ## `should_ignore` - The Bouncer at the Club Door
     ///
-    /// The master gatekeeper for ignoring files and directories.
-    /// This function checks a given `path` against several ignore mechanisms in order:
-    /// 1. Specific problematic files (e.g., `/proc/kcore`).
-    /// 2. System paths (e.g., `/proc`, `/sys`, and their children).
-    /// 3. Default ignore patterns (e.g., `node_modules`, `*.pyc`).
-    /// 4. `.gitignore` patterns (if `config.respect_gitignore` is true).
-    /// Returns `Ok(true)` if the path should be ignored, `Ok(false)` otherwise.
-    /// Can return `Err` if path manipulation fails (unlikely).
+    /// This function is our tough-but-fair bouncer. It checks every file and
+    /// directory against our lists (`.gitignore`, default ignores, etc.).
+    /// "Sorry, `node_modules`, you're not on the list tonight."
+    /// It's the first line of defense against clutter.
     fn should_ignore(&self, path: &Path) -> Result<bool> {
         // --- Rule 1: Check against specific, always-ignored files (absolute paths) ---
         if self.config.use_default_ignores && self.ignore_files.contains(path) {
@@ -1340,7 +1482,7 @@ impl Scanner {
         if Self::is_virtual_filesystem(path) {
             return Ok(true);
         }
-        
+
         // --- Rule 3: Check against other system paths if using default ignores ---
         if self.config.use_default_ignores {
             // Check for exact match of a system path.
@@ -1384,19 +1526,17 @@ impl Scanner {
             }
             // If strip_prefix fails (path is not under root), it can't match .gitignore relative patterns.
         }
-        
+
         // If none of the above rules triggered, the path is not ignored.
         Ok(false)
     }
 
-    /// ## `should_include`
+    /// ## `should_include` - The Velvet Rope
     ///
-    /// Determines if a given `FileNode` should be included in the final output,
-    /// based on the filtering criteria in `ScannerConfig` (find pattern, type, size, date).
-    /// This function is called *after* `should_ignore` has determined the node is not ignored,
-    /// or if we are showing ignored items.
-    /// It does NOT consider `search_matches` here; that's an OR condition handled by the caller.
-    /// Returns `true` if the node passes all active filters, `false` otherwise.
+    /// Once a file gets past the bouncer (`should_ignore`), it has to get past
+    /// the velvet rope. This function checks if the file meets the specific criteria
+    /// for this party: "Are you a `.rs` file? Are you bigger than 1MB?"
+    /// Only the coolest files that match all the rules get in.
     fn should_include(&self, node: &FileNode) -> bool {
         // --- Filter by --find pattern (applies to both files and directories) ---
         if let Some(ref find_regex_pattern) = self.config.find_pattern {
@@ -1411,7 +1551,11 @@ impl Scanner {
         if !node.is_dir {
             // --- Filter by file extension (--type) ---
             if let Some(ref required_extension) = self.config.file_type_filter {
-                match node.path.extension().and_then(|ext_osstr| ext_osstr.to_str()) {
+                match node
+                    .path
+                    .extension()
+                    .and_then(|ext_osstr| ext_osstr.to_str())
+                {
                     Some(file_ext_str) => {
                         if !file_ext_str.eq_ignore_ascii_case(required_extension) {
                             return false; // Extension doesn't match.
@@ -1466,14 +1610,16 @@ impl Scanner {
         {
             use std::os::unix::fs::FileTypeExt; // For is_socket, is_fifo, etc.
             let ft = metadata.file_type(); // Get the rich FileType from metadata.
-            
+
             if ft.is_dir() {
                 FileType::Directory
-            } else if ft.is_symlink() { // Check symlink before other types, as it can point to them.
+            } else if ft.is_symlink() {
+                // Check symlink before other types, as it can point to them.
                 FileType::Symlink
             } else if ft.is_socket() {
                 FileType::Socket
-            } else if ft.is_fifo() { // Named pipe
+            } else if ft.is_fifo() {
+                // Named pipe
                 FileType::Pipe
             } else if ft.is_block_device() {
                 FileType::BlockDevice
@@ -1483,16 +1629,18 @@ impl Scanner {
             // This applies to regular files that are not dirs, symlinks, or other special types.
             } else if ft.is_file() && (metadata.permissions().mode() & 0o111 != 0) {
                 FileType::Executable
-            } else { // If none of the above, it's a regular (non-executable) file.
+            } else {
+                // If none of the above, it's a regular (non-executable) file.
                 FileType::RegularFile
             }
         }
-        
+
         #[cfg(not(unix))] // Simpler detection for non-Unix platforms
         {
             if metadata.is_dir() {
                 FileType::Directory
-            } else if metadata.file_type().is_symlink() { // `is_symlink()` is part of stable `fs::FileType`
+            } else if metadata.file_type().is_symlink() {
+                // `is_symlink()` is part of stable `fs::FileType`
                 FileType::Symlink
             } else {
                 // No easy cross-platform way to check executable bit without external crates or OS-specific calls.
@@ -1510,7 +1658,7 @@ impl Scanner {
     #[cfg(unix)]
     fn get_permissions(metadata: &fs::Metadata) -> u32 {
         // On Unix, get the mode and mask it to get the permission bits (e.g., 0o755).
-        metadata.permissions().mode() & 0o777 
+        metadata.permissions().mode() & 0o777
     }
     #[cfg(not(unix))]
     fn get_permissions(_metadata: &fs::Metadata) -> u32 {
@@ -1536,16 +1684,15 @@ impl Scanner {
     }
 } // end impl Scanner
 
-/// # `parse_size` - Human-Readable Size String to Bytes
+/// # `parse_size` - The Universal Translator for Sizes
 ///
-/// Utility function (publicly exported from `lib.rs`) to parse size strings
-/// like "100", "1K", "2.5M", "1GB" into a `u64` number of bytes.
-/// Supports B (Bytes, default), K/KB (Kilobytes), M/MB (Megabytes),
-/// G/GB (Gigabytes), T/TB (Terabytes). Case-insensitive for units.
-/// Returns a `Result<u64>` because parsing can fail (e.g., invalid number or unit).
+/// This handy function takes something a human understands, like "2.5M", and
+/// translates it into something a computer understands (2,621,440 bytes).
+/// It's like having a Babel fish for file sizes. Why should we have to do
+/// that math when the computer can do it for us?
 pub fn parse_size(size_str: &str) -> Result<u64> {
     let upper_size_str = size_str.trim().to_uppercase(); // Normalize: trim whitespace, uppercase units.
-    
+
     if upper_size_str.is_empty() {
         return Ok(0); // Empty string is 0 bytes.
     }
@@ -1553,18 +1700,18 @@ pub fn parse_size(size_str: &str) -> Result<u64> {
     // Find the first alphabetic character, which separates the number part from the unit part.
     let (num_part_str, unit_part_str) = match upper_size_str.find(|c: char| c.is_alphabetic()) {
         Some(idx) => upper_size_str.split_at(idx), // Split into (number_string, unit_string)
-        None => (upper_size_str.as_str(), ""), // No unit found, assume bytes.
+        None => (upper_size_str.as_str(), ""),     // No unit found, assume bytes.
     };
 
     // Parse the number part. This can fail if it's not a valid number.
     let number_val: f64 = num_part_str.parse()?; // Use f64 to handle decimals like "2.5M".
-    
+
     // Determine the multiplier based on the unit.
     let multiplier: f64 = match unit_part_str {
-        "B" | "" => 1.0, // Bytes (or no unit)
-        "K" | "KB" => 1024.0, // Kilobytes
-        "M" | "MB" => 1024.0 * 1024.0, // Megabytes
-        "G" | "GB" => 1024.0 * 1024.0 * 1024.0, // Gigabytes
+        "B" | "" => 1.0,                                 // Bytes (or no unit)
+        "K" | "KB" => 1024.0,                            // Kilobytes
+        "M" | "MB" => 1024.0 * 1024.0,                   // Megabytes
+        "G" | "GB" => 1024.0 * 1024.0 * 1024.0,          // Gigabytes
         "T" | "TB" => 1024.0 * 1024.0 * 1024.0 * 1024.0, // Terabytes
         // Add P/PB, E/EB if needed, but T is usually enough for file sizes.
         _ => return Err(anyhow::anyhow!("Invalid size unit: '{}'", unit_part_str)), // Unknown unit.
@@ -1591,26 +1738,29 @@ mod tests {
         assert_eq!(parse_size("1KB").unwrap(), 1024);
         assert_eq!(parse_size("2.5M").unwrap(), (2.5 * 1024.0 * 1024.0) as u64);
         assert_eq!(parse_size("1GB").unwrap(), 1024 * 1024 * 1024);
-        assert_eq!(parse_size("0.5T").unwrap(), (0.5 * 1024.0 * 1024.0 * 1024.0 * 1024.0) as u64);
+        assert_eq!(
+            parse_size("0.5T").unwrap(),
+            (0.5 * 1024.0 * 1024.0 * 1024.0 * 1024.0) as u64
+        );
         assert_eq!(parse_size("  2 MB  ").unwrap(), 2 * 1024 * 1024); // Test with whitespace
     }
 
     #[test]
     fn test_parse_size_invalid_inputs() {
         assert!(parse_size("abc").is_err()); // Not a number
-        assert!(parse_size("1X").is_err());  // Invalid unit
+        assert!(parse_size("1X").is_err()); // Invalid unit
         assert!(parse_size("1.2.3K").is_err()); // Invalid number format
         assert!(parse_size("-100M").is_err()); // Negative numbers not typically parsed by `f64::parse` directly for this context
-                                             // but if f64 allows it, our logic might need to check for negative `number_val`.
-                                             // Current `f64::parse` will error on just "-100M" if it expects only digits before unit.
-                                             // Let's test `parse` behavior for negative:
+                                               // but if f64 allows it, our logic might need to check for negative `number_val`.
+                                               // Current `f64::parse` will error on just "-100M" if it expects only digits before unit.
+                                               // Let's test `parse` behavior for negative:
         assert!("-5".parse::<f64>().is_ok()); // This is fine.
-        // So, parse_size("-5M") should work if the number parser handles the negative.
-        // However, file sizes are non-negative. The function should ideally reject negative inputs.
-        // For now, it would produce a large u64 due to casting if f64 was negative.
-        // This indicates a potential improvement: explicitly check for `number_val < 0.0`.
+                                              // So, parse_size("-5M") should work if the number parser handles the negative.
+                                              // However, file sizes are non-negative. The function should ideally reject negative inputs.
+                                              // For now, it would produce a large u64 due to casting if f64 was negative.
+                                              // This indicates a potential improvement: explicitly check for `number_val < 0.0`.
     }
-    
+
     #[test]
     fn test_parse_size_zero_and_empty() {
         assert_eq!(parse_size("0").unwrap(), 0);
@@ -1627,7 +1777,7 @@ mod tests {
         let config = ScannerConfig {
             max_depth: 5,
             follow_symlinks: false,
-            respect_gitignore: true,    // Try to load .gitignore
+            respect_gitignore: true, // Try to load .gitignore
             show_hidden: false,
             show_ignored: false,
             find_pattern: None,
@@ -1639,7 +1789,7 @@ mod tests {
             use_default_ignores: true, // Use our built-in ignore list
             search_keyword: None,
         };
-        
+
         // Create a scanner for the current directory.
         // This will attempt to load ".gitignore" if present, and build default ignores.
         let scanner_result = Scanner::new(Path::new("."), config);

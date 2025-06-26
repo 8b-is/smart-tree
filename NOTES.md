@@ -6,7 +6,7 @@
 - **Fixed O(n²) performance bug** in classic formatter that caused hanging with deep directories
 - **Changed default depth from 10 to 5** to prevent excessive processing on deep structures
 - **Added `--everything` flag** - master switch that enables --all, --no-ignore, and --no-default-ignore
-- **Clarified size calculations** - stree reports actual file sizes, while `du` reports disk blocks
+- **Clarified size calculations** - st reports actual file sizes, while `du` reports disk blocks
 
 ## Recent Changes (December 2024)
 
@@ -22,7 +22,7 @@ We've added a built-in MCP server that allows AI assistants like Claude to direc
 ### Content Search Feature
 - Added `--search` flag to search for keywords within file contents
 - Works in combination with `--type` filter for targeted searches
-- Example: `stree --search "TODO" --type rs` finds all TODOs in Rust files
+- Example: `st --search "TODO" --type rs` finds all TODOs in Rust files
 - Efficient implementation that streams file contents
 
 ### Streaming Mode

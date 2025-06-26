@@ -1,8 +1,8 @@
-use super::{Formatter, StreamingFormatter, hex::HexFormatter, PathDisplayMode};
-use crate::scanner::{FileNode, TreeStats};
+use super::{hex::HexFormatter, Formatter, PathDisplayMode, StreamingFormatter};
 use crate::context::detect_project_context;
+use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::Path;
 
@@ -18,21 +18,27 @@ impl AiFormatter {
             hex_formatter: HexFormatter::new(false, no_emoji, true, PathDisplayMode::Off, false),
         }
     }
-    
+
     /// Calculate a SHA256 hash of the tree structure for consistency verification
     fn calculate_tree_hash(&self, nodes: &[FileNode]) -> String {
         let mut hasher = Sha256::new();
-        
+
         // Hash each node's key properties in a deterministic way
         for node in nodes {
             // Hash: depth, name, type (dir/file), size, permissions
             hasher.update(node.depth.to_le_bytes());
-            hasher.update(node.path.file_name().unwrap_or_default().to_string_lossy().as_bytes());
+            hasher.update(
+                node.path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .as_bytes(),
+            );
             hasher.update(&[if node.is_dir { 1 } else { 0 }]);
             hasher.update(node.size.to_le_bytes());
             hasher.update(node.permissions.to_le_bytes());
         }
-        
+
         // Return first 16 chars of hex for brevity
         let result = hasher.finalize();
         hex::encode(&result[..8])
@@ -49,19 +55,19 @@ impl Formatter for AiFormatter {
     ) -> Result<()> {
         // First print the hex tree header
         writeln!(writer, "TREE_HEX_V1:")?;
-        
+
         // Optionally add project context if detected
         if let Some(context) = detect_project_context(root_path) {
             writeln!(writer, "CONTEXT: {}", context)?;
         }
-        
+
         // Calculate SHA256 hash of the tree structure
         let tree_hash = self.calculate_tree_hash(nodes);
         writeln!(writer, "HASH: {}", tree_hash)?;
-        
+
         // Use hex formatter for the tree
         self.hex_formatter.format(writer, nodes, stats, root_path)?;
-        
+
         // Then print compact statistics - all in hex for consistency
         writeln!(writer, "\nSTATS:")?;
         writeln!(
@@ -72,53 +78,57 @@ impl Formatter for AiFormatter {
             stats.total_size,
             stats.total_size as f64 / (1024.0 * 1024.0)
         )?;
-        
+
         // File type summary (top 10) - counts in hex
         if !stats.file_types.is_empty() {
             let mut types: Vec<_> = stats.file_types.iter().collect();
             types.sort_by(|a, b| b.1.cmp(a.1));
-            
+
             let types_str: Vec<String> = types
                 .iter()
                 .take(10)
                 .map(|(ext, count)| format!("{}:{:x}", ext, count))
                 .collect();
-            
+
             writeln!(writer, "TYPES: {}", types_str.join(" "))?;
         }
-        
+
         // Largest files (top 5)
         if !stats.largest_files.is_empty() {
-            let large_str: Vec<String> = stats.largest_files
+            let large_str: Vec<String> = stats
+                .largest_files
                 .iter()
                 .take(5)
                 .map(|(size, path)| {
-                    let name = path.file_name()
+                    let name = path
+                        .file_name()
                         .unwrap_or(path.as_os_str())
                         .to_string_lossy();
                     format!("{}:{:x}", name, size)
                 })
                 .collect();
-            
+
             writeln!(writer, "LARGE: {}", large_str.join(" "))?;
         }
-        
+
         // Date range
         if !stats.oldest_files.is_empty() && !stats.newest_files.is_empty() {
-            let oldest = stats.oldest_files[0].0
+            let oldest = stats.oldest_files[0]
+                .0
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            let newest = stats.newest_files[0].0
+            let newest = stats.newest_files[0]
+                .0
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            
+
             writeln!(writer, "DATES: {:x}-{:x}", oldest, newest)?;
         }
-        
+
         writeln!(writer, "END_AI")?;
-        
+
         Ok(())
     }
 }
@@ -127,23 +137,28 @@ impl StreamingFormatter for AiFormatter {
     fn start_stream(&self, writer: &mut dyn Write, root_path: &Path) -> Result<()> {
         // Print header
         writeln!(writer, "TREE_HEX_V1:")?;
-        
+
         // Optionally add project context if detected
         if let Some(context) = detect_project_context(root_path) {
             writeln!(writer, "CONTEXT: {}", context)?;
         }
-        
+
         // Note: We can't calculate hash in streaming mode
         writeln!(writer, "HASH: STREAMING")?;
         writer.flush()?;
         Ok(())
     }
-    
+
     fn format_node(&self, writer: &mut dyn Write, node: &FileNode, root_path: &Path) -> Result<()> {
         self.hex_formatter.format_node(writer, node, root_path)
     }
-    
-    fn end_stream(&self, writer: &mut dyn Write, stats: &TreeStats, _root_path: &Path) -> Result<()> {
+
+    fn end_stream(
+        &self,
+        writer: &mut dyn Write,
+        stats: &TreeStats,
+        _root_path: &Path,
+    ) -> Result<()> {
         // Print statistics at the end
         writeln!(writer, "\nSTATS:")?;
         writeln!(
@@ -154,54 +169,58 @@ impl StreamingFormatter for AiFormatter {
             stats.total_size,
             stats.total_size as f64 / (1024.0 * 1024.0)
         )?;
-        
+
         // File type summary (top 10) - counts in hex
         if !stats.file_types.is_empty() {
             let mut types: Vec<_> = stats.file_types.iter().collect();
             types.sort_by(|a, b| b.1.cmp(a.1));
-            
+
             let types_str: Vec<String> = types
                 .iter()
                 .take(10)
                 .map(|(ext, count)| format!("{}:{:x}", ext, count))
                 .collect();
-            
+
             writeln!(writer, "TYPES: {}", types_str.join(" "))?;
         }
-        
+
         // Largest files (top 5)
         if !stats.largest_files.is_empty() {
-            let large_str: Vec<String> = stats.largest_files
+            let large_str: Vec<String> = stats
+                .largest_files
                 .iter()
                 .take(5)
                 .map(|(size, path)| {
-                    let name = path.file_name()
+                    let name = path
+                        .file_name()
                         .unwrap_or(path.as_os_str())
                         .to_string_lossy();
                     format!("{}:{:x}", name, size)
                 })
                 .collect();
-            
+
             writeln!(writer, "LARGE: {}", large_str.join(" "))?;
         }
-        
+
         // Date range
         if !stats.oldest_files.is_empty() && !stats.newest_files.is_empty() {
-            let oldest = stats.oldest_files[0].0
+            let oldest = stats.oldest_files[0]
+                .0
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            let newest = stats.newest_files[0].0
+            let newest = stats.newest_files[0]
+                .0
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            
+
             writeln!(writer, "DATES: {:x}-{:x}", oldest, newest)?;
         }
-        
+
         writeln!(writer, "END_AI")?;
         writer.flush()?;
-        
+
         Ok(())
     }
 }

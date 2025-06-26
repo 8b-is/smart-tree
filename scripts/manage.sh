@@ -23,9 +23,9 @@ else
 fi
 
 # Project info
-PROJECT_NAME="Smart Tree (stree)"
+PROJECT_NAME="Smart Tree (st)"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BINARY_NAME="stree"
+BINARY_NAME="st"
 
 # Non-interactive mode flag
 NON_INTERACTIVE=${NON_INTERACTIVE:-false}
@@ -419,7 +419,7 @@ ${YELLOW}Usage:${NC} $0 [command] [options]
 
 ${YELLOW}Commands:${NC}
   ${GREEN}build${NC} [debug|release] [features]  Build the project
-  ${GREEN}run${NC} [args...]         Run stree with arguments
+  ${GREEN}run${NC} [args...]         Run st with arguments
   ${GREEN}test${NC}                  Run tests, linting, and format check
   ${GREEN}format${NC}                Format code with rustfmt
   ${GREEN}clean${NC}                 Clean build artifacts

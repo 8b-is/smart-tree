@@ -1,4 +1,4 @@
-use super::{Formatter, ai::AiFormatter, PathDisplayMode};
+use super::{ai::AiFormatter, Formatter, PathDisplayMode};
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
 use serde_json::{json, Value};
@@ -27,9 +27,10 @@ impl Formatter for AiJsonFormatter {
     ) -> Result<()> {
         // First get the AI format output as a string
         let mut ai_output = Vec::new();
-        self.ai_formatter.format(&mut ai_output, nodes, stats, root_path)?;
+        self.ai_formatter
+            .format(&mut ai_output, nodes, stats, root_path)?;
         let ai_text = String::from_utf8_lossy(&ai_output);
-        
+
         // Parse the AI output to extract structured data
         let mut lines = ai_text.lines();
         let mut hex_tree_lines = Vec::new();
@@ -42,7 +43,7 @@ impl Formatter for AiJsonFormatter {
         let mut file_types = Vec::new();
         let mut large_files = Vec::new();
         let mut date_range = None;
-        
+
         while let Some(line) = lines.next() {
             if line == "TREE_HEX_V1:" {
                 continue;
@@ -97,7 +98,7 @@ impl Formatter for AiJsonFormatter {
                 hex_tree_lines.push(line.to_string());
             }
         }
-        
+
         // Build the JSON structure
         let mut json_output = json!({
             "version": "AI_JSON_V1",
@@ -110,27 +111,27 @@ impl Formatter for AiJsonFormatter {
                 "total_size_mb": format!("{:.1}", total_size as f64 / (1024.0 * 1024.0))
             }
         });
-        
+
         // Add optional fields
         if let Some(ctx) = context {
             json_output["context"] = Value::String(ctx);
         }
-        
+
         if !file_types.is_empty() {
             json_output["statistics"]["file_types"] = Value::Array(file_types);
         }
-        
+
         if !large_files.is_empty() {
             json_output["statistics"]["largest_files"] = Value::Array(large_files);
         }
-        
+
         if let Some(dates) = date_range {
             json_output["statistics"]["date_range"] = Value::String(dates);
         }
-        
+
         // Write the JSON output
         writeln!(writer, "{}", serde_json::to_string_pretty(&json_output)?)?;
-        
+
         Ok(())
     }
 }

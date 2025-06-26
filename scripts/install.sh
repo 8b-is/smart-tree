@@ -2,7 +2,7 @@
 #
 # Smart Tree Installer Script
 #
-# This script installs the 'stree' binary on Linux and macOS.
+# This script installs the 'st' binary on Linux and macOS.
 #
 # Usage:
 #   curl -sSL https://raw.githubusercontent.com/user/repo/main/scripts/install.sh | bash
@@ -15,7 +15,7 @@ set -euo pipefail
 
 # --- Configuration ---
 GITHUB_REPO="8b-is/smart-tree"
-BINARY_NAME="stree"
+BINARY_NAME="st"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 # --- Helper Functions ---

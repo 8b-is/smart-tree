@@ -1,4 +1,4 @@
-# 🌳 Smart Tree (stree) - The Intelligent Directory Visualizer
+# 🌳 Smart Tree (st) - The Intelligent Directory Visualizer
 
 A blazingly fast, AI-friendly directory tree visualization tool written in Rust. Smart Tree goes beyond traditional tree commands by providing intelligent filtering, multiple output formats, and optimization for both human and AI consumption.
 
@@ -45,7 +45,7 @@ cargo install --path .
 git clone https://github.com/8bit-wraith/smart-tree
 cd smart-tree
 cargo build --release
-sudo cp target/release/stree /usr/local/bin/
+sudo cp target/release/st /usr/local/bin/
 
 # Using the manage script
 ./scripts/manage.sh install
@@ -55,51 +55,51 @@ sudo cp target/release/stree /usr/local/bin/
 
 ```bash
 # Basic usage
-stree                          # Current directory
-stree /path/to/directory       # Specific directory
+st                          # Current directory
+st /path/to/directory       # Specific directory
 
 # Output modes
-stree -m hex                   # Hex format with file metadata
-stree -m json                  # JSON output
-stree -m ai                    # AI-optimized format
-stree -m digest                # Ultra-compact digest (one line)
-stree -m stats                 # Statistics only
-stree -m csv                   # CSV format
-stree -m tsv                   # TSV format
+st -m hex                   # Hex format with file metadata
+st -m json                  # JSON output
+st -m ai                    # AI-optimized format
+st -m digest                # Ultra-compact digest (one line)
+st -m stats                 # Statistics only
+st -m csv                   # CSV format
+st -m tsv                   # TSV format
 
 # Filtering
-stree --find "config"          # Find files/dirs matching pattern
-stree --type rs                # Only Rust files
-stree --min-size 1M            # Files larger than 1MB
-stree --newer-than 2024-01-01  # Recently modified files
+st --find "config"          # Find files/dirs matching pattern
+st --type rs                # Only Rust files
+st --min-size 1M            # Files larger than 1MB
+st --newer-than 2024-01-01  # Recently modified files
 
 # Options
-stree --no-emoji               # Plain text output
-stree --no-ignore              # Don't respect .gitignore
-stree --no-default-ignore      # Show node_modules, .git, etc.
-stree --show-ignored           # Show ignored dirs in brackets
-stree --depth 3                # Limit depth (default: 5)
-stree --everything             # Show EVERYTHING (--all --no-ignore --no-default-ignore)
-stree -z                       # Compress output
-stree --stream                 # Stream output for large dirs
+st --no-emoji               # Plain text output
+st --no-ignore              # Don't respect .gitignore
+st --no-default-ignore      # Show node_modules, .git, etc.
+st --show-ignored           # Show ignored dirs in brackets
+st --depth 3                # Limit depth (default: 5)
+st --everything             # Show EVERYTHING (--all --no-ignore --no-default-ignore)
+st -z                       # Compress output
+st --stream                 # Stream output for large dirs
 
 # Content search
-stree --search "TODO"          # Find files containing "TODO"
-stree --search "TODO" --type rs # Search only in Rust files
+st --search "TODO"          # Find files containing "TODO"
+st --search "TODO" --type rs # Search only in Rust files
 
 # AI usage
-AI_TOOLS=1 stree               # Auto AI mode + compression
-stree -m ai -z                 # Manual AI mode + compression
-stree -m ai --ai-json          # AI mode with JSON wrapper
-stree -m digest                # Quick digest for AI pre-check
+AI_TOOLS=1 st               # Auto AI mode + compression
+st -m ai -z                 # Manual AI mode + compression
+st -m ai --ai-json          # AI mode with JSON wrapper
+st -m digest                # Quick digest for AI pre-check
 
 # MCP Server (Model Context Protocol)
-stree --mcp                    # Run as MCP server for AI assistants
-stree --mcp-tools              # List available MCP tools
-stree --mcp-config             # Show config for Claude Desktop
+st --mcp                    # Run as MCP server for AI assistants
+st --mcp-tools              # List available MCP tools
+st --mcp-config             # Show config for Claude Desktop
 
 # Digest mode - perfect for AI to quickly check directories
-stree -m digest /large/project # Returns: HASH: 9b3b00cbcc1e8503 F:1623 D:89 S:ac39e7 TYPES: js:523 py:412...
+st -m digest /large/project # Returns: HASH: 9b3b00cbcc1e8503 F:1623 D:89 S:ac39e7 TYPES: js:523 py:412...
 ```
 
 ## 🏗️ Architecture
@@ -253,8 +253,8 @@ path,name,type,size,permissions,modified,uid,gid
 ## 🔧 Configuration
 
 Environment variables:
-- `STREE_DEFAULT_MODE`: Default output mode
-- `STREE_DEFAULT_DEPTH`: Default depth limit
+- `ST_DEFAULT_MODE`: Default output mode
+- `ST_DEFAULT_DEPTH`: Default depth limit
 - `AI_TOOLS=1`: Auto-enable AI mode with compression
 
 ## 🤖 MCP Server (Model Context Protocol)
@@ -265,7 +265,7 @@ Smart Tree includes a built-in MCP server that allows AI assistants like Claude 
 
 1. Show the configuration command:
 ```bash
-stree --mcp-config
+st --mcp-config
 ```
 
 2. Add the output to your Claude Desktop config file (`claude_desktop_config.json`)
@@ -281,7 +281,7 @@ stree --mcp-config
 
 ### MCP Configuration
 
-Create `~/.stree/mcp-config.toml` to customize:
+Create `~/.st/mcp-config.toml` to customize:
 ```toml
 cache_enabled = true
 cache_ttl = 300  # 5 minutes
