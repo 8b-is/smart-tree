@@ -14,7 +14,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-GITHUB_REPO="smart-tree-org/smart-tree"
+GITHUB_REPO="8b-is/smart-tree"
 BINARY_NAME="stree"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 

@@ -86,7 +86,7 @@ jobs:
 
             To install, run the following command in your terminal:
             ```bash
-            curl -sSL https://raw.githubusercontent.com/smart-tree-org/smart-tree/main/scripts/install.sh | bash
+            curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
             ```
           files: artifacts/*/*
         env:
