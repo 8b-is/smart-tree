@@ -51,7 +51,6 @@ This installer will:
 
 ## 📦 Installation
 
-
 ### Using the Quick Installer (Recommended)
 
 ```bash
