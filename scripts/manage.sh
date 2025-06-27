@@ -262,6 +262,100 @@ uninstall() {
     fi
 }
 
+# Create a new GitHub release
+release() {
+    print_header "Creating a new GitHub release ${ROCKET}"
+
+    local version="${1-}"
+    if [[ -z "$version" ]]; then
+        print_error "Version tag is required. Example: v1.0.0"
+        exit 1
+    fi
+
+    if ! command_exists gh; then
+        print_error "GitHub CLI (gh) is not installed. Please install it to create releases."
+        print_info "See: https://cli.github.com/"
+        exit 1
+    fi
+
+    if [[ -n "$(git status --porcelain)" ]]; then
+        print_error "Your working directory is not clean. Please commit or stash your changes."
+        git status --short
+        exit 1
+    fi
+
+    print_info "Creating release for version: $version"
+
+    # Artifacts directory
+    local artifact_dir="release_artifacts"
+    rm -rf "$artifact_dir"
+    mkdir -p "$artifact_dir"
+
+    # Get target triple for artifact naming
+    local target_triple
+    target_triple=$(rustc -vV | grep "host:" | cut -d ' ' -f2)
+
+    # --- Build standard version ---
+    print_info "Building standard release for ${target_triple}..."
+    build "release" ""
+    local standard_artifact_name="${BINARY_NAME}-${version}-standard-${target_triple}"
+    cp "target/release/${BINARY_NAME}" "${artifact_dir}/${standard_artifact_name}"
+    (cd "$artifact_dir" && tar -czf "${standard_artifact_name}.tar.gz" "${standard_artifact_name}")
+    rm "${artifact_dir}/${standard_artifact_name}"
+    local standard_artifact_path="${artifact_dir}/${standard_artifact_name}.tar.gz"
+    print_success "Standard artifact created: ${standard_artifact_path}"
+
+    # --- Build MCP version ---
+    print_info "Building MCP release for ${target_triple}..."
+    mcp_build
+    local mcp_artifact_name="${BINARY_NAME}-${version}-mcp-${target_triple}"
+    cp "target/release/${BINARY_NAME}" "${artifact_dir}/${mcp_artifact_name}"
+    (cd "$artifact_dir" && tar -czf "${mcp_artifact_name}.tar.gz" "${mcp_artifact_name}")
+    rm "${artifact_dir}/${mcp_artifact_name}"
+    local mcp_artifact_path="${artifact_dir}/${mcp_artifact_name}.tar.gz"
+    print_success "MCP artifact created: ${mcp_artifact_path}"
+
+    # --- Create GitHub Release ---
+    local release_title="Smart Tree ${version}"
+    shift # remove version from args
+    local release_notes="${*:-Release ${version}}"
+
+    print_info "Creating GitHub release..."
+    print_info "Title: $release_title"
+    print_info "Notes: $release_notes"
+
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        # Create git tag
+        print_info "Tagging and pushing version $version..."
+        git tag "$version"
+        git push origin "$version"
+
+        print_info "Creating GitHub release and uploading artifacts..."
+        gh release create "$version" "$standard_artifact_path" "$mcp_artifact_path" --title "$release_title" --notes "$release_notes"
+    else
+        echo -e "\n${YELLOW}Ready to create release. Review details above.${NC}"
+        read -p "Do you want to proceed? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_warning "Release cancelled."
+            rm -rf "$artifact_dir"
+            exit 1
+        fi
+        
+        # Create git tag and push it
+        print_info "Tagging version $version..."
+        git tag "$version"
+        git push origin "$version"
+        print_success "Pushed tag $version to origin."
+
+        print_info "Creating GitHub release and uploading artifacts..."
+        gh release create "$version" "$standard_artifact_path" "$mcp_artifact_path" --title "$release_title" --notes "$release_notes"
+    fi
+
+    print_success "Release ${version} created successfully! ${TREE} ${SPARKLE}"
+    rm -rf "$artifact_dir"
+}
+
 # Setup shell completions
 completions() {
     print_header "Setting up shell completions 🐚"
@@ -537,6 +631,7 @@ ${YELLOW}Commands:${NC}
   ${GREEN}bench${NC}                 Run performance benchmarks
   ${GREEN}install${NC} [dir]         Install binary (default: /usr/local/bin)
   ${GREEN}uninstall${NC} [dir]       Uninstall binary
+  ${GREEN}release${NC} <vX.Y.Z> [notes] Create a GitHub release with standard and MCP assets
   ${GREEN}completions${NC}           Setup shell completions
   ${GREEN}man-install${NC}           Generate and install the man page
   ${GREEN}man-uninstall${NC}         Uninstall the man page
@@ -560,6 +655,7 @@ ${YELLOW}Examples:${NC}
   $0 build release mcp  # Build with MCP support
   $0 run -- -m hex .    # Run with hex output on current dir
   $0 test               # Run all tests
+  $0 release v1.0.0 "My first release!" # Create a new release
   $0 mcp-run            # Start MCP server
 
 ${CYAN}Made with ${SPARKLE} and 🌳 by the Smart Tree team!${NC}
@@ -604,6 +700,10 @@ main() {
         uninstall|remove)
             shift
             uninstall "$@"
+            ;;
+        release)
+            shift
+            release "$@"
             ;;
         completions|complete)
             completions
