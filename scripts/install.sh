@@ -78,6 +78,14 @@ case "$architecture" in
         ;;
 esac
 
+# On Apple Silicon, prefer homebrew's default directory if it exists and the
+# user has not specified a custom INSTALL_DIR.
+if [[ "$os" == "apple-darwin" && "$arch" == "aarch64" && -d "/opt/homebrew/bin" ]]; then
+    if [[ "$INSTALL_DIR" == "/usr/local/bin" ]]; then
+        INSTALL_DIR="/opt/homebrew/bin"
+    fi
+fi
+
 # 2. Determine Version to Install
 if [[ -z "${VERSION:-}" ]]; then
     print_info "Fetching the latest version number..."

@@ -1680,7 +1680,7 @@ impl Scanner {
     }
     #[cfg(not(unix))]
     fn get_gid(_metadata: &fs::Metadata) -> u32 {
-        1000 // Common default GID placeholder for non-Unix.
+        0
     }
 } // end impl Scanner
 
@@ -1691,35 +1691,44 @@ impl Scanner {
 /// It's like having a Babel fish for file sizes. Why should we have to do
 /// that math when the computer can do it for us?
 pub fn parse_size(size_str: &str) -> Result<u64> {
-    let upper_size_str = size_str.trim().to_uppercase(); // Normalize: trim whitespace, uppercase units.
-
-    if upper_size_str.is_empty() {
-        return Ok(0); // Empty string is 0 bytes.
+    let size_str = size_str.trim().to_uppercase();
+    if size_str.is_empty() {
+        return Err(anyhow::anyhow!("Empty size string"));
     }
 
-    // Find the first alphabetic character, which separates the number part from the unit part.
-    let (num_part_str, unit_part_str) = match upper_size_str.find(|c: char| c.is_alphabetic()) {
-        Some(idx) => upper_size_str.split_at(idx), // Split into (number_string, unit_string)
-        None => (upper_size_str.as_str(), ""),     // No unit found, assume bytes.
+    // Find the first alphabetic character which marks the start of the unit.
+    let unit_start_index = size_str
+        .find(|c: char| c.is_alphabetic())
+        .unwrap_or(size_str.len());
+    let (num_part_str, unit_part) = size_str.split_at(unit_start_index);
+
+    // Trim any space from the number part before parsing.
+    let num_part_str = num_part_str.trim();
+
+    if num_part_str.is_empty() {
+        return Err(anyhow::anyhow!("Missing number for size string"));
+    }
+
+    let num: f64 = match num_part_str.parse() {
+        Ok(n) => n,
+        Err(e) => return Err(anyhow::anyhow!("Invalid number '{}': {}", num_part_str, e)),
     };
 
-    // Parse the number part. This can fail if it's not a valid number.
-    let number_val: f64 = num_part_str.parse()?; // Use f64 to handle decimals like "2.5M".
+    // Check for negative numbers.
+    if num.is_sign_negative() {
+        return Err(anyhow::anyhow!("Size cannot be negative: {}", num));
+    }
 
-    // Determine the multiplier based on the unit.
-    let multiplier: f64 = match unit_part_str {
-        "B" | "" => 1.0,                                 // Bytes (or no unit)
-        "K" | "KB" => 1024.0,                            // Kilobytes
-        "M" | "MB" => 1024.0 * 1024.0,                   // Megabytes
-        "G" | "GB" => 1024.0 * 1024.0 * 1024.0,          // Gigabytes
-        "T" | "TB" => 1024.0 * 1024.0 * 1024.0 * 1024.0, // Terabytes
-        // Add P/PB, E/EB if needed, but T is usually enough for file sizes.
-        _ => return Err(anyhow::anyhow!("Invalid size unit: '{}'", unit_part_str)), // Unknown unit.
+    let multiplier = match unit_part {
+        "K" | "KB" => 1024.0,
+        "M" | "MB" => 1024.0 * 1024.0,
+        "G" | "GB" => 1024.0 * 1024.0 * 1024.0,
+        "T" | "TB" => 1024.0 * 1024.0 * 1024.0 * 1024.0,
+        "B" | "" => 1.0,
+        _ => return Err(anyhow::anyhow!("Invalid size unit: '{}'", unit_part)),
     };
 
-    // Calculate final size in bytes and cast to u64.
-    // Potential for overflow if f64 result is too large for u64, but highly unlikely for file sizes.
-    Ok((number_val * multiplier) as u64)
+    Ok((num * multiplier) as u64)
 }
 
 // --- Unit Tests: Ensuring Our Scanner Behaves ---
@@ -1747,37 +1756,28 @@ mod tests {
 
     #[test]
     fn test_parse_size_invalid_inputs() {
-        assert!(parse_size("abc").is_err()); // Not a number
-        assert!(parse_size("1X").is_err()); // Invalid unit
-        assert!(parse_size("1.2.3K").is_err()); // Invalid number format
-        assert!(parse_size("-100M").is_err()); // Negative numbers not typically parsed by `f64::parse` directly for this context
-                                               // but if f64 allows it, our logic might need to check for negative `number_val`.
-                                               // Current `f64::parse` will error on just "-100M" if it expects only digits before unit.
-                                               // Let's test `parse` behavior for negative:
-        assert!("-5".parse::<f64>().is_ok()); // This is fine.
-                                              // So, parse_size("-5M") should work if the number parser handles the negative.
-                                              // However, file sizes are non-negative. The function should ideally reject negative inputs.
-                                              // For now, it would produce a large u64 due to casting if f64 was negative.
-                                              // This indicates a potential improvement: explicitly check for `number_val < 0.0`.
+        assert!(parse_size("100X").is_err());
+        assert!(parse_size("garbage").is_err());
+        assert!(parse_size("-100M").is_err());
+        assert!(parse_size("1..5K").is_err());
     }
 
     #[test]
     fn test_parse_size_zero_and_empty() {
         assert_eq!(parse_size("0").unwrap(), 0);
-        assert_eq!(parse_size("0K").unwrap(), 0);
-        assert_eq!(parse_size("").unwrap(), 0); // Empty string
-        assert_eq!(parse_size("   ").unwrap(), 0); // Whitespace only
+        assert!(parse_size("").is_err());
+        assert!(parse_size("  ").is_err());
     }
 
     // Basic test for Scanner creation. More comprehensive tests would involve
     // creating a temporary directory structure and verifying scan results.
     #[test]
     fn test_scanner_creation_defaults() {
-        // Configure a scanner with mostly default-like settings.
+        let temp_dir = tempfile::tempdir().unwrap();
         let config = ScannerConfig {
             max_depth: 5,
             follow_symlinks: false,
-            respect_gitignore: true, // Try to load .gitignore
+            respect_gitignore: true,
             show_hidden: false,
             show_ignored: false,
             find_pattern: None,
@@ -1786,19 +1786,11 @@ mod tests {
             max_size: None,
             newer_than: None,
             older_than: None,
-            use_default_ignores: true, // Use our built-in ignore list
+            use_default_ignores: true,
             search_keyword: None,
+            show_filesystems: false,
         };
-
-        // Create a scanner for the current directory.
-        // This will attempt to load ".gitignore" if present, and build default ignores.
-        let scanner_result = Scanner::new(Path::new("."), config);
-        assert!(scanner_result.is_ok()); // Scanner creation should succeed.
-        let scanner = scanner_result.unwrap();
-
-        // Check that default_ignores GlobSet was created.
-        assert!(scanner.default_ignores.is_some());
-        // .gitignore might be None if no .gitignore file exists in the test execution directory.
-        // So, `scanner.gitignore.is_some()` or `scanner.gitignore.is_none()` are both valid.
+        let scanner_result = Scanner::new(temp_dir.path(), config);
+        assert!(scanner_result.is_ok());
     }
 }

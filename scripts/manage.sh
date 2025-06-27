@@ -266,9 +266,119 @@ uninstall() {
 completions() {
     print_header "Setting up shell completions 🐚"
     cd "$PROJECT_DIR"
-    
-    print_warning "Shell completions coming soon! 🚧"
-    print_info "For now, enjoy tab-completing the manage.sh commands!"
+
+    print_info "Building release binary to generate completions..."
+    cargo build --release
+
+    local shell_type
+    shell_type="$(basename "$SHELL")"
+    local completion_dir
+
+    print_info "Detected shell: $shell_type"
+
+    case "$shell_type" in
+        bash)
+            completion_dir="/etc/bash_completion.d"
+            if [[ ! -d "$completion_dir" ]]; then
+                completion_dir="$HOME/.local/share/bash-completion/completions"
+                mkdir -p "$completion_dir"
+            fi
+            
+            print_info "Generating bash completions..."
+            ./target/release/st completions bash > "$completion_dir/st"
+            
+            print_success "Bash completions installed in $completion_dir/st"
+            print_info "Please restart your shell or run 'source ~/.bashrc' for changes to take effect."
+            ;;
+        zsh)
+            # Zsh can use a directory in FPATH for completions
+            completion_dir=$(zsh -c 'echo $fpath[1]')
+            if [[ -z "$completion_dir" ]] || [[ ! -w "$completion_dir" ]]; then
+                completion_dir="$HOME/.zsh/completions"
+                mkdir -p "$completion_dir"
+                print_warning "Could not find a writable fpath directory."
+                print_info "Created completions directory at $completion_dir"
+                print_info "Add the following to your ~/.zshrc:"
+                echo -e "${YELLOW}  fpath=(\$HOME/.zsh/completions \$fpath)${NC}"
+            fi
+
+            print_info "Generating zsh completions..."
+            ./target/release/st completions zsh > "$completion_dir/_st"
+
+            print_success "Zsh completions installed in $completion_dir/_st"
+            print_info "Please restart your shell or run 'source ~/.zshrc' for changes to take effect."
+            ;;
+        fish)
+            completion_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
+            mkdir -p "$completion_dir"
+
+            print_info "Generating fish completions..."
+            ./target/release/st completions fish > "$completion_dir/st.fish"
+            
+            print_success "Fish completions installed in $completion_dir/st.fish"
+            print_info "Please restart your shell for changes to take effect."
+            ;;
+        *)
+            print_warning "Unsupported shell: $shell_type"
+            print_info "You can generate completions manually for your shell:"
+            echo "  ./target/release/st completions [bash|zsh|fish|elvish|powershell] > /path/to/completions"
+            ;;
+    esac
+}
+
+# Install/Uninstall man page
+manage_man_page() {
+    print_header "Managing Man Page 📖"
+    cd "$PROJECT_DIR"
+
+    if ! command_exists pandoc; then
+        print_error "pandoc is not installed. Please install it to continue."
+        print_info "On Debian/Ubuntu: sudo apt-get install pandoc"
+        print_info "On macOS (Homebrew): brew install pandoc"
+        print_info "On Arch Linux: sudo pacman -S pandoc"
+        exit 1
+    fi
+
+    local man_dir="/usr/local/share/man/man1"
+    local man_page_src="docs/st-cheetsheet.md"
+    local man_page_dest="$man_dir/st.1"
+
+    if [[ "$1" == "install" ]]; then
+        print_info "Generating and installing man page from $man_page_src..."
+        
+        if [[ ! -d "$man_dir" ]]; then
+            print_info "Creating man directory: $man_dir"
+            sudo mkdir -p "$man_dir"
+        fi
+
+        # Use a temporary file for pandoc output before moving with sudo
+        local temp_file
+        temp_file=$(mktemp)
+        pandoc "$man_page_src" -s -t man -o "$temp_file"
+        
+        print_info "Installing to $man_page_dest"
+        sudo mv "$temp_file" "$man_page_dest"
+        
+        print_info "Updating man database..."
+        sudo mandb
+        
+        print_success "Man page for 'st' installed. Try 'man st'!"
+
+    elif [[ "$1" == "uninstall" ]]; then
+        if [[ -f "$man_page_dest" ]]; then
+            print_info "Uninstalling man page: $man_page_dest"
+            sudo rm "$man_page_dest"
+            
+            print_info "Updating man database..."
+            sudo mandb
+            
+            print_success "Man page for 'st' uninstalled."
+        else
+            print_warning "Man page not found at $man_page_dest. Nothing to do."
+        fi
+    else
+        print_error "Unknown argument. Use 'install' or 'uninstall'."
+    fi
 }
 
 # MCP server functions
@@ -428,6 +538,8 @@ ${YELLOW}Commands:${NC}
   ${GREEN}install${NC} [dir]         Install binary (default: /usr/local/bin)
   ${GREEN}uninstall${NC} [dir]       Uninstall binary
   ${GREEN}completions${NC}           Setup shell completions
+  ${GREEN}man-install${NC}           Generate and install the man page
+  ${GREEN}man-uninstall${NC}         Uninstall the man page
   ${GREEN}examples${NC}              Show usage examples
   ${GREEN}demo-stream${NC}           Demo streaming feature
   ${GREEN}demo-search${NC}           Demo search feature
@@ -495,6 +607,12 @@ main() {
             ;;
         completions|complete)
             completions
+            ;;
+        man-install)
+            manage_man_page install
+            ;;
+        man-uninstall)
+            manage_man_page uninstall
             ;;
         examples|ex)
             examples

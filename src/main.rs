@@ -10,8 +10,9 @@
 // -----------------------------------------------------------------------------
 use anyhow::Result;
 use chrono::NaiveDate;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
+use clap_mangen;
 use colored; // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -19,6 +20,7 @@ use regex::Regex;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
+use termimad;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
@@ -42,30 +44,44 @@ use st::{
     author   // Automatically pulls authors from Cargo.toml - "8bit-wraith" and "Claude" - what a team!
 )]
 struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
+    // --- Action Flags ---
+    /// Show the cheatsheet.
+    #[arg(long, exclusive = true)]
+    cheet: bool,
+
+    /// Generate shell completion scripts.
+    #[arg(long, exclusive = true, value_name = "SHELL")]
+    completions: Option<clap_complete::Shell>,
+
+    /// Generate the man page.
+    #[arg(long, exclusive = true)]
+    man: bool,
+
+    /// Run `st` as an MCP (Model Context Protocol) server.
+    #[cfg(feature = "mcp")]
+    #[arg(long, exclusive = true)]
+    mcp: bool,
+
+    /// List the tools `st` provides when running as an MCP server.
+    #[cfg(feature = "mcp")]
+    #[arg(long, exclusive = true)]
+    mcp_tools: bool,
+
+    /// Show the configuration snippet for the MCP server.
+    #[cfg(feature = "mcp")]
+    #[arg(long, exclusive = true)]
+    mcp_config: bool,
+
+    // --- Scan Arguments ---
+    /// Path to the directory or file you want to analyze.
+    path: Option<PathBuf>,
 
     #[command(flatten)]
-    scan: ScanArgs,
-}
-
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Generate shell completion scripts.
-    Completions {
-        /// The shell to generate completions for.
-        #[arg(value_enum)]
-        shell: Shell,
-    },
+    scan_opts: ScanArgs,
 }
 
 #[derive(Parser, Debug)]
 struct ScanArgs {
-    /// Path to the directory or file you want to analyze.
-    /// If you don't specify, it bravely defaults to the current directory (`.`).
-    #[arg(default_value = ".")]
-    path: PathBuf,
-
     /// Choose your adventure! Selects the output format.
     /// From classic human-readable to AI-optimized hex, we've got options.
     #[arg(short, long, value_enum, default_value = "classic")]
@@ -175,25 +191,6 @@ struct ScanArgs {
     /// This is like having X-ray vision for your files!
     #[arg(long)]
     search: Option<String>,
-
-    /// Run `st` as an MCP (Model Context Protocol) server.
-    /// This allows AI assistants (like our friend Claude) to use `st` as a tool.
-    /// This option is only available if the "mcp" feature is compiled.
-    #[cfg(feature = "mcp")]
-    #[arg(long)]
-    mcp: bool,
-
-    /// List the tools `st` provides when running as an MCP server.
-    /// Helpful for understanding what capabilities are exposed to AI.
-    #[cfg(feature = "mcp")]
-    #[arg(long)]
-    mcp_tools: bool,
-
-    /// Show the configuration snippet needed to add `st` as an MCP server in Claude Desktop.
-    /// Makes setup a breeze!
-    #[cfg(feature = "mcp")]
-    #[arg(long)]
-    mcp_config: bool,
 }
 
 /// Enum defining how color should be used in the output.
@@ -264,38 +261,43 @@ fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
 
-    if let Some(Commands::Completions { shell }) = cli.command {
-        let mut cmd = <Cli as clap::CommandFactory>::command();
+    // Handle exclusive action flags first.
+    if cli.cheet {
+        let markdown = std::fs::read_to_string("docs/st-cheetsheet.md")?;
+        let skin = termimad::MadSkin::default();
+        skin.print_text(&markdown);
+        return Ok(());
+    }
+    if let Some(shell) = cli.completions {
+        let mut cmd = Cli::command();
         let bin_name = cmd.get_name().to_string();
         generate(shell, &mut cmd, bin_name, &mut io::stdout());
         return Ok(());
     }
-
-    let args = cli.scan;
-
-    // --- MCP (Model Context Protocol) Handling ---
-    // If the "mcp" feature is enabled, check for MCP-specific commands first.
-    // These commands don't perform a regular scan but interact with the MCP system.
+    if cli.man {
+        let cmd = Cli::command();
+        let man = clap_mangen::Man::new(cmd);
+        man.render(&mut io::stdout())?;
+        return Ok(());
+    }
     #[cfg(feature = "mcp")]
     {
-        if args.mcp_config {
-            // If --mcp-config is passed, print the config for Claude Desktop and exit.
-            print_mcp_config();
-            return Ok(()); // Successfully printed config, task done.
+        if cli.mcp {
+            return run_mcp_server();
         }
-
-        if args.mcp_tools {
-            // If --mcp-tools is passed, print the list of available MCP tools and exit.
+        if cli.mcp_tools {
             print_mcp_tools();
-            return Ok(()); // Successfully listed tools, task done.
+            return Ok(());
         }
-
-        if args.mcp {
-            // If --mcp is passed, run st as an MCP server and exit.
-            // This function will block and handle MCP communication.
-            return run_mcp_server(); // The server itself will handle its lifecycle.
+        if cli.mcp_config {
+            print_mcp_config();
+            return Ok(());
         }
     }
+
+    // If no action flag was given, proceed with the scan.
+    let args = cli.scan_opts;
+    let path = cli.path.unwrap_or_else(|| PathBuf::from("."));
 
     // --- Environment Variable Overrides ---
     // Check for ST_DEFAULT_MODE environment variable to override the default output mode.
@@ -320,17 +322,18 @@ fn main() -> Result<()> {
     // Then, the command-line --mode flag.
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
-    let (mode, compress) =
-        if std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true") {
-            // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
-            (OutputMode::Ai, true)
-        } else if let Some(env_mode) = default_mode_env {
-            // If ST_DEFAULT_MODE is set, use it. Compression comes from args or its default.
-            (env_mode, args.compress)
-        } else {
-            // Otherwise, use the mode and compression from command-line arguments (or their defaults).
-            (args.mode, args.compress)
-        };
+    let (mode, compress) = if std::env::var("AI_TOOLS")
+        .map_or(false, |v| v == "1" || v.to_lowercase() == "true")
+    {
+        // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
+        (OutputMode::Ai, true)
+    } else if let Some(env_mode) = default_mode_env {
+        // If ST_DEFAULT_MODE is set, use it. Compression comes from args or its default.
+        (env_mode, args.compress)
+    } else {
+        // Otherwise, use the mode and compression from command-line arguments (or their defaults).
+        (args.mode, args.compress)
+    };
 
     // --- Color Configuration ---
     // Determine if colors should be used in the output.
@@ -371,8 +374,9 @@ fn main() -> Result<()> {
 
     // For AI mode, we automatically enable `show_ignored` to provide maximum context to the AI,
     // unless the user explicitly set `show_ignored` (which `args.show_ignored` would capture).
-    let show_ignored_final =
-        args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
+    let show_ignored_final = args.show_ignored
+        || matches!(mode, OutputMode::Ai | OutputMode::Digest)
+        || args.everything;
 
     let scanner_config = ScannerConfig {
         max_depth: args.depth,
@@ -403,7 +407,7 @@ fn main() -> Result<()> {
     };
 
     // Create the scanner instance with the specified root path and configuration.
-    let scanner = Scanner::new(&args.path, scanner_config)?;
+    let scanner = Scanner::new(&path, scanner_config)?;
 
     // Convert the command-line PathMode enum to the formatter's PathDisplayMode enum.
     let path_display_mode = match args.path_mode {
@@ -425,7 +429,7 @@ fn main() -> Result<()> {
                 use std::thread;
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
-                let scanner_path_clone = args.path.clone(); // Clone path for the scanner thread.
+                let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
 
                 // Spawn the scanner thread. It will send FileNode objects through the channel.
                 let scanner_thread = thread::spawn(move || {
@@ -442,7 +446,9 @@ fn main() -> Result<()> {
                         path_display_mode,
                         args.show_filesystems,
                     )),
-                    OutputMode::Ai => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
+                    OutputMode::Ai => {
+                        Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
+                    }
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
 
@@ -456,7 +462,8 @@ fn main() -> Result<()> {
                 // Receive and format nodes as they arrive from the scanner thread.
                 while let Ok(node) = rx.recv() {
                     // Loop until the channel is closed.
-                    streaming_formatter.format_node(&mut handle, &node, &scanner_path_clone)?;
+                    streaming_formatter
+                        .format_node(&mut handle, &node, &scanner_path_clone)?;
                 }
 
                 // Wait for the scanner thread to finish and get the final statistics.
@@ -522,7 +529,7 @@ fn main() -> Result<()> {
 
         // Format the collected nodes and stats into a byte vector.
         let mut output_buffer = Vec::new();
-        formatter.format(&mut output_buffer, &nodes, &stats, &args.path)?;
+        formatter.format(&mut output_buffer, &nodes, &stats, &path)?;
 
         // Handle compression if requested.
         if compress {
