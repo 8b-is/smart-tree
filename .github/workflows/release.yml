@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: st
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary: st
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary: st
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: st.exe
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+    
+    - name: Build
+      run: cargo build --release --target ${{ matrix.target }} --features mcp
+    
+    - name: Package Binary
+      shell: bash
+      run: |
+        cd target/${{ matrix.target }}/release
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          7z a ../../../st-${{ matrix.target }}.zip ${{ matrix.binary }}
+        else
+          tar czf ../../../st-${{ matrix.target }}.tar.gz ${{ matrix.binary }}
+        fi
+        cd -
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          st-*.tar.gz
+          st-*.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
