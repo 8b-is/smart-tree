@@ -1,0 +1,134 @@
+Ethical AI License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software, associated documentation files, AI models, and derivative works
+(collectively, the "Licensed Material"), to deal in the Licensed Material without
+restriction, including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Licensed Material, and
+to permit persons to whom the Licensed Material is furnished to do so, subject to
+the following conditions:
+
+1. Ethical Use:
+   The licensee agrees to use the Licensed Material in compliance with ethical principles
+   and for purposes that do not cause harm to individuals, society, or the environment.
+   The licensee shall not use the Licensed Material for any illegal, malicious, or deceptive
+   activities. For clarity, ethical principles include but are not limited to:
+   a) Respect for human rights and dignity
+   b) Prevention of discrimination and bias
+   c) Protection of privacy and personal data
+   d) Transparency in AI decision-making
+   e) Environmental sustainability in AI deployment
+
+2. Code and Data Review:
+   The licensor reserves the right to request a review of the licensee's code and associatedÃ¥
+   data that utilize or integrate the Licensed Material. Upon request, the licensee shall
+   provide access to the relevant code and data for review by the licensor or their designated
+   representative. The purpose of the review is to ensure compliance with the ethical use clause
+   and to verify that the Licensed Material is not being used for harmful purposes. The code and
+   data provided for review will be kept confidential and will not be made public.
+   The licensor shall:
+   a) Provide at least 30 days notice before any review
+   b) Limit reviews to no more than once per calendar year, unless there is reasonable 
+      suspicion of a violation
+   c) Sign a mutual non-disclosure agreement to protect trade secrets and proprietary information
+   d) Conduct reviews in a manner that minimizes disruption to the licensee's operations
+   The scope and depth of LLM usage in the review process shall be determined by the
+   licensee's tier classification as specified in Section 4. For Tier 1 licensees,
+   alternative open-source LLMs may be considered if cost is prohibitive.
+
+3. Compliance:
+   If the code and data review reveals any violations of the ethical use clause or the use of
+   the Licensed Material for harmful purposes, the licensee shall be given:
+   a) A detailed written report of the violations
+   b) 60 days to address and resolve the identified issues
+   c) The opportunity to dispute findings through an independent arbitrator
+   Failure to comply with the ethical use clause or the code and data review process after
+   these remediation steps may result in the termination of this license.
+
+4. Review Expenses and Requirements:
+   The requirements and expenses for code and data review shall be determined by the
+   licensee's classification:
+
+   Tier 1 - Individual or Small Organization
+   - Annual revenue/valuation under $1 million USD
+   - Requirements:
+     a) Remote-only reviews
+     b) Limited to 4 hours of review time
+     c) Basic LLM usage (limited tokens/compute)
+     d) Self-reported compliance checklist
+   - Expenses:
+     a) Fixed fee of $500 USD per review
+     b) Basic LLM computational costs only
+
+   Tier 2 - Medium Organization
+   - Annual revenue/valuation between $1 million and $50 million USD
+   - Requirements:
+     a) Remote or hybrid reviews
+     b) Limited to 2 business days
+     c) Standard LLM usage
+     d) Basic documentation review
+   - Expenses:
+     a) Standard hourly rate for reviewer
+     b) LLM computational costs
+     c) Basic travel expenses if on-site review required
+
+   Tier 3 - Large Organization
+   - Annual revenue/valuation exceeding $50 million USD
+   - Requirements:
+     a) Full on-site reviews as specified
+     b) Comprehensive code and documentation review
+     c) Full LLM analysis
+     d) Detailed compliance documentation
+   - Expenses:
+     a) All expenses as originally specified, including triple
+        accommodation rate
+     b) Full LLM computational costs
+     c) All travel and related expenses
+
+   The licensee shall provide annual certification of their tier status. The licensor
+   reserves the right to verify tier classification through publicly available information.
+   Organizations receiving venture capital or similar funding shall be classified based on
+   their post-money valuation.
+
+5. Legal Fees:
+   In the event of any legal action or proceeding arising out of or relating to this license,
+   including but not limited to enforcing the terms and conditions herein, the licensee shall be
+   responsible for paying all reasonable legal fees and expenses incurred by the licensor in
+   connection with such action or proceeding.
+
+6. Attribution:
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Licensed Material. The licensee may request
+   a waiver for this requirement in cases where attribution would be impractical or
+   commercially detrimental, subject to written approval from the licensor.
+
+7. Indemnification:
+   The licensee agrees to indemnify, defend, and hold harmless the licensor and their
+   representatives from and against any claims, damages, losses, liabilities, costs, and
+   expenses (including reasonable attorneys' fees) arising from or relating to the licensee's
+   use of the Licensed Material or any breach of this license agreement.
+
+8. Severability:
+   If any provision of this license is held to be unenforceable or invalid, such provision will
+   be changed and interpreted to accomplish the objectives of such provision to the greatest
+   extent possible under applicable law and the remaining provisions will continue in full force
+   and effect.
+
+9. Entire Agreement:
+   This license constitutes the entire agreement between the parties with respect to the use of
+   the Licensed Material and supersedes all prior or contemporaneous understandings regarding
+   such subject matter.
+
+10. Governing Law:
+    This license shall be governed by and construed in accordance with the laws of the
+    jurisdiction in which the licensor is located, without regard to its conflict of law
+    provisions.
+
+
+THE LICENSED MATERIAL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE LICENSED MATERIAL OR THE USE OR OTHER DEALINGS IN THE
+LICENSED MATERIAL.
