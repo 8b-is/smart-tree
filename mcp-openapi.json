@@ -1,0 +1,205 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Smart Tree MCP (Model Context Protocol) - AI Endpoints",
+    "version": "1.0.0",
+    "description": "API specification for the AI-centric features of Smart Tree's MCP. This protocol is message-based (JSON-RPC over stdio), but is documented here in a familiar OpenAPI format."
+  },
+  "servers": [
+    {
+      "url": "stdio",
+      "description": "The API is served over standard input/output, not HTTP. Methods correspond to JSON-RPC method names."
+    }
+  ],
+  "paths": {
+    "/tools/call": {
+      "post": {
+        "summary": "Call an AI-Enabled Tool",
+        "description": "Executes a specific tool with the given arguments. The `name` field in the request body determines which tool is called.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/AnalyzeDirectoryToolCall" },
+                  { "$ref": "#/components/schemas/FindFilesToolCall" }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": { "type": "string", "example": "text" },
+                          "text": { "type": "string", "description": "The output from the tool." }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prompts/get": {
+        "post": {
+            "summary": "Get a Pre-defined Prompt",
+            "description": "Retrieves a structured prompt that can be sent to a large language model. These prompts guide the model on how to use the available tools effectively.",
+            "requestBody": {
+                "required": true,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/GetPromptRequest"
+                        }
+                    }
+                }
+            },
+            "responses": {
+                "200": {
+                    "description": "Prompt content",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/GetPromptResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalyzeDirectoryToolCall": {
+        "type": "object",
+        "title": "Analyze Directory (AI Mode)",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["analyze_directory"],
+            "description": "The name of the tool to call."
+          },
+          "arguments": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path to the directory to analyze"
+              },
+              "mode": {
+                "type": "string",
+                "enum": ["ai"],
+                "description": "Output format mode. For AI usage, this should be 'ai'.",
+                "default": "ai"
+              },
+              "max_depth": {
+                "type": "integer",
+                "description": "Maximum depth to traverse",
+                "default": 10
+              },
+              "show_hidden": {
+                "type": "boolean",
+                "description": "Show hidden files and directories",
+                "default": false
+              },
+              "compress": {
+                "type": "boolean",
+                "description": "Compress output with zlib for token efficiency",
+                "default": true
+              }
+            },
+            "required": ["path"]
+          }
+        }
+      },
+      "FindFilesToolCall": {
+        "type": "object",
+        "title": "Find Files",
+        "properties": {
+            "name": {
+                "type": "string",
+                "enum": ["find_files"],
+                "description": "The name of the tool to call."
+            },
+            "arguments": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to search in"
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Regex pattern to match file/directory names"
+                    },
+                    "min_size": {
+                        "type": "string",
+                        "description": "Minimum file size (e.g., '1M', '500K')"
+                    },
+                    "newer_than": {
+                        "type": "string",
+                        "description": "Show files newer than date (YYYY-MM-DD)"
+                    }
+                },
+                "required": ["path"]
+            }
+        }
+      },
+      "GetPromptRequest": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "enum": ["analyze_codebase", "find_large_files", "recent_changes", "project_structure"],
+                "description": "The name of the prompt to retrieve."
+            },
+            "arguments": {
+                "type": "object",
+                "description": "Arguments to substitute into the prompt template.",
+                "example": { "path": "/path/to/project" }
+            }
+        }
+      },
+      "GetPromptResponse": {
+        "type": "object",
+        "properties": {
+            "description": {
+                "type": "string"
+            },
+            "messages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": { "type": "string", "enum": ["user"] },
+                        "content": {
+                            "type": "object",
+                            "properties": {
+                                "type": { "type": "string", "enum": ["text"] },
+                                "text": { "type": "string", "description": "The fully-formed prompt text." }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+      }
+    }
+  }
+} 

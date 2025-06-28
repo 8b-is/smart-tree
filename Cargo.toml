@@ -47,7 +47,7 @@ assert_cmd = "2.0"
 predicates = "3.1"
 
 [features]
-default = []
+default = ["mcp"]
 mcp = ["tokio", "async-trait", "futures", "dashmap"]
 
 [profile.release]
