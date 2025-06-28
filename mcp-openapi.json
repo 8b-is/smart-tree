@@ -1,29 +1,102 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Smart Tree MCP (Model Context Protocol) - AI Endpoints",
+    "title": "Smart Tree MCP (Model Context Protocol) - AI-Optimized Directory Analysis",
     "version": "1.0.0",
-    "description": "API specification for the AI-centric features of Smart Tree's MCP. This protocol is message-based (JSON-RPC over stdio), but is documented here in a familiar OpenAPI format."
+    "description": "A powerful directory analysis tool designed for AI/LLM consumption. Features streaming output, compression, content search, and multiple output formats optimized for different use cases. This API is served over JSON-RPC via stdio, not HTTP.",
+    "contact": {
+      "name": "Smart Tree Team",
+      "url": "https://github.com/8b-is/smart-tree"
+    }
   },
   "servers": [
     {
-      "url": "stdio",
-      "description": "The API is served over standard input/output, not HTTP. Methods correspond to JSON-RPC method names."
+      "url": "stdio://",
+      "description": "JSON-RPC over standard input/output. Use the 'method' field to specify the operation."
     }
   ],
   "paths": {
+    "/initialize": {
+      "post": {
+        "summary": "Initialize MCP Connection",
+        "description": "Establishes the MCP connection and returns server capabilities.",
+        "responses": {
+          "200": {
+            "description": "Server information and capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "protocolVersion": { "type": "string", "example": "2024-11-05" },
+                    "capabilities": {
+                      "type": "object",
+                      "properties": {
+                        "tools": { "type": "object" },
+                        "resources": { "type": "object" },
+                        "prompts": { "type": "object" }
+                      }
+                    },
+                    "serverInfo": {
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string", "example": "smart-tree" },
+                        "version": { "type": "string", "example": "0.1.0" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/list": {
+      "post": {
+        "summary": "List Available Tools",
+        "description": "Returns a list of all available tools with their schemas. This is how AI assistants discover what Smart Tree can do.",
+        "responses": {
+          "200": {
+            "description": "List of available tools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "description": { "type": "string" },
+                          "inputSchema": { "type": "object" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tools/call": {
       "post": {
-        "summary": "Call an AI-Enabled Tool",
-        "description": "Executes a specific tool with the given arguments. The `name` field in the request body determines which tool is called.",
+        "summary": "Execute a Tool",
+        "description": "Executes a specific tool with the given arguments. The main workhorse of the API.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "oneOf": [
-                  { "$ref": "#/components/schemas/AnalyzeDirectoryToolCall" },
-                  { "$ref": "#/components/schemas/FindFilesToolCall" }
+                  { "$ref": "#/components/schemas/AnalyzeDirectoryCall" },
+                  { "$ref": "#/components/schemas/FindFilesCall" },
+                  { "$ref": "#/components/schemas/GetStatisticsCall" },
+                  { "$ref": "#/components/schemas/GetDigestCall" }
                 ]
               }
             }
@@ -31,19 +104,49 @@
         },
         "responses": {
           "200": {
-            "description": "Tool output",
+            "description": "Tool execution result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ToolResponse" }
+              },
+              "text/plain": {
+                "description": "When streaming is enabled, output is sent line-by-line"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prompts/list": {
+      "post": {
+        "summary": "List Available Prompts",
+        "description": "Returns pre-defined prompts that guide AI assistants in using Smart Tree effectively.",
+        "responses": {
+          "200": {
+            "description": "List of available prompts",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "content": {
+                    "prompts": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "type": { "type": "string", "example": "text" },
-                          "text": { "type": "string", "description": "The output from the tool." }
+                          "name": { "type": "string" },
+                          "description": { "type": "string" },
+                          "arguments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": { "type": "string" },
+                                "description": { "type": "string" },
+                                "required": { "type": "boolean" }
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -56,44 +159,40 @@
       }
     },
     "/prompts/get": {
-        "post": {
-            "summary": "Get a Pre-defined Prompt",
-            "description": "Retrieves a structured prompt that can be sent to a large language model. These prompts guide the model on how to use the available tools effectively.",
-            "requestBody": {
-                "required": true,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "$ref": "#/components/schemas/GetPromptRequest"
-                        }
-                    }
-                }
-            },
-            "responses": {
-                "200": {
-                    "description": "Prompt content",
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/GetPromptResponse"
-                            }
-                        }
-                    }
-                }
+      "post": {
+        "summary": "Get a Specific Prompt",
+        "description": "Retrieves a pre-defined prompt with arguments substituted. These prompts help AI assistants understand how to use Smart Tree for common tasks.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GetPromptRequest" }
             }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Prompt content ready for use",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetPromptResponse" }
+              }
+            }
+          }
         }
+      }
     }
   },
   "components": {
     "schemas": {
-      "AnalyzeDirectoryToolCall": {
+      "AnalyzeDirectoryCall": {
         "type": "object",
-        "title": "Analyze Directory (AI Mode)",
+        "title": "Analyze Directory Tool",
+        "description": "The main tool for analyzing directory structures with multiple output formats and filtering options.",
         "properties": {
           "name": {
             "type": "string",
-            "enum": ["analyze_directory"],
-            "description": "The name of the tool to call."
+            "enum": ["analyze_directory"]
           },
           "arguments": {
             "type": "object",
@@ -104,102 +203,312 @@
               },
               "mode": {
                 "type": "string",
-                "enum": ["ai"],
-                "description": "Output format mode. For AI usage, this should be 'ai'.",
-                "default": "ai"
+                "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest"],
+                "default": "ai",
+                "description": "Output format. 'ai' is optimized for LLMs, 'digest' provides a compact hash"
               },
               "max_depth": {
                 "type": "integer",
-                "description": "Maximum depth to traverse",
-                "default": 10
+                "default": 10,
+                "description": "Maximum directory traversal depth"
               },
               "show_hidden": {
                 "type": "boolean",
-                "description": "Show hidden files and directories",
-                "default": false
+                "default": false,
+                "description": "Include hidden files (starting with .)"
+              },
+              "show_ignored": {
+                "type": "boolean",
+                "default": false,
+                "description": "Show ignored files/dirs in brackets. Auto-enabled for 'ai' mode"
+              },
+              "no_emoji": {
+                "type": "boolean",
+                "default": false,
+                "description": "Disable emoji in output for plain text"
               },
               "compress": {
                 "type": "boolean",
-                "description": "Compress output with zlib for token efficiency",
-                "default": true
+                "default": false,
+                "description": "Compress output with zlib. Result will be 'COMPRESSED_V1:<hex>'"
+              },
+              "path_mode": {
+                "type": "string",
+                "enum": ["off", "relative", "full"],
+                "default": "off",
+                "description": "How to display paths: off (names only), relative, or full absolute paths"
+              },
+              "stream": {
+                "type": "boolean",
+                "default": false,
+                "description": "Stream output line-by-line as files are discovered. Only for 'ai' and 'hex' modes"
+              },
+              "find": {
+                "type": "string",
+                "description": "Regex pattern to find specific files/directories"
+              },
+              "file_type": {
+                "type": "string",
+                "description": "Filter by file extension (e.g., 'rs', 'py')"
+              },
+              "min_size": {
+                "type": "string",
+                "description": "Minimum file size (e.g., '1M', '500K')"
+              },
+              "max_size": {
+                "type": "string",
+                "description": "Maximum file size"
+              },
+              "newer_than": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "description": "Show files newer than this date (YYYY-MM-DD)"
+              },
+              "older_than": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "description": "Show files older than this date (YYYY-MM-DD)"
+              },
+              "search": {
+                "type": "string",
+                "description": "Search for keyword within file contents. Best used with file_type filter"
+              },
+              "no_ignore": {
+                "type": "boolean",
+                "default": false,
+                "description": "Ignore .gitignore files"
+              },
+              "no_default_ignore": {
+                "type": "boolean",
+                "default": false,
+                "description": "Disable built-in ignore patterns (node_modules, __pycache__, etc.)"
+              },
+              "show_filesystems": {
+                "type": "boolean",
+                "default": false,
+                "description": "Show filesystem type indicators (X=XFS, 4=ext4, B=Btrfs)"
               }
             },
             "required": ["path"]
           }
         }
       },
-      "FindFilesToolCall": {
+      "FindFilesCall": {
         "type": "object",
-        "title": "Find Files",
+        "title": "Find Files Tool",
+        "description": "Specialized tool for finding files matching specific criteria.",
         "properties": {
-            "name": {
+          "name": {
+            "type": "string",
+            "enum": ["find_files"]
+          },
+          "arguments": {
+            "type": "object",
+            "properties": {
+              "path": {
                 "type": "string",
-                "enum": ["find_files"],
-                "description": "The name of the tool to call."
+                "description": "Root path to search from"
+              },
+              "pattern": {
+                "type": "string",
+                "description": "Regex pattern to match file/directory names"
+              },
+              "file_type": {
+                "type": "string",
+                "description": "Filter by file extension"
+              },
+              "min_size": {
+                "type": "string",
+                "description": "Minimum file size (e.g., '1M')"
+              },
+              "max_size": {
+                "type": "string",
+                "description": "Maximum file size"
+              },
+              "newer_than": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "description": "Files modified after this date"
+              },
+              "older_than": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "description": "Files modified before this date"
+              },
+              "max_depth": {
+                "type": "integer",
+                "default": 10,
+                "description": "Maximum search depth"
+              }
             },
-            "arguments": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to search in"
-                    },
-                    "pattern": {
-                        "type": "string",
-                        "description": "Regex pattern to match file/directory names"
-                    },
-                    "min_size": {
-                        "type": "string",
-                        "description": "Minimum file size (e.g., '1M', '500K')"
-                    },
-                    "newer_than": {
-                        "type": "string",
-                        "description": "Show files newer than date (YYYY-MM-DD)"
-                    }
+            "required": ["path"]
+          }
+        }
+      },
+      "GetStatisticsCall": {
+        "type": "object",
+        "title": "Get Statistics Tool",
+        "description": "Get detailed statistics about a directory without the full tree structure.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["get_statistics"]
+          },
+          "arguments": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path to analyze"
+              },
+              "show_hidden": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include hidden files in statistics"
+              }
+            },
+            "required": ["path"]
+          }
+        }
+      },
+      "GetDigestCall": {
+        "type": "object",
+        "title": "Get Digest Tool",
+        "description": "Get a compact SHA256 digest of directory structure. Perfect for quick comparisons or caching.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": ["get_digest"]
+          },
+          "arguments": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path to analyze"
+              }
+            },
+            "required": ["path"]
+          }
+        }
+      },
+      "ToolResponse": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["text"],
+                  "description": "Content type"
                 },
-                "required": ["path"]
+                "text": {
+                  "type": "string",
+                  "description": "The output from the tool. Format depends on mode and options."
+                }
+              }
             }
+          }
+        },
+        "example": {
+          "content": [{
+            "type": "text",
+            "text": "COMPRESSED_V1:789c4d8fc10a..."
+          }]
         }
       },
       "GetPromptRequest": {
         "type": "object",
         "properties": {
-            "name": {
+          "name": {
+            "type": "string",
+            "enum": ["analyze_codebase", "find_large_files", "recent_changes", "project_structure"],
+            "description": "The prompt template to retrieve"
+          },
+          "arguments": {
+            "type": "object",
+            "description": "Arguments to substitute into the prompt",
+            "properties": {
+              "path": {
                 "type": "string",
-                "enum": ["analyze_codebase", "find_large_files", "recent_changes", "project_structure"],
-                "description": "The name of the prompt to retrieve."
-            },
-            "arguments": {
-                "type": "object",
-                "description": "Arguments to substitute into the prompt template.",
-                "example": { "path": "/path/to/project" }
+                "description": "Path to analyze"
+              },
+              "include_hidden": {
+                "type": "boolean",
+                "description": "For analyze_codebase: include hidden files"
+              },
+              "min_size": {
+                "type": "string",
+                "description": "For find_large_files: minimum size threshold"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "For find_large_files: number of results"
+              },
+              "days": {
+                "type": "integer",
+                "description": "For recent_changes: number of days to look back"
+              },
+              "max_depth": {
+                "type": "integer",
+                "description": "For project_structure: maximum depth"
+              }
             }
-        }
+          }
+        },
+        "required": ["name"]
       },
       "GetPromptResponse": {
         "type": "object",
         "properties": {
-            "description": {
-                "type": "string"
-            },
-            "messages": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "role": { "type": "string", "enum": ["user"] },
-                        "content": {
-                            "type": "object",
-                            "properties": {
-                                "type": { "type": "string", "enum": ["text"] },
-                                "text": { "type": "string", "description": "The fully-formed prompt text." }
-                            }
-                        }
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of what this prompt does"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["user"]
+                },
+                "content": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["text"]
+                    },
+                    "text": {
+                      "type": "string",
+                      "description": "The complete prompt text ready to send to an LLM"
                     }
+                  }
                 }
+              }
             }
+          }
         }
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Core",
+      "description": "Core MCP operations"
+    },
+    {
+      "name": "Tools",
+      "description": "Directory analysis tools"
+    },
+    {
+      "name": "Prompts",
+      "description": "Pre-defined AI prompts"
+    }
+  ]
 } 

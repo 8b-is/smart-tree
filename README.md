@@ -297,12 +297,27 @@ st --mcp-config
 
 3. Restart Claude Desktop
 
+### Documentation
+
+- 📚 **[MCP Guide](docs/mcp-guide.md)** - Comprehensive guide with examples
+- 🚀 **[Quick Reference](docs/mcp-quick-reference.md)** - Cheat sheet for common patterns
+- 🔧 **[OpenAPI Spec](mcp-openapi.json)** - Machine-readable API specification
+
 ### Available MCP Tools
 
-- `analyze_directory`: Analyze a directory in various formats (classic, hex, json, ai, stats, etc.)
+- `analyze_directory`: Analyze a directory in various formats with streaming, compression, and search
 - `find_files`: Find files matching specific criteria (pattern, size, date, type)
 - `get_statistics`: Get detailed statistics about a directory
 - `get_digest`: Get SHA256 digest of directory structure
+
+### Key Features
+
+- **🚀 Streaming**: Real-time output for large directories
+- **🗜️ Compression**: ~80% reduction in token usage
+- **🔍 Content Search**: Find keywords within files
+- **📊 Multiple Formats**: AI-optimized, JSON, hex, stats, and more
+- **🎯 Smart Filtering**: By type, size, date, with regex support
+- **💾 Caching**: 5-minute cache for repeated queries
 
 ### MCP Configuration
 
