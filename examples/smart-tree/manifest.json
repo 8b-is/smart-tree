@@ -1,8 +1,13 @@
 {
+  "dxt_version": "0.1.0",
   "name": "smart-tree",
   "version": "1.1.1",
   "description": "A blazingly fast, AI-friendly directory tree visualization tool with MCP support",
-  "author": "8b-is",
+  "author": {
+    "name": "8b-is",
+    "email": "",
+    "url": "https://github.com/8b-is"
+  },
   "license": "MIT",
   "homepage": "https://github.com/8b-is/smart-tree",
   "repository": {
@@ -10,32 +15,25 @@
     "url": "https://github.com/8b-is/smart-tree.git"
   },
   "icon": "icon.png",
-  "requirements": {
-    "node": ">=16.0.0"
+  "server": {
+    "command": "node",
+    "args": ["server/index.js"],
+    "env": {
+      "ST_MCP_ALLOWED_PATHS": "${WORKSPACE_PATH}",
+      "ST_MCP_BLOCKED_PATHS": ""
+    },
+    "requirements": [
+      {
+        "name": "node",
+        "version": ">=16.0.0"
+      }
+    ]
   },
-  "files": [
-    "server/index.js",
-    "server/install.js",
-    "manifest.json",
-    "icon.png",
-    "README.md"
-  ],
   "install": {
-    "script": "server/install.js",
-    "requirements": {
-      "rust": "Optional - for building from source"
-    }
+    "script": "server/install.js"
   },
   "mcp": {
     "version": "1.0.0",
-    "server": {
-      "command": "node",
-      "args": ["server/index.js"],
-      "env": {
-        "ST_MCP_ALLOWED_PATHS": "${WORKSPACE_PATH}",
-        "ST_MCP_BLOCKED_PATHS": ""
-      }
-    },
     "tools": [
       {
         "name": "analyze_directory",
