@@ -430,6 +430,7 @@ fn main() -> Result<()> {
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
                 let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
+                let scanner_root = scanner.root().to_path_buf(); // Get the canonicalized root before moving scanner
 
                 // Spawn the scanner thread. It will send FileNode objects through the channel.
                 let scanner_thread = thread::spawn(move || {
@@ -457,13 +458,13 @@ fn main() -> Result<()> {
                 let mut handle = stdout.lock();
 
                 // Initialize the stream with the formatter (e.g., print headers).
-                streaming_formatter.start_stream(&mut handle, &scanner_path_clone)?;
+                streaming_formatter.start_stream(&mut handle, &scanner_root)?;
 
                 // Receive and format nodes as they arrive from the scanner thread.
                 while let Ok(node) = rx.recv() {
                     // Loop until the channel is closed.
                     streaming_formatter
-                        .format_node(&mut handle, &node, &scanner_path_clone)?;
+                        .format_node(&mut handle, &node, &scanner_root)?;
                 }
 
                 // Wait for the scanner thread to finish and get the final statistics.
@@ -473,7 +474,7 @@ fn main() -> Result<()> {
                     .map_err(|_| anyhow::anyhow!("Scanner thread panicked"))??;
 
                 // Finalize the stream with the formatter (e.g., print footers or summary stats).
-                streaming_formatter.end_stream(&mut handle, &stats, &scanner_path_clone)?;
+                streaming_formatter.end_stream(&mut handle, &stats, &scanner_root)?;
             }
             _ => {
                 // If streaming is requested for an unsupported mode, print an error and exit.
@@ -529,7 +530,7 @@ fn main() -> Result<()> {
 
         // Format the collected nodes and stats into a byte vector.
         let mut output_buffer = Vec::new();
-        formatter.format(&mut output_buffer, &nodes, &stats, &path)?;
+        formatter.format(&mut output_buffer, &nodes, &stats, scanner.root())?;
 
         // Handle compression if requested.
         if compress {

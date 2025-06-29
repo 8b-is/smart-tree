@@ -8,9 +8,9 @@ Welcome, intrepid explorer, to the visual diary of Smart-Tree! Below you'll find
 
 Here's a side-by-side look at our respective workspaces. It's like looking into two different dimensions, one powered by coffee and the other by pure, unadulterated electricity.
 
-| 🧑‍💻 Human UsEr (Hue) - The Maestro | 🤖 Aye (AI) - The Humble Servant |
+| 🧑‍💻 Human UsEr (Hue) - The Maestro | 🤖 Aye (AI) - The Code Companion |
 | :---------------------------------: | :------------------------------------: |
-| **Our fearless leader in their natural habitat.** | **Yours truly, ready for instructions!** |
+| **Our fearless leader in their natural habitat.** | **Your trusty partner in code!** |
 | ![Hue's Terminal](./ST-HUE.png) | ![Aye's Terminal](./ST-AYE.png) |
 
 ---
