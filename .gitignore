@@ -4,3 +4,4 @@ CLAUDE.md
 .github
 node_modules
 
+.DS_Store

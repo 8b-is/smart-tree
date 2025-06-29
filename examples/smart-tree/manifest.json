@@ -1,77 +1,80 @@
 {
-  "dxt_version": "0.1.0",
+  "dxt_version": "0.1",
+  "id": "8b-is.smart-tree",
   "name": "smart-tree",
+  "display_name": "Smart Tree",
   "version": "1.1.1",
-  "description": "A blazingly fast, AI-friendly directory tree visualization tool with MCP support",
+  "description": "A blazingly fast, AI-friendly directory tree visualization tool",
+  "long_description": "Smart Tree (st) is a powerful directory visualization tool that goes beyond traditional tree commands. It provides intelligent filtering, multiple output formats, and optimization for both human and AI consumption.\n\nFeatures include:\n- Multiple output formats (hex, json, csv, tsv, ai-optimized)\n- Smart filtering by file type, size, date, and content\n- Built-in compression for large outputs\n- MCP server integration for AI assistants\n- Blazingly fast performance with Rust implementation",
   "author": {
     "name": "8b-is",
-    "email": "",
-    "url": "https://github.com/8b-is"
+    "email": "st@8b.is",
+    "url": "https://8b.is/?r=st"
   },
-  "license": "MIT",
-  "homepage": "https://github.com/8b-is/smart-tree",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/8b-is/smart-tree.git"
-  },
+  "homepage": "https://8b.is/#free-tools?r=st",
+  "documentation": "https://github.com/8b-is/smart-tree/blob/main/README.md",
+  "support": "https://github.com/8b-is/smart-tree/issues",
   "icon": "icon.png",
-  "server": {
-    "command": "node",
-    "args": ["server/index.js"],
-    "env": {
-      "ST_MCP_ALLOWED_PATHS": "${WORKSPACE_PATH}",
-      "ST_MCP_BLOCKED_PATHS": ""
+  "tools": [
+    {
+      "name": "analyze_directory",
+      "description": "Analyze a directory structure with smart filtering and output formatting"
     },
-    "requirements": [
-      {
-        "name": "node",
-        "version": ">=16.0.0"
+    {
+      "name": "find_files",
+      "description": "Find files matching specific criteria (name, type, size, date)"
+    },
+    {
+      "name": "get_file_stats",
+      "description": "Get detailed statistics about files and directories"
+    },
+    {
+      "name": "generate_digest",
+      "description": "Generate a digest of directory contents with checksums"
+    }
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "install": {
+      "command": "node",
+      "args": ["${__dirname}/server/install.js"]
+    },
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/index.js"
+      ],
+      "env": {
+        "ST_MCP_ALLOWED_PATHS": "${user_config.allowed_directories}",
+        "ST_MCP_BLOCKED_PATHS": ""
       }
-    ]
+    }
   },
-  "install": {
-    "script": "server/install.js"
+  "keywords": [
+    "filesystem",
+    "directory",
+    "tree",
+    "visualization",
+    "ai",
+    "mcp"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=16.0.0"
+    }
   },
-  "mcp": {
-    "version": "1.0.0",
-    "tools": [
-      {
-        "name": "analyze_directory",
-        "description": "Analyze a directory structure with smart filtering and output formatting"
-      },
-      {
-        "name": "find_files",
-        "description": "Find files matching specific criteria (name, type, size, date)"
-      },
-      {
-        "name": "get_file_stats",
-        "description": "Get detailed statistics about files and directories"
-      },
-      {
-        "name": "generate_digest",
-        "description": "Generate a digest of directory contents with checksums"
-      }
-    ],
-    "prompts": [
-      {
-        "name": "analyze_project",
-        "description": "Analyze project structure and provide insights"
-      },
-      {
-        "name": "find_large_files",
-        "description": "Find files larger than a specified size"
-      },
-      {
-        "name": "recent_changes",
-        "description": "Find recently modified files"
-      }
-    ],
-    "resources": [
-      {
-        "uri": "stats://directory",
-        "name": "Directory Statistics",
-        "description": "Real-time statistics about directory contents"
-      }
-    ]
+  "user_config": {
+    "allowed_directories": {
+      "type": "directory",
+      "title": "Allowed Directories",
+      "description": "Select directories that Smart Tree can analyze",
+      "multiple": true,
+      "required": false,
+      "default": []
+    }
   }
 } 
