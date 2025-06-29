@@ -96,12 +96,18 @@ jobs:
           # Smart Tree ${{ github.ref }}
           
           ## What's New
-          - [Add release notes here]
+          
+          ### v1.1.1 Highlights
+          - Enhanced search functionality with line and column information
+          - Search results now show: `[SEARCH:L<line>:C<column>]`
+          - Fixed search filtering to only show files with matches
+          - Performance improvements with match truncation (100 max per file)
+          - Added DXT package for easy Claude Desktop installation
           
           ## Installation
           
-          ### Using DXT (Recommended)
-          Download `smart-tree.dxt` from the [DXT examples](https://github.com/8b-is/smart-tree/main/examples/smart-tree) and install in Claude Desktop.
+          ### Using DXT (Recommended for Claude Desktop)
+          Download `smart-tree.dxt` from the assets below and install in Claude Desktop.
           
           ### Manual Installation
           Download the appropriate binary for your platform below.
@@ -118,8 +124,14 @@ jobs:
         draft: true
         prerelease: false
     
+    - name: Build DXT Package
+      run: |
+        cd examples/smart-tree
+        ./build-dxt.sh
+        
     - name: Upload Release Assets
       run: |
+        # Upload binary assets
         for asset in artifacts/*/*.{tar.gz,zip}; do
           if [ -f "$asset" ]; then
             name=$(basename "$asset")
@@ -127,5 +139,11 @@ jobs:
             gh release upload "${{ github.ref_name }}" "$asset" --clobber
           fi
         done
+        
+        # Upload DXT package
+        if [ -f "examples/smart-tree/smart-tree.dxt" ]; then
+          echo "Uploading smart-tree.dxt"
+          gh release upload "${{ github.ref_name }}" "examples/smart-tree/smart-tree.dxt" --clobber
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
