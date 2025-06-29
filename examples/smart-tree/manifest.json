@@ -1,0 +1,79 @@
+{
+  "name": "smart-tree",
+  "version": "1.1.1",
+  "description": "A blazingly fast, AI-friendly directory tree visualization tool with MCP support",
+  "author": "8b-is",
+  "license": "MIT",
+  "homepage": "https://github.com/8b-is/smart-tree",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/8b-is/smart-tree.git"
+  },
+  "icon": "icon.png",
+  "requirements": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "server/index.js",
+    "server/install.js",
+    "manifest.json",
+    "icon.png",
+    "README.md"
+  ],
+  "install": {
+    "script": "server/install.js",
+    "requirements": {
+      "rust": "Optional - for building from source"
+    }
+  },
+  "mcp": {
+    "version": "1.0.0",
+    "server": {
+      "command": "node",
+      "args": ["server/index.js"],
+      "env": {
+        "ST_MCP_ALLOWED_PATHS": "${WORKSPACE_PATH}",
+        "ST_MCP_BLOCKED_PATHS": ""
+      }
+    },
+    "tools": [
+      {
+        "name": "analyze_directory",
+        "description": "Analyze a directory structure with smart filtering and output formatting"
+      },
+      {
+        "name": "find_files",
+        "description": "Find files matching specific criteria (name, type, size, date)"
+      },
+      {
+        "name": "get_file_stats",
+        "description": "Get detailed statistics about files and directories"
+      },
+      {
+        "name": "generate_digest",
+        "description": "Generate a digest of directory contents with checksums"
+      }
+    ],
+    "prompts": [
+      {
+        "name": "analyze_project",
+        "description": "Analyze project structure and provide insights"
+      },
+      {
+        "name": "find_large_files",
+        "description": "Find files larger than a specified size"
+      },
+      {
+        "name": "recent_changes",
+        "description": "Find recently modified files"
+      }
+    ],
+    "resources": [
+      {
+        "uri": "stats://directory",
+        "name": "Directory Statistics",
+        "description": "Real-time statistics about directory contents"
+      }
+    ]
+  }
+} 

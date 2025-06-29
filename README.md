@@ -49,6 +49,21 @@ This installer will:
 - Create a preferences file with your settings
 - Add colorful terminal integration (courtesy of Trisha from Accounting! ✨)
 
+### 🤖 Claude Desktop Integration (DXT)
+
+For Claude Desktop users, you can install Smart Tree as an MCP server:
+
+1. Download the DXT package from the [latest release](https://github.com/8b-is/smart-tree/releases/latest)
+2. Open Claude Desktop and go to Settings > Developer
+3. Click "Install from file" and select `smart-tree.dxt`
+
+Or build the DXT package yourself:
+```bash
+cd examples/smart-tree
+./build-dxt.sh
+# The smart-tree.dxt file will be created
+```
+
 ## 📦 Installation
 
 ### Using the Quick Installer (Recommended)

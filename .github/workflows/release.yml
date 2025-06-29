@@ -101,7 +101,7 @@ jobs:
           ## Installation
           
           ### Using DXT (Recommended)
-          Download `smart-tree.dxt` from the [DXT examples](https://github.com/anthropics/dxt/tree/main/examples/smart-tree) and install in Claude Desktop.
+          Download `smart-tree.dxt` from the [DXT examples](https://github.com/8b-is/smart-tree/main/examples/smart-tree) and install in Claude Desktop.
           
           ### Manual Installation
           Download the appropriate binary for your platform below.
