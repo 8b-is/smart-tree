@@ -15,8 +15,9 @@ Smart Tree (`st`) is a blazingly fast, AI-friendly directory visualization tool 
 - Claude format (`--mode claude`) with 10x compression
 - Content search within files (`--search`)
 - Streaming mode for large directories (`--stream`)
-- Multiple output formats (classic, hex, json, ai, ai_json, stats, csv, tsv, digest, quantum, claude)
+- Multiple output formats (classic, hex, json, ai, ai_json, stats, csv, tsv, digest, quantum, claude, semantic)
 - Built-in compression with `-z` flag for any format
+- Semantic grouping with `--semantic` flag (inspired by Omni!)
 
 ## Development Commands
 
@@ -66,6 +67,7 @@ st --find "*.rs"           # Find all Rust files
 st --search "TODO"         # Search for TODO in file contents
 st --stream                # Stream output for large directories
 st --everything            # Show all files (--all --no-ignore --no-default-ignore)
+st --semantic              # Group files by conceptual similarity (Omni's wisdom!)
 ```
 
 ### Linting and Formatting

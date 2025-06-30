@@ -26,6 +26,7 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 - **Show Ignored**: `--show-ignored` flag displays ignored directories in brackets [dirname]
 - **Hex Statistics**: Stats mode shows file counts, directory counts, and sizes in hexadecimal
 - **MCP Server**: Built-in Model Context Protocol server for AI assistant integration
+- **Semantic Grouping**: `--semantic` flag groups files by conceptual similarity (inspired by Omni!)
 
 ### AI Optimization
 - **Compact Hex Format**: Fixed-width fields for easy parsing
