@@ -91,13 +91,13 @@ pub struct QuantumScanner<W: Write> {
 impl<W: Write> QuantumScanner<W> {
     // Cross-platform permission handling
     #[cfg(unix)]
-    fn get_permissions(metadata: &fs::Metadata) -> u16 {
+    fn get_permissions(metadata: &fs::Metadata) -> u32 {
         use std::os::unix::fs::PermissionsExt;
-        (metadata.permissions().mode() & 0o777) as u16
+        metadata.permissions().mode() & 0o777
     }
     
     #[cfg(not(unix))]
-    fn get_permissions(_metadata: &fs::Metadata) -> u16 {
+    fn get_permissions(_metadata: &fs::Metadata) -> u32 {
         0o755 // Default permissions for non-Unix
     }
     
