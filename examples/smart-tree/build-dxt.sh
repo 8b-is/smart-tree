@@ -10,7 +10,7 @@ echo "🌲 Building smart-tree DXT package..."
 cd "$(dirname "$0")"
 
 # Check required files
-required_files=("manifest.json" "server/index.js" "server/install.js" "icon.png" "README.md")
+required_files=("manifest.json" "server/index.js" "server/install.js" "server/package.json" "icon.png" "README.md")
 for file in "${required_files[@]}"; do
     if [ ! -f "$file" ]; then
         echo "❌ Missing required file: $file"

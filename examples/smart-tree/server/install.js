@@ -69,10 +69,13 @@ async function getLatestRelease() {
     });
 }
 
-// Download binary from URL
+// Download and extract binary from URL
 async function downloadBinary(url, destPath) {
     return new Promise((resolve, reject) => {
         console.log(`📥 Downloading from: ${url}`);
+        
+        const isCompressed = url.endsWith('.tar.gz') || url.endsWith('.zip');
+        const tempFile = isCompressed ? destPath + '.tmp' : destPath;
         
         https.get(url, { 
             headers: { 'User-Agent': 'smart-tree-dxt-installer' },
@@ -90,11 +93,52 @@ async function downloadBinary(url, destPath) {
                 return;
             }
             
-            const file = fs.createWriteStream(destPath);
+            const file = fs.createWriteStream(tempFile);
             res.pipe(file);
             
             file.on('finish', () => {
                 file.close();
+                
+                if (isCompressed) {
+                    // Extract the binary
+                    console.log('📦 Extracting binary...');
+                    try {
+                        if (url.endsWith('.tar.gz')) {
+                            // Extract tar.gz using built-in tar command
+                            execSync(`tar -xzf "${tempFile}" -C "${path.dirname(destPath)}"`, { stdio: 'inherit' });
+                        } else if (url.endsWith('.zip')) {
+                            // Extract zip for Windows
+                            execSync(`unzip -o "${tempFile}" -d "${path.dirname(destPath)}"`, { stdio: 'inherit' });
+                        }
+                        
+                        // Clean up temp file
+                        fs.unlinkSync(tempFile);
+                        
+                        // The binary might be in a subdirectory, try to find it
+                        const binaryName = path.basename(destPath);
+                        const extractedBinary = path.join(path.dirname(destPath), binaryName);
+                        
+                        if (!fs.existsSync(extractedBinary)) {
+                            // Look for the binary in immediate subdirectories
+                            const files = fs.readdirSync(path.dirname(destPath));
+                            for (const file of files) {
+                                const fullPath = path.join(path.dirname(destPath), file);
+                                if (fs.statSync(fullPath).isDirectory()) {
+                                    const nestedBinary = path.join(fullPath, binaryName);
+                                    if (fs.existsSync(nestedBinary)) {
+                                        fs.renameSync(nestedBinary, destPath);
+                                        fs.rmdirSync(fullPath);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        reject(new Error(`Failed to extract: ${err.message}`));
+                        return;
+                    }
+                }
+                
                 // Make executable on Unix-like systems
                 if (process.platform !== 'win32') {
                     fs.chmodSync(destPath, '755');
