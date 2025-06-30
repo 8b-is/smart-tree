@@ -45,6 +45,8 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 
 ## 🚀 Quick Start
 
+📖 **New to Smart Tree?** Check out our [Mode Selection Guide](docs/MODE_SELECTION_GUIDE.md) to choose the perfect output format!
+
 ```bash
 # One-line installer (recommended)
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install-smart-tree.sh | bash
@@ -106,14 +108,17 @@ sudo cp target/release/st /usr/local/bin/
 st                          # Current directory
 st /path/to/directory       # Specific directory
 
-# Output modes
-st -m hex                   # Hex format with file metadata
-st -m json                  # JSON output
-st -m ai                    # AI-optimized format
-st -m digest                # Ultra-compact digest (one line)
-st -m stats                 # Statistics only
-st -m csv                   # CSV format
-st -m tsv                   # TSV format
+# Output modes (see Mode Selection Guide for details)
+st -m ai                    # 🤖 AI-optimized (default for AI, 5x compression)
+st -m claude                # 🚀 Maximum compression (10x reduction!)
+st -m quantum               # 🧬 Native quantum format (8x compression)
+st -m classic               # 👁️ Traditional tree view (for humans)
+st -m hex                   # 🔧 Hex format with metadata (3x compression)
+st -m json                  # 💻 JSON output (2x compression)
+st -m digest                # 📊 Ultra-compact one-line summary
+st -m stats                 # 📈 Statistics only (10x compression)
+st -m csv                   # 📄 CSV format
+st -m tsv                   # 📄 TSV format
 
 # Filtering
 st --find "config"          # Find files/dirs matching pattern

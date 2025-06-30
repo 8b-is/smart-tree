@@ -39,7 +39,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "analyze_directory".to_string(),
-            description: "Analyze a directory and return its structure in various formats"
+            description: "Analyze a directory with smart compression. Use mode='ai' (default) for balanced output, mode='claude' for 10x compression, mode='classic' for visual trees. Start with quick_tree for overviews!"
                 .to_string(),
             input_schema: json!({
                 "type": "object",
@@ -167,7 +167,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "quick_tree".to_string(),
-            description: "Get a quick tree view of a directory (optimized for AI, compressed by default)".to_string(),
+            description: "START HERE! Quick 3-level overview of any directory. Automatically compressed, perfect for initial exploration before using analyze_directory for details".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {

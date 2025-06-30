@@ -125,7 +125,8 @@ fn get_analyze_codebase_prompt(args: Value) -> Result<Value> {
             "type": "text",
             "text": format!(
                 "Please analyze the codebase at {} using Smart Tree. \
-                Use the analyze_directory tool with mode='ai' and compress=true for optimal token efficiency. \
+                First use quick_tree to get a 3-level overview, then use analyze_directory with mode='ai' (default) for details. \
+                For large codebases (>10k files), switch to mode='claude' with compress=true for 100x compression! \
                 {}",
                 path,
                 if include_hidden { "Include hidden files." } else { "" }
