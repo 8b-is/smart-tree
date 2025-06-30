@@ -72,7 +72,7 @@ async function getLatestRelease() {
 // Download and extract binary from URL
 async function downloadBinary(url, destPath) {
     return new Promise((resolve, reject) => {
-        console.log(`📥 Downloading from: ${url}`);
+        console.error(`📥 Downloading from: ${url}`);
         
         const isCompressed = url.endsWith('.tar.gz') || url.endsWith('.zip');
         const tempFile = isCompressed ? destPath + '.tmp' : destPath;
@@ -101,7 +101,7 @@ async function downloadBinary(url, destPath) {
                 
                 if (isCompressed) {
                     // Extract the binary
-                    console.log('📦 Extracting binary...');
+                    console.error('📦 Extracting binary...');
                     try {
                         if (url.endsWith('.tar.gz')) {
                             // Extract tar.gz using built-in tar command
@@ -152,28 +152,28 @@ async function downloadBinary(url, destPath) {
 // Main installation function
 async function install() {
     try {
-        console.log('🌳 Smart Tree Binary Installer');
-        console.log('==============================\n');
+        console.error('🌳 Smart Tree Binary Installer');
+        console.error('==============================\n');
         
         const platformInfo = getPlatformInfo();
-        console.log(`📍 Platform: ${platformInfo.platform} ${platformInfo.arch}`);
-        console.log(`🎯 Target: ${platformInfo.rustTarget}\n`);
+        console.error(`📍 Platform: ${platformInfo.platform} ${platformInfo.arch}`);
+        console.error(`🎯 Target: ${platformInfo.rustTarget}\n`);
         
         // Check if binary already exists
         const binaryPath = path.join(__dirname, platformInfo.binaryName);
         if (fs.existsSync(binaryPath)) {
-            console.log('✅ Binary already exists. Checking version...');
+            console.error('✅ Binary already exists. Checking version...');
             try {
-                const version = execSync(`${binaryPath} --version`, { encoding: 'utf8' }).trim();
-                console.log(`📌 Current version: ${version}`);
+                const version = execSync(`"${binaryPath}" --version`, { encoding: 'utf8' }).trim();
+                console.error(`📌 Current version: ${version}`);
             } catch (e) {
-                console.log('⚠️  Could not determine current version');
+                console.error('⚠️  Could not determine current version');
             }
         }
         
-        console.log('\n🔍 Fetching latest release info...');
+        console.error('\n🔍 Fetching latest release info...');
         const release = await getLatestRelease();
-        console.log(`📦 Latest version: ${release.tag_name}`);
+        console.error(`📦 Latest version: ${release.tag_name}`);
         
         // Find the asset for our platform
         const asset = release.assets.find(a => 
@@ -185,28 +185,28 @@ async function install() {
             throw new Error(`No binary found for ${platformInfo.rustTarget} in latest release`);
         }
         
-        console.log(`\n📥 Downloading ${asset.name}...`);
+        console.error(`\n📥 Downloading ${asset.name}...`);
         await downloadBinary(asset.browser_download_url, binaryPath);
         
         // Verify installation
-        console.log('\n🔧 Verifying installation...');
-        const version = execSync(`${binaryPath} --version`, { encoding: 'utf8' }).trim();
-        console.log(`✅ Successfully installed: ${version}`);
+        console.error('\n🔧 Verifying installation...');
+        const version = execSync(`"${binaryPath}" --version`, { encoding: 'utf8' }).trim();
+        console.error(`✅ Successfully installed: ${version}`);
         
         // Test MCP functionality
-        console.log('\n🧪 Testing MCP server...');
+        console.error('\n🧪 Testing MCP server...');
         const testResult = execSync(
-            `echo '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' | ${binaryPath} --mcp 2>&1 | head -2`,
+            `echo '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' | "${binaryPath}" --mcp 2>&1 | head -2`,
             { encoding: 'utf8' }
         );
         
         if (testResult.includes('MCP server started')) {
-            console.log('✅ MCP server test passed!');
+            console.error('✅ MCP server test passed!');
         } else {
-            console.log('⚠️  MCP server test inconclusive');
+            console.error('⚠️  MCP server test inconclusive');
         }
         
-        console.log('\n🎉 Installation complete!');
+        console.error('\n🎉 Installation complete!');
         
     } catch (error) {
         console.error('\n❌ Installation failed:', error.message);
