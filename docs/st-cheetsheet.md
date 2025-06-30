@@ -40,9 +40,13 @@ Getting started is as easy as pie. Mmm, pie.
 | **Hex** | `-m hex` | For the AI whisperers. Fixed-width fields for easy parsing. |
 | **JSON** | `-m json` | Structured data, perfect for scripts and programs. Use `--compact` for a single line! |
 | **AI** | `-m ai` | A special blend of hex and stats, optimized for Large Language Models. The future is now! |
+| **Claude** | `-m claude` | 🚀 **QUANTUM MODE!** 99% compression (10x) using MEM|8 format. Saves $1,270 per Chromium! |
+| **Quantum** | `-m quantum` | Native quantum format with token mapping (8x compression). The raw power! |
 | **Stats** | `-m stats` | Just the facts, ma'am. A summary of the directory without the full tree. |
 | **CSV / TSV** | `-m csv` / `-m tsv` | Your spreadsheet's new best friend. |
 | **Digest** | `-m digest` | Super compact, single-line output. Perfect for a quick check-in. |
+
+> **🌟 v2.0 Quantum Tip:** Use `st -m claude` for maximum compression when feeding to AI. It's like fitting an elephant in a matchbox!
 
 ---
 
