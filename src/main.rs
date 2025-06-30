@@ -27,7 +27,8 @@ use st::{
     formatters::{
         ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
         digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-        claude::ClaudeFormatter, stats::StatsFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode, StreamingFormatter,
+        claude::ClaudeFormatter, semantic::SemanticFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
+        Formatter, PathDisplayMode, StreamingFormatter,
     },
     parse_size,
     Scanner,
@@ -191,6 +192,13 @@ struct ScanArgs {
     /// This is like having X-ray vision for your files!
     #[arg(long)]
     search: Option<String>,
+
+    /// Group files by semantic similarity (inspired by Omni's wisdom!).
+    /// Uses content-aware tokenization to identify conceptually related files.
+    /// Perfect for understanding project structure at a higher level.
+    /// Example groups: "tests", "documentation", "configuration", "source code"
+    #[arg(long)]
+    semantic: bool,
 }
 
 /// Enum defining how color should be used in the output.
@@ -241,6 +249,8 @@ enum OutputMode {
     Quantum,
     /// Claude API format. Quantum compression wrapped for optimal Anthropic API transmission.
     Claude,
+    /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
+    Semantic,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -320,11 +330,13 @@ fn main() -> Result<()> {
             "digest" => Some(OutputMode::Digest),
             "quantum" => Some(OutputMode::Quantum),
             "claude" => Some(OutputMode::Claude),
+            "semantic" => Some(OutputMode::Semantic),
             _ => None, // Unknown mode string, ignore.
         });
 
     // Determine the final mode and compression settings.
     // The AI_TOOLS environment variable takes highest precedence.
+    // Then, --semantic flag overrides the mode.
     // Then, the command-line --mode flag.
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
@@ -333,6 +345,9 @@ fn main() -> Result<()> {
     {
         // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
         (OutputMode::Ai, true)
+    } else if args.semantic {
+        // If --semantic flag is set, use semantic mode (Omni's wisdom!)
+        (OutputMode::Semantic, args.compress)
     } else if let Some(env_mode) = default_mode_env {
         // If ST_DEFAULT_MODE is set, use it. Compression comes from args or its default.
         (env_mode, args.compress)
@@ -540,6 +555,7 @@ fn main() -> Result<()> {
             OutputMode::Digest => Box::new(DigestFormatter::new()),
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
             OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
+            OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji)),
         };
 
         // Format the collected nodes and stats into a byte vector.

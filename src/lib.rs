@@ -11,6 +11,7 @@ pub mod scanner; // The heart of directory traversal and file metadata collectio
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod decoders; // Decoders to convert quantum format to other representations
+pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 
 // Conditionally compile and declare the `mcp` module.
 // This module is only included if the "mcp" feature flag is enabled during compilation.
