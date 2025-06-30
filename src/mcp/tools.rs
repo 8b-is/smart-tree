@@ -528,7 +528,7 @@ fn default_path_mode() -> String {
 async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let cache_stats = ctx.cache.stats().await;
     
-    Ok(json!({
+    let info = json!({
         "server": {
             "name": "Smart Tree MCP Server",
             "version": env!("CARGO_PKG_VERSION"),
@@ -610,6 +610,17 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "Stream mode available for very large directories",
             "Content search supported with 'search_in_files' tool",
         ],
+    });
+    
+    // Convert to pretty JSON string
+    let json_string = serde_json::to_string_pretty(&info)?;
+    
+    // Return in MCP content format
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": json_string
+        }]
     }))
 }
 
