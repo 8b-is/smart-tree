@@ -89,6 +89,18 @@ pub struct QuantumScanner<W: Write> {
 }
 
 impl<W: Write> QuantumScanner<W> {
+    // Cross-platform permission handling
+    #[cfg(unix)]
+    fn get_permissions(metadata: &fs::Metadata) -> u16 {
+        use std::os::unix::fs::PermissionsExt;
+        (metadata.permissions().mode() & 0o777) as u16
+    }
+    
+    #[cfg(not(unix))]
+    fn get_permissions(_metadata: &fs::Metadata) -> u16 {
+        0o755 // Default permissions for non-Unix
+    }
+    
     pub fn new(writer: W) -> Self {
         let mut token_map = HashMap::new();
         
@@ -160,7 +172,7 @@ impl<W: Write> QuantumScanner<W> {
             
             // Update parent context
             let old_perms = self.parent_perms;
-            self.parent_perms = metadata.permissions().mode() & 0o777;
+            self.parent_perms = Self::get_permissions(&metadata);
             
             // Scan children
             let mut entries: Vec<_> = fs::read_dir(path)?
@@ -207,7 +219,7 @@ impl<W: Write> QuantumScanner<W> {
         data.extend(&self.encode_size(metadata.len()));
         
         // Permissions if different
-        let perms = metadata.permissions().mode() & 0o777;
+        let perms = Self::get_permissions(metadata);
         if perms != self.parent_perms {
             header |= HDR_HAS_PERMS;
             let delta = perms ^ self.parent_perms;
@@ -240,7 +252,7 @@ impl<W: Write> QuantumScanner<W> {
         data.extend(&self.encode_size(metadata.len()));
         
         // Permissions if different
-        let perms = metadata.permissions().mode() & 0o777;
+        let perms = Self::get_permissions(metadata);
         if perms != self.parent_perms {
             header |= HDR_HAS_PERMS;
             let delta = perms ^ self.parent_perms;
@@ -323,4 +335,5 @@ impl<W: Write> QuantumScanner<W> {
 }
 
 #[cfg(not(target_os = "windows"))]
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
