@@ -1,0 +1,12 @@
+# Built DXT package
+smart-tree.dxt
+
+# Downloaded binaries
+server/st
+server/st.exe
+
+# Update marker
+server/.update-available
+
+# Node modules (if any)
+node_modules/

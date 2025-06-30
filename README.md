@@ -303,6 +303,14 @@ Smart Tree includes a built-in MCP server that allows AI assistants like Claude 
 
 ### Quick Setup for Claude Desktop
 
+#### Option 1: DXT Package (Recommended)
+1. Download `smart-tree.dxt` from the [latest release](https://github.com/8b-is/smart-tree/releases)
+2. In Claude Desktop: Settings → Developer → Install from file
+3. Select `smart-tree.dxt` and grant directory access
+
+See [dxt/README.md](dxt/README.md) for full DXT documentation.
+
+#### Option 2: Manual Configuration
 1. Show the configuration command:
 ```bash
 st --mcp-config

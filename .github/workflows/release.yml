@@ -104,6 +104,7 @@ jobs:
           - Fixed search filtering to only show files with matches
           - Performance improvements with match truncation (100 max per file)
           - Added DXT package for easy Claude Desktop installation
+          - DXT package now includes auto-update functionality
           
           ## Installation
           
@@ -127,7 +128,7 @@ jobs:
     
     - name: Build DXT Package
       run: |
-        cd examples/smart-tree
+        cd dxt
         ./build-dxt.sh
         
     - name: Upload Release Assets
@@ -142,9 +143,9 @@ jobs:
         done
         
         # Upload DXT package
-        if [ -f "examples/smart-tree/smart-tree.dxt" ]; then
+        if [ -f "dxt/smart-tree.dxt" ]; then
           echo "Uploading smart-tree.dxt"
-          gh release upload "${{ github.ref_name }}" "examples/smart-tree/smart-tree.dxt" --clobber
+          gh release upload "${{ github.ref_name }}" "dxt/smart-tree.dxt" --clobber
         fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
