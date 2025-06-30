@@ -5,7 +5,7 @@ use crate::{
     formatters::{
         ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
         hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter, tsv::TsvFormatter,
-        quantum::QuantumFormatter, claude::ClaudeFormatter,
+        quantum::QuantumFormatter, claude::ClaudeFormatter, semantic::SemanticFormatter,
         Formatter, PathDisplayMode,
     },
     parse_size, Scanner, ScannerConfig,
@@ -50,7 +50,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "mode": {
                         "type": "string",
-                        "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", "quantum", "claude"],
+                        "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", "quantum", "claude", "semantic"],
                         "description": "Output format mode",
                         "default": "ai"
                     },
@@ -430,6 +430,30 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 "required": ["path"]
             }),
         },
+        ToolDefinition {
+            name: "semantic_analysis".to_string(),
+            description: "Group files by semantic similarity (inspired by Omni!). Uses wave-based analysis to categorize files by their conceptual purpose: Documentation, Source Code, Tests, Configuration, etc.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to analyze"
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Maximum depth to traverse",
+                        "default": 10
+                    },
+                    "show_wave_signatures": {
+                        "type": "boolean",
+                        "description": "Show wave signatures for each category",
+                        "default": true
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
     ];
 
     Ok(json!({
@@ -465,6 +489,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "find_build_files" => find_build_files(args, ctx).await,
         "directory_size_breakdown" => directory_size_breakdown(args, ctx).await,
         "find_empty_directories" => find_empty_directories(args, ctx).await,
+        "semantic_analysis" => semantic_analysis(args, ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }
@@ -522,7 +547,7 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         "capabilities": {
             "output_formats": [
                 "classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", 
-                "quantum", "claude"
+                "quantum", "claude", "semantic"
             ],
             "compression": {
                 "supported": true,
@@ -670,6 +695,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         "digest" => Box::new(DigestFormatter::new()),
         "quantum" => Box::new(QuantumFormatter::new()),
         "claude" => Box::new(ClaudeFormatter::new(true)),
+        "semantic" => Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji)),
         _ => return Err(anyhow::anyhow!("Invalid mode: {}", args.mode)),
     };
 
@@ -1437,4 +1463,20 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
             }))?
         }]
     }))
+}
+
+async fn semantic_analysis(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let path = args["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+    let max_depth = args["max_depth"].as_u64().unwrap_or(10) as usize;
+    
+    // Simply use analyze_directory with semantic mode
+    analyze_directory(json!({
+        "path": path,
+        "mode": "semantic",
+        "max_depth": max_depth,
+        "no_emoji": false,
+        "path_mode": "off"
+    }), ctx).await
 }
