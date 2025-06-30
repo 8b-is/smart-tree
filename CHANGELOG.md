@@ -5,6 +5,35 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2025-01-06
+
+### 🌊 Semantic Analysis & MCP Enhancements
+
+This release introduces Omni-inspired semantic file grouping and makes claude mode the default for MCP tools!
+
+### ✨ New Features
+- **Semantic Analysis Mode**: Group files by conceptual similarity using wave signatures
+  - `--semantic` CLI flag for semantic grouping  
+  - New `semantic_analysis` MCP tool
+  - Wave-based categorization inspired by Omni's wisdom
+  - Categories include: Documentation, Source Code, Tests, Configuration, etc.
+  - Each category has a unique wave signature for similarity matching
+
+### 🚀 Improvements
+- **MCP Tools Default to Claude Mode**: Maximum compression is now the default!
+  - `analyze_directory` now defaults to claude mode (10x compression)
+  - `quick_tree` uses claude mode for initial exploration
+  - `project_overview` leverages claude mode for efficiency
+  - Tool descriptions emphasize claude mode benefits
+- **DXT Installer Fix**: Fixed release artifact naming for v2.x compatibility
+  - Removed version numbers from artifact names
+  - Simplified MCP artifact creation (MCP is now default feature)
+
+### 📚 Documentation
+- Added comprehensive semantic mode documentation
+- Updated CLAUDE.md with project-specific instructions
+- Enhanced MCP tool descriptions to highlight compression benefits
+
 ## [2.0.1] - 2024-12-30
 
 ### 📖 Documentation & UX Improvements

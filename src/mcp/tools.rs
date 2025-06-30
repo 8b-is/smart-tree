@@ -39,7 +39,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "analyze_directory".to_string(),
-            description: "Analyze a directory with smart compression. Use mode='ai' (default) for balanced output, mode='claude' for 10x compression, mode='classic' for visual trees. Start with quick_tree for overviews!"
+            description: "Analyze a directory with smart compression. Use mode='claude' for MAXIMUM compression (10x reduction!), mode='ai' (default) for balanced output, mode='classic' for visual trees. For large directories, 'claude' mode is HIGHLY RECOMMENDED!"
                 .to_string(),
             input_schema: json!({
                 "type": "object",
@@ -52,7 +52,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                         "type": "string",
                         "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", "quantum", "claude", "semantic"],
                         "description": "Output format mode",
-                        "default": "ai"
+                        "default": "claude"
                     },
                     "max_depth": {
                         "type": "integer",
@@ -167,7 +167,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "quick_tree".to_string(),
-            description: "START HERE! Quick 3-level overview of any directory. Automatically compressed, perfect for initial exploration before using analyze_directory for details".to_string(),
+            description: "START HERE! Quick 3-level overview using CLAUDE mode (10x compression). Perfect for initial exploration before using analyze_directory for details. Automatically optimized for AI token efficiency!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -186,7 +186,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "project_overview".to_string(),
-            description: "Get a comprehensive project overview with context, structure, and key files".to_string(),
+            description: "Get a comprehensive project overview using CLAUDE mode compression. Provides context, structure, and key files with maximum token efficiency (10x reduction!)".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -514,7 +514,7 @@ struct AnalyzeDirectoryArgs {
 }
 
 fn default_mode() -> String {
-    "ai".to_string()
+    "claude".to_string()
 }
 
 fn default_max_depth() -> usize {
@@ -923,7 +923,7 @@ async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 async fn quick_tree(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let analyze_args = json!({
         "path": args["path"],
-        "mode": "ai",
+        "mode": "claude",
         "max_depth": args["depth"].as_u64().unwrap_or(3),
         "compress": true,
         "show_ignored": true
@@ -936,10 +936,10 @@ async fn project_overview(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     
-    // First get the AI format overview
+    // First get the Claude format overview (10x compression!)
     let ai_result = analyze_directory(json!({
         "path": path,
-        "mode": "ai",
+        "mode": "claude",
         "max_depth": 5,
         "show_ignored": true
     }), ctx.clone()).await?;
