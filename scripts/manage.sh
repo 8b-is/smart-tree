@@ -298,22 +298,55 @@ release() {
     # --- Build standard version ---
     print_info "Building standard release for ${target_triple}..."
     build "release" ""
-    local standard_artifact_name="${BINARY_NAME}-${version}-standard-${target_triple}"
-    cp "target/release/${BINARY_NAME}" "${artifact_dir}/${standard_artifact_name}"
-    (cd "$artifact_dir" && tar -czf "${standard_artifact_name}.tar.gz" "${standard_artifact_name}")
-    rm "${artifact_dir}/${standard_artifact_name}"
-    local standard_artifact_path="${artifact_dir}/${standard_artifact_name}.tar.gz"
+    
+    # Determine artifact name based on platform
+    local artifact_name
+    local archive_ext
+    if [[ "$target_triple" == *"windows"* ]]; then
+        artifact_name="${BINARY_NAME}-${target_triple}.exe"
+        archive_ext="zip"
+    else
+        artifact_name="${BINARY_NAME}-${target_triple}"
+        archive_ext="tar.gz"
+    fi
+    
+    # Copy binary to artifact directory
+    cp "target/release/${BINARY_NAME}" "${artifact_dir}/${BINARY_NAME}"
+    
+    # Create archive
+    if [[ "$archive_ext" == "zip" ]]; then
+        # For Windows, include .exe in the archive
+        mv "${artifact_dir}/${BINARY_NAME}" "${artifact_dir}/${BINARY_NAME}.exe"
+        (cd "$artifact_dir" && zip -q "${artifact_name}.zip" "${BINARY_NAME}.exe")
+        rm "${artifact_dir}/${BINARY_NAME}.exe"
+        local standard_artifact_path="${artifact_dir}/${artifact_name}.zip"
+    else
+        # For Unix, create tar.gz
+        (cd "$artifact_dir" && tar -czf "${artifact_name}.tar.gz" "${BINARY_NAME}")
+        rm "${artifact_dir}/${BINARY_NAME}"
+        local standard_artifact_path="${artifact_dir}/${artifact_name}.tar.gz"
+    fi
+    
     print_success "Standard artifact created: ${standard_artifact_path}"
 
-    # --- Build MCP version ---
-    print_info "Building MCP release for ${target_triple}..."
-    mcp_build
-    local mcp_artifact_name="${BINARY_NAME}-${version}-mcp-${target_triple}"
-    cp "target/release/${BINARY_NAME}" "${artifact_dir}/${mcp_artifact_name}"
-    (cd "$artifact_dir" && tar -czf "${mcp_artifact_name}.tar.gz" "${mcp_artifact_name}")
-    rm "${artifact_dir}/${mcp_artifact_name}"
-    local mcp_artifact_path="${artifact_dir}/${mcp_artifact_name}.tar.gz"
-    print_success "MCP artifact created: ${mcp_artifact_path}"
+    # Note: We only create one set of artifacts since MCP is a default feature
+    
+    # --- Build DXT package ---
+    print_info "Building DXT package..."
+    if [[ -f "dxt/build-dxt.sh" ]]; then
+        (cd dxt && ./build-dxt.sh)
+        if [[ -f "dxt/smart-tree.dxt" ]]; then
+            cp "dxt/smart-tree.dxt" "${artifact_dir}/"
+            local dxt_artifact_path="${artifact_dir}/smart-tree.dxt"
+            print_success "DXT package created: ${dxt_artifact_path}"
+        else
+            print_warning "DXT build completed but smart-tree.dxt not found"
+            local dxt_artifact_path=""
+        fi
+    else
+        print_warning "DXT build script not found, skipping DXT package"
+        local dxt_artifact_path=""
+    fi
 
     # --- Create GitHub Release ---
     local release_title="Smart Tree ${version}"
@@ -331,7 +364,13 @@ release() {
         git push origin "$version"
 
         print_info "Creating GitHub release and uploading artifacts..."
-        gh release create "$version" "$standard_artifact_path" "$mcp_artifact_path" --title "$release_title" --notes "$release_notes"
+        # Note: This will only upload the artifact for the current platform
+        # For multi-platform releases, you'll need to build on each platform or use CI/CD
+        if [[ -n "$dxt_artifact_path" ]]; then
+            gh release create "$version" "$standard_artifact_path" "$dxt_artifact_path" --title "$release_title" --notes "$release_notes"
+        else
+            gh release create "$version" "$standard_artifact_path" --title "$release_title" --notes "$release_notes"
+        fi
     else
         echo -e "\n${YELLOW}Ready to create release. Review details above.${NC}"
         read -p "Do you want to proceed? (y/N) " -n 1 -r
@@ -349,7 +388,13 @@ release() {
         print_success "Pushed tag $version to origin."
 
         print_info "Creating GitHub release and uploading artifacts..."
-        gh release create "$version" "$standard_artifact_path" "$mcp_artifact_path" --title "$release_title" --notes "$release_notes"
+        # Note: This will only upload the artifact for the current platform
+        # For multi-platform releases, you'll need to build on each platform or use CI/CD
+        if [[ -n "$dxt_artifact_path" ]]; then
+            gh release create "$version" "$standard_artifact_path" "$dxt_artifact_path" --title "$release_title" --notes "$release_notes"
+        else
+            gh release create "$version" "$standard_artifact_path" --title "$release_title" --notes "$release_notes"
+        fi
     fi
 
     print_success "Release ${version} created successfully! ${TREE} ${SPARKLE}"

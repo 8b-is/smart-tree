@@ -1,6 +1,5 @@
 .claude/
 target/
-CLAUDE.md
 .github
 node_modules
 
