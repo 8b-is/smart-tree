@@ -5,6 +5,34 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2024-12-30
+
+### 📖 Documentation & UX Improvements
+
+This release focuses on improving user experience based on feedback from Claude Desktop usage.
+
+### ✨ Improvements
+- **Mode Selection Guide**: Added comprehensive guide to help users choose optimal output modes
+- **Better Tool Descriptions**: Updated MCP tool descriptions to guide mode selection
+  - `quick_tree`: Now clearly marked as "START HERE!" for initial exploration
+  - `analyze_directory`: Explains ai/claude/classic mode trade-offs
+- **Enhanced Prompts**: Updated MCP prompts to recommend quick_tree → ai → claude workflow
+- **Documentation Updates**:
+  - Added MODE_SELECTION_GUIDE.md with decision tree
+  - Updated README with mode comparison emojis
+  - Added token cost calculations for each mode
+
+### 🐛 Bug Fixes
+- Removed emoji from MCP tool descriptions to prevent protocol errors
+
+### 📚 Documentation
+- **Mode Selection Guide**: Complete guide with:
+  - Quick start workflow recommendations
+  - Mode comparison table with compression ratios
+  - Token budget management strategies
+  - Real-world examples and cost analysis
+  - Common mistakes to avoid
+
 ## [2.0.0] - 2024-12-30
 
 ### 🚀 Revolutionary Update: MEM|8 Quantum Compression
