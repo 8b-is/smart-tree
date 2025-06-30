@@ -113,7 +113,10 @@ impl McpServer {
         let mut reader = BufReader::new(stdin);
         let mut stdout = stdout.lock();
 
-        eprintln!("Smart Tree MCP server started");
+        eprintln!("Smart Tree MCP server v{} started", env!("CARGO_PKG_VERSION"));
+        eprintln!("  Build: {} ({})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_DESCRIPTION"));
+        eprintln!("  Protocol: MCP v1.0");
+        eprintln!("  Features: tools, resources, prompts, caching");
 
         loop {
             let mut line = String::new();
@@ -214,13 +217,31 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
     Ok(json!({
         "protocolVersion": "2024-11-05",
         "capabilities": {
-            "tools": {},
-            "resources": {},
-            "prompts": {}
+            "tools": {
+                "listChanged": false
+            },
+            "resources": {
+                "subscribe": false,
+                "listChanged": false
+            },
+            "prompts": {
+                "listChanged": false
+            },
+            "logging": {}
         },
         "serverInfo": {
             "name": "smart-tree",
-            "version": env!("CARGO_PKG_VERSION")
+            "version": env!("CARGO_PKG_VERSION"),
+            "vendor": "8b-is",
+            "description": "Smart Tree - AI-optimized directory visualization with quantum compression",
+            "homepage": env!("CARGO_PKG_REPOSITORY"),
+            "features": [
+                "quantum-compression",
+                "claude-format",
+                "content-search",
+                "streaming",
+                "caching"
+            ]
         }
     }))
 }

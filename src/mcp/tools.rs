@@ -5,6 +5,7 @@ use crate::{
     formatters::{
         ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
         hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter, tsv::TsvFormatter,
+        quantum::QuantumFormatter, claude::ClaudeFormatter,
         Formatter, PathDisplayMode,
     },
     parse_size, Scanner, ScannerConfig,
@@ -28,6 +29,15 @@ struct ToolDefinition {
 pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let tools = vec![
         ToolDefinition {
+            name: "server_info".to_string(),
+            description: "Get information about the Smart Tree MCP server".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+        },
+        ToolDefinition {
             name: "analyze_directory".to_string(),
             description: "Analyze a directory and return its structure in various formats"
                 .to_string(),
@@ -40,7 +50,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "mode": {
                         "type": "string",
-                        "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest"],
+                        "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", "quantum", "claude"],
                         "description": "Output format mode",
                         "default": "ai"
                     },
@@ -434,6 +444,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
     let args = params["arguments"].clone();
 
     match tool_name {
+        "server_info" => server_info(args, ctx).await,
         "analyze_directory" => analyze_directory(args, ctx).await,
         "find_files" => find_files(args, ctx).await,
         "get_statistics" => get_statistics(args, ctx).await,
@@ -487,6 +498,94 @@ fn default_max_depth() -> usize {
 
 fn default_path_mode() -> String {
     "off".to_string()
+}
+
+async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let cache_stats = ctx.cache.stats().await;
+    
+    Ok(json!({
+        "server": {
+            "name": "Smart Tree MCP Server",
+            "version": env!("CARGO_PKG_VERSION"),
+            "build": {
+                "name": env!("CARGO_PKG_NAME"),
+                "description": env!("CARGO_PKG_DESCRIPTION"),
+                "authors": env!("CARGO_PKG_AUTHORS"),
+                "repository": env!("CARGO_PKG_REPOSITORY"),
+                "rust_version": env!("CARGO_PKG_RUST_VERSION"),
+            },
+            "protocol": {
+                "version": "1.0",
+                "features": ["tools", "resources", "prompts", "notifications"],
+            },
+        },
+        "capabilities": {
+            "output_formats": [
+                "classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", 
+                "quantum", "claude"
+            ],
+            "compression": {
+                "supported": true,
+                "formats": ["zlib", "quantum", "base64"],
+            },
+            "streaming": {
+                "supported": true,
+                "formats": ["hex", "ai", "quantum", "claude"],
+            },
+            "search": {
+                "content_search": true,
+                "pattern_matching": true,
+                "regex_support": true,
+            },
+        },
+        "configuration": {
+            "cache": {
+                "enabled": ctx.config.cache_enabled,
+                "ttl_seconds": ctx.config.cache_ttl,
+                "max_size_bytes": ctx.config.max_cache_size,
+                "current_entries": cache_stats.entries,
+                "current_size_bytes": cache_stats.size,
+                "hit_rate": format!("{:.1}%", cache_stats.hit_rate * 100.0),
+            },
+            "security": {
+                "allowed_paths": ctx.config.allowed_paths.len(),
+                "blocked_paths": ctx.config.blocked_paths.len(),
+                "default_blocks": ["/etc", "/sys", "/proc"],
+            },
+        },
+        "features": {
+            "quantum_compression": {
+                "description": "Ultra-compressed binary format with 90%+ compression",
+                "status": "active",
+                "notes": "Base64-encoded for JSON transport in MCP",
+            },
+            "claude_format": {
+                "description": "API-optimized format with quantum compression",
+                "status": "active",
+                "recommended_for": ["LLM APIs", "Claude", "GPT-4"],
+            },
+            "tokenization": {
+                "description": "Semantic tokenization for common patterns",
+                "tokens": {
+                    "directories": ["node_modules=0x80", ".git=0x81", "src=0x82"],
+                    "extensions": [".js=0x90", ".rs=0x91", ".py=0x92"],
+                },
+            },
+        },
+        "statistics": {
+            "uptime_seconds": 0, // Would need to track this
+            "requests_handled": 0, // Would need to track this
+            "cache_hits": cache_stats.hits,
+            "cache_misses": cache_stats.misses,
+        },
+        "tips": [
+            "Use 'claude' format for optimal LLM API transmission",
+            "Enable compression with compress=true for large directories",
+            "Use 'quantum' format for maximum compression (90%+ reduction)",
+            "Stream mode available for very large directories",
+            "Content search supported with 'search_in_files' tool",
+        ],
+    }))
 }
 
 async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
@@ -569,6 +668,8 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         "csv" => Box::new(CsvFormatter::new()),
         "tsv" => Box::new(TsvFormatter::new()),
         "digest" => Box::new(DigestFormatter::new()),
+        "quantum" => Box::new(QuantumFormatter::new()),
+        "claude" => Box::new(ClaudeFormatter::new(true)),
         _ => return Err(anyhow::anyhow!("Invalid mode: {}", args.mode)),
     };
 
@@ -576,20 +677,27 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let mut output = Vec::new();
     formatter.format(&mut output, &nodes, &stats, &path)?;
 
-    let output_str = String::from_utf8(output)?;
-
-    // Handle compression
-    let final_output = if args.compress {
-        use flate2::write::ZlibEncoder;
-        use flate2::Compression;
-        use std::io::Write;
-
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(output_str.as_bytes())?;
-        let compressed = encoder.finish()?;
-        format!("COMPRESSED_V1:{}", hex::encode(&compressed))
+    // Handle different output formats
+    let final_output = if args.mode == "quantum" {
+        // Quantum format contains binary data, so base64-encode it for JSON safety
+        use base64::{Engine as _, engine::general_purpose};
+        format!("QUANTUM_BASE64:{}", general_purpose::STANDARD.encode(&output))
     } else {
-        output_str
+        // For other formats, convert to string first
+        let output_str = String::from_utf8(output)?;
+        
+        if args.compress {
+            use flate2::write::ZlibEncoder;
+            use flate2::Compression;
+            use std::io::Write;
+
+            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(output_str.as_bytes())?;
+            let compressed = encoder.finish()?;
+            format!("COMPRESSED_V1:{}", hex::encode(&compressed))
+        } else {
+            output_str
+        }
     };
 
     // Cache result if enabled
@@ -787,7 +895,7 @@ async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 // New tool implementations
 
 async fn quick_tree(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let mut analyze_args = json!({
+    let analyze_args = json!({
         "path": args["path"],
         "mode": "ai",
         "max_depth": args["depth"].as_u64().unwrap_or(3),

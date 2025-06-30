@@ -26,8 +26,8 @@ use termimad;
 use st::{
     formatters::{
         ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
-        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter,
-        tsv::TsvFormatter, Formatter, PathDisplayMode, StreamingFormatter,
+        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
+        claude::ClaudeFormatter, stats::StatsFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode, StreamingFormatter,
     },
     parse_size,
     Scanner,
@@ -237,6 +237,10 @@ enum OutputMode {
     Tsv,
     /// Super compact digest format. A single line with a hash and minimal stats, perfect for quick AI pre-checks.
     Digest,
+    /// MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization.
+    Quantum,
+    /// Claude API format. Quantum compression wrapped for optimal Anthropic API transmission.
+    Claude,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -314,6 +318,8 @@ fn main() -> Result<()> {
             "csv" => Some(OutputMode::Csv),
             "tsv" => Some(OutputMode::Tsv),
             "digest" => Some(OutputMode::Digest),
+            "quantum" => Some(OutputMode::Quantum),
+            "claude" => Some(OutputMode::Claude),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -422,7 +428,7 @@ fn main() -> Result<()> {
     if args.stream && !compress {
         // Streaming mode is only supported for certain formatters that implement StreamingFormatter.
         match mode {
-            OutputMode::Hex | OutputMode::Ai => {
+            OutputMode::Hex | OutputMode::Ai | OutputMode::Quantum | OutputMode::Claude => {
                 // For streaming, we use threads: one for scanning, one for formatting/printing.
                 // A channel is used for communication between them.
                 use std::sync::mpsc; // Multi-producer, single-consumer channel.
@@ -449,6 +455,12 @@ fn main() -> Result<()> {
                     )),
                     OutputMode::Ai => {
                         Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
+                    }
+                    OutputMode::Quantum => {
+                        Box::new(QuantumFormatter::new())
+                    }
+                    OutputMode::Claude => {
+                        Box::new(ClaudeFormatter::new(true))
                     }
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
@@ -526,6 +538,8 @@ fn main() -> Result<()> {
             OutputMode::Csv => Box::new(CsvFormatter::new()),
             OutputMode::Tsv => Box::new(TsvFormatter::new()),
             OutputMode::Digest => Box::new(DigestFormatter::new()),
+            OutputMode::Quantum => Box::new(QuantumFormatter::new()),
+            OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
         };
 
         // Format the collected nodes and stats into a byte vector.

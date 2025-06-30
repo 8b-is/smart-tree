@@ -8,6 +8,9 @@
 pub mod context;
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
 pub mod scanner; // The heart of directory traversal and file metadata collection. // For intelligently detecting project context (e.g., Rust, Node.js).
+pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
+pub mod tokenizer; // Smart tokenization for semantic pattern recognition
+pub mod decoders; // Decoders to convert quantum format to other representations
 
 // Conditionally compile and declare the `mcp` module.
 // This module is only included if the "mcp" feature flag is enabled during compilation.

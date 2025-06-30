@@ -126,7 +126,7 @@ pub enum FilesystemType {
     Procfs,  // 'P' - /proc virtual filesystem
     Sysfs,   // 'Y' - /sys virtual filesystem
     Devfs,   // 'D' - /dev virtual filesystem
-    Mem8,    // 'M' - Mem8 filesystem (custom!)
+    Mem8,    // 'M' - MEM|8 filesystem (Coming soon - Quantum File System) - https://m8.is
     Unknown, // '?' - Unknown filesystem
 }
 
