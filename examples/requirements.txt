@@ -1,0 +1,18 @@
+# Smart Tree Examples Requirements
+# Install with: pip install -r requirements.txt
+
+# Core visualization libraries
+matplotlib>=3.5.0
+networkx>=2.6
+
+# Scientific computing
+numpy>=1.21.0
+scikit-learn>=1.0.0
+
+# Optional: Better graph layouts
+# Uncomment if you have graphviz installed
+# pygraphviz>=1.7
+
+# Optional: For advanced visualizations
+# seaborn>=0.11.0
+# plotly>=5.0.0
