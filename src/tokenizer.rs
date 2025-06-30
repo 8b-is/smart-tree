@@ -278,16 +278,37 @@ pub fn tokenize_path(path: &str) -> Vec<TokenId> {
 /// Check if two paths are semantically equivalent
 pub fn paths_equivalent(path1: &str, path2: &str) -> bool {
     let registry = TOKEN_REGISTRY.read().unwrap();
-    
+
     let components1: Vec<_> = path1.split('/').filter(|s| !s.is_empty()).collect();
     let components2: Vec<_> = path2.split('/').filter(|s| !s.is_empty()).collect();
-    
+
     if components1.len() != components2.len() {
         return false;
     }
-    
-    components1.iter().zip(components2.iter())
-        .all(|(c1, c2)| registry.are_equivalent(c1, c2))
+
+    for (i, (c1, c2)) in components1.iter().zip(components2.iter()).enumerate() {
+        if registry.are_equivalent(c1, c2) {
+            continue;
+        }
+        // Special handling for the last component: check file extension equivalence
+        if i == components1.len() - 1 {
+            let (base1, ext1) = split_basename_ext(c1);
+            let (base2, ext2) = split_basename_ext(c2);
+            if base1 == base2 && registry.are_equivalent(ext1, ext2) {
+                continue;
+            }
+        }
+        return false;
+    }
+    true
+}
+
+// Helper function to split filename and extension
+fn split_basename_ext(s: &str) -> (&str, &str) {
+    match s.rfind('.') {
+        Some(idx) => (&s[..idx], &s[idx..]),
+        None => (s, ""),
+    }
 }
 
 #[cfg(test)]
