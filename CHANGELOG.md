@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.4] - 2025-01-06
 
+### ✨ New Features
+- **Mermaid Diagram Formatter**: Generate directory structures as Mermaid diagrams!
+  - New `--mode mermaid` outputs diagrams perfect for documentation
+  - Three styles: flowchart (default), mindmap, gitgraph
+  - Use `--mermaid-style` to choose diagram type
+  - Copy & paste output directly into GitHub/GitLab markdown files
+  - Automatic styling based on file types (code, docs, config)
+  - Example: `st -m mermaid src/ > docs/architecture.md`
+
 ### 🐛 Bug Fixes
 - **MCP Notification Handling**: Fixed JSON-RPC notification handling to prevent validation errors
   - Notifications (like `notifications/initialized`) no longer receive responses

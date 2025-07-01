@@ -27,8 +27,8 @@ use st::{
     formatters::{
         ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
         digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-        claude::ClaudeFormatter, semantic::SemanticFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
-        Formatter, PathDisplayMode, StreamingFormatter,
+        claude::ClaudeFormatter, semantic::SemanticFormatter, mermaid::{MermaidFormatter, MermaidStyle},
+        stats::StatsFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode, StreamingFormatter,
     },
     parse_size,
     Scanner,
@@ -199,6 +199,22 @@ struct ScanArgs {
     /// Example groups: "tests", "documentation", "configuration", "source code"
     #[arg(long)]
     semantic: bool,
+    
+    /// Mermaid diagram style (only used with --mode mermaid).
+    /// Options: flowchart (default), mindmap, gitgraph
+    #[arg(long, value_enum, default_value = "flowchart")]
+    mermaid_style: MermaidStyleArg,
+}
+
+/// Enum for mermaid style argument
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum MermaidStyleArg {
+    /// Traditional flowchart with connected nodes
+    Flowchart,
+    /// Mind map style for overviews
+    Mindmap,
+    /// Git-like graph showing relationships
+    Gitgraph,
 }
 
 /// Enum defining how color should be used in the output.
@@ -251,6 +267,8 @@ enum OutputMode {
     Claude,
     /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
     Semantic,
+    /// Mermaid diagram format. Perfect for embedding in documentation!
+    Mermaid,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -331,6 +349,7 @@ fn main() -> Result<()> {
             "quantum" => Some(OutputMode::Quantum),
             "claude" => Some(OutputMode::Claude),
             "semantic" => Some(OutputMode::Semantic),
+            "mermaid" => Some(OutputMode::Mermaid),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -556,6 +575,15 @@ fn main() -> Result<()> {
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
             OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
             OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji)),
+            OutputMode::Mermaid => {
+                // Convert CLI arg enum to formatter enum
+                let style = match args.mermaid_style {
+                    MermaidStyleArg::Flowchart => MermaidStyle::Flowchart,
+                    MermaidStyleArg::Mindmap => MermaidStyle::Mindmap,
+                    MermaidStyleArg::Gitgraph => MermaidStyle::GitGraph,
+                };
+                Box::new(MermaidFormatter::new(style, args.no_emoji, path_display_mode))
+            }
         };
 
         // Format the collected nodes and stats into a byte vector.

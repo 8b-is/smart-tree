@@ -138,6 +138,8 @@ st -m digest                # 📊 Ultra-compact one-line summary
 st -m stats                 # 📈 Statistics only (10x compression)
 st -m csv                   # 📄 CSV format
 st -m tsv                   # 📄 TSV format
+st -m mermaid               # 🧜‍♀️ Mermaid diagram (perfect for docs!)
+st -m semantic              # 🌊 Semantic grouping (wave-based)
 
 # Filtering
 st --find "config"          # Find files/dirs matching pattern
@@ -169,6 +171,12 @@ st -m digest                # Quick digest for AI pre-check
 st --mcp                    # Run as MCP server for AI assistants
 st --mcp-tools              # List available MCP tools
 st --mcp-config             # Show config for Claude Desktop
+
+# Mermaid diagrams (NEW!)
+st -m mermaid               # Flowchart diagram (default)
+st -m mermaid --mermaid-style mindmap    # Mind map view
+st -m mermaid --mermaid-style gitgraph   # Git-like graph
+st -m mermaid src/ > docs/architecture.md # Add to documentation!
 
 # Digest mode - perfect for AI to quickly check directories
 st -m digest /large/project # Returns: HASH: 9b3b00cbcc1e8503 F:1623 D:89 S:ac39e7 TYPES: js:523 py:412...
@@ -387,6 +395,37 @@ graph TD
 </div>
 
 Files are grouped by their conceptual "waves" - a philosophy inspired by Omni's Hot Tub wisdom! 🛁✨
+
+### Mermaid Diagram Mode (--mode mermaid) 🧜‍♀️
+
+Perfect for embedding in your documentation!
+
+```mermaid
+graph TD
+    %% Smart Tree Directory Structure
+
+    root["📁 src"]
+    root_formatters["📁 formatters"]
+    root_formatters_ai_rs{{"🦀 ai.rs<br/>7.12 KB"}}
+    root_formatters_classic_rs{{"🦀 classic.rs<br/>13.21 KB"}}
+    root_formatters_mermaid_rs{{"🦀 mermaid.rs<br/>9.8 KB"}}
+    
+    root --> root_formatters
+    root_formatters --> root_formatters_ai_rs
+    root_formatters --> root_formatters_classic_rs
+    root_formatters --> root_formatters_mermaid_rs
+    
+    %% Styling
+    classDef dirStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef codeStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    class root dirStyle
+    class root_formatters dirStyle
+    class root_formatters_ai_rs codeStyle
+    class root_formatters_classic_rs codeStyle
+    class root_formatters_mermaid_rs codeStyle
+```
+
+Copy and paste the mermaid code into any markdown file - GitHub, GitLab, and most documentation tools will render it automatically!
 
 ## 🔧 Configuration
 

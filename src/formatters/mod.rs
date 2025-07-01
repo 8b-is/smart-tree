@@ -11,6 +11,7 @@ pub mod stats;
 pub mod tsv;
 pub mod claude;
 pub mod semantic;
+pub mod mermaid;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
