@@ -2,10 +2,10 @@
 
 <div align="center">
 
-[![Discord](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC)
+[![Discord](https://img.shields.io/discord/bKq3K2gV3B?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC)
 [![GitHub release](https://img.shields.io/github/v/release/8b-is/smart-tree?include_prereleases)](https://github.com/8b-is/smart-tree/releases)
 [![Downloads](https://img.shields.io/github/downloads/8b-is/smart-tree/total)](https://github.com/8b-is/smart-tree/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-ETHICAL%20AI-blue.svg)](https://8b.is/LICENSE.txt)
 
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-Ready-blueviolet)](https://claude.ai/download)
