@@ -101,7 +101,8 @@ else
 fi
 
 # 3. Construct Download URL
-archive_name="${BINARY_NAME}-${VERSION}-${arch}-${os}.tar.gz"
+# Note: As of v2.0.3, artifacts no longer include version in filename
+archive_name="${BINARY_NAME}-${arch}-${os}.tar.gz"
 download_url="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$archive_name"
 
 # 4. Download and Extract
