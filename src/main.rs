@@ -28,7 +28,8 @@ use st::{
         ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
         digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
         claude::ClaudeFormatter, semantic::SemanticFormatter, mermaid::{MermaidFormatter, MermaidStyle},
-        stats::StatsFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode, StreamingFormatter,
+        markdown::MarkdownFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
+        Formatter, PathDisplayMode, StreamingFormatter,
     },
     parse_size,
     Scanner,
@@ -204,6 +205,18 @@ struct ScanArgs {
     /// Options: flowchart (default), mindmap, gitgraph
     #[arg(long, value_enum, default_value = "flowchart")]
     mermaid_style: MermaidStyleArg,
+    
+    /// Exclude mermaid diagrams from markdown report (only used with --mode markdown).
+    #[arg(long)]
+    no_markdown_mermaid: bool,
+    
+    /// Exclude tables from markdown report (only used with --mode markdown).
+    #[arg(long)]
+    no_markdown_tables: bool,
+    
+    /// Exclude pie charts from markdown report (only used with --mode markdown).
+    #[arg(long)]
+    no_markdown_pie_charts: bool,
 }
 
 /// Enum for mermaid style argument
@@ -269,6 +282,8 @@ enum OutputMode {
     Semantic,
     /// Mermaid diagram format. Perfect for embedding in documentation!
     Mermaid,
+    /// Markdown report format. Combines mermaid, tables, and charts for beautiful documentation!
+    Markdown,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -350,6 +365,7 @@ fn main() -> Result<()> {
             "claude" => Some(OutputMode::Claude),
             "semantic" => Some(OutputMode::Semantic),
             "mermaid" => Some(OutputMode::Mermaid),
+            "markdown" => Some(OutputMode::Markdown),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -583,6 +599,16 @@ fn main() -> Result<()> {
                     MermaidStyleArg::Gitgraph => MermaidStyle::GitGraph,
                 };
                 Box::new(MermaidFormatter::new(style, args.no_emoji, path_display_mode))
+            }
+            OutputMode::Markdown => {
+                // Create a comprehensive markdown report with all visualizations!
+                Box::new(MarkdownFormatter::new(
+                    path_display_mode,
+                    args.no_emoji,
+                    !args.no_markdown_mermaid,    // Include mermaid unless disabled
+                    !args.no_markdown_tables,      // Include tables unless disabled
+                    !args.no_markdown_pie_charts,  // Include pie charts unless disabled
+                ))
             }
         };
 

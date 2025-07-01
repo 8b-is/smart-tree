@@ -12,6 +12,7 @@ pub mod tsv;
 pub mod claude;
 pub mod semantic;
 pub mod mermaid;
+pub mod markdown;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;

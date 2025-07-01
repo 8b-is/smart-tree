@@ -139,7 +139,6 @@ st -m stats                 # 📈 Statistics only (10x compression)
 st -m csv                   # 📄 CSV format
 st -m tsv                   # 📄 TSV format
 st -m mermaid               # 🧜‍♀️ Mermaid diagram (perfect for docs!)
-st -m markdown              # 📝 Comprehensive markdown report
 st -m semantic              # 🌊 Semantic grouping (wave-based)
 
 # Filtering
@@ -178,7 +177,6 @@ st -m mermaid               # Flowchart diagram (default)
 st -m mermaid --mermaid-style mindmap    # Mind map view
 st -m mermaid --mermaid-style gitgraph   # Git-like graph
 st -m mermaid src/ > docs/architecture.md # Add to documentation!
-st -m markdown . > PROJECT_OVERVIEW.md    # Generate full project report
 
 # Digest mode - perfect for AI to quickly check directories
 st -m digest /large/project # Returns: HASH: 9b3b00cbcc1e8503 F:1623 D:89 S:ac39e7 TYPES: js:523 py:412...
@@ -428,37 +426,6 @@ graph TD
 ```
 
 Copy and paste the mermaid code into any markdown file - GitHub, GitLab, and most documentation tools will render it automatically!
-
-
-### Markdown Report Mode (--mode markdown) 📝
-
-Generate comprehensive documentation with visualizations, perfect for project reports and real-time analysis\!
-
-```bash
-# Full report with all visualizations
-st --mode markdown src/ > project-report.md
-
-# Customize what's included
-st --mode markdown --no-markdown-pie-charts src/   # Skip pie charts
-st --mode markdown --no-markdown-mermaid src/      # Skip mermaid diagrams
-st --mode markdown --no-markdown-tables src/       # Skip tables (minimal output)
-```
-
-Example output includes:
-- 📊 Directory overview with statistics
-- 🌳 Mermaid directory structure diagram
-- 📋 File type breakdown tables
-- 🍰 Pie charts for file type and size distribution
-- 🏆 Largest files ranking
-- 🕐 Recent activity tracking
-- 📈 Beautiful summary section
-
-Perfect for:
-- Project documentation
-- Real-time progress reports
-- Client presentations
-- Repository README files
-- AI-assisted analysis
 
 ## 🔧 Configuration
 
