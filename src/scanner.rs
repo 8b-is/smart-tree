@@ -1365,7 +1365,7 @@ impl Scanner {
     /// Detects the filesystem type for a given path using statfs on Unix systems
     #[cfg(unix)]
     fn get_filesystem_type(path: &Path) -> FilesystemType {
-        use libc::{c_char, statfs};
+        use libc::statfs;
         use std::ffi::CString;
         use std::mem;
 

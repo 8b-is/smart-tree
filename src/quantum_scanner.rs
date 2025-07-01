@@ -334,6 +334,5 @@ impl<W: Write> QuantumScanner<W> {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+// PermissionsExt import removed - not currently used
+// Will be re-added when permission handling is implemented
