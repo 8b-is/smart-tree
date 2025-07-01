@@ -78,6 +78,21 @@ impl MermaidFormatter {
             .replace('?', "_")
     }
     
+    fn escape_label(text: &str) -> String {
+        // Escape special characters that might break Mermaid syntax
+        text.replace('|', "&#124;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
+            .replace('[', "&#91;")
+            .replace(']', "&#93;")
+            .replace('{', "&#123;")
+            .replace('}', "&#125;")
+            .replace('(', "&#40;")
+            .replace(')', "&#41;")
+    }
+    
     fn format_label(&self, node: &FileNode) -> String {
         let name = match self.path_mode {
             PathDisplayMode::Off => node.path.file_name()
@@ -108,8 +123,11 @@ impl MermaidFormatter {
             ""
         };
         
+        // Escape the name for Mermaid
+        let escaped_name = Self::escape_label(&name);
+        
         // Truncate if too long
-        let mut label = format!("{}{}", emoji, name);
+        let mut label = format!("{}{}", emoji, escaped_name);
         if label.len() > self.max_label_length {
             label.truncate(self.max_label_length - 3);
             label.push_str("...");
@@ -155,10 +173,14 @@ impl MermaidFormatter {
         
         // Write root node with emoji handling
         let root_emoji = if !self.no_emoji { "📁 " } else { "" };
+        let root_name = root_path.file_name()
+            .unwrap_or_else(|| root_path.as_os_str())
+            .to_string_lossy();
+        let escaped_root_name = Self::escape_label(&root_name);
         writeln!(writer, "    {}[\"{}{}\"]", 
             root_id, 
             root_emoji,
-            root_path.file_name().unwrap_or_else(|| root_path.as_os_str()).to_string_lossy()
+            escaped_root_name
         )?;
         
         // Write all nodes and connections
@@ -233,9 +255,11 @@ impl MermaidFormatter {
     ) -> Result<()> {
         writeln!(writer, "```mermaid")?;
         writeln!(writer, "mindmap")?;
-        writeln!(writer, "  root((📁 {}))", 
-            root_path.file_name().unwrap_or_else(|| root_path.as_os_str()).to_string_lossy()
-        )?;
+        let root_name = root_path.file_name()
+            .unwrap_or_else(|| root_path.as_os_str())
+            .to_string_lossy();
+        let escaped_root_name = Self::escape_label(&root_name);
+        writeln!(writer, "  root((📁 {}))", escaped_root_name)?;
         
         // Build tree structure
         let mut current_depth = 0;
@@ -276,13 +300,14 @@ impl MermaidFormatter {
                 let branch_name = format!("dir{}", branch_count);
                 writeln!(writer, "    branch {}", branch_name)?;
                 writeln!(writer, "    checkout {}", branch_name)?;
-                writeln!(writer, "    commit id: \"{}\"", 
-                    node.path.file_name().unwrap_or_default().to_string_lossy()
-                )?;
+                let dir_name = node.path.file_name().unwrap_or_default().to_string_lossy();
+                let escaped_dir_name = Self::escape_label(&dir_name);
+                writeln!(writer, "    commit id: \"{}\"", escaped_dir_name)?;
                 current_branch = &branch_name;
             } else if i < 20 { // Limit to prevent overly complex graphs
-                writeln!(writer, "    commit id: \"{}\"", 
-                    node.path.file_name().unwrap_or_default().to_string_lossy()
+                let file_name = node.path.file_name().unwrap_or_default().to_string_lossy();
+                let escaped_file_name = Self::escape_label(&file_name);
+                writeln!(writer, "    commit id: \"{}\"", escaped_file_name
                 )?;
             }
         }

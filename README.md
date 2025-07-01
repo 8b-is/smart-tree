@@ -218,7 +218,7 @@ src/
 
 ```mermaid
 graph TD
-    A[📁 project/] -->|12.9% size| B[MEM|8 Quantum Format]
+    A[📁 project/] -->|12.9% size| B["MEM8 Quantum Format"]
     B --> C[Token Substitution]
     B --> D[Bitfield Headers]
     B --> E[Delta Encoding]
@@ -229,9 +229,9 @@ graph TD
     
     C --> G[".rs" → 0x91]
     C --> H["node_modules" → 0x80]
-    D --> I[Permission XOR: 755^644]
-    E --> J[Size: Variable Length]
-    F --> K[0x0E=enter, 0x0F=exit]
+    D --> I["Permission XOR: 755^644"]
+    E --> J["Size: Variable Length"]
+    F --> K["0x0E=enter, 0x0F=exit"]
 ```
 
 **Real Example**: 82KB directory → 246 bytes (99.7% reduction!)
