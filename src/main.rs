@@ -375,9 +375,7 @@ fn main() -> Result<()> {
     // Then, the command-line --mode flag.
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
-    let (mode, compress) = if std::env::var("AI_TOOLS")
-        .map_or(false, |v| v == "1" || v.to_lowercase() == "true")
-    {
+    let (mode, compress) = if std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true") {
         // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
         (OutputMode::Ai, true)
     } else if args.semantic {
@@ -485,7 +483,7 @@ fn main() -> Result<()> {
                 use std::thread;
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
-                let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
+                // let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
                 let scanner_root = scanner.root().to_path_buf(); // Get the canonicalized root before moving scanner
 
                 // Spawn the scanner thread. It will send FileNode objects through the channel.

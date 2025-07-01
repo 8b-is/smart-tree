@@ -423,18 +423,20 @@ impl Formatter for MarkdownFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::{FileCategory, FileNode, FileType, FilesystemType, TreeStats};
     use std::path::PathBuf;
-    
+    use std::time::SystemTime;
+
     #[test]
     fn test_markdown_formatter() {
         let formatter = MarkdownFormatter::new(
             PathDisplayMode::Off,
             false,
-            true,  // include_mermaid
-            true,  // include_tables
-            true,  // include_pie_charts
+            true, // include_mermaid
+            true, // include_tables
+            true, // include_pie_charts
         );
-        
+
         let nodes = vec![
             FileNode {
                 path: PathBuf::from("src"),
@@ -443,17 +445,23 @@ mod tests {
                 permissions: 0o755,
                 uid: 1000,
                 gid: 1000,
-                modified: None,
+                modified: SystemTime::now(),
                 is_symlink: false,
                 is_ignored: false,
-                file_type: None,
                 search_matches: None,
+                // ---- Fields added to fix compilation ----
+                is_hidden: false,
+                permission_denied: false,
+                depth: 1,
+                file_type: FileType::Directory,
+                category: FileCategory::Unknown,
+                filesystem_type: FilesystemType::Unknown,
             },
         ];
-        
+
         let mut stats = TreeStats::default();
-        stats.add_node(&nodes[0]);
-        
+        stats.update_file(&nodes[0]);
+
         let mut output = Vec::new();
         let result = formatter.format(&mut output, &nodes, &stats, &PathBuf::from("."));
         assert!(result.is_ok());
