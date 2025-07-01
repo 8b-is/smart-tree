@@ -120,13 +120,16 @@ impl HexFormatter {
 
         // Add search matches if present
         let display_name_with_search = if let Some(matches) = &node.search_matches {
-            if !matches.is_empty() {
-                let hex_positions: Vec<String> = matches
-                    .iter()
-                    .take(10) // Limit to first 10 matches
-                    .map(|pos| format!("{:x}", pos))
-                    .collect();
-                format!("{} [SEARCH:{:}]", display_name, hex_positions.join(","))
+            if matches.total_count > 0 {
+                // Show first match position and total count
+                let (line, col) = matches.first_match;
+                let truncated_indicator = if matches.truncated { ",TRUNCATED" } else { "" };
+                
+                if matches.total_count > 1 {
+                    format!("{} [SEARCH:L{}:C{},{}x{}]", display_name, line, col, matches.total_count, truncated_indicator)
+                } else {
+                    format!("{} [SEARCH:L{}:C{}]", display_name, line, col)
+                }
             } else {
                 display_name
             }

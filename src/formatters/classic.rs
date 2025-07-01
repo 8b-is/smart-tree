@@ -340,6 +340,23 @@ impl ClassicFormatter {
             ""
         };
 
+        // Add search match indicator
+        let search_indicator = if let Some(matches) = &node.search_matches {
+            if matches.total_count > 0 {
+                let (line, col) = matches.first_match;
+                let truncated = if matches.truncated { ",TRUNCATED" } else { "" };
+                if matches.total_count > 1 {
+                    format!(" [FOUND:L{}:C{},{}x{}]", line, col, matches.total_count, truncated)
+                } else {
+                    format!(" [FOUND:L{}:C{}]", line, col)
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
         // Apply color to the name based on file category
         let colored_name = if node.is_dir {
             // Directories get bright yellow and bold
@@ -356,11 +373,11 @@ impl ClassicFormatter {
 
         if is_last.is_empty() {
             // Root node
-            format!("{} {}{}{}", emoji, colored_name, size_str, indicator)
+            format!("{} {}{}{}{}", emoji, colored_name, size_str, indicator, search_indicator)
         } else {
             format!(
-                "{}{} {}{}{}",
-                prefix, emoji, colored_name, size_str, indicator
+                "{}{} {}{}{}{}",
+                prefix, emoji, colored_name, size_str, indicator, search_indicator
             )
         }
     }

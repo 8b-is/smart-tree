@@ -5,8 +5,12 @@ pub mod csv;
 pub mod digest;
 pub mod hex;
 pub mod json;
+pub mod quantum;
+pub mod quantum_safe;
 pub mod stats;
 pub mod tsv;
+pub mod claude;
+pub mod semantic;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;

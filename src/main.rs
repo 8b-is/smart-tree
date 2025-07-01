@@ -26,8 +26,9 @@ use termimad;
 use st::{
     formatters::{
         ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
-        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter,
-        tsv::TsvFormatter, Formatter, PathDisplayMode, StreamingFormatter,
+        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
+        claude::ClaudeFormatter, semantic::SemanticFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
+        Formatter, PathDisplayMode, StreamingFormatter,
     },
     parse_size,
     Scanner,
@@ -191,6 +192,13 @@ struct ScanArgs {
     /// This is like having X-ray vision for your files!
     #[arg(long)]
     search: Option<String>,
+
+    /// Group files by semantic similarity (inspired by Omni's wisdom!).
+    /// Uses content-aware tokenization to identify conceptually related files.
+    /// Perfect for understanding project structure at a higher level.
+    /// Example groups: "tests", "documentation", "configuration", "source code"
+    #[arg(long)]
+    semantic: bool,
 }
 
 /// Enum defining how color should be used in the output.
@@ -237,6 +245,12 @@ enum OutputMode {
     Tsv,
     /// Super compact digest format. A single line with a hash and minimal stats, perfect for quick AI pre-checks.
     Digest,
+    /// MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization.
+    Quantum,
+    /// Claude API format. Quantum compression wrapped for optimal Anthropic API transmission.
+    Claude,
+    /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
+    Semantic,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -314,11 +328,15 @@ fn main() -> Result<()> {
             "csv" => Some(OutputMode::Csv),
             "tsv" => Some(OutputMode::Tsv),
             "digest" => Some(OutputMode::Digest),
+            "quantum" => Some(OutputMode::Quantum),
+            "claude" => Some(OutputMode::Claude),
+            "semantic" => Some(OutputMode::Semantic),
             _ => None, // Unknown mode string, ignore.
         });
 
     // Determine the final mode and compression settings.
     // The AI_TOOLS environment variable takes highest precedence.
+    // Then, --semantic flag overrides the mode.
     // Then, the command-line --mode flag.
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
@@ -327,6 +345,9 @@ fn main() -> Result<()> {
     {
         // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
         (OutputMode::Ai, true)
+    } else if args.semantic {
+        // If --semantic flag is set, use semantic mode (Omni's wisdom!)
+        (OutputMode::Semantic, args.compress)
     } else if let Some(env_mode) = default_mode_env {
         // If ST_DEFAULT_MODE is set, use it. Compression comes from args or its default.
         (env_mode, args.compress)
@@ -422,7 +443,7 @@ fn main() -> Result<()> {
     if args.stream && !compress {
         // Streaming mode is only supported for certain formatters that implement StreamingFormatter.
         match mode {
-            OutputMode::Hex | OutputMode::Ai => {
+            OutputMode::Hex | OutputMode::Ai | OutputMode::Quantum | OutputMode::Claude => {
                 // For streaming, we use threads: one for scanning, one for formatting/printing.
                 // A channel is used for communication between them.
                 use std::sync::mpsc; // Multi-producer, single-consumer channel.
@@ -430,6 +451,7 @@ fn main() -> Result<()> {
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
                 let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
+                let scanner_root = scanner.root().to_path_buf(); // Get the canonicalized root before moving scanner
 
                 // Spawn the scanner thread. It will send FileNode objects through the channel.
                 let scanner_thread = thread::spawn(move || {
@@ -449,6 +471,12 @@ fn main() -> Result<()> {
                     OutputMode::Ai => {
                         Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
                     }
+                    OutputMode::Quantum => {
+                        Box::new(QuantumFormatter::new())
+                    }
+                    OutputMode::Claude => {
+                        Box::new(ClaudeFormatter::new(true))
+                    }
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
 
@@ -457,13 +485,13 @@ fn main() -> Result<()> {
                 let mut handle = stdout.lock();
 
                 // Initialize the stream with the formatter (e.g., print headers).
-                streaming_formatter.start_stream(&mut handle, &scanner_path_clone)?;
+                streaming_formatter.start_stream(&mut handle, &scanner_root)?;
 
                 // Receive and format nodes as they arrive from the scanner thread.
                 while let Ok(node) = rx.recv() {
                     // Loop until the channel is closed.
                     streaming_formatter
-                        .format_node(&mut handle, &node, &scanner_path_clone)?;
+                        .format_node(&mut handle, &node, &scanner_root)?;
                 }
 
                 // Wait for the scanner thread to finish and get the final statistics.
@@ -473,7 +501,7 @@ fn main() -> Result<()> {
                     .map_err(|_| anyhow::anyhow!("Scanner thread panicked"))??;
 
                 // Finalize the stream with the formatter (e.g., print footers or summary stats).
-                streaming_formatter.end_stream(&mut handle, &stats, &scanner_path_clone)?;
+                streaming_formatter.end_stream(&mut handle, &stats, &scanner_root)?;
             }
             _ => {
                 // If streaming is requested for an unsupported mode, print an error and exit.
@@ -525,11 +553,14 @@ fn main() -> Result<()> {
             OutputMode::Csv => Box::new(CsvFormatter::new()),
             OutputMode::Tsv => Box::new(TsvFormatter::new()),
             OutputMode::Digest => Box::new(DigestFormatter::new()),
+            OutputMode::Quantum => Box::new(QuantumFormatter::new()),
+            OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
+            OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji)),
         };
 
         // Format the collected nodes and stats into a byte vector.
         let mut output_buffer = Vec::new();
-        formatter.format(&mut output_buffer, &nodes, &stats, &path)?;
+        formatter.format(&mut output_buffer, &nodes, &stats, scanner.root())?;
 
         // Handle compression if requested.
         if compress {

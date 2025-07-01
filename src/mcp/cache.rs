@@ -63,4 +63,37 @@ impl AnalysisCache {
     pub fn clear(&self) {
         self.entries.clear();
     }
+    
+    /// Get cache statistics
+    pub async fn stats(&self) -> CacheStats {
+        let mut total_size = 0;
+        let mut expired = 0;
+        let now = Instant::now();
+        
+        for entry in self.entries.iter() {
+            total_size += entry.value.len();
+            if entry.expires_at <= now {
+                expired += 1;
+            }
+        }
+        
+        CacheStats {
+            entries: self.entries.len(),
+            size: total_size,
+            expired,
+            hits: 0, // Would need to track this
+            misses: 0, // Would need to track this
+            hit_rate: 0.0,
+        }
+    }
+}
+
+/// Cache statistics
+pub struct CacheStats {
+    pub entries: usize,
+    pub size: usize,
+    pub expired: usize,
+    pub hits: u64,
+    pub misses: u64,
+    pub hit_rate: f64,
 }

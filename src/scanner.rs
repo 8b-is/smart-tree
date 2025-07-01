@@ -67,11 +67,24 @@ pub struct FileNode {
     /// A category assigned based on extension or name, used for coloring and context.
     /// (e.g., Rust, Python, Image, Archive).
     pub category: FileCategory,
-    /// For content search: A list of byte offsets (hex positions) where the search keyword was found.
+    /// For content search: Information about where matches were found
     /// `None` if no search was performed or no matches.
-    pub search_matches: Option<Vec<usize>>,
+    pub search_matches: Option<SearchMatches>,
     /// The filesystem type this file resides on
     pub filesystem_type: FilesystemType,
+}
+
+/// Information about search matches within a file
+#[derive(Debug, Clone)]
+pub struct SearchMatches {
+    /// First match position (line, column)
+    pub first_match: (usize, usize),
+    /// Total number of matches found
+    pub total_count: usize,
+    /// List of all match positions (line, column) - limited to prevent memory issues
+    pub positions: Vec<(usize, usize)>,
+    /// Whether the search was truncated due to too many matches
+    pub truncated: bool,
 }
 
 /// # FileType: Distinguishing Different Kinds of Filesystem Objects
@@ -113,7 +126,7 @@ pub enum FilesystemType {
     Procfs,  // 'P' - /proc virtual filesystem
     Sysfs,   // 'Y' - /sys virtual filesystem
     Devfs,   // 'D' - /dev virtual filesystem
-    Mem8,    // 'M' - Mem8 filesystem (custom!)
+    Mem8,    // 'M' - MEM|8 filesystem (Coming soon - Quantum File System) - https://m8.is
     Unknown, // '?' - Unknown filesystem
 }
 
@@ -495,6 +508,11 @@ pub struct Scanner {
 }
 
 impl Scanner {
+    /// Returns the canonicalized root path of the scanner
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+    
     /// ## `get_file_category`
     /// Determines a `FileCategory` for a given path and `FileType`.
     /// This function uses a series of heuristics based on file extensions and common names
@@ -598,9 +616,15 @@ impl Scanner {
     ///
     /// This setup prepares the scanner for efficient `should_ignore` checks during traversal.
     pub fn new(root: &Path, config: ScannerConfig) -> Result<Self> {
+        // Canonicalize the root path to get the absolute path
+        // If canonicalize fails (e.g., path doesn't exist), fall back to absolute path
+        let canonical_root = root.canonicalize()
+            .or_else(|_| std::env::current_dir().map(|cwd| cwd.join(root)))
+            .unwrap_or_else(|_| root.to_path_buf());
+        
         // Load .gitignore patterns from the root directory if requested.
         let gitignore = if config.respect_gitignore {
-            Self::load_gitignore(root)? // This can return None if no .gitignore or error.
+            Self::load_gitignore(&canonical_root)? // This can return None if no .gitignore or error.
         } else {
             None // Not respecting .gitignore.
         };
@@ -638,7 +662,7 @@ impl Scanner {
             default_ignores,
             system_paths,
             ignore_files,
-            root: root.to_path_buf(), // Store a copy of the root path.
+            root: canonical_root, // Store a copy of the root path.
         })
     }
 
@@ -709,16 +733,24 @@ impl Scanner {
     /// Returns the final `TreeStats` once the scan is complete.
     pub fn scan_stream(&self, sender: mpsc::Sender<FileNode>) -> Result<TreeStats> {
         let mut stats = TreeStats::default();
-        // Keep track of directories we've decided to ignore entirely to avoid processing their children.
-        // Note: This was `ignored_dirs` in the original, but it's not used beyond `skip_current_dir`.
-        // `walkdir` handles skipping children of explicitly ignored dirs.
-
-        // Initialize WalkDir starting from the root path.
-        // Configure it with max_depth and whether to follow symlinks from our ScannerConfig.
+        
+        // When searching, we need to collect all nodes first to determine which directories to show
+        if self.config.search_keyword.is_some() {
+            // Use the non-streaming scan and then send results in order
+            let (nodes, stats) = self.scan()?;
+            for node in nodes {
+                if sender.send(node).is_err() {
+                    break; // Receiver disconnected
+                }
+            }
+            return Ok(stats);
+        }
+        
+        // Original streaming logic for non-search cases
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
-            .follow_links(self.config.follow_symlinks) // Usually false for st
-            .into_iter(); // Get an iterator over directory entries.
+            .follow_links(self.config.follow_symlinks)
+            .into_iter();
 
         // Loop through each entry provided by WalkDir.
         while let Some(entry_result) = walker.next() {
@@ -781,8 +813,16 @@ impl Scanner {
                             let has_search_match = node
                                 .search_matches
                                 .as_ref()
-                                .map_or(false, |m| !m.is_empty());
-                            if node.is_dir || has_search_match || self.should_include(&node) {
+                                .map_or(false, |m| m.total_count > 0);
+                            
+                            // If we have a search keyword, only include files with matches
+                            let should_include_file = if self.config.search_keyword.is_some() {
+                                has_search_match
+                            } else {
+                                self.should_include(&node)
+                            };
+                            
+                            if node.is_dir || should_include_file {
                                 // Send the processed node through the channel.
                                 if sender.send(node.clone()).is_err() {
                                     break; // Receiver disconnected.
@@ -821,147 +861,131 @@ impl Scanner {
     }
 
     /// ## `should_search_file`
-    /// Determines if the content of a given `FileNode` should be searched for the `search_keyword`.
-    /// Search is performed if:
-    /// 1. A `search_keyword` is configured.
-    /// 2. If `file_type_filter` is set, the file's extension must match it.
-    /// 3. If no `file_type_filter`, the file must be of a category typically containing text
-    ///    (e.g., source code, markdown, JSON, plain text, etc.). This avoids searching binaries.
+    /// This function is called before `search_in_file` to decide if it's worth attempting a search.
+    /// It checks if a search keyword is configured and if the file is likely text-based.
     fn should_search_file(&self, node: &FileNode) -> bool {
-        // If no search keyword is provided in the config, no files should be searched.
+        // No search keyword? No search.
         if self.config.search_keyword.is_none() {
             return false;
         }
 
-        // If a specific file type filter is active (e.g., --type rs),
-        // only search files matching that extension.
-        if let Some(filter_ext) = &self.config.file_type_filter {
-            return match node.path.extension() {
-                Some(ext) => ext.to_string_lossy().eq_ignore_ascii_case(filter_ext),
-                None => false, // No extension, doesn't match.
-            };
-        }
-
-        // If no specific type filter, apply a heuristic: search in files that are likely text-based.
-        // This is determined by checking common text file extensions first for speed,
-        // then by checking the broader `FileCategory`.
-        if let Some(ext_str) = node.path.extension().and_then(|e| e.to_str()) {
-            match ext_str.to_lowercase().as_str() {
-                // Common plain text or config-like extensions
-                "txt" | "text" | "log" | "md" | "rst" | "tex" | "org" | "adoc" |
-                "ini" | "cfg" | "conf" | "config" | "properties" | "env" | "pem" | "key" |
-                "crt" | "csr" | "cnf" | "rules" | "policy" | "example" | "sample" |
-                // Data formats often in text
-                "csv" | "tsv" | "sql" | "graphql" | "proto" | "thrift" | "hql" | "psql" |
-                // Shell/scripting related that are text
-                "vim" | "vimrc" | "bashrc" | "zshrc" | "profile" | "gitconfig" | "editorconfig" |
-                "npmrc" | "yarnrc" | "babelrc" | "eslintrc" | "prettierrc" | "stylelintrc" |
-                "tf" | "tfvars" | // Terraform
-                "hcl" | // HashiCorp Configuration Language
-                "tfstate" | // Terraform state (JSON)
-                "lock" | // Common lock file format (e.g. package-lock.json, Cargo.lock which is TOML)
-                "mod" | // Go modules, often text
-                "sum" | // Go checksums, text
-                "gradle" | // Gradle build scripts (Groovy/Kotlin)
-                "sbt" | // Scala Build Tool
-                "cabal" | // Haskell Cabal
-                "nix" | // Nix expressions
-                "dhall" | // Dhall configuration language
-                "cue" | // CUE configuration language
-                "ipynb" // Jupyter notebooks (JSON-based)
-                 => return true,
-                _ => {} // Not a common plain text extension, fall through to category check.
+        // If there's a file type filter, only search files that match it
+        if let Some(ref filter_ext) = self.config.file_type_filter {
+            if let Some(ext) = node.path.extension() {
+                if ext.to_str() != Some(filter_ext) {
+                    return false;
+                }
+            } else {
+                // No extension, doesn't match filter
+                return false;
             }
         }
 
-        // Fallback to checking the pre-determined FileCategory.
-        // This covers source code files and other structured text formats.
+        // Skip directories, symlinks, and special files.
+        if node.is_dir || node.is_symlink || node.permission_denied {
+            return false;
+        }
+
+        // Skip binary and system files based on category.
         matches!(
             node.category,
-            FileCategory::Rust | FileCategory::Python | FileCategory::JavaScript |
-            FileCategory::TypeScript | FileCategory::Java | FileCategory::C | // Most source code
-            FileCategory::Cpp | FileCategory::Go | FileCategory::Ruby | FileCategory::PHP |
-            FileCategory::Shell | FileCategory::Markdown | FileCategory::Html | // Markup
-            FileCategory::Css | FileCategory::Json | FileCategory::Yaml | // Data/Style
-            FileCategory::Xml | FileCategory::Toml | FileCategory::Makefile | // Config/Build
-            FileCategory::Dockerfile | FileCategory::GitConfig |
-            FileCategory::Unknown // If category is Unknown, it might still be a text file we don't have a specific category for.
-                                  // We err on the side of searching it if no type filter is specified.
-                                  // Binary files should ideally be caught by specific categories like `Binary` or `Archive`.
+            FileCategory::Rust
+                | FileCategory::Python
+                | FileCategory::JavaScript
+                | FileCategory::TypeScript
+                | FileCategory::Java
+                | FileCategory::C
+                | FileCategory::Cpp
+                | FileCategory::Go
+                | FileCategory::Ruby
+                | FileCategory::PHP
+                | FileCategory::Shell
+                | FileCategory::Markdown
+                | FileCategory::Html
+                | FileCategory::Css
+                | FileCategory::Json
+                | FileCategory::Yaml
+                | FileCategory::Xml
+                | FileCategory::Toml
+                | FileCategory::Makefile
+                | FileCategory::Dockerfile
+                | FileCategory::GitConfig
         )
     }
 
     /// ## `search_in_file`
     ///
-    /// Performs a content search for `config.search_keyword` within the specified file.
-    /// Reads the file line by line and records the byte offset (0-indexed) of each match.
-    /// Returns `Some(Vec<usize>)` with match positions if found, or `None` if no matches
-    /// or if the keyword is not set, or if the file cannot be read/is binary.
+    /// Searches for the configured keyword within a file and returns match information.
+    /// Returns line and column positions for each match, up to a reasonable limit.
     /// The search is case-sensitive.
-    /// To avoid performance issues with huge files or many matches, it limits the number of reported matches.
-    fn search_in_file(&self, path: &Path) -> Option<Vec<usize>> {
+    fn search_in_file(&self, path: &Path) -> Option<SearchMatches> {
         // Ensure there's a keyword to search for.
         let keyword = self.config.search_keyword.as_ref()?;
         if keyword.is_empty() {
             return None;
-        } // Don't search for empty string.
+        }
 
         // Attempt to open the file for reading.
         let file = match fs::File::open(path) {
             Ok(f) => f,
-            Err(_) => return None, // Cannot open file, so cannot search.
+            Err(_) => return None,
         };
 
-        let mut positions = Vec::new(); // Store byte offsets of matches.
-        let reader = BufReader::new(file); // Use a buffered reader for efficiency.
-        let mut current_byte_offset: usize = 0; // Track our position in the file.
+        let mut positions = Vec::new();
+        let reader = BufReader::new(file);
+        let mut line_number = 1;
+        let mut first_match: Option<(usize, usize)> = None;
+        let mut total_count = 0;
 
         // Read and process the file line by line.
-        // This is generally more memory-efficient than reading the whole file,
-        // and allows us to stop early if it seems like a binary file or too many matches.
         for line_result in reader.lines() {
             match line_result {
                 Ok(line_content) => {
                     // Find all occurrences of the keyword in the current line.
-                    // `match_indices` gives (byte_offset_in_line, matched_string).
-                    for (match_start_in_line, _matched_str) in line_content.match_indices(keyword) {
-                        positions.push(current_byte_offset + match_start_in_line);
-
-                        // Performance guard: If we find too many matches, stop early.
-                        // This prevents using too much memory or time on files with dense matches.
-                        // The limit (e.g., 100) can be adjusted.
-                        if positions.len() > 100 {
-                            // Adding a special marker or logging could indicate truncation.
-                            // For now, just return the matches found so far.
-                            return Some(positions);
+                    for (column_index, _) in line_content.match_indices(keyword) {
+                        total_count += 1;
+                        
+                        // Column numbers are 1-based for user display
+                        let match_pos = (line_number, column_index + 1);
+                        
+                        if first_match.is_none() {
+                            first_match = Some(match_pos);
+                        }
+                        
+                        // Only store first 100 positions to prevent memory issues
+                        if positions.len() < 100 {
+                            positions.push(match_pos);
+                        }
+                        
+                        // Stop processing this file if we've found too many matches
+                        if total_count > 100 {
+                            return Some(SearchMatches {
+                                first_match: first_match.unwrap(),
+                                total_count,
+                                positions,
+                                truncated: true,
+                            });
                         }
                     }
-                    // Update the byte offset for the next line.
-                    // Add length of the line content + 1 for the newline character.
-                    // (Note: This assumes Unix-style newlines (\n). Windows (\r\n) would be +2.
-                    // However, `lines()` iterator strips newlines, so `line_content.len()` is just text.
-                    // A more robust way might involve tracking bytes read from the BufReader if precision is critical
-                    // across OSes, but for typical text files and search, this is a common approach.)
-                    // Let's assume `+1` is a reasonable approximation for line terminator length.
-                    current_byte_offset += line_content.len() + 1;
+                    line_number += 1;
                 }
                 Err(_) => {
-                    // An error occurred reading a line (e.g., invalid UTF-8 in a binary file).
-                    // Stop searching this file.
+                    // Invalid UTF-8 or other error, stop searching this file
                     break;
                 }
             }
-
-            // Another performance guard: if the file is excessively large and we're still reading,
-            // perhaps cap the total bytes processed or lines read. For now, relies on match limit.
-            // e.g., if current_byte_offset > SOME_LARGE_THRESHOLD { break; }
         }
 
-        // Return the collected positions if any matches were found.
-        if positions.is_empty() {
-            None
+        // Return matches if any were found
+        if let Some(first) = first_match {
+            Some(SearchMatches {
+                first_match: first,
+                total_count,
+                positions,
+                truncated: false,
+            })
         } else {
-            Some(positions)
+            None
         }
     }
 
@@ -1077,7 +1101,7 @@ impl Scanner {
             || self.config.max_size.is_some()
             || self.config.newer_than.is_some()
             || self.config.older_than.is_some()
-        // `search_keyword` isn't a primary filter in this sense; it's an inclusion criterion.
+            || self.config.search_keyword.is_some()  // Now search_keyword is also a filter
     }
 
     /// ## `filter_nodes_and_calculate_stats` (Formerly `filter_nodes_with_ancestors`)
@@ -1108,7 +1132,7 @@ impl Scanner {
             let has_search_match = node
                 .search_matches
                 .as_ref()
-                .map_or(false, |m| !m.is_empty());
+                .map_or(false, |m| m.total_count > 0);
 
             if node.is_dir {
                 // For directories, only the --find pattern applies directly.
@@ -1133,18 +1157,40 @@ impl Scanner {
                 }
             } else {
                 // For files, check if it passes all filters OR has a search match.
-                if has_search_match || self.should_include(node) {
-                    included_files_and_matching_dirs.push(node.clone());
-                    // Add all ancestors of this matching file to `required_ancestor_dirs`.
-                    let mut current = node.path.parent();
-                    while let Some(parent_path) = current {
-                        // Stop if we reach the root or an already added ancestor.
-                        if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
-                        {
-                            break;
+                // If we have a search keyword, ONLY include files with search matches
+                if self.config.search_keyword.is_some() {
+                    if has_search_match {
+                        // Even with search matches, the file must still pass other filters
+                        if self.should_include(node) {
+                            included_files_and_matching_dirs.push(node.clone());
+                            // Add all ancestors of this matching file to `required_ancestor_dirs`.
+                            let mut current = node.path.parent();
+                            while let Some(parent_path) = current {
+                                // Stop if we reach the root or an already added ancestor.
+                                if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                                {
+                                    break;
+                                }
+                                required_ancestor_dirs.insert(parent_path.to_path_buf());
+                                current = parent_path.parent();
+                            }
                         }
-                        required_ancestor_dirs.insert(parent_path.to_path_buf());
-                        current = parent_path.parent();
+                    }
+                } else {
+                    // No search keyword, use normal filtering
+                    if has_search_match || self.should_include(node) {
+                        included_files_and_matching_dirs.push(node.clone());
+                        // Add all ancestors of this matching file to `required_ancestor_dirs`.
+                        let mut current = node.path.parent();
+                        while let Some(parent_path) = current {
+                            // Stop if we reach the root or an already added ancestor.
+                            if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                            {
+                                break;
+                            }
+                            required_ancestor_dirs.insert(parent_path.to_path_buf());
+                            current = parent_path.parent();
+                        }
                     }
                 }
             }

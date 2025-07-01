@@ -113,7 +113,10 @@ impl McpServer {
         let mut reader = BufReader::new(stdin);
         let mut stdout = stdout.lock();
 
-        eprintln!("Smart Tree MCP server started");
+        eprintln!("Smart Tree MCP server v{} started", env!("CARGO_PKG_VERSION"));
+        eprintln!("  Build: {} ({})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_DESCRIPTION"));
+        eprintln!("  Protocol: MCP v1.0");
+        eprintln!("  Features: tools, resources, prompts, caching");
 
         loop {
             let mut line = String::new();
@@ -127,8 +130,11 @@ impl McpServer {
 
                     match self.handle_request(line).await {
                         Ok(response) => {
-                            writeln!(stdout, "{}", response)?;
-                            stdout.flush()?;
+                            // Only write response if it's not empty (notifications return empty)
+                            if !response.is_empty() {
+                                writeln!(stdout, "{}", response)?;
+                                stdout.flush()?;
+                            }
                         }
                         Err(e) => {
                             eprintln!("Error handling request: {}", e);
@@ -162,6 +168,16 @@ impl McpServer {
         let request: JsonRpcRequest =
             serde_json::from_str(request_str).context("Failed to parse JSON-RPC request")?;
 
+        // Check if this is a notification (no id field)
+        let is_notification = request.id.is_none();
+        
+        // Handle notifications that don't expect responses
+        if is_notification && request.method == "notifications/initialized" {
+            // Just acknowledge receipt, don't send response
+            eprintln!("Received notification: notifications/initialized");
+            return Ok(String::new()); // Return empty string to skip response
+        }
+
         // Route the request
         let result = match request.method.as_str() {
             "initialize" => handle_initialize(request.params, self.context.clone()).await,
@@ -179,12 +195,22 @@ impl McpServer {
                 handle_prompts_get(request.params.unwrap_or(json!({})), self.context.clone()).await
             }
             "notifications/cancelled" => {
+                // This is also a notification but might need handling
+                if is_notification {
+                    eprintln!("Received notification: notifications/cancelled");
+                    return Ok(String::new());
+                }
                 handle_cancelled(request.params, self.context.clone()).await
             }
             _ => Err(anyhow::anyhow!("Method not found: {}", request.method)),
         };
 
-        // Build response
+        // Don't send response for notifications
+        if is_notification {
+            return Ok(String::new());
+        }
+
+        // Build response for requests only
         let response = match result {
             Ok(result) => JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
@@ -214,13 +240,31 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
     Ok(json!({
         "protocolVersion": "2024-11-05",
         "capabilities": {
-            "tools": {},
-            "resources": {},
-            "prompts": {}
+            "tools": {
+                "listChanged": false
+            },
+            "resources": {
+                "subscribe": false,
+                "listChanged": false
+            },
+            "prompts": {
+                "listChanged": false
+            },
+            "logging": {}
         },
         "serverInfo": {
             "name": "smart-tree",
-            "version": env!("CARGO_PKG_VERSION")
+            "version": env!("CARGO_PKG_VERSION"),
+            "vendor": "8b-is",
+            "description": "Smart Tree - AI-optimized directory visualization with quantum compression",
+            "homepage": env!("CARGO_PKG_REPOSITORY"),
+            "features": [
+                "quantum-compression",
+                "claude-format",
+                "content-search",
+                "streaming",
+                "caching"
+            ]
         }
     }))
 }
