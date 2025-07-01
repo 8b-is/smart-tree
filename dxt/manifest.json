@@ -3,9 +3,9 @@
   "id": "is.8b.smart-tree",
   "name": "smart-tree",
   "display_name": "Smart Tree",
-  "version": "2.0.1",
+  "version": "2.0.4",
   "description": "Revolutionary AI-optimized directory tree with MEM|8 Quantum compression - 99% token reduction",
-  "long_description": "Smart Tree v2.0 revolutionizes directory visualization with MEM|8 Quantum compression, reducing output by 99% and saving thousands in AI token costs.\n\nKey Features:\n- **MEM|8 Quantum Format**: 99% size reduction (487MB → 4.1MB for Chromium)\n- **Cost Savings**: $1,270 saved per large directory analysis\n- **10-24x Faster**: Than traditional tree command\n- **Native Quantum Output**: Zero conversion overhead\n- Multiple output formats (quantum, hex, json, csv, tsv, ai-optimized)\n- Smart filtering by file type, size, date, and content\n- Built-in compression for all formats\n- MCP server integration with 20+ specialized tools\n- Cross-platform support (Windows, macOS, Linux)",
+  "long_description": "Smart Tree v2.0 revolutionizes directory visualization with MEM|8 Quantum compression, reducing output by 99% and saving thousands in AI token costs.\n\nKey Features:\n- **MEM|8 Quantum Format**: 99% size reduction (487MB → 4.1MB for Chromium)\n- **Claude Mode Default**: MCP tools now use maximum compression by default\n- **Semantic Analysis**: Group files by conceptual waves (inspired by Omni!)\n- **Mermaid Diagrams**: Generate directory diagrams for documentation\n- **Cost Savings**: $1,270 saved per large directory analysis\n- **10-24x Faster**: Than traditional tree command\n- **Native Streaming**: Constant memory usage for massive directories\n- Multiple output formats (quantum, claude, mermaid, semantic, hex, json, csv, tsv)\n- Smart filtering by file type, size, date, and content\n- Built-in compression for all formats\n- MCP server with 22 specialized tools\n- Cross-platform support (Windows, macOS, Linux)",
   "author": {
     "name": "8b-is",
     "email": "st@8b.is",
@@ -28,20 +28,24 @@
   ],
   "tools": [
     {
+      "name": "server_info",
+      "description": "Get information about the Smart Tree MCP server"
+    },
+    {
       "name": "analyze_directory",
-      "description": "Analyze a directory structure with smart filtering and output formatting"
+      "description": "Analyze a directory with smart compression. Use mode='claude' for MAXIMUM compression (10x reduction!)"
     },
     {
       "name": "find_files",
       "description": "Find files matching specific criteria (name, type, size, date)"
     },
     {
-      "name": "get_file_stats",
-      "description": "Get detailed statistics about files and directories"
+      "name": "get_statistics",
+      "description": "Get detailed statistics about a directory"
     },
     {
-      "name": "generate_digest",
-      "description": "Generate a digest of directory contents with checksums"
+      "name": "get_digest",
+      "description": "Get SHA256 digest of directory structure"
     },
     {
       "name": "quick_tree",
@@ -106,6 +110,10 @@
     {
       "name": "find_empty_directories",
       "description": "Find all empty directories"
+    },
+    {
+      "name": "semantic_analysis",
+      "description": "Group files by semantic similarity using wave-based analysis (inspired by Omni!)"
     }
   ],
   "prompts": [
