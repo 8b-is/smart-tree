@@ -1,8 +1,26 @@
 # 🌳 Smart Tree (st) v2.0 - Revolutionary MEM|8 Quantum Compression
 
+<div align="center">
+
+[![Discord](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC)
+[![GitHub release](https://img.shields.io/github/v/release/8b-is/smart-tree?include_prereleases)](https://github.com/8b-is/smart-tree/releases)
+[![Downloads](https://img.shields.io/github/downloads/8b-is/smart-tree/total)](https://github.com/8b-is/smart-tree/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+[![Rust](https://img.shields.io/badge/rust-%23000000.svg?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-Ready-blueviolet)](https://claude.ai/download)
+[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green)](https://modelcontextprotocol.io/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/8b-is/smart-tree/releases)
+
+**🌊 Where Files Ride Semantic Waves | 🚀 10x Compression | 🤖 AI-First Design**
+
+</div>
+
+---
+
 A blazingly fast, AI-friendly directory tree visualization tool written in Rust. Smart Tree is the first directory tool designed for the AI era, featuring revolutionary MEM|8 Quantum compression that reduces output by 99% and saves thousands in AI token costs.
 
-**Status**: ✅ **v2.0.0 Released** - Native quantum compression changes everything!
+**Status**: ✅ **v2.0.4 Released** - MCP notification handling fixed!
 
 ## 🚀 What's New in v2.0
 
@@ -417,6 +435,30 @@ All core features are now implemented:
 - ✅ Parallel directory scanning
 - ✅ Management script with humor
 - ✅ MCP (Model Context Protocol) server for AI assistants
+
+## 🤝 Community & Support
+
+### Join Our Discord!
+
+[![Discord Banner](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Join%20our%20Discord&logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/uayQFhWC)
+
+Connect with the Smart Tree community:
+- 💬 Get help and support
+- 🚀 Share your use cases
+- 🐛 Report bugs and request features
+- 🌊 Discuss semantic waves with Omni
+- 🛁 Join Hot Tub sessions for deep dives
+
+### Contributing
+
+We welcome contributions! Check out:
+- [Contributing Guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Open Issues](https://github.com/8b-is/smart-tree/issues)
+
+### Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date)](https://star-history.com/#8b-is/smart-tree&Date)
 
 ## 🙏 Acknowledgments
 
