@@ -10,10 +10,11 @@
 // -----------------------------------------------------------------------------
 
 use super::{Formatter, PathDisplayMode};
-use crate::scanner::{FileNode, TreeStats};
+use crate::scanner::{FileCategory, FileNode, FileType, FilesystemType, TreeStats};
 use anyhow::Result;
-use std::io::Write;
 use std::collections::HashMap;
+use std::io::Write;
+use std::time::SystemTime;
 
 pub struct MermaidFormatter {
     style: MermaidStyle,
@@ -157,8 +158,8 @@ impl MermaidFormatter {
         let root_id = Self::sanitize_node_id(root_path);
         
         for node in nodes {
-            let node_id = Self::sanitize_node_id(&node.path);
-            
+            let _node_id = Self::sanitize_node_id(&node.path);
+
             // Find parent
             if let Some(parent_path) = node.path.parent() {
                 let parent_id = if parent_path == root_path {
@@ -262,9 +263,9 @@ impl MermaidFormatter {
         writeln!(writer, "  root((📁 {}))", escaped_root_name)?;
         
         // Build tree structure
-        let mut current_depth = 0;
-        let mut depth_stack = vec![root_path.to_path_buf()];
-        
+        let _current_depth = 0;
+        let _depth_stack = vec![root_path.to_path_buf()];
+
         for node in nodes {
             // Calculate depth
             let depth = node.path.components().count() - root_path.components().count();
@@ -291,9 +292,9 @@ impl MermaidFormatter {
         writeln!(writer, "    commit id: \"Project Root\"")?;
         
         // Group by directory
-        let mut current_branch = "main";
+        let _current_branch = "main";
         let mut branch_count = 0;
-        
+
         for (i, node) in nodes.iter().enumerate() {
             if node.is_dir {
                 branch_count += 1;
@@ -303,8 +304,9 @@ impl MermaidFormatter {
                 let dir_name = node.path.file_name().unwrap_or_default().to_string_lossy();
                 let escaped_dir_name = Self::escape_label(&dir_name);
                 writeln!(writer, "    commit id: \"{}\"", escaped_dir_name)?;
-                current_branch = &branch_name;
-            } else if i < 20 { // Limit to prevent overly complex graphs
+                // current_branch = &branch_name; // This was unused, so we comment it out.
+            } else if i < 20 {
+                // Limit to prevent overly complex graphs
                 let file_name = node.path.file_name().unwrap_or_default().to_string_lossy();
                 let escaped_file_name = Self::escape_label(&file_name);
                 writeln!(writer, "    commit id: \"{}\"", escaped_file_name
@@ -389,11 +391,16 @@ mod tests {
                 permissions: 0o755,
                 uid: 1000,
                 gid: 1000,
-                modified: None,
+                modified: SystemTime::now(),
                 is_symlink: false,
                 is_ignored: false,
-                file_type: None,
                 search_matches: None,
+                is_hidden: false,
+                permission_denied: false,
+                depth: 1,
+                file_type: FileType::Directory,
+                category: FileCategory::Unknown,
+                filesystem_type: FilesystemType::Unknown,
             },
             FileNode {
                 path: PathBuf::from("src/main.rs"),
@@ -402,19 +409,24 @@ mod tests {
                 permissions: 0o644,
                 uid: 1000,
                 gid: 1000,
-                modified: None,
+                modified: SystemTime::now(),
                 is_symlink: false,
                 is_ignored: false,
-                file_type: None,
                 search_matches: None,
+                is_hidden: false,
+                permission_denied: false,
+                depth: 2,
+                file_type: FileType::RegularFile,
+                category: FileCategory::Rust,
+                filesystem_type: FilesystemType::Unknown,
             },
         ];
-        
+
         let mut stats = TreeStats::default();
         for node in &nodes {
-            stats.add_node(node);
+            stats.update_file(node);
         }
-        
+
         let mut output = Vec::new();
         let result = formatter.format(&mut output, &nodes, &stats, &PathBuf::from("."));
         assert!(result.is_ok());

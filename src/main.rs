@@ -10,8 +10,8 @@
 // -----------------------------------------------------------------------------
 use anyhow::Result;
 use chrono::NaiveDate;
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
-use clap_complete::{generate, Shell};
+use clap::{CommandFactory, Parser, ValueEnum};
+use clap_complete::generate;
 use clap_mangen;
 use colored; // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;

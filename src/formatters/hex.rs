@@ -1,5 +1,5 @@
 use super::{Formatter, PathDisplayMode, StreamingFormatter};
-use crate::scanner::{FileNode, FileType, FilesystemType, TreeStats};
+use crate::scanner::{FileNode, FileType, TreeStats};
 use anyhow::Result;
 use std::io::Write;
 use std::path::Path;

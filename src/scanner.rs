@@ -1371,8 +1371,6 @@ impl Scanner {
 
         // Filesystem magic numbers from statfs.h
         const EXT4_SUPER_MAGIC: i64 = 0xef53;
-        const EXT3_SUPER_MAGIC: i64 = 0xef53; // Same as ext4, need to check features
-        const EXT2_SUPER_MAGIC: i64 = 0xef53; // Same as ext4, need to check features
         const XFS_SUPER_MAGIC: i64 = 0x58465342;
         const BTRFS_SUPER_MAGIC: i64 = 0x9123683e;
         const ZFS_SUPER_MAGIC: i64 = 0x2fc12fc1;

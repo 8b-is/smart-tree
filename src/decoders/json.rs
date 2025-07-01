@@ -7,7 +7,6 @@ use anyhow::Result;
 use serde_json::{json, Value};
 
 pub struct JsonDecoder {
-    root: Value,
     stack: Vec<Value>,
     current_children: Vec<Value>,
 }
@@ -15,7 +14,6 @@ pub struct JsonDecoder {
 impl JsonDecoder {
     pub fn new() -> Self {
         Self {
-            root: json!(null),
             stack: Vec::new(),
             current_children: Vec::new(),
         }
@@ -31,7 +29,7 @@ impl QuantumDecoder for JsonDecoder {
         Ok(())
     }
     
-    fn decode_entry(&mut self, entry: &QuantumEntry, writer: &mut dyn Write) -> Result<()> {
+    fn decode_entry(&mut self, entry: &QuantumEntry, _writer: &mut dyn Write) -> Result<()> {
         let mut node = json!({
             "name": entry.name,
             "type": if entry.is_dir { "directory" } else { "file" },

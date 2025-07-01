@@ -5,13 +5,11 @@ use super::{QuantumDecoder, QuantumEntry};
 use std::io::Write;
 use anyhow::Result;
 
-pub struct ClassicDecoder {
-    depth: usize,
-}
+pub struct ClassicDecoder;
 
 impl ClassicDecoder {
     pub fn new() -> Self {
-        Self { depth: 0 }
+        Self
     }
 }
 

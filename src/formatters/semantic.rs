@@ -11,28 +11,27 @@
 // -----------------------------------------------------------------------------
 
 use super::{Formatter, PathDisplayMode};
-use crate::scanner::{FileNode, TreeStats};
+use crate::scanner::{FileCategory, FileNode, FileType, FilesystemType, TreeStats};
 use crate::semantic::{SemanticAnalyzer, SemanticCategory};
 use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashMap;
 use std::io::Write;
+use std::time::SystemTime;
 
 pub struct SemanticFormatter {
     path_mode: PathDisplayMode,
-    no_emoji: bool,
     analyzer: SemanticAnalyzer,
 }
 
 impl SemanticFormatter {
-    pub fn new(path_mode: PathDisplayMode, no_emoji: bool) -> Self {
+    pub fn new(path_mode: PathDisplayMode, _no_emoji: bool) -> Self {
         Self {
             path_mode,
-            no_emoji,
             analyzer: SemanticAnalyzer::new(),
         }
     }
-    
+
     fn format_size(size: u64) -> String {
         if size < 1024 {
             format!("{} B", size)
@@ -52,7 +51,7 @@ impl Formatter for SemanticFormatter {
         writer: &mut dyn Write,
         nodes: &[FileNode],
         stats: &TreeStats,
-        root_path: &std::path::Path,
+        _root_path: &std::path::Path,
     ) -> Result<()> {
         // Header with Omni's wisdom
         writeln!(writer, "{}", "🌊 SEMANTIC WAVE ANALYSIS 🌊".cyan().bold())?;
@@ -173,11 +172,11 @@ impl Formatter for SemanticFormatter {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    
+
     #[test]
     fn test_semantic_formatter() {
         let formatter = SemanticFormatter::new(PathDisplayMode::Off, false);
-        
+
         let nodes = vec![
             FileNode {
                 path: PathBuf::from("README.md"),
@@ -186,11 +185,16 @@ mod tests {
                 permissions: 0o644,
                 uid: 1000,
                 gid: 1000,
-                modified: None,
+                modified: SystemTime::now(),
                 is_symlink: false,
                 is_ignored: false,
-                file_type: None,
                 search_matches: None,
+                is_hidden: false,
+                permission_denied: false,
+                depth: 1,
+                file_type: FileType::RegularFile,
+                category: FileCategory::Documentation,
+                filesystem_type: FilesystemType::Unknown,
             },
             FileNode {
                 path: PathBuf::from("src/main.rs"),
@@ -199,11 +203,16 @@ mod tests {
                 permissions: 0o644,
                 uid: 1000,
                 gid: 1000,
-                modified: None,
+                modified: SystemTime::now(),
                 is_symlink: false,
                 is_ignored: false,
-                file_type: None,
                 search_matches: None,
+                is_hidden: false,
+                permission_denied: false,
+                depth: 2,
+                file_type: FileType::RegularFile,
+                category: FileCategory::Rust,
+                filesystem_type: FilesystemType::Unknown,
             },
             FileNode {
                 path: PathBuf::from("tests/test_main.rs"),
@@ -212,19 +221,24 @@ mod tests {
                 permissions: 0o644,
                 uid: 1000,
                 gid: 1000,
-                modified: None,
+                modified: SystemTime::now(),
                 is_symlink: false,
                 is_ignored: false,
-                file_type: None,
                 search_matches: None,
+                is_hidden: false,
+                permission_denied: false,
+                depth: 2,
+                file_type: FileType::RegularFile,
+                category: FileCategory::Rust,
+                filesystem_type: FilesystemType::Unknown,
             },
         ];
-        
+
         let mut stats = TreeStats::default();
         for node in &nodes {
-            stats.add_node(node);
+            stats.update_file(node);
         }
-        
+
         let mut output = Vec::new();
         let result = formatter.format(&mut output, &nodes, &stats, &PathBuf::from("."));
         assert!(result.is_ok());

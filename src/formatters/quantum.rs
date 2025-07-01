@@ -26,18 +26,17 @@ pub struct QuantumFormatter {
     
     // Token dictionary for common patterns
     tokens: HashMap<String, u8>,
-    next_token: u8,
 }
 
 // Bit positions in header
 const SIZE_BIT: u8 = 0b00000001;
 const PERMS_BIT: u8 = 0b00000010;
-const TIME_BIT: u8 = 0b00000100;
-const OWNER_BIT: u8 = 0b00001000;
+// const TIME_BIT: u8 = 0b00000100; // Unused for now
+// const OWNER_BIT: u8 = 0b00001000; // Unused for now
 const DIR_BIT: u8 = 0b00010000;
-const LINK_BIT: u8 = 0b00100000;
-const XATTR_BIT: u8 = 0b01000000;
-const SUMMARY_BIT: u8 = 0b10000000;
+// const LINK_BIT: u8 = 0b00100000; // Unused for now
+// const XATTR_BIT: u8 = 0b01000000; // Unused for now
+// const SUMMARY_BIT: u8 = 0b10000000; // Unused for now
 
 // ASCII control codes for tree traversal
 const TRAVERSE_SAME: char = '\x0B';     // Vertical Tab
@@ -67,7 +66,6 @@ impl QuantumFormatter {
             parent_gid: 1000,
             parent_time: 0,
             tokens,
-            next_token: 0xA0,
         }
     }
     

@@ -23,7 +23,6 @@ use std::path::Path;
 use chrono::Local;
 
 pub struct MarkdownFormatter {
-    path_mode: PathDisplayMode,
     no_emoji: bool,
     include_mermaid: bool,
     include_tables: bool,
@@ -33,14 +32,13 @@ pub struct MarkdownFormatter {
 
 impl MarkdownFormatter {
     pub fn new(
-        path_mode: PathDisplayMode,
+        _path_mode: PathDisplayMode,
         no_emoji: bool,
         include_mermaid: bool,
         include_tables: bool,
         include_pie_charts: bool,
     ) -> Self {
         Self {
-            path_mode,
             no_emoji,
             include_mermaid,
             include_tables,
@@ -231,15 +229,15 @@ impl MarkdownFormatter {
         writeln!(writer)?;
         
         // Group files by size ranges
-        let mut size_ranges = vec![
-            ("< 1 KB", 0u64, 0usize),
-            ("1-10 KB", 0, 0),
-            ("10-100 KB", 0, 0),
-            ("100 KB - 1 MB", 0, 0),
-            ("1-10 MB", 0, 0),
-            ("10-100 MB", 0, 0),
-            ("> 100 MB", 0, 0),
-        ];
+        // let mut size_ranges = vec![
+        //     ("< 1 KB", 0u64, 0usize),
+        //     ("1-10 KB", 0, 0),
+        //     ("10-100 KB", 0, 0),
+        //     ("100 KB - 1 MB", 0, 0),
+        //     ("1-10 MB", 0, 0),
+        //     ("10-100 MB", 0, 0),
+        //     ("> 100 MB", 0, 0),
+        // ];
         
         // This would need access to individual file sizes, so we'll use a placeholder
         // In a real implementation, we'd track this during scanning
