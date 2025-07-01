@@ -10,11 +10,10 @@
 // -----------------------------------------------------------------------------
 
 use super::{Formatter, PathDisplayMode};
-use crate::scanner::{FileCategory, FileNode, FileType, FilesystemType, TreeStats};
+use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::io::Write;
-use std::time::SystemTime;
 
 pub struct MermaidFormatter {
     style: MermaidStyle,

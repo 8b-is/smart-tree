@@ -11,13 +11,12 @@
 // -----------------------------------------------------------------------------
 
 use super::{Formatter, PathDisplayMode};
-use crate::scanner::{FileCategory, FileNode, FileType, FilesystemType, TreeStats};
+use crate::scanner::{FileNode, TreeStats};
 use crate::semantic::{SemanticAnalyzer, SemanticCategory};
 use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashMap;
 use std::io::Write;
-use std::time::SystemTime;
 
 pub struct SemanticFormatter {
     path_mode: PathDisplayMode,
