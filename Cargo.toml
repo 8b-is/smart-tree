@@ -1,8 +1,8 @@
 [package]
 name = "st"
-version = "2.0.7"
+version = "3.0.0"
 edition = "2021"
-authors = ["8bit-wraith", "Claude"] # Updated authors
+authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
 repository = "https://github.com/8b-is/smart-tree" # Updated repository
 license = "MIT"

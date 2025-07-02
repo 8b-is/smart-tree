@@ -214,6 +214,16 @@ struct ScanArgs {
     /// Exclude pie charts from markdown report (only used with --mode markdown).
     #[arg(long)]
     no_markdown_pie_charts: bool,
+    
+    /// Focus analysis on specific file (for relations mode).
+    /// Shows all relationships for a particular file.
+    #[arg(long, value_name = "FILE")]
+    focus: Option<PathBuf>,
+    
+    /// Filter relationships by type (for relations mode).
+    /// Options: imports, calls, types, tests, coupled
+    #[arg(long, value_name = "TYPE")]
+    relations_filter: Option<String>,
 }
 
 /// Enum for mermaid style argument
@@ -281,6 +291,14 @@ enum OutputMode {
     Mermaid,
     /// Markdown report format. Combines mermaid, tables, and charts for beautiful documentation!
     Markdown,
+    /// Interactive summary mode (default for humans in terminal)
+    Summary,
+    /// AI-optimized summary mode (default for AI/piped output) 
+    SummaryAi,
+    /// Code relationship analysis
+    Relations,
+    /// Quantum compression with semantic understanding (Omni's nuclear option!)
+    QuantumSemantic,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -360,6 +378,10 @@ fn main() -> Result<()> {
             "semantic" => Some(OutputMode::Semantic),
             "mermaid" => Some(OutputMode::Mermaid),
             "markdown" => Some(OutputMode::Markdown),
+            "relations" => Some(OutputMode::Relations),
+            "summary" => Some(OutputMode::Summary),
+            "summary-ai" => Some(OutputMode::SummaryAi),
+            "quantum-semantic" => Some(OutputMode::QuantumSemantic),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -453,6 +475,7 @@ fn main() -> Result<()> {
         search_keyword: args.search.clone(),
         show_filesystems: args.show_filesystems,
     };
+
 
     // Create the scanner instance with the specified root path and configuration.
     let scanner = Scanner::new(&path, scanner_config)?;
@@ -601,6 +624,27 @@ fn main() -> Result<()> {
                     !args.no_markdown_tables,      // Include tables unless disabled
                     !args.no_markdown_pie_charts,  // Include pie charts unless disabled
                 ))
+            }
+            OutputMode::Relations => {
+                // Code relationship analysis - "Semantic X-ray vision!" - Omni
+                use st::formatters::relations_formatter::RelationsFormatter;
+                Box::new(RelationsFormatter::new(
+                    args.relations_filter.clone(),
+                    args.focus.clone(),
+                ))
+            }
+            OutputMode::Summary => {
+                // TODO: Implement interactive summary
+                Box::new(StatsFormatter::new()) // Placeholder
+            }
+            OutputMode::SummaryAi => {
+                // TODO: Implement AI summary
+                Box::new(DigestFormatter::new()) // Placeholder
+            }
+            OutputMode::QuantumSemantic => {
+                // Semantic-aware quantum compression - "The nuclear option!" - Omni
+                use st::formatters::quantum_semantic::QuantumSemanticFormatter;
+                Box::new(QuantumSemanticFormatter::new())
             }
         };
 

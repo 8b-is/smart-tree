@@ -13,6 +13,9 @@ pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
+pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
+pub mod tree_sitter_quantum; // Semantic-aware quantum compression - "AST meets compression!" - Omni
+pub mod dynamic_tokenizer; // Dynamic pattern learning - "Every project has its own language!" - Omni
 
 // The `mcp` module for Model Context Protocol integration.
 // MCP stands for Model Context Protocol, enabling AI assistant integration.

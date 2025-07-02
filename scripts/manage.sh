@@ -609,6 +609,30 @@ demo_search() {
     print_success "Search helps you find content quickly! ${SPARKLE}"
 }
 
+# Demo relations feature
+demo_relations() {
+    print_header "Demonstrating Code Relations Feature 🔗"
+    cd "$PROJECT_DIR"
+    
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+    
+    print_info "Analyzing relationships in src/ directory..."
+    ./target/release/$BINARY_NAME -m relations src | head -30
+    echo "... (truncated for demo)"
+    
+    print_info "\nWith import filter:"
+    ./target/release/$BINARY_NAME -m relations --relations-filter imports src | head -20
+    echo "... (truncated for demo)"
+    
+    print_info "\nFocusing on main.rs:"
+    ./target/release/$BINARY_NAME -m relations --focus src/main.rs src | head -15
+    
+    print_success "Relations feature provides semantic X-ray vision for codebases! ${SPARKLE}"
+}
+
 # Show usage examples
 examples() {
     print_header "Usage Examples ${SPARKLE}"
@@ -645,6 +669,11 @@ ${CYAN}🆕 File Content Search:${NC}
   $BINARY_NAME --search "TODO"          # Find TODO in all text files
   $BINARY_NAME --type rs --search "fn"  # Search for "fn" in Rust files
   $BINARY_NAME -m hex --search "error"  # Hex output with search positions
+  
+${CYAN}🔗 Code Relations (NEW!):${NC}
+  $BINARY_NAME -m relations             # Analyze code relationships
+  $BINARY_NAME -m relations --focus main.rs  # Focus on specific file
+  $BINARY_NAME -m relations --relations-filter imports  # Show only imports
   
 ${CYAN}AI usage:${NC}
   AI_TOOLS=1 $BINARY_NAME               # Auto AI mode + compression
@@ -683,6 +712,7 @@ ${YELLOW}Commands:${NC}
   ${GREEN}examples${NC}              Show usage examples
   ${GREEN}demo-stream${NC}           Demo streaming feature
   ${GREEN}demo-search${NC}           Demo search feature
+  ${GREEN}demo-relations${NC}        Demo code relations feature 🔗
   ${GREEN}help${NC}                  Show this help message
 
 ${YELLOW}MCP Commands:${NC}
@@ -779,6 +809,9 @@ main() {
             ;;
         demo-search)
             demo_search
+            ;;
+        demo-relations)
+            demo_relations
             ;;
         help|h|-h|--help)
             show_help
