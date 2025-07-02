@@ -17,7 +17,7 @@ use colored; // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use regex::Regex;
-use std::io::{self, Write};
+use std::io::{self, Write, IsTerminal};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use termimad;
@@ -407,7 +407,7 @@ fn main() -> Result<()> {
                 false
             } else {
                 // If no env var override, check if stdout is a terminal.
-                atty::is(atty::Stream::Stdout)
+                std::io::stdout().is_terminal()
             }
         }
     };
