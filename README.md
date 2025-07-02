@@ -66,9 +66,26 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 
 📖 **New to Smart Tree?** Check out our [Mode Selection Guide](docs/MODE_SELECTION_GUIDE.md) to choose the perfect output format!
 
+### Linux/Max and WSL for Windows
 ```bash
 # One-line installer (recommended)
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install-smart-tree.sh | bash
+```
+
+### Windows Specific
+> You may need Microsoft Build Tools for RUST: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+ - Don't forget the ARM compiler Version if you build for Windows in Parallels
+ - Rust: https://www.rust-lang.org/tools/install
+ - GIT: winget install git
+
+```powershell
+
+git clone 
+git clone https://github.com/8b-is/smart-tree
+cd smart-tree
+cargo build --release --features mcp
+cargo 
+
 ```
 
 This installer will:
@@ -113,7 +130,7 @@ cargo install --path .
 # Build from source
 git clone https://github.com/8b-is/smart-tree
 cd smart-tree
-cargo build --release
+cargo build --release --features mcp
 sudo cp target/release/st /usr/local/bin/
 
 # Using the manage script
@@ -531,7 +548,7 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 ```bash
 git clone https://github.com/8bit-wraith/smart-tree
 cd smart-tree
-cargo build --release
+cargo build --features mcp
 cargo test
 
 # Using the manage script
