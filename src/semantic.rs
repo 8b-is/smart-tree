@@ -61,19 +61,19 @@ impl SemanticCategory {
     /// Get a wave signature for semantic matching (Omni-inspired!)
     pub fn wave_signature(&self) -> u32 {
         match self {
-            Self::Documentation => 0xD0C5_D0C5,  // DOCs DOCs
-            Self::SourceCode => 0xC0DE_C0DE,    // CODE CODE
-            Self::Tests => 0x7E57_7E57,         // TEST TEST
-            Self::Configuration => 0xC0F1_C0F1,  // COFIg COFIg
-            Self::BuildSystem => 0xB01D_B01D,    // BuiLD BuiLD
-            Self::Dependencies => 0xDEEE_DEEE,   // DEpEndencies
-            Self::Assets => 0xA55E_A55E,         // ASsEts
-            Self::Data => 0xDA7A_DA7A,           // DATA DATA
-            Self::Scripts => 0x5C12_5C12,        // SCRIpts
-            Self::Generated => 0x6E6E_6E6E,      // GENErated
-            Self::ProjectRoot => 0x1200_1200,    // Root Root
-            Self::Development => 0xDE7E_DE7E,    // DEVElopment
-            Self::Deployment => 0xDE91_DE91,     // DEPLoyment
+            Self::Documentation => 0xAAAA_AAAA,  // DOCs wave pattern
+            Self::SourceCode => 0x5555_5555,    // CODE wave pattern (inverted)
+            Self::Tests => 0xF0F0_F0F0,         // TEST wave pattern
+            Self::Configuration => 0x0F0F_0F0F,  // CONFIG wave pattern (inverted tests)
+            Self::BuildSystem => 0xFF00_FF00,    // BUILD wave pattern
+            Self::Dependencies => 0x00FF_00FF,   // DEPS wave pattern (inverted build)
+            Self::Assets => 0xF00F_F00F,         // ASSETS wave pattern
+            Self::Data => 0x0FF0_0FF0,           // DATA wave pattern (inverted assets)
+            Self::Scripts => 0x3333_3333,        // SCRIPTS wave pattern
+            Self::Generated => 0xCCCC_CCCC,      // GENERATED wave pattern (inverted scripts)
+            Self::ProjectRoot => 0x1111_1111,    // ROOT wave pattern
+            Self::Development => 0x8888_8888,    // DEV wave pattern
+            Self::Deployment => 0x4444_4444,     // DEPLOY wave pattern
             Self::Unknown => 0x0000_0000,
         }
     }
@@ -174,6 +174,18 @@ impl SemanticAnalyzer {
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_lowercase();
+        
+        // First, check for specific build system files that should override other patterns
+        if file_name == "cargo.toml" || file_name == "package.json" || 
+           file_name == "makefile" || file_name == "cmakelists.txt" ||
+           file_name == "build.gradle" || file_name == "setup.py" {
+            return SemanticCategory::BuildSystem;
+        }
+        
+        // Check if it's a test file first (high priority)
+        if self.is_test_file(&path_str, &file_name) {
+            return SemanticCategory::Tests;
+        }
         
         // Check each category's patterns
         for (category, patterns) in &self.patterns {
