@@ -2,7 +2,7 @@
 //! Tracks imports, function calls, type usage, and test relationships
 
 use anyhow::{Context, Result};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::fs;
 use regex::Regex;
@@ -280,8 +280,8 @@ impl RelationAnalyzer {
             }
             
             // Parse functions and types for cross-referencing
-            let functions = parser.parse_functions(&content);
-            let types = parser.parse_types(&content);
+            let _functions = parser.parse_functions(&content);
+            let _types = parser.parse_types(&content);
             
             // Store for later cross-referencing
             // (In a real implementation, we'd build an index here)

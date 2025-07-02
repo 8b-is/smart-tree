@@ -35,7 +35,7 @@ impl MermaidRelationFormatter {
         
         // Generate node definitions with styling
         writeln!(writer, "    %% File nodes")?;
-        for file in &files {
+        for file in files {
             let relative = file.strip_prefix(root_path).unwrap_or(file);
             let display_name = relative.to_string_lossy();
             let id = format!("F{}", id_counter);
@@ -252,6 +252,9 @@ impl TextRelationFormatter {
         for rel in analyzer.get_relations() {
             file_relations.entry(&rel.source).or_default().push(rel);
         }
+
+        // Calculate total files before moving file_relations
+        let total_files = file_relations.len();
         
         for (file, relations) in file_relations {
             let relative = file.strip_prefix(root_path).unwrap_or(file);
@@ -300,7 +303,6 @@ impl TextRelationFormatter {
         writeln!(writer, "📊 Summary")?;
         writeln!(writer, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
         
-        let total_files = file_relations.len();
         let total_relations = analyzer.get_relations().len();
         let coupled_count = analyzer.get_relations().iter()
             .filter(|r| r.relation_type == RelationType::Coupled)
