@@ -12,6 +12,7 @@ pub mod quantum_scanner; // The native quantum format tree walker - no intermedi
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
+pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
 
 // The `mcp` module for Model Context Protocol integration.
 // MCP stands for Model Context Protocol, enabling AI assistant integration.

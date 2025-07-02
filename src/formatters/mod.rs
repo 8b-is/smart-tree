@@ -13,6 +13,7 @@ pub mod claude;
 pub mod semantic;
 pub mod mermaid;
 pub mod markdown;
+pub mod relations;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
