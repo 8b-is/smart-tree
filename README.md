@@ -20,6 +20,8 @@
 
 A blazingly fast, AI-friendly directory tree visualization tool written in Rust. Smart Tree is the first directory tool designed for the AI era, featuring revolutionary MEM|8 Quantum compression that reduces output by 99% and saves thousands in AI token costs.
 
+![Hue's Terminal](dxt/ST-HUE.png)
+
 **Status**: ✅ **v2.0.4 Released** - MCP notification handling fixed!
 
 ## 🚀 What's New in v2.0
