@@ -13,10 +13,8 @@ pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 
-// Conditionally compile and declare the `mcp` module.
-// This module is only included if the "mcp" feature flag is enabled during compilation.
+// The `mcp` module for Model Context Protocol integration.
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
-#[cfg(feature = "mcp")]
 pub mod mcp;
 
 // Re-export key items from the `scanner` module for easier access.

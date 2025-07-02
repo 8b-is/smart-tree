@@ -55,7 +55,7 @@ cargo test test_classic_formatter -- --nocapture
 ```bash
 cargo run -- [args]        # Run in development mode
 cargo run --release -- [args]  # Run optimized version
-./target/release/st [args]    # Run compiled binary (note: binary is 'st' not 'stree')
+./target/release/st [args]    # Run compiled binary
 
 # Example commands:
 st                         # Default classic mode for current directory
@@ -81,28 +81,28 @@ cargo clippy -- -D warnings  # Treat warnings as errors
 ### MCP Server Mode
 ```bash
 # Run as MCP server (for Claude Desktop integration)
-stree --mcp
+st --mcp
 
 # Show MCP configuration for Claude Desktop
-stree --mcp-config
+st --mcp-config
 
 # List available MCP tools
-stree --mcp-tools
+st --mcp-tools
 ```
 
 ### MCP Development Workflow
 ```bash
 # Test MCP server locally
-cargo run --features mcp -- --mcp
+cargo run -- --mcp
 
 # Debug MCP communication
-RUST_LOG=debug cargo run --features mcp -- --mcp
+RUST_LOG=debug cargo run -- --mcp
 
 # Test specific MCP tools
-cargo test mcp::tools --features mcp
+cargo test mcp::tools
 
 # Verify MCP protocol compliance
-cargo run --features mcp -- --mcp-tools | jq  # Should output valid JSON
+cargo run -- --mcp-tools | jq  # Should output valid JSON
 ```
 
 ## Architecture
@@ -135,7 +135,7 @@ The codebase follows a modular structure designed for extensibility:
 
 ## Python Reference Implementation
 
-A working Python implementation exists in `old/stree.py` that demonstrates all features. Key implementation details from the Python version:
+A working Python implementation exists in `old/st.py` that demonstrates all features. Key implementation details from the Python version:
 
 ### Output Format Specifications
 
@@ -299,7 +299,7 @@ The script supports non-interactive mode (`NON_INTERACTIVE=true`) and includes h
 1. **After making changes**: Always run `cargo fmt` and `cargo clippy` before committing
 2. **Testing specific functionality**: Use module-specific tests, e.g., `cargo test scanner`
 3. **Performance testing**: Use `cargo build --release` for benchmarking
-4. **MCP development**: Test with `stree --mcp-tools` to verify tool registration
+4. **MCP development**: Test with `st --mcp-tools` to verify tool registration
 
 ## Performance Considerations
 
@@ -315,7 +315,7 @@ The script supports non-interactive mode (`NON_INTERACTIVE=true`) and includes h
 1. **Performance Fix**: Classic mode tree building changed from O(n²) to O(n) using HashMap lookups
 2. **Default Depth**: Changed from 10 to 5 levels to prevent hanging on deep directory structures
 3. **--everything Flag**: Added master flag that combines --all, --no-ignore, and --no-default-ignore
-4. **Size Reporting**: Clarified that stree reports actual file sizes while `du` reports disk blocks
+4. **Size Reporting**: Clarified that st reports actual file sizes while `du` reports disk blocks
 
 ## Debugging Tips and Common Issues
 
@@ -333,15 +333,15 @@ The script supports non-interactive mode (`NON_INTERACTIVE=true`) and includes h
 ### Debugging Output Formats
 ```bash
 # Compare formatter outputs
-stree --mode classic src/ > classic.out
-stree --mode hex src/ > hex.out
-stree --mode ai src/ > ai.out
+st --mode classic src/ > classic.out
+st --mode hex src/ > hex.out
+st --mode ai src/ > ai.out
 
 # Test compression
-stree --mode ai -z src/ | wc -c  # Should be ~10x smaller
+st --mode ai -z src/ | wc -c  # Should be ~10x smaller
 
 # Verify hex format fields
-stree --mode hex | head -5  # Check field alignment
+st --mode hex | head -5  # Check field alignment
 ```
 
 ### Common Development Issues
@@ -349,8 +349,7 @@ stree --mode hex | head -5  # Check field alignment
 2. **Missing emojis**: Terminal might not support Unicode, use `--no-emoji`
 3. **Broken pipe errors**: Normal when piping to `head`, scanner handles gracefully
 4. **MCP server not starting**: Ensure tokio runtime is available, check feature flags
-5. **Binary name confusion**: The binary is `st`, not `stree` (though aliases may exist)
-6. **Permission errors on install**: Use `sudo` or specify user-writable install directory
+5. **Permission errors on install**: Use `sudo` or specify user-writable install directory
 
 ## Important Code Patterns
 

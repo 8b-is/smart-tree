@@ -368,6 +368,8 @@ fn format_size(size: u64) -> String {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::time::SystemTime;
+    use crate::scanner::{FileType, FileCategory, FilesystemType};
     
     #[test]
     fn test_sanitize_node_id() {

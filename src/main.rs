@@ -60,17 +60,14 @@ struct Cli {
     man: bool,
 
     /// Run `st` as an MCP (Model Context Protocol) server.
-    #[cfg(feature = "mcp")]
     #[arg(long, exclusive = true)]
     mcp: bool,
 
     /// List the tools `st` provides when running as an MCP server.
-    #[cfg(feature = "mcp")]
     #[arg(long, exclusive = true)]
     mcp_tools: bool,
 
     /// Show the configuration snippet for the MCP server.
-    #[cfg(feature = "mcp")]
     #[arg(long, exclusive = true)]
     mcp_config: bool,
 
@@ -327,19 +324,16 @@ fn main() -> Result<()> {
         man.render(&mut io::stdout())?;
         return Ok(());
     }
-    #[cfg(feature = "mcp")]
-    {
-        if cli.mcp {
-            return run_mcp_server();
-        }
-        if cli.mcp_tools {
-            print_mcp_tools();
-            return Ok(());
-        }
-        if cli.mcp_config {
-            print_mcp_config();
-            return Ok(());
-        }
+    if cli.mcp {
+        return run_mcp_server();
+    }
+    if cli.mcp_tools {
+        print_mcp_tools();
+        return Ok(());
+    }
+    if cli.mcp_config {
+        print_mcp_config();
+        return Ok(());
     }
 
     // If no action flag was given, proceed with the scan.
@@ -647,7 +641,6 @@ fn compress_output(data: &[u8]) -> Result<Vec<u8>> {
 
 /// Prints the JSON configuration snippet for adding `st` as an MCP server
 /// to Claude Desktop. This helps users easily integrate `st`.
-#[cfg(feature = "mcp")]
 fn print_mcp_config() {
     // Try to get the current executable's path. Fallback to "st" if it fails.
     let exe_path = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("st")); // Graceful fallback.
@@ -675,7 +668,6 @@ fn print_mcp_config() {
 
 /// Prints a list of available MCP tools that `st` provides.
 /// This helps users (or AI) understand what actions can be performed via MCP.
-#[cfg(feature = "mcp")]
 fn print_mcp_tools() {
     println!("Smart Tree MCP Server - Available Tools:");
     println!();
@@ -711,7 +703,6 @@ fn print_mcp_tools() {
 /// Runs `st` as an MCP server. This function initializes and starts the
 /// Tokio runtime and the MCP server logic.
 /// This is the entry point for the `--mcp` flag.
-#[cfg(feature = "mcp")]
 fn run_mcp_server() -> Result<()> {
     // Import MCP server components. These are only available if "mcp" feature is enabled.
     use st::mcp::{load_config, McpServer};

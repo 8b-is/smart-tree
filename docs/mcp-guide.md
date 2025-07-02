@@ -20,11 +20,12 @@ Smart Tree's MCP server enables AI assistants to analyze directory structures pr
 cargo build --release
 
 # Or install from source
-cargo install --path . --features mcp
+cargo install --path .
 ```
 
 ### 2. Configure your AI assistant
 Add to your Claude Desktop config (`claude_desktop_config.json`):
+on
 ```json
 {
   "mcpServers": {

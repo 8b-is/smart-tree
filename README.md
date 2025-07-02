@@ -71,7 +71,7 @@ A blazingly fast, AI-friendly directory tree visualization tool written in Rust.
 ### Linux/Max and WSL for Windows
 ```bash
 # One-line installer (recommended)
-curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install-smart-tree.sh | bash
+curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
 ```
 
 ### Windows Specific
@@ -85,14 +85,13 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 git clone 
 git clone https://github.com/8b-is/smart-tree
 cd smart-tree
-cargo build --release --features mcp
+cargo build --release
 cargo 
 
 ```
 
 This installer will:
 - Build and install Smart Tree (`st` command)
-- Set up aliases for `stree` and `smart-tree`
 - Optionally configure AI mode for Claude Desktop/Code
 - Create a preferences file with your settings
 - Add colorful terminal integration (courtesy of Trisha from Accounting! ✨)
@@ -120,7 +119,7 @@ cd examples/smart-tree
 # Clone and run the installer
 git clone https://github.com/8b-is/smart-tree
 cd smart-tree
-./scripts/install-smart-tree.sh
+./scripts/build-and-install.sh
 ```
 
 ### Manual Installation
@@ -132,7 +131,7 @@ cargo install --path .
 # Build from source
 git clone https://github.com/8b-is/smart-tree
 cd smart-tree
-cargo build --release --features mcp
+cargo build --release
 sudo cp target/release/st /usr/local/bin/
 
 # Using the manage script
@@ -550,7 +549,7 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 ```bash
 git clone https://github.com/8bit-wraith/smart-tree
 cd smart-tree
-cargo build --features mcp
+cargo build
 cargo test
 
 # Using the manage script
@@ -615,7 +614,13 @@ We welcome contributions! Check out:
 
 ### Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date)](https://star-history.com/#8b-is/smart-tree&Date)
+<a href="https://www.star-history.com/#8b-is/smart-tree&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date" />
+ </picture>
+</a>
 
 ## 🙏 Acknowledgments
 

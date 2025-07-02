@@ -1306,7 +1306,7 @@ dependencies = [
 
 [[package]]
 name = "st"
-version = "2.0.4"
+version = "2.0.5"
 dependencies = [
  "anyhow",
  "assert_cmd",

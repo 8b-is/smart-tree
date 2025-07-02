@@ -194,7 +194,7 @@ mod tests {
                 permission_denied: false,
                 depth: 1,
                 file_type: FileType::RegularFile,
-                category: FileCategory::Documentation,
+                category: FileCategory::Markdown,
                 filesystem_type: FilesystemType::Unknown,
             },
             FileNode {
