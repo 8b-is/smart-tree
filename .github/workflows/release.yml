@@ -50,7 +50,7 @@ jobs:
         targets: ${{ matrix.target }}
     
     - name: Build
-      run: cargo build --release --features mcp --target ${{ matrix.target }}
+      run: cargo build --release --target ${{ matrix.target }}
     
     - name: Prepare binary
       shell: bash
@@ -85,47 +85,34 @@ jobs:
       with:
         path: artifacts
     
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
+    - name: Build DXT Package
+      run: |
+        cd dxt
+        ./build-dxt.sh
+        
+    - name: Create Release with Assets
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Smart Tree ${{ github.ref }}
+        name: Smart Tree ${{ github.ref_name }}
         body: |
-          # Smart Tree ${{ github.ref }}
+          # Smart Tree ${{ github.ref_name }}
+          
+          🌳 **Making directories beautiful, one tree at a time!**
           
           ## What's New
           
-          ### v2.0.0 - Revolutionary MEM|8 Quantum Compression 🚀
+          See the [CHANGELOG.md](https://github.com/8b-is/smart-tree/blob/main/CHANGELOG.md) for detailed release notes.
           
-          **This changes everything for AI-assisted development!**
+          ### Key Features
           
-          - **99% size reduction** - Chromium tree: 487MB → 4.1MB
-          - **$1,270 saved** per large directory analysis
-          - **10-24x faster** than traditional tree command
-          - **Native quantum format** - zero conversion overhead
-          
-          #### Breaking Changes
-          - Tree walker now outputs quantum format natively
-          - All other formats are decoders from quantum
-          - Default MCP output changed to quantum
-          
-          #### New Features
-          - MEM|8 Quantum compression format
-          - Semantic tokenization (.js ≡ .mjs ≡ .cjs)
-          - JSON-safe base64 encoding for MCP
-          - Streaming architecture with constant memory
-          - Enhanced MCP server with version info
-          
-          #### Performance
-          | Codebase | Traditional | Quantum+Z | Savings |
-          |----------|-------------|-----------|---------|
-          | Linux | 487MB | 4.1MB | $1,237 |
-          | Node | 42MB | 412KB | $103 |
-          
-          **Annual savings for 10-dev team: $261,360**
+          - **🤖 AI-Optimized** - MCP (Model Context Protocol) integration for Claude Desktop
+          - **⚡ Ultra-Fast** - Quantum compression with 99% size reduction
+          - **🎯 Multiple Formats** - JSON, hex, AI-optimized, markdown, and more
+          - **🔍 Smart Search** - Find content within files while scanning
+          - **📊 Rich Statistics** - Detailed analysis with file categorization
+          - **🌊 Streaming Mode** - Real-time output for large directories
           
           ## Installation
           
@@ -144,29 +131,9 @@ jobs:
           | Linux | x64 | `st-x86_64-unknown-linux-gnu.tar.gz` |
           | Windows | x64 | `st-x86_64-pc-windows-msvc.exe.zip` |
           
-        draft: true
+        draft: false
         prerelease: false
-    
-    - name: Build DXT Package
-      run: |
-        cd dxt
-        ./build-dxt.sh
-        
-    - name: Upload Release Assets
-      run: |
-        # Upload binary assets
-        for asset in artifacts/*/*.{tar.gz,zip}; do
-          if [ -f "$asset" ]; then
-            name=$(basename "$asset")
-            echo "Uploading $name"
-            gh release upload "${{ github.ref_name }}" "$asset" --clobber
-          fi
-        done
-        
-        # Upload DXT package
-        if [ -f "dxt/smart-tree.dxt" ]; then
-          echo "Uploading smart-tree.dxt"
-          gh release upload "${{ github.ref_name }}" "dxt/smart-tree.dxt" --clobber
-        fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        files: |
+          artifacts/*/*.tar.gz
+          artifacts/*/*.zip
+          dxt/smart-tree.dxt
