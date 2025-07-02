@@ -187,15 +187,36 @@ impl SemanticAnalyzer {
             return SemanticCategory::Tests;
         }
         
-        // Check each category's patterns
-        for (category, patterns) in &self.patterns {
-            for pattern in patterns {
-                if file_name.contains(pattern) || path_str.contains(pattern) {
-                    // Special handling for tests - they override source code
-                    if *category == SemanticCategory::SourceCode && 
-                       self.is_test_file(&path_str, &file_name) {
-                        return SemanticCategory::Tests;
+        // Check categories in a deterministic priority order
+        // More specific file types should be checked before generic ones
+        let priority_order = [
+            SemanticCategory::Generated,      // .o, .exe, etc. - very specific
+            SemanticCategory::Data,           // .csv, .db, etc. - specific data formats  
+            SemanticCategory::Assets,         // .png, .mp3, etc. - specific media formats
+            SemanticCategory::Scripts,        // .sh, .bat, etc. - executable scripts
+            SemanticCategory::Configuration,  // .json, .yaml, etc. - config files
+            SemanticCategory::Dependencies,   // node_modules, etc. - dependency dirs
+            SemanticCategory::Documentation, // .md, README, etc. - documentation
+            SemanticCategory::SourceCode,     // .rs, .py, etc. - source code (more generic)
+        ];
+        
+        for category in &priority_order {
+            if let Some(patterns) = self.patterns.get(category) {
+                for pattern in patterns {
+                    if self.matches_pattern(&file_name, &path_str, pattern) {
+                        return category.clone();
                     }
+                }
+            }
+        }
+        
+        // Check remaining categories not in priority order
+        for (category, patterns) in &self.patterns {
+            if priority_order.contains(category) {
+                continue; // Already checked above
+            }
+            for pattern in patterns {
+                if self.matches_pattern(&file_name, &path_str, pattern) {
                     return category.clone();
                 }
             }
@@ -210,6 +231,17 @@ impl SemanticAnalyzer {
         }
         
         SemanticCategory::Unknown
+    }
+    
+    /// Check if a pattern matches a file, with better precision for extensions
+    fn matches_pattern(&self, file_name: &str, path_str: &str, pattern: &str) -> bool {
+        if pattern.starts_with('.') && pattern.len() > 1 {
+            // This is a file extension - match it precisely
+            file_name.ends_with(pattern) || path_str.contains(&format!("{}/", pattern))
+        } else {
+            // This is a name pattern - use contains matching
+            file_name.contains(pattern) || path_str.contains(pattern)
+        }
     }
     
     /// Check if a file is a test file
