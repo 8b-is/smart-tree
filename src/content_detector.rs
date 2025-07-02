@@ -129,7 +129,7 @@ impl ContentDetector {
         }
     }
     
-    fn is_code_project(ext_counts: &HashMap<String, usize>, nodes: &[FileNode], root_path: &Path) -> bool {
+    fn is_code_project(ext_counts: &HashMap<String, usize>, nodes: &[FileNode], _root_path: &Path) -> bool {
         // Check for common code file extensions
         let code_extensions = ["rs", "py", "js", "ts", "go", "java", "cpp", "c", "rb", "php"];
         let code_files: usize = code_extensions.iter()
