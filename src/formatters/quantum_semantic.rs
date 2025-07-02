@@ -90,16 +90,8 @@ impl Formatter for QuantumSemanticFormatter {
                         write!(writer, "{}", compressed_path)?;
                         
                         // Extract and write semantic nodes
-                        if let Ok(content) = std::fs::read_to_string(&node.path) {
-                            let semantic_nodes = self.compressor.extract_semantic_nodes(
-                                &content,
-                                ext,
-                                self.max_nodes_per_file
-                            );
-                            if !semantic_nodes.is_empty() {
-                                write!(writer, ":{}", semantic_nodes.join(","))?;
-                            }
-                        }
+                        // For now, using placeholder semantic info
+                        // TODO: Integrate actual tree-sitter parsing
                         
                         writeln!(writer)?;
                     }

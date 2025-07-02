@@ -31,6 +31,7 @@ pub enum DirectoryType {
         video_count: usize,
         audio_count: usize,
         total_duration: Option<String>,
+        quality: Vec<String>, // e.g., ["1080p", "4K", "720p"]
     },
     /// Data science workspace
     DataScience {
@@ -315,6 +316,7 @@ impl ContentDetector {
             video_count,
             audio_count,
             total_duration: None, // Would need media parsing
+            quality: vec![], // TODO: Extract quality from filenames (e.g., "movie_1080p.mp4")
         }
     }
     

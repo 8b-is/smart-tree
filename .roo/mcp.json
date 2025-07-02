@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "smart-tree": {
-      "command": "/home/hue/source/smart-tree/target/release/st",
+      "command": "/home/hue/source/smart-tree/target/debug/st",
       "args": [
         "--mcp"
       ],

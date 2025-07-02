@@ -83,7 +83,7 @@ struct Cli {
 struct ScanArgs {
     /// Choose your adventure! Selects the output format.
     /// From classic human-readable to AI-optimized hex, we've got options.
-    #[arg(short, long, value_enum, default_value = "classic")]
+    #[arg(short, long, value_enum, default_value = "summary")]
     mode: OutputMode,
 
     /// Feeling like a detective? Find files/directories matching this regex pattern.
@@ -391,9 +391,14 @@ fn main() -> Result<()> {
     // Then, the command-line --mode flag.
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
-    let (mode, compress) = if std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true") {
-        // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
-        (OutputMode::Ai, true)
+    let is_ai_caller = std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true");
+    
+    let (mode, compress) = if is_ai_caller {
+        // If AI_TOOLS is set, use AI-optimized modes
+        match args.mode {
+            OutputMode::Summary => (OutputMode::SummaryAi, true), // Auto-switch to AI version
+            other => (other, true), // Keep other modes but enable compression
+        }
     } else if args.semantic {
         // If --semantic flag is set, use semantic mode (Omni's wisdom!)
         (OutputMode::Semantic, args.compress)
@@ -634,12 +639,14 @@ fn main() -> Result<()> {
                 ))
             }
             OutputMode::Summary => {
-                // TODO: Implement interactive summary
-                Box::new(StatsFormatter::new()) // Placeholder
+                // Interactive summary for humans - "Smart defaults!" - Omni
+                use st::formatters::summary::SummaryFormatter;
+                Box::new(SummaryFormatter::new(use_color))
             }
             OutputMode::SummaryAi => {
-                // TODO: Implement AI summary
-                Box::new(DigestFormatter::new()) // Placeholder
+                // Compressed summary for AI consumption
+                use st::formatters::summary_ai::SummaryAiFormatter;
+                Box::new(SummaryAiFormatter::new(compress))
             }
             OutputMode::QuantumSemantic => {
                 // Semantic-aware quantum compression - "The nuclear option!" - Omni

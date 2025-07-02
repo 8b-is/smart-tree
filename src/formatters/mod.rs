@@ -16,6 +16,9 @@ pub mod markdown;
 pub mod relations;
 pub mod relations_formatter;
 pub mod quantum_semantic;
+pub mod quantum_semantic_v2;
+pub mod summary;
+pub mod summary_ai;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
