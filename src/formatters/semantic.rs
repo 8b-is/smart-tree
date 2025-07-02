@@ -171,6 +171,8 @@ impl Formatter for SemanticFormatter {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::time::SystemTime;
+    use crate::scanner::{FileType, FileCategory, FilesystemType};
 
     #[test]
     fn test_semantic_formatter() {
