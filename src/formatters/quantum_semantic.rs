@@ -89,26 +89,16 @@ impl Formatter for QuantumSemanticFormatter {
                         write!(writer, "{}", lang_marker)?;
                         write!(writer, "{}", compressed_path)?;
                         
-                        // Add semantic information
-                        // In real implementation, we'd extract actual semantic nodes
-                        if ext == "rs" {
-                            if path_str.contains("main") {
-                                write!(writer, ":F6,F1x2,F7x5")?; // main, 2 structs, 5 pub functions
-                            } else if path_str.contains("mod") {
-                                write!(writer, ":F2x5,F7")?; // 5 traits, pub
-                            } else if path_str.contains("test") {
-                                write!(writer, ":F8,F0x10")?; // test, 10 functions
-                            } else {
-                                write!(writer, ":F1,F2,F7x3")?; // struct, trait, 3 pub
+                        // Extract and write semantic nodes
+                        if let Ok(content) = std::fs::read_to_string(&node.path) {
+                            let semantic_nodes = self.compressor.extract_semantic_nodes(
+                                &content,
+                                ext,
+                                self.max_nodes_per_file
+                            );
+                            if !semantic_nodes.is_empty() {
+                                write!(writer, ":{}", semantic_nodes.join(","))?;
                             }
-                        } else if ext == "py" {
-                            if path_str.contains("test") {
-                                write!(writer, ":F8,F5x5")?; // test, 5 defs
-                            } else {
-                                write!(writer, ":F4,F5x5")?; // class, 5 defs
-                            }
-                        } else if ext == "js" || ext == "ts" {
-                            write!(writer, ":F0x5")?; // 5 functions
                         }
                         
                         writeln!(writer)?;

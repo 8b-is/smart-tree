@@ -282,9 +282,13 @@ impl RelationAnalyzer {
             // Parse functions and types for cross-referencing
             let _functions = parser.parse_functions(&content);
             let _types = parser.parse_types(&content);
+            let _function_calls = parser.parse_function_calls(&content);
+            let _type_usages = parser.parse_type_usages(&content);
             
             // Store for later cross-referencing
-            // (In a real implementation, we'd build an index here)
+            // (In a real implementation, we'd build an index here to track
+            // where functions are called and types are used, enabling deeper
+            // analysis like call graphs and type dependency chains)
         }
         
         Ok(())

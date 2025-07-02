@@ -42,6 +42,7 @@ pub enum DirectoryType {
     MixedContent {
         dominant_type: Option<String>,
         file_types: HashMap<String, usize>,
+        total_files: usize,
     },
 }
 
@@ -109,7 +110,7 @@ impl ContentDetector {
         
         // Check for document archive
         if Self::is_document_archive(&ext_counts) {
-            return Self::analyze_document_archive(nodes, &ext_counts);
+            return Self::analyze_document_archive(nodes);
         }
         
         // Check for media library
@@ -119,13 +120,14 @@ impl ContentDetector {
         
         // Check for data science
         if Self::is_data_science(&ext_counts) {
-            return Self::analyze_data_science(nodes, &ext_counts);
+            return Self::analyze_data_science(&ext_counts);
         }
         
         // Default to mixed content
         DirectoryType::MixedContent {
             dominant_type: Self::get_dominant_type(&ext_counts),
             file_types: ext_counts,
+            total_files,
         }
     }
     
@@ -145,7 +147,7 @@ impl ContentDetector {
         code_files > 5 || has_project_files
     }
     
-    fn analyze_code_project(nodes: &[FileNode], root_path: &Path, ext_counts: &HashMap<String, usize>) -> DirectoryType {
+    fn analyze_code_project(nodes: &[FileNode], _root_path: &Path, ext_counts: &HashMap<String, usize>) -> DirectoryType {
         // Detect primary language
         let language = if ext_counts.contains_key("rs") {
             Language::Rust
@@ -229,7 +231,7 @@ impl ContentDetector {
         image_files > 10
     }
     
-    fn analyze_photo_collection(nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
+    fn analyze_photo_collection(_nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
         let image_extensions = ["jpg", "jpeg", "png", "gif", "bmp", "raw", "dng", "heic"];
         let image_count: usize = image_extensions.iter()
             .filter_map(|ext| ext_counts.get(*ext))
@@ -251,7 +253,7 @@ impl ContentDetector {
         doc_files > 10
     }
     
-    fn analyze_document_archive(nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
+    fn analyze_document_archive(nodes: &[FileNode]) -> DirectoryType {
         let mut categories = HashMap::new();
         
         // Simple categorization based on filename patterns
@@ -298,7 +300,7 @@ impl ContentDetector {
         video_files + audio_files > 10
     }
     
-    fn analyze_media_library(nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
+    fn analyze_media_library(_nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
         let video_extensions = ["mp4", "avi", "mkv", "mov", "wmv", "flv"];
         let audio_extensions = ["mp3", "wav", "flac", "aac", "ogg", "m4a"];
         
@@ -322,7 +324,7 @@ impl ContentDetector {
         (ext_counts.contains_key("parquet") || ext_counts.contains_key("feather"))
     }
     
-    fn analyze_data_science(nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
+    fn analyze_data_science(ext_counts: &HashMap<String, usize>) -> DirectoryType {
         let notebooks = ext_counts.get("ipynb").copied().unwrap_or(0);
         let datasets = ext_counts.get("csv").copied().unwrap_or(0) +
                       ext_counts.get("parquet").copied().unwrap_or(0) +
