@@ -10,6 +10,7 @@ pub mod context;
 pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod dynamic_tokenizer;
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
+pub mod interactive; // Interactive terminal UI for exploring directories
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
 pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
 pub mod scanner; // The heart of directory traversal and file metadata collection. // For intelligently detecting project context (e.g., Rust, Node.js).

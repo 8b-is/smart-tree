@@ -35,6 +35,7 @@ libc = "0.2"
 termimad = "0.26.1"
 once_cell = "1.19"
 base64 = "0.22"
+inquire = "0.7"
 
 # MCP (Model Context Protocol) support
 tokio = { version = "1.42", features = ["full"] }

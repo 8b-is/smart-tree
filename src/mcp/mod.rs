@@ -267,7 +267,7 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             "homepage": env!("CARGO_PKG_REPOSITORY"),
             "features": [
                 "quantum-compression",
-                "claude-format",
+                "mcp-optimization",
                 "content-search",
                 "streaming",
                 "caching"

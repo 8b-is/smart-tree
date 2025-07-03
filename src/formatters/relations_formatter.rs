@@ -41,25 +41,109 @@ impl Formatter for RelationsFormatter {
             eprintln!("📋 Filtering by: {}", filter_type);
         }
 
-        // Focus on specific file if requested
-        if let Some(focus_file) = &self.focus {
-            let relations = analyzer.get_file_relations(focus_file);
+        // Get relations based on focus or all
+        let relations: Vec<&crate::relations::FileRelation> = if let Some(focus_file) = &self.focus {
+            // Convert relative path to absolute for matching
+            let abs_focus = if focus_file.is_relative() {
+                root_path.join(focus_file)
+            } else {
+                focus_file.clone()
+            };
+            
+            let file_relations = analyzer.get_file_relations(&abs_focus);
             eprintln!(
                 "📄 Found {} relationships for {}",
-                relations.len(),
+                file_relations.len(),
                 focus_file.display()
             );
-        }
+            file_relations
+        } else {
+            analyzer.get_relations().iter().collect()
+        };
 
-        // Write directly since we have a trait object
+        // Write header
         writeln!(writer, "🔗 Code Relationship Analysis")?;
         writeln!(writer, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
         writeln!(writer)?;
 
-        // For now, just show a summary until we refactor the formatters
-        let relations = analyzer.get_relations();
-        writeln!(writer, "Total relationships found: {}", relations.len())?;
-        writeln!(writer, "Files analyzed: {}", root_path.display())?;
+        // If no relationships found
+        if relations.is_empty() {
+            if let Some(focus_file) = &self.focus {
+                writeln!(writer, "No relationships found for: {}", focus_file.display())?;
+            } else {
+                writeln!(writer, "No relationships found in the codebase.")?;
+            }
+            return Ok(());
+        }
+
+        // Group relations by type
+        use crate::relations::RelationType;
+        let mut imports = Vec::new();
+        let mut calls = Vec::new();
+        let mut types = Vec::new();
+        let mut tests = Vec::new();
+        let mut coupled = Vec::new();
+
+        for relation in &relations {
+            match &relation.relation_type {
+                RelationType::Imports => imports.push(relation),
+                RelationType::FunctionCall => calls.push(relation),
+                RelationType::TypeUsage => types.push(relation),
+                RelationType::TestedBy => tests.push(relation),
+                RelationType::Coupled => coupled.push(relation),
+                RelationType::Exports => {}, // Skip exports for now
+            }
+        }
+
+        // Display relationships by type
+        if !imports.is_empty() {
+            writeln!(writer, "📦 Imports ({}):", imports.len())?;
+            for rel in imports {
+                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+            }
+            writeln!(writer)?;
+        }
+
+        if !calls.is_empty() {
+            writeln!(writer, "📞 Function Calls ({}):", calls.len())?;
+            for rel in calls {
+                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+            }
+            writeln!(writer)?;
+        }
+
+        if !types.is_empty() {
+            writeln!(writer, "🏷️  Type Usage ({}):", types.len())?;
+            for rel in types {
+                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+            }
+            writeln!(writer)?;
+        }
+
+        if !tests.is_empty() {
+            writeln!(writer, "🧪 Tests ({}):", tests.len())?;
+            for rel in tests {
+                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+            }
+            writeln!(writer)?;
+        }
+
+        if !coupled.is_empty() {
+            writeln!(writer, "🔗 Coupled Changes ({}):", coupled.len())?;
+            for rel in coupled {
+                writeln!(writer, "  {} ↔ {}", rel.source.display(), rel.target.display())?;
+            }
+            writeln!(writer)?;
+        }
+
+        // Summary
+        writeln!(writer, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")?;
+        writeln!(writer, "Total relationships: {}", relations.len())?;
+        if let Some(focus_file) = &self.focus {
+            writeln!(writer, "Focused on: {}", focus_file.display())?;
+        } else {
+            writeln!(writer, "Files analyzed: {}", root_path.display())?;
+        }
 
         Ok(())
     }

@@ -40,8 +40,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "analyze_directory".to_string(),
-            description: "Analyze a directory with smart compression. Use mode='claude' for MAXIMUM compression (10x reduction!), mode='ai' (default) for balanced output, mode='classic' for visual trees. For large directories, 'claude' mode is HIGHLY RECOMMENDED!"
-                .to_string(),
+            description: "Analyze a directory with smart compression. Use mode='classic' for human-readable tree, 'ai' for AI-optimized format (default), 'quantum-semantic' for semantic-aware compression with tokens (recommended!), 'summary-ai' for maximum compression (10x reduction), 'quantum' for ultra-compressed binary, 'digest' for minimal hash. MCP automatically optimizes output for AI consumption.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -77,8 +76,8 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "compress": {
                         "type": "boolean",
-                        "description": "Compress output with zlib",
-                        "default": false
+                        "description": "Compress output with zlib. Default: true for AI modes (ai, digest, quantum, quantum-semantic, summary-ai), false for human-readable modes",
+                        "default": null
                     },
                     "path_mode": {
                         "type": "string",
@@ -168,7 +167,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "quick_tree".to_string(),
-            description: "START HERE! Quick 3-level overview using CLAUDE mode (10x compression). Perfect for initial exploration before using analyze_directory for details. Automatically optimized for AI token efficiency!".to_string(),
+            description: "START HERE! Quick 3-level overview using SUMMARY-AI mode (10x compression). Perfect for initial exploration before using analyze_directory for details. Automatically optimized for AI token efficiency!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -187,7 +186,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "project_overview".to_string(),
-            description: "Get a comprehensive project overview using CLAUDE mode compression. Provides context, structure, and key files with maximum token efficiency (10x reduction!)".to_string(),
+            description: "Get a comprehensive project overview using SUMMARY-AI mode compression. Provides context, structure, and key files with maximum token efficiency (10x reduction!)".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -508,6 +507,8 @@ struct AnalyzeDirectoryArgs {
     show_ignored: bool,
     #[serde(default = "default_path_mode")]
     path_mode: String,
+    #[serde(default)]
+    compress: Option<bool>,
 }
 
 fn default_mode() -> String {
@@ -594,7 +595,7 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 "description": "Automatic API optimization for any output mode",
                 "status": "active",
                 "features": ["compression (disable with MCP_NO_COMPRESS=1)", "no emoji", "AI mode selection"],
-                "recommended_for": ["MCP servers", "LLM APIs", "Claude", "GPT-4"],
+                "recommended_for": ["MCP servers", "LLM APIs", "AI assistants"],
             },
             "tokenization": {
                 "description": "Semantic tokenization for common patterns",
@@ -611,7 +612,7 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "cache_misses": cache_stats.misses,
         },
         "tips": [
-            "Use 'claude' format for optimal LLM API transmission",
+            "Use 'summary-ai' format for optimal LLM API transmission",
             "Enable compression with compress=true for large directories",
             "Use 'quantum' format for maximum compression (90%+ reduction)",
             "Stream mode available for very large directories",
@@ -691,12 +692,29 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         _ => PathDisplayMode::Off,
     };
 
-    // MCP optimizations: no emoji for clean output, compression can be disabled via env var
+    // MCP optimizations: no emoji for clean output
     let mcp_no_emoji = true;
     
-    // Allow disabling compression via MCP_NO_COMPRESS env var for AIs that can't handle it
-    let mcp_compress = !std::env::var("MCP_NO_COMPRESS")
-        .is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
+    // Compression logic:
+    // 1. If user explicitly sets compress parameter, use that
+    // 2. Otherwise, check MCP_NO_COMPRESS env var
+    // 3. Default: true for AI modes, false for human-readable modes
+    let default_compress = matches!(args.mode.as_str(), 
+        "ai" | "digest" | "quantum" | "quantum-semantic" | "summary-ai"
+    );
+    
+    let mcp_compress = match args.compress {
+        Some(compress) => compress, // User's explicit choice
+        None => {
+            // Check env var, otherwise use mode-based default
+            if std::env::var("MCP_NO_COMPRESS")
+                .is_ok_and(|v| v == "1" || v.to_lowercase() == "true") {
+                false
+            } else {
+                default_compress
+            }
+        }
+    };
 
     // Handle summary mode - auto-switch to AI version in MCP context
     let effective_mode = match args.mode.as_str() {
@@ -959,7 +977,7 @@ async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 async fn quick_tree(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let analyze_args = json!({
         "path": args["path"],
-        "mode": "claude",
+        "mode": "summary-ai",
         "max_depth": args["depth"].as_u64().unwrap_or(3),
         "compress": true,
         "show_ignored": true
@@ -972,11 +990,11 @@ async fn project_overview(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
 
-    // First get the Claude format overview (10x compression!)
+    // First get the summary-ai format overview (10x compression!)
     let ai_result = analyze_directory(
         json!({
             "path": path,
-            "mode": "claude",
+            "mode": "summary-ai",
             "max_depth": 5,
             "show_ignored": true
         }),

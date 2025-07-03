@@ -145,6 +145,10 @@ sudo cp target/release/st /usr/local/bin/
 st                          # Current directory
 st /path/to/directory       # Specific directory
 
+# Interactive mode - NEW! 🎸
+st --interactive            # Launch interactive TUI
+st -i                       # Short form
+
 # Output modes (see Mode Selection Guide for details)
 st -m ai                    # 🤖 AI-optimized (default for AI, 5x compression)
 st -m claude                # 🚀 Maximum compression (10x reduction!)
@@ -229,6 +233,24 @@ src/
     ├── prompts.rs    # MCP prompts
     └── cache.rs      # Analysis caching
 ```
+
+## 🌟 Interactive Mode (NEW!)
+
+Launch an interactive Terminal User Interface for exploring directories:
+
+```bash
+st --interactive  # or st -i
+```
+
+Features:
+- 📁 Multiple view modes (Classic, Summary, Semantic, Relations, Mermaid, Markdown)
+- 🔍 Filter by file extensions
+- 🔎 Search within file contents
+- 🚀 Automatic content detection (code projects, media libraries, etc.)
+- 💾 Export in various formats (AI, Quantum, JSON, CSV)
+- 🎨 Full color terminal UI with intuitive navigation
+
+See [Interactive Mode Demo](examples/interactive_demo.md) for a complete guide.
 
 ## 🎨 Output Examples
 
