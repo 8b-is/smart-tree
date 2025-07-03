@@ -1,7 +1,6 @@
 pub mod ai;
 pub mod ai_json;
 pub mod classic;
-pub mod claude;
 pub mod csv;
 pub mod digest;
 pub mod hex;

@@ -3,10 +3,11 @@
 use super::{is_path_allowed, McpContext};
 use crate::{
     formatters::{
-        ai::AiFormatter, classic::ClassicFormatter, claude::ClaudeFormatter, csv::CsvFormatter,
+        ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter,
         digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-        semantic::SemanticFormatter, stats::StatsFormatter, tsv::TsvFormatter, Formatter,
-        PathDisplayMode,
+        quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter, 
+        stats::StatsFormatter, summary::SummaryFormatter, summary_ai::SummaryAiFormatter,
+        tsv::TsvFormatter, Formatter, PathDisplayMode,
     },
     parse_size, Scanner, ScannerConfig,
 };
@@ -50,9 +51,9 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "mode": {
                         "type": "string",
-                        "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", "quantum", "claude", "semantic"],
+                        "enum": ["classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", "quantum", "semantic", "quantum-semantic", "summary", "summary-ai"],
                         "description": "Output format mode",
-                        "default": "claude"
+                        "default": "ai"
                     },
                     "max_depth": {
                         "type": "integer",
@@ -505,16 +506,12 @@ struct AnalyzeDirectoryArgs {
     show_hidden: bool,
     #[serde(default)]
     show_ignored: bool,
-    #[serde(default)]
-    no_emoji: bool,
-    #[serde(default)]
-    compress: bool,
     #[serde(default = "default_path_mode")]
     path_mode: String,
 }
 
 fn default_mode() -> String {
-    "claude".to_string()
+    "ai".to_string()
 }
 
 fn default_max_depth() -> usize {
@@ -547,7 +544,7 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         "capabilities": {
             "output_formats": [
                 "classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest",
-                "quantum", "claude", "semantic"
+                "quantum", "semantic", "quantum-semantic", "summary", "summary-ai"
             ],
             "compression": {
                 "supported": true,
@@ -555,7 +552,7 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             },
             "streaming": {
                 "supported": true,
-                "formats": ["hex", "ai", "quantum", "claude"],
+                "formats": ["hex", "ai", "quantum", "quantum-semantic"],
             },
             "search": {
                 "content_search": true,
@@ -577,6 +574,15 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 "blocked_paths": ctx.config.blocked_paths.len(),
                 "default_blocks": ["/etc", "/sys", "/proc"],
             },
+            "mcp_optimization": {
+                "compression_enabled": !std::env::var("MCP_NO_COMPRESS")
+                    .is_ok_and(|v| v == "1" || v.to_lowercase() == "true"),
+                "emoji_disabled": true,
+                "auto_ai_modes": true,
+                "env_vars": {
+                    "MCP_NO_COMPRESS": "Set to '1' or 'true' to disable compression for AIs that can't handle it",
+                },
+            },
         },
         "features": {
             "quantum_compression": {
@@ -584,10 +590,11 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 "status": "active",
                 "notes": "Base64-encoded for JSON transport in MCP",
             },
-            "claude_format": {
-                "description": "API-optimized format with quantum compression",
+            "mcp_optimization": {
+                "description": "Automatic API optimization for any output mode",
                 "status": "active",
-                "recommended_for": ["LLM APIs", "Claude", "GPT-4"],
+                "features": ["compression (disable with MCP_NO_COMPRESS=1)", "no emoji", "AI mode selection"],
+                "recommended_for": ["MCP servers", "LLM APIs", "Claude", "GPT-4"],
             },
             "tokenization": {
                 "description": "Semantic tokenization for common patterns",
@@ -684,29 +691,44 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         _ => PathDisplayMode::Off,
     };
 
+    // MCP optimizations: no emoji for clean output, compression can be disabled via env var
+    let mcp_no_emoji = true;
+    
+    // Allow disabling compression via MCP_NO_COMPRESS env var for AIs that can't handle it
+    let mcp_compress = !std::env::var("MCP_NO_COMPRESS")
+        .is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
+
+    // Handle summary mode - auto-switch to AI version in MCP context
+    let effective_mode = match args.mode.as_str() {
+        "summary" => "summary-ai",
+        other => other,
+    };
+
     // Create formatter
-    let formatter: Box<dyn Formatter> = match args.mode.as_str() {
+    let formatter: Box<dyn Formatter> = match effective_mode {
         "classic" => Box::new(ClassicFormatter::new(
-            args.no_emoji,
+            mcp_no_emoji,
             true,
             path_display_mode,
         )),
         "hex" => Box::new(HexFormatter::new(
             true,
-            args.no_emoji,
+            mcp_no_emoji,
             args.show_ignored,
             path_display_mode,
             false,
         )),
         "json" => Box::new(JsonFormatter::new(false)),
-        "ai" => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
+        "ai" => Box::new(AiFormatter::new(mcp_no_emoji, path_display_mode)),
         "stats" => Box::new(StatsFormatter::new()),
         "csv" => Box::new(CsvFormatter::new()),
         "tsv" => Box::new(TsvFormatter::new()),
         "digest" => Box::new(DigestFormatter::new()),
         "quantum" => Box::new(QuantumFormatter::new()),
-        "claude" => Box::new(ClaudeFormatter::new(true)),
-        "semantic" => Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji)),
+        "semantic" => Box::new(SemanticFormatter::new(path_display_mode, mcp_no_emoji)),
+        "quantum-semantic" => Box::new(QuantumSemanticFormatter::new()),
+        "summary" => Box::new(SummaryFormatter::new(!mcp_no_emoji)),
+        "summary-ai" => Box::new(SummaryAiFormatter::new(mcp_compress)),
         _ => return Err(anyhow::anyhow!("Invalid mode: {}", args.mode)),
     };
 
@@ -715,8 +737,8 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     formatter.format(&mut output, &nodes, &stats, &path)?;
 
     // Handle different output formats
-    let final_output = if args.mode == "quantum" {
-        // Quantum format contains binary data, so base64-encode it for JSON safety
+    let final_output = if args.mode == "quantum" || args.mode == "quantum-semantic" {
+        // Quantum formats contain binary data, so base64-encode it for JSON safety
         use base64::{engine::general_purpose, Engine as _};
         format!(
             "QUANTUM_BASE64:{}",
@@ -726,7 +748,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // For other formats, convert to string first
         let output_str = String::from_utf8(output)?;
 
-        if args.compress {
+        if mcp_compress {
             use flate2::write::ZlibEncoder;
             use flate2::Compression;
             use std::io::Write;

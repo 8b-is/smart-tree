@@ -26,7 +26,6 @@ use st::{
         ai::AiFormatter,
         ai_json::AiJsonFormatter,
         classic::ClassicFormatter,
-        claude::ClaudeFormatter,
         csv::CsvFormatter,
         digest::DigestFormatter,
         hex::HexFormatter,
@@ -168,6 +167,12 @@ struct ScanArgs {
     #[arg(short = 'z', long)]
     compress: bool,
 
+    /// MCP/API optimization mode. Automatically enables compression, disables colors/emoji,
+    /// and optimizes output for machine consumption. Perfect for MCP servers, LLM APIs, and tools.
+    /// Works with any output mode to make it API-friendly!
+    #[arg(long)]
+    mcp_optimize: bool,
+
     /// For JSON output, this makes it compact (one line) instead of pretty-printed.
     /// Saves space, but might make Trish's eyes water if she tries to read it directly.
     #[arg(long)]
@@ -291,8 +296,6 @@ enum OutputMode {
     Digest,
     /// MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization.
     Quantum,
-    /// Claude API format. Quantum compression wrapped for optimal Anthropic API transmission.
-    Claude,
     /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
     Semantic,
     /// Mermaid diagram format. Perfect for embedding in documentation!
@@ -382,7 +385,6 @@ fn main() -> Result<()> {
             "tsv" => Some(OutputMode::Tsv),
             "digest" => Some(OutputMode::Digest),
             "quantum" => Some(OutputMode::Quantum),
-            "claude" => Some(OutputMode::Claude),
             "semantic" => Some(OutputMode::Semantic),
             "mermaid" => Some(OutputMode::Mermaid),
             "markdown" => Some(OutputMode::Markdown),
@@ -402,8 +404,11 @@ fn main() -> Result<()> {
     let is_ai_caller =
         std::env::var("AI_TOOLS").is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
 
-    let (mode, compress) = if is_ai_caller {
-        // If AI_TOOLS is set, use AI-optimized modes
+    // MCP optimization: enables compression and AI-friendly settings
+    let mcp_mode = args.mcp_optimize || is_ai_caller;
+    
+    let (mode, compress) = if mcp_mode {
+        // If MCP optimization is requested or AI_TOOLS is set, use API-optimized settings
         match args.mode {
             OutputMode::Summary => (OutputMode::SummaryAi, true), // Auto-switch to AI version
             other => (other, true), // Keep other modes but enable compression
@@ -421,13 +426,17 @@ fn main() -> Result<()> {
 
     // --- Color Configuration ---
     // Determine if colors should be used in the output.
+    // MCP mode disables colors for clean API output.
     // Command-line --color flag takes precedence.
     // Then, ST_COLOR or NO_COLOR environment variables.
     // Finally, auto-detect based on whether stdout is a TTY.
-    let use_color = match args.color {
-        ColorMode::Always => true,
-        ColorMode::Never => false,
-        ColorMode::Auto => {
+    let use_color = if mcp_mode {
+        false // MCP mode always disables colors
+    } else {
+            match args.color {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => {
             // Check environment variables first for explicit overrides.
             if std::env::var("ST_COLOR").as_deref() == Ok("always") {
                 true
@@ -439,6 +448,7 @@ fn main() -> Result<()> {
                 // If no env var override, check if stdout is a terminal.
                 std::io::stdout().is_terminal()
             }
+            }
         }
     };
 
@@ -446,6 +456,9 @@ fn main() -> Result<()> {
     if !use_color {
         colored::control::set_override(false);
     }
+
+    // MCP mode also disables emoji for clean output
+    let no_emoji = args.no_emoji || mcp_mode;
 
     // --- Scanner Configuration ---
     // Build the configuration for the directory scanner.
@@ -505,7 +518,7 @@ fn main() -> Result<()> {
     if args.stream && !compress {
         // Streaming mode is only supported for certain formatters that implement StreamingFormatter.
         match mode {
-            OutputMode::Hex | OutputMode::Ai | OutputMode::Quantum | OutputMode::Claude => {
+            OutputMode::Hex | OutputMode::Ai | OutputMode::Quantum => {
                 // For streaming, we use threads: one for scanning, one for formatting/printing.
                 // A channel is used for communication between them.
                 use std::sync::mpsc; // Multi-producer, single-consumer channel.
@@ -525,14 +538,13 @@ fn main() -> Result<()> {
                 let streaming_formatter: Box<dyn StreamingFormatter> = match mode {
                     OutputMode::Hex => Box::new(HexFormatter::new(
                         use_color,
-                        args.no_emoji,
+                        no_emoji,
                         show_ignored_final,
                         path_display_mode,
                         args.show_filesystems,
                     )),
-                    OutputMode::Ai => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
+                    OutputMode::Ai => Box::new(AiFormatter::new(no_emoji, path_display_mode)),
                     OutputMode::Quantum => Box::new(QuantumFormatter::new()),
-                    OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
 
@@ -583,14 +595,14 @@ fn main() -> Result<()> {
                         path_display_mode // Use the user-specified or default path_mode.
                     };
                 Box::new(ClassicFormatter::new(
-                    args.no_emoji,
+                    no_emoji,
                     use_color,
                     classic_path_mode,
                 ))
             }
             OutputMode::Hex => Box::new(HexFormatter::new(
                 use_color,
-                args.no_emoji,
+                no_emoji,
                 show_ignored_final,
                 path_display_mode,
                 args.show_filesystems,
@@ -599,9 +611,9 @@ fn main() -> Result<()> {
             OutputMode::Ai => {
                 // AI mode can optionally be wrapped in JSON.
                 if args.ai_json {
-                    Box::new(AiJsonFormatter::new(args.no_emoji, path_display_mode))
+                    Box::new(AiJsonFormatter::new(no_emoji, path_display_mode))
                 } else {
-                    Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
+                    Box::new(AiFormatter::new(no_emoji, path_display_mode))
                 }
             }
             OutputMode::Stats => Box::new(StatsFormatter::new()),
@@ -609,9 +621,8 @@ fn main() -> Result<()> {
             OutputMode::Tsv => Box::new(TsvFormatter::new()),
             OutputMode::Digest => Box::new(DigestFormatter::new()),
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
-            OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
             OutputMode::Semantic => {
-                Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji))
+                Box::new(SemanticFormatter::new(path_display_mode, no_emoji))
             }
             OutputMode::Mermaid => {
                 // Convert CLI arg enum to formatter enum
@@ -622,7 +633,7 @@ fn main() -> Result<()> {
                 };
                 Box::new(MermaidFormatter::new(
                     style,
-                    args.no_emoji,
+                    no_emoji,
                     path_display_mode,
                 ))
             }
@@ -630,7 +641,7 @@ fn main() -> Result<()> {
                 // Create a comprehensive markdown report with all visualizations!
                 Box::new(MarkdownFormatter::new(
                     path_display_mode,
-                    args.no_emoji,
+                    no_emoji,
                     !args.no_markdown_mermaid, // Include mermaid unless disabled
                     !args.no_markdown_tables,  // Include tables unless disabled
                     !args.no_markdown_pie_charts, // Include pie charts unless disabled
