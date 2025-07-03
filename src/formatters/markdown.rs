@@ -155,10 +155,7 @@ impl MarkdownFormatter {
                     format!("node_{}", parent_map.len())
                 };
 
-                parent_map
-                    .entry(parent_id)
-                    .or_default()
-                    .push(node);
+                parent_map.entry(parent_id).or_default().push(node);
             }
         }
 

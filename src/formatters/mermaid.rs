@@ -43,8 +43,13 @@ impl MermaidFormatter {
         // Create safe node IDs for Mermaid
         let path_str = path.to_string_lossy();
         // Replace problematic characters
-        path_str
-            .replace(['/', '\\', '.', ' ', '-', '(', ')', '[', ']', '{', '}', ':', ';', ',', '\'', '"', '`', '~', '!', '@', '#', '$', '%', '^', '&', '*', '=', '+', '|', '<', '>', '?'], "_")
+        path_str.replace(
+            [
+                '/', '\\', '.', ' ', '-', '(', ')', '[', ']', '{', '}', ':', ';', ',', '\'', '"',
+                '`', '~', '!', '@', '#', '$', '%', '^', '&', '*', '=', '+', '|', '<', '>', '?',
+            ],
+            "_",
+        )
     }
 
     fn escape_label(text: &str) -> String {
@@ -138,10 +143,7 @@ impl MermaidFormatter {
                     Self::sanitize_node_id(parent_path)
                 };
 
-                parent_map
-                    .entry(parent_id)
-                    .or_default()
-                    .push(node);
+                parent_map.entry(parent_id).or_default().push(node);
             }
         }
 

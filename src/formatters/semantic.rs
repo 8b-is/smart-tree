@@ -67,10 +67,7 @@ impl Formatter for SemanticFormatter {
 
         for node in nodes {
             let category = self.analyzer.categorize(&node.path);
-            groups
-                .entry(category)
-                .or_default()
-                .push(node.clone());
+            groups.entry(category).or_default().push(node.clone());
         }
 
         // Sort categories by importance/typical workflow order

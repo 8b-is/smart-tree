@@ -649,10 +649,7 @@ impl Scanner {
 
         // Initialize the set of specific files to ignore (e.g., /proc/kcore).
         let ignore_files: HashSet<PathBuf> = if config.use_default_ignores {
-            DEFAULT_IGNORE_FILES
-                .iter()
-                .map(PathBuf::from)
-                .collect()
+            DEFAULT_IGNORE_FILES.iter().map(PathBuf::from).collect()
         } else {
             HashSet::new()
         };
@@ -979,11 +976,11 @@ impl Scanner {
 
         // Return matches if any were found
         first_match.map(|first| SearchMatches {
-                first_match: first,
-                total_count,
-                positions,
-                truncated: false,
-            })
+            first_match: first,
+            total_count,
+            positions,
+            truncated: false,
+        })
     }
 
     /// ## `scan` - The Full Scan (Non-Streaming)
@@ -1342,9 +1339,7 @@ impl Scanner {
             permissions: Self::get_permissions(&metadata),
             uid: Self::get_uid(&metadata),
             gid: Self::get_gid(&metadata),
-            modified: metadata
-                .modified()
-                .unwrap_or(SystemTime::UNIX_EPOCH), // Fallback for modified time
+            modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH), // Fallback for modified time
             is_symlink: metadata.file_type().is_symlink(), // Use file_type() for symlink check
             is_hidden,
             permission_denied: false, // If we got metadata, assume no permission error *for this node itself*.
