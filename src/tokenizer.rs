@@ -50,6 +50,12 @@ pub struct TokenRegistry {
     pattern_frequency: HashMap<String, u64>,
 }
 
+impl Default for TokenRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenRegistry {
     pub fn new() -> Self {
         let mut registry = Self {

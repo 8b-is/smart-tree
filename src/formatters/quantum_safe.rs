@@ -14,6 +14,12 @@ pub struct QuantumSafeFormatter {
     inner: super::quantum::QuantumFormatter,
 }
 
+impl Default for QuantumSafeFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QuantumSafeFormatter {
     pub fn new() -> Self {
         Self {

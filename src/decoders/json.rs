@@ -11,6 +11,12 @@ pub struct JsonDecoder {
     current_children: Vec<Value>,
 }
 
+impl Default for JsonDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JsonDecoder {
     pub fn new() -> Self {
         Self {

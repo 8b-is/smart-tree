@@ -110,9 +110,7 @@ impl HexFormatter {
         };
 
         // Add brackets for permission denied or ignored
-        let display_name = if node.permission_denied {
-            format!("[{}]", name)
-        } else if node.is_ignored {
+        let display_name = if node.permission_denied || node.is_ignored {
             format!("[{}]", name)
         } else {
             name

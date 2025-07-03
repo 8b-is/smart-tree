@@ -105,11 +105,9 @@ fn parse_quantum_entry(data: &[u8], offset: usize) -> Result<(Option<QuantumEntr
     }
 
     // Parse permissions delta if present
-    if (header & 0x02) != 0 {
-        if offset + 2 <= data.len() {
-            entry.perms_delta = Some((data[offset] as u16) << 8 | data[offset + 1] as u16);
-            offset += 2;
-        }
+    if (header & 0x02) != 0 && offset + 2 <= data.len() {
+        entry.perms_delta = Some((data[offset] as u16) << 8 | data[offset + 1] as u16);
+        offset += 2;
     }
 
     // TODO: Parse time, owner/group deltas
@@ -187,7 +185,7 @@ fn decode_size(data: &[u8], offset: usize) -> Result<(u64, usize)> {
         }
         _ => {
             // Check if it's a size token
-            if prefix >= 0xA0 && prefix <= 0xAF {
+            if (0xA0..=0xAF).contains(&prefix) {
                 // Size range tokens
                 let size = match prefix {
                     0xA0 => 0,                // TOKEN_SIZE_ZERO

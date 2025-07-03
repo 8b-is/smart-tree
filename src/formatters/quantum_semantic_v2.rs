@@ -9,6 +9,12 @@ use std::path::Path;
 
 pub struct QuantumSemanticV2Formatter;
 
+impl Default for QuantumSemanticV2Formatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QuantumSemanticV2Formatter {
     pub fn new() -> Self {
         Self

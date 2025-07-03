@@ -39,6 +39,12 @@ pub enum NodeKind {
 /// Rust language quantum parser
 pub struct RustQuantumParser;
 
+impl Default for RustQuantumParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RustQuantumParser {
     pub fn new() -> Self {
         Self
@@ -140,6 +146,12 @@ impl LanguageQuantumParser for RustQuantumParser {
 /// Python language quantum parser
 pub struct PythonQuantumParser;
 
+impl Default for PythonQuantumParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PythonQuantumParser {
     pub fn new() -> Self {
         Self
@@ -213,6 +225,12 @@ impl QuantumParserFactory {
 /// Quantum compression that uses semantic analysis
 pub struct SemanticQuantumCompressor {
     parsers: HashMap<String, Box<dyn LanguageQuantumParser>>,
+}
+
+impl Default for SemanticQuantumCompressor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SemanticQuantumCompressor {

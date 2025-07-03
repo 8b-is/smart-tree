@@ -10,8 +10,16 @@ use std::io::Write;
 use std::path::Path;
 
 pub struct QuantumSemanticFormatter {
+    #[allow(dead_code)]
     compressor: SemanticQuantumCompressor,
+    #[allow(dead_code)]
     max_nodes_per_file: usize,
+}
+
+impl Default for QuantumSemanticFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl QuantumSemanticFormatter {

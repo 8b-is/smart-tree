@@ -333,14 +333,13 @@ impl SemanticAnalyzer {
         }
 
         // Check if it's a project root file
-        if path.parent().is_none() || path.components().count() == 1 {
-            if file_name == "cargo.toml"
+        if (path.parent().is_none() || path.components().count() == 1)
+            && (file_name == "cargo.toml"
                 || file_name == "package.json"
                 || file_name == "setup.py"
-                || file_name == "go.mod"
-            {
-                return SemanticCategory::ProjectRoot;
-            }
+                || file_name == "go.mod")
+        {
+            return SemanticCategory::ProjectRoot;
         }
 
         SemanticCategory::Unknown
@@ -419,7 +418,7 @@ pub fn group_by_semantics<'a>(files: &[&'a Path]) -> HashMap<SemanticCategory, V
 
     for file in files {
         let category = analyzer.categorize(file);
-        groups.entry(category).or_insert_with(Vec::new).push(file);
+        groups.entry(category).or_default().push(file);
     }
 
     groups

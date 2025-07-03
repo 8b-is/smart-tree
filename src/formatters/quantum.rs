@@ -43,6 +43,12 @@ const TRAVERSE_SAME: char = '\x0B'; // Vertical Tab
 const TRAVERSE_DEEPER: char = '\x0E'; // Shift Out
 const TRAVERSE_BACK: char = '\x0F'; // Shift In
 
+impl Default for QuantumFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QuantumFormatter {
     pub fn new() -> Self {
         let mut tokens = HashMap::new();
@@ -116,7 +122,7 @@ impl QuantumFormatter {
         if let Some(dot_pos) = name.rfind('.') {
             let ext = &name[dot_pos..];
             if let Some(&token) = self.tokens.get(ext) {
-                result.extend_from_slice(name[..dot_pos].as_bytes());
+                result.extend_from_slice(&name.as_bytes()[..dot_pos]);
                 result.push(token);
                 return result;
             }
@@ -126,7 +132,7 @@ impl QuantumFormatter {
         for (pattern, &token) in &self.tokens {
             if name.starts_with(pattern) && pattern.len() > 3 {
                 result.push(token);
-                result.extend_from_slice(name[pattern.len()..].as_bytes());
+                result.extend_from_slice(&name.as_bytes()[pattern.len()..]);
                 return result;
             }
         }

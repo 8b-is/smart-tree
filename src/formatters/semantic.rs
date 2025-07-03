@@ -69,7 +69,7 @@ impl Formatter for SemanticFormatter {
             let category = self.analyzer.categorize(&node.path);
             groups
                 .entry(category)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(node.clone());
         }
 

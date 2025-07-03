@@ -9,6 +9,12 @@ pub struct HexDecoder {
     // TODO: Add state for hex formatting
 }
 
+impl Default for HexDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HexDecoder {
     pub fn new() -> Self {
         Self {}

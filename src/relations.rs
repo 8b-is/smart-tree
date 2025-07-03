@@ -173,7 +173,7 @@ impl LanguageParser for PythonParser {
             let items = cap.get(2).map_or(vec![], |m| {
                 m.as_str()
                     .split(',')
-                    .map(|s| s.trim().split_whitespace().next().unwrap_or("").to_string())
+                    .map(|s| s.split_whitespace().next().unwrap_or("").to_string())
                     .collect()
             });
             imports.push((module.to_string(), items));
@@ -216,6 +216,12 @@ impl LanguageParser for PythonParser {
             .captures_iter(content)
             .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
             .collect()
+    }
+}
+
+impl Default for RelationAnalyzer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -385,7 +391,7 @@ impl RelationAnalyzer {
                         && source
                             .file_stem()
                             .and_then(|s| s.to_str())
-                            .map_or(false, |s| s == base_name)
+                            .is_some_and(|s| s == base_name)
                     {
                         self.relations.push(FileRelation {
                             source: source.clone(),

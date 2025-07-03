@@ -44,38 +44,7 @@ impl MermaidFormatter {
         let path_str = path.to_string_lossy();
         // Replace problematic characters
         path_str
-            .replace('/', "_")
-            .replace('\\', "_")
-            .replace('.', "_")
-            .replace(' ', "_")
-            .replace('-', "_")
-            .replace('(', "_")
-            .replace(')', "_")
-            .replace('[', "_")
-            .replace(']', "_")
-            .replace('{', "_")
-            .replace('}', "_")
-            .replace(':', "_")
-            .replace(';', "_")
-            .replace(',', "_")
-            .replace('\'', "_")
-            .replace('"', "_")
-            .replace('`', "_")
-            .replace('~', "_")
-            .replace('!', "_")
-            .replace('@', "_")
-            .replace('#', "_")
-            .replace('$', "_")
-            .replace('%', "_")
-            .replace('^', "_")
-            .replace('&', "_")
-            .replace('*', "_")
-            .replace('=', "_")
-            .replace('+', "_")
-            .replace('|', "_")
-            .replace('<', "_")
-            .replace('>', "_")
-            .replace('?', "_")
+            .replace(['/', '\\', '.', ' ', '-', '(', ')', '[', ']', '{', '}', ':', ';', ',', '\'', '"', '`', '~', '!', '@', '#', '$', '%', '^', '&', '*', '=', '+', '|', '<', '>', '?'], "_")
     }
 
     fn escape_label(text: &str) -> String {
@@ -171,7 +140,7 @@ impl MermaidFormatter {
 
                 parent_map
                     .entry(parent_id)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(node);
             }
         }
@@ -180,7 +149,7 @@ impl MermaidFormatter {
         let root_emoji = if !self.no_emoji { "📁 " } else { "" };
         let root_name = root_path
             .file_name()
-            .unwrap_or_else(|| root_path.as_os_str())
+            .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         let escaped_root_name = Self::escape_label(&root_name);
         writeln!(
@@ -279,14 +248,14 @@ impl MermaidFormatter {
         writeln!(writer, "mindmap")?;
         let root_name = root_path
             .file_name()
-            .unwrap_or_else(|| root_path.as_os_str())
+            .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         let escaped_root_name = Self::escape_label(&root_name);
         writeln!(writer, "  root((📁 {}))", escaped_root_name)?;
 
         // Build tree structure
         let _current_depth = 0;
-        let _depth_stack = vec![root_path.to_path_buf()];
+        let _depth_stack = [root_path.to_path_buf()];
 
         for node in nodes {
             // Calculate depth

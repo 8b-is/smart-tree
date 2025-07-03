@@ -282,7 +282,7 @@ impl<W: Write> QuantumScanner<W> {
             let ext = &name[dot_pos..];
             if let Some(&token) = self.token_map.get(ext) {
                 // Write base name + extension token
-                self.writer.write_all(name[..dot_pos].as_bytes())?;
+                self.writer.write_all(&name.as_bytes()[..dot_pos])?;
                 self.writer.write_all(&token.to_le_bytes())?;
                 return Ok(());
             }

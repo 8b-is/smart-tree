@@ -12,15 +12,13 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::generate;
-use clap_mangen;
-use colored; // To make our output as vibrant as Trish's spreadsheets!
+ // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use regex::Regex;
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
-use termimad;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
@@ -402,7 +400,7 @@ fn main() -> Result<()> {
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
     let is_ai_caller =
-        std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true");
+        std::env::var("AI_TOOLS").is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
 
     let (mode, compress) = if is_ai_caller {
         // If AI_TOOLS is set, use AI-optimized modes

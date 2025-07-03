@@ -8,6 +8,12 @@ use std::path::Path;
 
 pub struct StatsFormatter;
 
+impl Default for StatsFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StatsFormatter {
     pub fn new() -> Self {
         Self

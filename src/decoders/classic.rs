@@ -7,6 +7,12 @@ use std::io::Write;
 
 pub struct ClassicDecoder;
 
+impl Default for ClassicDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClassicDecoder {
     pub fn new() -> Self {
         Self

@@ -641,7 +641,7 @@ impl Scanner {
         let system_paths: HashSet<PathBuf> = if config.use_default_ignores {
             DEFAULT_SYSTEM_PATHS
                 .iter()
-                .map(|p_str| PathBuf::from(p_str)) // Convert string slices to PathBufs
+                .map(PathBuf::from) // Convert string slices to PathBufs
                 .collect() // Collect into a HashSet for quick lookups.
         } else {
             HashSet::new() // Empty set if not using default ignores.
@@ -651,7 +651,7 @@ impl Scanner {
         let ignore_files: HashSet<PathBuf> = if config.use_default_ignores {
             DEFAULT_IGNORE_FILES
                 .iter()
-                .map(|p_str| PathBuf::from(p_str))
+                .map(PathBuf::from)
                 .collect()
         } else {
             HashSet::new()
@@ -814,7 +814,7 @@ impl Scanner {
                             let has_search_match = node
                                 .search_matches
                                 .as_ref()
-                                .map_or(false, |m| m.total_count > 0);
+                                .is_some_and(|m| m.total_count > 0);
 
                             // If we have a search keyword, only include files with matches
                             let should_include_file = if self.config.search_keyword.is_some() {
@@ -978,16 +978,12 @@ impl Scanner {
         }
 
         // Return matches if any were found
-        if let Some(first) = first_match {
-            Some(SearchMatches {
+        first_match.map(|first| SearchMatches {
                 first_match: first,
                 total_count,
                 positions,
                 truncated: false,
             })
-        } else {
-            None
-        }
     }
 
     /// ## `scan` - The Full Scan (Non-Streaming)
@@ -1005,7 +1001,7 @@ impl Scanner {
     /// 1. **Act I**: Walk through every single file and directory, collecting a huge list of `FileNode`s.
     /// 2. **Act II**: If there are filters, go through that huge list and pick out only the ones that
     ///    match, making sure to keep their parent directories so the tree still makes sense.
-    /// It's thorough and great for when you need the whole picture before making decisions.
+    ///    It's thorough and great for when you need the whole picture before making decisions.
     pub fn scan(&self) -> Result<(Vec<FileNode>, TreeStats)> {
         let mut all_nodes_collected = Vec::new(); // Stores all nodes initially encountered.
                                                   // `ignored_dirs` was here, but its primary use with `skip_current_dir` is within the loop.
@@ -1057,7 +1053,7 @@ impl Scanner {
                     if let Some(path) = e.path() {
                         let depth = e.depth();
                         all_nodes_collected.push(self.create_permission_denied_node(path, depth));
-                        if e.io_error().map_or(false, |io_err| {
+                        if e.io_error().is_some_and(|io_err| {
                             io_err.kind() == std::io::ErrorKind::PermissionDenied
                         }) {
                             walker.skip_current_dir(); // Skip unreadable directory.
@@ -1112,9 +1108,9 @@ impl Scanner {
     /// 1. Files are included if they directly match all active filters OR if they contain a search match.
     /// 2. Directories are included if they themselves match a `--find` pattern OR
     ///    if they are an ancestor of an included file.
-    /// It then calculates `TreeStats` based on this final, filtered list of nodes.
-    /// This replaces the older `filter_nodes_with_ancestors` to integrate stat calculation
-    /// and clarify the logic for directory inclusion with `--find`.
+    ///    It then calculates `TreeStats` based on this final, filtered list of nodes.
+    ///    This replaces the older `filter_nodes_with_ancestors` to integrate stat calculation
+    ///    and clarify the logic for directory inclusion with `--find`.
     fn filter_nodes_and_calculate_stats(
         &self,
         all_nodes_collected: Vec<FileNode>,
@@ -1133,7 +1129,7 @@ impl Scanner {
             let has_search_match = node
                 .search_matches
                 .as_ref()
-                .map_or(false, |m| m.total_count > 0);
+                .is_some_and(|m| m.total_count > 0);
 
             if node.is_dir {
                 // For directories, only the --find pattern applies directly.
@@ -1142,7 +1138,7 @@ impl Scanner {
                     .config
                     .find_pattern
                     .as_ref()
-                    .map_or(false, |p| p.is_match(&node.path.to_string_lossy()))
+                    .is_some_and(|p| p.is_match(&node.path.to_string_lossy()))
                 {
                     included_files_and_matching_dirs.push(node.clone());
                     // Add ancestors of this directly matched directory
@@ -1216,12 +1212,11 @@ impl Scanner {
         for node in &all_nodes_collected {
             if node.permission_denied {
                 // Also include permission denied nodes if they are part of the path
-                if required_ancestor_dirs.contains(&node.path)
-                    || node.path == self.root && !final_node_list.is_empty()
+                if (required_ancestor_dirs.contains(&node.path)
+                    || node.path == self.root && !final_node_list.is_empty())
+                    && added_paths.insert(node.path.clone())
                 {
-                    if added_paths.insert(node.path.clone()) {
-                        final_node_list.push(node.clone());
-                    }
+                    final_node_list.push(node.clone());
                 }
                 continue;
             }
@@ -1232,13 +1227,12 @@ impl Scanner {
                     .config
                     .find_pattern
                     .as_ref()
-                    .map_or(false, |p| p.is_match(&node.path.to_string_lossy()));
-                if required_ancestor_dirs.contains(&node.path)
-                    || (is_find_match && node.path != self.root)
+                    .is_some_and(|p| p.is_match(&node.path.to_string_lossy()));
+                if (required_ancestor_dirs.contains(&node.path)
+                    || (is_find_match && node.path != self.root))
+                    && added_paths.insert(node.path.clone())
                 {
-                    if added_paths.insert(node.path.clone()) {
-                        final_node_list.push(node.clone());
-                    }
+                    final_node_list.push(node.clone());
                 }
             }
         }
@@ -1294,7 +1288,7 @@ impl Scanner {
         let is_hidden = path
             .file_name()
             .and_then(|name_osstr| name_osstr.to_str()) // Convert OsStr to &str
-            .map_or(false, |name_str| name_str.starts_with('.'));
+            .is_some_and(|name_str| name_str.starts_with('.'));
 
         // Skip if hidden and we are not configured to show hidden files,
         // UNLESS it's an ignored item that we *are* configured to show (is_ignored_by_rules = true, config.show_ignored = true).
@@ -1350,7 +1344,7 @@ impl Scanner {
             gid: Self::get_gid(&metadata),
             modified: metadata
                 .modified()
-                .unwrap_or_else(|_| SystemTime::UNIX_EPOCH), // Fallback for modified time
+                .unwrap_or(SystemTime::UNIX_EPOCH), // Fallback for modified time
             is_symlink: metadata.file_type().is_symlink(), // Use file_type() for symlink check
             is_hidden,
             permission_denied: false, // If we got metadata, assume no permission error *for this node itself*.

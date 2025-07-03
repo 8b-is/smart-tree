@@ -106,7 +106,7 @@ impl MarkdownFormatter {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
         let root_name = root_path
             .file_name()
-            .unwrap_or_else(|| root_path.as_os_str())
+            .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
 
         writeln!(writer, "# 📊 Directory Analysis Report")?;
@@ -157,7 +157,7 @@ impl MarkdownFormatter {
 
                 parent_map
                     .entry(parent_id)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(node);
             }
         }
@@ -165,7 +165,7 @@ impl MarkdownFormatter {
         // Write root
         let root_name = root_path
             .file_name()
-            .unwrap_or_else(|| root_path.as_os_str())
+            .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         writeln!(
             writer,

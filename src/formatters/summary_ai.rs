@@ -10,6 +10,7 @@ use std::io::Write;
 use std::path::Path;
 
 pub struct SummaryAiFormatter {
+    #[allow(dead_code)]
     compress: bool,
 }
 

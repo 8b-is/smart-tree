@@ -19,6 +19,12 @@ pub struct DynamicTokenizer {
     tokens: HashMap<String, String>,
 }
 
+impl Default for DynamicTokenizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DynamicTokenizer {
     pub fn new() -> Self {
         Self {
@@ -182,7 +188,7 @@ impl DynamicTokenizer {
 
         // Sort tokens by ID for consistent output
         let mut sorted_tokens: Vec<(&String, &String)> = self.tokens.iter().collect();
-        sorted_tokens.sort_by(|a, b| a.1.cmp(&b.1));
+        sorted_tokens.sort_by(|a, b| a.1.cmp(b.1));
 
         for (pattern, token) in sorted_tokens {
             header.push_str(&format!("  {}={}\n", token, pattern));
