@@ -3,12 +3,12 @@
 
 #![allow(dead_code)] // Many constants and fields are reserved for future use
 
+use anyhow::Result;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::collections::HashMap;
 use std::time::SystemTime;
-use anyhow::Result;
 
 // Token ranges as suggested
 const TOKEN_RESERVED_START: u16 = 0x0000;
@@ -46,16 +46,16 @@ const TOKEN_TESTS: u16 = 0x0087;
 
 // Size tokens for common ranges
 const TOKEN_SIZE_ZERO: u16 = 0x00A0;
-const TOKEN_SIZE_TINY: u16 = 0x00A1;  // 1-1KB
+const TOKEN_SIZE_TINY: u16 = 0x00A1; // 1-1KB
 const TOKEN_SIZE_SMALL: u16 = 0x00A2; // 1KB-100KB
 const TOKEN_SIZE_MEDIUM: u16 = 0x00A3; // 100KB-10MB
 const TOKEN_SIZE_LARGE: u16 = 0x00A4; // 10MB+
 
 // ASCII control codes for tree traversal
-const TRAVERSE_SAME: u8 = 0x0B;     // Vertical Tab
-const TRAVERSE_DEEPER: u8 = 0x0E;   // Shift Out
-const TRAVERSE_BACK: u8 = 0x0F;     // Shift In
-const TRAVERSE_SUMMARY: u8 = 0x0C;  // Form Feed
+const TRAVERSE_SAME: u8 = 0x0B; // Vertical Tab
+const TRAVERSE_DEEPER: u8 = 0x0E; // Shift Out
+const TRAVERSE_BACK: u8 = 0x0F; // Shift In
+const TRAVERSE_SUMMARY: u8 = 0x0C; // Form Feed
 
 // Header bit flags
 const HDR_HAS_SIZE: u8 = 0b00000001;
@@ -72,7 +72,7 @@ pub struct QuantumScanner<W: Write> {
     token_map: HashMap<String, u16>,
     #[allow(dead_code)]
     next_dynamic_token: u16,
-    
+
     // Context for delta encoding
     parent_perms: u32,
     #[allow(dead_code)]
@@ -81,7 +81,7 @@ pub struct QuantumScanner<W: Write> {
     parent_gid: u32,
     #[allow(dead_code)]
     parent_time: SystemTime,
-    
+
     // Stats tracking
     total_files: u64,
     total_dirs: u64,
@@ -95,15 +95,15 @@ impl<W: Write> QuantumScanner<W> {
         use std::os::unix::fs::PermissionsExt;
         metadata.permissions().mode() & 0o777
     }
-    
+
     #[cfg(not(unix))]
     fn get_permissions(_metadata: &fs::Metadata) -> u32 {
         0o755 // Default permissions for non-Unix
     }
-    
+
     pub fn new(writer: W) -> Self {
         let mut token_map = HashMap::new();
-        
+
         // Initialize with predefined tokens
         token_map.insert("node_modules".to_string(), TOKEN_NODE_MODULES);
         token_map.insert(".git".to_string(), TOKEN_GIT);
@@ -113,7 +113,7 @@ impl<W: Write> QuantumScanner<W> {
         token_map.insert("dist".to_string(), TOKEN_DIST);
         token_map.insert("docs".to_string(), TOKEN_DOCS);
         token_map.insert("tests".to_string(), TOKEN_TESTS);
-        
+
         // Extension tokens
         token_map.insert(".js".to_string(), TOKEN_EXT_JS);
         token_map.insert(".rs".to_string(), TOKEN_EXT_RS);
@@ -123,7 +123,7 @@ impl<W: Write> QuantumScanner<W> {
         token_map.insert(".json".to_string(), TOKEN_EXT_JSON);
         token_map.insert(".yaml".to_string(), TOKEN_EXT_YAML);
         token_map.insert(".txt".to_string(), TOKEN_EXT_TXT);
-        
+
         Self {
             writer,
             token_map,
@@ -137,24 +137,24 @@ impl<W: Write> QuantumScanner<W> {
             total_size: 0,
         }
     }
-    
+
     /// Write the quantum format header
     pub fn write_header(&mut self) -> Result<()> {
         writeln!(self.writer, "QUANTUM_NATIVE_V1:")?;
         writeln!(self.writer, "TOKENS:")?;
-        
+
         // Write token map in sorted order
         let mut tokens: Vec<_> = self.token_map.iter().collect();
         tokens.sort_by_key(|(_, &token)| token);
-        
+
         for (name, token) in tokens {
             writeln!(self.writer, "  {:04X}={}", token, name)?;
         }
-        
+
         writeln!(self.writer, "DATA:")?;
         Ok(())
     }
-    
+
     /// Scan a path and emit quantum format directly
     pub fn scan(&mut self, path: &Path) -> Result<()> {
         self.write_header()?;
@@ -162,62 +162,60 @@ impl<W: Write> QuantumScanner<W> {
         self.write_summary()?;
         Ok(())
     }
-    
+
     fn scan_recursive(&mut self, path: &Path, depth: usize) -> Result<()> {
         let metadata = fs::metadata(path)?;
-        
+
         // Emit quantum entry
         if metadata.is_dir() {
             self.emit_directory(path, &metadata, depth)?;
-            
+
             // Update parent context
             let old_perms = self.parent_perms;
             self.parent_perms = Self::get_permissions(&metadata);
-            
+
             // Scan children
-            let mut entries: Vec<_> = fs::read_dir(path)?
-                .filter_map(|e| e.ok())
-                .collect();
-            
+            let mut entries: Vec<_> = fs::read_dir(path)?.filter_map(|e| e.ok()).collect();
+
             // Sort for consistent output
             entries.sort_by_key(|e| e.file_name());
-            
+
             for (i, entry) in entries.iter().enumerate() {
                 let child_path = entry.path();
                 self.scan_recursive(&child_path, depth + 1)?;
-                
+
                 // Emit traversal code
                 if i < entries.len() - 1 {
                     self.writer.write_all(&[TRAVERSE_SAME])?;
                 }
             }
-            
+
             // Restore parent context
             self.parent_perms = old_perms;
-            
+
             // Emit back traversal if not at root
             if depth > 0 {
                 self.writer.write_all(&[TRAVERSE_BACK])?;
             }
-            
+
             self.total_dirs += 1;
         } else {
             self.emit_file(path, &metadata)?;
             self.total_files += 1;
             self.total_size += metadata.len();
         }
-        
+
         Ok(())
     }
-    
+
     fn emit_directory(&mut self, path: &Path, metadata: &fs::Metadata, depth: usize) -> Result<()> {
         let mut header = HDR_IS_DIR;
         let mut data = Vec::new();
-        
+
         // Size (for directories, this is the entry size)
         header |= HDR_HAS_SIZE;
         data.extend(&self.encode_size(metadata.len()));
-        
+
         // Permissions if different
         let perms = Self::get_permissions(metadata);
         if perms != self.parent_perms {
@@ -226,31 +224,31 @@ impl<W: Write> QuantumScanner<W> {
             data.push((delta >> 8) as u8);
             data.push(delta as u8);
         }
-        
+
         // Emit header and data
         self.writer.write_all(&[header])?;
         self.writer.write_all(&data)?;
-        
+
         // Emit name (tokenized if possible)
         self.emit_name(path)?;
-        
+
         // Emit traversal code
         if depth == 0 {
             // Root directory
             self.writer.write_all(&[TRAVERSE_DEEPER])?;
         }
-        
+
         Ok(())
     }
-    
+
     fn emit_file(&mut self, path: &Path, metadata: &fs::Metadata) -> Result<()> {
         let mut header = 0u8;
         let mut data = Vec::new();
-        
+
         // Size
         header |= HDR_HAS_SIZE;
         data.extend(&self.encode_size(metadata.len()));
-        
+
         // Permissions if different
         let perms = Self::get_permissions(metadata);
         if perms != self.parent_perms {
@@ -259,28 +257,26 @@ impl<W: Write> QuantumScanner<W> {
             data.push((delta >> 8) as u8);
             data.push(delta as u8);
         }
-        
+
         // Emit header and data
         self.writer.write_all(&[header])?;
         self.writer.write_all(&data)?;
-        
+
         // Emit name
         self.emit_name(path)?;
-        
+
         Ok(())
     }
-    
+
     fn emit_name(&mut self, path: &Path) -> Result<()> {
-        let name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
-        
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
         // Check for exact token match
         if let Some(&token) = self.token_map.get(name) {
             self.writer.write_all(&token.to_le_bytes())?;
             return Ok(());
         }
-        
+
         // Check for extension token
         if let Some(dot_pos) = name.rfind('.') {
             let ext = &name[dot_pos..];
@@ -291,22 +287,30 @@ impl<W: Write> QuantumScanner<W> {
                 return Ok(());
             }
         }
-        
+
         // No token found - consider adding dynamically for frequently seen patterns
         // For now, just write the raw name
         self.writer.write_all(name.as_bytes())?;
         Ok(())
     }
-    
+
     fn encode_size(&self, size: u64) -> Vec<u8> {
         // Size-based tokenization
         match size {
             0 => vec![TOKEN_SIZE_ZERO as u8, (TOKEN_SIZE_ZERO >> 8) as u8],
-            1..=1024 => vec![TOKEN_SIZE_TINY as u8, (TOKEN_SIZE_TINY >> 8) as u8, size as u8],
+            1..=1024 => vec![
+                TOKEN_SIZE_TINY as u8,
+                (TOKEN_SIZE_TINY >> 8) as u8,
+                size as u8,
+            ],
             1025..=102400 => {
                 let kb = (size / 1024) as u16;
-                vec![TOKEN_SIZE_SMALL as u8, (TOKEN_SIZE_SMALL >> 8) as u8, 
-                     kb as u8, (kb >> 8) as u8]
+                vec![
+                    TOKEN_SIZE_SMALL as u8,
+                    (TOKEN_SIZE_SMALL >> 8) as u8,
+                    kb as u8,
+                    (kb >> 8) as u8,
+                ]
             }
             _ => {
                 // For larger sizes, use standard encoding
@@ -324,7 +328,7 @@ impl<W: Write> QuantumScanner<W> {
             }
         }
     }
-    
+
     fn write_summary(&mut self) -> Result<()> {
         writeln!(self.writer, "\nSUMMARY:")?;
         writeln!(self.writer, "FILES: {}", self.total_files)?;

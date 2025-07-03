@@ -346,7 +346,10 @@ impl ClassicFormatter {
                 let (line, col) = matches.first_match;
                 let truncated = if matches.truncated { ",TRUNCATED" } else { "" };
                 if matches.total_count > 1 {
-                    format!(" [FOUND:L{}:C{},{}x{}]", line, col, matches.total_count, truncated)
+                    format!(
+                        " [FOUND:L{}:C{},{}x{}]",
+                        line, col, matches.total_count, truncated
+                    )
                 } else {
                     format!(" [FOUND:L{}:C{}]", line, col)
                 }
@@ -373,7 +376,10 @@ impl ClassicFormatter {
 
         if is_last.is_empty() {
             // Root node
-            format!("{} {}{}{}{}", emoji, colored_name, size_str, indicator, search_indicator)
+            format!(
+                "{} {}{}{}{}",
+                emoji, colored_name, size_str, indicator, search_indicator
+            )
         } else {
             format!(
                 "{}{} {}{}{}{}",

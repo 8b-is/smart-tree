@@ -512,7 +512,7 @@ impl Scanner {
     pub fn root(&self) -> &Path {
         &self.root
     }
-    
+
     /// ## `get_file_category`
     /// Determines a `FileCategory` for a given path and `FileType`.
     /// This function uses a series of heuristics based on file extensions and common names
@@ -618,10 +618,11 @@ impl Scanner {
     pub fn new(root: &Path, config: ScannerConfig) -> Result<Self> {
         // Canonicalize the root path to get the absolute path
         // If canonicalize fails (e.g., path doesn't exist), fall back to absolute path
-        let canonical_root = root.canonicalize()
+        let canonical_root = root
+            .canonicalize()
             .or_else(|_| std::env::current_dir().map(|cwd| cwd.join(root)))
             .unwrap_or_else(|_| root.to_path_buf());
-        
+
         // Load .gitignore patterns from the root directory if requested.
         let gitignore = if config.respect_gitignore {
             Self::load_gitignore(&canonical_root)? // This can return None if no .gitignore or error.
@@ -733,7 +734,7 @@ impl Scanner {
     /// Returns the final `TreeStats` once the scan is complete.
     pub fn scan_stream(&self, sender: mpsc::Sender<FileNode>) -> Result<TreeStats> {
         let mut stats = TreeStats::default();
-        
+
         // When searching, we need to collect all nodes first to determine which directories to show
         if self.config.search_keyword.is_some() {
             // Use the non-streaming scan and then send results in order
@@ -745,7 +746,7 @@ impl Scanner {
             }
             return Ok(stats);
         }
-        
+
         // Original streaming logic for non-search cases
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
@@ -814,14 +815,14 @@ impl Scanner {
                                 .search_matches
                                 .as_ref()
                                 .map_or(false, |m| m.total_count > 0);
-                            
+
                             // If we have a search keyword, only include files with matches
                             let should_include_file = if self.config.search_keyword.is_some() {
                                 has_search_match
                             } else {
                                 self.should_include(&node)
                             };
-                            
+
                             if node.is_dir || should_include_file {
                                 // Send the processed node through the channel.
                                 if sender.send(node.clone()).is_err() {
@@ -944,19 +945,19 @@ impl Scanner {
                     // Find all occurrences of the keyword in the current line.
                     for (column_index, _) in line_content.match_indices(keyword) {
                         total_count += 1;
-                        
+
                         // Column numbers are 1-based for user display
                         let match_pos = (line_number, column_index + 1);
-                        
+
                         if first_match.is_none() {
                             first_match = Some(match_pos);
                         }
-                        
+
                         // Only store first 100 positions to prevent memory issues
                         if positions.len() < 100 {
                             positions.push(match_pos);
                         }
-                        
+
                         // Stop processing this file if we've found too many matches
                         if total_count > 100 {
                             return Some(SearchMatches {
@@ -1101,7 +1102,7 @@ impl Scanner {
             || self.config.max_size.is_some()
             || self.config.newer_than.is_some()
             || self.config.older_than.is_some()
-            || self.config.search_keyword.is_some()  // Now search_keyword is also a filter
+            || self.config.search_keyword.is_some() // Now search_keyword is also a filter
     }
 
     /// ## `filter_nodes_and_calculate_stats` (Formerly `filter_nodes_with_ancestors`)
@@ -1167,7 +1168,8 @@ impl Scanner {
                             let mut current = node.path.parent();
                             while let Some(parent_path) = current {
                                 // Stop if we reach the root or an already added ancestor.
-                                if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                                if parent_path == self.root
+                                    || required_ancestor_dirs.contains(parent_path)
                                 {
                                     break;
                                 }
@@ -1184,7 +1186,8 @@ impl Scanner {
                         let mut current = node.path.parent();
                         while let Some(parent_path) = current {
                             // Stop if we reach the root or an already added ancestor.
-                            if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                            if parent_path == self.root
+                                || required_ancestor_dirs.contains(parent_path)
                             {
                                 break;
                             }

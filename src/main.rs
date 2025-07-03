@@ -17,7 +17,7 @@ use colored; // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use regex::Regex;
-use std::io::{self, Write, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use termimad;
@@ -25,10 +25,20 @@ use termimad;
 // Pulling in the brains of the operation from our library modules.
 use st::{
     formatters::{
-        ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
-        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-        claude::ClaudeFormatter, semantic::SemanticFormatter, mermaid::{MermaidFormatter, MermaidStyle},
-        markdown::MarkdownFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
+        ai::AiFormatter,
+        ai_json::AiJsonFormatter,
+        classic::ClassicFormatter,
+        claude::ClaudeFormatter,
+        csv::CsvFormatter,
+        digest::DigestFormatter,
+        hex::HexFormatter,
+        json::JsonFormatter,
+        markdown::MarkdownFormatter,
+        mermaid::{MermaidFormatter, MermaidStyle},
+        quantum::QuantumFormatter,
+        semantic::SemanticFormatter,
+        stats::StatsFormatter,
+        tsv::TsvFormatter,
         Formatter, PathDisplayMode, StreamingFormatter,
     },
     parse_size,
@@ -197,29 +207,29 @@ struct ScanArgs {
     /// Example groups: "tests", "documentation", "configuration", "source code"
     #[arg(long)]
     semantic: bool,
-    
+
     /// Mermaid diagram style (only used with --mode mermaid).
     /// Options: flowchart (default), mindmap, gitgraph
     #[arg(long, value_enum, default_value = "flowchart")]
     mermaid_style: MermaidStyleArg,
-    
+
     /// Exclude mermaid diagrams from markdown report (only used with --mode markdown).
     #[arg(long)]
     no_markdown_mermaid: bool,
-    
+
     /// Exclude tables from markdown report (only used with --mode markdown).
     #[arg(long)]
     no_markdown_tables: bool,
-    
+
     /// Exclude pie charts from markdown report (only used with --mode markdown).
     #[arg(long)]
     no_markdown_pie_charts: bool,
-    
+
     /// Focus analysis on specific file (for relations mode).
     /// Shows all relationships for a particular file.
     #[arg(long, value_name = "FILE")]
     focus: Option<PathBuf>,
-    
+
     /// Filter relationships by type (for relations mode).
     /// Options: imports, calls, types, tests, coupled
     #[arg(long, value_name = "TYPE")]
@@ -293,7 +303,7 @@ enum OutputMode {
     Markdown,
     /// Interactive summary mode (default for humans in terminal)
     Summary,
-    /// AI-optimized summary mode (default for AI/piped output) 
+    /// AI-optimized summary mode (default for AI/piped output)
     SummaryAi,
     /// Code relationship analysis
     Relations,
@@ -391,8 +401,9 @@ fn main() -> Result<()> {
     // Then, the command-line --mode flag.
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
-    let is_ai_caller = std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true");
-    
+    let is_ai_caller =
+        std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true");
+
     let (mode, compress) = if is_ai_caller {
         // If AI_TOOLS is set, use AI-optimized modes
         match args.mode {
@@ -449,9 +460,8 @@ fn main() -> Result<()> {
 
     // For AI mode, we automatically enable `show_ignored` to provide maximum context to the AI,
     // unless the user explicitly set `show_ignored` (which `args.show_ignored` would capture).
-    let show_ignored_final = args.show_ignored
-        || matches!(mode, OutputMode::Ai | OutputMode::Digest)
-        || args.everything;
+    let show_ignored_final =
+        args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
 
     let scanner_config = ScannerConfig {
         max_depth: args.depth,
@@ -481,7 +491,6 @@ fn main() -> Result<()> {
         show_filesystems: args.show_filesystems,
     };
 
-
     // Create the scanner instance with the specified root path and configuration.
     let scanner = Scanner::new(&path, scanner_config)?;
 
@@ -505,7 +514,7 @@ fn main() -> Result<()> {
                 use std::thread;
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
-                // let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
+                                                // let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
                 let scanner_root = scanner.root().to_path_buf(); // Get the canonicalized root before moving scanner
 
                 // Spawn the scanner thread. It will send FileNode objects through the channel.
@@ -523,15 +532,9 @@ fn main() -> Result<()> {
                         path_display_mode,
                         args.show_filesystems,
                     )),
-                    OutputMode::Ai => {
-                        Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
-                    }
-                    OutputMode::Quantum => {
-                        Box::new(QuantumFormatter::new())
-                    }
-                    OutputMode::Claude => {
-                        Box::new(ClaudeFormatter::new(true))
-                    }
+                    OutputMode::Ai => Box::new(AiFormatter::new(args.no_emoji, path_display_mode)),
+                    OutputMode::Quantum => Box::new(QuantumFormatter::new()),
+                    OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
 
@@ -545,8 +548,7 @@ fn main() -> Result<()> {
                 // Receive and format nodes as they arrive from the scanner thread.
                 while let Ok(node) = rx.recv() {
                     // Loop until the channel is closed.
-                    streaming_formatter
-                        .format_node(&mut handle, &node, &scanner_root)?;
+                    streaming_formatter.format_node(&mut handle, &node, &scanner_root)?;
                 }
 
                 // Wait for the scanner thread to finish and get the final statistics.
@@ -610,7 +612,9 @@ fn main() -> Result<()> {
             OutputMode::Digest => Box::new(DigestFormatter::new()),
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
             OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
-            OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji)),
+            OutputMode::Semantic => {
+                Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji))
+            }
             OutputMode::Mermaid => {
                 // Convert CLI arg enum to formatter enum
                 let style = match args.mermaid_style {
@@ -618,16 +622,20 @@ fn main() -> Result<()> {
                     MermaidStyleArg::Mindmap => MermaidStyle::Mindmap,
                     MermaidStyleArg::Gitgraph => MermaidStyle::GitGraph,
                 };
-                Box::new(MermaidFormatter::new(style, args.no_emoji, path_display_mode))
+                Box::new(MermaidFormatter::new(
+                    style,
+                    args.no_emoji,
+                    path_display_mode,
+                ))
             }
             OutputMode::Markdown => {
                 // Create a comprehensive markdown report with all visualizations!
                 Box::new(MarkdownFormatter::new(
                     path_display_mode,
                     args.no_emoji,
-                    !args.no_markdown_mermaid,    // Include mermaid unless disabled
-                    !args.no_markdown_tables,      // Include tables unless disabled
-                    !args.no_markdown_pie_charts,  // Include pie charts unless disabled
+                    !args.no_markdown_mermaid, // Include mermaid unless disabled
+                    !args.no_markdown_tables,  // Include tables unless disabled
+                    !args.no_markdown_pie_charts, // Include pie charts unless disabled
                 ))
             }
             OutputMode::Relations => {

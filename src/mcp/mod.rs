@@ -113,8 +113,15 @@ impl McpServer {
         let mut reader = BufReader::new(stdin);
         let mut stdout = stdout.lock();
 
-        eprintln!("Smart Tree MCP server v{} started", env!("CARGO_PKG_VERSION"));
-        eprintln!("  Build: {} ({})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_DESCRIPTION"));
+        eprintln!(
+            "Smart Tree MCP server v{} started",
+            env!("CARGO_PKG_VERSION")
+        );
+        eprintln!(
+            "  Build: {} ({})",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_DESCRIPTION")
+        );
         eprintln!("  Protocol: MCP v1.0");
         eprintln!("  Features: tools, resources, prompts, caching");
 
@@ -170,7 +177,7 @@ impl McpServer {
 
         // Check if this is a notification (no id field)
         let is_notification = request.id.is_none();
-        
+
         // Handle notifications that don't expect responses
         if is_notification && request.method == "notifications/initialized" {
             // Just acknowledge receipt, don't send response

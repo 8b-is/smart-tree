@@ -1,9 +1,9 @@
 //! Content detection engine - "Understanding what's in your directories" - Omni
 //! Analyzes directory contents to determine the type of project/collection
 
+use crate::scanner::FileNode;
 use std::collections::HashMap;
 use std::path::Path;
-use crate::scanner::FileNode;
 
 /// Types of content that can be detected in a directory
 #[derive(Debug, Clone, PartialEq)]
@@ -89,7 +89,7 @@ impl ContentDetector {
         // Count file extensions
         let mut ext_counts: HashMap<String, usize> = HashMap::new();
         let mut total_files = 0;
-        
+
         for node in nodes {
             if !node.is_dir {
                 total_files += 1;
@@ -98,32 +98,32 @@ impl ContentDetector {
                 }
             }
         }
-        
+
         // Check for code project indicators
         if Self::is_code_project(&ext_counts, nodes, root_path) {
             return Self::analyze_code_project(nodes, root_path, &ext_counts);
         }
-        
+
         // Check for photo collection
         if Self::is_photo_collection(&ext_counts) {
             return Self::analyze_photo_collection(nodes, &ext_counts);
         }
-        
+
         // Check for document archive
         if Self::is_document_archive(&ext_counts) {
             return Self::analyze_document_archive(nodes);
         }
-        
+
         // Check for media library
         if Self::is_media_library(&ext_counts) {
             return Self::analyze_media_library(nodes, &ext_counts);
         }
-        
+
         // Check for data science
         if Self::is_data_science(&ext_counts) {
             return Self::analyze_data_science(&ext_counts);
         }
-        
+
         // Default to mixed content
         DirectoryType::MixedContent {
             dominant_type: Self::get_dominant_type(&ext_counts),
@@ -131,24 +131,43 @@ impl ContentDetector {
             total_files,
         }
     }
-    
-    fn is_code_project(ext_counts: &HashMap<String, usize>, nodes: &[FileNode], _root_path: &Path) -> bool {
+
+    fn is_code_project(
+        ext_counts: &HashMap<String, usize>,
+        nodes: &[FileNode],
+        _root_path: &Path,
+    ) -> bool {
         // Check for common code file extensions
-        let code_extensions = ["rs", "py", "js", "ts", "go", "java", "cpp", "c", "rb", "php"];
-        let code_files: usize = code_extensions.iter()
+        let code_extensions = [
+            "rs", "py", "js", "ts", "go", "java", "cpp", "c", "rb", "php",
+        ];
+        let code_files: usize = code_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        
+
         // Check for project files
         let has_project_files = nodes.iter().any(|n| {
             let name = n.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            matches!(name, "Cargo.toml" | "package.json" | "requirements.txt" | "go.mod" | "pom.xml" | "Gemfile")
+            matches!(
+                name,
+                "Cargo.toml"
+                    | "package.json"
+                    | "requirements.txt"
+                    | "go.mod"
+                    | "pom.xml"
+                    | "Gemfile"
+            )
         });
-        
+
         code_files > 5 || has_project_files
     }
-    
-    fn analyze_code_project(nodes: &[FileNode], _root_path: &Path, ext_counts: &HashMap<String, usize>) -> DirectoryType {
+
+    fn analyze_code_project(
+        nodes: &[FileNode],
+        _root_path: &Path,
+        ext_counts: &HashMap<String, usize>,
+    ) -> DirectoryType {
         // Detect primary language
         let language = if ext_counts.contains_key("rs") {
             Language::Rust
@@ -169,22 +188,22 @@ impl ContentDetector {
         } else {
             Language::Other("Unknown".to_string())
         };
-        
+
         // Detect framework
         let framework = Self::detect_framework(nodes, &language);
-        
+
         // Check for tests and docs
         let has_tests = nodes.iter().any(|n| {
             let path_str = n.path.to_string_lossy();
             path_str.contains("test") || path_str.contains("spec")
         });
-        
+
         let has_docs = nodes.iter().any(|n| {
             let name = n.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             let path_str = n.path.to_string_lossy();
             name.ends_with(".md") || path_str.contains("docs/")
         });
-        
+
         DirectoryType::CodeProject {
             language,
             framework,
@@ -192,11 +211,11 @@ impl ContentDetector {
             has_docs,
         }
     }
-    
+
     fn detect_framework(nodes: &[FileNode], language: &Language) -> Option<Framework> {
         for node in nodes {
             let name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            
+
             match language {
                 Language::Rust => {
                     // Check Cargo.toml for dependencies
@@ -222,116 +241,138 @@ impl ContentDetector {
         }
         None
     }
-    
+
     fn is_photo_collection(ext_counts: &HashMap<String, usize>) -> bool {
         let image_extensions = ["jpg", "jpeg", "png", "gif", "bmp", "raw", "dng", "heic"];
-        let image_files: usize = image_extensions.iter()
+        let image_files: usize = image_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        
+
         image_files > 10
     }
-    
-    fn analyze_photo_collection(_nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
+
+    fn analyze_photo_collection(
+        _nodes: &[FileNode],
+        ext_counts: &HashMap<String, usize>,
+    ) -> DirectoryType {
         let image_extensions = ["jpg", "jpeg", "png", "gif", "bmp", "raw", "dng", "heic"];
-        let image_count: usize = image_extensions.iter()
+        let image_count: usize = image_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        
+
         DirectoryType::PhotoCollection {
             image_count,
             date_range: None, // Would need EXIF parsing
             cameras: vec![],  // Would need EXIF parsing
         }
     }
-    
+
     fn is_document_archive(ext_counts: &HashMap<String, usize>) -> bool {
         let doc_extensions = ["pdf", "doc", "docx", "txt", "odt", "rtf"];
-        let doc_files: usize = doc_extensions.iter()
+        let doc_files: usize = doc_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        
+
         doc_files > 10
     }
-    
+
     fn analyze_document_archive(nodes: &[FileNode]) -> DirectoryType {
         let mut categories = HashMap::new();
-        
+
         // Simple categorization based on filename patterns
         for node in nodes {
             if !node.is_dir {
-                let name = node.path.file_name()
+                let name = node
+                    .path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .to_lowercase();
-                
-                let category = if name.contains("invoice") || name.contains("receipt") || name.contains("bank") {
+
+                let category = if name.contains("invoice")
+                    || name.contains("receipt")
+                    || name.contains("bank")
+                {
                     "Financial"
-                } else if name.contains("homework") || name.contains("assignment") || name.contains("grade") {
+                } else if name.contains("homework")
+                    || name.contains("assignment")
+                    || name.contains("grade")
+                {
                     "School"
-                } else if name.contains("resume") || name.contains("cv") || name.contains("letter") {
+                } else if name.contains("resume") || name.contains("cv") || name.contains("letter")
+                {
                     "Personal"
                 } else {
                     "Other"
                 };
-                
+
                 *categories.entry(category.to_string()).or_insert(0) += 1;
             }
         }
-        
+
         let total_docs = categories.values().sum();
-        
+
         DirectoryType::DocumentArchive {
             categories,
             total_docs,
         }
     }
-    
+
     fn is_media_library(ext_counts: &HashMap<String, usize>) -> bool {
         let video_extensions = ["mp4", "avi", "mkv", "mov", "wmv", "flv"];
         let audio_extensions = ["mp3", "wav", "flac", "aac", "ogg", "m4a"];
-        
-        let video_files: usize = video_extensions.iter()
+
+        let video_files: usize = video_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        let audio_files: usize = audio_extensions.iter()
+        let audio_files: usize = audio_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        
+
         video_files + audio_files > 10
     }
-    
-    fn analyze_media_library(_nodes: &[FileNode], ext_counts: &HashMap<String, usize>) -> DirectoryType {
+
+    fn analyze_media_library(
+        _nodes: &[FileNode],
+        ext_counts: &HashMap<String, usize>,
+    ) -> DirectoryType {
         let video_extensions = ["mp4", "avi", "mkv", "mov", "wmv", "flv"];
         let audio_extensions = ["mp3", "wav", "flac", "aac", "ogg", "m4a"];
-        
-        let video_count: usize = video_extensions.iter()
+
+        let video_count: usize = video_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        let audio_count: usize = audio_extensions.iter()
+        let audio_count: usize = audio_extensions
+            .iter()
             .filter_map(|ext| ext_counts.get(*ext))
             .sum();
-        
+
         DirectoryType::MediaLibrary {
             video_count,
             audio_count,
             total_duration: None, // Would need media parsing
-            quality: vec![], // TODO: Extract quality from filenames (e.g., "movie_1080p.mp4")
+            quality: vec![],      // TODO: Extract quality from filenames (e.g., "movie_1080p.mp4")
         }
     }
-    
+
     fn is_data_science(ext_counts: &HashMap<String, usize>) -> bool {
-        ext_counts.contains_key("ipynb") || 
-        (ext_counts.contains_key("csv") && ext_counts["csv"] > 5) ||
-        (ext_counts.contains_key("parquet") || ext_counts.contains_key("feather"))
+        ext_counts.contains_key("ipynb")
+            || (ext_counts.contains_key("csv") && ext_counts["csv"] > 5)
+            || (ext_counts.contains_key("parquet") || ext_counts.contains_key("feather"))
     }
-    
+
     fn analyze_data_science(ext_counts: &HashMap<String, usize>) -> DirectoryType {
         let notebooks = ext_counts.get("ipynb").copied().unwrap_or(0);
-        let datasets = ext_counts.get("csv").copied().unwrap_or(0) +
-                      ext_counts.get("parquet").copied().unwrap_or(0) +
-                      ext_counts.get("feather").copied().unwrap_or(0);
-        
+        let datasets = ext_counts.get("csv").copied().unwrap_or(0)
+            + ext_counts.get("parquet").copied().unwrap_or(0)
+            + ext_counts.get("feather").copied().unwrap_or(0);
+
         let mut languages = vec![];
         if ext_counts.contains_key("py") {
             languages.push("Python".to_string());
@@ -342,16 +383,17 @@ impl ContentDetector {
         if ext_counts.contains_key("jl") {
             languages.push("Julia".to_string());
         }
-        
+
         DirectoryType::DataScience {
             notebooks,
             datasets,
             languages,
         }
     }
-    
+
     fn get_dominant_type(ext_counts: &HashMap<String, usize>) -> Option<String> {
-        ext_counts.iter()
+        ext_counts
+            .iter()
             .max_by_key(|(_, count)| *count)
             .map(|(ext, _)| ext.clone())
     }

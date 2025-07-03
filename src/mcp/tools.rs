@@ -3,10 +3,10 @@
 use super::{is_path_allowed, McpContext};
 use crate::{
     formatters::{
-        ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
-        hex::HexFormatter, json::JsonFormatter, stats::StatsFormatter, tsv::TsvFormatter,
-        quantum::QuantumFormatter, claude::ClaudeFormatter, semantic::SemanticFormatter,
-        Formatter, PathDisplayMode,
+        ai::AiFormatter, classic::ClassicFormatter, claude::ClaudeFormatter, csv::CsvFormatter,
+        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
+        semantic::SemanticFormatter, stats::StatsFormatter, tsv::TsvFormatter, Formatter,
+        PathDisplayMode,
     },
     parse_size, Scanner, ScannerConfig,
 };
@@ -527,7 +527,7 @@ fn default_path_mode() -> String {
 
 async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let cache_stats = ctx.cache.stats().await;
-    
+
     let info = json!({
         "server": {
             "name": "Smart Tree MCP Server",
@@ -546,7 +546,7 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         },
         "capabilities": {
             "output_formats": [
-                "classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest", 
+                "classic", "hex", "json", "ai", "stats", "csv", "tsv", "digest",
                 "quantum", "claude", "semantic"
             ],
             "compression": {
@@ -611,10 +611,10 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "Content search supported with 'search_in_files' tool",
         ],
     });
-    
+
     // Convert to pretty JSON string
     let json_string = serde_json::to_string_pretty(&info)?;
-    
+
     // Return in MCP content format
     Ok(json!({
         "content": [{
@@ -717,12 +717,15 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     // Handle different output formats
     let final_output = if args.mode == "quantum" {
         // Quantum format contains binary data, so base64-encode it for JSON safety
-        use base64::{Engine as _, engine::general_purpose};
-        format!("QUANTUM_BASE64:{}", general_purpose::STANDARD.encode(&output))
+        use base64::{engine::general_purpose, Engine as _};
+        format!(
+            "QUANTUM_BASE64:{}",
+            general_purpose::STANDARD.encode(&output)
+        )
     } else {
         // For other formats, convert to string first
         let output_str = String::from_utf8(output)?;
-        
+
         if args.compress {
             use flate2::write::ZlibEncoder;
             use flate2::Compression;
@@ -946,25 +949,33 @@ async fn project_overview(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let path = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-    
+
     // First get the Claude format overview (10x compression!)
-    let ai_result = analyze_directory(json!({
-        "path": path,
-        "mode": "claude",
-        "max_depth": 5,
-        "show_ignored": true
-    }), ctx.clone()).await?;
-    
+    let ai_result = analyze_directory(
+        json!({
+            "path": path,
+            "mode": "claude",
+            "max_depth": 5,
+            "show_ignored": true
+        }),
+        ctx.clone(),
+    )
+    .await?;
+
     // Then get statistics
-    let stats_result = get_statistics(json!({
-        "path": path,
-        "show_hidden": false
-    }), ctx.clone()).await?;
-    
+    let stats_result = get_statistics(
+        json!({
+            "path": path,
+            "show_hidden": false
+        }),
+        ctx.clone(),
+    )
+    .await?;
+
     // Combine results
     let ai_text = ai_result["content"][0]["text"].as_str().unwrap_or("");
     let stats_text = stats_result["content"][0]["text"].as_str().unwrap_or("");
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -981,11 +992,13 @@ async fn find_code_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_array()
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
         .unwrap_or_else(|| vec!["all"]);
-    
+
     let extensions = if languages.contains(&"all") {
-        vec!["py", "js", "ts", "tsx", "jsx", "rs", "go", "java", "cpp", "c", "h", "hpp", 
-             "rb", "php", "swift", "kt", "scala", "r", "jl", "cs", "vb", "lua", "pl", 
-             "sh", "bash", "zsh", "ps1", "dart", "elm", "ex", "exs", "clj", "cljs", "ml", "mli"]
+        vec![
+            "py", "js", "ts", "tsx", "jsx", "rs", "go", "java", "cpp", "c", "h", "hpp", "rb",
+            "php", "swift", "kt", "scala", "r", "jl", "cs", "vb", "lua", "pl", "sh", "bash", "zsh",
+            "ps1", "dart", "elm", "ex", "exs", "clj", "cljs", "ml", "mli",
+        ]
     } else {
         let mut exts = Vec::new();
         for lang in languages {
@@ -1010,55 +1023,70 @@ async fn find_code_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         }
         exts
     };
-    
+
     let pattern = format!(r"\.({})$", extensions.join("|"));
-    find_files(json!({
-        "path": path,
-        "pattern": pattern,
-        "max_depth": 20
-    }), ctx).await
+    find_files(
+        json!({
+            "path": path,
+            "pattern": pattern,
+            "max_depth": 20
+        }),
+        ctx,
+    )
+    .await
 }
 
 async fn find_config_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let path = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-    
-    let pattern = r"\.(json|yaml|yml|toml|ini|cfg|conf|config|env|properties|xml)$|^\..*rc$|^.*config.*$";
-    find_files(json!({
-        "path": path,
-        "pattern": pattern,
-        "max_depth": 10
-    }), ctx).await
+
+    let pattern =
+        r"\.(json|yaml|yml|toml|ini|cfg|conf|config|env|properties|xml)$|^\..*rc$|^.*config.*$";
+    find_files(
+        json!({
+            "path": path,
+            "pattern": pattern,
+            "max_depth": 10
+        }),
+        ctx,
+    )
+    .await
 }
 
 async fn find_documentation(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let path = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-    
+
     let pattern = r"(README|readme|CHANGELOG|changelog|LICENSE|license|CONTRIBUTING|contributing|TODO|todo|INSTALL|install|AUTHORS|authors|NOTICE|notice|HISTORY|history)(\.(md|markdown|rst|txt|adoc|org))?$|\.(md|markdown|rst|txt|adoc|org)$";
-    find_files(json!({
-        "path": path,
-        "pattern": pattern,
-        "max_depth": 10
-    }), ctx).await
+    find_files(
+        json!({
+            "path": path,
+            "pattern": pattern,
+            "max_depth": 10
+        }),
+        ctx,
+    )
+    .await
 }
 
 async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(args["path"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing path"))?);
+    let path = PathBuf::from(
+        args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
+    );
     let keyword = args["keyword"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing keyword"))?;
     let file_type = args["file_type"].as_str();
-    
+
     // Security check
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Access denied: path not allowed"));
     }
-    
+
     let config = ScannerConfig {
         max_depth: 10,
         follow_symlinks: false,
@@ -1075,10 +1103,10 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         search_keyword: Some(keyword.to_string()),
         show_filesystems: false,
     };
-    
+
     let scanner = Scanner::new(&path, config)?;
     let (nodes, _) = scanner.scan()?;
-    
+
     // Format results showing files with matches
     let mut results = Vec::new();
     for node in &nodes {
@@ -1092,7 +1120,7 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             }));
         }
     }
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -1110,12 +1138,16 @@ async fn find_large_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     let min_size = args["min_size"].as_str().unwrap_or("10M");
-    
-    find_files(json!({
-        "path": path,
-        "min_size": min_size,
-        "max_depth": 20
-    }), ctx).await
+
+    find_files(
+        json!({
+            "path": path,
+            "min_size": min_size,
+            "max_depth": 20
+        }),
+        ctx,
+    )
+    .await
 }
 
 async fn find_recent_changes(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
@@ -1123,45 +1155,61 @@ async fn find_recent_changes(args: Value, ctx: Arc<McpContext>) -> Result<Value>
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     let days = args["days"].as_u64().unwrap_or(7);
-    
+
     // Calculate date N days ago
     use chrono::{Duration, Utc};
     let date = Utc::now() - Duration::days(days as i64);
     let date_str = date.format("%Y-%m-%d").to_string();
-    
-    find_files(json!({
-        "path": path,
-        "newer_than": date_str,
-        "max_depth": 20
-    }), ctx).await
+
+    find_files(
+        json!({
+            "path": path,
+            "newer_than": date_str,
+            "max_depth": 20
+        }),
+        ctx,
+    )
+    .await
 }
 
 async fn compare_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path1 = PathBuf::from(args["path1"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing path1"))?);
-    let path2 = PathBuf::from(args["path2"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing path2"))?);
-    
+    let path1 = PathBuf::from(
+        args["path1"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path1"))?,
+    );
+    let path2 = PathBuf::from(
+        args["path2"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path2"))?,
+    );
+
     // Security checks
     if !is_path_allowed(&path1, &ctx.config) || !is_path_allowed(&path2, &ctx.config) {
         return Err(anyhow::anyhow!("Access denied: path not allowed"));
     }
-    
+
     // Get directory structures
-    let tree1 = analyze_directory(json!({
-        "path": path1.display().to_string(),
-        "mode": "json",
-        "max_depth": 10
-    }), ctx.clone()).await?;
-    
-    let tree2 = analyze_directory(json!({
-        "path": path2.display().to_string(),
-        "mode": "json",
-        "max_depth": 10
-    }), ctx.clone()).await?;
-    
+    let tree1 = analyze_directory(
+        json!({
+            "path": path1.display().to_string(),
+            "mode": "json",
+            "max_depth": 10
+        }),
+        ctx.clone(),
+    )
+    .await?;
+
+    let tree2 = analyze_directory(
+        json!({
+            "path": path2.display().to_string(),
+            "mode": "json",
+            "max_depth": 10
+        }),
+        ctx.clone(),
+    )
+    .await?;
+
     // Compare and format differences
     Ok(json!({
         "content": [{
@@ -1178,15 +1226,17 @@ async fn compare_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value>
 }
 
 async fn get_git_status(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(args["path"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing path"))?);
-    
+    let path = PathBuf::from(
+        args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
+    );
+
     // Security check
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Access denied: path not allowed"));
     }
-    
+
     // Check if it's a git repository
     let git_dir = path.join(".git");
     if !git_dir.exists() {
@@ -1197,15 +1247,19 @@ async fn get_git_status(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             }]
         }));
     }
-    
+
     // Get tree excluding .git directory
-    let tree_result = analyze_directory(json!({
-        "path": path.display().to_string(),
-        "mode": "ai",
-        "max_depth": 5,
-        "show_ignored": true
-    }), ctx.clone()).await?;
-    
+    let tree_result = analyze_directory(
+        json!({
+            "path": path.display().to_string(),
+            "mode": "ai",
+            "max_depth": 5,
+            "show_ignored": true
+        }),
+        ctx.clone(),
+    )
+    .await?;
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -1219,15 +1273,17 @@ async fn get_git_status(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 }
 
 async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(args["path"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing path"))?);
-    
+    let path = PathBuf::from(
+        args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
+    );
+
     // Security check
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Access denied: path not allowed"));
     }
-    
+
     // Get all files
     let config = ScannerConfig {
         max_depth: 20,
@@ -1245,20 +1301,20 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         search_keyword: None,
         show_filesystems: false,
     };
-    
+
     let scanner = Scanner::new(&path, config)?;
     let (nodes, _) = scanner.scan()?;
-    
+
     // Group files by size and name
     use std::collections::HashMap;
     let mut size_groups: HashMap<u64, Vec<&crate::scanner::FileNode>> = HashMap::new();
-    
+
     for node in &nodes {
         if !node.is_dir {
             size_groups.entry(node.size).or_default().push(node);
         }
     }
-    
+
     // Find potential duplicates
     let mut duplicates = Vec::new();
     for (size, files) in size_groups.iter() {
@@ -1270,7 +1326,7 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             }));
         }
     }
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -1286,16 +1342,16 @@ async fn analyze_workspace(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let path = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-    
+
     // Get project overview
     let overview = project_overview(json!({ "path": path }), ctx.clone()).await?;
-    
+
     // Find build files
     let build_files = find_build_files(json!({ "path": path }), ctx.clone()).await?;
-    
+
     // Find config files
     let config_files = find_config_files(json!({ "path": path }), ctx.clone()).await?;
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -1313,38 +1369,48 @@ async fn find_tests(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let path = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-    
+
     let pattern = r"(test_|_test\.|\.test\.|tests?\.|spec\.|\.spec\.|_spec\.)|(/tests?/|/specs?/)";
-    find_files(json!({
-        "path": path,
-        "pattern": pattern,
-        "max_depth": 20
-    }), ctx).await
+    find_files(
+        json!({
+            "path": path,
+            "pattern": pattern,
+            "max_depth": 20
+        }),
+        ctx,
+    )
+    .await
 }
 
 async fn find_build_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let path = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-    
+
     let pattern = r"^(Makefile|makefile|CMakeLists\.txt|Cargo\.toml|package\.json|pom\.xml|build\.gradle|build\.sbt|setup\.py|requirements\.txt|Gemfile|go\.mod|composer\.json|Dockerfile|docker-compose\.yml)$";
-    find_files(json!({
-        "path": path,
-        "pattern": pattern,
-        "max_depth": 10
-    }), ctx).await
+    find_files(
+        json!({
+            "path": path,
+            "pattern": pattern,
+            "max_depth": 10
+        }),
+        ctx,
+    )
+    .await
 }
 
 async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(args["path"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing path"))?);
-    
+    let path = PathBuf::from(
+        args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
+    );
+
     // Security check
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Access denied: path not allowed"));
     }
-    
+
     // Get immediate subdirectories
     let config = ScannerConfig {
         max_depth: 1,
@@ -1362,10 +1428,10 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
         search_keyword: None,
         show_filesystems: false,
     };
-    
+
     let scanner = Scanner::new(&path, config)?;
     let (nodes, _) = scanner.scan()?;
-    
+
     // Calculate size for each subdirectory
     let mut dir_sizes = Vec::new();
     for node in &nodes {
@@ -1389,7 +1455,7 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
             };
             let subscanner = Scanner::new(&node.path, subconfig)?;
             let (_, substats) = subscanner.scan()?;
-            
+
             dir_sizes.push(json!({
                 "directory": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
                 "path": node.path.display().to_string(),
@@ -1399,10 +1465,10 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
             }));
         }
     }
-    
+
     // Sort by size
     dir_sizes.sort_by_key(|d| -(d["size"].as_u64().unwrap_or(0) as i64));
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -1415,15 +1481,17 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
 }
 
 async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(args["path"]
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing path"))?);
-    
+    let path = PathBuf::from(
+        args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
+    );
+
     // Security check
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Access denied: path not allowed"));
     }
-    
+
     let config = ScannerConfig {
         max_depth: 20,
         follow_symlinks: false,
@@ -1440,21 +1508,22 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
         search_keyword: None,
         show_filesystems: false,
     };
-    
+
     let scanner = Scanner::new(&path, config)?;
     let (nodes, _) = scanner.scan()?;
-    
+
     // Find directories with no children
     let mut empty_dirs = Vec::new();
-    let mut dir_children: std::collections::HashMap<PathBuf, usize> = std::collections::HashMap::new();
-    
+    let mut dir_children: std::collections::HashMap<PathBuf, usize> =
+        std::collections::HashMap::new();
+
     // Count children for each directory
     for node in &nodes {
         if let Some(parent) = node.path.parent() {
             *dir_children.entry(parent.to_path_buf()).or_insert(0) += 1;
         }
     }
-    
+
     // Find empty directories
     for node in &nodes {
         if node.is_dir {
@@ -1464,7 +1533,7 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
             }
         }
     }
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -1481,13 +1550,17 @@ async fn semantic_analysis(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     let max_depth = args["max_depth"].as_u64().unwrap_or(10) as usize;
-    
+
     // Simply use analyze_directory with semantic mode
-    analyze_directory(json!({
-        "path": path,
-        "mode": "semantic",
-        "max_depth": max_depth,
-        "no_emoji": false,
-        "path_mode": "off"
-    }), ctx).await
+    analyze_directory(
+        json!({
+            "path": path,
+            "mode": "semantic",
+            "max_depth": max_depth,
+            "no_emoji": false,
+            "path_mode": "off"
+        }),
+        ctx,
+    )
+    .await
 }
