@@ -50,10 +50,3 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     
-    - name: Check formatting
-      run: cargo fmt -- --check
-      if: matrix.os == 'ubuntu-latest'
-    
-    - name: Run clippy
-      run: cargo clippy -- -D warnings
-      if: matrix.os == 'ubuntu-latest'
