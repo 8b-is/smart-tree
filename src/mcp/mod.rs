@@ -144,7 +144,7 @@ impl McpServer {
                             }
                         }
                         Err(e) => {
-                            eprintln!("Error handling request: {}", e);
+                            eprintln!("Error handling request: {e}");
                             let error_response = json!({
                                 "jsonrpc": "2.0",
                                 "error": {
@@ -159,7 +159,7 @@ impl McpServer {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error reading input: {}", e);
+                    eprintln!("Error reading input: {e}");
                     break;
                 }
             }

@@ -265,7 +265,7 @@ impl RelationAnalyzer {
             if let Some(ext) = path.extension() {
                 if self.parsers.contains_key(ext.to_str().unwrap_or("")) {
                     let content =
-                        fs::read_to_string(path).context(format!("Failed to read {:?}", path))?;
+                        fs::read_to_string(path).context(format!("Failed to read {path:?}"))?;
                     self.file_cache.insert(path.to_path_buf(), content);
                 }
             }
