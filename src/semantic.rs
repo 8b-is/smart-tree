@@ -81,88 +81,89 @@ impl SemanticCategory {
 
 /// Analyzes files and determines their semantic category
 pub struct SemanticAnalyzer {
-    // Pattern matching for different file types
-    patterns: HashMap<SemanticCategory, Vec<&'static str>>,
+    // Pattern matching for different file types in priority order
+    patterns: Vec<(SemanticCategory, Vec<&'static str>)>,
 }
 
 impl SemanticAnalyzer {
     pub fn new() -> Self {
-        let mut patterns = HashMap::new();
-        
-        // Documentation patterns
-        patterns.insert(SemanticCategory::Documentation, vec![
-            "README", "readme", "LICENSE", "CHANGELOG", "AUTHORS", "CONTRIBUTORS",
-            "INSTALL", "GUIDE", "TUTORIAL", "DOCS", "NOTES", "TODO",
-            ".md", ".rst", ".txt", ".adoc", ".org", ".tex",
-        ]);
-        
-        // Source code patterns (by extension)
-        patterns.insert(SemanticCategory::SourceCode, vec![
-            ".rs", ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".java", ".c", ".cpp",
-            ".h", ".hpp", ".cs", ".rb", ".php", ".swift", ".kt", ".scala", ".r",
-            ".jl", ".ml", ".hs", ".ex", ".exs", ".clj", ".dart", ".nim",
-        ]);
-        
-        // Test patterns
-        patterns.insert(SemanticCategory::Tests, vec![
-            "test", "tests", "spec", "specs", "__tests__", "_test", "test_",
-            ".test.", ".spec.", "_spec.", "integration", "unit", "e2e",
-        ]);
-        
-        // Configuration patterns
-        patterns.insert(SemanticCategory::Configuration, vec![
-            ".config", ".conf", ".cfg", ".ini", ".env", ".properties",
-            ".json", ".yaml", ".yml", ".toml", ".xml", "settings",
-            "config", "configuration", ".gitignore", ".dockerignore",
-        ]);
-        
-        // Build system patterns
-        patterns.insert(SemanticCategory::BuildSystem, vec![
-            "Makefile", "makefile", "CMakeLists", "build", "BUILD",
-            "Cargo.toml", "package.json", "pom.xml", "build.gradle",
-            "setup.py", "setup.cfg", "pyproject.toml", "composer.json",
-            ".bazel", "meson.build", "SConstruct", "Rakefile",
-        ]);
-        
-        // Dependencies patterns
-        patterns.insert(SemanticCategory::Dependencies, vec![
-            "node_modules", "vendor", "packages", ".packages", "target",
-            "venv", ".venv", "env", ".env", "virtualenv", "__pycache__",
-            "dist", "build", ".gradle", ".m2", "Cargo.lock", "package-lock.json",
-            "yarn.lock", "poetry.lock", "Gemfile.lock", "requirements.txt",
-        ]);
-        
-        // Assets patterns
-        patterns.insert(SemanticCategory::Assets, vec![
-            ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
-            ".mp3", ".wav", ".ogg", ".mp4", ".webm", ".mov",
-            ".ttf", ".otf", ".woff", ".woff2", ".eot",
-            ".css", ".scss", ".sass", ".less", ".styl",
-            "assets", "static", "public", "resources", "media",
-        ]);
-        
-        // Data patterns
-        patterns.insert(SemanticCategory::Data, vec![
-            ".csv", ".tsv", ".parquet", ".feather", ".arrow",
-            ".db", ".sqlite", ".sql", ".mdb", ".dbf",
-            ".h5", ".hdf5", ".nc", ".zarr", ".npy", ".npz",
-            "data", "datasets", "corpus", "samples",
-        ]);
-        
-        // Scripts patterns
-        patterns.insert(SemanticCategory::Scripts, vec![
-            ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
-            "scripts", "bin", "tools", "utils", "hooks",
-            "install", "setup", "deploy", "run", "start", "stop",
-        ]);
-        
-        // Generated patterns
-        patterns.insert(SemanticCategory::Generated, vec![
-            ".o", ".a", ".so", ".dll", ".dylib", ".exe", ".app",
-            ".class", ".jar", ".war", ".pyc", ".pyo", ".pyd",
-            ".min.js", ".min.css", ".bundle.js", ".chunk.js",
-            "generated", "gen", "auto", "autogen", ".g.dart",
-        ]);
+        // Patterns in priority order - more specific categories first
+        let patterns = vec![
+            // Generated patterns - most specific, should be checked first
+            (SemanticCategory::Generated, vec![
+                ".o", ".a", ".so", ".dll", ".dylib", ".exe", ".app",
+                ".class", ".jar", ".war", ".pyc", ".pyo", ".pyd",
+                ".min.js", ".min.css", ".bundle.js", ".chunk.js",
+                "generated", "gen", "auto", "autogen", ".g.dart",
+            ]),
+            
+            // Data patterns - specific data formats
+            (SemanticCategory::Data, vec![
+                ".csv", ".tsv", ".parquet", ".feather", ".arrow",
+                ".db", ".sqlite", ".sql", ".mdb", ".dbf",
+                ".h5", ".hdf5", ".nc", ".zarr", ".npy", ".npz",
+                "data", "datasets", "corpus", "samples",
+            ]),
+            
+            // Assets patterns - multimedia and static files
+            (SemanticCategory::Assets, vec![
+                ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
+                ".mp3", ".wav", ".ogg", ".mp4", ".webm", ".mov",
+                ".ttf", ".otf", ".woff", ".woff2", ".eot",
+                ".css", ".scss", ".sass", ".less", ".styl",
+                "assets", "static", "public", "resources", "media",
+            ]),
+            
+            // Scripts patterns - executable scripts
+            (SemanticCategory::Scripts, vec![
+                ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+                "scripts", "bin", "tools", "utils", "hooks",
+                "install", "setup", "deploy", "run", "start", "stop",
+            ]),
+            
+            // Test patterns - testing files
+            (SemanticCategory::Tests, vec![
+                "test", "tests", "spec", "specs", "__tests__", "_test", "test_",
+                ".test.", ".spec.", "_spec.", "integration", "unit", "e2e",
+            ]),
+            
+            // Build system patterns - build files
+            (SemanticCategory::BuildSystem, vec![
+                "Makefile", "makefile", "CMakeLists", "build", "BUILD",
+                "Cargo.toml", "package.json", "pom.xml", "build.gradle",
+                "setup.py", "setup.cfg", "pyproject.toml", "composer.json",
+                ".bazel", "meson.build", "SConstruct", "Rakefile",
+            ]),
+            
+            // Configuration patterns - config files
+            (SemanticCategory::Configuration, vec![
+                ".config", ".conf", ".cfg", ".ini", ".env", ".properties",
+                ".json", ".yaml", ".yml", ".toml", ".xml", "settings",
+                "config", "configuration", ".gitignore", ".dockerignore",
+            ]),
+            
+            // Dependencies patterns - dependency directories
+            (SemanticCategory::Dependencies, vec![
+                "node_modules", "vendor", "packages", ".packages", "target",
+                "venv", ".venv", "env", ".env", "virtualenv", "__pycache__",
+                "dist", "build", ".gradle", ".m2", "Cargo.lock", "package-lock.json",
+                "yarn.lock", "poetry.lock", "Gemfile.lock", "requirements.txt",
+            ]),
+            
+            // Documentation patterns
+            (SemanticCategory::Documentation, vec![
+                "README", "readme", "LICENSE", "CHANGELOG", "AUTHORS", "CONTRIBUTORS",
+                "INSTALL", "GUIDE", "TUTORIAL", "DOCS", "NOTES", "TODO",
+                ".md", ".rst", ".txt", ".adoc", ".org", ".tex",
+            ]),
+            
+            // Source code patterns - most general, should be last
+            (SemanticCategory::SourceCode, vec![
+                ".rs", ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".java", ".c", ".cpp",
+                ".h", ".hpp", ".cs", ".rb", ".php", ".swift", ".kt", ".scala", ".r",
+                ".jl", ".ml", ".hs", ".ex", ".exs", ".clj", ".dart", ".nim",
+            ]),
+        ];
         
         Self { patterns }
     }
@@ -187,15 +188,10 @@ impl SemanticAnalyzer {
             return SemanticCategory::Tests;
         }
         
-        // Check each category's patterns
+        // Check patterns in the predefined priority order
         for (category, patterns) in &self.patterns {
             for pattern in patterns {
-                if file_name.contains(pattern) || path_str.contains(pattern) {
-                    // Special handling for tests - they override source code
-                    if *category == SemanticCategory::SourceCode && 
-                       self.is_test_file(&path_str, &file_name) {
-                        return SemanticCategory::Tests;
-                    }
+                if self.matches_pattern(&file_name, &path_str, pattern) {
                     return category.clone();
                 }
             }
@@ -212,12 +208,28 @@ impl SemanticAnalyzer {
         SemanticCategory::Unknown
     }
     
+    /// Check if a pattern matches a file, with better precision for extensions
+    fn matches_pattern(&self, file_name: &str, path_str: &str, pattern: &str) -> bool {
+        if pattern.starts_with('.') && pattern.len() > 1 {
+            // This is a file extension - match it precisely
+            file_name.ends_with(pattern) || path_str.contains(&format!("{}/", pattern))
+        } else {
+            // This is a name pattern - use contains matching
+            file_name.contains(pattern) || path_str.contains(pattern)
+        }
+    }
+    
     /// Check if a file is a test file
     fn is_test_file(&self, path_str: &str, file_name: &str) -> bool {
-        let test_patterns = &self.patterns[&SemanticCategory::Tests];
-        test_patterns.iter().any(|pattern| {
-            file_name.contains(pattern) || path_str.contains(pattern)
-        })
+        // Find the test patterns in the ordered list
+        for (category, patterns) in &self.patterns {
+            if *category == SemanticCategory::Tests {
+                return patterns.iter().any(|pattern| {
+                    self.matches_pattern(file_name, path_str, pattern)
+                });
+            }
+        }
+        false
     }
     
     /// Calculate semantic similarity between two files (0.0 to 1.0)
