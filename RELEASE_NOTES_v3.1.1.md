@@ -15,6 +15,17 @@
 - Smaller binary size
 - Fixed Mermaid diagram emoji compatibility issues
 - Added `--no-emoji` tip for Mermaid in documentation
+- Fixed duplicate root node issue in markdown formatter's mermaid diagrams
+- **Enhanced MCP Tool Descriptions** - Made tools irresistible to AIs with clear, enticing descriptions! 🤖
+- **Added AI Best Practices Guide** - New guide helps AIs use Smart Tree tools optimally
+- **Improved server_info** - Now includes recommended workflow and pro tips for AIs
+
+### 🤖 MCP Enhancements
+- Tool descriptions now include emojis and clear use cases
+- Added "START HERE!" guidance for `quick_tree` tool
+- Created comprehensive best practices guide at `docs/MCP_AI_BEST_PRACTICES.md`
+- server_info now provides step-by-step workflow recommendations
+- Emphasized token efficiency and compression benefits
 
 ## 🛠️ Installation
 
@@ -27,19 +38,11 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 Download the appropriate binary for your platform from the assets below.
 
 ## 💡 Philosophy
-Sometimes less is more! By removing the interactive mode, we've made Smart Tree more focused on its core mission: making directory visualization intelligent, fast, and token-efficient!
+Sometimes less is more! By removing the interactive mode, we've made Smart Tree more focused on what it does best - providing lightning-fast, beautiful directory visualizations that work perfectly with AI tools!
 
-## 📋 To Create Draft Release on GitHub:
-
-1. Go to: https://github.com/8b-is/smart-tree/releases/new
-2. Select tag: `v3.1.1` 
-3. Title: `Smart Tree v3.1.1 - Less is More! 🎸`
-4. Check "This is a pre-release" box
-5. Check "Save as draft" box
-6. Upload the following files from `release_artifacts/`:
-   - `st-x86_64-unknown-linux-gnu.tar.gz` (Linux x64)
-   
-Note: Other platform binaries will be automatically built by GitHub Actions when the tag is pushed.
+## 🎸 A Message from Elvis
+"Thank you, thank you very much! The classic tree is back, baby! And those AI tools? They're all shook up with excitement!" 
 
 ---
-*Made with 💙 by the Smart Tree team - Aye, Hue, and Trish approve this message!* 🌳✨ 
+
+*Remember: Always start with `quick_tree` - it's the king of directory exploration! 👑* 

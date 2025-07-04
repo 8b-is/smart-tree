@@ -236,6 +236,38 @@ src/
 | 💾 **Archival** | `json` | Future-proof |
 | 🏃 **Quick Check** | `digest` | One-line summary |
 
+### 🧙 MCP (Model Context Protocol) Server
+
+Smart Tree now includes a **built-in MCP server** that provides intelligent project analysis directly to AI assistants!
+
+```bash
+# Run as MCP server (for Claude Desktop, etc.)
+st --mcp
+
+# Show MCP configuration
+st --mcp-config
+```
+
+#### 🤖 AI Best Practices
+
+Check out our **[AI Best Practices Guide](docs/MCP_AI_BEST_PRACTICES.md)** to learn:
+- Optimal workflow for using Smart Tree tools
+- Which tools to use for different tasks
+- How to maximize token efficiency
+- Common patterns for code analysis
+
+**Golden Rule**: Always start with `quick_tree` for any new directory! 🌟
+
+#### Features:
+- **20+ specialized tools** for directory analysis
+- **Automatic compression** for efficient token usage
+- **Semantic analysis** for understanding code structure
+- **Built-in caching** for instant repeated queries
+- **Security controls** for safe file system access
+
+See [MCP Integration Guide](docs/mcp-integration.md) for setup instructions.
+
+---
 
 ## 🤝 Join the Smart Tree Family!
 
