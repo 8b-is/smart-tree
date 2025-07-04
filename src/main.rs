@@ -78,11 +78,6 @@ struct Cli {
     #[arg(long, exclusive = true)]
     mcp_config: bool,
 
-    /// Launch interactive mode for exploring directories with a TUI.
-    /// This is the ultimate Smart Tree experience! 🎸
-    #[arg(short = 'i', long, exclusive = true)]
-    interactive: bool,
-
     // --- Scan Arguments ---
     /// Path to the directory or file you want to analyze.
     path: Option<PathBuf>,
@@ -95,7 +90,7 @@ struct Cli {
 struct ScanArgs {
     /// Choose your adventure! Selects the output format.
     /// From classic human-readable to AI-optimized hex, we've got options.
-    #[arg(short, long, value_enum, default_value = "summary")]
+    #[arg(short, long, value_enum, default_value = "classic")]
     mode: OutputMode,
 
     /// Feeling like a detective? Find files/directories matching this regex pattern.
@@ -368,9 +363,6 @@ fn main() -> Result<()> {
     if cli.mcp_config {
         print_mcp_config();
         return Ok(());
-    }
-    if cli.interactive {
-        return run_interactive_mode(cli.path);
     }
 
     // If no action flag was given, proceed with the scan.
@@ -796,31 +788,4 @@ fn run_mcp_server() -> Result<()> {
         // `run_stdio` would handle communication over stdin/stdout.
         server.run_stdio().await
     })
-}
-
-/// Run the interactive mode - the ultimate Smart Tree experience!
-/// This launches a TUI (Terminal User Interface) for exploring directories
-/// with various visualization modes, filters, and export options.
-fn run_interactive_mode(initial_path: Option<PathBuf>) -> Result<()> {
-    use st::interactive::InteractiveMode;
-    
-    // Determine the starting path
-    let path = initial_path.unwrap_or_else(|| PathBuf::from("."));
-    
-    // Ensure the path exists and is a directory
-    if !path.exists() {
-        return Err(anyhow::anyhow!("Path does not exist: {:?}", path));
-    }
-    if !path.is_dir() {
-        return Err(anyhow::anyhow!("Path is not a directory: {:?}", path));
-    }
-    
-    // Create the interactive mode instance
-    let mut interactive = InteractiveMode::new(path.canonicalize()?);
-    
-    // Create a runtime for the interactive mode (which may use async operations)
-    let runtime = tokio::runtime::Runtime::new()?;
-    
-    // Run the interactive mode
-    runtime.block_on(interactive.run())
 }

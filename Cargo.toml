@@ -1,6 +1,6 @@
 [package]
 name = "st"
-version = "3.0.0-beta.1"
+version = "3.1.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -35,7 +35,6 @@ libc = "0.2"
 termimad = "0.26.1"
 once_cell = "1.19"
 base64 = "0.22"
-inquire = "0.7"
 
 # MCP (Model Context Protocol) support
 tokio = { version = "1.42", features = ["full"] }

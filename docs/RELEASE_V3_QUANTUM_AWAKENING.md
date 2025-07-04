@@ -139,4 +139,4 @@ To everyone who believed in the vision of making codebases not just visible, but
 **Smart Tree v3.0: Quantum Awakening**
 *"AST meets LLM. Meaning over megabytes."*
 
-Built with 💥 by the 8b-is team
+Built with �� by the 8b-is team

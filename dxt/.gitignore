@@ -10,3 +10,5 @@ server/.update-available
 
 # Node modules (if any)
 node_modules/
+.cursorrules
+.cursor/rules
