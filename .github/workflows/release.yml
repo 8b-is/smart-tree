@@ -1,51 +1,32 @@
 name: Release
-permissions:
-  contents: write
+
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
+    name: Build for ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          # macOS ARM64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            binary_name: st
-            asset_name: st-aarch64-apple-darwin
-          
-          # macOS Intel
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            binary_name: st
-            asset_name: st-x86_64-apple-darwin
-
-          # Linux ARM64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            binary_name: st
-            asset_name: st-aarch64-unknown-linux-gnu
-          
-          # Linux x64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary_name: st
-            asset_name: st-x86_64-unknown-linux-gnu
-          
-          # Windows x64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            binary_name: st.exe
-            asset_name: st-x86_64-pc-windows-msvc.exe
+            archive: tar.gz
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
 
     steps:
     - uses: actions/checkout@v4
@@ -55,33 +36,38 @@ jobs:
       with:
         targets: ${{ matrix.target }}
     
+    - name: Install cross-compilation tools
+      if: matrix.target == 'aarch64-unknown-linux-gnu'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+    
     - name: Build
       run: cargo build --release --target ${{ matrix.target }}
     
-    - name: Prepare binary
+    - name: Create archive
       shell: bash
       run: |
         cd target/${{ matrix.target }}/release
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          7z a -tzip ${{ matrix.asset_name }}.zip ${{ matrix.binary_name }}
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          7z a ../../../st-${{ matrix.target }}.zip st.exe
         else
-          chmod +x ${{ matrix.binary_name }}
-          tar czf ${{ matrix.asset_name }}.tar.gz ${{ matrix.binary_name }}
+          tar czf ../../../st-${{ matrix.target }}.tar.gz st
         fi
+        cd -
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.asset_name }}
-        path: |
-          target/${{ matrix.target }}/release/${{ matrix.asset_name }}.zip
-          target/${{ matrix.target }}/release/${{ matrix.asset_name }}.tar.gz
+        name: st-${{ matrix.target }}
+        path: st-${{ matrix.target }}.${{ matrix.archive }}
 
   release:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
     
     steps:
     - uses: actions/checkout@v4
@@ -91,56 +77,12 @@ jobs:
       with:
         path: artifacts
     
-    - name: Build DXT Package
-      run: |
-        cd dxt
-        ./build-dxt.sh
-        
-    - name: Create Release with Assets
+    - name: Create Release
       uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        name: Smart Tree ${{ github.ref_name }}
-        body: |
-          # Smart Tree ${{ github.ref_name }}
-          
-          🌳 **Making directories beautiful, one tree at a time!**
-          
-          ## What's New
-          
-          See the [CHANGELOG.md](https://github.com/8b-is/smart-tree/blob/main/CHANGELOG.md) for detailed release notes.
-          
-          ### Key Features
-          
-          - **🤖 AI-Optimized** - MCP (Model Context Protocol) integration for Claude Desktop
-          - **⚡ Ultra-Fast** - Quantum compression with 99% size reduction
-          - **🎯 Multiple Formats** - JSON, hex, AI-optimized, markdown, and more
-          - **🔍 Smart Search** - Find content within files while scanning
-          - **📊 Rich Statistics** - Detailed analysis with file categorization
-          - **🌊 Streaming Mode** - Real-time output for large directories
-          
-          ## Installation
-          
-          ### Using DXT (Recommended for Claude Desktop)
-          Download `smart-tree.dxt` from the assets below and install in Claude Desktop.
-          
-          ### Manual Installation
-          Download the appropriate binary for your platform below.
-          
-          ## Binaries
-          
-          | Platform | Architecture | Download |
-          |----------|--------------|----------|
-          | macOS | ARM64 (Apple Silicon) | `st-aarch64-apple-darwin.tar.gz` |
-          | macOS | Intel | `st-x86_64-apple-darwin.tar.gz` |
-          | Linux | x64 | `st-x86_64-unknown-linux-gnu.tar.gz` |
-          | Linux | ARM64 | `st-aarch64-unknown-linux-gnu.tar.gz` |
-          | Windows | x64 | `st-x86_64-pc-windows-msvc.exe.zip` |
-          
+        files: artifacts/**/st-*
+        generate_release_notes: true
         draft: false
         prerelease: false
-        files: |
-          artifacts/*/*.tar.gz
-          artifacts/*/*.zip
-          dxt/smart-tree.dxt
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

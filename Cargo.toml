@@ -1,6 +1,6 @@
 [package]
 name = "st"
-version = "3.1.0"
+version = "2.0.8"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
