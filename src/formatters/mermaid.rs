@@ -167,19 +167,19 @@ impl MermaidFormatter {
 
             // Determine node shape based on type
             let (open_shape, close_shape) = if node.is_dir {
-                ("[", "]") // Rectangle for directories
+                ("[\"", "\"]") // Rectangle for directories - use quotes to handle emojis
             } else {
                 match node.path.extension().and_then(|e| e.to_str()) {
-                    Some("md") | Some("txt") | Some("rst") => ("([", "])"), // Stadium for docs
-                    Some("rs") | Some("py") | Some("js") | Some("ts") => ("{{", "}}"), // Hexagon for code
-                    Some("toml") | Some("yaml") | Some("yml") | Some("json") => ("[(", ")]"), // Cylinder for config
-                    _ => ("(", ")"), // Circle for other files
+                    Some("md") | Some("txt") | Some("rst") => ("([\"", "\"])"), // Stadium for docs
+                    Some("rs") | Some("py") | Some("js") | Some("ts") => ("{{\"", "\"}}"), // Hexagon for code
+                    Some("toml") | Some("yaml") | Some("yml") | Some("json") => ("[\"", "\"]"), // Rectangle for config (simpler than cylinder)
+                    _ => ("[\"", "\"]"), // Rectangle for other files (safer than circles)
                 }
             };
 
             writeln!(
                 writer,
-                "    {}{}\"{}\"{}",
+                "    {}{}{}{}",
                 node_id, open_shape, label, close_shape
             )?;
 
@@ -253,7 +253,8 @@ impl MermaidFormatter {
             .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         let escaped_root_name = Self::escape_label(&root_name);
-        writeln!(writer, "  root((📁 {}))", escaped_root_name)?;
+        let root_emoji = if !self.no_emoji { "📁 " } else { "" };
+        writeln!(writer, "  root(({}{}))", root_emoji, escaped_root_name)?;
 
         // Build tree structure
         let _current_depth = 0;
