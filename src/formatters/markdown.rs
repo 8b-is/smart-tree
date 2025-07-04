@@ -188,7 +188,7 @@ impl MarkdownFormatter {
             let label = format!("{} {}", emoji, Self::escape_mermaid(name));
 
             if node.is_dir {
-                writeln!(writer, "    {}[[\"{}\"])", node_id, label)?;
+                writeln!(writer, "    {}[[\"{}\"]]", node_id, label)?;
             } else {
                 writeln!(
                     writer,
