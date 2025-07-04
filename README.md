@@ -1,4 +1,4 @@
-# 🌳 Smart Tree (st) v2.0 - Revolutionary MEM|8 Quantum Compression
+# 🌳 Smart Tree (st) v3.1.1 - Revolutionary MEM|8 Quantum Compression
 
 <div align="center">
 
