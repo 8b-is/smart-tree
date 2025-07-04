@@ -16,9 +16,12 @@
 - Fixed Mermaid diagram emoji compatibility issues
 - Added `--no-emoji` tip for Mermaid in documentation
 - Fixed duplicate root node issue in markdown formatter's mermaid diagrams
+- Fixed stray parenthesis in mermaid directory nodes (directories now properly show as `[["📁 name"]]`)
 - **Enhanced MCP Tool Descriptions** - Made tools irresistible to AIs with clear, enticing descriptions! 🤖
 - **Added AI Best Practices Guide** - New guide helps AIs use Smart Tree tools optimally
 - **Improved server_info** - Now includes recommended workflow and pro tips for AIs
+- **Smart Installer** - Now detects if releases have binaries and offers alternatives if the latest version isn't ready yet!
+- **NEW: Mermaid Treemap Visualization** - Added `--mermaid-style treemap` for beautiful file size visualization! Shows directory structures with visual size representation 🗺️
 
 ### 🤖 MCP Enhancements
 - Tool descriptions now include emojis and clear use cases

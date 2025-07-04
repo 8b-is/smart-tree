@@ -177,6 +177,7 @@ st --semantic               # 🌊 Groups: tests, docs, config, source
 # Mermaid diagrams - instant documentation!
 st -m mermaid > docs/arch.md        # 📊 Flowchart magic
 st -m mermaid --mermaid-style mindmap  # 🧠 Mind map mode
+st -m mermaid --mermaid-style treemap # 🗺️ Treemap visualization (shows file sizes!)
 st -m markdown > README_PROJECT.md   # 📚 Full project report!
 
 # Pro tip: If mermaid has issues with emojis, use --no-emoji

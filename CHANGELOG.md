@@ -72,8 +72,10 @@ This release embodies our vision: compression with comprehension, making codebas
 
 ### ✨ New Features
 - **Mermaid Diagram Formatter**: Generate directory structures as Mermaid diagrams!
-  - New `--mode mermaid` outputs diagrams perfect for documentation
-  - Three styles: flowchart (default), mindmap, gitgraph
+  - Flowchart style (default)
+  - Mind map style (`--mermaid-style mindmap`)
+  - Git graph style (`--mermaid-style gitgraph`)
+  - NEW: Treemap style (`--mermaid-style treemap`) - visualize file sizes!
   - Use `--mermaid-style` to choose diagram type
   - Copy & paste output directly into GitHub/GitLab markdown files
   - Automatic styling based on file types (code, docs, config)

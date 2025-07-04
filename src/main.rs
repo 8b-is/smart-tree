@@ -242,12 +242,14 @@ struct ScanArgs {
 /// Enum for mermaid style argument
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum MermaidStyleArg {
-    /// Traditional flowchart with connected nodes
+    /// Traditional flowchart (default)
     Flowchart,
-    /// Mind map style for overviews
+    /// Mind map style
     Mindmap,
-    /// Git-like graph showing relationships
+    /// Git graph style
     Gitgraph,
+    /// Treemap style (shows file sizes visually)
+    Treemap,
 }
 
 /// Enum defining how color should be used in the output.
@@ -630,6 +632,7 @@ fn main() -> Result<()> {
                     MermaidStyleArg::Flowchart => MermaidStyle::Flowchart,
                     MermaidStyleArg::Mindmap => MermaidStyle::Mindmap,
                     MermaidStyleArg::Gitgraph => MermaidStyle::GitGraph,
+                    MermaidStyleArg::Treemap => MermaidStyle::Treemap,
                 };
                 Box::new(MermaidFormatter::new(
                     style,
