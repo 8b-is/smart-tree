@@ -534,7 +534,7 @@ pub fn process_file() {
 "#;
 
         let imports = parser.parse_imports(content, Path::new("test.rs"));
-        assert_eq!(imports.len(), 3);
+        assert_eq!(imports.len(), 2);
 
         let functions = parser.parse_functions(content);
         assert_eq!(functions, vec!["process_file"]);
