@@ -320,8 +320,7 @@ impl MermaidFormatter {
     ) -> Result<()> {
         writeln!(writer, "```mermaid")?;
         writeln!(writer, "%%{{init: {{'theme':'dark'}}}}%%")?; // Dark theme looks better
-        writeln!(writer, "treemap-beta")?;
-        
+        writeln!(writer, "treemap-beta")?; // Treemap is a Mermaid Beta feature.        
         // Build directory tree with sizes
         let root_name = root_path
             .file_name()
