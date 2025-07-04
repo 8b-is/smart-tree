@@ -173,6 +173,11 @@ impl MarkdownFormatter {
 
         // Write nodes
         for (i, node) in display_nodes.iter().enumerate() {
+            // Skip the root directory itself to avoid duplicates
+            if node.path == *root_path {
+                continue;
+            }
+            
             let node_id = format!("node_{}", i);
             let name = node
                 .path

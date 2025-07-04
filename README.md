@@ -1,20 +1,10 @@
 # 🌳 Smart Tree (st) v3.1.1 - The Directory Visualizer That Rocks! 🎸
 
-```
-   _____ __  __          _____ _______   _______ _____  ______ ______ 
-  / ____|  \/  |   /\   |  __ \__   __| |__   __|  __ \|  ____|  ____|
- | (___ | \  / |  /  \  | |__) | | |       | |  | |__) | |__  | |__   
-  \___ \| |\/| | / /\ \ |  _  /  | |       | |  |  _  /|  __| |  __|  
-  ____) | |  | |/ ____ \| | \ \  | |       | |  | | \ \| |____| |____ 
- |_____/|_|  |_/_/    \_\_|  \_\ |_|       |_|  |_|  \_\______|______|
-                                                                       
-            🌊 Where Files Surf Semantic Waves Since 2024 🏄‍♂️
-```
+![Hue's Terminal](dxt/ST-HUE.png)
 
 [![Discord](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Join%20the%20Party&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC) [![GitHub release](https://img.shields.io/github/v/release/8b-is/smart-tree?include_prereleases&label=Latest%20Jam)](https://github.com/8b-is/smart-tree/releases) [![Downloads](https://img.shields.io/github/downloads/8b-is/smart-tree/total?label=Happy%20Users)](https://github.com/8b-is/smart-tree/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)[![Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange?logo=rust)](https://www.rust-lang.org/)[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-BFF%20Status-blueviolet)](https://claude.ai/download)[![MCP Compatible](https://img.shields.io/badge/MCP-Hell%20Yeah!-green)](https://modelcontextprotocol.io/)[![Platform](https://img.shields.io/badge/Runs%20on-Everything%20🚀-blue)](https://github.com/8b-is/smart-tree/releases)
 
 **"Making directories beautiful, one tree at a time!"** - *Trish from Accounting (our #1 fan!)*
-
 
 ---
 
@@ -90,8 +80,6 @@ copy target\release\st.exe C:\your\favorite\path\
 
 ### 🤖 Claude Desktop Integration - The Future is Now!
 
-<div align="center">
-
 **Make Claude your directory-reading bestie in 3 clicks!**
 
 1. 📥 Download `smart-tree.dxt` from [latest release](https://github.com/8b-is/smart-tree/releases/latest)
@@ -99,8 +87,6 @@ copy target\release\st.exe C:\your\favorite\path\
 3. 🎉 Select the file and grant access - DONE!
 
 *Claude can now see your directories better than you can!* 🔮
-
-</div>
 
 ## 🎯 Usage Examples (The Fun Part!)
 
@@ -226,28 +212,20 @@ src/
 
 ### 💰 The Money Shot - Compression Comparison
 
-<div align="center">
+#### 📈 Benchmarks
 
-```mermaid
-graph LR
-    A[487 MB Directory] -->|Old Tree| B[487 MB Output 💸]
-    A -->|Smart Tree| C[4.1 MB Output 🎉]
-    
-    B --> D[$1,270 in AI tokens 😱]
-    C --> E[$10 in AI tokens 😎]
-    
-    style A fill:#ff6b6b
-    style C fill:#4ecdc4
-    style E fill:#95e1d3
-```
+| Format | Size | Tokens | Relative Cost |
+|--------|------|--------|---------------|
+| Classic Tree | 1.2MB | 300K | 100% |
+| JSON | 2.1MB | 525K | 175% |
+| **Hex Mode** | 800KB | 200K | 67% |
+| **AI Mode + Compression** | 120KB | 30K | 10% |
+| **Digest** | 128B | 32 | 0.01% |
 
 **That's a 99.2% reduction! Your wallet just did a happy dance! 💃**
 
-</div>
-
 ### 🎯 Format Quick Reference
 
-<div align="center">
 
 | Use Case | Best Format | Why? |
 |:---------|:------------|:-----|
@@ -258,13 +236,12 @@ graph LR
 | 💾 **Archival** | `json` | Future-proof |
 | 🏃 **Quick Check** | `digest` | One-line summary |
 
-</div>
 
 ## 🤝 Join the Smart Tree Family!
 
 ### 💬 Discord Community - Where the Cool Kids Hang Out
 
-[![Discord Banner](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Join%20the%20Tree%20House&logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/uayQFhWC)
+[![Discord Banner](https://img.shields.io/discord/1352603992504401961?color=7289da&label=Join%20the%20Tree%20House&logo=discord&logoColor=lightgreena&style=for-the-badge)](https://discord.gg/uayQFhWC)
 
 **Come for the trees, stay for the memes!** 🌳😂
 
@@ -292,8 +269,6 @@ Special shoutouts to:
 
 ## 🎬 The Grand Finale
 
-<div align="center">
-
 ### Why Smart Tree? Because...
 
 **🌳 Life's too short for boring directory listings!**
@@ -312,12 +287,10 @@ Special shoutouts to:
 
 *Aye, Hue, Trish, and Omni approve this message!* ✨
 
-</div>
-
 ---
-
-<div align="center">
 
 **P.S. - If you read this far, you're awesome! Here's a secret: Try `st --semantic` and watch the magic happen! 🌊✨**
 
-</div>
+---
+
+[FYI Section](FYI.md)

@@ -31,7 +31,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
     let tools = vec![
         ToolDefinition {
             name: "server_info".to_string(),
-            description: "Get information about the Smart Tree MCP server".to_string(),
+            description: "Get information about the Smart Tree MCP server - shows capabilities, compression options, and performance tips. Call this to understand what Smart Tree can do for you!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {},
@@ -40,7 +40,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "analyze_directory".to_string(),
-            description: "Analyze a directory with smart compression. Use mode='classic' for human-readable tree, 'ai' for AI-optimized format (default), 'quantum-semantic' for semantic-aware compression with tokens (recommended!), 'summary-ai' for maximum compression (10x reduction), 'quantum' for ultra-compressed binary, 'digest' for minimal hash. MCP automatically optimizes output for AI consumption.".to_string(),
+            description: "🔍 The MAIN WORKHORSE - Analyze any directory with multiple output formats. Use mode='classic' for human-readable tree, 'ai' for AI-optimized format (default), 'quantum-semantic' for semantic-aware compression with tokens (HIGHLY RECOMMENDED for code analysis!), 'summary-ai' for maximum compression (10x reduction - perfect for large codebases!), 'quantum' for ultra-compressed binary, 'digest' for minimal hash. PRO TIP: Start with quick_tree for overview, then use this for details!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -91,7 +91,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_files".to_string(),
-            description: "Find files matching specific criteria".to_string(),
+            description: "🔎 Powerful file search with regex patterns, size filters, and date ranges. Perfect for finding specific files in large codebases. Returns structured JSON with file details. Use this when you need to locate specific files by name, type, size, or modification date.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -134,7 +134,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "get_statistics".to_string(),
-            description: "Get detailed statistics about a directory".to_string(),
+            description: "📊 Get comprehensive statistics about a directory - file counts by type, size distribution, largest files, newest files, and more. Great for understanding project composition and identifying potential issues like large files or unusual patterns.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -153,7 +153,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "get_digest".to_string(),
-            description: "Get SHA256 digest of directory structure".to_string(),
+            description: "🔐 Get SHA256 digest of directory structure - perfect for detecting changes, verifying directory integrity, or creating unique identifiers for directory states. Super fast and efficient!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -167,7 +167,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "quick_tree".to_string(),
-            description: "START HERE! Quick 3-level overview using SUMMARY-AI mode (10x compression). Perfect for initial exploration before using analyze_directory for details. Automatically optimized for AI token efficiency!".to_string(),
+            description: "⚡ START HERE! Lightning-fast 3-level directory overview using SUMMARY-AI mode with 10x compression. Perfect for initial exploration before diving into details. This is your go-to tool for quickly understanding any codebase structure. Automatically optimized for AI token efficiency - saves you tokens while giving maximum insight!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -186,7 +186,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "project_overview".to_string(),
-            description: "Get a comprehensive project overview using SUMMARY-AI mode compression. Provides context, structure, and key files with maximum token efficiency (10x reduction!)".to_string(),
+            description: "🚀 Get a comprehensive project analysis with context detection, key files identification, and structure insights. Uses SUMMARY-AI compression for 10x token reduction! This tool automatically detects project type (Node.js, Rust, Python, etc.) and highlights important files. IDEAL for understanding new codebases quickly!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -200,7 +200,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_code_files".to_string(),
-            description: "Find all code files in a project by common programming languages".to_string(),
+            description: "💻 Find all source code files by programming language. Supports 25+ languages including Python, JavaScript, TypeScript, Rust, Go, Java, C++, and more. Use languages=['all'] to find all code files, or specify specific languages. Returns structured JSON perfect for further analysis.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -223,7 +223,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_config_files".to_string(),
-            description: "Find all configuration files (json, yaml, toml, ini, env, etc.)".to_string(),
+            description: "⚙️ Locate all configuration files - JSON, YAML, TOML, INI, .env, and more. Essential for understanding project setup, dependencies, and configuration. Finds package.json, Cargo.toml, requirements.txt, docker-compose.yml, and dozens of other config patterns.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -237,7 +237,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_documentation".to_string(),
-            description: "Find all documentation files (README, markdown, rst, txt docs)".to_string(),
+            description: "📚 Find all documentation files - README, CHANGELOG, LICENSE, and any markdown/text docs. Perfect for quickly understanding project documentation structure and locating important information about setup, contribution guidelines, or API documentation.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -251,7 +251,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "search_in_files".to_string(),
-            description: "Search for content within files (like grep but AI-friendly output)".to_string(),
+            description: "🔍 Powerful content search within files (like grep but AI-friendly). Search for keywords, function names, TODOs, or any text pattern. Returns file locations with match counts - perfect for finding where specific functionality is implemented or tracking down references.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -278,7 +278,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_large_files".to_string(),
-            description: "Find files larger than a specified size".to_string(),
+            description: "💾 Identify files consuming significant disk space. Default threshold is 10MB but fully customizable. Essential for optimization, cleanup, or understanding resource usage. Great for finding forgotten large assets, logs, or build artifacts.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -297,7 +297,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_recent_changes".to_string(),
-            description: "Find recently modified files".to_string(),
+            description: "📅 Find files modified within the last N days (default: 7). Perfect for understanding recent development activity, tracking changes, or identifying what's been worked on lately. Helps focus attention on active areas of the codebase.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -316,7 +316,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "compare_directories".to_string(),
-            description: "Compare two directories and show differences".to_string(),
+            description: "🔄 Compare two directory structures to identify differences. Useful for comparing branches, versions, or similar projects. Shows what's unique to each directory and helps identify structural changes or missing files.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -334,7 +334,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "get_git_status".to_string(),
-            description: "Get git repository status and structure (if directory is a git repo)".to_string(),
+            description: "🌿 Analyze git repository structure (excluding .git internals). Shows the working tree with awareness of version control. Perfect for understanding project layout while respecting git boundaries. Automatically shows ignored files to give complete picture.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -348,7 +348,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_duplicates".to_string(),
-            description: "Find duplicate files based on size and name patterns".to_string(),
+            description: "🔁 Detect potential duplicate files based on size and name patterns. Helps identify redundant files, backup copies, or files that could be consolidated. Groups files by size for efficient duplicate detection.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -362,7 +362,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "analyze_workspace".to_string(),
-            description: "Analyze a development workspace and identify project structure, build files, dependencies".to_string(),
+            description: "🏗️ Comprehensive development workspace analysis - identifies project type, build systems, dependencies, and structure. Combines multiple analyses into one powerful overview. PERFECT for understanding complex multi-language projects or monorepos!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -376,7 +376,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_tests".to_string(),
-            description: "Find all test files in a project".to_string(),
+            description: "🧪 Locate all test files using common naming patterns (test_, _test, .test, spec, etc.). Essential for understanding test coverage, running specific tests, or analyzing testing patterns. Searches for unit tests, integration tests, and specs across all languages.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -390,7 +390,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_build_files".to_string(),
-            description: "Find build configuration files (Makefile, CMake, Cargo.toml, package.json, etc.)".to_string(),
+            description: "🔨 Find all build configuration files - Makefile, CMakeLists.txt, Cargo.toml, package.json, pom.xml, and more. Critical for understanding how to build, test, and deploy the project. Covers 15+ build systems!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -404,7 +404,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "directory_size_breakdown".to_string(),
-            description: "Get size breakdown of subdirectories to identify space usage".to_string(),
+            description: "📊 Get size analysis of immediate subdirectories - shows which folders consume the most space. Perfect for identifying bloated directories, understanding project layout by size, or cleanup opportunities. Returns sorted list with human-readable sizes.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -418,7 +418,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_empty_directories".to_string(),
-            description: "Find all empty directories".to_string(),
+            description: "📂 Find all empty directories in the tree. Useful for cleanup, identifying incomplete structures, or understanding project organization. Often reveals forgotten directories or structural issues.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -432,7 +432,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "semantic_analysis".to_string(),
-            description: "Group files by semantic similarity (inspired by Omni!). Uses wave-based analysis to categorize files by their conceptual purpose: Documentation, Source Code, Tests, Configuration, etc.".to_string(),
+            description: "🧠 ADVANCED: Group files by semantic similarity using wave-based analysis (inspired by Omni!). Categorizes files by conceptual purpose: Documentation, Source Code, Tests, Configuration, etc. Uses quantum semantic compression to identify patterns. AMAZING for understanding large codebases at a conceptual level!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -605,6 +605,44 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 },
             },
         },
+        "recommended_workflow": {
+            "step_1": {
+                "tool": "quick_tree",
+                "why": "Always start here! Gets you a 3-level overview with 10x compression. Perfect for understanding the basic structure.",
+                "example": "quick_tree(path='.')",
+            },
+            "step_2": {
+                "tool": "project_overview or analyze_workspace",
+                "why": "For deeper understanding of project type, dependencies, and structure. Use project_overview for single projects, analyze_workspace for complex/multi-language codebases.",
+                "example": "project_overview(path='.')",
+            },
+            "step_3_options": {
+                "for_specific_files": {
+                    "tools": ["find_code_files", "find_config_files", "find_documentation", "find_tests"],
+                    "why": "Use these targeted searches to locate specific file types quickly",
+                },
+                "for_code_analysis": {
+                    "tool": "analyze_directory with mode='quantum-semantic'",
+                    "why": "Best mode for understanding code structure with semantic compression and tokenization",
+                },
+                "for_search": {
+                    "tool": "search_in_files",
+                    "why": "Find specific functions, TODOs, or any text pattern across the codebase",
+                },
+                "for_statistics": {
+                    "tool": "get_statistics",
+                    "why": "Understand file distribution, sizes, and project composition",
+                },
+            },
+            "pro_tips": [
+                "Always use quick_tree first - it's optimized for initial exploration",
+                "For large codebases, use mode='summary-ai' for 10x compression",
+                "quantum-semantic mode is AMAZING for code understanding - try it!",
+                "Cache is enabled by default - repeated calls are instant",
+                "Use search_in_files to find specific implementations quickly",
+                "semantic_analysis groups files by purpose - great for large projects",
+            ],
+        },
         "statistics": {
             "uptime_seconds": 0, // Would need to track this
             "requests_handled": 0, // Would need to track this
@@ -612,11 +650,13 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "cache_misses": cache_stats.misses,
         },
         "tips": [
-            "Use 'summary-ai' format for optimal LLM API transmission",
+            "🌟 ALWAYS start with 'quick_tree' for any new directory!",
+            "Use 'summary-ai' format for optimal LLM API transmission (10x compression!)",
             "Enable compression with compress=true for large directories",
-            "Use 'quantum' format for maximum compression (90%+ reduction)",
+            "Use 'quantum-semantic' mode for the best code analysis experience",
             "Stream mode available for very large directories",
             "Content search supported with 'search_in_files' tool",
+            "The cache makes repeated queries instant - don't worry about calling tools multiple times!",
         ],
     });
 
