@@ -24,9 +24,9 @@ pub struct MermaidFormatter {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MermaidStyle {
-    Flowchart,  // Traditional flowchart style (TD/LR)
-    Mindmap,    // Mind map style (great for overviews)
-    GitGraph,   // Git-like graph (good for showing relationships)
+    Flowchart, // Traditional flowchart style (TD/LR)
+    Mindmap,   // Mind map style (great for overviews)
+    GitGraph,  // Git-like graph (good for showing relationships)
 }
 
 impl MermaidFormatter {
@@ -38,46 +38,20 @@ impl MermaidFormatter {
             max_label_length: 50, // Prevent overly long labels
         }
     }
-    
+
     fn sanitize_node_id(path: &std::path::Path) -> String {
         // Create safe node IDs for Mermaid
         let path_str = path.to_string_lossy();
         // Replace problematic characters
-        path_str
-            .replace('/', "_")
-            .replace('\\', "_")
-            .replace('.', "_")
-            .replace(' ', "_")
-            .replace('-', "_")
-            .replace('(', "_")
-            .replace(')', "_")
-            .replace('[', "_")
-            .replace(']', "_")
-            .replace('{', "_")
-            .replace('}', "_")
-            .replace(':', "_")
-            .replace(';', "_")
-            .replace(',', "_")
-            .replace('\'', "_")
-            .replace('"', "_")
-            .replace('`', "_")
-            .replace('~', "_")
-            .replace('!', "_")
-            .replace('@', "_")
-            .replace('#', "_")
-            .replace('$', "_")
-            .replace('%', "_")
-            .replace('^', "_")
-            .replace('&', "_")
-            .replace('*', "_")
-            .replace('=', "_")
-            .replace('+', "_")
-            .replace('|', "_")
-            .replace('<', "_")
-            .replace('>', "_")
-            .replace('?', "_")
+        path_str.replace(
+            [
+                '/', '\\', '.', ' ', '-', '(', ')', '[', ']', '{', '}', ':', ';', ',', '\'', '"',
+                '`', '~', '!', '@', '#', '$', '%', '^', '&', '*', '=', '+', '|', '<', '>', '?',
+            ],
+            "_",
+        )
     }
-    
+
     fn escape_label(text: &str) -> String {
         // Escape special characters that might break Mermaid syntax
         text.replace('|', "&#124;")
@@ -92,10 +66,12 @@ impl MermaidFormatter {
             .replace('(', "&#40;")
             .replace(')', "&#41;")
     }
-    
+
     fn format_label(&self, node: &FileNode) -> String {
         let name = match self.path_mode {
-            PathDisplayMode::Off => node.path.file_name()
+            PathDisplayMode::Off => node
+                .path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("?")
                 .to_string(),
@@ -103,7 +79,7 @@ impl MermaidFormatter {
                 node.path.to_string_lossy().to_string()
             }
         };
-        
+
         // Add emoji if enabled
         let emoji = if !self.no_emoji {
             if node.is_dir {
@@ -116,31 +92,31 @@ impl MermaidFormatter {
                     Some("md") => "📝 ",
                     Some("toml") | Some("yaml") | Some("yml") | Some("json") => "⚙️ ",
                     Some("png") | Some("jpg") | Some("jpeg") | Some("gif") => "🖼️ ",
-                    _ => "📄 "
+                    _ => "📄 ",
                 }
             }
         } else {
             ""
         };
-        
+
         // Escape the name for Mermaid
         let escaped_name = Self::escape_label(&name);
-        
+
         // Truncate if too long
         let mut label = format!("{}{}", emoji, escaped_name);
         if label.len() > self.max_label_length {
             label.truncate(self.max_label_length - 3);
             label.push_str("...");
         }
-        
+
         // Add size for files
         if !node.is_dir && node.size > 0 {
             label.push_str(&format!("<br/>{}", format_size(node.size)));
         }
-        
+
         label
     }
-    
+
     fn write_flowchart(
         &self,
         writer: &mut dyn Write,
@@ -151,11 +127,11 @@ impl MermaidFormatter {
         writeln!(writer, "graph TD")?;
         writeln!(writer, "    %% Smart Tree Directory Structure")?;
         writeln!(writer)?;
-        
+
         // Build parent-child relationships
         let mut parent_map: HashMap<String, Vec<&FileNode>> = HashMap::new();
         let root_id = Self::sanitize_node_id(root_path);
-        
+
         for node in nodes {
             let _node_id = Self::sanitize_node_id(&node.path);
 
@@ -166,42 +142,47 @@ impl MermaidFormatter {
                 } else {
                     Self::sanitize_node_id(parent_path)
                 };
-                
-                parent_map.entry(parent_id).or_insert_with(Vec::new).push(node);
+
+                parent_map.entry(parent_id).or_default().push(node);
             }
         }
-        
+
         // Write root node with emoji handling
         let root_emoji = if !self.no_emoji { "📁 " } else { "" };
-        let root_name = root_path.file_name()
-            .unwrap_or_else(|| root_path.as_os_str())
+        let root_name = root_path
+            .file_name()
+            .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         let escaped_root_name = Self::escape_label(&root_name);
-        writeln!(writer, "    {}[\"{}{}\"]", 
-            root_id, 
-            root_emoji,
-            escaped_root_name
+        writeln!(
+            writer,
+            "    {}[\"{}{}\"]",
+            root_id, root_emoji, escaped_root_name
         )?;
-        
+
         // Write all nodes and connections
         for node in nodes {
             let node_id = Self::sanitize_node_id(&node.path);
             let label = self.format_label(node);
-            
+
             // Determine node shape based on type
             let (open_shape, close_shape) = if node.is_dir {
-                ("[", "]")  // Rectangle for directories
+                ("[", "]") // Rectangle for directories
             } else {
                 match node.path.extension().and_then(|e| e.to_str()) {
                     Some("md") | Some("txt") | Some("rst") => ("([", "])"), // Stadium for docs
                     Some("rs") | Some("py") | Some("js") | Some("ts") => ("{{", "}}"), // Hexagon for code
                     Some("toml") | Some("yaml") | Some("yml") | Some("json") => ("[(", ")]"), // Cylinder for config
-                    _ => ("(", ")") // Circle for other files
+                    _ => ("(", ")"), // Circle for other files
                 }
             };
-            
-            writeln!(writer, "    {}{}\"{}\"{}", node_id, open_shape, label, close_shape)?;
-            
+
+            writeln!(
+                writer,
+                "    {}{}\"{}\"{}",
+                node_id, open_shape, label, close_shape
+            )?;
+
             // Connect to parent
             if let Some(parent_path) = node.path.parent() {
                 let parent_id = if parent_path == root_path {
@@ -209,19 +190,31 @@ impl MermaidFormatter {
                 } else {
                     Self::sanitize_node_id(parent_path)
                 };
-                
+
                 writeln!(writer, "    {} --> {}", parent_id, node_id)?;
             }
         }
-        
+
         // Add styling
         writeln!(writer)?;
         writeln!(writer, "    %% Styling")?;
-        writeln!(writer, "    classDef dirStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px")?;
-        writeln!(writer, "    classDef codeStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px")?;
-        writeln!(writer, "    classDef docStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px")?;
-        writeln!(writer, "    classDef configStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px")?;
-        
+        writeln!(
+            writer,
+            "    classDef dirStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px"
+        )?;
+        writeln!(
+            writer,
+            "    classDef codeStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px"
+        )?;
+        writeln!(
+            writer,
+            "    classDef docStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px"
+        )?;
+        writeln!(
+            writer,
+            "    classDef configStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px"
+        )?;
+
         // Apply styles
         for node in nodes {
             let node_id = Self::sanitize_node_id(&node.path);
@@ -242,11 +235,11 @@ impl MermaidFormatter {
                 }
             }
         }
-        
+
         writeln!(writer, "```")?;
         Ok(())
     }
-    
+
     fn write_mindmap(
         &self,
         writer: &mut dyn Write,
@@ -255,31 +248,32 @@ impl MermaidFormatter {
     ) -> Result<()> {
         writeln!(writer, "```mermaid")?;
         writeln!(writer, "mindmap")?;
-        let root_name = root_path.file_name()
-            .unwrap_or_else(|| root_path.as_os_str())
+        let root_name = root_path
+            .file_name()
+            .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         let escaped_root_name = Self::escape_label(&root_name);
         writeln!(writer, "  root((📁 {}))", escaped_root_name)?;
-        
+
         // Build tree structure
         let _current_depth = 0;
-        let _depth_stack = vec![root_path.to_path_buf()];
+        let _depth_stack = [root_path.to_path_buf()];
 
         for node in nodes {
             // Calculate depth
             let depth = node.path.components().count() - root_path.components().count();
-            
+
             // Adjust indentation
             let indent = "    ".repeat(depth + 1);
             let label = self.format_label(node);
-            
+
             writeln!(writer, "{}{}", indent, label)?;
         }
-        
+
         writeln!(writer, "```")?;
         Ok(())
     }
-    
+
     fn write_gitgraph(
         &self,
         writer: &mut dyn Write,
@@ -289,7 +283,7 @@ impl MermaidFormatter {
         writeln!(writer, "```mermaid")?;
         writeln!(writer, "gitGraph")?;
         writeln!(writer, "    commit id: \"Project Root\"")?;
-        
+
         // Group by directory
         let _current_branch = "main";
         let mut branch_count = 0;
@@ -308,11 +302,10 @@ impl MermaidFormatter {
                 // Limit to prevent overly complex graphs
                 let file_name = node.path.file_name().unwrap_or_default().to_string_lossy();
                 let escaped_file_name = Self::escape_label(&file_name);
-                writeln!(writer, "    commit id: \"{}\"", escaped_file_name
-                )?;
+                writeln!(writer, "    commit id: \"{}\"", escaped_file_name)?;
             }
         }
-        
+
         writeln!(writer, "```")?;
         Ok(())
     }
@@ -329,25 +322,33 @@ impl Formatter for MermaidFormatter {
         // Header
         writeln!(writer, "# Directory Structure Diagram")?;
         writeln!(writer)?;
-        writeln!(writer, "Generated by Smart Tree - {} files, {} directories, {}",
+        writeln!(
+            writer,
+            "Generated by Smart Tree - {} files, {} directories, {}",
             stats.total_files,
             stats.total_dirs,
             format_size(stats.total_size)
         )?;
         writeln!(writer)?;
-        
+
         // Choose format based on style
         match self.style {
             MermaidStyle::Flowchart => self.write_flowchart(writer, nodes, root_path)?,
             MermaidStyle::Mindmap => self.write_mindmap(writer, nodes, root_path)?,
             MermaidStyle::GitGraph => self.write_gitgraph(writer, nodes, root_path)?,
         }
-        
+
         // Footer with copy instructions
         writeln!(writer)?;
-        writeln!(writer, "<!-- Copy the mermaid code block above into your markdown file -->")?;
-        writeln!(writer, "<!-- GitHub, GitLab, and many other platforms will render it automatically! -->")?;
-        
+        writeln!(
+            writer,
+            "<!-- Copy the mermaid code block above into your markdown file -->"
+        )?;
+        writeln!(
+            writer,
+            "<!-- GitHub, GitLab, and many other platforms will render it automatically! -->"
+        )?;
+
         Ok(())
     }
 }
@@ -367,10 +368,10 @@ fn format_size(size: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::{FileCategory, FileType, FilesystemType};
     use std::path::PathBuf;
     use std::time::SystemTime;
-    use crate::scanner::{FileType, FileCategory, FilesystemType};
-    
+
     #[test]
     fn test_sanitize_node_id() {
         let path = PathBuf::from("/home/user/my-project/src/main.rs");
@@ -379,11 +380,11 @@ mod tests {
         assert!(!id.contains('.'));
         assert!(!id.contains('-'));
     }
-    
+
     #[test]
     fn test_mermaid_flowchart() {
         let formatter = MermaidFormatter::new(MermaidStyle::Flowchart, false, PathDisplayMode::Off);
-        
+
         let nodes = vec![
             FileNode {
                 path: PathBuf::from("src"),
@@ -431,7 +432,7 @@ mod tests {
         let mut output = Vec::new();
         let result = formatter.format(&mut output, &nodes, &stats, &PathBuf::from("."));
         assert!(result.is_ok());
-        
+
         let output_str = String::from_utf8(output).unwrap();
         assert!(output_str.contains("```mermaid"));
         assert!(output_str.contains("graph TD"));

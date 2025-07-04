@@ -110,9 +110,7 @@ impl HexFormatter {
         };
 
         // Add brackets for permission denied or ignored
-        let display_name = if node.permission_denied {
-            format!("[{}]", name)
-        } else if node.is_ignored {
+        let display_name = if node.permission_denied || node.is_ignored {
             format!("[{}]", name)
         } else {
             name
@@ -124,9 +122,12 @@ impl HexFormatter {
                 // Show first match position and total count
                 let (line, col) = matches.first_match;
                 let truncated_indicator = if matches.truncated { ",TRUNCATED" } else { "" };
-                
+
                 if matches.total_count > 1 {
-                    format!("{} [SEARCH:L{}:C{},{}x{}]", display_name, line, col, matches.total_count, truncated_indicator)
+                    format!(
+                        "{} [SEARCH:L{}:C{},{}x{}]",
+                        display_name, line, col, matches.total_count, truncated_indicator
+                    )
                 } else {
                     format!("{} [SEARCH:L{}:C{}]", display_name, line, col)
                 }

@@ -34,7 +34,7 @@ impl AiFormatter {
                     .to_string_lossy()
                     .as_bytes(),
             );
-            hasher.update(&[if node.is_dir { 1 } else { 0 }]);
+            hasher.update([if node.is_dir { 1 } else { 0 }]);
             hasher.update(node.size.to_le_bytes());
             hasher.update(node.permissions.to_le_bytes());
         }

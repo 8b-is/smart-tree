@@ -12,23 +12,30 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::generate;
-use clap_mangen;
-use colored; // To make our output as vibrant as Trish's spreadsheets!
+// To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use regex::Regex;
-use std::io::{self, Write, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
-use termimad;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
     formatters::{
-        ai::AiFormatter, ai_json::AiJsonFormatter, classic::ClassicFormatter, csv::CsvFormatter,
-        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-        claude::ClaudeFormatter, semantic::SemanticFormatter, mermaid::{MermaidFormatter, MermaidStyle},
-        markdown::MarkdownFormatter, stats::StatsFormatter, tsv::TsvFormatter, 
+        ai::AiFormatter,
+        ai_json::AiJsonFormatter,
+        classic::ClassicFormatter,
+        csv::CsvFormatter,
+        digest::DigestFormatter,
+        hex::HexFormatter,
+        json::JsonFormatter,
+        markdown::MarkdownFormatter,
+        mermaid::{MermaidFormatter, MermaidStyle},
+        quantum::QuantumFormatter,
+        semantic::SemanticFormatter,
+        stats::StatsFormatter,
+        tsv::TsvFormatter,
         Formatter, PathDisplayMode, StreamingFormatter,
     },
     parse_size,
@@ -71,6 +78,11 @@ struct Cli {
     #[arg(long, exclusive = true)]
     mcp_config: bool,
 
+    /// Launch interactive mode for exploring directories with a TUI.
+    /// This is the ultimate Smart Tree experience! 🎸
+    #[arg(short = 'i', long, exclusive = true)]
+    interactive: bool,
+
     // --- Scan Arguments ---
     /// Path to the directory or file you want to analyze.
     path: Option<PathBuf>,
@@ -83,7 +95,7 @@ struct Cli {
 struct ScanArgs {
     /// Choose your adventure! Selects the output format.
     /// From classic human-readable to AI-optimized hex, we've got options.
-    #[arg(short, long, value_enum, default_value = "classic")]
+    #[arg(short, long, value_enum, default_value = "summary")]
     mode: OutputMode,
 
     /// Feeling like a detective? Find files/directories matching this regex pattern.
@@ -160,6 +172,12 @@ struct ScanArgs {
     #[arg(short = 'z', long)]
     compress: bool,
 
+    /// MCP/API optimization mode. Automatically enables compression, disables colors/emoji,
+    /// and optimizes output for machine consumption. Perfect for MCP servers, LLM APIs, and tools.
+    /// Works with any output mode to make it API-friendly!
+    #[arg(long)]
+    mcp_optimize: bool,
+
     /// For JSON output, this makes it compact (one line) instead of pretty-printed.
     /// Saves space, but might make Trish's eyes water if she tries to read it directly.
     #[arg(long)]
@@ -197,23 +215,33 @@ struct ScanArgs {
     /// Example groups: "tests", "documentation", "configuration", "source code"
     #[arg(long)]
     semantic: bool,
-    
+
     /// Mermaid diagram style (only used with --mode mermaid).
     /// Options: flowchart (default), mindmap, gitgraph
     #[arg(long, value_enum, default_value = "flowchart")]
     mermaid_style: MermaidStyleArg,
-    
+
     /// Exclude mermaid diagrams from markdown report (only used with --mode markdown).
     #[arg(long)]
     no_markdown_mermaid: bool,
-    
+
     /// Exclude tables from markdown report (only used with --mode markdown).
     #[arg(long)]
     no_markdown_tables: bool,
-    
+
     /// Exclude pie charts from markdown report (only used with --mode markdown).
     #[arg(long)]
     no_markdown_pie_charts: bool,
+
+    /// Focus analysis on specific file (for relations mode).
+    /// Shows all relationships for a particular file.
+    #[arg(long, value_name = "FILE")]
+    focus: Option<PathBuf>,
+
+    /// Filter relationships by type (for relations mode).
+    /// Options: imports, calls, types, tests, coupled
+    #[arg(long, value_name = "TYPE")]
+    relations_filter: Option<String>,
 }
 
 /// Enum for mermaid style argument
@@ -273,14 +301,20 @@ enum OutputMode {
     Digest,
     /// MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization.
     Quantum,
-    /// Claude API format. Quantum compression wrapped for optimal Anthropic API transmission.
-    Claude,
     /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
     Semantic,
     /// Mermaid diagram format. Perfect for embedding in documentation!
     Mermaid,
     /// Markdown report format. Combines mermaid, tables, and charts for beautiful documentation!
     Markdown,
+    /// Interactive summary mode (default for humans in terminal)
+    Summary,
+    /// AI-optimized summary mode (default for AI/piped output)
+    SummaryAi,
+    /// Code relationship analysis
+    Relations,
+    /// Quantum compression with semantic understanding (Omni's nuclear option!)
+    QuantumSemantic,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -335,6 +369,9 @@ fn main() -> Result<()> {
         print_mcp_config();
         return Ok(());
     }
+    if cli.interactive {
+        return run_interactive_mode(cli.path);
+    }
 
     // If no action flag was given, proceed with the scan.
     let args = cli.scan_opts;
@@ -356,10 +393,13 @@ fn main() -> Result<()> {
             "tsv" => Some(OutputMode::Tsv),
             "digest" => Some(OutputMode::Digest),
             "quantum" => Some(OutputMode::Quantum),
-            "claude" => Some(OutputMode::Claude),
             "semantic" => Some(OutputMode::Semantic),
             "mermaid" => Some(OutputMode::Mermaid),
             "markdown" => Some(OutputMode::Markdown),
+            "relations" => Some(OutputMode::Relations),
+            "summary" => Some(OutputMode::Summary),
+            "summary-ai" => Some(OutputMode::SummaryAi),
+            "quantum-semantic" => Some(OutputMode::QuantumSemantic),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -369,9 +409,18 @@ fn main() -> Result<()> {
     // Then, the command-line --mode flag.
     // Then, ST_DEFAULT_MODE environment variable.
     // Finally, the default mode from clap.
-    let (mode, compress) = if std::env::var("AI_TOOLS").map_or(false, |v| v == "1" || v.to_lowercase() == "true") {
-        // If AI_TOOLS is set (e.g., AI_TOOLS=1), force AI mode and compression.
-        (OutputMode::Ai, true)
+    let is_ai_caller =
+        std::env::var("AI_TOOLS").is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
+
+    // MCP optimization: enables compression and AI-friendly settings
+    let mcp_mode = args.mcp_optimize || is_ai_caller;
+    
+    let (mode, compress) = if mcp_mode {
+        // If MCP optimization is requested or AI_TOOLS is set, use API-optimized settings
+        match args.mode {
+            OutputMode::Summary => (OutputMode::SummaryAi, true), // Auto-switch to AI version
+            other => (other, true), // Keep other modes but enable compression
+        }
     } else if args.semantic {
         // If --semantic flag is set, use semantic mode (Omni's wisdom!)
         (OutputMode::Semantic, args.compress)
@@ -385,13 +434,17 @@ fn main() -> Result<()> {
 
     // --- Color Configuration ---
     // Determine if colors should be used in the output.
+    // MCP mode disables colors for clean API output.
     // Command-line --color flag takes precedence.
     // Then, ST_COLOR or NO_COLOR environment variables.
     // Finally, auto-detect based on whether stdout is a TTY.
-    let use_color = match args.color {
-        ColorMode::Always => true,
-        ColorMode::Never => false,
-        ColorMode::Auto => {
+    let use_color = if mcp_mode {
+        false // MCP mode always disables colors
+    } else {
+            match args.color {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => {
             // Check environment variables first for explicit overrides.
             if std::env::var("ST_COLOR").as_deref() == Ok("always") {
                 true
@@ -403,6 +456,7 @@ fn main() -> Result<()> {
                 // If no env var override, check if stdout is a terminal.
                 std::io::stdout().is_terminal()
             }
+            }
         }
     };
 
@@ -410,6 +464,9 @@ fn main() -> Result<()> {
     if !use_color {
         colored::control::set_override(false);
     }
+
+    // MCP mode also disables emoji for clean output
+    let no_emoji = args.no_emoji || mcp_mode;
 
     // --- Scanner Configuration ---
     // Build the configuration for the directory scanner.
@@ -422,9 +479,8 @@ fn main() -> Result<()> {
 
     // For AI mode, we automatically enable `show_ignored` to provide maximum context to the AI,
     // unless the user explicitly set `show_ignored` (which `args.show_ignored` would capture).
-    let show_ignored_final = args.show_ignored
-        || matches!(mode, OutputMode::Ai | OutputMode::Digest)
-        || args.everything;
+    let show_ignored_final =
+        args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
 
     let scanner_config = ScannerConfig {
         max_depth: args.depth,
@@ -470,14 +526,14 @@ fn main() -> Result<()> {
     if args.stream && !compress {
         // Streaming mode is only supported for certain formatters that implement StreamingFormatter.
         match mode {
-            OutputMode::Hex | OutputMode::Ai | OutputMode::Quantum | OutputMode::Claude => {
+            OutputMode::Hex | OutputMode::Ai | OutputMode::Quantum => {
                 // For streaming, we use threads: one for scanning, one for formatting/printing.
                 // A channel is used for communication between them.
                 use std::sync::mpsc; // Multi-producer, single-consumer channel.
                 use std::thread;
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
-                // let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
+                                                // let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
                 let scanner_root = scanner.root().to_path_buf(); // Get the canonicalized root before moving scanner
 
                 // Spawn the scanner thread. It will send FileNode objects through the channel.
@@ -490,20 +546,13 @@ fn main() -> Result<()> {
                 let streaming_formatter: Box<dyn StreamingFormatter> = match mode {
                     OutputMode::Hex => Box::new(HexFormatter::new(
                         use_color,
-                        args.no_emoji,
+                        no_emoji,
                         show_ignored_final,
                         path_display_mode,
                         args.show_filesystems,
                     )),
-                    OutputMode::Ai => {
-                        Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
-                    }
-                    OutputMode::Quantum => {
-                        Box::new(QuantumFormatter::new())
-                    }
-                    OutputMode::Claude => {
-                        Box::new(ClaudeFormatter::new(true))
-                    }
+                    OutputMode::Ai => Box::new(AiFormatter::new(no_emoji, path_display_mode)),
+                    OutputMode::Quantum => Box::new(QuantumFormatter::new()),
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
 
@@ -517,8 +566,7 @@ fn main() -> Result<()> {
                 // Receive and format nodes as they arrive from the scanner thread.
                 while let Ok(node) = rx.recv() {
                     // Loop until the channel is closed.
-                    streaming_formatter
-                        .format_node(&mut handle, &node, &scanner_root)?;
+                    streaming_formatter.format_node(&mut handle, &node, &scanner_root)?;
                 }
 
                 // Wait for the scanner thread to finish and get the final statistics.
@@ -555,14 +603,14 @@ fn main() -> Result<()> {
                         path_display_mode // Use the user-specified or default path_mode.
                     };
                 Box::new(ClassicFormatter::new(
-                    args.no_emoji,
+                    no_emoji,
                     use_color,
                     classic_path_mode,
                 ))
             }
             OutputMode::Hex => Box::new(HexFormatter::new(
                 use_color,
-                args.no_emoji,
+                no_emoji,
                 show_ignored_final,
                 path_display_mode,
                 args.show_filesystems,
@@ -571,9 +619,9 @@ fn main() -> Result<()> {
             OutputMode::Ai => {
                 // AI mode can optionally be wrapped in JSON.
                 if args.ai_json {
-                    Box::new(AiJsonFormatter::new(args.no_emoji, path_display_mode))
+                    Box::new(AiJsonFormatter::new(no_emoji, path_display_mode))
                 } else {
-                    Box::new(AiFormatter::new(args.no_emoji, path_display_mode))
+                    Box::new(AiFormatter::new(no_emoji, path_display_mode))
                 }
             }
             OutputMode::Stats => Box::new(StatsFormatter::new()),
@@ -581,8 +629,9 @@ fn main() -> Result<()> {
             OutputMode::Tsv => Box::new(TsvFormatter::new()),
             OutputMode::Digest => Box::new(DigestFormatter::new()),
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
-            OutputMode::Claude => Box::new(ClaudeFormatter::new(true)),
-            OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, args.no_emoji)),
+            OutputMode::Semantic => {
+                Box::new(SemanticFormatter::new(path_display_mode, no_emoji))
+            }
             OutputMode::Mermaid => {
                 // Convert CLI arg enum to formatter enum
                 let style = match args.mermaid_style {
@@ -590,17 +639,44 @@ fn main() -> Result<()> {
                     MermaidStyleArg::Mindmap => MermaidStyle::Mindmap,
                     MermaidStyleArg::Gitgraph => MermaidStyle::GitGraph,
                 };
-                Box::new(MermaidFormatter::new(style, args.no_emoji, path_display_mode))
+                Box::new(MermaidFormatter::new(
+                    style,
+                    no_emoji,
+                    path_display_mode,
+                ))
             }
             OutputMode::Markdown => {
                 // Create a comprehensive markdown report with all visualizations!
                 Box::new(MarkdownFormatter::new(
                     path_display_mode,
-                    args.no_emoji,
-                    !args.no_markdown_mermaid,    // Include mermaid unless disabled
-                    !args.no_markdown_tables,      // Include tables unless disabled
-                    !args.no_markdown_pie_charts,  // Include pie charts unless disabled
+                    no_emoji,
+                    !args.no_markdown_mermaid, // Include mermaid unless disabled
+                    !args.no_markdown_tables,  // Include tables unless disabled
+                    !args.no_markdown_pie_charts, // Include pie charts unless disabled
                 ))
+            }
+            OutputMode::Relations => {
+                // Code relationship analysis - "Semantic X-ray vision!" - Omni
+                use st::formatters::relations_formatter::RelationsFormatter;
+                Box::new(RelationsFormatter::new(
+                    args.relations_filter.clone(),
+                    args.focus.clone(),
+                ))
+            }
+            OutputMode::Summary => {
+                // Interactive summary for humans - "Smart defaults!" - Omni
+                use st::formatters::summary::SummaryFormatter;
+                Box::new(SummaryFormatter::new(use_color))
+            }
+            OutputMode::SummaryAi => {
+                // Compressed summary for AI consumption
+                use st::formatters::summary_ai::SummaryAiFormatter;
+                Box::new(SummaryAiFormatter::new(compress))
+            }
+            OutputMode::QuantumSemantic => {
+                // Semantic-aware quantum compression - "The nuclear option!" - Omni
+                use st::formatters::quantum_semantic::QuantumSemanticFormatter;
+                Box::new(QuantumSemanticFormatter::new())
             }
         };
 
@@ -720,4 +796,31 @@ fn run_mcp_server() -> Result<()> {
         // `run_stdio` would handle communication over stdin/stdout.
         server.run_stdio().await
     })
+}
+
+/// Run the interactive mode - the ultimate Smart Tree experience!
+/// This launches a TUI (Terminal User Interface) for exploring directories
+/// with various visualization modes, filters, and export options.
+fn run_interactive_mode(initial_path: Option<PathBuf>) -> Result<()> {
+    use st::interactive::InteractiveMode;
+    
+    // Determine the starting path
+    let path = initial_path.unwrap_or_else(|| PathBuf::from("."));
+    
+    // Ensure the path exists and is a directory
+    if !path.exists() {
+        return Err(anyhow::anyhow!("Path does not exist: {:?}", path));
+    }
+    if !path.is_dir() {
+        return Err(anyhow::anyhow!("Path is not a directory: {:?}", path));
+    }
+    
+    // Create the interactive mode instance
+    let mut interactive = InteractiveMode::new(path.canonicalize()?);
+    
+    // Create a runtime for the interactive mode (which may use async operations)
+    let runtime = tokio::runtime::Runtime::new()?;
+    
+    // Run the interactive mode
+    runtime.block_on(interactive.run())
 }

@@ -8,6 +8,12 @@ use std::path::Path;
 
 pub struct CsvFormatter;
 
+impl Default for CsvFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CsvFormatter {
     pub fn new() -> Self {
         Self
@@ -25,7 +31,7 @@ impl Formatter for CsvFormatter {
         let mut csv_writer = Writer::from_writer(writer);
 
         // Write header
-        csv_writer.write_record(&[
+        csv_writer.write_record([
             "path",
             "type",
             "size",

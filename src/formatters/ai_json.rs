@@ -32,7 +32,7 @@ impl Formatter for AiJsonFormatter {
         let ai_text = String::from_utf8_lossy(&ai_output);
 
         // Parse the AI output to extract structured data
-        let mut lines = ai_text.lines();
+        let lines = ai_text.lines();
         let mut hex_tree_lines = Vec::new();
         let mut context = None;
         let mut hash = None;
@@ -44,7 +44,7 @@ impl Formatter for AiJsonFormatter {
         let mut large_files = Vec::new();
         let mut date_range = None;
 
-        while let Some(line) = lines.next() {
+        for line in lines {
             if line == "TREE_HEX_V1:" {
                 continue;
             } else if line.starts_with("CONTEXT: ") {
@@ -56,7 +56,7 @@ impl Formatter for AiJsonFormatter {
             } else if line.starts_with("F:") && stats_section {
                 // Parse stats line: F:45 D:12 S:23fc00 (2.3MB)
                 let parts: Vec<&str> = line.split_whitespace().collect();
-                if let Some(f) = parts.get(0).and_then(|s| s.strip_prefix("F:")) {
+                if let Some(f) = parts.first().and_then(|s| s.strip_prefix("F:")) {
                     file_count = u64::from_str_radix(f, 16).unwrap_or(0);
                 }
                 if let Some(d) = parts.get(1).and_then(|s| s.strip_prefix("D:")) {

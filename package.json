@@ -1,6 +1,6 @@
 {
   "name": "smart-tree",
-  "version": "1.1.1",
+  "version": "3.0.0-beta.1",
   "description": "A blazingly fast, AI-friendly directory tree visualization tool written in Rust. Smart Tree goes beyond traditional tree commands by providing intelligent filtering, multiple output formats, and optimization for both human and AI consumption.",
   "main": "index.js",
   "directories": {

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "smart-tree": {
+      "command": "/home/hue/source/smart-tree/target/debug/st",
+      "args": [
+        "--mcp"
+      ],
+      "env": {},
+      "alwaysAllow": [
+        "find_files",
+        "analyze_directory",
+        "get_statistics",
+        "get_digest"
+      ]
+    }
+  }
+}

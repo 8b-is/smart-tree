@@ -7,6 +7,12 @@ use std::path::Path;
 
 pub struct DigestFormatter;
 
+impl Default for DigestFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DigestFormatter {
     pub fn new() -> Self {
         Self
@@ -27,7 +33,7 @@ impl DigestFormatter {
                     .to_string_lossy()
                     .as_bytes(),
             );
-            hasher.update(&[if node.is_dir { 1 } else { 0 }]);
+            hasher.update([if node.is_dir { 1 } else { 0 }]);
             hasher.update(node.size.to_le_bytes());
             hasher.update(node.permissions.to_le_bytes());
         }
