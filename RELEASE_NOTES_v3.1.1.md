@@ -13,6 +13,8 @@
 - Cleaner, more focused codebase
 - Faster build times  
 - Smaller binary size
+- Fixed Mermaid diagram emoji compatibility issues
+- Added `--no-emoji` tip for Mermaid in documentation
 
 ## 🛠️ Installation
 
