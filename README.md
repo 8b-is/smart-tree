@@ -336,3 +336,16 @@ Special shoutouts to:
 ---
 
 [FYI Section](FYI.md)
+
+
+
+## Star History
+>By Request
+
+<a href="https://www.star-history.com/#8b-is/smart-tree&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date" />
+ </picture>
+</a>
