@@ -2,3 +2,9 @@
 target/
 node_modules
 .DS_Store
+rules
+__pycache__
+venv
+.venv
+.env
+*WISHLIST.md

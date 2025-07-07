@@ -78,6 +78,15 @@ copy target\release\st.exe C:\your\favorite\path\
 
 </details>
 
+### Claude Code Integration ###
+
+```
+# Do the quick install above.   This is the example for Linux, Mac, WSL, and who knows? 
+
+claude mcp add st /usr/local/bin/st -- --mcp
+
+```
+
 ### 🤖 Claude Desktop Integration - The Future is Now!
 
 **Make Claude your directory-reading bestie in 3 clicks!**
