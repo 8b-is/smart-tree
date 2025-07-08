@@ -22,6 +22,65 @@ impl ClassicFormatter {
         }
     }
 
+    /// Calculate visual weight based on directory size and depth
+    /// Larger directories and shallower depths get higher visual weight (thicker lines)
+    fn calculate_visual_weight(&self, node: &FileNode) -> u8 {
+        if !node.is_dir {
+            return 1; // Files get standard weight
+        }
+        
+        // Base weight starts higher for directories
+        let mut weight = 2;
+        
+        // Size-based scaling (logarithmic to avoid extreme values)
+        // Directories with more content get thicker lines
+        if node.size > 0 {
+            let size_factor = (node.size as f64).log10().max(1.0) as u8;
+            weight += (size_factor / 2).min(2); // Cap the size contribution
+        }
+        
+        // Depth-based scaling - shallower directories get thicker lines
+        // Root level (depth 0) gets maximum thickness
+        let depth_bonus = if node.depth == 0 {
+            3 // Root gets the thickest lines
+        } else if node.depth == 1 {
+            2 // First level gets thick lines
+        } else if node.depth <= 3 {
+            1 // Moderate depth gets medium lines
+        } else {
+            0 // Deep levels get standard lines
+        };
+        
+        weight += depth_bonus;
+        
+        // Cap the maximum weight to avoid going beyond our character sets
+        weight.min(5)
+    }
+    
+    /// Get terminal characters (└── and ├──) based on visual weight
+    /// Returns (corner_char, branch_char) tuple
+    fn get_terminal_chars(&self, weight: u8) -> (&'static str, &'static str) {
+        match weight {
+            5 => ("┗━━━ ", "┣━━━ "), // Ultra thick - for root level large dirs
+            4 => ("┗━━ ", "┣━━ "),   // Very thick - for large shallow dirs
+            3 => ("└── ", "├── "),   // Thick - for medium dirs
+            2 => ("└─ ", "├─ "),     // Medium - for small dirs
+            _ => ("└ ", "├ "),       // Thin - for files and tiny dirs
+        }
+    }
+    
+    /// Get continuation characters (│ and spaces) based on visual weight
+    /// Returns (space_char, line_char) tuple
+    fn get_continuation_chars(&self, weight: u8) -> (&'static str, &'static str) {
+        match weight {
+            5 => ("     ", "┃    "), // Ultra thick vertical line
+            4 => ("    ", "┃   "),   // Very thick vertical line
+            3 => ("    ", "│   "),   // Standard thick vertical line
+            2 => ("   ", "│  "),     // Medium vertical line
+            _ => ("  ", "│ "),       // Thin vertical line
+        }
+    }
+
     fn get_file_emoji(&self, file_type: FileType) -> &'static str {
         if self.no_emoji {
             match file_type {
@@ -289,12 +348,19 @@ impl ClassicFormatter {
     fn format_node(&self, node: &FileNode, is_last: &[bool], root_path: &Path) -> String {
         let mut prefix = String::new();
 
-        // Build tree prefix
+        // Build tree prefix with enhanced visual scaling
+        // Calculate visual weight based on size and depth for thicker lines
+        let visual_weight = self.calculate_visual_weight(node);
+        
         for (i, &last) in is_last.iter().enumerate() {
             if i == is_last.len() - 1 {
-                prefix.push_str(if last { "└── " } else { "├── " });
+                // Terminal connectors (last level)
+                let (corner, branch) = self.get_terminal_chars(visual_weight);
+                prefix.push_str(if last { corner } else { branch });
             } else {
-                prefix.push_str(if last { "    " } else { "│   " });
+                // Continuation lines (intermediate levels)
+                let (space, line) = self.get_continuation_chars(visual_weight);
+                prefix.push_str(if last { space } else { line });
             }
         }
 
