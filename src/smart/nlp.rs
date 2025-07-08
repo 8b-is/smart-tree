@@ -227,7 +227,7 @@ impl QueryParser {
     
     /// 📊 Calculate confidence score
     fn calculate_confidence(&self, intent: &SearchIntent, entities: &[String], keywords: &[String]) -> f32 {
-        let mut confidence = 0.5; // Base confidence
+        let mut confidence: f32 = 0.5; // Base confidence
         
         // Boost confidence for specific intents
         if *intent != SearchIntent::General {

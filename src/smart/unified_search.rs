@@ -7,7 +7,7 @@
 use super::{SmartResponse, TaskContext, TokenSavings};
 use super::nlp::{QueryParser, ParsedQuery, SearchIntent};
 use super::context::ContextAnalyzer;
-use super::smart_read::SmartRead;
+use super::smart_read::SmartReader;
 use super::smart_ls::SmartLS;
 use crate::scanner::{FileNode, Scanner, ScannerConfig};
 use anyhow::Result;
@@ -18,9 +18,8 @@ use std::path::Path;
 pub struct UnifiedSearch {
     query_parser: QueryParser,
     context_analyzer: ContextAnalyzer,
-    smart_read: SmartRead,
+    smart_read: SmartReader,
     smart_ls: SmartLS,
-    scanner: Scanner,
 }
 
 /// 🎯 Search result with multiple result types
@@ -61,9 +60,8 @@ impl UnifiedSearch {
         Self {
             query_parser: QueryParser::new(),
             context_analyzer: ContextAnalyzer::new(),
-            smart_read: SmartRead::new(),
+            smart_read: SmartReader::new(),
             smart_ls: SmartLS::new(),
-            scanner: Scanner::new(),
         }
     }
     
@@ -134,13 +132,12 @@ impl UnifiedSearch {
         
         // Find code files
         let config = ScannerConfig {
-            max_depth: 5,
+            max_depth: 10,
             show_hidden: false,
-            follow_symlinks: false,
             ..Default::default()
         };
-        
-        let (nodes, _) = self.scanner.scan_with_config(path, &config)?;
+        let scanner = Scanner::new(path, config)?;
+        let (nodes, _stats) = scanner.scan()?;
         
         for node in nodes {
             if self.is_code_file(&node) {
@@ -172,7 +169,7 @@ impl UnifiedSearch {
     fn search_config(
         &self,
         path: &Path,
-        parsed_query: &ParsedQuery,
+        _parsed_query: &ParsedQuery,
         context: &TaskContext,
     ) -> Result<Vec<SearchResult>> {
         let mut results = Vec::new();
@@ -184,7 +181,8 @@ impl UnifiedSearch {
             ..Default::default()
         };
         
-        let (nodes, _) = self.scanner.scan_with_config(path, &config)?;
+        let scanner = Scanner::new(path, config)?;
+        let (nodes, _) = scanner.scan()?;
         
         for node in nodes {
             if self.is_config_file(&node) {
@@ -211,7 +209,7 @@ impl UnifiedSearch {
     fn search_tests(
         &self,
         path: &Path,
-        parsed_query: &ParsedQuery,
+        _parsed_query: &ParsedQuery,
         context: &TaskContext,
     ) -> Result<Vec<SearchResult>> {
         let mut results = Vec::new();
@@ -223,7 +221,8 @@ impl UnifiedSearch {
             ..Default::default()
         };
         
-        let (nodes, _) = self.scanner.scan_with_config(path, &config)?;
+        let scanner = Scanner::new(path, config)?;
+        let (nodes, _) = scanner.scan()?;
         
         for node in nodes {
             if self.is_test_file(&node) {
@@ -250,7 +249,7 @@ impl UnifiedSearch {
     fn search_docs(
         &self,
         path: &Path,
-        parsed_query: &ParsedQuery,
+        _parsed_query: &ParsedQuery,
         context: &TaskContext,
     ) -> Result<Vec<SearchResult>> {
         let mut results = Vec::new();
@@ -262,7 +261,8 @@ impl UnifiedSearch {
             ..Default::default()
         };
         
-        let (nodes, _) = self.scanner.scan_with_config(path, &config)?;
+        let scanner = Scanner::new(path, config)?;
+        let (nodes, _) = scanner.scan()?;
         
         for node in nodes {
             if self.is_doc_file(&node) {
@@ -364,9 +364,9 @@ impl UnifiedSearch {
     /// Search within file contents for keywords
     fn search_file_contents(
         &self,
-        path: &Path,
-        keywords: &[String],
-        context: &TaskContext,
+        _path: &Path,
+        _keywords: &[String],
+        _context: &TaskContext,
     ) -> Result<Vec<SearchResult>> {
         // This would integrate with ripgrep or similar for content search
         // For now, return empty results
@@ -376,36 +376,40 @@ impl UnifiedSearch {
     /// Check if file is a code file
     fn is_code_file(&self, node: &FileNode) -> bool {
         matches!(
-            node.file_type,
-            crate::scanner::FileType::Rust
-                | crate::scanner::FileType::Python
-                | crate::scanner::FileType::JavaScript
-                | crate::scanner::FileType::TypeScript
-                | crate::scanner::FileType::Go
-                | crate::scanner::FileType::Java
-                | crate::scanner::FileType::Cpp
-                | crate::scanner::FileType::C
+            node.category,
+            crate::scanner::FileCategory::Rust
+                | crate::scanner::FileCategory::Python
+                | crate::scanner::FileCategory::JavaScript
+                | crate::scanner::FileCategory::TypeScript
+                | crate::scanner::FileCategory::Go
+                | crate::scanner::FileCategory::Java
+                | crate::scanner::FileCategory::Cpp
+                | crate::scanner::FileCategory::C
         )
     }
     
     /// Check if file is a configuration file
     fn is_config_file(&self, node: &FileNode) -> bool {
         matches!(
-            node.file_type,
-            crate::scanner::FileType::Json
-                | crate::scanner::FileType::Yaml
-                | crate::scanner::FileType::Toml
-        ) || node.name.starts_with('.') && (
-            node.name.contains("config") || 
-            node.name.contains("env") ||
-            node.name == ".gitignore" ||
-            node.name == ".dockerignore"
-        )
+            node.category,
+            crate::scanner::FileCategory::Json
+                | crate::scanner::FileCategory::Yaml
+                | crate::scanner::FileCategory::Toml
+        ) || {
+            let name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name.starts_with('.') && (
+                name.contains("config") || 
+                name.contains("env") ||
+                name == ".gitignore" ||
+                name == ".dockerignore"
+            )
+        }
     }
     
     /// Check if file is a test file
     fn is_test_file(&self, node: &FileNode) -> bool {
-        let name_lower = node.name.to_lowercase();
+        let name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let name_lower = name.to_lowercase();
         name_lower.contains("test") || 
         name_lower.contains("spec") ||
         node.path.to_string_lossy().contains("/test/") ||
@@ -414,9 +418,12 @@ impl UnifiedSearch {
     
     /// Check if file is documentation
     fn is_doc_file(&self, node: &FileNode) -> bool {
-        matches!(node.file_type, crate::scanner::FileType::Markdown) ||
-        node.name.to_lowercase().starts_with("readme") ||
-        node.name.to_lowercase().contains("doc") ||
+        matches!(node.category, crate::scanner::FileCategory::Markdown) || {
+            let name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let name_lower = name.to_lowercase();
+            name_lower.starts_with("readme") ||
+            name_lower.contains("doc")
+        } ||
         node.path.to_string_lossy().contains("/docs/")
     }
     
@@ -441,7 +448,7 @@ impl UnifiedSearch {
     }
     
     /// Calculate token savings from unified search
-    fn calculate_token_savings(&self, results: &[SearchResult], parsed_query: &ParsedQuery) -> TokenSavings {
+    fn calculate_token_savings(&self, results: &[SearchResult], _parsed_query: &ParsedQuery) -> TokenSavings {
         let original_tokens = 1000; // Estimated tokens for multiple separate tool calls
         let compressed_tokens = results.len() * 20; // Estimated tokens per result
         

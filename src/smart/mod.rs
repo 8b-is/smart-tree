@@ -14,7 +14,7 @@
 //! improving accuracy and reducing token usage.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
 
 // 📦 Smart Tools Modules
 pub mod context;        // Context analysis engine
@@ -31,7 +31,7 @@ pub use git_relay::{GitRelay, GitResult, GitOperation, GitRelayResponse};
 pub use nlp::{QueryParser, ParsedQuery, SearchIntent};
 pub use relevance::{RelevanceEngine, ProjectContext, ProjectType};
 pub use smart_ls::{SmartLS, SmartDirEntry, SmartLSResponse};
-pub use smart_read::{SmartRead, SmartSection, SmartReadResponse};
+pub use smart_read::{SmartReader, FileSection, SmartReadResponse};
 pub use unified_search::{UnifiedSearch, SearchResult, SearchResultType, UnifiedSearchResponse};
 
 /// 🎯 Core context analysis for understanding user intent and task focus
@@ -171,7 +171,7 @@ impl FocusArea {
             FocusArea::Logging => vec!["log", "logger", "debug", "info", "warn", "error", "trace"],
             FocusArea::Deployment => vec!["deploy", "docker", "kubernetes", "ci", "cd", "pipeline", "build"],
             FocusArea::Dependencies => vec!["dependency", "import", "require", "package", "module", "crate"],
-            FocusArea::Custom(s) => vec![], // Custom focus areas don't have predefined keywords
+            FocusArea::Custom(_s) => vec![], // Custom focus areas don't have predefined keywords
         }
     }
 }

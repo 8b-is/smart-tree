@@ -14,7 +14,6 @@ use std::path::Path;
 /// 📂 Smart directory lister with task awareness
 pub struct SmartLS {
     context_analyzer: ContextAnalyzer,
-    scanner: Scanner,
 }
 
 /// 📁 Smart directory entry with relevance scoring
@@ -36,7 +35,6 @@ impl SmartLS {
     pub fn new() -> Self {
         Self {
             context_analyzer: ContextAnalyzer::new(),
-            scanner: Scanner::new(),
         }
     }
     
@@ -55,7 +53,8 @@ impl SmartLS {
             ..Default::default()
         };
         
-        let (nodes, _stats) = self.scanner.scan_with_config(path, &config)?;
+        let scanner = Scanner::new(path, config)?;
+        let (nodes, _stats) = scanner.scan()?;
         
         // Score and categorize files
         let scored_entries = self.score_and_categorize(&nodes, context)?;
@@ -162,13 +161,19 @@ impl SmartLS {
             // Task-specific suggestions
             for focus_area in &context.focus_areas {
                 match focus_area {
-                    super::FocusArea::Testing if node.name.contains("test") => {
+                    super::FocusArea::Testing if node.path.file_name().and_then(|n| n.to_str()).unwrap_or("").contains("test") => {
                         actions.push("Run tests".to_string());
                     }
-                    super::FocusArea::Configuration if node.name.ends_with(".json") || node.name.ends_with(".yaml") => {
+                    super::FocusArea::Configuration if {
+                        let name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                        name.ends_with(".json") || name.ends_with(".yaml")
+                    } => {
                         actions.push("Edit configuration".to_string());
                     }
-                    super::FocusArea::API if node.name.contains("api") || node.name.contains("handler") => {
+                    super::FocusArea::API if {
+                        let name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                        name.contains("api") || name.contains("handler")
+                    } => {
                         actions.push("Analyze API endpoints".to_string());
                     }
                     _ => {}
@@ -195,15 +200,12 @@ impl SmartLS {
     fn generate_context_summary(
         &self,
         primary: &[SmartDirEntry],
-        secondary: &[SmartDirEntry],
-        context: &TaskContext,
+        _secondary: &[SmartDirEntry],
+        _context: &TaskContext,
     ) -> String {
         format!(
-            "SmartLS analyzed directory for task: '{}'. Found {} high-priority and {} medium-priority items. Focus: {:?}",
-            context.task,
-            primary.len(),
-            secondary.len(),
-            context.focus_areas
+            "SmartLS analyzed directory. Found {} high-priority items.",
+            primary.len()
         )
     }
     
@@ -211,8 +213,8 @@ impl SmartLS {
     fn generate_suggestions(
         &self,
         primary: &[SmartDirEntry],
-        secondary: &[SmartDirEntry],
-        context: &TaskContext,
+        _secondary: &[SmartDirEntry],
+        _context: &TaskContext,
     ) -> Vec<String> {
         let mut suggestions = Vec::new();
         
@@ -221,8 +223,11 @@ impl SmartLS {
         }
         
         // Suggest related tools based on file types found
-        let has_config = primary.iter().any(|e| e.node.name.ends_with(".json") || e.node.name.ends_with(".yaml"));
-        let has_code = primary.iter().any(|e| matches!(e.node.file_type, crate::scanner::FileType::Rust | crate::scanner::FileType::Python | crate::scanner::FileType::JavaScript));
+        let has_config = primary.iter().any(|e| {
+            let name = e.node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name.ends_with(".json") || name.ends_with(".yaml")
+        });
+        let has_code = primary.iter().any(|e| matches!(e.node.category, crate::scanner::FileCategory::Rust | crate::scanner::FileCategory::Python | crate::scanner::FileCategory::JavaScript));
         
         if has_config {
             suggestions.push("Use find_config_files for detailed configuration analysis.".to_string());

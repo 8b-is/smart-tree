@@ -336,7 +336,7 @@ impl SmartReader {
         let mut scored_sections = Vec::new();
         
         for section in sections {
-            let mut relevance_score = 0.0;
+            let mut relevance_score: f32 = 0.0;
             let mut reasons = Vec::new();
             let mut focus_matches = Vec::new();
             
@@ -440,7 +440,7 @@ impl SmartReader {
         &self,
         primary: &[FileSection],
         secondary: &[FileSection],
-        context: &TaskContext,
+        _context: &TaskContext,
     ) -> Vec<String> {
         let mut suggestions = Vec::new();
         

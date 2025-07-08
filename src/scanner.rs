@@ -35,7 +35,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 /// holds all the juicy details: its name, size, when it was last cool (modified),
 /// and whether it's on the super-secret "ignored" list. It's the atom of our
 /// `st` universe.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FileNode {
     /// The full path to the file or directory. The source of truth for location!
     pub path: PathBuf,
@@ -75,7 +75,7 @@ pub struct FileNode {
 }
 
 /// Information about search matches within a file
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SearchMatches {
     /// First match position (line, column)
     pub first_match: (usize, usize),
@@ -91,7 +91,7 @@ pub struct SearchMatches {
 ///
 /// This enum helps us categorize entries beyond just "file" or "directory".
 /// It's especially useful on Unix-like systems where you have sockets, pipes, etc.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum FileType {
     Directory,   // A folder, a container of other things.
     RegularFile, // Your everyday, garden-variety file.
@@ -107,7 +107,7 @@ pub enum FileType {
 ///
 /// This enum represents different filesystem types with single-character codes
 /// for compact display. The mapping is designed to be memorable and intuitive.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum FilesystemType {
     Ext4,    // '4' - The most common Linux filesystem
     Ext3,    // '3' - Older ext filesystem
@@ -219,7 +219,7 @@ impl FilesystemType {
 /// or names. It's primarily used for display purposes, like coloring output,
 /// and can also help in understanding the nature of a directory's contents.
 /// Trish loves how this makes the tree output more intuitive!
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum FileCategory {
     // --- Programming Languages ---
     Rust,       // .rs
@@ -332,6 +332,7 @@ impl TreeStats {
 /// "I only want to see files bigger than a tour bus," "Ignore the messy backstage
 /// area (`.gitignore`)." We build this from the user's command-line arguments
 /// to make sure the scanner puts on the exact show the user wants to see.
+#[derive(Default)]
 pub struct ScannerConfig {
     /// Maximum depth to traverse into subdirectories.
     pub max_depth: usize,

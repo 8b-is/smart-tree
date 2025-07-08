@@ -378,7 +378,7 @@ impl GitRelay {
     }
     
     /// Get human-readable operation name
-    fn operation_name(&self, operation: &GitOperation) -> &str {
+    fn operation_name<'a>(&self, operation: &'a GitOperation) -> &'a str {
         match operation {
             GitOperation::Status => "status",
             GitOperation::Log => "log",

@@ -5,7 +5,7 @@
 //! achieve maximum token efficiency.
 
 use super::{FocusArea, RelevanceScore, TaskContext};
-use crate::scanner::{FileNode, FileType};
+use crate::scanner::{FileNode, FileCategory};
 use std::collections::HashMap;
 
 /// 🎯 Advanced relevance scoring engine
@@ -13,7 +13,7 @@ pub struct RelevanceEngine {
     /// Cached scoring patterns
     patterns: HashMap<String, f32>,
     /// File type weights
-    type_weights: HashMap<FileType, f32>,
+    type_weights: HashMap<FileCategory, f32>,
 }
 
 impl RelevanceEngine {
@@ -40,10 +40,10 @@ impl RelevanceEngine {
         let mut reasons = Vec::new();
         let mut focus_matches = Vec::new();
         
-        // Base file type score
-        if let Some(weight) = self.type_weights.get(&file_node.file_type) {
+        // Base file category score
+        if let Some(weight) = self.type_weights.get(&file_node.category) {
             score += weight;
-            reasons.push(format!("File type {:?} base score", file_node.file_type));
+            reasons.push(format!("File category {:?} base score", file_node.category));
         }
         
         // Pattern matching score
@@ -82,7 +82,10 @@ impl RelevanceEngine {
     
     /// Calculate focus-specific scoring
     fn calculate_focus_score(&self, file_node: &FileNode, focus_area: &FocusArea) -> f32 {
-        let file_name = file_node.name.to_lowercase();
+        let file_name = file_node.path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .to_lowercase();
         let file_path = file_node.path.to_string_lossy().to_lowercase();
         
         let keywords = focus_area.keywords();
@@ -144,14 +147,14 @@ impl RelevanceEngine {
     
     /// Initialize file type weights
     fn initialize_type_weights(&mut self) {
-        self.type_weights.insert(FileType::Rust, 0.8);
-        self.type_weights.insert(FileType::Python, 0.8);
-        self.type_weights.insert(FileType::JavaScript, 0.7);
-        self.type_weights.insert(FileType::TypeScript, 0.7);
-        self.type_weights.insert(FileType::Json, 0.5);
-        self.type_weights.insert(FileType::Yaml, 0.5);
-        self.type_weights.insert(FileType::Markdown, 0.4);
-        self.type_weights.insert(FileType::Text, 0.3);
+        self.type_weights.insert(FileCategory::Rust, 0.8);
+        self.type_weights.insert(FileCategory::Python, 0.8);
+        self.type_weights.insert(FileCategory::JavaScript, 0.7);
+        self.type_weights.insert(FileCategory::TypeScript, 0.7);
+        self.type_weights.insert(FileCategory::Json, 0.5);
+        self.type_weights.insert(FileCategory::Yaml, 0.5);
+        self.type_weights.insert(FileCategory::Markdown, 0.4);
+        self.type_weights.insert(FileCategory::Unknown, 0.3);
     }
 }
 

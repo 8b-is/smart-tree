@@ -7,7 +7,7 @@
 use super::{FocusArea, RelevanceScore, TaskContext};
 use crate::scanner::{FileNode, FileCategory};
 use std::collections::HashMap;
-use std::path::Path;
+
 
 /// 🎯 Context analyzer that understands user intent and task focus
 pub struct ContextAnalyzer {
@@ -73,22 +73,26 @@ impl ContextAnalyzer {
         file_node: &FileNode,
         context: &TaskContext,
     ) -> RelevanceScore {
-        let mut score = 0.0;
+        let mut score: f32 = 0.0;
         let mut reasons = Vec::new();
         let mut focus_matches = Vec::new();
         
-        // Base score from file type
-        if let Some(type_score) = self.file_type_scores.get(&file_node.file_type) {
+        // Base score from file category
+        if let Some(type_score) = self.file_type_scores.get(&file_node.category) {
             score += type_score;
-            reasons.push(format!("File type {:?} relevance", file_node.file_type));
+            reasons.push(format!("File category {:?} relevance", file_node.category));
         }
         
         // Score based on filename and path
         let file_path = file_node.path.to_string_lossy().to_lowercase();
-        let file_name = file_node.name.to_lowercase();
+        let file_name = file_node.path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .to_lowercase();
         
         for focus_area in &context.focus_areas {
-            let keywords = self.focus_keywords.get(focus_area).unwrap_or(&Vec::new());
+            let empty_vec = Vec::new();
+            let keywords = self.focus_keywords.get(focus_area).unwrap_or(&empty_vec);
             let mut area_score = 0.0;
             
             for keyword in keywords {
@@ -133,16 +137,20 @@ impl ContextAnalyzer {
         dir_node: &FileNode,
         context: &TaskContext,
     ) -> RelevanceScore {
-        let mut score = 0.0;
+        let mut score: f32 = 0.0;
         let mut reasons = Vec::new();
         let mut focus_matches = Vec::new();
         
-        let dir_name = dir_node.name.to_lowercase();
+        let dir_name = dir_node.path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .to_lowercase();
         let dir_path = dir_node.path.to_string_lossy().to_lowercase();
         
         // Score based on directory name and common patterns
         for focus_area in &context.focus_areas {
-            let keywords = self.focus_keywords.get(focus_area).unwrap_or(&Vec::new());
+            let empty_vec = Vec::new();
+            let keywords = self.focus_keywords.get(focus_area).unwrap_or(&empty_vec);
             
             for keyword in keywords {
                 if dir_name.contains(keyword) || dir_path.contains(keyword) {
@@ -269,26 +277,38 @@ impl ContextAnalyzer {
         );
     }
     
-    /// Initialize file type relevance scores
+    /// Initialize file category relevance scores
     fn initialize_file_type_scores(&mut self) {
-        // High relevance files
-        self.file_type_scores.insert(FileType::Rust, 0.8);
-        self.file_type_scores.insert(FileType::Python, 0.8);
-        self.file_type_scores.insert(FileType::JavaScript, 0.8);
-        self.file_type_scores.insert(FileType::TypeScript, 0.8);
-        self.file_type_scores.insert(FileType::Go, 0.8);
-        self.file_type_scores.insert(FileType::Java, 0.8);
+        // High relevance programming languages
+        self.file_type_scores.insert(FileCategory::Rust, 0.9);
+        self.file_type_scores.insert(FileCategory::Python, 0.8);
+        self.file_type_scores.insert(FileCategory::JavaScript, 0.8);
+        self.file_type_scores.insert(FileCategory::TypeScript, 0.8);
+        self.file_type_scores.insert(FileCategory::Go, 0.8);
+        self.file_type_scores.insert(FileCategory::Java, 0.8);
+        self.file_type_scores.insert(FileCategory::C, 0.7);
+        self.file_type_scores.insert(FileCategory::Cpp, 0.7);
         
-        // Medium relevance files
-        self.file_type_scores.insert(FileType::Json, 0.6);
-        self.file_type_scores.insert(FileType::Yaml, 0.6);
-        self.file_type_scores.insert(FileType::Toml, 0.6);
-        self.file_type_scores.insert(FileType::Markdown, 0.6);
+        // Configuration and markup files
+        self.file_type_scores.insert(FileCategory::Json, 0.6);
+        self.file_type_scores.insert(FileCategory::Yaml, 0.6);
+        self.file_type_scores.insert(FileCategory::Toml, 0.6);
+        self.file_type_scores.insert(FileCategory::Markdown, 0.6);
+        self.file_type_scores.insert(FileCategory::Html, 0.5);
+        self.file_type_scores.insert(FileCategory::Css, 0.5);
+        
+        // Build and system files
+        self.file_type_scores.insert(FileCategory::Makefile, 0.5);
+        self.file_type_scores.insert(FileCategory::Dockerfile, 0.5);
+        self.file_type_scores.insert(FileCategory::GitConfig, 0.4);
         
         // Lower relevance files
-        self.file_type_scores.insert(FileType::Text, 0.4);
-        self.file_type_scores.insert(FileType::Log, 0.3);
-        self.file_type_scores.insert(FileType::Binary, 0.2);
+        self.file_type_scores.insert(FileCategory::Archive, 0.2);
+        self.file_type_scores.insert(FileCategory::Image, 0.2);
+        self.file_type_scores.insert(FileCategory::Video, 0.1);
+        self.file_type_scores.insert(FileCategory::Audio, 0.1);
+        self.file_type_scores.insert(FileCategory::Binary, 0.2);
+        self.file_type_scores.insert(FileCategory::Unknown, 0.3);
     }
     
     /// Check if file is commonly important
