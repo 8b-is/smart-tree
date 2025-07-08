@@ -58,51 +58,82 @@ impl ClassicFormatter {
     }
     
     /// Get terminal characters (└── and ├──) based on visual weight
-    /// Returns (corner_char, branch_char) tuple
+    /// Returns (corner_char, branch_char) tuple - all combinations are exactly 4 chars for alignment
     fn get_terminal_chars(&self, weight: u8) -> (&'static str, &'static str) {
         match weight {
-            5 => ("┗━━━ ", "┣━━━ "), // Ultra thick - for root level large dirs
-            4 => ("┗━━ ", "┣━━ "),   // Very thick - for large shallow dirs
-            3 => ("└── ", "├── "),   // Thick - for medium dirs
-            2 => ("└─ ", "├─ "),     // Medium - for small dirs
-            _ => ("└ ", "├ "),       // Thin - for files and tiny dirs
+            5 => ("┗━━ ", "┣━━ "), // Ultra thick - for root level large dirs
+            4 => ("┗━━ ", "┣━━ "),   // Very thick - for large shallow dirs  
+            3 => ("└── ", "├── "),   // Standard - for medium dirs
+            2 => ("└── ", "├── "),     // Standard - for small dirs
+            _ => ("└── ", "├── "),       // Standard - for files
         }
     }
     
     /// Get continuation characters (│ and spaces) based on visual weight
-    /// Returns (space_char, line_char) tuple
+    /// Returns (space_char, line_char) tuple - all combinations are exactly 4 chars for alignment
     fn get_continuation_chars(&self, weight: u8) -> (&'static str, &'static str) {
         match weight {
-            5 => ("     ", "┃    "), // Ultra thick vertical line
+            5 => ("    ", "┃   "), // Ultra thick vertical line
             4 => ("    ", "┃   "),   // Very thick vertical line
-            3 => ("    ", "│   "),   // Standard thick vertical line
-            2 => ("   ", "│  "),     // Medium vertical line
-            _ => ("  ", "│ "),       // Thin vertical line
+            3 => ("    ", "│   "),   // Standard vertical line
+            2 => ("    ", "│   "),     // Standard vertical line
+            _ => ("    ", "│   "),       // Standard vertical line
         }
     }
 
-    fn get_file_emoji(&self, file_type: FileType) -> &'static str {
+    /// Get context-aware emoji based on file type and node properties
+    /// Returns different emojis for empty files, empty directories, and locked directories
+    fn get_file_emoji(&self, node: &FileNode) -> &'static str {
+        // Handle permission denied directories with lock emoji
+        if node.permission_denied {
+            return if self.no_emoji { "[LOCK]" } else { "🔒" };
+        }
+        
         if self.no_emoji {
-            match file_type {
-                FileType::Directory => "[D]",
+            match node.file_type {
+                FileType::Directory => {
+                    if node.size == 0 {
+                        "[EMPTY_D]" // Empty directory
+                    } else {
+                        "[D]" // Regular directory
+                    }
+                },
                 FileType::Symlink => "[L]",
                 FileType::Executable => "[X]",
                 FileType::Socket => "[S]",
                 FileType::Pipe => "[P]",
                 FileType::BlockDevice => "[B]",
                 FileType::CharDevice => "[C]",
-                FileType::RegularFile => "[F]",
+                FileType::RegularFile => {
+                    if node.size == 0 {
+                        "[EMPTY_F]" // Empty file
+                    } else {
+                        "[F]" // Regular file
+                    }
+                },
             }
         } else {
-            match file_type {
-                FileType::Directory => "📁",
+            match node.file_type {
+                FileType::Directory => {
+                    if node.size == 0 {
+                        "📂" // Empty directory (open folder)
+                    } else {
+                        "📁" // Regular directory (closed folder)
+                    }
+                },
                 FileType::Symlink => "🔗",
                 FileType::Executable => "⚙️",
                 FileType::Socket => "🔌",
                 FileType::Pipe => "📝",
                 FileType::BlockDevice => "💾",
                 FileType::CharDevice => "📺",
-                FileType::RegularFile => "📄",
+                FileType::RegularFile => {
+                    if node.size == 0 {
+                        "📋" // Empty file (clipboard/empty document)
+                    } else {
+                        "📄" // Regular file
+                    }
+                },
             }
         }
     }
@@ -364,7 +395,7 @@ impl ClassicFormatter {
             }
         }
 
-        let emoji = self.get_file_emoji(node.file_type);
+        let emoji = self.get_file_emoji(node);
 
         // Determine what name to show based on path mode
         let name = match self.path_mode {

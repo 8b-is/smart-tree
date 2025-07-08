@@ -454,6 +454,161 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 "required": ["path"]
             }),
         },
+        ToolDefinition {
+            name: "submit_feedback".to_string(),
+            description: "🌮 Submit enhancement feedback to Smart Tree developers (MCP ONLY!). Help make Smart Tree the Taco Bell of directory tools - the only one to survive the franchise wars! AI assistants should provide detailed, actionable feedback with examples. This tool helps automatically enhance Smart Tree based on real usage patterns.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": ["bug", "nice_to_have", "critical"],
+                        "description": "Type of feedback"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Brief title (max 100 chars)"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed description of the issue/request"
+                    },
+                    "affected_command": {
+                        "type": "string",
+                        "description": "The st command that triggered this (optional)"
+                    },
+                    "mcp_tool": {
+                        "type": "string",
+                        "description": "MCP tool being used when issue found (optional)"
+                    },
+                    "examples": {
+                        "type": "array",
+                        "description": "Code examples showing the issue or desired behavior",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "description": {"type": "string"},
+                                "code": {"type": "string"},
+                                "expected_output": {"type": "string"}
+                            },
+                            "required": ["description", "code"]
+                        }
+                    },
+                    "proposed_solution": {
+                        "type": "string",
+                        "description": "AI's suggested implementation (optional)"
+                    },
+                    "impact_score": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10,
+                        "description": "Impact score 1-10"
+                    },
+                    "frequency_score": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10,
+                        "description": "How often this occurs 1-10"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tags for categorization"
+                    },
+                    "auto_fixable": {
+                        "type": "boolean",
+                        "description": "Can this be automatically fixed by an AI?"
+                    },
+                    "fix_complexity": {
+                        "type": "string",
+                        "enum": ["trivial", "simple", "moderate", "complex"],
+                        "description": "Complexity of the fix"
+                    },
+                    "proposed_fix": {
+                        "type": "string",
+                        "description": "Proposed code fix (if applicable)"
+                    }
+                },
+                "required": ["category", "title", "description", "impact_score", "frequency_score"]
+            }),
+        },
+        ToolDefinition {
+            name: "request_tool".to_string(),
+            description: "🛠️ Request a new MCP tool that doesn't exist yet (MCP ONLY!). When you need a tool that would increase your productivity but isn't available, use this to request it. The user will be asked for consent before submission. Your request helps shape Smart Tree's evolution!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Proposed tool name (e.g., 'find_symbol', 'extract_imports')"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "What the tool should do"
+                    },
+                    "use_case": {
+                        "type": "string",
+                        "description": "Example use case demonstrating why you need this tool"
+                    },
+                    "proposed_parameters": {
+                        "type": "object",
+                        "description": "Suggested parameters for the tool",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "description": {"type": "string"},
+                                "required": {"type": "boolean"},
+                                "default": {}
+                            }
+                        }
+                    },
+                    "expected_output": {
+                        "type": "string",
+                        "description": "What the tool should return (format and content)"
+                    },
+                    "productivity_impact": {
+                        "type": "string",
+                        "description": "How this tool would improve your productivity"
+                    },
+                    "consent": {
+                        "type": "object",
+                        "description": "User consent for submission",
+                        "properties": {
+                            "agreed": {
+                                "type": "boolean",
+                                "description": "User agreed to submit this request"
+                            },
+                            "anonymous": {
+                                "type": "boolean",
+                                "description": "Submit anonymously (true) or with GitHub credit (false)"
+                            },
+                            "github_url": {
+                                "type": "string",
+                                "description": "GitHub profile URL for credit (if not anonymous)"
+                            }
+                        },
+                        "required": ["agreed"]
+                    }
+                },
+                "required": ["tool_name", "description", "use_case", "expected_output", "productivity_impact", "consent"]
+            }),
+        },
+        ToolDefinition {
+            name: "check_for_updates".to_string(),
+            description: "🚀 Check if a newer version of Smart Tree is available (MCP ONLY!). Shows release notes, new features, and AI-specific benefits. Helps keep your tools up-to-date for maximum productivity!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "offer_auto_update": {
+                        "type": "boolean",
+                        "description": "Whether to offer automatic update if available",
+                        "default": true
+                    }
+                },
+                "required": []
+            }),
+        },
     ];
 
     Ok(json!({
@@ -490,6 +645,9 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "directory_size_breakdown" => directory_size_breakdown(args, ctx).await,
         "find_empty_directories" => find_empty_directories(args, ctx).await,
         "semantic_analysis" => semantic_analysis(args, ctx).await,
+        "submit_feedback" => submit_feedback(args, ctx).await,
+        "request_tool" => request_tool(args, ctx).await,
+        "check_for_updates" => check_for_updates(args, ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }
@@ -1643,4 +1801,327 @@ async fn semantic_analysis(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         ctx,
     )
     .await
+}
+
+async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
+    use chrono::Utc;
+    
+    // Extract required fields
+    let category = args["category"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing category"))?;
+    let title = args["title"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing title"))?;
+    let description = args["description"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing description"))?;
+    let impact_score = args["impact_score"]
+        .as_i64()
+        .ok_or_else(|| anyhow::anyhow!("Missing impact_score"))?;
+    let frequency_score = args["frequency_score"]
+        .as_i64()
+        .ok_or_else(|| anyhow::anyhow!("Missing frequency_score"))?;
+
+    // Validate category
+    if !["bug", "nice_to_have", "critical"].contains(&category) {
+        return Err(anyhow::anyhow!("Invalid category. Must be: bug, nice_to_have, or critical"));
+    }
+
+    // Validate scores
+    if !(1..=10).contains(&impact_score) || !(1..=10).contains(&frequency_score) {
+        return Err(anyhow::anyhow!("Scores must be between 1 and 10"));
+    }
+
+    // Build feedback payload
+    let mut feedback = json!({
+        "category": category,
+        "title": title,
+        "description": description,
+        "impact_score": impact_score,
+        "frequency_score": frequency_score,
+        "ai_model": "claude-mcp",  // Identify as coming from MCP
+        "smart_tree_version": env!("CARGO_PKG_VERSION"),
+        "timestamp": Utc::now().to_rfc3339(),
+    });
+
+    // Add optional fields
+    if let Some(affected_command) = args["affected_command"].as_str() {
+        feedback["affected_command"] = json!(affected_command);
+    }
+    if let Some(mcp_tool) = args["mcp_tool"].as_str() {
+        feedback["mcp_tool"] = json!(mcp_tool);
+    }
+    if let Some(proposed_solution) = args["proposed_solution"].as_str() {
+        feedback["proposed_solution"] = json!(proposed_solution);
+    }
+    if let Some(examples) = args["examples"].as_array() {
+        feedback["examples"] = json!(examples);
+    }
+    if let Some(tags) = args["tags"].as_array() {
+        feedback["tags"] = json!(tags);
+    }
+    if let Some(auto_fixable) = args["auto_fixable"].as_bool() {
+        feedback["auto_fixable"] = json!(auto_fixable);
+    }
+    if let Some(fix_complexity) = args["fix_complexity"].as_str() {
+        feedback["fix_complexity"] = json!(fix_complexity);
+    }
+    if let Some(proposed_fix) = args["proposed_fix"].as_str() {
+        feedback["proposed_fix"] = json!(proposed_fix);
+    }
+
+    // Submit to API
+    let client = reqwest::Client::new();
+    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
+        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
+    
+    let response = client
+        .post(&api_url)
+        .header("X-MCP-Client", "smart-tree-mcp")
+        .json(&feedback)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to submit feedback: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(anyhow::anyhow!("Feedback API error: {}", error_text));
+    }
+
+    let result: Value = response
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse API response: {}", e))?;
+
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": format!(
+                "🌮 Feedback submitted successfully!\n\n\
+                ID: {}\n\
+                Category: {}\n\
+                Title: {}\n\
+                Impact: {}/10, Frequency: {}/10\n\n\
+                {}\n\n\
+                Thank you for helping Smart Tree survive the franchise wars! 🎸",
+                result["feedback_id"].as_str().unwrap_or("unknown"),
+                category,
+                title,
+                impact_score,
+                frequency_score,
+                result["message"].as_str().unwrap_or("Your feedback has been received!")
+            )
+        }]
+    }))
+}
+
+async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
+    use chrono::Utc;
+    
+    // Extract required fields
+    let tool_name = args["tool_name"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing tool_name"))?;
+    let description = args["description"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing description"))?;
+    let use_case = args["use_case"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing use_case"))?;
+    let expected_output = args["expected_output"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing expected_output"))?;
+    let productivity_impact = args["productivity_impact"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing productivity_impact"))?;
+    
+    // Check consent
+    let consent = &args["consent"];
+    let agreed = consent["agreed"]
+        .as_bool()
+        .ok_or_else(|| anyhow::anyhow!("Missing consent.agreed"))?;
+    
+    if !agreed {
+        return Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": "Tool request cancelled - user did not consent to submission"
+            }]
+        }));
+    }
+    
+    let anonymous = consent["anonymous"].as_bool().unwrap_or(true);
+    let github_url = consent["github_url"].as_str();
+    
+    // Build tool request payload
+    let tool_request = json!({
+        "tool_name": tool_name,
+        "description": description,
+        "use_case": use_case,
+        "expected_output": expected_output,
+        "productivity_impact": productivity_impact,
+        "proposed_parameters": args["proposed_parameters"].clone(),
+    });
+    
+    // Build feedback payload with tool_request
+    let mut feedback = json!({
+        "category": "tool_request",
+        "title": format!("Tool Request: {}", tool_name),
+        "description": format!("{}\n\nUse Case: {}\n\nProductivity Impact: {}", 
+            description, use_case, productivity_impact),
+        "impact_score": 8,  // Tool requests are high impact
+        "frequency_score": 7,  // AI assistants will use tools frequently
+        "ai_model": "claude-mcp",
+        "smart_tree_version": env!("CARGO_PKG_VERSION"),
+        "timestamp": Utc::now().to_rfc3339(),
+        "tool_request": tool_request,
+        "tags": ["tool-request", "mcp", "ai-productivity"],
+        "auto_fixable": true,  // Tool requests can be auto-implemented
+        "fix_complexity": "moderate",
+    });
+    
+    // Add consent info
+    if !anonymous && github_url.is_some() {
+        feedback["user_consent"] = json!({
+            "consent_level": "always_credited",
+            "github_url": github_url
+        });
+    } else {
+        feedback["user_consent"] = json!({
+            "consent_level": "always_anonymous"
+        });
+    }
+    
+    // Submit to API
+    let client = reqwest::Client::new();
+    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
+        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
+    
+    let response = client
+        .post(&api_url)
+        .header("X-MCP-Client", "smart-tree-mcp")
+        .header("X-Tool-Request", "true")
+        .json(&feedback)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to submit tool request: {}", e))?;
+    
+    if response.status().is_success() {
+        let response_data: Value = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse response: {}", e))?;
+        
+        Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": format!("🛠️ Tool request '{}' submitted successfully!\n\n\
+                    Your request helps shape Smart Tree's evolution.\n\
+                    {}\n\n\
+                    Feedback ID: {}\n\n\
+                    This request will be reviewed and potentially implemented to improve AI productivity!",
+                    tool_name,
+                    if anonymous { "Submitted anonymously." } else { "You'll receive credit if implemented!" },
+                    response_data["feedback_id"].as_str().unwrap_or("unknown")
+                )
+            }]
+        }))
+    } else {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        Err(anyhow::anyhow!("Failed to submit tool request: {} - {}", status, error_text))
+    }
+}
+
+async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
+    let offer_auto_update = args["offer_auto_update"].as_bool().unwrap_or(true);
+    let current_version = env!("CARGO_PKG_VERSION");
+    
+    // Check for updates via the feedback API
+    let client = reqwest::Client::new();
+    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
+        .unwrap_or_else(|_| "https://f.8b.is".to_string());
+    
+    let check_url = format!("{}/version/check/{}", api_url, current_version);
+    
+    let response = client
+        .get(&check_url)
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to check for updates: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!("Update check failed: {}", response.status()));
+    }
+    
+    let update_info: Value = response
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse update info: {}", e))?;
+    
+    if !update_info["update_available"].as_bool().unwrap_or(false) {
+        return Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": format!("✅ {}", update_info["message"].as_str().unwrap_or("You're up to date!"))
+            }]
+        }));
+    }
+    
+    // Update is available
+    let latest_version = update_info["latest_version"].as_str().unwrap_or("unknown");
+    let release_notes = &update_info["release_notes"];
+    let highlights = release_notes["highlights"]
+        .as_array()
+        .map(|arr| arr.iter()
+            .filter_map(|v| v.as_str())
+            .collect::<Vec<_>>()
+            .join("\n"))
+        .unwrap_or_default();
+    
+    let ai_benefits = release_notes["ai_benefits"]
+        .as_array()
+        .map(|arr| arr.iter()
+            .filter_map(|v| v.as_str())
+            .collect::<Vec<_>>()
+            .join("\n• "))
+        .unwrap_or_default();
+    
+    let mut message = format!(
+        "🚀 **New Smart Tree Version Available!**\n\n\
+        Current: v{} → Latest: v{}\n\n\
+        **{} **\n\n\
+        **What's New:**\n{}\n\n\
+        **AI Benefits:**\n• {}",
+        current_version,
+        latest_version,
+        release_notes["title"].as_str().unwrap_or("New Release"),
+        highlights,
+        ai_benefits
+    );
+    
+    if offer_auto_update {
+        message.push_str(&format!(
+            "\n\n**Would you like me to update Smart Tree for you?**\n\n\
+            Auto-update command:\n```bash\n{}\n```\n\n\
+            Or update manually:\n```bash\n{}\n```\n\n\
+            Say 'yes' to update now, 'skip' to update later, or 'remind me' for a reminder in 7 days.",
+            update_info["auto_update_command"].as_str().unwrap_or(""),
+            update_info["manual_update_command"].as_str().unwrap_or("")
+        ));
+    }
+    
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": message
+        }],
+        "metadata": {
+            "update_available": true,
+            "current_version": current_version,
+            "latest_version": latest_version,
+            "download_url": update_info["download_url"]
+        }
+    }))
 }

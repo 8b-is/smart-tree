@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  feedback-api:
+    build: .
+    container_name: smart-tree-feedback-api
+    ports:
+      - "8420:8420"
+    environment:
+      - FEEDBACK_DIR=/app/feedback
+    volumes:
+      - ./feedback:/app/feedback
+    restart: unless-stopped
+    labels:
+      - "com.8b-is.service=smart-tree-feedback"
+      - "com.8b-is.description=Collect feedback from AI assistants using Smart Tree"

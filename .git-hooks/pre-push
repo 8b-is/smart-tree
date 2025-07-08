@@ -1,0 +1,86 @@
+#!/bin/bash
+# Smart Tree Selective Pre-Push Hook
+# Controls what gets pushed where based on temperature and rules
+
+# Load temperature
+TEMP=${GIT_TEMP:-5}
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# Get remote name and URL
+remote="$1"
+url="$2"
+
+# Get current branch
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+echo -e "${YELLOW}🌡️  Git Temperature: $TEMP${NC}"
+echo -e "${YELLOW}📡 Pushing to: $remote ($url)${NC}"
+echo -e "${YELLOW}🌿 Branch: $branch${NC}"
+
+# Function to check if push is allowed
+check_push_allowed() {
+    # Check temperature-based rules
+    case "$remote" in
+        forgejo)
+            if [ "$TEMP" -lt 3 ] && [[ ! "$branch" =~ ^experimental/ ]]; then
+                echo -e "${RED}❌ Temperature too low for Forgejo (need >= 3, current: $TEMP)${NC}"
+                echo -e "${YELLOW}💡 Increase temperature with: export GIT_TEMP=3${NC}"
+                return 1
+            fi
+            ;;
+        gitlab)
+            if [ "$TEMP" -lt 5 ]; then
+                echo -e "${RED}❌ Temperature too low for GitLab (need >= 5, current: $TEMP)${NC}"
+                echo -e "${YELLOW}💡 Increase temperature with: export GIT_TEMP=5${NC}"
+                return 1
+            fi
+            ;;
+    esac
+    
+    # Check branch routing rules
+    if [[ "$branch" =~ ^experimental/ ]] && [ "$remote" = "origin" ]; then
+        echo -e "${YELLOW}⚠️  Experimental branches typically go to Forgejo first${NC}"
+        read -p "Push experimental branch to GitHub? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            return 1
+        fi
+    fi
+    
+    if [[ "$branch" =~ ^hue/ ]] && [ "$remote" != "forgejo" ]; then
+        echo -e "${RED}❌ Personal branches (hue/*) only go to Forgejo${NC}"
+        return 1
+    fi
+    
+    # Run tests for testing remotes
+    if [[ "$remote" =~ -test$ ]]; then
+        echo -e "${YELLOW}🧪 Running pre-push tests for $remote...${NC}"
+        
+        if ! cargo test --quiet; then
+            echo -e "${RED}❌ Tests failed! Fix before pushing to $remote${NC}"
+            return 1
+        fi
+        
+        echo -e "${GREEN}✅ Tests passed${NC}"
+    fi
+    
+    return 0
+}
+
+# Check if push is allowed
+if ! check_push_allowed; then
+    echo -e "${RED}🚫 Push cancelled${NC}"
+    exit 1
+fi
+
+# Log push for analytics
+mkdir -p .git/push-log
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $remote $branch $TEMP" >> .git/push-log/history.log
+
+echo -e "${GREEN}✅ Push approved!${NC}"
+exit 0
