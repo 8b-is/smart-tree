@@ -29,28 +29,59 @@ impl HexFormatter {
         }
     }
 
-    fn get_file_emoji(&self, file_type: FileType) -> &'static str {
+    /// Get context-aware emoji based on file type and node properties
+    /// Returns different emojis for empty files, empty directories, and locked directories
+    fn get_file_emoji(&self, node: &FileNode) -> &'static str {
+        // Handle permission denied directories with lock emoji
+        if node.permission_denied {
+            return if self.no_emoji { "[LOCK]" } else { "🔒" };
+        }
+        
         if self.no_emoji {
-            match file_type {
-                FileType::Directory => "d",
-                FileType::Symlink => "l",
-                FileType::Executable => "x",
-                FileType::Socket => "s",
-                FileType::Pipe => "p",
-                FileType::BlockDevice => "b",
-                FileType::CharDevice => "c",
-                FileType::RegularFile => "f",
+            match node.file_type {
+                FileType::Directory => {
+                    if node.size == 0 {
+                        "[EMPTY_D]" // Empty directory
+                    } else {
+                        "[D]" // Regular directory
+                    }
+                },
+                FileType::Symlink => "[L]",
+                FileType::Executable => "[X]",
+                FileType::Socket => "[S]",
+                FileType::Pipe => "[P]",
+                FileType::BlockDevice => "[B]",
+                FileType::CharDevice => "[C]",
+                FileType::RegularFile => {
+                    if node.size == 0 {
+                        "[EMPTY_F]" // Empty file
+                    } else {
+                        "[F]" // Regular file
+                    }
+                },
             }
         } else {
-            match file_type {
-                FileType::Directory => "📁",
+            match node.file_type {
+                FileType::Directory => {
+                    if node.size == 0 {
+                        "📂" // Empty directory (open folder)
+                    } else {
+                        "📁" // Regular directory
+                    }
+                },
                 FileType::Symlink => "🔗",
                 FileType::Executable => "⚙️",
                 FileType::Socket => "🔌",
                 FileType::Pipe => "📝",
                 FileType::BlockDevice => "💾",
                 FileType::CharDevice => "📺",
-                FileType::RegularFile => "📄",
+                FileType::RegularFile => {
+                    if node.size == 0 {
+                        "📋" // Empty file (clipboard)
+                    } else {
+                        "📄" // Regular file
+                    }
+                },
             }
         }
     }
@@ -73,7 +104,7 @@ impl HexFormatter {
                 .as_secs()
         );
 
-        let emoji = self.get_file_emoji(node.file_type);
+        let emoji = self.get_file_emoji(node);
 
         // Add filesystem indicator if enabled
         let fs_indicator = if self.show_filesystems && node.filesystem_type.should_show_by_default()
