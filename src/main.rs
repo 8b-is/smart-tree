@@ -36,6 +36,7 @@ use st::{
         semantic::SemanticFormatter,
         stats::StatsFormatter,
         tsv::TsvFormatter,
+        waste::WasteFormatter,
         Formatter, PathDisplayMode, StreamingFormatter,
     },
     inputs::InputProcessor,
@@ -318,6 +319,8 @@ enum OutputMode {
     Relations,
     /// Quantum compression with semantic understanding (Omni's nuclear option!)
     QuantumSemantic,
+    /// Waste detection and optimization analysis (Marie Kondo mode!)
+    Waste,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -400,6 +403,7 @@ fn main() -> Result<()> {
             "summary" => Some(OutputMode::Summary),
             "summary-ai" => Some(OutputMode::SummaryAi),
             "quantum-semantic" => Some(OutputMode::QuantumSemantic),
+            "waste" => Some(OutputMode::Waste),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -718,6 +722,10 @@ fn main() -> Result<()> {
                 // Semantic-aware quantum compression - "The nuclear option!" - Omni
                 use st::formatters::quantum_semantic::QuantumSemanticFormatter;
                 Box::new(QuantumSemanticFormatter::new())
+            }
+            OutputMode::Waste => {
+                // Waste detection and optimization analysis - "Marie Kondo mode!" - Hue & Aye
+                Box::new(WasteFormatter::new())
             }
         };
 
