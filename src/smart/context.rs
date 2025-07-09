@@ -348,6 +348,8 @@ impl Default for ContextAnalyzer {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use crate::scanner::{FileType, FileCategory, FilesystemType};
+    use std::time::SystemTime;
 
     #[test]
     fn test_task_analysis() {
@@ -370,17 +372,22 @@ mod tests {
         };
         
         let file_node = FileNode {
-            name: "api_handler.rs".to_string(),
             path: PathBuf::from("src/api/api_handler.rs"),
-            file_type: FileType::Rust,
+            is_dir: false,
             size: 1024,
-            modified: std::time::SystemTime::now(),
             permissions: 0o644,
             uid: 1000,
             gid: 1000,
-            is_dir: false,
-            children: None,
-            category: crate::scanner::FileCategory::SourceCode,
+            modified: SystemTime::now(),
+            is_symlink: false,
+            is_hidden: false,
+            permission_denied: false,
+            is_ignored: false,
+            depth: 1,
+            file_type: FileType::RegularFile,
+            category: FileCategory::Rust,
+            search_matches: None,
+            filesystem_type: FilesystemType::Ext4,
         };
         
         let score = analyzer.score_file_relevance(&file_node, &context);

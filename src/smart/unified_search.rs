@@ -515,11 +515,11 @@ impl Default for UnifiedSearch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    // use std::path::PathBuf;  // Commented out as unused
 
     #[test]
     fn test_unified_search_creation() {
-        let search = UnifiedSearch::new();
+        let _search = UnifiedSearch::new();
         // Basic creation test
         assert!(true); // Placeholder test
     }

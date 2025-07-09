@@ -20,7 +20,7 @@ use anyhow::Result;
 use humansize::{format_size, BINARY};
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The WasteFormatter - Your personal codebase cleanup consultant! 🧹
 pub struct WasteFormatter {
@@ -380,7 +380,7 @@ mod tests {
                 is_ignored: false,
                 depth: 1,
                 file_type: FileType::RegularFile,
-                category: FileCategory::Text,
+                category: FileCategory::Markdown,
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
             },
@@ -398,7 +398,7 @@ mod tests {
                 is_ignored: false,
                 depth: 1,
                 file_type: FileType::RegularFile,
-                category: FileCategory::Text,
+                category: FileCategory::Markdown,
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
             },

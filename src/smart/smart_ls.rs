@@ -250,11 +250,11 @@ impl Default for SmartLS {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    // use std::path::PathBuf;  // Commented out as unused
 
     #[test]
     fn test_smart_ls_creation() {
-        let smart_ls = SmartLS::new();
+        let _smart_ls = SmartLS::new();
         // Basic creation test
         assert!(true); // Placeholder test
     }

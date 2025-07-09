@@ -409,7 +409,7 @@ impl Default for GitRelay {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    // use std::path::PathBuf;  // Commented out as unused
 
     #[test]
     fn test_git_relay_creation() {

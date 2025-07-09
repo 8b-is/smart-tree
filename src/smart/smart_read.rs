@@ -473,7 +473,7 @@ impl Default for SmartReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    // use std::path::PathBuf;  // Commented out as unused
 
     #[test]
     fn test_rust_section_identification() {
@@ -490,8 +490,9 @@ mod tests {
         let mut sections = Vec::new();
         reader.identify_rust_sections(&lines, &mut sections).unwrap();
         
-        assert_eq!(sections.len(), 2); // Import section and function section
+        assert_eq!(sections.len(), 3); // Import, documentation, and function sections
         assert_eq!(sections[0].section_type, SectionType::Import);
-        assert_eq!(sections[1].section_type, SectionType::Function);
+        assert_eq!(sections[1].section_type, SectionType::Documentation);
+        assert_eq!(sections[2].section_type, SectionType::Function);
     }
 }
