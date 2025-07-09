@@ -60,7 +60,7 @@ impl ClassicFormatter {
     /// Get terminal characters with gradient background based on file size
     /// Returns formatted string with gradient background that fades to the right
     fn get_terminal_chars(&self, file_size: u64, is_last: bool) -> String {
-        let base_char = if is_last { "└──" } else { "├── " };
+        let base_char = if is_last { "└── " } else { "├── " };
         
         if self.no_emoji {
             // No color mode - just return plain characters
@@ -92,85 +92,55 @@ impl ClassicFormatter {
     }
     
     /// Calculate gradient intensity (0-100) based on file size
-    /// Larger files get more intense gradients
+    /// Enhanced thresholds with 50% darker colors for better visibility
     fn calculate_gradient_intensity(&self, file_size: u64) -> u8 {
-        // Define size thresholds for gradient intensity
+        // Enhanced size thresholds - make gradients much more visible!
+        const MB_100: u64 = 100 * 1024 * 1024;    // 100MB
+        const MB_200: u64 = 200 * 1024 * 1024;    // 200MB
+        const MB_500: u64 = 500 * 1024 * 1024;    // 500MB
+        const GB_1: u64 = 1024 * 1024 * 1024;     // 1GB
+        const GB_4: u64 = 4 * 1024 * 1024 * 1024; // 4GB
+        
         match file_size {
-            0..=1024 => 10,                    // 0-1KB: Very light
-            1025..=10240 => 25,                // 1-10KB: Light
-            10241..=102400 => 40,              // 10-100KB: Medium-light
-            102401..=1048576 => 55,            // 100KB-1MB: Medium
-            1048577..=10485760 => 70,          // 1-10MB: Medium-heavy
-            10485761..=104857600 => 85,        // 10-100MB: Heavy
-            _ => 100,                          // >100MB: Maximum intensity
+            0..=1024 => 50,                    // 0-1KB: 50% darker base
+            1025..=10240 => 55,                // 1-10KB: Slightly more
+            10241..=102400 => 60,              // 10-100KB: Visible
+            102401..=1048576 => 65,            // 100KB-1MB: More visible
+            1048577..=10485760 => 70,          // 1-10MB: Quite visible
+            10485761..MB_100 => 75,            // 10-100MB: Strong
+            MB_100..MB_200 => 80,              // 100-200MB: 60% intensity
+            MB_200..MB_500 => 85,              // 200-500MB: 70% intensity
+            MB_500..GB_1 => 90,                // 500MB-1GB: 80% intensity
+            GB_1..GB_4 => 95,                  // 1-4GB: 90% intensity
+            _ => 100,                          // 4GB+: 100% maximum intensity!
         }
     }
     
-    /// Apply gradient background that fades from left to right
-    /// Creates beautiful visual hierarchy based on file size
+    /// Apply solid gradient background blocks based on file size intensity
+    /// Creates stunning visual hierarchy with darker, more visible colors!
     fn apply_gradient_background(&self, text: &str, intensity: u8) -> String {
         let chars: Vec<char> = text.chars().collect();
         let mut result = String::new();
         
-        // Apply gradient from left to right based on file size intensity
-        if intensity < 15 {
-            // Very small files - subtle blue gradient
-            for (i, &ch) in chars.iter().enumerate() {
-                let bg_color = match i {
-                    0 => "\x1b[48;5;17m",      // Dark blue
-                    1 => "\x1b[48;5;18m",      // Medium blue
-                    2 => "\x1b[48;5;19m",      // Light blue
-                    _ => "\x1b[48;5;20m",      // Very light blue
-                };
-                result.push_str(&format!("{}{}", bg_color, ch));
-            }
-        } else if intensity < 35 {
-            // Small files - green gradient
-            for (i, &ch) in chars.iter().enumerate() {
-                let bg_color = match i {
-                    0 => "\x1b[48;5;22m",      // Dark green
-                    1 => "\x1b[48;5;28m",      // Medium green
-                    2 => "\x1b[48;5;34m",      // Light green
-                    _ => "\x1b[48;5;40m",      // Very light green
-                };
-                result.push_str(&format!("{}{}", bg_color, ch));
-            }
-        } else if intensity < 55 {
-            // Medium files - yellow gradient
-            for (i, &ch) in chars.iter().enumerate() {
-                let bg_color = match i {
-                    0 => "\x1b[48;5;3m",       // Dark yellow
-                    1 => "\x1b[48;5;11m",      // Medium yellow
-                    2 => "\x1b[48;5;227m",     // Light yellow
-                    _ => "\x1b[48;5;228m",     // Very light yellow
-                };
-                result.push_str(&format!("{}{}", bg_color, ch));
-            }
-        } else if intensity < 75 {
-            // Large files - orange gradient
-            for (i, &ch) in chars.iter().enumerate() {
-                let bg_color = match i {
-                    0 => "\x1b[48;5;202m",     // Dark orange
-                    1 => "\x1b[48;5;208m",     // Medium orange
-                    2 => "\x1b[48;5;214m",     // Light orange
-                    _ => "\x1b[48;5;220m",     // Very light orange
-                };
-                result.push_str(&format!("{}{}", bg_color, ch));
-            }
-        } else {
-            // Huge files - red gradient
-            for (i, &ch) in chars.iter().enumerate() {
-                let bg_color = match i {
-                    0 => "\x1b[48;5;196m",     // Dark red
-                    1 => "\x1b[48;5;202m",     // Medium red
-                    2 => "\x1b[48;5;208m",     // Light red
-                    _ => "\x1b[48;5;214m",     // Very light red
-                };
-                result.push_str(&format!("{}{}", bg_color, ch));
-            }
+        // Choose solid background color based on intensity level
+        let bg_color = match intensity {
+            50..=60 => "\x1b[48;5;17m",    // Small files: Dark blue block
+            61..=70 => "\x1b[48;5;22m",    // Medium files: Dark green block
+            71..=75 => "\x1b[48;5;58m",    // Large files: Dark yellow/brown block
+            76..=80 => "\x1b[48;5;94m",    // 100-200MB: Dark orange block (60%)
+            81..=85 => "\x1b[48;5;130m",   // 200-500MB: Darker orange block (70%)
+            86..=90 => "\x1b[48;5;124m",   // 500MB-1GB: Dark red block (80%)
+            91..=95 => "\x1b[48;5;88m",    // 1-4GB: Very dark red block (90%)
+            96..=100 => "\x1b[48;5;52m",   // 4GB+: Maximum dark red block (100%)
+            _ => "\x1b[48;5;236m",         // Fallback: Dark gray
+        };
+        
+        // Apply solid background to entire tree structure as a block
+        for &ch in chars.iter() {
+            result.push_str(&format!("{}{}", bg_color, ch));
         }
         
-        // Reset color at the end
+        // Add reset at the end to prevent color bleeding
         result.push_str("\x1b[0m");
         result
     }
