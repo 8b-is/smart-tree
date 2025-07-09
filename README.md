@@ -33,14 +33,6 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 - **🚀 Smaller, Faster, Better** - Like a sports car that lost weight and gained speed!
 - **💾 One Less Dependency** - `inquire` said goodbye, and we're not crying!
 
-```bash
-# Before v3.1.1:
-st --interactive  # 😴 Too many steps!
-
-# After v3.1.1:
-st  # 🎉 BAM! Instant classic tree goodness!
-```
-
 ## 🚀 Quick Start (Faster than Making Coffee ☕)
 
 ### 🐧 Linux/Mac/WSL - The One-Liner Wonder!
@@ -121,6 +113,7 @@ st -a                       # Include hidden files (they're shy) 🙈
 # For Humans (That's You!) 👤
 st -m classic               # 🌳 The beautiful default (with emojis!)
 st -m stats                 # 📊 Just the facts, ma'am
+st -m waste                 # 🗑️ Marie Kondo mode! Find duplicates & waste
 st -m markdown              # 📝 Perfect documentation in seconds!
 st -m mermaid               # 🧜‍♀️ Diagrams that make you look smart
 
@@ -197,6 +190,75 @@ st -m digest /huge/project  # Returns in 0.1 seconds: "HASH: abc123 F:10000 D:50
 st --no-emoji --no-color    # 😢 Boring mode (but why would you?)
 ```
 
+## 🗑️ Waste Detection: Marie Kondo Mode! ✨
+
+**"Does this file spark joy? If not, let's optimize it!"** - *Marie Kondo (probably)*
+
+Smart Tree's waste detection feature is like having a professional organizer for your codebase! It finds duplicates, build artifacts, large files, and dependency bloat, then gives you actionable cleanup suggestions.
+
+### 🎯 What It Finds:
+
+- **🔄 Duplicate Files**: Identical files wasting precious disk space
+- **🧹 Build Artifacts**: `node_modules`, `target`, `__pycache__`, and other temporary files
+- **📦 Large Files**: Files over 10MB that might need optimization
+- **📚 Dependency Waste**: Package manager directories and their impact
+
+### 🚀 Quick Examples:
+
+```bash
+# Analyze current directory for waste
+st -m waste
+
+# Deep analysis of a large project
+st -m waste --depth 5 /path/to/project
+
+# Find waste in your entire home directory (prepare to be shocked!)
+st -m waste --depth 3 ~
+```
+
+### 📊 Sample Output:
+
+```
+════════════════════════════════════════════════════════════════════════════════
+🗑️  SMART TREE WASTE ANALYSIS - Marie Kondo Mode Activated! ✨
+   Project: /home/hue/my-project
+   Analyzed: 1,234 files, 567 directories
+════════════════════════════════════════════════════════════════════════════════
+
+📊 WASTE SUMMARY:
+├── Total Project Size: 2.36 GiB
+├── Potential Waste: 1.82 GiB (77.4% of project)
+├── Duplicate Groups: 42
+├── Build Artifacts: 15
+├── Large Files (>10 MiB): 8
+└── Potential Savings: 1.66 GiB (70.4% reduction possible)
+
+🔄 DUPLICATE FILES DETECTED:
+├── 16 files of size 100 MiB each (database files)
+├── 6 files of size 20.08 MiB each (editor cache)
+├── 4 files of size 23.44 MiB each (VS Code binaries)
+
+💡 OPTIMIZATION SUGGESTIONS:
+🔄 DUPLICATE FILE CLEANUP:
+   Consider using symbolic links or git submodules for identical files
+   Review and consolidate duplicate configuration files
+
+🧹 BUILD ARTIFACT CLEANUP:
+   rm -rf */node_modules  # Clean Node.js dependencies
+   rm -rf */target        # Clean Rust build artifacts
+   find . -name '__pycache__' -type d -exec rm -rf {} +
+```
+
+### 🎉 Why You'll Love It:
+
+- **💰 Save Money**: Reduce cloud storage costs
+- **⚡ Speed Up Builds**: Less files = faster CI/CD
+- **🧠 Peace of Mind**: Know exactly what's taking up space
+- **🎯 Actionable**: Get specific commands to run, not just reports
+- **🎨 Beautiful**: Color-coded, emoji-rich output that's actually fun to read
+
+*"This tool found 77.4% waste in my home directory and saved me 1.66 GiB! Trisha from Accounting is so proud!"* - *Hue (actual user)*
+
 ## 🏗️ Architecture (For the Curious Minds)
 
 <details>
@@ -210,6 +272,7 @@ src/
 │   ├── classic.rs    # 🌳 Beautiful trees
 │   ├── quantum.rs    # 🧬 Compression wizard
 │   ├── ai.rs         # 🤖 AI whisperer
+│   ├── waste.rs      # 🗑️ Marie Kondo consultant
 │   └── mermaid.rs    # 🧜‍♀️ Diagram artist
 ├── semantic.rs       # 🌊 Wave philosopher
 └── mcp/              # 🔌 AI integration HQ
