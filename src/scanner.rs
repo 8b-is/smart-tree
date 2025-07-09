@@ -838,15 +838,26 @@ impl Scanner {
                 Err(e) => {
                     // An error occurred trying to access a directory entry (e.g., permission denied).
                     if let Some(path) = e.path() {
-                        // If the error is associated with a path.
                         let depth = e.depth();
-                        // Create a special node representing the permission-denied entry.
-                        let node = self.create_permission_denied_node(path, depth);
-                        if sender.send(node.clone()).is_err() {
-                            break; // Receiver disconnected.
+                        
+                        // Check if this is a "directory contents" error vs "directory entry" error.
+                        // If this is a permission error, it's likely we already processed the directory
+                        // entry successfully but can't read its contents. In that case, skip creating
+                        // a duplicate node since we already marked the original as permission_denied.
+                        let is_contents_error = e.io_error().map_or(false, |io_err| 
+                            io_err.kind() == std::io::ErrorKind::PermissionDenied
+                        );
+                        
+                        if !is_contents_error {
+                            // Create a special node representing the permission-denied entry.
+                            let node = self.create_permission_denied_node(path, depth);
+                            if sender.send(node.clone()).is_err() {
+                                break; // Receiver disconnected.
+                            }
+                            // Still update stats (e.g., directory count) for permission-denied entries if shown.
+                            stats.update_file(&node);
                         }
-                        // Still update stats (e.g., directory count) for permission-denied entries if shown.
-                        stats.update_file(&node);
+                        
                         // Tell WalkDir not to try to descend into this unreadable directory.
                         walker.skip_current_dir();
                     }
@@ -1332,6 +1343,14 @@ impl Scanner {
         } else {
             metadata.len()
         };
+        
+        // Check if this is a directory that we can't read the contents of
+        let permission_denied = if metadata.is_dir() {
+            // Try to read the directory to see if we have permission
+            std::fs::read_dir(path).is_err()
+        } else {
+            false
+        };
 
         Ok(Some(FileNode {
             path: path.to_path_buf(),
@@ -1343,7 +1362,7 @@ impl Scanner {
             modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH), // Fallback for modified time
             is_symlink: metadata.file_type().is_symlink(), // Use file_type() for symlink check
             is_hidden,
-            permission_denied: false, // If we got metadata, assume no permission error *for this node itself*.
+            permission_denied, // Set based on whether we can read directory contents
             is_ignored: is_ignored_by_rules, // Use the pre-determined ignore status.
             depth,
             file_type,
