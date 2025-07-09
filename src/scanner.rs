@@ -35,7 +35,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 /// holds all the juicy details: its name, size, when it was last cool (modified),
 /// and whether it's on the super-secret "ignored" list. It's the atom of our
 /// `st` universe.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FileNode {
     /// The full path to the file or directory. The source of truth for location!
     pub path: PathBuf,
@@ -75,7 +75,7 @@ pub struct FileNode {
 }
 
 /// Information about search matches within a file
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SearchMatches {
     /// First match position (line, column)
     pub first_match: (usize, usize),
@@ -91,7 +91,7 @@ pub struct SearchMatches {
 ///
 /// This enum helps us categorize entries beyond just "file" or "directory".
 /// It's especially useful on Unix-like systems where you have sockets, pipes, etc.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum FileType {
     Directory,   // A folder, a container of other things.
     RegularFile, // Your everyday, garden-variety file.
@@ -107,7 +107,7 @@ pub enum FileType {
 ///
 /// This enum represents different filesystem types with single-character codes
 /// for compact display. The mapping is designed to be memorable and intuitive.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum FilesystemType {
     Ext4,    // '4' - The most common Linux filesystem
     Ext3,    // '3' - Older ext filesystem
@@ -219,7 +219,7 @@ impl FilesystemType {
 /// or names. It's primarily used for display purposes, like coloring output,
 /// and can also help in understanding the nature of a directory's contents.
 /// Trish loves how this makes the tree output more intuitive!
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum FileCategory {
     // --- Programming Languages ---
     Rust,       // .rs
@@ -332,6 +332,7 @@ impl TreeStats {
 /// "I only want to see files bigger than a tour bus," "Ignore the messy backstage
 /// area (`.gitignore`)." We build this from the user's command-line arguments
 /// to make sure the scanner puts on the exact show the user wants to see.
+#[derive(Default)]
 pub struct ScannerConfig {
     /// Maximum depth to traverse into subdirectories.
     pub max_depth: usize,
@@ -837,15 +838,26 @@ impl Scanner {
                 Err(e) => {
                     // An error occurred trying to access a directory entry (e.g., permission denied).
                     if let Some(path) = e.path() {
-                        // If the error is associated with a path.
                         let depth = e.depth();
-                        // Create a special node representing the permission-denied entry.
-                        let node = self.create_permission_denied_node(path, depth);
-                        if sender.send(node.clone()).is_err() {
-                            break; // Receiver disconnected.
+                        
+                        // Check if this is a "directory contents" error vs "directory entry" error.
+                        // If this is a permission error, it's likely we already processed the directory
+                        // entry successfully but can't read its contents. In that case, skip creating
+                        // a duplicate node since we already marked the original as permission_denied.
+                        let is_contents_error = e.io_error().map_or(false, |io_err| 
+                            io_err.kind() == std::io::ErrorKind::PermissionDenied
+                        );
+                        
+                        if !is_contents_error {
+                            // Create a special node representing the permission-denied entry.
+                            let node = self.create_permission_denied_node(path, depth);
+                            if sender.send(node.clone()).is_err() {
+                                break; // Receiver disconnected.
+                            }
+                            // Still update stats (e.g., directory count) for permission-denied entries if shown.
+                            stats.update_file(&node);
                         }
-                        // Still update stats (e.g., directory count) for permission-denied entries if shown.
-                        stats.update_file(&node);
+                        
                         // Tell WalkDir not to try to descend into this unreadable directory.
                         walker.skip_current_dir();
                     }
@@ -1331,6 +1343,14 @@ impl Scanner {
         } else {
             metadata.len()
         };
+        
+        // Check if this is a directory that we can't read the contents of
+        let permission_denied = if metadata.is_dir() {
+            // Try to read the directory to see if we have permission
+            std::fs::read_dir(path).is_err()
+        } else {
+            false
+        };
 
         Ok(Some(FileNode {
             path: path.to_path_buf(),
@@ -1342,7 +1362,7 @@ impl Scanner {
             modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH), // Fallback for modified time
             is_symlink: metadata.file_type().is_symlink(), // Use file_type() for symlink check
             is_hidden,
-            permission_denied: false, // If we got metadata, assume no permission error *for this node itself*.
+            permission_denied, // Set based on whether we can read directory contents
             is_ignored: is_ignored_by_rules, // Use the pre-determined ignore status.
             depth,
             file_type,

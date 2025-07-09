@@ -36,8 +36,10 @@ use st::{
         semantic::SemanticFormatter,
         stats::StatsFormatter,
         tsv::TsvFormatter,
+        waste::WasteFormatter,
         Formatter, PathDisplayMode, StreamingFormatter,
     },
+    inputs::InputProcessor,
     parse_size,
     Scanner,
     ScannerConfig, // The mighty Scanner and its configuration.
@@ -80,7 +82,12 @@ struct Cli {
 
     // --- Scan Arguments ---
     /// Path to the directory or file you want to analyze.
-    path: Option<PathBuf>,
+    /// Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)
+    path: Option<String>,
+    
+    /// Specify input type explicitly (filesystem, qcp, sse, openapi, mem8)
+    #[arg(long, value_name = "TYPE")]
+    input: Option<String>,
 
     #[command(flatten)]
     scan_opts: ScanArgs,
@@ -242,12 +249,14 @@ struct ScanArgs {
 /// Enum for mermaid style argument
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum MermaidStyleArg {
-    /// Traditional flowchart with connected nodes
+    /// Traditional flowchart (default)
     Flowchart,
-    /// Mind map style for overviews
+    /// Mind map style
     Mindmap,
-    /// Git-like graph showing relationships
+    /// Git graph style
     Gitgraph,
+    /// Treemap style (shows file sizes visually)
+    Treemap,
 }
 
 /// Enum defining how color should be used in the output.
@@ -310,6 +319,8 @@ enum OutputMode {
     Relations,
     /// Quantum compression with semantic understanding (Omni's nuclear option!)
     QuantumSemantic,
+    /// Waste detection and optimization analysis (Marie Kondo mode!)
+    Waste,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -367,7 +378,7 @@ fn main() -> Result<()> {
 
     // If no action flag was given, proceed with the scan.
     let args = cli.scan_opts;
-    let path = cli.path.unwrap_or_else(|| PathBuf::from("."));
+    let input_str = cli.path.unwrap_or_else(|| ".".to_string());
 
     // --- Environment Variable Overrides ---
     // Check for ST_DEFAULT_MODE environment variable to override the default output mode.
@@ -392,6 +403,7 @@ fn main() -> Result<()> {
             "summary" => Some(OutputMode::Summary),
             "summary-ai" => Some(OutputMode::SummaryAi),
             "quantum-semantic" => Some(OutputMode::QuantumSemantic),
+            "waste" => Some(OutputMode::Waste),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -502,8 +514,13 @@ fn main() -> Result<()> {
         show_filesystems: args.show_filesystems,
     };
 
-    // Create the scanner instance with the specified root path and configuration.
-    let scanner = Scanner::new(&path, scanner_config)?;
+    // 🌊 Universal Input Processing
+    // Detect input type and determine root path
+    let (is_traditional_fs, scan_path) = if cli.input.is_some() || !input_str.starts_with(".") && !PathBuf::from(&input_str).exists() {
+        (false, PathBuf::from(&input_str))
+    } else {
+        (true, PathBuf::from(&input_str))
+    };
 
     // Convert the command-line PathMode enum to the formatter's PathDisplayMode enum.
     let path_display_mode = match args.path_mode {
@@ -515,7 +532,8 @@ fn main() -> Result<()> {
     // --- Output Generation ---
     // Decide whether to use streaming mode or normal (scan-all-then-format) mode.
     // Streaming is enabled by --stream flag AND if compression is NOT requested (as zlib needs the whole buffer).
-    if args.stream && !compress {
+    // Note: Streaming is only supported for traditional filesystem scanning
+    if args.stream && !compress && is_traditional_fs {
         // Streaming mode is only supported for certain formatters that implement StreamingFormatter.
         match mode {
             OutputMode::Hex | OutputMode::Ai | OutputMode::Quantum => {
@@ -525,7 +543,10 @@ fn main() -> Result<()> {
                 use std::thread;
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
-                                                // let scanner_path_clone = path.clone(); // Clone path for the scanner thread.
+                
+                // Recreate scanner for streaming (since we consumed it above)
+                let path = PathBuf::from(&input_str);
+                let scanner = Scanner::new(&path, scanner_config)?;
                 let scanner_root = scanner.root().to_path_buf(); // Get the canonicalized root before moving scanner
 
                 // Spawn the scanner thread. It will send FileNode objects through the channel.
@@ -580,7 +601,38 @@ fn main() -> Result<()> {
     } else {
         // Normal (non-streaming) mode or when compression is enabled.
         // Scan the entire directory structure first.
-        let (nodes, stats) = scanner.scan()?;
+        // Get nodes and stats based on input type
+        let (nodes, stats, root_path) = if is_traditional_fs {
+            let scanner = Scanner::new(&scan_path, scanner_config)?;
+            let root = scanner.root().to_path_buf();
+            let (n, s) = scanner.scan()?;
+            (n, s, root)
+        } else {
+            // Use universal input processor for non-filesystem inputs
+            eprintln!("🌊 Detecting input type...");
+            let input_processor = InputProcessor::new();
+            let input_source = InputProcessor::detect_input_type(&input_str);
+            
+            let context_root = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(input_processor.process(input_source))?;
+                
+            // Convert context nodes to file nodes
+            let file_nodes = st::inputs::context_to_file_nodes(context_root);
+            
+            // Create synthetic stats
+            let stats = st::TreeStats {
+                total_files: file_nodes.iter().filter(|n| !n.is_dir).count() as u64,
+                total_dirs: file_nodes.iter().filter(|n| n.is_dir).count() as u64,
+                total_size: file_nodes.iter().map(|n| n.size).sum(),
+                file_types: std::collections::HashMap::new(),
+                largest_files: vec![],
+                newest_files: vec![],
+                oldest_files: vec![],
+            };
+            
+            (file_nodes, stats, scan_path.clone())
+        };
 
         // Create the appropriate formatter based on the selected mode.
         let formatter: Box<dyn Formatter> = match mode {
@@ -630,6 +682,7 @@ fn main() -> Result<()> {
                     MermaidStyleArg::Flowchart => MermaidStyle::Flowchart,
                     MermaidStyleArg::Mindmap => MermaidStyle::Mindmap,
                     MermaidStyleArg::Gitgraph => MermaidStyle::GitGraph,
+                    MermaidStyleArg::Treemap => MermaidStyle::Treemap,
                 };
                 Box::new(MermaidFormatter::new(
                     style,
@@ -670,11 +723,15 @@ fn main() -> Result<()> {
                 use st::formatters::quantum_semantic::QuantumSemanticFormatter;
                 Box::new(QuantumSemanticFormatter::new())
             }
+            OutputMode::Waste => {
+                // Waste detection and optimization analysis - "Marie Kondo mode!" - Hue & Aye
+                Box::new(WasteFormatter::new())
+            }
         };
 
         // Format the collected nodes and stats into a byte vector.
         let mut output_buffer = Vec::new();
-        formatter.format(&mut output_buffer, &nodes, &stats, scanner.root())?;
+        formatter.format(&mut output_buffer, &nodes, &stats, &root_path)?;
 
         // Handle compression if requested.
         if compress {

@@ -18,6 +18,7 @@ pub mod stats;
 pub mod summary;
 pub mod summary_ai;
 pub mod tsv;
+pub mod waste;
 
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;

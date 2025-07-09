@@ -22,28 +22,182 @@ impl ClassicFormatter {
         }
     }
 
-    fn get_file_emoji(&self, file_type: FileType) -> &'static str {
+    /// Calculate visual weight based on directory size and depth
+    /// Larger directories and shallower depths get higher visual weight (thicker lines)
+    fn calculate_visual_weight(&self, node: &FileNode) -> u8 {
+        if !node.is_dir {
+            return 1; // Files get standard weight
+        }
+        
+        // Base weight starts higher for directories
+        let mut weight = 2;
+        
+        // Size-based scaling (logarithmic to avoid extreme values)
+        // Directories with more content get thicker lines
+        if node.size > 0 {
+            let size_factor = (node.size as f64).log10().max(1.0) as u8;
+            weight += (size_factor / 2).min(2); // Cap the size contribution
+        }
+        
+        // Depth-based scaling - shallower directories get thicker lines
+        // Root level (depth 0) gets maximum thickness
+        let depth_bonus = if node.depth == 0 {
+            3 // Root gets the thickest lines
+        } else if node.depth == 1 {
+            2 // First level gets thick lines
+        } else if node.depth <= 3 {
+            1 // Moderate depth gets medium lines
+        } else {
+            0 // Deep levels get standard lines
+        };
+        
+        weight += depth_bonus;
+        
+        // Cap the maximum weight to avoid going beyond our character sets
+        weight.min(5)
+    }
+    
+    /// Get terminal characters with gradient background based on file size
+    /// Returns formatted string with gradient background that fades to the right
+    fn get_terminal_chars(&self, file_size: u64, is_last: bool) -> String {
+        let base_char = if is_last { "└── " } else { "├── " };
+        
+        if self.no_emoji || !self.use_color {
+            // No color/emoji mode - just return plain characters
+            return base_char.to_string();
+        }
+        
+        // Calculate gradient intensity based on file size (0-100)
+        let intensity = self.calculate_gradient_intensity(file_size);
+        
+        // Create gradient background that fades from left to right
+        self.apply_gradient_background(base_char, intensity)
+    }
+    
+    /// Get continuation characters with gradient background
+    /// Returns formatted string with gradient background for vertical lines
+    fn get_continuation_chars(&self, file_size: u64, is_vertical: bool) -> String {
+        let base_char = if is_vertical { "│   " } else { "    " };
+        
+        if self.no_emoji || !self.use_color {
+            // No color/emoji mode - just return plain characters
+            return base_char.to_string();
+        }
+        
+        // Calculate gradient intensity based on file size
+        let intensity = self.calculate_gradient_intensity(file_size);
+        
+        // Create gradient background that fades from left to right
+        self.apply_gradient_background(base_char, intensity)
+    }
+    
+    /// Calculate gradient intensity (0-100) based on file size
+    /// Enhanced thresholds with 50% darker colors for better visibility
+    fn calculate_gradient_intensity(&self, file_size: u64) -> u8 {
+        // Enhanced size thresholds - make gradients much more visible!
+        const MB_100: u64 = 100 * 1024 * 1024;    // 100MB
+        const MB_200: u64 = 200 * 1024 * 1024;    // 200MB
+        const MB_500: u64 = 500 * 1024 * 1024;    // 500MB
+        const GB_1: u64 = 1024 * 1024 * 1024;     // 1GB
+        const GB_4: u64 = 4 * 1024 * 1024 * 1024; // 4GB
+        
+        match file_size {
+            0..=1024 => 50,                    // 0-1KB: 50% darker base
+            1025..=10240 => 55,                // 1-10KB: Slightly more
+            10241..=102400 => 60,              // 10-100KB: Visible
+            102401..=1048576 => 65,            // 100KB-1MB: More visible
+            1048577..=10485760 => 70,          // 1-10MB: Quite visible
+            10485761..MB_100 => 75,            // 10-100MB: Strong
+            MB_100..MB_200 => 80,              // 100-200MB: 60% intensity
+            MB_200..MB_500 => 85,              // 200-500MB: 70% intensity
+            MB_500..GB_1 => 90,                // 500MB-1GB: 80% intensity
+            GB_1..GB_4 => 95,                  // 1-4GB: 90% intensity
+            _ => 100,                          // 4GB+: 100% maximum intensity!
+        }
+    }
+    
+    /// Apply solid gradient background blocks based on file size intensity
+    /// Creates stunning visual hierarchy with darker, more visible colors!
+    fn apply_gradient_background(&self, text: &str, intensity: u8) -> String {
+        let chars: Vec<char> = text.chars().collect();
+        let mut result = String::new();
+        
+        // Choose solid background color based on intensity level
+        let bg_color = match intensity {
+            50..=60 => "\x1b[48;5;17m",    // Small files: Dark blue block
+            61..=70 => "\x1b[48;5;22m",    // Medium files: Dark green block
+            71..=75 => "\x1b[48;5;58m",    // Large files: Dark yellow/brown block
+            76..=80 => "\x1b[48;5;94m",    // 100-200MB: Dark orange block (60%)
+            81..=85 => "\x1b[48;5;130m",   // 200-500MB: Darker orange block (70%)
+            86..=90 => "\x1b[48;5;124m",   // 500MB-1GB: Dark red block (80%)
+            91..=95 => "\x1b[48;5;88m",    // 1-4GB: Very dark red block (90%)
+            96..=100 => "\x1b[48;5;52m",   // 4GB+: Maximum dark red block (100%)
+            _ => "\x1b[48;5;236m",         // Fallback: Dark gray
+        };
+        
+        // Apply solid background to entire tree structure as a block
+        for &ch in chars.iter() {
+            result.push_str(&format!("{}{}", bg_color, ch));
+        }
+        
+        // Add reset at the end to prevent color bleeding
+        result.push_str("\x1b[0m");
+        result
+    }
+
+    /// Get context-aware emoji based on file type and node properties
+    /// Returns different emojis for empty files, empty directories, and locked directories
+    fn get_file_emoji(&self, node: &FileNode) -> &'static str {
+        // Handle permission denied directories with lock emoji
+        if node.permission_denied {
+            return if self.no_emoji { "[LOCK]" } else { "🔒" };
+        }
+        
         if self.no_emoji {
-            match file_type {
-                FileType::Directory => "[D]",
+            match node.file_type {
+                FileType::Directory => {
+                    if node.size == 0 {
+                        "[EMPTY_D]" // Empty directory
+                    } else {
+                        "[D]" // Regular directory
+                    }
+                },
                 FileType::Symlink => "[L]",
                 FileType::Executable => "[X]",
                 FileType::Socket => "[S]",
                 FileType::Pipe => "[P]",
                 FileType::BlockDevice => "[B]",
                 FileType::CharDevice => "[C]",
-                FileType::RegularFile => "[F]",
+                FileType::RegularFile => {
+                    if node.size == 0 {
+                        "[EMPTY_F]" // Empty file
+                    } else {
+                        "[F]" // Regular file
+                    }
+                },
             }
         } else {
-            match file_type {
-                FileType::Directory => "📁",
+            match node.file_type {
+                FileType::Directory => {
+                    if node.size == 0 {
+                        "📂" // Empty directory (open folder)
+                    } else {
+                        "📁" // Regular directory (closed folder)
+                    }
+                },
                 FileType::Symlink => "🔗",
                 FileType::Executable => "⚙️",
                 FileType::Socket => "🔌",
                 FileType::Pipe => "📝",
                 FileType::BlockDevice => "💾",
                 FileType::CharDevice => "📺",
-                FileType::RegularFile => "📄",
+                FileType::RegularFile => {
+                    if node.size == 0 {
+                        "📋" // Empty file (clipboard/empty document)
+                    } else {
+                        "📄" // Regular file
+                    }
+                },
             }
         }
     }
@@ -289,16 +443,22 @@ impl ClassicFormatter {
     fn format_node(&self, node: &FileNode, is_last: &[bool], root_path: &Path) -> String {
         let mut prefix = String::new();
 
-        // Build tree prefix
+        // Build tree prefix with gradient backgrounds based on file size
+        // Larger files get more intense gradient backgrounds that fade to the right
+        
         for (i, &last) in is_last.iter().enumerate() {
             if i == is_last.len() - 1 {
-                prefix.push_str(if last { "└── " } else { "├── " });
+                // Terminal connectors (last level) - with gradient background
+                let terminal_chars = self.get_terminal_chars(node.size, last);
+                prefix.push_str(&terminal_chars);
             } else {
-                prefix.push_str(if last { "    " } else { "│   " });
+                // Continuation lines (intermediate levels) - with gradient background
+                let continuation_chars = self.get_continuation_chars(node.size, !last);
+                prefix.push_str(&continuation_chars);
             }
         }
 
-        let emoji = self.get_file_emoji(node.file_type);
+        let emoji = self.get_file_emoji(node);
 
         // Determine what name to show based on path mode
         let name = match self.path_mode {

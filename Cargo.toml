@@ -1,6 +1,6 @@
 [package]
 name = "st"
-version = "3.1.1"
+version = "3.2.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -41,6 +41,8 @@ tokio = { version = "1.42", features = ["full"] }
 async-trait = { version = "0.1" }
 futures = { version = "0.3" }
 dashmap = { version = "6.1" }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde_yaml = "0.9"
 
 [dev-dependencies]
 tempfile = "3.10"

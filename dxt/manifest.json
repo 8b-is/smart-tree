@@ -3,9 +3,9 @@
   "id": "is.8b.smart-tree",
   "name": "smart-tree",
   "display_name": "Smart Tree",
-  "version": "2.0.7",
-  "description": "Revolutionary AI-optimized directory tree with MEM|8 Quantum compression - 99% token reduction",
-  "long_description": "Smart Tree v2.0 revolutionizes directory visualization with MEM|8 Quantum compression, reducing output by 99% and saving thousands in AI token costs.\n\nKey Features:\n- **MEM|8 Quantum Format**: 99% size reduction (487MB → 4.1MB for Chromium)\n- **Claude Mode Default**: MCP tools now use maximum compression by default\n- **Semantic Analysis**: Group files by conceptual waves (inspired by Omni!)\n- **Mermaid Diagrams**: Generate directory diagrams for documentation\n- **Cost Savings**: $1,270 saved per large directory analysis\n- **10-24x Faster**: Than traditional tree command\n- **Native Streaming**: Constant memory usage for massive directories\n- Multiple output formats (quantum, claude, mermaid, semantic, hex, json, csv, tsv)\n- Smart filtering by file type, size, date, and content\n- Built-in compression for all formats\n- MCP server with 22 specialized tools\n- Cross-platform support (Windows, macOS, Linux)",
+  "version": "3.1.1",
+  "description": "🌳 World's smartest directory tree tool! Features summary-ai (10x token reduction), semantic search, quantum compression, mermaid diagrams (including treemaps!). Save 98% on AI costs while getting better results. Created by the legendary Cheet!",
+  "long_description": "Smart Tree v3.1 revolutionizes directory visualization with MEM|8 Quantum compression, reducing output by 99% and saving thousands in AI token costs.\n\nKey Features:\n- **MEM|8 Quantum Format**: 99% size reduction (487MB → 4.1MB for Chromium)\n- **Claude Mode Default**: MCP tools now use maximum compression by default\n- **Semantic Analysis**: Group files by conceptual waves (inspired by Omni!)\n- **Mermaid Diagrams**: Generate directory diagrams for documentation\n- **Cost Savings**: $1,270 saved per large directory analysis\n- **10-24x Faster**: Than traditional tree command\n- **Native Streaming**: Constant memory usage for massive directories\n- Multiple output formats (quantum, claude, mermaid, semantic, hex, json, csv, tsv)\n- Smart filtering by file type, size, date, and content\n- Built-in compression for all formats\n- MCP server with 22 specialized tools\n- Cross-platform support (Windows, macOS, Linux)",
   "author": {
     "name": "8b-is",
     "email": "st@8b.is",
