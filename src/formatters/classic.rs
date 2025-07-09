@@ -61,11 +61,11 @@ impl ClassicFormatter {
     /// Returns (corner_char, branch_char) tuple - all combinations are exactly 4 chars for alignment
     fn get_terminal_chars(&self, weight: u8) -> (&'static str, &'static str) {
         match weight {
-            5 => ("┗━ ", "┣━ "), // Ultra thick - for root level large dirs
-            4 => ("┗━ ", "┣━ "),   // Very thick - for large shallow dirs  
-            3 => ("└─ ", "├─ "),   // Standard - for medium dirs
-            2 => ("└─ ", "├─ "),     // Standard - for small dirs
-            _ => ("└─ ", "├─ "),       // Standard - for files
+            5 => ("┗━\t", "┣━\t"), // Ultra thick - for root level large dirs
+            4 => ("┗━\t", "┣━\t"),   // Very thick - for large shallow dirs  
+            3 => ("└─\t", "├─\t"),   // Standard - for medium dirs
+            2 => ("└─\t", "├─\t"),     // Standard - for small dirs
+            _ => ("└─\t", "├─\t"),       // Standard - for files
         }
     }
     
@@ -73,11 +73,11 @@ impl ClassicFormatter {
     /// Returns (space_char, line_char) tuple - all combinations are exactly 4 chars for alignment
     fn get_continuation_chars(&self, weight: u8) -> (&'static str, &'static str) {
         match weight {
-            5 => ("   ", "┃  "), // Ultra thick vertical line
-            4 => ("   ", "┃  "),   // Very thick vertical line
-            3 => ("   ", "│  "),   // Standard vertical line
-            2 => ("   ", "│  "),     // Standard vertical line
-            _ => ("   ", "|  "),       // Standard vertical line
+            5 => ("\t", "┃\t"), // Ultra thick vertical line
+            4 => ("\t", "┃\t"),   // Very thick vertical line
+            3 => ("\t", "│\t"),   // Standard vertical line
+            2 => ("\t", "│\t"),     // Standard vertical line
+            _ => ("\t", "|\t"),       // Standard vertical line
         }
     }
 
