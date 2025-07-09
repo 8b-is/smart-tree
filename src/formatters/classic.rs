@@ -216,7 +216,7 @@ impl ClassicFormatter {
                     }
                 },
                 FileType::Symlink => "🔗",
-                FileType::Executable => "⚙️ ",
+                FileType::Executable => "⚙️",
                 FileType::Socket => "🔌",
                 FileType::Pipe => "📝",
                 FileType::BlockDevice => "💾",
