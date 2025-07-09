@@ -57,28 +57,122 @@ impl ClassicFormatter {
         weight.min(5)
     }
     
-    /// Get terminal characters (└── and ├──) based on visual weight
-    /// Returns (corner_char, branch_char) tuple - all combinations are exactly 4 chars for alignment
-    fn get_terminal_chars(&self, weight: u8) -> (&'static str, &'static str) {
-        match weight {
-            5 => ("┗━\t", "┣━\t"), // Ultra thick - for root level large dirs
-            4 => ("┗━\t", "┣━\t"),   // Very thick - for large shallow dirs  
-            3 => ("└─\t", "├─\t"),   // Standard - for medium dirs
-            2 => ("└─\t", "├─\t"),     // Standard - for small dirs
-            _ => ("└─\t", "├─\t"),       // Standard - for files
+    /// Get terminal characters with gradient background based on file size
+    /// Returns formatted string with gradient background that fades to the right
+    fn get_terminal_chars(&self, file_size: u64, is_last: bool) -> String {
+        let base_char = if is_last { "└──" } else { "├── " };
+        
+        if self.no_emoji {
+            // No color mode - just return plain characters
+            return base_char.to_string();
+        }
+        
+        // Calculate gradient intensity based on file size (0-100)
+        let intensity = self.calculate_gradient_intensity(file_size);
+        
+        // Create gradient background that fades from left to right
+        self.apply_gradient_background(base_char, intensity)
+    }
+    
+    /// Get continuation characters with gradient background
+    /// Returns formatted string with gradient background for vertical lines
+    fn get_continuation_chars(&self, file_size: u64, is_vertical: bool) -> String {
+        let base_char = if is_vertical { "│   " } else { "    " };
+        
+        if self.no_emoji {
+            // No color mode - just return plain characters
+            return base_char.to_string();
+        }
+        
+        // Calculate gradient intensity based on file size
+        let intensity = self.calculate_gradient_intensity(file_size);
+        
+        // Create gradient background that fades from left to right
+        self.apply_gradient_background(base_char, intensity)
+    }
+    
+    /// Calculate gradient intensity (0-100) based on file size
+    /// Larger files get more intense gradients
+    fn calculate_gradient_intensity(&self, file_size: u64) -> u8 {
+        // Define size thresholds for gradient intensity
+        match file_size {
+            0..=1024 => 10,                    // 0-1KB: Very light
+            1025..=10240 => 25,                // 1-10KB: Light
+            10241..=102400 => 40,              // 10-100KB: Medium-light
+            102401..=1048576 => 55,            // 100KB-1MB: Medium
+            1048577..=10485760 => 70,          // 1-10MB: Medium-heavy
+            10485761..=104857600 => 85,        // 10-100MB: Heavy
+            _ => 100,                          // >100MB: Maximum intensity
         }
     }
     
-    /// Get continuation characters (│ and spaces) based on visual weight
-    /// Returns (space_char, line_char) tuple - all combinations are exactly 4 chars for alignment
-    fn get_continuation_chars(&self, weight: u8) -> (&'static str, &'static str) {
-        match weight {
-            5 => ("\t", "┃\t"), // Ultra thick vertical line
-            4 => ("\t", "┃\t"),   // Very thick vertical line
-            3 => ("\t", "│\t"),   // Standard vertical line
-            2 => ("\t", "│\t"),     // Standard vertical line
-            _ => ("\t", "|\t"),       // Standard vertical line
+    /// Apply gradient background that fades from left to right
+    /// Creates beautiful visual hierarchy based on file size
+    fn apply_gradient_background(&self, text: &str, intensity: u8) -> String {
+        let chars: Vec<char> = text.chars().collect();
+        let mut result = String::new();
+        
+        // Apply gradient from left to right based on file size intensity
+        if intensity < 15 {
+            // Very small files - subtle blue gradient
+            for (i, &ch) in chars.iter().enumerate() {
+                let bg_color = match i {
+                    0 => "\x1b[48;5;17m",      // Dark blue
+                    1 => "\x1b[48;5;18m",      // Medium blue
+                    2 => "\x1b[48;5;19m",      // Light blue
+                    _ => "\x1b[48;5;20m",      // Very light blue
+                };
+                result.push_str(&format!("{}{}", bg_color, ch));
+            }
+        } else if intensity < 35 {
+            // Small files - green gradient
+            for (i, &ch) in chars.iter().enumerate() {
+                let bg_color = match i {
+                    0 => "\x1b[48;5;22m",      // Dark green
+                    1 => "\x1b[48;5;28m",      // Medium green
+                    2 => "\x1b[48;5;34m",      // Light green
+                    _ => "\x1b[48;5;40m",      // Very light green
+                };
+                result.push_str(&format!("{}{}", bg_color, ch));
+            }
+        } else if intensity < 55 {
+            // Medium files - yellow gradient
+            for (i, &ch) in chars.iter().enumerate() {
+                let bg_color = match i {
+                    0 => "\x1b[48;5;3m",       // Dark yellow
+                    1 => "\x1b[48;5;11m",      // Medium yellow
+                    2 => "\x1b[48;5;227m",     // Light yellow
+                    _ => "\x1b[48;5;228m",     // Very light yellow
+                };
+                result.push_str(&format!("{}{}", bg_color, ch));
+            }
+        } else if intensity < 75 {
+            // Large files - orange gradient
+            for (i, &ch) in chars.iter().enumerate() {
+                let bg_color = match i {
+                    0 => "\x1b[48;5;202m",     // Dark orange
+                    1 => "\x1b[48;5;208m",     // Medium orange
+                    2 => "\x1b[48;5;214m",     // Light orange
+                    _ => "\x1b[48;5;220m",     // Very light orange
+                };
+                result.push_str(&format!("{}{}", bg_color, ch));
+            }
+        } else {
+            // Huge files - red gradient
+            for (i, &ch) in chars.iter().enumerate() {
+                let bg_color = match i {
+                    0 => "\x1b[48;5;196m",     // Dark red
+                    1 => "\x1b[48;5;202m",     // Medium red
+                    2 => "\x1b[48;5;208m",     // Light red
+                    _ => "\x1b[48;5;214m",     // Very light red
+                };
+                result.push_str(&format!("{}{}", bg_color, ch));
+            }
         }
+        
+        // Reset color at the end
+        result.push_str("\x1b[0m");
+        result
     }
 
     /// Get context-aware emoji based on file type and node properties
@@ -379,19 +473,18 @@ impl ClassicFormatter {
     fn format_node(&self, node: &FileNode, is_last: &[bool], root_path: &Path) -> String {
         let mut prefix = String::new();
 
-        // Build tree prefix with enhanced visual scaling
-        // Calculate visual weight based on size and depth for thicker lines
-        let visual_weight = self.calculate_visual_weight(node);
+        // Build tree prefix with gradient backgrounds based on file size
+        // Larger files get more intense gradient backgrounds that fade to the right
         
         for (i, &last) in is_last.iter().enumerate() {
             if i == is_last.len() - 1 {
-                // Terminal connectors (last level)
-                let (corner, branch) = self.get_terminal_chars(visual_weight);
-                prefix.push_str(if last { corner } else { branch });
+                // Terminal connectors (last level) - with gradient background
+                let terminal_chars = self.get_terminal_chars(node.size, last);
+                prefix.push_str(&terminal_chars);
             } else {
-                // Continuation lines (intermediate levels)
-                let (space, line) = self.get_continuation_chars(visual_weight);
-                prefix.push_str(if last { space } else { line });
+                // Continuation lines (intermediate levels) - with gradient background
+                let continuation_chars = self.get_continuation_chars(node.size, !last);
+                prefix.push_str(&continuation_chars);
             }
         }
 
