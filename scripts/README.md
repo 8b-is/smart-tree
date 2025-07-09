@@ -53,7 +53,7 @@ st-killall   # Kill stuck st processes
 ./scripts/manage.sh help    # See all available commands
 ./scripts/manage.sh build   # Build project
 ./scripts/manage.sh test    # Run tests
-./scripts/manage.sh release v3.1.1 "Release notes"
+./scripts/manage.sh release v3.2.0 "Release notes"
 ```
 
 **`send-to-claude.sh`** - Demo Claude API integration

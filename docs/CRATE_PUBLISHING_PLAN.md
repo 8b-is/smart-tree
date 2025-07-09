@@ -10,7 +10,7 @@ Smart-tree is already structured as a library with a binary! The `src/lib.rs` ex
 ```toml
 [package]
 name = "smart-tree"  # Change from "st" to avoid conflicts
-version = "3.1.1"
+version = "3.2.0"
 ```
 
 Keep the binary name as `st`:
@@ -81,9 +81,9 @@ pub fn analyze_project(path: impl AsRef<Path>) -> Result<ProjectAnalysis> {
 ```rust
 // Cargo.toml
 [dependencies]
-smart-tree = "3.1.1"
+smart-tree = "3.2.0"
 # Or with specific features
-smart-tree = { version = "3.1.1", features = ["quantum", "semantic"] }
+smart-tree = { version = "3.2.0", features = ["quantum", "semantic"] }
 
 // main.rs
 use smart_tree::prelude::*;
@@ -172,7 +172,7 @@ async fn run_mcp_server() {
 
 ### 10. Versioning Strategy
 
-- Current: 3.1.1
+- Current: 3.2.0
 - After publishing: Follow semver strictly
 - Major version bump for breaking API changes
 - Consider 4.0.0 for the cleaned-up library API

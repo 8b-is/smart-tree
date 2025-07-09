@@ -40,7 +40,7 @@ st --mode quantum-semantic --delta HEAD~1..HEAD
 ```toml
 [package]
 name = "smart-tree"
-version = "3.1.1"
+version = "3.2.0"
 description = "Semantic code understanding and visualization"
 ```
 

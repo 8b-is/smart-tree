@@ -1,4 +1,4 @@
-# 🌳 Smart Tree (st) v3.1.1 - The Directory Visualizer That Rocks! 🎸
+# 🌳 Smart Tree (st) v3.2.0 - The Directory Visualizer That Rocks! 🎸
 
 ![Hue's Terminal](dxt/ST-HUE.png)
 
@@ -22,7 +22,7 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 | **Compression** | None | 99% | 🤯 "How?!" |
 | **Fun Factor** | 0% | 100% | 🎉 "Finally!" |
 
-## 🌟 Version 3.1.1: "Less is More" Edition! 
+## 🌟 Version 3.2.0: "Less is More" Edition! 
 
 ### 🎸 What's NEW (or should we say... what's GONE?)
 
@@ -94,7 +94,7 @@ claude mcp add st /usr/local/bin/st -- --mcp
 ### 🌈 The Basics - Simple Yet Powerful
 
 ```bash
-# The classics never die! (Now the default in v3.1.1!)
+# The classics never die! (Now the default in v3.2.0!)
 st                          # Current directory with beautiful trees 🌳
 st /path/to/directory       # Specific directory - point and shoot! 🎯
 

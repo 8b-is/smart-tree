@@ -1,4 +1,4 @@
-# Smart Tree v3.1.1 - Less is More! 🎸
+# Smart Tree v3.2.0 - Less is More! 🎸
 
 ## 🎉 What's Changed
 
