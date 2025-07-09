@@ -62,8 +62,8 @@ impl ClassicFormatter {
     fn get_terminal_chars(&self, file_size: u64, is_last: bool) -> String {
         let base_char = if is_last { "└── " } else { "├── " };
         
-        if self.no_emoji {
-            // No color mode - just return plain characters
+        if self.no_emoji || !self.use_color {
+            // No color/emoji mode - just return plain characters
             return base_char.to_string();
         }
         
@@ -79,8 +79,8 @@ impl ClassicFormatter {
     fn get_continuation_chars(&self, file_size: u64, is_vertical: bool) -> String {
         let base_char = if is_vertical { "│   " } else { "    " };
         
-        if self.no_emoji {
-            // No color mode - just return plain characters
+        if self.no_emoji || !self.use_color {
+            // No color/emoji mode - just return plain characters
             return base_char.to_string();
         }
         
