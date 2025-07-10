@@ -15,18 +15,30 @@ jobs:
     strategy:
       matrix:
         include:
+          # Linux builds
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
+            
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             archive: tar.gz
+            cross: true
+            
+          # macOS builds
           - os: macos-latest
             target: x86_64-apple-darwin
             archive: tar.gz
+            
           - os: macos-latest
             target: aarch64-apple-darwin
             archive: tar.gz
+            
+          # Windows builds
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            extension: .exe
 
     steps:
     - uses: actions/checkout@v4
@@ -36,23 +48,29 @@ jobs:
       with:
         targets: ${{ matrix.target }}
     
-    - name: Install cross-compilation tools
-      if: matrix.target == 'aarch64-unknown-linux-gnu'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-aarch64-linux-gnu
+    - name: Install cross
+      if: matrix.cross
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cross
     
-    - name: Build
+    - name: Build (native)
+      if: '!matrix.cross'
       run: cargo build --release --target ${{ matrix.target }}
+    
+    - name: Build (cross)
+      if: matrix.cross
+      run: cross build --release --target ${{ matrix.target }}
     
     - name: Create archive
       shell: bash
       run: |
         cd target/${{ matrix.target }}/release
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          7z a ../../../st-${{ matrix.target }}.zip st.exe
+        BINARY_NAME="st${{ matrix.extension || '' }}"
+        if [[ "${{ matrix.archive }}" == "zip" ]]; then
+          7z a ../../../st-${{ matrix.target }}.zip "$BINARY_NAME"
         else
-          tar czf ../../../st-${{ matrix.target }}.tar.gz st
+          tar czf ../../../st-${{ matrix.target }}.tar.gz "$BINARY_NAME"
         fi
         cd -
     
@@ -62,9 +80,31 @@ jobs:
         name: st-${{ matrix.target }}
         path: st-${{ matrix.target }}.${{ matrix.archive }}
 
+  build-dxt:
+    name: Build DXT Package
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install zip
+      run: sudo apt-get update && sudo apt-get install -y zip
+    
+    - name: Build DXT package
+      run: |
+        cd dxt
+        ./build-dxt.sh
+        cd ..
+    
+    - name: Upload DXT artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: smart-tree-dxt
+        path: dxt/smart-tree.dxt
+
   release:
     name: Create Release
-    needs: build
+    needs: [build, build-dxt]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -77,11 +117,47 @@ jobs:
       with:
         path: artifacts
     
+    - name: List artifacts (debug)
+      run: find artifacts -type f -name "st-*" -o -name "*.dxt" | sort
+    
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: artifacts/**/st-*
-        generate_release_notes: true
+        name: Smart Tree ${{ github.ref_name }}
+        body: |
+          # Smart Tree ${{ github.ref_name }} 🌳
+          
+          See [RELEASE_NOTES_${{ github.ref_name }}.md](https://github.com/8b-is/smart-tree/blob/main/RELEASE_NOTES_${{ github.ref_name }}.md) for detailed release notes.
+          
+          ## Installation
+          
+          ### Quick Install (Linux/macOS/WSL)
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+          ```
+          
+          ### Claude Desktop
+          Download `smart-tree.dxt` below and install via Settings → Developer → Install from file
+          
+          ### Manual Installation
+          Download the appropriate binary for your platform below.
+          
+          ## Available Downloads
+          
+          | Platform | Architecture | File |
+          |----------|--------------|------|
+          | Linux | x86_64 | `st-x86_64-unknown-linux-gnu.tar.gz` |
+          | Linux | ARM64 | `st-aarch64-unknown-linux-gnu.tar.gz` |
+          | macOS | Intel | `st-x86_64-apple-darwin.tar.gz` |
+          | macOS | Apple Silicon | `st-aarch64-apple-darwin.tar.gz` |
+          | Windows | x86_64 | `st-x86_64-pc-windows-msvc.zip` |
+          | Claude Desktop | All | `smart-tree.dxt` |
+          
+          ---
+          *Built with 💙 by the Smart Tree Team*
+        files: |
+          artifacts/**/st-*
+          artifacts/**/smart-tree.dxt
         draft: false
         prerelease: false
       env:

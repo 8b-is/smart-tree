@@ -98,7 +98,7 @@ async function main() {
         });
         
         // Log startup info to stderr (safe for MCP protocol)
-        console.error(`Smart Tree MCP server v2.0.4 started`);
+        console.error(`Smart Tree MCP server v3.2.0 started`);
         console.error(`  Build: ${platformInfo.binaryName} (${platformInfo.rustTarget})`);
         console.error(`  Protocol: MCP v1.0`);
         console.error(`  Features: tools, resources, prompts, caching`);

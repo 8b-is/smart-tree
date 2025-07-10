@@ -1,4 +1,4 @@
-# 🚀 Smart Tree v3.0.0 Release Commands
+# 🚀 Smart Tree v3.2.0 Release Commands
 
 ## Build & Test
 ```bash
@@ -15,13 +15,13 @@ cargo build --release
 ## Create GitHub Release
 ```bash
 # Tag the release
-git tag -a v3.0.0 -m "Smart Tree v3.0.0: Quantum Awakening"
+git tag -a v3.2.0 -m "Smart Tree v3.2.0: Quantum Awakening"
 
 # Push to GitHub
 git push origin main --tags
 
 # Create release with manage.sh
-./scripts/manage.sh release v3.0.0 "Quantum Awakening - Semantic compression meets code understanding!"
+./scripts/manage.sh release v3.2.0 "Quantum Awakening - Semantic compression meets code understanding!"
 ```
 
 ## Demo Commands for Release Notes
@@ -49,7 +49,7 @@ cargo publish
 
 ## Announcement Template
 ```
-🎉 Smart Tree v3.0.0: Quantum Awakening is here!
+🎉 Smart Tree v3.2.0: Quantum Awakening is here!
 
 🧬 Semantic compression that understands your code
 🔗 Relations mode for visualizing dependencies  
@@ -59,5 +59,5 @@ cargo publish
 Get it now:
 cargo install smart-tree
 
-Details: https://github.com/8b-is/smart-tree/releases/tag/v3.0.0
+Details: https://github.com/8b-is/smart-tree/releases/tag/3.2.0
 ```

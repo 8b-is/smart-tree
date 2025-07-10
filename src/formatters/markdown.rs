@@ -137,88 +137,235 @@ impl MarkdownFormatter {
         writeln!(writer, "## 🌳 Directory Structure")?;
         writeln!(writer)?;
         writeln!(writer, "```mermaid")?;
-        writeln!(writer, "graph TD")?;
-
+        writeln!(writer, "flowchart LR")?; // Use Left-Right for better readability
+        writeln!(writer, "    %% Smart Tree Directory Visualization")?;
+        
         // Limit nodes for readability
-        let max_nodes = 50;
+        let max_nodes = 40; // Reduced for cleaner diagrams
         let display_nodes: Vec<&FileNode> = nodes.iter().take(max_nodes).collect();
 
-        // Build parent-child relationships
-        let mut parent_map: HashMap<String, Vec<&FileNode>> = HashMap::new();
-        let root_id = "root";
-
-        for node in &display_nodes {
-            if let Some(parent_path) = node.path.parent() {
-                let parent_id = if parent_path == root_path {
-                    root_id.to_string()
-                } else {
-                    format!("node_{}", parent_map.len())
-                };
-
-                parent_map.entry(parent_id).or_default().push(node);
-            }
-        }
-
-        // Write root
+        // Write root node with better styling
         let root_name = root_path
             .file_name()
             .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         writeln!(
             writer,
-            "    {}[\"📁 {}\"]",
-            root_id,
+            "    root{{\"📁 {}\"}}", 
             Self::escape_mermaid(&root_name)
         )?;
+        writeln!(writer, "    style root fill:#ff9800,stroke:#e65100,stroke-width:4px,color:#fff")?;
+        writeln!(writer)?;
 
-        // Write nodes
-        for (i, node) in display_nodes.iter().enumerate() {
-            let node_id = format!("node_{}", i);
-            let name = node
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("?");
-            let emoji = self.get_file_emoji(&node.path, node.is_dir);
-            let label = format!("{} {}", emoji, Self::escape_mermaid(name));
-
-            if node.is_dir {
-                writeln!(writer, "    {}[[\"{}\"])", node_id, label)?;
-            } else {
-                writeln!(
-                    writer,
-                    "    {}[\"{}<br/>{}\"]",
-                    node_id,
-                    label,
-                    Self::format_size(node.size)
-                )?;
+        // Group nodes by parent directory for cleaner visualization
+        let mut dir_groups: HashMap<std::path::PathBuf, Vec<&FileNode>> = HashMap::new();
+        let mut all_dirs: Vec<std::path::PathBuf> = Vec::new();
+        
+        for node in &display_nodes {
+            // Skip the root directory itself
+            if node.path == *root_path {
+                continue;
             }
+            
+            if let Some(parent) = node.path.parent() {
+                dir_groups.entry(parent.to_path_buf()).or_default().push(node);
+                if node.is_dir && !all_dirs.contains(&node.path) {
+                    all_dirs.push(node.path.clone());
+                }
+            }
+        }
 
-            // Connect to parent
-            if let Some(parent_path) = node.path.parent() {
-                let parent_id = if parent_path == root_path {
-                    root_id.to_string()
+        // Write subgraphs for each directory with children
+        let mut subgraph_count = 0;
+        for (parent, children) in &dir_groups {
+            if children.len() > 1 && parent != root_path {
+                subgraph_count += 1;
+                let parent_name = parent.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?");
+                writeln!(writer, "    subgraph sub{} [\"{}\" ]", subgraph_count, Self::escape_mermaid(parent_name))?;
+                writeln!(writer, "        direction TB")?;
+                
+                for child in children {
+                    let node_id = format!("node_{}", display_nodes.iter().position(|n| n.path == child.path).unwrap_or(0));
+                    let name = child
+                        .path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("?");
+                    let emoji = self.get_file_emoji(&child.path, child.is_dir);
+                    
+                    if child.is_dir {
+                        writeln!(writer, "        {}[\"📁 {}\"]", node_id, Self::escape_mermaid(name))?;
+                    } else {
+                        let size_str = Self::format_size(child.size);
+                        writeln!(writer, "        {}[\"{}{}\\n{}\"]", node_id, emoji, Self::escape_mermaid(name), size_str)?;
+                    }
+                }
+                writeln!(writer, "    end")?;
+                writeln!(writer)?;
+            }
+        }
+
+        // Write remaining nodes (not in subgraphs)
+        for (i, node) in display_nodes.iter().enumerate() {
+            // Skip the root directory itself
+            if node.path == *root_path {
+                continue;
+            }
+            
+            let parent = node.path.parent();
+            let in_subgraph = parent.map(|p| dir_groups.get(p).map(|c| c.len() > 1).unwrap_or(false)).unwrap_or(false);
+            
+            if !in_subgraph || parent == Some(root_path) {
+                let node_id = format!("node_{}", i);
+                let name = node
+                    .path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?");
+                let emoji = self.get_file_emoji(&node.path, node.is_dir);
+                
+                if node.is_dir {
+                    writeln!(writer, "    {}[\"📁 {}\"]", node_id, Self::escape_mermaid(name))?;
+                    writeln!(writer, "    style {} fill:#e3f2fd,stroke:#1976d2,stroke-width:2px", node_id)?;
                 } else {
-                    // Find parent node
-                    display_nodes
-                        .iter()
-                        .position(|n| n.path == *parent_path)
-                        .map(|idx| format!("node_{}", idx))
-                        .unwrap_or_else(|| root_id.to_string())
-                };
+                    let size_str = Self::format_size(node.size);
+                    writeln!(writer, "    {}[\"{}{}\\n{}\"]", node_id, emoji, Self::escape_mermaid(name), size_str)?;
+                    
+                    // Style based on file type
+                    match node.path.extension().and_then(|e| e.to_str()) {
+                        Some("rs") => writeln!(writer, "    style {} fill:#dcedc8,stroke:#689f38", node_id)?,
+                        Some("md") => writeln!(writer, "    style {} fill:#fff9c4,stroke:#f9a825", node_id)?,
+                        Some("json") | Some("toml") | Some("yaml") => writeln!(writer, "    style {} fill:#f3e5f5,stroke:#7b1fa2", node_id)?,
+                        _ => writeln!(writer, "    style {} fill:#f5f5f5,stroke:#616161", node_id)?,
+                    }
+                }
+            }
+        }
 
-                writeln!(writer, "    {} --> {}", parent_id, node_id)?;
+        // Simplified connections
+        writeln!(writer)?;
+        writeln!(writer, "    %% Connections")?;
+        
+        // Connect root to immediate children
+        for node in &display_nodes {
+            if let Some(parent) = node.path.parent() {
+                if parent == root_path {
+                    let node_id = format!("node_{}", display_nodes.iter().position(|n| n.path == node.path).unwrap_or(0));
+                    writeln!(writer, "    root --> {}", node_id)?;
+                }
+            }
+        }
+
+        // Connect directories to their subgraphs
+        let mut connected_subgraphs = std::collections::HashSet::new();
+        let mut subgraph_map = HashMap::new();
+        let mut current_sub = 0;
+        
+        // Build a map of directories to subgraph numbers
+        for (parent, children) in &dir_groups {
+            if children.len() > 1 && parent != root_path {
+                current_sub += 1;
+                subgraph_map.insert(parent.clone(), current_sub);
+            }
+        }
+        
+        // Connect parent directories to their subgraphs
+        for node in &display_nodes {
+            if node.is_dir {
+                if let Some(&sub_num) = subgraph_map.get(&node.path) {
+                    if !connected_subgraphs.contains(&sub_num) {
+                        // Find parent of this directory
+                        if let Some(parent) = node.path.parent() {
+                            if parent == root_path {
+                                writeln!(writer, "    root --> sub{}", sub_num)?;
+                            } else {
+                                // Find parent node id
+                                if let Some(parent_idx) = display_nodes.iter().position(|n| n.path == *parent) {
+                                    writeln!(writer, "    node_{} --> sub{}", parent_idx, sub_num)?;
+                                }
+                            }
+                        }
+                        connected_subgraphs.insert(sub_num);
+                    }
+                }
             }
         }
 
         if nodes.len() > max_nodes {
+            writeln!(writer)?;
             writeln!(
                 writer,
                 "    more[\"... and {} more items\"]",
                 nodes.len() - max_nodes
             )?;
+            writeln!(writer, "    style more fill:#ffecb3,stroke:#ff6f00,stroke-dasharray: 5 5")?;
         }
 
+        writeln!(writer, "```")?;
+        writeln!(writer)?;
+        
+        // Add a simple text tree as fallback
+        writeln!(writer, "### 📂 Simple Tree View")?;
+        writeln!(writer)?;
+        writeln!(writer, "```")?;
+        
+        let root_name = root_path
+            .file_name()
+            .unwrap_or(root_path.as_os_str())
+            .to_string_lossy();
+        writeln!(writer, "{} {}/", 
+            if !self.no_emoji { "📁" } else { "" },
+            root_name
+        )?;
+        
+        // Sort nodes by path for consistent output
+        let mut sorted_nodes = display_nodes.clone();
+        sorted_nodes.sort_by_key(|n| &n.path);
+        
+        for (i, node) in sorted_nodes.iter().enumerate() {
+            if node.path == *root_path {
+                continue;
+            }
+            
+            let depth = node.path.components().count() - root_path.components().count();
+            if depth > 2 {
+                continue; // Only show 2 levels in simple view
+            }
+            
+            let is_last = i == sorted_nodes.len() - 1 || 
+                sorted_nodes.get(i + 1).map(|next| {
+                    let next_depth = next.path.components().count() - root_path.components().count();
+                    next_depth < depth
+                }).unwrap_or(true);
+            
+            let indent = if depth > 0 {
+                "│   ".repeat(depth - 1)
+            } else {
+                String::new()
+            };
+            
+            let prefix = if is_last { "└── " } else { "├── " };
+            let emoji = self.get_file_emoji(&node.path, node.is_dir);
+            let name = node.path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?");
+            
+            if node.is_dir {
+                writeln!(writer, "{}{}{} {}/", indent, prefix, emoji, name)?;
+            } else {
+                writeln!(writer, "{}{}{} {} ({})", 
+                    indent, prefix, emoji, name, 
+                    Self::format_size(node.size)
+                )?;
+            }
+        }
+        
+        if nodes.len() > max_nodes {
+            writeln!(writer, "│   └── ... and {} more items", nodes.len() - max_nodes)?;
+        }
+        
         writeln!(writer, "```")?;
         writeln!(writer)?;
 
