@@ -745,7 +745,6 @@ async fn main() -> Result<()> {
             }
             OutputMode::Waste => {
                 // Waste detection and optimization analysis - "Marie Kondo mode!" - Hue & Aye
-                use st::formatters::waste::WasteFormatter;
                 Box::new(WasteFormatter::new())
             }
         };

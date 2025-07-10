@@ -18,13 +18,14 @@
 // -----------------------------------------------------------------------------
 
 use super::Formatter;
-use crate::scanner::{FileNode, TreeStats};
+use crate::scanner::{FileNode, TreeStats, FileCategory, FilesystemType};
 use anyhow::Result;
 use chrono::{DateTime, Local};
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 /// LS Formatter - Unix ls -Alh output with smart-tree enhancements
 /// 
@@ -303,26 +304,38 @@ mod tests {
             size: 0,
             is_dir: true,
             depth: 0,
-            permissions: None,
-            modified: None,
-            created: None,
-            uid: None,
-            gid: None,
+            permissions: 0o755,
+            modified: SystemTime::now(),
+            uid: 1000,
+            gid: 1000,
+            is_symlink: false,
+            is_hidden: false,
+            permission_denied: false,
+            is_ignored: false,
+            category: FileCategory::Unknown,
+            search_matches: None,
+            filesystem_type: FilesystemType::Unknown,
         };
         assert_eq!(formatter.get_emoji(&empty_dir), "📂");
         
         // Test file emojis
         let empty_file = FileNode {
             path: PathBuf::from("/test.txt"),
-            file_type: FileType::File,
+            file_type: FileType::RegularFile,
             size: 0,
             is_dir: false,
             depth: 0,
-            permissions: None,
-            modified: None,
-            created: None,
-            uid: None,
-            gid: None,
+            permissions: 0o644,
+            modified: SystemTime::now(),
+            uid: 1000,
+            gid: 1000,
+            is_symlink: false,
+            is_hidden: false,
+            permission_denied: false,
+            is_ignored: false,
+            category: FileCategory::Unknown,
+            search_matches: None,
+            filesystem_type: FilesystemType::Unknown,
         };
         assert_eq!(formatter.get_emoji(&empty_file), "📋");
     }
@@ -339,11 +352,17 @@ mod tests {
             size: 0,
             is_dir: true,
             depth: 0,
-            permissions: None,
-            modified: None,
-            created: None,
-            uid: None,
-            gid: None,
+            permissions: 0o755,
+            modified: SystemTime::now(),
+            uid: 1000,
+            gid: 1000,
+            is_symlink: false,
+            is_hidden: false,
+            permission_denied: false,
+            is_ignored: false,
+            category: FileCategory::Unknown,
+            search_matches: None,
+            filesystem_type: FilesystemType::Unknown,
         };
         
         let perms = formatter.format_permissions(&test_node);
