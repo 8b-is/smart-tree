@@ -50,9 +50,10 @@ jobs:
     
     - name: Install cross
       if: matrix.cross
-      uses: taiki-e/install-action@v2
-      with:
-        tool: cross
+      run: |
+        curl -L https://github.com/cross-rs/cross/releases/latest/download/cross-x86_64-unknown-linux-gnu.tar.gz | tar xz
+        sudo mv cross /usr/local/bin/
+        cross --version
     
     - name: Build (native)
       if: '!matrix.cross'
