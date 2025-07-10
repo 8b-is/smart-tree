@@ -357,7 +357,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
     if cli.mcp {
-        return run_mcp_server();
+        return run_mcp_server().await;
     }
     if cli.mcp_tools {
         print_mcp_tools();
@@ -871,24 +871,136 @@ fn print_mcp_tools() {
     // The current `analyze_directory` is quite versatile due to its parameters.
 }
 
-/// Runs `st` as an MCP server. This function initializes and starts the
-/// Tokio runtime and the MCP server logic.
-/// This is the entry point for the `--mcp` flag.
-fn run_mcp_server() -> Result<()> {
+/// Show version information with optional update checking
+/// This combines the traditional --version output with smart update detection
+/// Elvis would love this modern approach! 🕺
+async fn show_version_with_updates() -> Result<()> {
+    let current_version = env!("CARGO_PKG_VERSION");
+    
+    // Always show current version info first
+    println!("🌟 Smart Tree v{} - The Gradient Enhancement Release! 🌈", current_version);
+    println!("🔧 Target: {}", std::env::consts::ARCH);
+    println!("📦 Repository: {}", env!("CARGO_PKG_REPOSITORY"));
+    println!("🎯 Authors: {}", env!("CARGO_PKG_AUTHORS"));
+    println!("📝 Description: {}", env!("CARGO_PKG_DESCRIPTION"));
+    
+    // Check for updates (but don't fail if update service is unavailable)
+    match check_for_updates_cli().await {
+        Ok(update_info) => {
+            if update_info.is_empty() {
+                println!("✅ You're running the latest version! 🎉");
+            } else {
+                println!();
+                println!("{}", update_info);
+            }
+        }
+        Err(e) => {
+            // Don't fail the whole command if update check fails
+            eprintln!("⚠️  Update check unavailable: {}", e);
+            println!("💡 Check https://github.com/8b-is/smart-tree for the latest releases");
+        }
+    }
+    
+    println!();
+    println!("🚀 Ready to make your directories beautiful! Try: st --help");
+    println!("🎭 Trish from Accounting loves the colorful tree views! 🎨");
+    
+    Ok(())
+}
+
+/// Check for updates from our feedback API (CLI version)
+/// Returns update message if available, empty string if up-to-date
+async fn check_for_updates_cli() -> Result<String> {
+    let current_version = env!("CARGO_PKG_VERSION");
+    
+    let client = reqwest::Client::new();
+    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
+        .unwrap_or_else(|_| "https://f.8b.is".to_string());
+    
+    let check_url = format!("{}/version/check/{}", api_url, current_version);
+    
+    let response = client
+        .get(&check_url)
+        .timeout(std::time::Duration::from_secs(5)) // Quick timeout for CLI
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Network error: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!("Service returned: {}", response.status()));
+    }
+    
+    let update_info: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse response: {}", e))?;
+    
+    if !update_info["update_available"].as_bool().unwrap_or(false) {
+        return Ok(String::new()); // Up to date
+    }
+    
+    // Format update message for CLI
+    let latest_version = update_info["latest_version"].as_str().unwrap_or("unknown");
+    let release_notes = &update_info["release_notes"];
+    
+    let highlights = release_notes["highlights"]
+        .as_array()
+        .map(|arr| arr.iter()
+            .filter_map(|v| v.as_str())
+            .map(|s| format!("  • {}", s))
+            .collect::<Vec<_>>()
+            .join("\n"))
+        .unwrap_or_default();
+    
+    let ai_benefits = release_notes["ai_benefits"]
+        .as_array()
+        .map(|arr| arr.iter()
+            .filter_map(|v| v.as_str())
+            .map(|s| format!("  • {}", s))
+            .collect::<Vec<_>>()
+            .join("\n"))
+        .unwrap_or_default();
+    
+    let mut message = format!(
+        "🚀 \x1b[1;32mNew Version Available!\x1b[0m\n\n\
+        📊 Current: v{} → Latest: \x1b[1;36mv{}\x1b[0m\n\n\
+        🎯 \x1b[1m{}\x1b[0m\n",
+        current_version,
+        latest_version,
+        release_notes["title"].as_str().unwrap_or("New Release")
+    );
+    
+    if !highlights.is_empty() {
+        message.push_str(&format!("\n\x1b[1mWhat's New:\x1b[0m\n{}\n", highlights));
+    }
+    
+    if !ai_benefits.is_empty() {
+        message.push_str(&format!("\n\x1b[1mAI Benefits:\x1b[0m\n{}\n", ai_benefits));
+    }
+    
+    // Add update instructions
+    message.push_str(&format!(
+        "\n\x1b[1mUpdate Instructions:\x1b[0m\n\
+        • Cargo: \x1b[36mcargo install st --force\x1b[0m\n\
+        • GitHub: Download from https://github.com/8b-is/smart-tree/releases\n\
+        • Check: \x1b[36mst --version\x1b[0m (after update)\n"
+    ));
+    
+    Ok(message)
+}
+
+/// run_mcp_server is an async function that starts the MCP server.
+/// This function runs directly in the existing async runtime from main().
+/// When --mcp is passed, we start a server that communicates via stdio.
+async fn run_mcp_server() -> Result<()> {
     // Import MCP server components. These are only available if "mcp" feature is enabled.
     use st::mcp::{load_config, McpServer};
 
-    // Create a Tokio runtime. MCP server might use async operations.
-    // Using `new()` creates a multi-threaded runtime by default.
-    let runtime = tokio::runtime::Runtime::new()?;
-
-    // Run the MCP server logic within the Tokio runtime.
-    // `block_on` runs an async block to completion on the current thread.
-    runtime.block_on(async {
-        // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
-        let mcp_config = load_config().unwrap_or_default(); // Load or use defaults.
-        let server = McpServer::new(mcp_config);
-        // `run_stdio` would handle communication over stdin/stdout.
-        server.run_stdio().await
-    })
+    // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
+    let mcp_config = load_config().unwrap_or_default(); // Load or use defaults.
+    let server = McpServer::new(mcp_config);
+    
+    // Run the MCP server directly - no need for nested runtime!
+    // `run_stdio` handles communication over stdin/stdout.
+    server.run_stdio().await
 }
