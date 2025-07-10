@@ -3,9 +3,8 @@
 ## 🎉 What's Changed
 
 ### 🔥 Major Changes
-- **Removed Interactive Mode** - Elvis has left the building! We've removed the TUI interactive mode to keep things lean and focused.
-- **Classic is Back as Default!** - Running `st` now gives you the beautiful classic tree format by default! 🌳
 - **Enhanced MCP Integration** - Comprehensive Model Context Protocol support with 25+ specialized tools
+- **Colored File Backgrounds** - Quicly look for large files
 
 ### 📦 Dependencies  
 - Removed `inquire` dependency (no longer needed without interactive mode)
