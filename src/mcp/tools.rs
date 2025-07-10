@@ -1874,7 +1874,7 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     // Submit to API
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
+        .unwrap_or_else(|_| "https://f.8t.is/feedback".to_string());
     
     let response = client
         .post(&api_url)
@@ -1996,7 +1996,7 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     // Submit to API
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
+        .unwrap_or_else(|_| "https://f.8t.is/feedback".to_string());
     
     let response = client
         .post(&api_url)
@@ -2041,7 +2041,7 @@ async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> 
     // Check for updates via the feedback API
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is".to_string());
+        .unwrap_or_else(|_| "https://f.8t.is".to_string());
     
     let check_url = format!("{}/version/check/{}", api_url, current_version);
     

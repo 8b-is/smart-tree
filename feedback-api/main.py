@@ -559,7 +559,7 @@ async def check_version(current_version: str):
                 "Better context understanding with semantic waves"
             ]
         },
-        "auto_update_command": f"curl -fsSL https://f.8b.is/install.sh | bash -s {latest_version}",
+        "auto_update_command": f"curl -fsSL https://f.8t.is/install.sh | bash -s {latest_version}",
         "manual_update_command": "cargo install --git https://github.com/8b-is/smart-tree --tag v{latest_version}"
     }
 
