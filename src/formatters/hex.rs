@@ -36,7 +36,7 @@ impl HexFormatter {
         if node.permission_denied {
             return if self.no_emoji { "[LOCK]" } else { "🔒" };
         }
-        
+
         if self.no_emoji {
             match node.file_type {
                 FileType::Directory => {
@@ -45,7 +45,7 @@ impl HexFormatter {
                     } else {
                         "[D]" // Regular directory
                     }
-                },
+                }
                 FileType::Symlink => "[L]",
                 FileType::Executable => "[X]",
                 FileType::Socket => "[S]",
@@ -58,7 +58,7 @@ impl HexFormatter {
                     } else {
                         "[F]" // Regular file
                     }
-                },
+                }
             }
         } else {
             match node.file_type {
@@ -68,7 +68,7 @@ impl HexFormatter {
                     } else {
                         "📁" // Regular directory
                     }
-                },
+                }
                 FileType::Symlink => "🔗",
                 FileType::Executable => "⚙️",
                 FileType::Socket => "🔌",
@@ -81,7 +81,7 @@ impl HexFormatter {
                     } else {
                         "📄" // Regular file
                     }
-                },
+                }
             }
         }
     }

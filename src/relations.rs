@@ -73,12 +73,12 @@ struct RustParser;
 impl LanguageParser for RustParser {
     fn parse_imports(&self, content: &str, _file_path: &Path) -> Vec<(String, Vec<String>)> {
         let mut imports = Vec::new();
-        
+
         // First, handle multi-line imports by joining them
         let mut cleaned_content = String::new();
         let mut in_use = false;
         let mut use_buffer = String::new();
-        
+
         for line in content.lines() {
             if line.trim_start().starts_with("use ") {
                 in_use = true;
@@ -121,7 +121,10 @@ impl LanguageParser for RustParser {
                         let parts: Vec<&str> = s.trim().split("::").collect();
                         if parts.len() > 1 {
                             // For ai::AiFormatter, we want to track both the submodule and item
-                            imports.push((format!("{}::{}", module, parts[0]), vec![parts[1].to_string()]));
+                            imports.push((
+                                format!("{}::{}", module, parts[0]),
+                                vec![parts[1].to_string()],
+                            ));
                         }
                         s.trim().to_string()
                     })
@@ -375,26 +378,30 @@ impl RelationAnalyzer {
     /// Resolve an import to a file path
     fn resolve_import(&self, from_file: &Path, module: &str) -> Option<PathBuf> {
         // Skip external crates
-        if !module.starts_with("crate") && !module.starts_with("super") && !module.starts_with("self") {
+        if !module.starts_with("crate")
+            && !module.starts_with("super")
+            && !module.starts_with("self")
+        {
             // Check if it's an internal module by looking for st:: or our crate name
             if !module.starts_with("st::") && !module.contains("::") {
                 return None; // External crate
             }
         }
-        
+
         // Find the src directory (project root)
         let mut src_dir = from_file.parent()?;
-        while src_dir.file_name() != Some(std::ffi::OsStr::new("src")) && src_dir.parent().is_some() {
+        while src_dir.file_name() != Some(std::ffi::OsStr::new("src")) && src_dir.parent().is_some()
+        {
             src_dir = src_dir.parent()?;
         }
-        
+
         // Clean up the module path
         let clean_module = module
             .trim_start_matches("crate::")
             .trim_start_matches("st::")
             .trim_start_matches("self::")
             .replace("::", "/");
-        
+
         // Handle super:: imports
         let (base_dir, module_path) = if module.starts_with("super::") {
             let parent = from_file.parent()?.parent()?;
@@ -412,9 +419,12 @@ impl RelationAnalyzer {
         let patterns = vec![
             format!("{}.rs", module_path),
             format!("{}/mod.rs", module_path),
-            format!("{}.rs", module_path.split('/').last().unwrap_or(&module_path)),
+            format!(
+                "{}.rs",
+                module_path.split('/').last().unwrap_or(&module_path)
+            ),
         ];
-        
+
         for pattern in patterns {
             let path = base_dir.join(&pattern);
             if self.file_cache.contains_key(&path) {

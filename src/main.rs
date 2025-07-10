@@ -30,6 +30,7 @@ use st::{
         digest::DigestFormatter,
         hex::HexFormatter,
         json::JsonFormatter,
+        ls::LsFormatter,
         markdown::MarkdownFormatter,
         mermaid::{MermaidFormatter, MermaidStyle},
         quantum::QuantumFormatter,
@@ -88,7 +89,7 @@ struct Cli {
     /// Path to the directory or file you want to analyze.
     /// Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)
     path: Option<String>,
-    
+
     /// Specify input type explicitly (filesystem, qcp, sse, openapi, mem8)
     #[arg(long, value_name = "TYPE")]
     input: Option<String>,
@@ -297,6 +298,8 @@ enum OutputMode {
     Hex,
     /// JSON output. Structured data for easy programmatic use.
     Json,
+    /// Unix ls -Alh format. Familiar directory listing with human-readable sizes and permissions.
+    Ls,
     /// AI-optimized format. A special blend of hex tree and statistics, designed for LLMs.
     Ai,
     /// Directory statistics only. Get a summary without the full tree.
@@ -370,7 +373,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     if cli.mcp {
-        return run_mcp_server();
+        return run_mcp_server().await;
     }
     if cli.mcp_tools {
         print_mcp_tools();
@@ -398,6 +401,7 @@ async fn main() -> Result<()> {
             "classic" => Some(OutputMode::Classic),
             "hex" => Some(OutputMode::Hex),
             "json" => Some(OutputMode::Json),
+            "ls" => Some(OutputMode::Ls),
             "ai" => Some(OutputMode::Ai),
             "stats" => Some(OutputMode::Stats),
             "csv" => Some(OutputMode::Csv),
@@ -426,7 +430,7 @@ async fn main() -> Result<()> {
 
     // MCP optimization: enables compression and AI-friendly settings
     let mcp_mode = args.mcp_optimize || is_ai_caller;
-    
+
     let (mode, compress) = if mcp_mode {
         // If MCP optimization is requested or AI_TOOLS is set, use API-optimized settings
         match args.mode {
@@ -453,21 +457,21 @@ async fn main() -> Result<()> {
     let use_color = if mcp_mode {
         false // MCP mode always disables colors
     } else {
-            match args.color {
+        match args.color {
             ColorMode::Always => true,
             ColorMode::Never => false,
             ColorMode::Auto => {
-            // Check environment variables first for explicit overrides.
-            if std::env::var("ST_COLOR").as_deref() == Ok("always") {
-                true
-            } else if std::env::var("NO_COLOR").is_ok()
-                || std::env::var("ST_COLOR").as_deref() == Ok("never")
-            {
-                false
-            } else {
-                // If no env var override, check if stdout is a terminal.
-                std::io::stdout().is_terminal()
-            }
+                // Check environment variables first for explicit overrides.
+                if std::env::var("ST_COLOR").as_deref() == Ok("always") {
+                    true
+                } else if std::env::var("NO_COLOR").is_ok()
+                    || std::env::var("ST_COLOR").as_deref() == Ok("never")
+                {
+                    false
+                } else {
+                    // If no env var override, check if stdout is a terminal.
+                    std::io::stdout().is_terminal()
+                }
             }
         }
     };
@@ -494,8 +498,15 @@ async fn main() -> Result<()> {
     let show_ignored_final =
         args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
 
+    // Smart default: LS mode should show only direct children (depth 1) like real ls
+    let effective_depth = if matches!(mode, OutputMode::Ls) && args.depth == 10 {
+        1 // Default to depth 1 for LS mode (like real ls command)
+    } else {
+        args.depth
+    };
+
     let scanner_config = ScannerConfig {
-        max_depth: args.depth,
+        max_depth: effective_depth,
         follow_symlinks: false, // Symlink following is generally off for safety and simplicity.
         respect_gitignore: !no_ignore_final,
         show_hidden: all_final,
@@ -524,7 +535,9 @@ async fn main() -> Result<()> {
 
     // 🌊 Universal Input Processing
     // Detect input type and determine root path
-    let (is_traditional_fs, scan_path) = if cli.input.is_some() || !input_str.starts_with(".") && !PathBuf::from(&input_str).exists() {
+    let (is_traditional_fs, scan_path) = if cli.input.is_some()
+        || !input_str.starts_with(".") && !PathBuf::from(&input_str).exists()
+    {
         (false, PathBuf::from(&input_str))
     } else {
         (true, PathBuf::from(&input_str))
@@ -551,7 +564,7 @@ async fn main() -> Result<()> {
                 use std::thread;
 
                 let (tx, rx) = mpsc::channel(); // Create the communication channel.
-                
+
                 // Recreate scanner for streaming (since we consumed it above)
                 let path = PathBuf::from(&input_str);
                 let scanner = Scanner::new(&path, scanner_config)?;
@@ -620,14 +633,14 @@ async fn main() -> Result<()> {
             eprintln!("🌊 Detecting input type...");
             let input_processor = InputProcessor::new();
             let input_source = InputProcessor::detect_input_type(&input_str);
-            
+
             let context_root = tokio::runtime::Runtime::new()
                 .unwrap()
                 .block_on(input_processor.process(input_source))?;
-                
+
             // Convert context nodes to file nodes
             let file_nodes = st::inputs::context_to_file_nodes(context_root);
-            
+
             // Create synthetic stats
             let stats = st::TreeStats {
                 total_files: file_nodes.iter().filter(|n| !n.is_dir).count() as u64,
@@ -638,7 +651,7 @@ async fn main() -> Result<()> {
                 newest_files: vec![],
                 oldest_files: vec![],
             };
-            
+
             (file_nodes, stats, scan_path.clone())
         };
 
@@ -668,6 +681,7 @@ async fn main() -> Result<()> {
                 args.show_filesystems,
             )),
             OutputMode::Json => Box::new(JsonFormatter::new(args.compact)),
+            OutputMode::Ls => Box::new(LsFormatter::new(!no_emoji, use_color)),
             OutputMode::Ai => {
                 // AI mode can optionally be wrapped in JSON.
                 if args.ai_json {
@@ -681,9 +695,7 @@ async fn main() -> Result<()> {
             OutputMode::Tsv => Box::new(TsvFormatter::new()),
             OutputMode::Digest => Box::new(DigestFormatter::new()),
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
-            OutputMode::Semantic => {
-                Box::new(SemanticFormatter::new(path_display_mode, no_emoji))
-            }
+            OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, no_emoji)),
             OutputMode::Mermaid => {
                 // Convert CLI arg enum to formatter enum
                 let style = match args.mermaid_style {
@@ -692,11 +704,7 @@ async fn main() -> Result<()> {
                     MermaidStyleArg::Gitgraph => MermaidStyle::GitGraph,
                     MermaidStyleArg::Treemap => MermaidStyle::Treemap,
                 };
-                Box::new(MermaidFormatter::new(
-                    style,
-                    no_emoji,
-                    path_display_mode,
-                ))
+                Box::new(MermaidFormatter::new(style, no_emoji, path_display_mode))
             }
             OutputMode::Markdown => {
                 // Create a comprehensive markdown report with all visualizations!
@@ -750,10 +758,113 @@ async fn main() -> Result<()> {
         } else {
             // If not compressing, write the formatted output directly to stdout.
             io::stdout().write_all(&output_buffer)?;
+
+            // Show helpful tips for human users (not when piped, redirected, or in AI modes)
+            if IsTerminal::is_terminal(&io::stdout())
+                && !compress
+                && !matches!(
+                    mode,
+                    OutputMode::Ai
+                        | OutputMode::Hex
+                        | OutputMode::Digest
+                        | OutputMode::Quantum
+                        | OutputMode::QuantumSemantic
+                )
+            {
+                show_helpful_tips(&mode, effective_depth, &args)?;
+            }
         }
     }
 
     // If we've reached here, everything went well!
+    Ok(())
+}
+
+/// Show helpful tips to human users to improve their smart-tree experience
+///
+/// This provides contextual suggestions based on current usage patterns,
+/// helping users discover powerful features and optimize their workflow.
+/// Trish loves these little nuggets of wisdom! 💡
+fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result<()> {
+    use rand::seq::SliceRandom;
+
+    let mut tips = Vec::new();
+
+    // Mode-specific tips
+    match mode {
+        OutputMode::Classic => {
+            if depth > 3 {
+                tips.push("💡 Deep trees can be overwhelming. Try --mode ls -d 1 for a clean directory listing!");
+            }
+            tips.push("🚀 Pro tip: Set ST_DEFAULT_MODE=ls for instant directory listings!");
+        }
+        OutputMode::Ls => {
+            tips.push("✨ You're using LS mode! This mimics 'ls -Alh' but with smart-tree magic.");
+            if depth == 1 {
+                tips.push(
+                    "🎯 Perfect! Depth 1 is ideal for LS mode - just like the real ls command.",
+                );
+            }
+            tips.push("💾 Save time: export ST_DEFAULT_MODE=ls to make this your default!");
+        }
+        OutputMode::Waste => {
+            tips.push("🧹 Great choice! Waste mode helps you Marie Kondo your projects.");
+            tips.push("💰 Run the suggested cleanup commands to reclaim disk space!");
+        }
+        OutputMode::Ai => {
+            tips.push("🤖 AI mode provides LLM-optimized output for perfect code analysis.");
+            tips.push("⚡ Combine with --compress for ultra-efficient AI input!");
+        }
+        _ => {
+            // General tips for other modes
+            tips.push("🗂️ Try --mode ls -d 1 for a clean directory view like 'ls -Alh'!");
+            tips.push("🧹 Use --mode waste to find duplicate files and reclaim disk space!");
+        }
+    }
+
+    // Depth-specific tips
+    if depth > 5 {
+        tips.push("🌳 Deep exploration detected! Consider -d 2 or -d 3 for better readability.");
+    }
+
+    // Feature discovery tips
+    if !args.all {
+        tips.push("👀 Add -a to see hidden files and directories (like .gitignore).");
+    }
+
+    if args.filter_type.is_none() {
+        tips.push("🔍 Filter by type: --type f (files only) or --type d (directories only).");
+    }
+
+    // Random general tips
+    let general_tips = [
+        "📚 Check out --mode markdown for beautiful project documentation!",
+        "🔥 Use --mode quantum for ultra-compressed output perfect for AI analysis!",
+        "📊 Try --mode stats for quick project metrics and insights!",
+        "🎨 Smart-tree respects your terminal colors and emoji preferences!",
+        "⚡ Set ST_DEFAULT_MODE environment variable to save your preferred mode!",
+        "🔧 Use --find 'pattern' to search for specific files across your tree!",
+    ];
+
+    // Add 1-2 random general tips
+    let mut rng = rand::thread_rng();
+    let selected_general: Vec<_> = general_tips.choose_multiple(&mut rng, 2).collect();
+    for tip in selected_general {
+        tips.push(tip);
+    }
+
+    // Show a maximum of 3 tips to avoid overwhelming the user
+    let selected_tips: Vec<_> = tips.choose_multiple(&mut rng, 3.min(tips.len())).collect();
+
+    if !selected_tips.is_empty() {
+        eprintln!(); // Add some space
+        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
+        for tip in selected_tips {
+            eprintln!("\x1b[2m{tip}\x1b[0m");
+        }
+        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
+    }
+
     Ok(())
 }
 
@@ -838,14 +949,17 @@ fn print_mcp_tools() {
 /// Elvis would love this modern approach! 🕺
 async fn show_version_with_updates() -> Result<()> {
     let current_version = env!("CARGO_PKG_VERSION");
-    
+
     // Always show current version info first
-    println!("🌟 Smart Tree v{} - The Gradient Enhancement Release! 🌈", current_version);
+    println!(
+        "🌟 Smart Tree v{} - The Gradient Enhancement Release! 🌈",
+        current_version
+    );
     println!("🔧 Target: {}", std::env::consts::ARCH);
     println!("📦 Repository: {}", env!("CARGO_PKG_REPOSITORY"));
     println!("🎯 Authors: {}", env!("CARGO_PKG_AUTHORS"));
     println!("📝 Description: {}", env!("CARGO_PKG_DESCRIPTION"));
-    
+
     // Check for updates (but don't fail if update service is unavailable)
     match check_for_updates_cli().await {
         Ok(update_info) => {
@@ -862,11 +976,11 @@ async fn show_version_with_updates() -> Result<()> {
             println!("💡 Check https://github.com/8b-is/smart-tree for the latest releases");
         }
     }
-    
+
     println!();
     println!("🚀 Ready to make your directories beautiful! Try: st --help");
     println!("🎭 Trish from Accounting loves the colorful tree views! 🎨");
-    
+
     Ok(())
 }
 
@@ -874,55 +988,59 @@ async fn show_version_with_updates() -> Result<()> {
 /// Returns update message if available, empty string if up-to-date
 async fn check_for_updates_cli() -> Result<String> {
     let current_version = env!("CARGO_PKG_VERSION");
-    
+
     let client = reqwest::Client::new();
-    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is".to_string());
-    
+    let api_url =
+        std::env::var("SMART_TREE_FEEDBACK_API").unwrap_or_else(|_| "https://f.8b.is".to_string());
+
     let check_url = format!("{}/version/check/{}", api_url, current_version);
-    
+
     let response = client
         .get(&check_url)
         .timeout(std::time::Duration::from_secs(5)) // Quick timeout for CLI
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Network error: {}", e))?;
-    
+
     if !response.status().is_success() {
         return Err(anyhow::anyhow!("Service returned: {}", response.status()));
     }
-    
+
     let update_info: serde_json::Value = response
         .json()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to parse response: {}", e))?;
-    
+
     if !update_info["update_available"].as_bool().unwrap_or(false) {
         return Ok(String::new()); // Up to date
     }
-    
+
     // Format update message for CLI
     let latest_version = update_info["latest_version"].as_str().unwrap_or("unknown");
     let release_notes = &update_info["release_notes"];
-    
+
     let highlights = release_notes["highlights"]
         .as_array()
-        .map(|arr| arr.iter()
-            .filter_map(|v| v.as_str())
-            .map(|s| format!("  • {}", s))
-            .collect::<Vec<_>>()
-            .join("\n"))
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| format!("  • {}", s))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
         .unwrap_or_default();
-    
+
     let ai_benefits = release_notes["ai_benefits"]
         .as_array()
-        .map(|arr| arr.iter()
-            .filter_map(|v| v.as_str())
-            .map(|s| format!("  • {}", s))
-            .collect::<Vec<_>>()
-            .join("\n"))
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| format!("  • {}", s))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
         .unwrap_or_default();
-    
+
     let mut message = format!(
         "🚀 \x1b[1;32mNew Version Available!\x1b[0m\n\n\
         📊 Current: v{} → Latest: \x1b[1;36mv{}\x1b[0m\n\n\
@@ -931,15 +1049,15 @@ async fn check_for_updates_cli() -> Result<String> {
         latest_version,
         release_notes["title"].as_str().unwrap_or("New Release")
     );
-    
+
     if !highlights.is_empty() {
         message.push_str(&format!("\n\x1b[1mWhat's New:\x1b[0m\n{}\n", highlights));
     }
-    
+
     if !ai_benefits.is_empty() {
         message.push_str(&format!("\n\x1b[1mAI Benefits:\x1b[0m\n{}\n", ai_benefits));
     }
-    
+
     // Add update instructions
     message.push_str(&format!(
         "\n\x1b[1mUpdate Instructions:\x1b[0m\n\
@@ -947,28 +1065,22 @@ async fn check_for_updates_cli() -> Result<String> {
         • GitHub: Download from https://github.com/8b-is/smart-tree/releases\n\
         • Check: \x1b[36mst --version\x1b[0m (after update)\n"
     ));
-    
+
     Ok(message)
 }
 
-/// run_mcp_server is a function that starts the MCP server.
-/// It's an exclusive function that replaces the regular st scan operation.
+/// run_mcp_server is an async function that starts the MCP server.
+/// This function runs directly in the existing async runtime from main().
 /// When --mcp is passed, we start a server that communicates via stdio.
-fn run_mcp_server() -> Result<()> {
+async fn run_mcp_server() -> Result<()> {
     // Import MCP server components. These are only available if "mcp" feature is enabled.
     use st::mcp::{load_config, McpServer};
 
-    // Create a Tokio runtime. MCP server might use async operations.
-    // Using `new()` creates a multi-threaded runtime by default.
-    let runtime = tokio::runtime::Runtime::new()?;
+    // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
+    let mcp_config = load_config().unwrap_or_default(); // Load or use defaults.
+    let server = McpServer::new(mcp_config);
 
-    // Run the MCP server logic within the Tokio runtime.
-    // `block_on` runs an async block to completion on the current thread.
-    runtime.block_on(async {
-        // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
-        let mcp_config = load_config().unwrap_or_default(); // Load or use defaults.
-        let server = McpServer::new(mcp_config);
-        // `run_stdio` would handle communication over stdin/stdout.
-        server.run_stdio().await
-    })
+    // Run the MCP server directly - no need for nested runtime!
+    // `run_stdio` handles communication over stdin/stdout.
+    server.run_stdio().await
 }

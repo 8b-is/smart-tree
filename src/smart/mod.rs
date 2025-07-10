@@ -15,24 +15,23 @@
 
 use serde::{Deserialize, Serialize};
 
-
 // 📦 Smart Tools Modules
-pub mod context;        // Context analysis engine
-pub mod git_relay;     // 🔄 Smart Git CLI integration with compression
-pub mod nlp;           // Natural language processing
-pub mod relevance;     // Advanced relevance scoring
-pub mod smart_ls;      // Task-aware directory listings
-pub mod smart_read;    // Context-aware file reading
+pub mod context; // Context analysis engine
+pub mod git_relay; // 🔄 Smart Git CLI integration with compression
+pub mod nlp; // Natural language processing
+pub mod relevance; // Advanced relevance scoring
+pub mod smart_ls; // Task-aware directory listings
+pub mod smart_read; // Context-aware file reading
 pub mod unified_search; // Natural language search engine
 
 // Re-export key types for convenience
 pub use context::ContextAnalyzer;
-pub use git_relay::{GitRelay, GitResult, GitOperation, GitRelayResponse};
-pub use nlp::{QueryParser, ParsedQuery, SearchIntent};
-pub use relevance::{RelevanceEngine, ProjectContext, ProjectType};
-pub use smart_ls::{SmartLS, SmartDirEntry, SmartLSResponse};
-pub use smart_read::{SmartReader, FileSection, SmartReadResponse};
-pub use unified_search::{UnifiedSearch, SearchResult, SearchResultType, UnifiedSearchResponse};
+pub use git_relay::{GitOperation, GitRelay, GitRelayResponse, GitResult};
+pub use nlp::{ParsedQuery, QueryParser, SearchIntent};
+pub use relevance::{ProjectContext, ProjectType, RelevanceEngine};
+pub use smart_ls::{SmartDirEntry, SmartLS, SmartLSResponse};
+pub use smart_read::{FileSection, SmartReadResponse, SmartReader};
+pub use unified_search::{SearchResult, SearchResultType, UnifiedSearch, UnifiedSearchResponse};
 
 /// 🎯 Core context analysis for understanding user intent and task focus
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,7 +109,7 @@ impl TokenSavings {
         } else {
             0.0
         };
-        
+
         Self {
             original_tokens: original,
             compressed_tokens: compressed,
@@ -153,24 +152,105 @@ impl FocusArea {
             _ => FocusArea::Custom(s.to_string()),
         }
     }
-    
+
     /// Get keywords associated with this focus area
     pub fn keywords(&self) -> Vec<&'static str> {
         match self {
-            FocusArea::Authentication => vec!["auth", "login", "password", "token", "session", "jwt", "oauth"],
-            FocusArea::API => vec!["api", "endpoint", "route", "handler", "request", "response", "http"],
-            FocusArea::Database => vec!["db", "database", "sql", "query", "table", "schema", "migration"],
-            FocusArea::Frontend => vec!["ui", "component", "react", "vue", "angular", "html", "css"],
-            FocusArea::Backend => vec!["server", "service", "controller", "model", "business", "logic"],
-            FocusArea::Testing => vec!["test", "spec", "mock", "assert", "expect", "unit", "integration"],
-            FocusArea::Configuration => vec!["config", "env", "settings", "properties", "yaml", "json", "toml"],
-            FocusArea::Security => vec!["security", "vulnerability", "sanitize", "validate", "encrypt", "hash"],
-            FocusArea::Performance => vec!["performance", "optimize", "cache", "memory", "cpu", "benchmark"],
-            FocusArea::Documentation => vec!["doc", "readme", "comment", "documentation", "guide", "manual"],
-            FocusArea::ErrorHandling => vec!["error", "exception", "try", "catch", "panic", "result", "option"],
+            FocusArea::Authentication => vec![
+                "auth", "login", "password", "token", "session", "jwt", "oauth",
+            ],
+            FocusArea::API => vec![
+                "api", "endpoint", "route", "handler", "request", "response", "http",
+            ],
+            FocusArea::Database => vec![
+                "db",
+                "database",
+                "sql",
+                "query",
+                "table",
+                "schema",
+                "migration",
+            ],
+            FocusArea::Frontend => {
+                vec!["ui", "component", "react", "vue", "angular", "html", "css"]
+            }
+            FocusArea::Backend => vec![
+                "server",
+                "service",
+                "controller",
+                "model",
+                "business",
+                "logic",
+            ],
+            FocusArea::Testing => vec![
+                "test",
+                "spec",
+                "mock",
+                "assert",
+                "expect",
+                "unit",
+                "integration",
+            ],
+            FocusArea::Configuration => vec![
+                "config",
+                "env",
+                "settings",
+                "properties",
+                "yaml",
+                "json",
+                "toml",
+            ],
+            FocusArea::Security => vec![
+                "security",
+                "vulnerability",
+                "sanitize",
+                "validate",
+                "encrypt",
+                "hash",
+            ],
+            FocusArea::Performance => vec![
+                "performance",
+                "optimize",
+                "cache",
+                "memory",
+                "cpu",
+                "benchmark",
+            ],
+            FocusArea::Documentation => vec![
+                "doc",
+                "readme",
+                "comment",
+                "documentation",
+                "guide",
+                "manual",
+            ],
+            FocusArea::ErrorHandling => vec![
+                "error",
+                "exception",
+                "try",
+                "catch",
+                "panic",
+                "result",
+                "option",
+            ],
             FocusArea::Logging => vec!["log", "logger", "debug", "info", "warn", "error", "trace"],
-            FocusArea::Deployment => vec!["deploy", "docker", "kubernetes", "ci", "cd", "pipeline", "build"],
-            FocusArea::Dependencies => vec!["dependency", "import", "require", "package", "module", "crate"],
+            FocusArea::Deployment => vec![
+                "deploy",
+                "docker",
+                "kubernetes",
+                "ci",
+                "cd",
+                "pipeline",
+                "build",
+            ],
+            FocusArea::Dependencies => vec![
+                "dependency",
+                "import",
+                "require",
+                "package",
+                "module",
+                "crate",
+            ],
             FocusArea::Custom(_s) => vec![], // Custom focus areas don't have predefined keywords
         }
     }
@@ -184,7 +264,10 @@ mod tests {
     fn test_focus_area_parsing() {
         assert_eq!(FocusArea::from_str("auth"), FocusArea::Authentication);
         assert_eq!(FocusArea::from_str("API"), FocusArea::API);
-        assert_eq!(FocusArea::from_str("custom_thing"), FocusArea::Custom("custom_thing".to_string()));
+        assert_eq!(
+            FocusArea::from_str("custom_thing"),
+            FocusArea::Custom("custom_thing".to_string())
+        );
     }
 
     #[test]

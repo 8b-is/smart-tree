@@ -1,12 +1,12 @@
 //! Server-Sent Events (SSE) input adapter
-//! 
+//!
 //! Visualizes real-time event streams as living trees
 
 use super::*;
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 use reqwest;
-use std::time::{SystemTime, Duration};
+use std::time::{Duration, SystemTime};
 
 pub struct SseAdapter;
 
@@ -15,17 +15,15 @@ impl InputAdapter for SseAdapter {
     fn name(&self) -> &'static str {
         "SSE"
     }
-    
+
     fn supported_formats(&self) -> Vec<&'static str> {
         vec!["sse", "events", "stream"]
     }
-    
+
     async fn can_handle(&self, input: &InputSource) -> bool {
         match input {
             InputSource::Url(url) => {
-                url.contains("/events") || 
-                url.contains("/stream") ||
-                url.contains("sse")
+                url.contains("/events") || url.contains("/stream") || url.contains("sse")
             }
             InputSource::Raw { format_hint, .. } => {
                 format_hint.as_ref().map(|h| h == "sse").unwrap_or(false)
@@ -33,7 +31,7 @@ impl InputAdapter for SseAdapter {
             _ => false,
         }
     }
-    
+
     async fn parse(&self, input: InputSource) -> Result<ContextNode> {
         match input {
             InputSource::Url(url) => self.parse_sse_stream(&url).await,
@@ -46,7 +44,7 @@ impl InputAdapter for SseAdapter {
 impl SseAdapter {
     async fn parse_sse_stream(&self, url: &str) -> Result<ContextNode> {
         let _client = reqwest::Client::new();
-        
+
         // Create root node for event stream
         let mut root = ContextNode {
             id: url.to_string(),
@@ -66,7 +64,7 @@ impl SseAdapter {
             }),
             entanglements: vec![],
         };
-        
+
         // For demo, just show structure
         // In real implementation, would stream events
         root.children = vec![
@@ -93,14 +91,14 @@ impl SseAdapter {
                 entanglements: vec![],
             },
         ];
-        
+
         Ok(root)
     }
-    
+
     async fn parse_sse_data(&self, data: &[u8]) -> Result<ContextNode> {
         let content = String::from_utf8_lossy(data);
         let mut events = Vec::new();
-        
+
         // Parse SSE format
         for line in content.lines() {
             if line.starts_with("data: ") {
@@ -110,16 +108,19 @@ impl SseAdapter {
                 }
             }
         }
-        
+
         Ok(ContextNode {
             id: "sse_data".to_string(),
             name: "SSE Events".to_string(),
             node_type: NodeType::EventSource,
             quantum_state: None,
-            children: events.iter().enumerate().map(|(i, event)| {
-                ContextNode {
+            children: events
+                .iter()
+                .enumerate()
+                .map(|(i, event)| ContextNode {
                     id: format!("event_{}", i),
-                    name: event.get("type")
+                    name: event
+                        .get("type")
                         .and_then(|t| t.as_str())
                         .unwrap_or("event")
                         .to_string(),
@@ -128,15 +129,15 @@ impl SseAdapter {
                     children: vec![],
                     metadata: event.clone(),
                     entanglements: vec![],
-                }
-            }).collect(),
+                })
+                .collect(),
             metadata: serde_json::json!({
                 "event_count": events.len()
             }),
             entanglements: vec![],
         })
     }
-    
+
     fn create_event_type_node(&self, event_type: &str, frequency: f64) -> ContextNode {
         ContextNode {
             id: format!("type_{}", event_type),
@@ -156,11 +157,11 @@ impl SseAdapter {
             entanglements: vec![],
         }
     }
-    
+
     fn create_timeline_nodes(&self) -> Vec<ContextNode> {
         let now = SystemTime::now();
         let mut nodes = Vec::new();
-        
+
         // Create nodes for last 5 time buckets
         for i in 0..5 {
             let bucket_time = now - Duration::from_secs(i * 60);
@@ -190,7 +191,7 @@ impl SseAdapter {
                 },
             });
         }
-        
+
         nodes
     }
 }

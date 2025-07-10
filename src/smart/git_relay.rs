@@ -1,12 +1,12 @@
 //! 🔄 GiT Relay - Smart Git CLI Integration with Compression
-//! 
+//!
 //! This module provides a compressed, intelligent interface to Git CLI
 //! operations without requiring API keys or vendor lock-in. It leverages
 //! our quantum compression and context awareness for maximum efficiency.
 
-use super::{SmartResponse, TaskContext, TokenSavings};
 use super::context::ContextAnalyzer;
-use anyhow::{Result, anyhow};
+use super::{SmartResponse, TaskContext, TokenSavings};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::{Command, Output};
@@ -62,7 +62,7 @@ impl GitRelay {
             context_analyzer: ContextAnalyzer::new(),
         }
     }
-    
+
     /// 🔄 Execute git command with smart compression
     pub fn execute(
         &self,
@@ -74,7 +74,7 @@ impl GitRelay {
         // Build git command
         let mut cmd = Command::new("git");
         cmd.current_dir(repo_path);
-        
+
         // Add operation-specific arguments
         match &operation {
             GitOperation::Status => {
@@ -99,33 +99,36 @@ impl GitRelay {
                 return Err(anyhow!("Operation {:?} not yet implemented", operation));
             }
         }
-        
+
         // Add user-provided arguments
         cmd.args(args);
-        
+
         // Execute command
         let output = cmd.output()?;
-        
+
         // Process and compress output
         let git_result = self.process_output(operation, output, context)?;
-        
+
         // Calculate token savings
         let original_tokens = git_result.output.len() / 4; // Rough estimation
         let compressed_tokens = git_result.summary.len() / 4;
         let token_savings = TokenSavings::new(original_tokens, compressed_tokens, "git-relay");
-        
+
         // Create response
         let response = GitRelayResponse {
             primary: vec![git_result.clone()],
             secondary: vec![],
-            context_summary: format!("Git {} operation completed", self.operation_name(&git_result.operation)),
+            context_summary: format!(
+                "Git {} operation completed",
+                self.operation_name(&git_result.operation)
+            ),
             token_savings,
             suggestions: git_result.suggestions.clone(),
         };
-        
+
         Ok(response)
     }
-    
+
     /// 📊 Smart git status with context awareness
     pub fn smart_status(
         &self,
@@ -134,7 +137,7 @@ impl GitRelay {
     ) -> Result<GitRelayResponse> {
         self.execute(repo_path, GitOperation::Status, &[], context)
     }
-    
+
     /// 📜 Smart git log with relevance filtering
     pub fn smart_log(
         &self,
@@ -146,7 +149,7 @@ impl GitRelay {
         let args = vec![format!("-{}", limit_str)];
         self.execute(repo_path, GitOperation::Log, &args, context)
     }
-    
+
     /// 🔍 Smart git diff with context filtering
     pub fn smart_diff(
         &self,
@@ -161,7 +164,7 @@ impl GitRelay {
         };
         self.execute(repo_path, GitOperation::Diff, &args, context)
     }
-    
+
     /// 🌿 Smart branch information
     pub fn smart_branches(
         &self,
@@ -170,7 +173,7 @@ impl GitRelay {
     ) -> Result<GitRelayResponse> {
         self.execute(repo_path, GitOperation::Branch, &[], context)
     }
-    
+
     /// 🔗 Smart remote information
     pub fn smart_remotes(
         &self,
@@ -179,7 +182,7 @@ impl GitRelay {
     ) -> Result<GitRelayResponse> {
         self.execute(repo_path, GitOperation::Remote, &[], context)
     }
-    
+
     /// 🎯 Execute custom git command with compression
     pub fn custom_command(
         &self,
@@ -188,9 +191,14 @@ impl GitRelay {
         args: &[String],
         context: Option<&TaskContext>,
     ) -> Result<GitRelayResponse> {
-        self.execute(repo_path, GitOperation::Custom(command.to_string()), args, context)
+        self.execute(
+            repo_path,
+            GitOperation::Custom(command.to_string()),
+            args,
+            context,
+        )
     }
-    
+
     /// Process git command output with smart compression
     fn process_output(
         &self,
@@ -200,20 +208,21 @@ impl GitRelay {
     ) -> Result<GitResult> {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        
+
         // Combine stdout and stderr
         let full_output = if stderr.is_empty() {
             stdout.to_string()
         } else {
             format!("{}\nERROR: {}", stdout, stderr)
         };
-        
+
         // Generate context-aware summary
         let summary = self.generate_summary(&operation, &full_output, context);
-        
+
         // Generate suggestions
-        let suggestions = self.generate_suggestions(&operation, &full_output, output.status.code().unwrap_or(-1));
-        
+        let suggestions =
+            self.generate_suggestions(&operation, &full_output, output.status.code().unwrap_or(-1));
+
         Ok(GitResult {
             operation,
             output: full_output,
@@ -222,7 +231,7 @@ impl GitRelay {
             suggestions,
         })
     }
-    
+
     /// Generate context-aware summary
     fn generate_summary(
         &self,
@@ -231,41 +240,34 @@ impl GitRelay {
         _context: Option<&TaskContext>,
     ) -> String {
         match operation {
-            GitOperation::Status => {
-                self.summarize_status(output)
-            }
-            GitOperation::Log => {
-                self.summarize_log(output)
-            }
-            GitOperation::Diff => {
-                self.summarize_diff(output)
-            }
-            GitOperation::Branch => {
-                self.summarize_branches(output)
-            }
-            GitOperation::Remote => {
-                self.summarize_remotes(output)
-            }
+            GitOperation::Status => self.summarize_status(output),
+            GitOperation::Log => self.summarize_log(output),
+            GitOperation::Diff => self.summarize_diff(output),
+            GitOperation::Branch => self.summarize_branches(output),
+            GitOperation::Remote => self.summarize_remotes(output),
             _ => {
-                format!("Git {} completed with {} characters of output", 
-                       self.operation_name(operation), output.len())
+                format!(
+                    "Git {} completed with {} characters of output",
+                    self.operation_name(operation),
+                    output.len()
+                )
             }
         }
     }
-    
+
     /// Summarize git status output
     fn summarize_status(&self, output: &str) -> String {
         let lines: Vec<&str> = output.lines().collect();
         if lines.is_empty() {
             return "Repository is clean - no changes detected".to_string();
         }
-        
+
         let mut modified = 0;
         let mut added = 0;
         let mut deleted = 0;
         let mut untracked = 0;
         let mut branch_info = String::new();
-        
+
         for line in lines {
             if line.starts_with("##") {
                 branch_info = line.trim_start_matches("## ").to_string();
@@ -279,28 +281,36 @@ impl GitRelay {
                 untracked += 1;
             }
         }
-        
+
         let mut summary = format!("Branch: {}", branch_info);
-        if modified > 0 { summary.push_str(&format!(", {} modified", modified)); }
-        if added > 0 { summary.push_str(&format!(", {} added", added)); }
-        if deleted > 0 { summary.push_str(&format!(", {} deleted", deleted)); }
-        if untracked > 0 { summary.push_str(&format!(", {} untracked", untracked)); }
-        
+        if modified > 0 {
+            summary.push_str(&format!(", {} modified", modified));
+        }
+        if added > 0 {
+            summary.push_str(&format!(", {} added", added));
+        }
+        if deleted > 0 {
+            summary.push_str(&format!(", {} deleted", deleted));
+        }
+        if untracked > 0 {
+            summary.push_str(&format!(", {} untracked", untracked));
+        }
+
         summary
     }
-    
+
     /// Summarize git log output
     fn summarize_log(&self, output: &str) -> String {
         let lines: Vec<&str> = output.lines().collect();
         let commit_count = lines.iter().filter(|line| line.contains("*")).count();
-        
+
         if commit_count == 0 {
             "No commits found".to_string()
         } else {
             format!("Last {} commits shown", commit_count)
         }
     }
-    
+
     /// Summarize git diff output
     fn summarize_diff(&self, output: &str) -> String {
         if output.trim().is_empty() {
@@ -311,37 +321,51 @@ impl GitRelay {
             format!("Changes in {} files", file_count)
         }
     }
-    
+
     /// Summarize git branch output
     fn summarize_branches(&self, output: &str) -> String {
         let lines: Vec<&str> = output.lines().collect();
-        let local_branches = lines.iter().filter(|line| !line.contains("remotes/")).count();
-        let remote_branches = lines.iter().filter(|line| line.contains("remotes/")).count();
-        
-        format!("{} local branches, {} remote branches", local_branches, remote_branches)
+        let local_branches = lines
+            .iter()
+            .filter(|line| !line.contains("remotes/"))
+            .count();
+        let remote_branches = lines
+            .iter()
+            .filter(|line| line.contains("remotes/"))
+            .count();
+
+        format!(
+            "{} local branches, {} remote branches",
+            local_branches, remote_branches
+        )
     }
-    
+
     /// Summarize git remote output
     fn summarize_remotes(&self, output: &str) -> String {
         let lines: Vec<&str> = output.lines().collect();
         let remote_count = lines.len() / 2; // Each remote has fetch and push URLs
-        
+
         if remote_count == 0 {
             "No remotes configured".to_string()
         } else {
             format!("{} remote(s) configured", remote_count)
         }
     }
-    
+
     /// Generate operation-specific suggestions
-    fn generate_suggestions(&self, operation: &GitOperation, output: &str, exit_code: i32) -> Vec<String> {
+    fn generate_suggestions(
+        &self,
+        operation: &GitOperation,
+        output: &str,
+        exit_code: i32,
+    ) -> Vec<String> {
         let mut suggestions = Vec::new();
-        
+
         if exit_code != 0 {
             suggestions.push("Command failed - check git status and repository state".to_string());
             return suggestions;
         }
-        
+
         match operation {
             GitOperation::Status => {
                 if output.contains("??") {
@@ -369,14 +393,15 @@ impl GitRelay {
             }
             GitOperation::Branch => {
                 suggestions.push("Use 'git checkout <branch>' to switch branches".to_string());
-                suggestions.push("Use 'git branch -d <branch>' to delete merged branches".to_string());
+                suggestions
+                    .push("Use 'git branch -d <branch>' to delete merged branches".to_string());
             }
             _ => {}
         }
-        
+
         suggestions
     }
-    
+
     /// Get human-readable operation name
     fn operation_name<'a>(&self, operation: &'a GitOperation) -> &'a str {
         match operation {

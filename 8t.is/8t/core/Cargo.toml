@@ -1,0 +1,21 @@
+[package]
+name = "eighty-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+blake3 = { workspace = true }
+bytes = { workspace = true }
+memmap2 = { workspace = true }
+rayon = { workspace = true }
+dashmap = { workspace = true }
+
+[features]
+default = ["simd"]
+simd = []

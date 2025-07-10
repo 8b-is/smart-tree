@@ -1,5 +1,5 @@
 //! 🧠 Natural Language Processing for Smart Tools
-//! 
+//!
 //! This module provides natural language understanding capabilities
 //! for parsing user queries and converting them into structured
 //! search intents and parameters.
@@ -61,33 +61,33 @@ impl QueryParser {
             intent_patterns: HashMap::new(),
             entity_patterns: HashMap::new(),
         };
-        
+
         parser.initialize_patterns();
         parser
     }
-    
+
     /// 🔍 Parse natural language query
     pub fn parse(&self, query: &str) -> ParsedQuery {
         let query_lower = query.to_lowercase();
-        
+
         // Detect intent
         let intent = self.detect_intent(&query_lower);
-        
+
         // Extract entities
         let entities = self.extract_entities(&query_lower);
-        
+
         // Extract languages
         let languages = self.extract_languages(&query_lower);
-        
+
         // Extract keywords
         let keywords = self.extract_keywords(&query_lower);
-        
+
         // Derive focus areas
         let focus_areas = self.derive_focus_areas(&intent, &keywords);
-        
+
         // Calculate confidence
         let confidence = self.calculate_confidence(&intent, &entities, &keywords);
-        
+
         ParsedQuery {
             intent,
             entities,
@@ -98,7 +98,7 @@ impl QueryParser {
             confidence,
         }
     }
-    
+
     /// 🎯 Detect search intent from query
     fn detect_intent(&self, query: &str) -> SearchIntent {
         for (intent, patterns) in &self.intent_patterns {
@@ -108,18 +108,18 @@ impl QueryParser {
                 }
             }
         }
-        
+
         SearchIntent::General
     }
-    
+
     /// 🏷️ Extract entities (file names, function names, etc.)
     fn extract_entities(&self, query: &str) -> Vec<String> {
         let mut entities = Vec::new();
-        
+
         // Simple entity extraction - look for quoted strings
         let mut in_quotes = false;
         let mut current_entity = String::new();
-        
+
         for ch in query.chars() {
             match ch {
                 '"' | '\'' => {
@@ -137,7 +137,7 @@ impl QueryParser {
                 _ => {}
             }
         }
-        
+
         // Also extract common file extensions and patterns
         for (entity_type, patterns) in &self.entity_patterns {
             for pattern in patterns {
@@ -146,55 +146,67 @@ impl QueryParser {
                 }
             }
         }
-        
+
         entities
     }
-    
+
     /// 💻 Extract programming languages mentioned
     fn extract_languages(&self, query: &str) -> Option<Vec<String>> {
         let languages = vec![
-            "rust", "python", "javascript", "typescript", "go", "java",
-            "cpp", "c++", "c", "ruby", "php", "swift", "kotlin", "scala"
+            "rust",
+            "python",
+            "javascript",
+            "typescript",
+            "go",
+            "java",
+            "cpp",
+            "c++",
+            "c",
+            "ruby",
+            "php",
+            "swift",
+            "kotlin",
+            "scala",
         ];
-        
+
         let mut found_languages = Vec::new();
-        
+
         for lang in languages {
             if query.contains(lang) {
                 found_languages.push(lang.to_string());
             }
         }
-        
+
         if found_languages.is_empty() {
             None
         } else {
             Some(found_languages)
         }
     }
-    
+
     /// 🔑 Extract keywords for content search
     fn extract_keywords(&self, query: &str) -> Vec<String> {
         // Simple keyword extraction - split on common words and take meaningful terms
         let stop_words = vec![
-            "find", "search", "look", "for", "in", "the", "a", "an", "and", "or",
-            "with", "that", "have", "has", "is", "are", "was", "were", "be",
-            "been", "being", "do", "does", "did", "will", "would", "could",
-            "should", "may", "might", "can", "all", "any", "some", "this",
-            "that", "these", "those", "i", "you", "he", "she", "it", "we", "they"
+            "find", "search", "look", "for", "in", "the", "a", "an", "and", "or", "with", "that",
+            "have", "has", "is", "are", "was", "were", "be", "been", "being", "do", "does", "did",
+            "will", "would", "could", "should", "may", "might", "can", "all", "any", "some",
+            "this", "that", "these", "those", "i", "you", "he", "she", "it", "we", "they",
         ];
-        
-        query.split_whitespace()
+
+        query
+            .split_whitespace()
             .map(|word| word.trim_matches(|c: char| !c.is_alphanumeric()))
             .filter(|word| !word.is_empty() && word.len() > 2)
             .filter(|word| !stop_words.contains(&word.to_lowercase().as_str()))
             .map(|word| word.to_string())
             .collect()
     }
-    
+
     /// 🎯 Derive focus areas from intent and keywords
     fn derive_focus_areas(&self, intent: &SearchIntent, keywords: &[String]) -> Vec<FocusArea> {
         let mut focus_areas = Vec::new();
-        
+
         // Add focus area based on intent
         match intent {
             SearchIntent::FindAuth => focus_areas.push(FocusArea::Authentication),
@@ -207,7 +219,7 @@ impl QueryParser {
             SearchIntent::FindDocs => focus_areas.push(FocusArea::Documentation),
             _ => {}
         }
-        
+
         // Add focus areas based on keywords
         for keyword in keywords {
             let keyword_lower = keyword.to_lowercase();
@@ -216,37 +228,42 @@ impl QueryParser {
                 focus_areas.push(focus_area);
             }
         }
-        
+
         // Default focus areas if none found
         if focus_areas.is_empty() {
             focus_areas = vec![FocusArea::API, FocusArea::Configuration];
         }
-        
+
         focus_areas
     }
-    
+
     /// 📊 Calculate confidence score
-    fn calculate_confidence(&self, intent: &SearchIntent, entities: &[String], keywords: &[String]) -> f32 {
+    fn calculate_confidence(
+        &self,
+        intent: &SearchIntent,
+        entities: &[String],
+        keywords: &[String],
+    ) -> f32 {
         let mut confidence: f32 = 0.5; // Base confidence
-        
+
         // Boost confidence for specific intents
         if *intent != SearchIntent::General {
             confidence += 0.2;
         }
-        
+
         // Boost confidence for entities
         if !entities.is_empty() {
             confidence += 0.2;
         }
-        
+
         // Boost confidence for meaningful keywords
         if keywords.len() >= 2 {
             confidence += 0.1;
         }
-        
+
         confidence.min(1.0)
     }
-    
+
     /// Initialize intent detection patterns
     fn initialize_patterns(&mut self) {
         // Find code patterns
@@ -261,7 +278,7 @@ impl QueryParser {
                 "classes".to_string(),
             ],
         );
-        
+
         // Find config patterns
         self.intent_patterns.insert(
             SearchIntent::FindConfig,
@@ -273,7 +290,7 @@ impl QueryParser {
                 "environment".to_string(),
             ],
         );
-        
+
         // Find tests patterns
         self.intent_patterns.insert(
             SearchIntent::FindTests,
@@ -285,7 +302,7 @@ impl QueryParser {
                 "specs".to_string(),
             ],
         );
-        
+
         // Authentication patterns
         self.intent_patterns.insert(
             SearchIntent::FindAuth,
@@ -298,7 +315,7 @@ impl QueryParser {
                 "token".to_string(),
             ],
         );
-        
+
         // API patterns
         self.intent_patterns.insert(
             SearchIntent::FindAPI,
@@ -310,7 +327,7 @@ impl QueryParser {
                 "controller".to_string(),
             ],
         );
-        
+
         // Security patterns
         self.intent_patterns.insert(
             SearchIntent::FindSecurity,
@@ -322,7 +339,7 @@ impl QueryParser {
                 "sanitize".to_string(),
             ],
         );
-        
+
         // Performance patterns
         self.intent_patterns.insert(
             SearchIntent::FindPerformance,
@@ -334,7 +351,7 @@ impl QueryParser {
                 "cache".to_string(),
             ],
         );
-        
+
         // Debug patterns
         self.intent_patterns.insert(
             SearchIntent::Debug,
@@ -347,12 +364,16 @@ impl QueryParser {
                 "problem".to_string(),
             ],
         );
-        
+
         // Entity patterns
         self.entity_patterns.insert(
             "file_extension".to_string(),
-            vec![".rs", ".py", ".js", ".ts", ".go", ".java", ".json", ".yaml", ".toml"]
-                .into_iter().map(String::from).collect(),
+            vec![
+                ".rs", ".py", ".js", ".ts", ".go", ".java", ".json", ".yaml", ".toml",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect(),
         );
     }
 }
@@ -372,9 +393,13 @@ mod tests {
         let parser = QueryParser::new();
         let query = "find authentication code in rust files";
         let parsed = parser.parse(query);
-        
+
         assert_eq!(parsed.intent, SearchIntent::FindAuth);
-        assert!(parsed.languages.as_ref().unwrap().contains(&"rust".to_string()));
+        assert!(parsed
+            .languages
+            .as_ref()
+            .unwrap()
+            .contains(&"rust".to_string()));
         assert!(parsed.focus_areas.contains(&FocusArea::Authentication));
     }
 
@@ -383,7 +408,7 @@ mod tests {
         let parser = QueryParser::new();
         let query = "find 'login_handler' function";
         let parsed = parser.parse(query);
-        
+
         assert!(parsed.entities.contains(&"login_handler".to_string()));
     }
 }

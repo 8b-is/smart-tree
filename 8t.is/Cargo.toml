@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = [
+    "8t/core",
+    "8t/api",
+    "8t/feedback",
+    "8t/container",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["8b-is <dev@8b.is>"]
+license = "MIT OR Apache-2.0"
+repository = "https://g8t.is/8t"
+
+[workspace.dependencies]
+tokio = { version = "1.41", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0"
+thiserror = "2.0"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+bytes = "1.9"
+memmap2 = "0.9"
+rayon = "1.10"
+dashmap = "6.1"
+blake3 = "1.5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

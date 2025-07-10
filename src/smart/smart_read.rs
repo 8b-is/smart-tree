@@ -1,12 +1,12 @@
 //! 📖 SmartRead - Context-Aware File Reading
-//! 
+//!
 //! This module implements intelligent file reading that focuses on relevant
 //! sections based on task context, achieving 70-90% token reduction while
 //! maintaining all necessary information for the user's current task.
 
-use super::{RelevanceScore, SmartResponse, TaskContext, TokenSavings};
 use super::context::ContextAnalyzer;
-use anyhow::{Result, anyhow};
+use super::{RelevanceScore, SmartResponse, TaskContext, TokenSavings};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -55,38 +55,34 @@ impl SmartReader {
             context_analyzer: ContextAnalyzer::new(),
         }
     }
-    
+
     /// 📖 Read file with context awareness
-    pub fn read_contextual(
-        &self,
-        path: &Path,
-        context: &TaskContext,
-    ) -> Result<SmartReadResponse> {
+    pub fn read_contextual(&self, path: &Path, context: &TaskContext) -> Result<SmartReadResponse> {
         // Read the full file
         let content = fs::read_to_string(path)
             .map_err(|e| anyhow!("Failed to read file {}: {}", path.display(), e))?;
-        
+
         // Split into sections
         let sections = self.identify_sections(&content, path)?;
-        
+
         // Score sections by relevance
         let scored_sections = self.score_sections(&sections, context)?;
-        
+
         // Filter and categorize by relevance
         let (primary, secondary) = self.categorize_by_relevance(&scored_sections, context);
-        
+
         // Calculate token savings
         let original_tokens = self.estimate_tokens(&content);
-        let compressed_tokens = self.estimate_tokens_for_sections(&primary) + 
-                               self.estimate_tokens_for_sections(&secondary);
+        let compressed_tokens = self.estimate_tokens_for_sections(&primary)
+            + self.estimate_tokens_for_sections(&secondary);
         let token_savings = TokenSavings::new(original_tokens, compressed_tokens, "smart-read");
-        
+
         // Generate context summary
         let context_summary = self.generate_context_summary(&primary, &secondary, context);
-        
+
         // Generate suggestions
         let suggestions = self.generate_suggestions(&primary, &secondary, context);
-        
+
         Ok(SmartReadResponse {
             primary,
             secondary,
@@ -95,18 +91,19 @@ impl SmartReader {
             suggestions,
         })
     }
-    
+
     /// 🔍 Identify sections within file content
     fn identify_sections(&self, content: &str, path: &Path) -> Result<Vec<FileSection>> {
         let lines: Vec<&str> = content.lines().collect();
         let mut sections = Vec::new();
-        
+
         // Determine file type from extension
-        let extension = path.extension()
+        let extension = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("")
             .to_lowercase();
-        
+
         match extension.as_str() {
             "rs" => self.identify_rust_sections(&lines, &mut sections)?,
             "py" => self.identify_python_sections(&lines, &mut sections)?,
@@ -116,20 +113,27 @@ impl SmartReader {
             "md" => self.identify_markdown_sections(&lines, &mut sections)?,
             _ => self.identify_generic_sections(&lines, &mut sections)?,
         }
-        
+
         Ok(sections)
     }
-    
+
     /// 🦀 Identify Rust code sections
-    fn identify_rust_sections(&self, lines: &[&str], sections: &mut Vec<FileSection>) -> Result<()> {
+    fn identify_rust_sections(
+        &self,
+        lines: &[&str],
+        sections: &mut Vec<FileSection>,
+    ) -> Result<()> {
         let mut current_section: Option<(usize, SectionType, Vec<String>)> = None;
-        
+
         for (i, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Function definitions
-            if trimmed.starts_with("fn ") || trimmed.starts_with("pub fn ") || 
-               trimmed.starts_with("async fn ") || trimmed.starts_with("pub async fn ") {
+            if trimmed.starts_with("fn ")
+                || trimmed.starts_with("pub fn ")
+                || trimmed.starts_with("async fn ")
+                || trimmed.starts_with("pub async fn ")
+            {
                 self.finish_current_section(&mut current_section, sections);
                 current_section = Some((i, SectionType::Function, vec![line.to_string()]));
             }
@@ -150,7 +154,9 @@ impl SmartReader {
             }
             // Use statements
             else if trimmed.starts_with("use ") {
-                if current_section.is_none() || current_section.as_ref().unwrap().1 != SectionType::Import {
+                if current_section.is_none()
+                    || current_section.as_ref().unwrap().1 != SectionType::Import
+                {
                     self.finish_current_section(&mut current_section, sections);
                     current_section = Some((i, SectionType::Import, vec![line.to_string()]));
                 } else if let Some((_, _, ref mut content)) = current_section {
@@ -159,7 +165,9 @@ impl SmartReader {
             }
             // Documentation comments
             else if trimmed.starts_with("///") || trimmed.starts_with("//!") {
-                if current_section.is_none() || current_section.as_ref().unwrap().1 != SectionType::Documentation {
+                if current_section.is_none()
+                    || current_section.as_ref().unwrap().1 != SectionType::Documentation
+                {
                     self.finish_current_section(&mut current_section, sections);
                     current_section = Some((i, SectionType::Documentation, vec![line.to_string()]));
                 } else if let Some((_, _, ref mut content)) = current_section {
@@ -174,26 +182,30 @@ impl SmartReader {
             // Continue current section
             else if let Some((_, _, ref mut content)) = current_section {
                 content.push(line.to_string());
-                
+
                 // End section on closing brace at start of line
                 if trimmed == "}" {
                     self.finish_current_section(&mut current_section, sections);
                 }
             }
         }
-        
+
         // Finish any remaining section
         self.finish_current_section(&mut current_section, sections);
         Ok(())
     }
-    
+
     /// 🐍 Identify Python code sections
-    fn identify_python_sections(&self, lines: &[&str], sections: &mut Vec<FileSection>) -> Result<()> {
+    fn identify_python_sections(
+        &self,
+        lines: &[&str],
+        sections: &mut Vec<FileSection>,
+    ) -> Result<()> {
         let mut current_section: Option<(usize, SectionType, Vec<String>)> = None;
-        
+
         for (i, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Function definitions
             if trimmed.starts_with("def ") || trimmed.starts_with("async def ") {
                 self.finish_current_section(&mut current_section, sections);
@@ -206,7 +218,9 @@ impl SmartReader {
             }
             // Import statements
             else if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-                if current_section.is_none() || current_section.as_ref().unwrap().1 != SectionType::Import {
+                if current_section.is_none()
+                    || current_section.as_ref().unwrap().1 != SectionType::Import
+                {
                     self.finish_current_section(&mut current_section, sections);
                     current_section = Some((i, SectionType::Import, vec![line.to_string()]));
                 } else if let Some((_, _, ref mut content)) = current_section {
@@ -218,19 +232,27 @@ impl SmartReader {
                 content.push(line.to_string());
             }
         }
-        
+
         self.finish_current_section(&mut current_section, sections);
         Ok(())
     }
-    
+
     /// 🟨 Identify JavaScript/TypeScript sections
-    fn identify_javascript_sections(&self, lines: &[&str], sections: &mut Vec<FileSection>) -> Result<()> {
+    fn identify_javascript_sections(
+        &self,
+        lines: &[&str],
+        sections: &mut Vec<FileSection>,
+    ) -> Result<()> {
         // Similar pattern to Rust but with JS/TS syntax
         self.identify_generic_sections(lines, sections)
     }
-    
+
     /// 📄 Identify JSON sections
-    fn identify_json_sections(&self, lines: &[&str], sections: &mut Vec<FileSection>) -> Result<()> {
+    fn identify_json_sections(
+        &self,
+        lines: &[&str],
+        sections: &mut Vec<FileSection>,
+    ) -> Result<()> {
         // For JSON, treat the whole file as a configuration section
         let content = lines.join("\n");
         sections.push(FileSection {
@@ -245,9 +267,13 @@ impl SmartReader {
         });
         Ok(())
     }
-    
+
     /// 📄 Identify YAML sections
-    fn identify_yaml_sections(&self, lines: &[&str], sections: &mut Vec<FileSection>) -> Result<()> {
+    fn identify_yaml_sections(
+        &self,
+        lines: &[&str],
+        sections: &mut Vec<FileSection>,
+    ) -> Result<()> {
         // For YAML, treat as configuration
         let content = lines.join("\n");
         sections.push(FileSection {
@@ -262,14 +288,18 @@ impl SmartReader {
         });
         Ok(())
     }
-    
+
     /// 📝 Identify Markdown sections
-    fn identify_markdown_sections(&self, lines: &[&str], sections: &mut Vec<FileSection>) -> Result<()> {
+    fn identify_markdown_sections(
+        &self,
+        lines: &[&str],
+        sections: &mut Vec<FileSection>,
+    ) -> Result<()> {
         let mut current_section: Option<(usize, SectionType, Vec<String>)> = None;
-        
+
         for (i, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Headers start new sections
             if trimmed.starts_with('#') {
                 self.finish_current_section(&mut current_section, sections);
@@ -284,13 +314,17 @@ impl SmartReader {
                 current_section = Some((i, SectionType::Documentation, vec![line.to_string()]));
             }
         }
-        
+
         self.finish_current_section(&mut current_section, sections);
         Ok(())
     }
-    
+
     /// 📄 Identify generic file sections
-    fn identify_generic_sections(&self, lines: &[&str], sections: &mut Vec<FileSection>) -> Result<()> {
+    fn identify_generic_sections(
+        &self,
+        lines: &[&str],
+        sections: &mut Vec<FileSection>,
+    ) -> Result<()> {
         // For unknown file types, create one section with the entire content
         let content = lines.join("\n");
         sections.push(FileSection {
@@ -305,7 +339,7 @@ impl SmartReader {
         });
         Ok(())
     }
-    
+
     /// ✅ Finish current section and add to sections list
     fn finish_current_section(
         &self,
@@ -326,7 +360,7 @@ impl SmartReader {
             });
         }
     }
-    
+
     /// 📊 Score sections by relevance to context
     fn score_sections(
         &self,
@@ -334,12 +368,12 @@ impl SmartReader {
         context: &TaskContext,
     ) -> Result<Vec<FileSection>> {
         let mut scored_sections = Vec::new();
-        
+
         for section in sections {
             let mut relevance_score: f32 = 0.0;
             let mut reasons = Vec::new();
             let mut focus_matches = Vec::new();
-            
+
             // Score based on section type
             relevance_score += match section.section_type {
                 SectionType::Function => 0.8,
@@ -350,7 +384,7 @@ impl SmartReader {
                 SectionType::Documentation => 0.3,
                 _ => 0.5,
             };
-            
+
             // Score based on content matching focus areas
             let content_lower = section.content.to_lowercase();
             for focus_area in &context.focus_areas {
@@ -364,23 +398,23 @@ impl SmartReader {
                     }
                 }
             }
-            
+
             // Normalize score
             relevance_score = relevance_score.min(1.0);
-            
+
             let mut scored_section = section.clone();
             scored_section.relevance = RelevanceScore {
                 score: relevance_score,
                 reasons,
                 focus_matches,
             };
-            
+
             scored_sections.push(scored_section);
         }
-        
+
         Ok(scored_sections)
     }
-    
+
     /// 🏷️ Categorize sections by relevance threshold
     fn categorize_by_relevance(
         &self,
@@ -389,7 +423,7 @@ impl SmartReader {
     ) -> (Vec<FileSection>, Vec<FileSection>) {
         let mut primary = Vec::new();
         let mut secondary = Vec::new();
-        
+
         for section in sections {
             if section.relevance.score >= context.relevance_threshold {
                 primary.push(section.clone());
@@ -398,27 +432,28 @@ impl SmartReader {
             }
             // Sections below 70% of threshold are filtered out
         }
-        
+
         // Sort by relevance score (highest first)
         primary.sort_by(|a, b| b.relevance.score.partial_cmp(&a.relevance.score).unwrap());
         secondary.sort_by(|a, b| b.relevance.score.partial_cmp(&a.relevance.score).unwrap());
-        
+
         (primary, secondary)
     }
-    
+
     /// 🧮 Estimate token count for content
     fn estimate_tokens(&self, content: &str) -> usize {
         // Rough estimation: ~4 characters per token
         content.len() / 4
     }
-    
+
     /// 🧮 Estimate token count for sections
     fn estimate_tokens_for_sections(&self, sections: &[FileSection]) -> usize {
-        sections.iter()
+        sections
+            .iter()
             .map(|s| self.estimate_tokens(&s.content))
             .sum()
     }
-    
+
     /// 📝 Generate context summary
     fn generate_context_summary(
         &self,
@@ -434,7 +469,7 @@ impl SmartReader {
             context.focus_areas
         )
     }
-    
+
     /// 💡 Generate proactive suggestions
     fn generate_suggestions(
         &self,
@@ -443,23 +478,25 @@ impl SmartReader {
         _context: &TaskContext,
     ) -> Vec<String> {
         let mut suggestions = Vec::new();
-        
+
         if primary.is_empty() {
             suggestions.push("No highly relevant sections found. Consider adjusting the task context or relevance threshold.".to_string());
         }
-        
+
         if secondary.len() > 10 {
             suggestions.push("Many medium-relevance sections found. Consider using a more specific task context.".to_string());
         }
-        
+
         // Suggest related tools based on section types
-        let has_functions = primary.iter().any(|s| s.section_type == SectionType::Function);
+        let has_functions = primary
+            .iter()
+            .any(|s| s.section_type == SectionType::Function);
         let has_tests = primary.iter().any(|s| s.section_type == SectionType::Test);
-        
+
         if has_functions && !has_tests {
             suggestions.push("Consider using find_tests to locate related test files.".to_string());
         }
-        
+
         suggestions
     }
 }
@@ -486,10 +523,12 @@ mod tests {
             "    println!(\"Hello\");",
             "}",
         ];
-        
+
         let mut sections = Vec::new();
-        reader.identify_rust_sections(&lines, &mut sections).unwrap();
-        
+        reader
+            .identify_rust_sections(&lines, &mut sections)
+            .unwrap();
+
         assert_eq!(sections.len(), 3); // Import, documentation, and function sections
         assert_eq!(sections[0].section_type, SectionType::Import);
         assert_eq!(sections[1].section_type, SectionType::Documentation);

@@ -42,14 +42,15 @@ impl Formatter for RelationsFormatter {
         }
 
         // Get relations based on focus or all
-        let relations: Vec<&crate::relations::FileRelation> = if let Some(focus_file) = &self.focus {
+        let relations: Vec<&crate::relations::FileRelation> = if let Some(focus_file) = &self.focus
+        {
             // Convert relative path to absolute for matching
             let abs_focus = if focus_file.is_relative() {
                 root_path.join(focus_file)
             } else {
                 focus_file.clone()
             };
-            
+
             let file_relations = analyzer.get_file_relations(&abs_focus);
             eprintln!(
                 "📄 Found {} relationships for {}",
@@ -69,7 +70,11 @@ impl Formatter for RelationsFormatter {
         // If no relationships found
         if relations.is_empty() {
             if let Some(focus_file) = &self.focus {
-                writeln!(writer, "No relationships found for: {}", focus_file.display())?;
+                writeln!(
+                    writer,
+                    "No relationships found for: {}",
+                    focus_file.display()
+                )?;
             } else {
                 writeln!(writer, "No relationships found in the codebase.")?;
             }
@@ -91,7 +96,7 @@ impl Formatter for RelationsFormatter {
                 RelationType::TypeUsage => types.push(relation),
                 RelationType::TestedBy => tests.push(relation),
                 RelationType::Coupled => coupled.push(relation),
-                RelationType::Exports => {}, // Skip exports for now
+                RelationType::Exports => {} // Skip exports for now
             }
         }
 
@@ -99,7 +104,12 @@ impl Formatter for RelationsFormatter {
         if !imports.is_empty() {
             writeln!(writer, "📦 Imports ({}):", imports.len())?;
             for rel in imports {
-                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+                writeln!(
+                    writer,
+                    "  {} → {}",
+                    rel.source.display(),
+                    rel.target.display()
+                )?;
             }
             writeln!(writer)?;
         }
@@ -107,7 +117,12 @@ impl Formatter for RelationsFormatter {
         if !calls.is_empty() {
             writeln!(writer, "📞 Function Calls ({}):", calls.len())?;
             for rel in calls {
-                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+                writeln!(
+                    writer,
+                    "  {} → {}",
+                    rel.source.display(),
+                    rel.target.display()
+                )?;
             }
             writeln!(writer)?;
         }
@@ -115,7 +130,12 @@ impl Formatter for RelationsFormatter {
         if !types.is_empty() {
             writeln!(writer, "🏷️  Type Usage ({}):", types.len())?;
             for rel in types {
-                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+                writeln!(
+                    writer,
+                    "  {} → {}",
+                    rel.source.display(),
+                    rel.target.display()
+                )?;
             }
             writeln!(writer)?;
         }
@@ -123,7 +143,12 @@ impl Formatter for RelationsFormatter {
         if !tests.is_empty() {
             writeln!(writer, "🧪 Tests ({}):", tests.len())?;
             for rel in tests {
-                writeln!(writer, "  {} → {}", rel.source.display(), rel.target.display())?;
+                writeln!(
+                    writer,
+                    "  {} → {}",
+                    rel.source.display(),
+                    rel.target.display()
+                )?;
             }
             writeln!(writer)?;
         }
@@ -131,7 +156,12 @@ impl Formatter for RelationsFormatter {
         if !coupled.is_empty() {
             writeln!(writer, "🔗 Coupled Changes ({}):", coupled.len())?;
             for rel in coupled {
-                writeln!(writer, "  {} ↔ {}", rel.source.display(), rel.target.display())?;
+                writeln!(
+                    writer,
+                    "  {} ↔ {}",
+                    rel.source.display(),
+                    rel.target.display()
+                )?;
             }
             writeln!(writer)?;
         }
