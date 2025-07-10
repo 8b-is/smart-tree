@@ -36,6 +36,7 @@ termimad = "0.26.1"
 once_cell = "1.19"
 base64 = "0.22"
 rand = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
 
 # MCP (Model Context Protocol) support
 tokio = { version = "1.42", features = ["full"] }

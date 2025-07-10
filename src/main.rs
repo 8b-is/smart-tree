@@ -313,6 +313,8 @@ enum OutputMode {
     Relations,
     /// Quantum compression with semantic understanding (Omni's nuclear option!)
     QuantumSemantic,
+    /// Marie Kondo mode - find files that don't spark joy!
+    Waste,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -333,7 +335,8 @@ fn parse_date(date_str: &str) -> Result<SystemTime> {
 /// This is the heart of the st concert. It's where we parse the arguments,
 /// configure the scanner, pick the right formatter for the job, and let it rip.
 /// It returns a `Result` because sometimes, even rockstars hit a wrong note.
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
 
@@ -396,6 +399,7 @@ fn main() -> Result<()> {
             "summary" => Some(OutputMode::Summary),
             "summary-ai" => Some(OutputMode::SummaryAi),
             "quantum-semantic" => Some(OutputMode::QuantumSemantic),
+            "waste" => Some(OutputMode::Waste),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -591,36 +595,7 @@ fn main() -> Result<()> {
     } else {
         // Normal (non-streaming) mode or when compression is enabled.
         // Scan the entire directory structure first.
-        // Get nodes and stats based on input type
-        let (nodes, stats, root_path) = if is_traditional_fs {
-            let scanner = Scanner::new(&scan_path, scanner_config)?;
-            let root = scanner.root().to_path_buf();
-            let (n, s) = scanner.scan()?;
-            (n, s, root)
-        } else {
-            // Use universal input processor for non-filesystem inputs
-            eprintln!("🌊 Detecting input type...");
-            let input_processor = InputProcessor::new();
-            let input_source = InputProcessor::detect_input_type(&input_str);
-            
-            let context_root = input_processor.process(input_source).await?;
-                
-            // Convert context nodes to file nodes
-            let file_nodes = st::inputs::context_to_file_nodes(context_root);
-            
-            // Create synthetic stats
-            let stats = st::TreeStats {
-                total_files: file_nodes.iter().filter(|n| !n.is_dir).count() as u64,
-                total_dirs: file_nodes.iter().filter(|n| n.is_dir).count() as u64,
-                total_size: file_nodes.iter().map(|n| n.size).sum(),
-                file_types: std::collections::HashMap::new(),
-                largest_files: vec![],
-                newest_files: vec![],
-                oldest_files: vec![],
-            };
-            
-            (file_nodes, stats, scan_path.clone())
-        };
+        let (nodes, stats) = scanner.scan()?;
 
         // Create the appropriate formatter based on the selected mode.
         let formatter: Box<dyn Formatter> = match mode {
@@ -711,6 +686,11 @@ fn main() -> Result<()> {
                 use st::formatters::quantum_semantic::QuantumSemanticFormatter;
                 Box::new(QuantumSemanticFormatter::new())
             }
+            OutputMode::Waste => {
+                // Marie Kondo mode - find files that don't spark joy!
+                use st::formatters::waste::WasteFormatter;
+                Box::new(WasteFormatter::new())
+            }
         };
 
         // Format the collected nodes and stats into a byte vector.
@@ -727,8 +707,8 @@ fn main() -> Result<()> {
             // If not compressing, write the formatted output directly to stdout.
             io::stdout().write_all(&output_buffer)?;
             
-            // Show helpful tips for human users (not when piped or redirected)
-            if IsTerminal::is_terminal(&io::stdout()) && !compress {
+            // Show helpful tips for human users (not when piped, redirected, or in AI modes)
+            if IsTerminal::is_terminal(&io::stdout()) && !compress && !matches!(mode, OutputMode::Ai | OutputMode::Hex | OutputMode::Digest | OutputMode::Quantum | OutputMode::QuantumSemantic) {
                 show_helpful_tips(&mode, effective_depth, &args)?;
             }
         }

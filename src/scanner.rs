@@ -1507,6 +1507,13 @@ impl Scanner {
     /// "Sorry, `node_modules`, you're not on the list tonight."
     /// It's the first line of defense against clutter.
     fn should_ignore(&self, path: &Path) -> Result<bool> {
+        // --- Rule 0: Never ignore the root path itself ---
+        // If the user explicitly asks to scan a directory, we should show it
+        // even if it would normally be ignored (e.g., scanning 'target' directory)
+        if path == self.root {
+            return Ok(false);
+        }
+
         // --- Rule 1: Check against specific, always-ignored files (absolute paths) ---
         if self.config.use_default_ignores && self.ignore_files.contains(path) {
             return Ok(true); // Matches a specific problematic file.

@@ -73,6 +73,211 @@ The MEM8 documentation describes a powerful binary format for semantic context, 
    - Generate semantic diffs ("concept changes" not just file changes)
    - Pre-commit hooks to update .mem8 metadata
 
+## 🎓 Progressive Tips System
+
+### Smart Tips That Learn From Usage
+**Current**: Tips always show the same amount (if terminal + human mode)
+**Proposed**: Tips progressively fade as users gain experience
+
+**Implementation**:
+```rust
+// ~/.config/smart-tree/usage.toml
+[usage]
+total_runs = 47
+last_run = "2025-01-10T15:23:45Z"
+tip_level = 2  // 3=verbose (new user), 2=moderate, 1=minimal, 0=off
+last_tips_shown = ["tip_id_1", "tip_id_5", "tip_id_12"]
+
+[preferences]
+tips_enabled = true
+tips_fade_after = 20  // Start fading after 20 uses
+tips_off_after = 100  // Turn off completely after 100 uses
+```
+
+**Behavior**:
+- First 20 runs: Show 3 random tips (verbose mode)
+- Runs 21-50: Show 2 tips (moderate mode)  
+- Runs 51-100: Show 1 tip (minimal mode)
+- After 100: No tips (expert mode)
+- Can override with `--tips always|never|auto`
+- Track shown tips to avoid repetition
+- Reset with `st --reset-tips`
+
+**Example Evolution**:
+```bash
+# Run 1-20 (New User):
+💡 Deep trees can be overwhelming. Try --mode ls -d 1 for clean listings!
+🚀 Pro tip: Set ST_DEFAULT_MODE=ls for instant directory listings!
+✨ Try --mode waste to find duplicate files and reclaim disk space!
+
+# Run 21-50 (Intermediate):
+💡 Try --mode waste to find duplicate files!
+🚀 Set ST_DEFAULT_MODE=ls to make ls your default!
+
+# Run 51-100 (Advanced):
+💡 New in v3.2: --mode waste finds duplicates!
+
+# Run 100+ (Expert):
+[No tips shown]
+```
+
+**Benefits**:
+- New users get maximum help
+- Experienced users get cleaner output
+- Respects user expertise progression
+- Can always re-enable if needed
+
+## 🚀 Interactive Onboarding & Personalization
+
+### First-Run Experience That Learns YOU
+**Current**: Smart Tree uses hardcoded defaults that might not match your workflow
+**Proposed**: Interactive setup wizard that creates a personalized config
+
+**Triggers**:
+- First run ever (no config file exists)
+- `st --demo` or `st --setup`
+- `st --reconfigure` to change preferences
+
+**Interactive Flow**:
+```bash
+$ st
+🌟 Welcome to Smart Tree v3.2! Let's set up YOUR perfect tree experience.
+
+📊 What's your preferred default view?
+  1) Classic tree (like traditional tree command)
+  2) ls -Alh style listing [Recommended for daily use]
+  3) AI-optimized format
+  4) Minimalist digest
+> 2
+
+📁 How deep should we go by default?
+  1) Current directory only (depth 1, like ls)
+  2) 2 levels deep
+  3) 3 levels deep  
+  4) All the way down (careful on large dirs!)
+> 1
+
+👻 Show hidden files/directories by default?
+  1) Yes, show me everything (.git, .config, etc)
+  2) No, hide dotfiles
+  3) Smart mode (show in home dir, hide in projects)
+> 1
+
+🔒 Permission Check - Want warnings for files you can't edit?
+  1) Yes, warn me BEFORE I try to edit (saves sudo headaches!)
+  2) No, I'll figure it out
+> 1
+
+🎨 Your style preferences?
+  1) Full color + emojis 🌈
+  2) Colors only, no emojis
+  3) Minimalist (no colors/emojis)
+> 1
+
+💡 How many tips do you want to see?
+  1) Full tips (I'm learning)
+  2) Occasional tips  
+  3) No tips (I know what I'm doing)
+> 2
+
+🚀 Analyzing your environment...
+✓ Detected: Fish shell
+✓ Home directory: /home/hue
+✓ Common sudo-required paths: /etc, /usr/local
+✓ Large directories found: ~/source (2.3GB), ~/Downloads (5.1GB)
+
+📝 Here's your personalized config:
+
+# ~/.config/smart-tree/config.toml
+[defaults]
+mode = "ls"
+depth = 1
+show_hidden = true
+use_color = true
+use_emoji = true
+check_permissions = true
+warn_sudo_required = true
+
+[smart_features]
+# Warn when trying to access files that need sudo
+sudo_paths = ["/etc", "/usr/local", "/var/log"]
+highlight_readonly = true
+
+# Auto-switch to streaming mode for these large dirs
+large_dirs = ["~/source", "~/Downloads"]
+auto_stream_threshold = "100MB"
+
+[aliases]
+# Your custom shortcuts
+tree = "st --mode classic -d 3"
+ll = "st --mode ls -d 1 --all"
+waste = "st --mode waste --all"
+
+[tips]
+level = "occasional"
+seen_tips = []
+
+💾 Save this configuration? (Y/n) y
+
+✨ Configuration saved! 
+
+🎯 Quick tips for YOUR setup:
+- Just type 'st' for your ls-style view
+- Use 'st /etc/hosts' - we'll warn if you need sudo!
+- Try 'st waste ~/Downloads' to find duplicates
+
+🎭 Want to see a demo of your personalized Smart Tree? (Y/n) y
+
+[Shows interactive demo with their settings...]
+```
+
+**Smart Permission Features**:
+```bash
+# Trying to view a sudo-required file
+$ st /etc/sudoers
+⚠️  Permission Alert: /etc/sudoers requires sudo to read!
+💡 Try: sudo st /etc/sudoers
+
+# In config:
+[smart_features]
+sudo_paths = ["/etc", "/usr/local", "/var/log", "/root"]
+permission_warnings = true
+suggest_sudo_command = true
+
+# Even smarter - track YOUR common sudo mistakes:
+[learned_patterns]
+sudo_required_files = [
+  "/etc/hosts",
+  "/etc/nginx/nginx.conf",
+  "~/.ssh/authorized_keys"  # If owned by root
+]
+```
+
+**Benefits**:
+- First run is personalized, not generic
+- Learns YOUR workflow and preferences
+- Prevents common permission headaches
+- Discovers your large directories automatically
+- Sets up useful aliases
+- Can reconfigure anytime
+
+**Advanced Personalization**:
+```toml
+[contextual_defaults]
+# Different defaults for different directories
+"~/source" = { mode = "summary-ai", depth = 2 }
+"~/Documents" = { mode = "ls", depth = 1, sort = "date" }
+"/etc" = { mode = "ls", warn_sudo = true }
+"~/Downloads" = { mode = "waste", show_sizes = true }
+
+[workflow_optimizations]
+# Detect project types and adjust
+rust_projects = { show_target = false, highlight = ["Cargo.toml", "src/"] }
+node_projects = { show_node_modules = false, highlight = ["package.json"] }
+```
+
+This makes Smart Tree truly SMART - it adapts to each user's unique needs!
+
 ## 🍒 Low-Hanging Fruit (Quick Wins)
 
 These can be implemented quickly with high impact:
@@ -681,6 +886,30 @@ Priority recommendations:
 4. Build consciousness-aware modes for developer experience
 
 These quantum features would position smart-tree as the first truly quantum-aware filesystem tool, bridging traditional directory analysis with next-generation quantum computing concepts.
+
+## 2025-01-10 Update: Ignored Directory Explicit Access Fixed! 🎯
+
+### ✅ COMPLETED: Smart Tree Now Shows Ignored Directories When Explicitly Requested!
+
+**Issue Fixed**: When running `st target` on an ignored directory (like `target` which is in .gitignore), Smart Tree would show nothing. This was confusing because users expected to see the contents when they explicitly asked for a specific directory.
+
+**Solution Implemented**: Modified the `should_ignore` function in scanner.rs to never ignore the root path itself. Now when you explicitly scan an ignored directory, it will show its contents regardless of ignore rules.
+
+**Usage**:
+```bash
+# Normal scan - target directory is hidden (as expected)
+st
+
+# Explicit scan - target directory contents are shown!
+st target
+
+# This works for any ignored directory
+st node_modules
+st .git
+st __pycache__
+```
+
+This follows the principle of least surprise - if a user explicitly asks to see something, we should show it to them!
 
 ## 2025-01-08 Update: Universal Input System Implemented! 🌊
 
