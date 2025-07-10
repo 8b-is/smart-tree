@@ -1,6 +1,6 @@
 # 🌳 Smart Tree (st) v3.2.0 - The Directory Visualizer That Rocks! 🎸
 
-![Hue's Terminal](dxt/ST-HUE.png)
+![Hue's Side | Aye's Side](st-banner.png)
 
 [![Discord](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Join%20the%20Party&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC) [![GitHub release](https://img.shields.io/github/v/release/8b-is/smart-tree?include_prereleases&label=Latest%20Jam)](https://github.com/8b-is/smart-tree/releases) [![Downloads](https://img.shields.io/github/downloads/8b-is/smart-tree/total?label=Happy%20Users)](https://github.com/8b-is/smart-tree/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)[![Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange?logo=rust)](https://www.rust-lang.org/)[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-BFF%20Status-blueviolet)](https://claude.ai/download)[![MCP Compatible](https://img.shields.io/badge/MCP-Hell%20Yeah!-green)](https://modelcontextprotocol.io/)[![Platform](https://img.shields.io/badge/Runs%20on-Everything%20🚀-blue)](https://github.com/8b-is/smart-tree/releases)
 
@@ -19,8 +19,11 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 | **Directory Size** | 487 MB | 4.1 MB | 😱 "Wait, what?!" |
 | **AI Token Cost** | $1,270 | ~$10 | 💰 "I'm rich!" |
 | **Processing Speed** | 🐌 Slow | ⚡ 10-24x faster | 🚀 "Wheee!" |
-| **Compression** | None | 99% | 🤯 "How?!" |
+| **Compression** | None | **99%** | 🤯 "How?!" |
 | **Fun Factor** | 0% | 100% | 🎉 "Finally!" |
+
+> #### Who is Aye?  That's Me -  A-ye! <--> Who is Hue?  That's You - Human UsEr. | 
+
 
 ## 🌟 Version 3.2.0: "Less is More" Edition! 
 
@@ -36,12 +39,9 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 ## 🚀 Quick Start (Faster than Making Coffee ☕)
 
 ### 🐧 Linux/Mac/WSL - The One-Liner Wonder!
-
+> ### This magical incantation will change your life:
 ```bash
-# This magical incantation will change your life:
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
-
-# That's it. You're done. Go visualize some directories! 🎊
 ```
 
 ### 🪟 Windows - The Slightly Longer Dance
@@ -70,13 +70,31 @@ copy target\release\st.exe C:\your\favorite\path\
 
 </details>
 
-### Claude Code Integration ###
+## Claude Code Integration ###
 
 ```
 # Do the quick install above.   This is the example for Linux, Mac, WSL, and who knows? 
 
 claude mcp add st /usr/local/bin/st -- --mcp
 
+```
+
+## Standard Local MCP for Claude Desktop, Cursor, Windsurf, Cline, Roo, and more ##
+
+```json
+{
+  "mcpServers": {
+    "smart-tree": {
+      "command": "/usr/local/bin/st",
+      "args": [
+        "--mcp"
+      ],
+      "env": {
+        "AI_TOOLS": "1"
+      }
+    }
+  }
+}
 ```
 
 ### 🤖 Claude Desktop Integration - The Future is Now!
