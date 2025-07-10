@@ -20,7 +20,7 @@ use anyhow::Result;
 use humansize::{format_size, BINARY};
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The WasteFormatter - Your personal codebase cleanup consultant! 🧹
 pub struct WasteFormatter {

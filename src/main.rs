@@ -591,7 +591,36 @@ fn main() -> Result<()> {
     } else {
         // Normal (non-streaming) mode or when compression is enabled.
         // Scan the entire directory structure first.
-        let (nodes, stats) = scanner.scan()?;
+        // Get nodes and stats based on input type
+        let (nodes, stats, root_path) = if is_traditional_fs {
+            let scanner = Scanner::new(&scan_path, scanner_config)?;
+            let root = scanner.root().to_path_buf();
+            let (n, s) = scanner.scan()?;
+            (n, s, root)
+        } else {
+            // Use universal input processor for non-filesystem inputs
+            eprintln!("🌊 Detecting input type...");
+            let input_processor = InputProcessor::new();
+            let input_source = InputProcessor::detect_input_type(&input_str);
+            
+            let context_root = input_processor.process(input_source).await?;
+                
+            // Convert context nodes to file nodes
+            let file_nodes = st::inputs::context_to_file_nodes(context_root);
+            
+            // Create synthetic stats
+            let stats = st::TreeStats {
+                total_files: file_nodes.iter().filter(|n| !n.is_dir).count() as u64,
+                total_dirs: file_nodes.iter().filter(|n| n.is_dir).count() as u64,
+                total_size: file_nodes.iter().map(|n| n.size).sum(),
+                file_types: std::collections::HashMap::new(),
+                largest_files: vec![],
+                newest_files: vec![],
+                oldest_files: vec![],
+            };
+            
+            (file_nodes, stats, scan_path.clone())
+        };
 
         // Create the appropriate formatter based on the selected mode.
         let formatter: Box<dyn Formatter> = match mode {
