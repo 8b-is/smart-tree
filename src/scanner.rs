@@ -1463,6 +1463,7 @@ impl Scanner {
     /// Checks if a file is likely a special virtual file (e.g., in /proc, /sys, /dev)
     /// where reported metadata like size might be zero, misleading, or cause issues if read.
     /// This helps in deciding to report size as 0 for such files.
+    #[allow(unused_variables)]
     fn is_special_virtual_file(&self, path: &Path, metadata: &fs::Metadata) -> bool {
         // Check if the path starts with known virtual filesystem prefixes.
         if let Some(path_str) = path.to_str() {

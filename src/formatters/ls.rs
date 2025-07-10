@@ -23,9 +23,11 @@ use anyhow::Result;
 use chrono::{DateTime, Local};
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 /// LS Formatter - Unix ls -Alh output with smart-tree enhancements
 /// 
@@ -68,6 +70,7 @@ impl LsFormatter {
     /// This creates the familiar 10-character permission string that every
     /// Unix user recognizes. First character is file type, then 3 groups of
     /// 3 characters each for owner, group, and other permissions.
+    /// On Windows, we show a simplified version.
     fn format_permissions(&self, node: &FileNode) -> String {
         let metadata = match fs::metadata(&node.path) {
             Ok(meta) => meta,
@@ -82,28 +85,48 @@ impl LsFormatter {
             '-'
         };
 
-        let mode = metadata.permissions().mode();
-        
-        // Extract permission bits (owner, group, other)
-        let owner_perms = format!("{}{}{}",
-            if mode & 0o400 != 0 { 'r' } else { '-' },
-            if mode & 0o200 != 0 { 'w' } else { '-' },
-            if mode & 0o100 != 0 { 'x' } else { '-' }
-        );
-        
-        let group_perms = format!("{}{}{}",
-            if mode & 0o040 != 0 { 'r' } else { '-' },
-            if mode & 0o020 != 0 { 'w' } else { '-' },
-            if mode & 0o010 != 0 { 'x' } else { '-' }
-        );
-        
-        let other_perms = format!("{}{}{}",
-            if mode & 0o004 != 0 { 'r' } else { '-' },
-            if mode & 0o002 != 0 { 'w' } else { '-' },
-            if mode & 0o001 != 0 { 'x' } else { '-' }
-        );
+        #[cfg(unix)]
+        {
+            let mode = metadata.permissions().mode();
+            
+            // Extract permission bits (owner, group, other)
+            let owner_perms = format!("{}{}{}",
+                if mode & 0o400 != 0 { 'r' } else { '-' },
+                if mode & 0o200 != 0 { 'w' } else { '-' },
+                if mode & 0o100 != 0 { 'x' } else { '-' }
+            );
+            
+            let group_perms = format!("{}{}{}",
+                if mode & 0o040 != 0 { 'r' } else { '-' },
+                if mode & 0o020 != 0 { 'w' } else { '-' },
+                if mode & 0o010 != 0 { 'x' } else { '-' }
+            );
+            
+            let other_perms = format!("{}{}{}",
+                if mode & 0o004 != 0 { 'r' } else { '-' },
+                if mode & 0o002 != 0 { 'w' } else { '-' },
+                if mode & 0o001 != 0 { 'x' } else { '-' }
+            );
 
-        format!("{}{}{}{}", file_type, owner_perms, group_perms, other_perms)
+            format!("{}{}{}{}", file_type, owner_perms, group_perms, other_perms)
+        }
+        
+        #[cfg(windows)]
+        {
+            // On Windows, show simplified permissions
+            let readonly = metadata.permissions().readonly();
+            if readonly {
+                format!("{}r--r--r--", file_type)
+            } else {
+                format!("{}rw-rw-rw-", file_type)
+            }
+        }
+        
+        #[cfg(not(any(unix, windows)))]
+        {
+            // For other platforms, show a generic format
+            format!("{}rwxrwxrwx", file_type)
+        }
     }
 
     /// Format file size in human-readable format (like ls -h)
@@ -195,9 +218,23 @@ impl LsFormatter {
 
     /// Get hard link count (simplified)
     fn get_link_count(&self, node: &FileNode) -> u64 {
-        match fs::metadata(&node.path) {
-            Ok(meta) => meta.nlink(),
-            Err(_) => 1, // Default to 1 if we can't read metadata
+        #[cfg(unix)]
+        {
+            match fs::metadata(&node.path) {
+                Ok(meta) => meta.nlink(),
+                Err(_) => 1, // Default to 1 if we can't read metadata
+            }
+        }
+        
+        #[cfg(not(unix))]
+        {
+            // On non-Unix systems, always return 1 for files, 2 for directories
+            // This is a reasonable approximation
+            if node.is_dir {
+                2
+            } else {
+                1
+            }
         }
     }
 }
