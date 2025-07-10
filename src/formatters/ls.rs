@@ -18,13 +18,12 @@
 // -----------------------------------------------------------------------------
 
 use super::Formatter;
-use crate::scanner::{FileCategory, FileNode, FilesystemType, TreeStats};
+use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
 use chrono::{DateTime, Local};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::path::Path;
 
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -322,8 +321,9 @@ impl Formatter for LsFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scanner::FileType;
+    use crate::scanner::{FileCategory, FileType, FilesystemType};
     use std::path::PathBuf;
+    use std::time::SystemTime;
 
     #[test]
     fn test_format_size() {

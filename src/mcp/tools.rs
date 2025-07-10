@@ -1906,12 +1906,12 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
                 Impact: {}/10, Frequency: {}/10\n\n\
                 {}\n\n\
                 Thank you for helping Smart Tree survive the franchise wars! 🎸",
-                result.feedback_id,
+                result["feedback_id"].as_str().unwrap_or("unknown"),
                 category,
                 title,
                 impact_score,
                 frequency_score,
-                result.message
+                result["message"].as_str().unwrap_or("Your feedback has been received!")
             )
         }]
     }))
@@ -2046,29 +2046,26 @@ async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> 
     let _offer_auto_update = args["offer_auto_update"].as_bool().unwrap_or(true);
     let current_version = env!("CARGO_PKG_VERSION");
     
-    // Check for updates via the feedback API
-    let client = reqwest::Client::new();
-    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8t.is".to_string());
+    // Check for updates using our client
+    let client = FeedbackClient::new()?;
+    let version_info = match client.check_for_updates().await {
+        Ok(info) => info,
+        Err(e) => {
+            // If the API is down or unavailable, just return a soft error
+            return Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!("Unable to check for updates at this time: {}\n\nYou can check manually at: https://github.com/8b-is/smart-tree/releases", e)
+                }]
+            }));
+        }
+    };
     
-    let check_url = format!("{}/version/check/{}", api_url, current_version);
+    // Compare versions
+    let current = current_version.trim_start_matches('v');
+    let latest = version_info.version.trim_start_matches('v');
     
-    let response = client
-        .get(&check_url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to check for updates: {}", e))?;
-    
-    if !response.status().is_success() {
-        return Err(anyhow::anyhow!("Update check failed: {}", response.status()));
-    }
-    
-    let update_info: Value = response
-        .json()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to parse update info: {}", e))?;
-    
-    if !update_info["update_available"].as_bool().unwrap_or(false) {
+    if current == latest {
         return Ok(json!({
             "content": [{
                 "type": "text",
@@ -2078,51 +2075,17 @@ async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> 
     }
 
     // Update is available
-    let features_text = if !version_info.features.is_empty() {
-        format!(
-            "\n\n🌟 New Features:\n{}",
-            version_info
-                .features
-                .iter()
-                .map(|f| format!("  • {}", f))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
-    } else {
-        String::new()
-    };
-
-    let ai_benefits_text = if !version_info.ai_benefits.is_empty() {
-        format!(
-            "\n\n🤖 AI Benefits:\n{}",
-            version_info
-                .ai_benefits
-                .iter()
-                .map(|b| format!("  • {}", b))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
-    } else {
-        String::new()
-    };
-
     let message = format!(
         "🚀 **New Smart Tree Version Available!**\n\n\
         Current: v{} → Latest: v{}\n\n\
-        Released: {}{}{}\n\n\
-        📥 Download: {}\n\
-        📝 Release Notes: {}\n\n\
+        📥 Download: https://github.com/8b-is/smart-tree/releases/tag/v{}\n\n\
         To update:\n\
         ```bash\n\
         curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash\n\
         ```",
         current,
         latest,
-        version_info.release_date,
-        features_text,
-        ai_benefits_text,
-        version_info.download_url,
-        version_info.release_notes_url
+        latest
     );
 
     Ok(json!({
@@ -2133,8 +2096,8 @@ async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> 
         "metadata": {
             "update_available": true,
             "current_version": current_version,
-            "latest_version": version_info.version,
-            "download_url": version_info.download_url
+            "latest_version": version_info.version.clone(),
+            "download_url": format!("https://github.com/8b-is/smart-tree/releases/tag/v{}", latest)
         }
     }))
 }
