@@ -370,7 +370,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     if cli.mcp {
-        return run_mcp_server();
+        return run_mcp_server().await;
     }
     if cli.mcp_tools {
         print_mcp_tools();
@@ -951,24 +951,18 @@ async fn check_for_updates_cli() -> Result<String> {
     Ok(message)
 }
 
-/// run_mcp_server is a function that starts the MCP server.
+/// run_mcp_server is an async function that starts the MCP server.
 /// It's an exclusive function that replaces the regular st scan operation.
 /// When --mcp is passed, we start a server that communicates via stdio.
-fn run_mcp_server() -> Result<()> {
+async fn run_mcp_server() -> Result<()> {
     // Import MCP server components. These are only available if "mcp" feature is enabled.
     use st::mcp::{load_config, McpServer};
 
-    // Create a Tokio runtime. MCP server might use async operations.
-    // Using `new()` creates a multi-threaded runtime by default.
-    let runtime = tokio::runtime::Runtime::new()?;
-
-    // Run the MCP server logic within the Tokio runtime.
-    // `block_on` runs an async block to completion on the current thread.
-    runtime.block_on(async {
-        // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
-        let mcp_config = load_config().unwrap_or_default(); // Load or use defaults.
-        let server = McpServer::new(mcp_config);
-        // `run_stdio` would handle communication over stdin/stdout.
-        server.run_stdio().await
-    })
+    // Load MCP server-specific configuration (e.g., allowed paths, cache settings).
+    let mcp_config = load_config().unwrap_or_default(); // Load or use defaults.
+    let server = McpServer::new(mcp_config);
+    
+    // Run the MCP server directly - no need for nested runtime!
+    // `run_stdio` handles communication over stdin/stdout.
+    server.run_stdio().await
 }
