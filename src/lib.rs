@@ -23,6 +23,9 @@ pub mod tree_sitter_quantum; // Semantic-aware quantum compression - "AST meets 
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
 pub mod mcp;
 
+// Feedback API client for sending feedback to f.8t.is
+pub mod feedback_client;
+
 // Re-export key items from the `scanner` module for easier access.
 // This means users of the `st` library can use `st::Scanner`
 // instead of `st::scanner::Scanner`, for example. It's all about convenience!
