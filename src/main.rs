@@ -30,6 +30,7 @@ use st::{
         digest::DigestFormatter,
         hex::HexFormatter,
         json::JsonFormatter,
+        ls::LsFormatter,
         markdown::MarkdownFormatter,
         mermaid::{MermaidFormatter, MermaidStyle},
         quantum::QuantumFormatter,
@@ -284,6 +285,8 @@ enum OutputMode {
     Hex,
     /// JSON output. Structured data for easy programmatic use.
     Json,
+    /// Unix ls -Alh format. Familiar directory listing with human-readable sizes and permissions.
+    Ls,
     /// AI-optimized format. A special blend of hex tree and statistics, designed for LLMs.
     Ai,
     /// Directory statistics only. Get a summary without the full tree.
@@ -379,6 +382,7 @@ fn main() -> Result<()> {
             "classic" => Some(OutputMode::Classic),
             "hex" => Some(OutputMode::Hex),
             "json" => Some(OutputMode::Json),
+            "ls" => Some(OutputMode::Ls),
             "ai" => Some(OutputMode::Ai),
             "stats" => Some(OutputMode::Stats),
             "csv" => Some(OutputMode::Csv),
@@ -474,8 +478,15 @@ fn main() -> Result<()> {
     let show_ignored_final =
         args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
 
+    // Smart default: LS mode should show only direct children (depth 1) like real ls
+    let effective_depth = if matches!(mode, OutputMode::Ls) && args.depth == 10 {
+        1 // Default to depth 1 for LS mode (like real ls command)
+    } else {
+        args.depth
+    };
+
     let scanner_config = ScannerConfig {
-        max_depth: args.depth,
+        max_depth: effective_depth,
         follow_symlinks: false, // Symlink following is generally off for safety and simplicity.
         respect_gitignore: !no_ignore_final,
         show_hidden: all_final,
@@ -608,6 +619,7 @@ fn main() -> Result<()> {
                 args.show_filesystems,
             )),
             OutputMode::Json => Box::new(JsonFormatter::new(args.compact)),
+            OutputMode::Ls => Box::new(LsFormatter::new(!no_emoji, use_color)),
             OutputMode::Ai => {
                 // AI mode can optionally be wrapped in JSON.
                 if args.ai_json {
@@ -685,10 +697,101 @@ fn main() -> Result<()> {
         } else {
             // If not compressing, write the formatted output directly to stdout.
             io::stdout().write_all(&output_buffer)?;
+            
+            // Show helpful tips for human users (not when piped or redirected)
+            if IsTerminal::is_terminal(&io::stdout()) && !compress {
+                show_helpful_tips(&mode, effective_depth, &args)?;
+            }
         }
     }
 
     // If we've reached here, everything went well!
+    Ok(())
+}
+
+/// Show helpful tips to human users to improve their smart-tree experience
+/// 
+/// This provides contextual suggestions based on current usage patterns,
+/// helping users discover powerful features and optimize their workflow.
+/// Trish loves these little nuggets of wisdom! 💡
+fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result<()> {
+    use rand::seq::SliceRandom;
+    
+    let mut tips = Vec::new();
+    
+    // Mode-specific tips
+    match mode {
+        OutputMode::Classic => {
+            if depth > 3 {
+                tips.push("💡 Deep trees can be overwhelming. Try --mode ls -d 1 for a clean directory listing!");
+            }
+            tips.push("🚀 Pro tip: Set ST_DEFAULT_MODE=ls for instant directory listings!");
+        }
+        OutputMode::Ls => {
+            tips.push("✨ You're using LS mode! This mimics 'ls -Alh' but with smart-tree magic.");
+            if depth == 1 {
+                tips.push("🎯 Perfect! Depth 1 is ideal for LS mode - just like the real ls command.");
+            }
+            tips.push("💾 Save time: export ST_DEFAULT_MODE=ls to make this your default!");
+        }
+        OutputMode::Waste => {
+            tips.push("🧹 Great choice! Waste mode helps you Marie Kondo your projects.");
+            tips.push("💰 Run the suggested cleanup commands to reclaim disk space!");
+        }
+        OutputMode::Ai => {
+            tips.push("🤖 AI mode provides LLM-optimized output for perfect code analysis.");
+            tips.push("⚡ Combine with --compress for ultra-efficient AI input!");
+        }
+        _ => {
+            // General tips for other modes
+            tips.push("🗂️ Try --mode ls -d 1 for a clean directory view like 'ls -Alh'!");
+            tips.push("🧹 Use --mode waste to find duplicate files and reclaim disk space!");
+        }
+    }
+    
+    // Depth-specific tips
+    if depth > 5 {
+        tips.push("🌳 Deep exploration detected! Consider -d 2 or -d 3 for better readability.");
+    }
+    
+    // Feature discovery tips
+    if !args.all {
+        tips.push("👀 Add -a to see hidden files and directories (like .gitignore).");
+    }
+    
+    if args.filter_type.is_none() {
+        tips.push("🔍 Filter by type: --type f (files only) or --type d (directories only).");
+    }
+    
+    // Random general tips
+    let general_tips = [
+        "📚 Check out --mode markdown for beautiful project documentation!",
+        "🔥 Use --mode quantum for ultra-compressed output perfect for AI analysis!",
+        "📊 Try --mode stats for quick project metrics and insights!",
+        "🎨 Smart-tree respects your terminal colors and emoji preferences!",
+        "⚡ Set ST_DEFAULT_MODE environment variable to save your preferred mode!",
+        "🔧 Use --find 'pattern' to search for specific files across your tree!",
+    ];
+    
+    // Add 1-2 random general tips
+    let mut rng = rand::thread_rng();
+    let selected_general: Vec<_> = general_tips.choose_multiple(&mut rng, 2).collect();
+    for tip in selected_general {
+        tips.push(tip);
+    }
+    
+    // Show a maximum of 3 tips to avoid overwhelming the user
+    let selected_tips: Vec<_> = tips.choose_multiple(&mut rng, 3.min(tips.len())).collect();
+    
+    if !selected_tips.is_empty() {
+        eprintln!(); // Add some space
+        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
+        for tip in selected_tips {
+            eprintln!("\x1b[2m{tip}\x1b[0m");
+        }
+        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
+    }
+    
     Ok(())
 }
 

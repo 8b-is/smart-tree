@@ -5,6 +5,7 @@ pub mod csv;
 pub mod digest;
 pub mod hex;
 pub mod json;
+pub mod ls;
 pub mod markdown;
 pub mod mermaid;
 pub mod quantum;
