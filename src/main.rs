@@ -326,11 +326,7 @@ enum OutputMode {
     Relations,
     /// Quantum compression with semantic understanding (Omni's nuclear option!)
     QuantumSemantic,
-<<<<<<< HEAD
-    /// Marie Kondo mode - find files that don't spark joy!
-=======
     /// Waste detection and optimization analysis (Marie Kondo mode!)
->>>>>>> 702ef933892597a0048adcb8e1692e1a61630300
     Waste,
 }
 
@@ -748,12 +744,8 @@ async fn main() -> Result<()> {
                 Box::new(QuantumSemanticFormatter::new())
             }
             OutputMode::Waste => {
-<<<<<<< HEAD
-                // Marie Kondo mode - find files that don't spark joy!
-                use st::formatters::waste::WasteFormatter;
-=======
                 // Waste detection and optimization analysis - "Marie Kondo mode!" - Hue & Aye
->>>>>>> 702ef933892597a0048adcb8e1692e1a61630300
+                use st::formatters::waste::WasteFormatter;
                 Box::new(WasteFormatter::new())
             }
         };
@@ -1063,17 +1055,10 @@ async fn check_for_updates_cli() -> Result<String> {
     Ok(message)
 }
 
-<<<<<<< HEAD
 /// run_mcp_server is an async function that starts the MCP server.
 /// This function runs directly in the existing async runtime from main().
 /// When --mcp is passed, we start a server that communicates via stdio.
 async fn run_mcp_server() -> Result<()> {
-=======
-/// run_mcp_server is a function that starts the MCP server.
-/// It's an exclusive function that replaces the regular st scan operation.
-/// When --mcp is passed, we start a server that communicates via stdio.
-fn run_mcp_server() -> Result<()> {
->>>>>>> 702ef933892597a0048adcb8e1692e1a61630300
     // Import MCP server components. These are only available if "mcp" feature is enabled.
     use st::mcp::{load_config, McpServer};
 
