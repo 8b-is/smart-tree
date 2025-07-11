@@ -1,0 +1,1900 @@
+{
+  "id" : "aye1",
+  "class" : "system",
+  "claimed" : true,
+  "handle" : "DMI:0001",
+  "description" : "Desktop Computer",
+  "product" : "MS-7D25 (Default string)",
+  "vendor" : "Micro-Star International Co., Ltd.",
+  "version" : "2.0",
+  "serial" : "Default string",
+  "width" : 64,
+  "configuration" : {
+    "boot" : "normal",
+    "chassis" : "desktop",
+    "family" : "Default string",
+    "sku" : "Default string",
+    "uuid" : "10675385-688e-6919-a356-047c168ba330"
+  },
+  "capabilities" : {
+    "smbios-3.6.0" : "SMBIOS version 3.6.0",
+    "dmi-3.6.0" : "DMI version 3.6.0",
+    "smp" : "Symmetric Multi-Processing",
+    "vsyscall32" : "32-bit processes"
+  },
+  "children" : [    {
+      "id" : "core",
+      "class" : "bus",
+      "claimed" : true,
+      "handle" : "DMI:0002",
+      "description" : "Motherboard",
+      "product" : "PRO Z690-A WIFI (MS-7D25)",
+      "vendor" : "Micro-Star International Co., Ltd.",
+      "physid" : "0",
+      "version" : "2.0",
+      "serial" : "07D2521_N21E161294",
+      "slot" : "Default string",
+      "children" : [        {
+          "id" : "firmware",
+          "class" : "memory",
+          "claimed" : true,
+          "description" : "BIOS",
+          "vendor" : "American Megatrends International, LLC.",
+          "physid" : "0",
+          "version" : "A.H0",
+          "date" : "03/29/2024",
+          "units" : "bytes",
+          "size" : 65536,
+          "capacity" : 33554432,
+          "capabilities" : {
+            "pci" : "PCI bus",
+            "upgrade" : "BIOS EEPROM can be upgraded",
+            "shadowing" : "BIOS shadowing",
+            "cdboot" : "Booting from CD-ROM/DVD",
+            "bootselect" : "Selectable boot path",
+            "socketedrom" : "BIOS ROM is socketed",
+            "edd" : "Enhanced Disk Drive extensions",
+            "int13floppynec" : "NEC 9800 floppy",
+            "int13floppytoshiba" : "Toshiba floppy",
+            "int13floppy360" : "5.25\" 360KB floppy",
+            "int13floppy1200" : "5.25\" 1.2MB floppy",
+            "int13floppy720" : "3.5\" 720KB floppy",
+            "int13floppy2880" : "3.5\" 2.88MB floppy",
+            "int5printscreen" : "Print Screen key",
+            "int9keyboard" : "i8042 keyboard controller",
+            "int14serial" : "INT14 serial line control",
+            "int17printer" : "INT17 printer control",
+            "int10video" : "INT10 CGA/Mono video",
+            "acpi" : "ACPI",
+            "usb" : "USB legacy emulation",
+            "biosbootspecification" : "BIOS boot specification",
+            "uefi" : "UEFI specification is supported"
+          }
+        },
+        {
+          "id" : "memory",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:003A",
+          "description" : "System Memory",
+          "physid" : "3a",
+          "slot" : "System board or motherboard",
+          "units" : "bytes",
+          "size" : 68719476736,
+          "children" : [            {
+              "id" : "bank:0",
+              "class" : "memory",
+              "claimed" : true,
+              "handle" : "DMI:003B",
+              "description" : "[empty]",
+              "physid" : "0",
+              "slot" : "Controller0-DIMMA1"
+            },
+            {
+              "id" : "bank:1",
+              "class" : "memory",
+              "claimed" : true,
+              "handle" : "DMI:003C",
+              "description" : "DIMM Synchronous 5600 MHz (0.2 ns)",
+              "product" : "AVW644GU44K6560P04-H",
+              "vendor" : "Avant Technology",
+              "physid" : "1",
+              "serial" : "00000000",
+              "slot" : "Controller0-DIMMA2",
+              "units" : "bytes",
+              "size" : 34359738368,
+              "width" : 64,
+              "clock" : 1305032704
+            },
+            {
+              "id" : "bank:2",
+              "class" : "memory",
+              "claimed" : true,
+              "handle" : "DMI:003D",
+              "description" : "[empty]",
+              "physid" : "2",
+              "slot" : "Controller1-DIMMB1"
+            },
+            {
+              "id" : "bank:3",
+              "class" : "memory",
+              "claimed" : true,
+              "handle" : "DMI:003E",
+              "description" : "DIMM Synchronous 5600 MHz (0.2 ns)",
+              "product" : "AVW644GU44K6560P04-H",
+              "vendor" : "Avant Technology",
+              "physid" : "3",
+              "serial" : "00000000",
+              "slot" : "Controller1-DIMMB2",
+              "units" : "bytes",
+              "size" : 34359738368,
+              "width" : 64,
+              "clock" : 1305032704
+            }]
+        },
+        {
+          "id" : "cache:0",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:0049",
+          "description" : "L1 cache",
+          "physid" : "49",
+          "slot" : "L1 Cache",
+          "units" : "bytes",
+          "size" : 393216,
+          "capacity" : 393216,
+          "configuration" : {
+            "level" : "1"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "data" : "Data cache"
+          }
+        },
+        {
+          "id" : "cache:1",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:004A",
+          "description" : "L1 cache",
+          "physid" : "4a",
+          "slot" : "L1 Cache",
+          "units" : "bytes",
+          "size" : 262144,
+          "capacity" : 262144,
+          "configuration" : {
+            "level" : "1"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "instruction" : "Instruction cache"
+          }
+        },
+        {
+          "id" : "cache:2",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:004B",
+          "description" : "L2 cache",
+          "physid" : "4b",
+          "slot" : "L2 Cache",
+          "units" : "bytes",
+          "size" : 16777216,
+          "capacity" : 16777216,
+          "configuration" : {
+            "level" : "2"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "unified" : "Unified cache"
+          }
+        },
+        {
+          "id" : "cache:3",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:004C",
+          "description" : "L3 cache",
+          "physid" : "4c",
+          "slot" : "L3 Cache",
+          "units" : "bytes",
+          "size" : 37748736,
+          "capacity" : 37748736,
+          "configuration" : {
+            "level" : "3"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "unified" : "Unified cache"
+          }
+        },
+        {
+          "id" : "cache:4",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:004D",
+          "description" : "L1 cache",
+          "physid" : "4d",
+          "slot" : "L1 Cache",
+          "units" : "bytes",
+          "size" : 524288,
+          "capacity" : 524288,
+          "configuration" : {
+            "level" : "1"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "data" : "Data cache"
+          }
+        },
+        {
+          "id" : "cache:5",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:004E",
+          "description" : "L1 cache",
+          "physid" : "4e",
+          "slot" : "L1 Cache",
+          "units" : "bytes",
+          "size" : 1048576,
+          "capacity" : 1048576,
+          "configuration" : {
+            "level" : "1"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "instruction" : "Instruction cache"
+          }
+        },
+        {
+          "id" : "cache:6",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:004F",
+          "description" : "L2 cache",
+          "physid" : "4f",
+          "slot" : "L2 Cache",
+          "units" : "bytes",
+          "size" : 16777216,
+          "capacity" : 16777216,
+          "configuration" : {
+            "level" : "2"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "unified" : "Unified cache"
+          }
+        },
+        {
+          "id" : "cache:7",
+          "class" : "memory",
+          "claimed" : true,
+          "handle" : "DMI:0050",
+          "description" : "L3 cache",
+          "physid" : "50",
+          "slot" : "L3 Cache",
+          "units" : "bytes",
+          "size" : 37748736,
+          "capacity" : 37748736,
+          "configuration" : {
+            "level" : "3"
+          },
+          "capabilities" : {
+            "synchronous" : "Synchronous",
+            "internal" : "Internal",
+            "write-back" : "Write-back",
+            "unified" : "Unified cache"
+          }
+        },
+        {
+          "id" : "cpu",
+          "class" : "processor",
+          "claimed" : true,
+          "handle" : "DMI:0051",
+          "description" : "CPU",
+          "product" : "13th Gen Intel(R) Core(TM) i9-13900KF",
+          "vendor" : "Intel Corp.",
+          "physid" : "51",
+          "businfo" : "cpu@0",
+          "version" : "6.183.1",
+          "serial" : "To Be Filled By O.E.M.",
+          "slot" : "U3E1",
+          "units" : "Hz",
+          "size" : 5500000000,
+          "capacity" : 5500000000,
+          "width" : 64,
+          "clock" : 100000000,
+          "configuration" : {
+            "cores" : "24",
+            "enabledcores" : "24",
+            "microcode" : "303",
+            "threads" : "32"
+          },
+          "capabilities" : {
+            "lm" : "64bits extensions (x86-64)",
+            "fpu" : "mathematical co-processor",
+            "fpu_exception" : "FPU exceptions reporting",
+            "wp" : true,
+            "vme" : "virtual mode extensions",
+            "de" : "debugging extensions",
+            "pse" : "page size extensions",
+            "tsc" : "time stamp counter",
+            "msr" : "model-specific registers",
+            "pae" : "4GB+ memory addressing (Physical Address Extension)",
+            "mce" : "machine check exceptions",
+            "cx8" : "compare and exchange 8-byte",
+            "apic" : "on-chip advanced programmable interrupt controller (APIC)",
+            "sep" : "fast system calls",
+            "mtrr" : "memory type range registers",
+            "pge" : "page global enable",
+            "mca" : "machine check architecture",
+            "cmov" : "conditional move instruction",
+            "pat" : "page attribute table",
+            "pse36" : "36-bit page size extensions",
+            "clflush" : true,
+            "dts" : "debug trace and EMON store MSRs",
+            "acpi" : "thermal control (ACPI)",
+            "mmx" : "multimedia extensions (MMX)",
+            "fxsr" : "fast floating point save/restore",
+            "sse" : "streaming SIMD extensions (SSE)",
+            "sse2" : "streaming SIMD extensions (SSE2)",
+            "ss" : "self-snoop",
+            "ht" : "HyperThreading",
+            "tm" : "thermal interrupt and status",
+            "pbe" : "pending break event",
+            "syscall" : "fast system calls",
+            "nx" : "no-execute bit (NX)",
+            "pdpe1gb" : true,
+            "rdtscp" : true,
+            "x86-64" : "64bits extensions (x86-64)",
+            "constant_tsc" : true,
+            "art" : true,
+            "arch_perfmon" : true,
+            "pebs" : true,
+            "bts" : true,
+            "rep_good" : true,
+            "nopl" : true,
+            "xtopology" : true,
+            "nonstop_tsc" : true,
+            "cpuid" : true,
+            "aperfmperf" : true,
+            "tsc_known_freq" : true,
+            "pni" : true,
+            "pclmulqdq" : true,
+            "dtes64" : true,
+            "monitor" : true,
+            "ds_cpl" : true,
+            "vmx" : true,
+            "est" : true,
+            "tm2" : true,
+            "ssse3" : true,
+            "sdbg" : true,
+            "fma" : true,
+            "cx16" : true,
+            "xtpr" : true,
+            "pdcm" : true,
+            "sse4_1" : true,
+            "sse4_2" : true,
+            "x2apic" : true,
+            "movbe" : true,
+            "popcnt" : true,
+            "tsc_deadline_timer" : true,
+            "aes" : true,
+            "xsave" : true,
+            "avx" : true,
+            "f16c" : true,
+            "rdrand" : true,
+            "lahf_lm" : true,
+            "abm" : true,
+            "3dnowprefetch" : true,
+            "cpuid_fault" : true,
+            "ssbd" : true,
+            "ibrs" : true,
+            "ibpb" : true,
+            "stibp" : true,
+            "ibrs_enhanced" : true,
+            "tpr_shadow" : true,
+            "flexpriority" : true,
+            "ept" : true,
+            "vpid" : true,
+            "ept_ad" : true,
+            "fsgsbase" : true,
+            "tsc_adjust" : true,
+            "bmi1" : true,
+            "avx2" : true,
+            "smep" : true,
+            "bmi2" : true,
+            "erms" : true,
+            "invpcid" : true,
+            "rdseed" : true,
+            "adx" : true,
+            "smap" : true,
+            "clflushopt" : true,
+            "clwb" : true,
+            "intel_pt" : true,
+            "sha_ni" : true,
+            "xsaveopt" : true,
+            "xsavec" : true,
+            "xgetbv1" : true,
+            "xsaves" : true,
+            "split_lock_detect" : true,
+            "user_shstk" : true,
+            "avx_vnni" : true,
+            "dtherm" : true,
+            "ida" : true,
+            "arat" : true,
+            "pln" : true,
+            "pts" : true,
+            "hwp" : true,
+            "hwp_notify" : true,
+            "hwp_act_window" : true,
+            "hwp_epp" : true,
+            "hwp_pkg_req" : true,
+            "hfi" : true,
+            "vnmi" : true,
+            "umip" : true,
+            "pku" : true,
+            "ospke" : true,
+            "waitpkg" : true,
+            "gfni" : true,
+            "vaes" : true,
+            "vpclmulqdq" : true,
+            "rdpid" : true,
+            "movdiri" : true,
+            "movdir64b" : true,
+            "fsrm" : true,
+            "md_clear" : true,
+            "serialize" : true,
+            "arch_lbr" : true,
+            "ibt" : true,
+            "flush_l1d" : true,
+            "arch_capabilities" : true,
+            "cpufreq" : "CPU Frequency scaling"
+          }
+        },
+        {
+          "id" : "pci",
+          "class" : "bridge",
+          "claimed" : true,
+          "handle" : "PCIBUS:0000:00",
+          "description" : "Host bridge",
+          "product" : "Intel Corporation",
+          "vendor" : "Intel Corporation",
+          "physid" : "100",
+          "businfo" : "pci@0000:00:00.0",
+          "version" : "01",
+          "width" : 32,
+          "clock" : 33000000,
+          "children" : [            {
+              "id" : "pci:0",
+              "class" : "bridge",
+              "claimed" : true,
+              "handle" : "PCIBUS:0000:01",
+              "description" : "PCI bridge",
+              "product" : "Intel Corporation",
+              "vendor" : "Intel Corporation",
+              "physid" : "1",
+              "businfo" : "pci@0000:00:01.0",
+              "version" : "01",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "pcieport"
+              },
+              "capabilities" : {
+                "pci" : true,
+                "pciexpress" : "PCI Express",
+                "msi" : "Message Signalled Interrupts",
+                "pm" : "Power Management",
+                "normal_decode" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              },
+              "children" : [                {
+                  "id" : "display",
+                  "class" : "display",
+                  "claimed" : true,
+                  "handle" : "PCI:0000:01:00.0",
+                  "description" : "VGA compatible controller",
+                  "product" : "AD102 [GeForce RTX 4090]",
+                  "vendor" : "NVIDIA Corporation",
+                  "physid" : "0",
+                  "businfo" : "pci@0000:01:00.0",
+                  "logicalname" : "/dev/fb0",
+                  "version" : "a1",
+                  "width" : 64,
+                  "clock" : 33000000,
+                  "configuration" : {
+                    "depth" : "32",
+                    "driver" : "nvidia",
+                    "latency" : "0",
+                    "mode" : "3840x2160",
+                    "resolution" : "3840,2160",
+                    "visual" : "truecolor",
+                    "xres" : "3840",
+                    "yres" : "2160"
+                  },
+                  "capabilities" : {
+                    "pm" : "Power Management",
+                    "msi" : "Message Signalled Interrupts",
+                    "pciexpress" : "PCI Express",
+                    "vga_controller" : true,
+                    "bus_master" : "bus mastering",
+                    "cap_list" : "PCI capabilities listing",
+                    "rom" : "extension ROM",
+                    "fb" : "framebuffer"
+                  }
+                },
+                {
+                  "id" : "multimedia",
+                  "class" : "multimedia",
+                  "claimed" : true,
+                  "handle" : "PCI:0000:01:00.1",
+                  "description" : "Audio device",
+                  "product" : "AD102 High Definition Audio Controller",
+                  "vendor" : "NVIDIA Corporation",
+                  "physid" : "0.1",
+                  "businfo" : "pci@0000:01:00.1",
+                  "logicalname" : ["card0", "/dev/snd/controlC0", "/dev/snd/hwC0D0", "/dev/snd/pcmC0D3p", "/dev/snd/pcmC0D7p", "/dev/snd/pcmC0D8p", "/dev/snd/pcmC0D9p"],
+                  "version" : "a1",
+                  "width" : 32,
+                  "clock" : 33000000,
+                  "configuration" : {
+                    "driver" : "snd_hda_intel",
+                    "latency" : "0"
+                  },
+                  "capabilities" : {
+                    "pm" : "Power Management",
+                    "msi" : "Message Signalled Interrupts",
+                    "pciexpress" : "PCI Express",
+                    "bus_master" : "bus mastering",
+                    "cap_list" : "PCI capabilities listing"
+                  },
+                  "children" : [                    {
+                      "id" : "input:0",
+                      "class" : "input",
+                      "claimed" : true,
+                      "product" : "HDA NVidia HDMI/DP,pcm=8",
+                      "physid" : "0",
+                      "logicalname" : ["input10", "/dev/input/event10"]
+                    },
+                    {
+                      "id" : "input:1",
+                      "class" : "input",
+                      "claimed" : true,
+                      "product" : "HDA NVidia HDMI/DP,pcm=9",
+                      "physid" : "1",
+                      "logicalname" : ["input11", "/dev/input/event11"]
+                    },
+                    {
+                      "id" : "input:2",
+                      "class" : "input",
+                      "claimed" : true,
+                      "product" : "HDA NVidia HDMI/DP,pcm=3",
+                      "physid" : "2",
+                      "logicalname" : ["input8", "/dev/input/event8"]
+                    },
+                    {
+                      "id" : "input:3",
+                      "class" : "input",
+                      "claimed" : true,
+                      "product" : "HDA NVidia HDMI/DP,pcm=7",
+                      "physid" : "3",
+                      "logicalname" : ["input9", "/dev/input/event9"]
+                    }]
+                }]
+            },
+            {
+              "id" : "pci:1",
+              "class" : "bridge",
+              "claimed" : true,
+              "handle" : "PCIBUS:0000:02",
+              "description" : "PCI bridge",
+              "product" : "Raptor Lake PCIe 4.0 Graphics Port",
+              "vendor" : "Intel Corporation",
+              "physid" : "6",
+              "businfo" : "pci@0000:00:06.0",
+              "version" : "01",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "pcieport"
+              },
+              "capabilities" : {
+                "pci" : true,
+                "pciexpress" : "PCI Express",
+                "msi" : "Message Signalled Interrupts",
+                "pm" : "Power Management",
+                "normal_decode" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              },
+              "children" : [                {
+                  "id" : "nvme",
+                  "class" : "storage",
+                  "claimed" : true,
+                  "handle" : "PCI:0000:02:00.0",
+                  "description" : "NVMe device",
+                  "product" : "T-FORCE TM8FPP002T",
+                  "vendor" : "MAXIO Technology (Hangzhou) Ltd.",
+                  "physid" : "0",
+                  "businfo" : "pci@0000:02:00.0",
+                  "logicalname" : "/dev/nvme0",
+                  "version" : "SN10932",
+                  "serial" : "TPBF2305160040300213",
+                  "width" : 64,
+                  "clock" : 33000000,
+                  "configuration" : {
+                    "driver" : "nvme",
+                    "latency" : "0",
+                    "nqn" : "nqn.2014.08.org.nvmexpress:1e4b1e4bTPBF2305160040300213T-FORCE TM8FPP002T",
+                    "state" : "live"
+                  },
+                  "capabilities" : {
+                    "nvme" : true,
+                    "pm" : "Power Management",
+                    "msi" : "Message Signalled Interrupts",
+                    "pciexpress" : "PCI Express",
+                    "msix" : "MSI-X",
+                    "nvm_express" : true,
+                    "bus_master" : "bus mastering",
+                    "cap_list" : "PCI capabilities listing"
+                  },
+                  "children" : [                    {
+                      "id" : "namespace:0",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "description" : "NVMe disk",
+                      "physid" : "0",
+                      "logicalname" : "hwmon3"
+                    },
+                    {
+                      "id" : "namespace:1",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "description" : "NVMe disk",
+                      "physid" : "2",
+                      "logicalname" : "/dev/ng0n1"
+                    },
+                    {
+                      "id" : "namespace:2",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "handle" : "GUID:411a7c18-7123-40fc-9437-2a8d4fe9e872",
+                      "description" : "NVMe disk",
+                      "physid" : "1",
+                      "businfo" : "nvme@0:1",
+                      "logicalname" : "/dev/nvme0n1",
+                      "units" : "bytes",
+                      "size" : 2048408248320,
+                      "configuration" : {
+                        "guid" : "411a7c18-7123-40fc-9437-2a8d4fe9e872",
+                        "logicalsectorsize" : "512",
+                        "sectorsize" : "512",
+                        "wwid" : "nvme.1e4b-5450424632333035313630303430333030323133-542d464f52434520544d3846505030303254-00000001"
+                      },
+                      "capabilities" : {
+                        "gpt-1.00" : "GUID Partition Table version 1.00",
+                        "partitioned" : "Partitioned disk",
+                        "partitioned:gpt" : "GUID partition table"
+                      },
+                      "children" : [                        {
+                          "id" : "volume:0",
+                          "class" : "volume",
+                          "handle" : "GUID:ce71083d-eef4-47d6-8788-0abf8bdaff65",
+                          "description" : "Windows FAT volume",
+                          "vendor" : "mkfs.fat",
+                          "physid" : "1",
+                          "businfo" : "nvme@0:1,1",
+                          "version" : "FAT32",
+                          "serial" : "c33c-a2e7",
+                          "size" : 1126154240,
+                          "capacity" : 1127218688,
+                          "configuration" : {
+                            "FATs" : "2",
+                            "filesystem" : "fat"
+                          },
+                          "capabilities" : {
+                            "boot" : "Contains boot code",
+                            "fat" : "Windows FAT",
+                            "initialized" : "initialized volume"
+                          }
+                        },
+                        {
+                          "id" : "volume:1",
+                          "class" : "volume",
+                          "claimed" : true,
+                          "handle" : "GUID:327c0804-cd60-4b55-90e3-d7061360bcfa",
+                          "description" : "EXT4 volume",
+                          "vendor" : "Linux",
+                          "physid" : "2",
+                          "businfo" : "nvme@0:1,2",
+                          "logicalname" : ["/dev/nvme0n1p2", "/boot"],
+                          "dev" : "259:8",
+                          "version" : "1.0",
+                          "serial" : "4f750a0a-f721-4b91-ae40-7157b11d4251",
+                          "size" : 2147483648,
+                          "configuration" : {
+                            "created" : "2025-06-07 12:43:33",
+                            "filesystem" : "ext4",
+                            "lastmountpoint" : "/boot",
+                            "modified" : "2025-06-21 12:26:18",
+                            "mount.fstype" : "ext4",
+                            "mount.options" : "rw,relatime",
+                            "mounted" : "2025-06-21 12:26:18",
+                            "state" : "mounted"
+                          },
+                          "capabilities" : {
+                            "journaled" : true,
+                            "extended_attributes" : "Extended Attributes",
+                            "large_files" : "4GB+ files",
+                            "huge_files" : "16TB+ files",
+                            "dir_nlink" : "directories with 65000+ subdirs",
+                            "recover" : "needs recovery",
+                            "64bit" : "64bit filesystem",
+                            "extents" : "extent-based allocation",
+                            "ext4" : true,
+                            "ext2" : "EXT2/EXT3",
+                            "initialized" : "initialized volume"
+                          }
+                        },
+                        {
+                          "id" : "volume:2",
+                          "class" : "volume",
+                          "claimed" : true,
+                          "handle" : "GUID:2964d157-2298-4ed4-ba06-b4089bbf67d1",
+                          "description" : "EFI partition",
+                          "physid" : "3",
+                          "businfo" : "nvme@0:1,3",
+                          "logicalname" : "/dev/nvme0n1p3",
+                          "dev" : "259:9",
+                          "serial" : "1ubf1p-x4Wi-my0b-Zs21-cx7Q-q4cT-ZO9SVW",
+                          "size" : 2045131096064,
+                          "capabilities" : {
+                            "lvm2" : true
+                          }
+                        }]
+                    }]
+                }]
+            },
+            {
+              "id" : "generic:0",
+              "class" : "generic",
+              "handle" : "PCI:0000:00:08.0",
+              "description" : "System peripheral",
+              "product" : "GNA Scoring Accelerator module",
+              "vendor" : "Intel Corporation",
+              "physid" : "8",
+              "businfo" : "pci@0000:00:08.0",
+              "version" : "01",
+              "width" : 64,
+              "clock" : 33000000,
+              "configuration" : {
+                "latency" : "0"
+              },
+              "capabilities" : {
+                "msi" : "Message Signalled Interrupts",
+                "pm" : "Power Management",
+                "cap_list" : "PCI capabilities listing"
+              }
+            },
+            {
+              "id" : "generic:1",
+              "class" : "generic",
+              "claimed" : true,
+              "handle" : "PCI:0000:00:0a.0",
+              "description" : "Signal processing controller",
+              "product" : "Raptor Lake Crashlog and Telemetry",
+              "vendor" : "Intel Corporation",
+              "physid" : "a",
+              "businfo" : "pci@0000:00:0a.0",
+              "version" : "01",
+              "width" : 64,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "intel_vsec",
+                "latency" : "0"
+              },
+              "capabilities" : {
+                "pciexpress" : "PCI Express",
+                "pm" : "Power Management",
+                "cap_list" : "PCI capabilities listing"
+              }
+            },
+            {
+              "id" : "usb",
+              "class" : "bus",
+              "claimed" : true,
+              "handle" : "PCI:0000:00:14.0",
+              "description" : "USB controller",
+              "product" : "Alder Lake-S PCH USB 3.2 Gen 2x2 XHCI Controller",
+              "vendor" : "Intel Corporation",
+              "physid" : "14",
+              "businfo" : "pci@0000:00:14.0",
+              "version" : "11",
+              "width" : 64,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "xhci_hcd",
+                "latency" : "0"
+              },
+              "capabilities" : {
+                "pm" : "Power Management",
+                "msi" : "Message Signalled Interrupts",
+                "xhci" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              },
+              "children" : [                {
+                  "id" : "usbhost:0",
+                  "class" : "bus",
+                  "claimed" : true,
+                  "handle" : "USB:1:1",
+                  "product" : "xHCI Host Controller",
+                  "vendor" : "Linux 6.8.0-62-generic xhci-hcd",
+                  "physid" : "0",
+                  "businfo" : "usb@1",
+                  "logicalname" : "usb1",
+                  "version" : "6.08",
+                  "configuration" : {
+                    "driver" : "hub",
+                    "slots" : "16",
+                    "speed" : "480Mbit/s"
+                  },
+                  "capabilities" : {
+                    "usb-2.00" : "USB 2.0"
+                  },
+                  "children" : [                    {
+                      "id" : "usb:0",
+                      "class" : "bus",
+                      "claimed" : true,
+                      "handle" : "USB:1:2",
+                      "description" : "USB hub",
+                      "product" : "USB2.0 Hub",
+                      "vendor" : "Fresco Logic, Inc.",
+                      "physid" : "1",
+                      "businfo" : "usb@1:1",
+                      "version" : "1.01",
+                      "configuration" : {
+                        "driver" : "hub",
+                        "slots" : "5",
+                        "speed" : "480Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-2.10" : true
+                      },
+                      "children" : [                        {
+                          "id" : "usb:0",
+                          "class" : "generic",
+                          "handle" : "USB:1:5",
+                          "description" : "Generic USB device",
+                          "product" : "FLIR ONE Camera",
+                          "vendor" : "FLIR Systems",
+                          "physid" : "2",
+                          "businfo" : "usb@1:1.2",
+                          "version" : "1.08",
+                          "serial" : "T07KA600103",
+                          "configuration" : {
+                            "speed" : "480Mbit/s"
+                          },
+                          "capabilities" : {
+                            "usb-2.00" : "USB 2.0"
+                          }
+                        },
+                        {
+                          "id" : "usb:1",
+                          "class" : "generic",
+                          "handle" : "USB:1:8",
+                          "description" : "Generic USB device",
+                          "product" : "Thunderbolt 4 5-in-1 Core Hub",
+                          "vendor" : "Belkin Intenational",
+                          "physid" : "5",
+                          "businfo" : "usb@1:1.5",
+                          "version" : "17.46",
+                          "serial" : "11AD1D0AEBF3301516290B00",
+                          "configuration" : {
+                            "speed" : "12Mbit/s"
+                          },
+                          "capabilities" : {
+                            "usb-2.01" : true
+                          }
+                        }]
+                    },
+                    {
+                      "id" : "usb:1",
+                      "class" : "input",
+                      "claimed" : true,
+                      "handle" : "USB:1:3",
+                      "description" : "Human interface device",
+                      "product" : "MSI MYSTIC LIGHT",
+                      "vendor" : "MSI",
+                      "physid" : "2",
+                      "businfo" : "usb@1:2",
+                      "logicalname" : ["input3", "/dev/input/event3"],
+                      "version" : "0.01",
+                      "serial" : "A02021081203",
+                      "configuration" : {
+                        "driver" : "usbhid",
+                        "maxpower" : "500mA",
+                        "speed" : "12Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-1.10" : "USB 1.1",
+                        "usb" : "USB"
+                      }
+                    },
+                    {
+                      "id" : "usb:2",
+                      "class" : "bus",
+                      "claimed" : true,
+                      "handle" : "USB:1:4",
+                      "description" : "USB hub",
+                      "product" : "USB2.0 Hub",
+                      "vendor" : "Genesys Logic, Inc.",
+                      "physid" : "5",
+                      "businfo" : "usb@1:5",
+                      "version" : "60.90",
+                      "configuration" : {
+                        "driver" : "hub",
+                        "maxpower" : "100mA",
+                        "slots" : "4",
+                        "speed" : "480Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-2.00" : "USB 2.0"
+                      },
+                      "children" : [                        {
+                          "id" : "usb",
+                          "class" : "bus",
+                          "claimed" : true,
+                          "handle" : "USB:1:7",
+                          "description" : "USB hub",
+                          "product" : "USB2.0 Hub",
+                          "vendor" : "Genesys Logic, Inc.",
+                          "physid" : "3",
+                          "businfo" : "usb@1:5.3",
+                          "version" : "85.36",
+                          "configuration" : {
+                            "driver" : "hub",
+                            "maxpower" : "100mA",
+                            "slots" : "4",
+                            "speed" : "480Mbit/s"
+                          },
+                          "capabilities" : {
+                            "usb-2.00" : "USB 2.0"
+                          }
+                        }]
+                    },
+                    {
+                      "id" : "usb:3",
+                      "class" : "input",
+                      "claimed" : true,
+                      "handle" : "USB:1:6",
+                      "description" : "Keyboard",
+                      "product" : "Gaming KB",
+                      "vendor" : "SINO WEALTH",
+                      "physid" : "a",
+                      "businfo" : "usb@1:a",
+                      "version" : "90.36",
+                      "configuration" : {
+                        "driver" : "usbhid",
+                        "maxpower" : "500mA",
+                        "speed" : "12Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-1.10" : "USB 1.1"
+                      }
+                    },
+                    {
+                      "id" : "usb:4",
+                      "class" : "multimedia",
+                      "claimed" : true,
+                      "handle" : "USB:1:9",
+                      "description" : "Audio device",
+                      "product" : "Scarlett 18i20 USB",
+                      "vendor" : "Focusrite",
+                      "physid" : "b",
+                      "businfo" : "usb@1:b",
+                      "version" : "6.6c",
+                      "serial" : "P9VETXM1B86085",
+                      "configuration" : {
+                        "driver" : "snd-usb-audio",
+                        "speed" : "480Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-2.00" : "USB 2.0",
+                        "audio-control" : "Control device"
+                      }
+                    },
+                    {
+                      "id" : "usb:5",
+                      "class" : "bus",
+                      "claimed" : true,
+                      "handle" : "USB:1:10",
+                      "description" : "USB hub",
+                      "product" : "USB 2.0 Hub",
+                      "vendor" : "Terminus Technology Inc.",
+                      "physid" : "c",
+                      "businfo" : "usb@1:c",
+                      "version" : "1.11",
+                      "configuration" : {
+                        "driver" : "hub",
+                        "maxpower" : "100mA",
+                        "slots" : "4",
+                        "speed" : "480Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-2.00" : "USB 2.0"
+                      }
+                    },
+                    {
+                      "id" : "usb:6",
+                      "class" : "bus",
+                      "claimed" : true,
+                      "handle" : "USB:1:11",
+                      "description" : "USB hub",
+                      "product" : "USB2.0 Hub",
+                      "vendor" : "Genesys Logic, Inc.",
+                      "physid" : "d",
+                      "businfo" : "usb@1:d",
+                      "version" : "60.90",
+                      "configuration" : {
+                        "driver" : "hub",
+                        "maxpower" : "100mA",
+                        "slots" : "4",
+                        "speed" : "480Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-2.00" : "USB 2.0"
+                      }
+                    }]
+                },
+                {
+                  "id" : "usbhost:1",
+                  "class" : "bus",
+                  "claimed" : true,
+                  "handle" : "USB:2:1",
+                  "product" : "xHCI Host Controller",
+                  "vendor" : "Linux 6.8.0-62-generic xhci-hcd",
+                  "physid" : "1",
+                  "businfo" : "usb@2",
+                  "logicalname" : "usb2",
+                  "version" : "6.08",
+                  "configuration" : {
+                    "driver" : "hub",
+                    "slots" : "9",
+                    "speed" : "10000Mbit/s"
+                  },
+                  "capabilities" : {
+                    "usb-3.10" : true
+                  },
+                  "children" : [                    {
+                      "id" : "usb",
+                      "class" : "bus",
+                      "claimed" : true,
+                      "handle" : "USB:2:2",
+                      "description" : "USB hub",
+                      "product" : "USB3.0 Hub",
+                      "vendor" : "Intel Corporation.",
+                      "physid" : "1",
+                      "businfo" : "usb@2:1",
+                      "version" : "12.34",
+                      "configuration" : {
+                        "driver" : "hub",
+                        "slots" : "4",
+                        "speed" : "10000Mbit/s"
+                      },
+                      "capabilities" : {
+                        "usb-3.20" : true
+                      }
+                    }]
+                }]
+            },
+            {
+              "id" : "memory",
+              "class" : "memory",
+              "handle" : "PCI:0000:00:14.2",
+              "description" : "RAM memory",
+              "product" : "Alder Lake-S PCH Shared SRAM",
+              "vendor" : "Intel Corporation",
+              "physid" : "14.2",
+              "businfo" : "pci@0000:00:14.2",
+              "version" : "11",
+              "width" : 64,
+              "clock" : 33000000,
+              "configuration" : {
+                "latency" : "0"
+              },
+              "capabilities" : {
+                "pm" : "Power Management",
+                "cap_list" : "PCI capabilities listing"
+              }
+            },
+            {
+              "id" : "communication",
+              "class" : "communication",
+              "claimed" : true,
+              "handle" : "PCI:0000:00:16.0",
+              "description" : "Communication controller",
+              "product" : "Alder Lake-S PCH HECI Controller #1",
+              "vendor" : "Intel Corporation",
+              "physid" : "16",
+              "businfo" : "pci@0000:00:16.0",
+              "version" : "11",
+              "width" : 64,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "mei_me",
+                "latency" : "0"
+              },
+              "capabilities" : {
+                "pm" : "Power Management",
+                "msi" : "Message Signalled Interrupts",
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              }
+            },
+            {
+              "id" : "sata",
+              "class" : "storage",
+              "claimed" : true,
+              "handle" : "PCI:0000:00:17.0",
+              "description" : "SATA controller",
+              "product" : "Alder Lake-S PCH SATA Controller [AHCI Mode]",
+              "vendor" : "Intel Corporation",
+              "physid" : "17",
+              "businfo" : "pci@0000:00:17.0",
+              "logicalname" : ["scsi3", "scsi5"],
+              "version" : "11",
+              "width" : 32,
+              "clock" : 66000000,
+              "configuration" : {
+                "driver" : "ahci",
+                "latency" : "0"
+              },
+              "capabilities" : {
+                "sata" : true,
+                "msi" : "Message Signalled Interrupts",
+                "pm" : "Power Management",
+                "ahci_1.0" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing",
+                "emulated" : "Emulated device"
+              },
+              "children" : [                {
+                  "id" : "disk:0",
+                  "class" : "disk",
+                  "claimed" : true,
+                  "handle" : "GUID:411c731b-bb59-4364-a241-2fc85d7d9cca",
+                  "description" : "ATA Disk",
+                  "product" : "TOSHIBA MD06ACA8",
+                  "vendor" : "Toshiba",
+                  "physid" : "0",
+                  "businfo" : "scsi@3:0.0.0",
+                  "logicalname" : "/dev/sda",
+                  "dev" : "8:0",
+                  "version" : "0603",
+                  "serial" : "81H0A04EF6BG",
+                  "units" : "bytes",
+                  "size" : 8001563222016,
+                  "configuration" : {
+                    "ansiversion" : "5",
+                    "guid" : "411c731b-bb59-4364-a241-2fc85d7d9cca",
+                    "logicalsectorsize" : "512",
+                    "sectorsize" : "4096"
+                  },
+                  "capabilities" : {
+                    "gpt-1.00" : "GUID Partition Table version 1.00",
+                    "partitioned" : "Partitioned disk",
+                    "partitioned:gpt" : "GUID partition table"
+                  },
+                  "children" : [                    {
+                      "id" : "volume:0",
+                      "class" : "volume",
+                      "claimed" : true,
+                      "handle" : "GUID:0b20f775-4776-4001-9708-aedbcce4bb62",
+                      "description" : "RAID partition",
+                      "vendor" : "Linux",
+                      "physid" : "1",
+                      "businfo" : "scsi@3:0.0.0,1",
+                      "logicalname" : "/dev/sda1",
+                      "dev" : "8:1",
+                      "serial" : "0b20f775-4776-4001-9708-aedbcce4bb62",
+                      "capacity" : 2550005248,
+                      "capabilities" : {
+                        "multi" : "Multi-volumes"
+                      }
+                    },
+                    {
+                      "id" : "volume:1",
+                      "class" : "volume",
+                      "claimed" : true,
+                      "handle" : "GUID:b6cbf3fd-9cae-4110-b979-eb9d3c82164e",
+                      "description" : "EFI partition",
+                      "physid" : "3",
+                      "businfo" : "scsi@3:0.0.0,3",
+                      "logicalname" : "/dev/sda3",
+                      "dev" : "8:3",
+                      "serial" : "b6cbf3fd-9cae-4110-b979-eb9d3c82164e",
+                      "capacity" : 1073741312
+                    },
+                    {
+                      "id" : "volume:2",
+                      "class" : "volume",
+                      "claimed" : true,
+                      "handle" : "GUID:9fc7b55c-2d45-4e66-98d2-65cd78878996",
+                      "description" : "EFI partition",
+                      "physid" : "5",
+                      "businfo" : "scsi@3:0.0.0,5",
+                      "logicalname" : "/dev/sda5",
+                      "dev" : "8:5",
+                      "serial" : "9fc7b55c-2d45-4e66-98d2-65cd78878996",
+                      "capacity" : 7992973270016
+                    }]
+                },
+                {
+                  "id" : "disk:1",
+                  "class" : "disk",
+                  "claimed" : true,
+                  "handle" : "GUID:a2eb024a-87e1-664c-af62-ebb00448bf9f",
+                  "description" : "ATA Disk",
+                  "product" : "SEAGATE ST6000NM",
+                  "physid" : "1",
+                  "businfo" : "scsi@5:0.0.0",
+                  "logicalname" : "/dev/sdb",
+                  "dev" : "8:16",
+                  "version" : "NS01",
+                  "serial" : "Z4D2V137",
+                  "units" : "bytes",
+                  "size" : 6001175126016,
+                  "configuration" : {
+                    "ansiversion" : "5",
+                    "guid" : "a2eb024a-87e1-664c-af62-ebb00448bf9f",
+                    "logicalsectorsize" : "512",
+                    "sectorsize" : "4096"
+                  },
+                  "capabilities" : {
+                    "gpt-1.00" : "GUID Partition Table version 1.00",
+                    "partitioned" : "Partitioned disk",
+                    "partitioned:gpt" : "GUID partition table"
+                  },
+                  "children" : [                    {
+                      "id" : "volume",
+                      "class" : "volume",
+                      "claimed" : true,
+                      "handle" : "GUID:94948d3d-05cc-ef43-ab85-66287112f4e1",
+                      "description" : "EXT4 volume",
+                      "vendor" : "Linux",
+                      "physid" : "1",
+                      "businfo" : "scsi@5:0.0.0,1",
+                      "logicalname" : "/dev/sdb1",
+                      "dev" : "8:17",
+                      "version" : "1.0",
+                      "serial" : "6e5b61f0-ebd1-4d92-87f9-1f648a15fab6",
+                      "size" : 6001174056960,
+                      "capacity" : 6001174060032,
+                      "configuration" : {
+                        "created" : "2024-04-13 18:03:45",
+                        "filesystem" : "ext4",
+                        "lastmountpoint" : "/",
+                        "modified" : "2025-06-09 01:55:54",
+                        "mounted" : "2025-06-09 01:51:32",
+                        "state" : "clean"
+                      },
+                      "capabilities" : {
+                        "journaled" : true,
+                        "extended_attributes" : "Extended Attributes",
+                        "large_files" : "4GB+ files",
+                        "huge_files" : "16TB+ files",
+                        "dir_nlink" : "directories with 65000+ subdirs",
+                        "64bit" : "64bit filesystem",
+                        "extents" : "extent-based allocation",
+                        "ext4" : true,
+                        "ext2" : "EXT2/EXT3",
+                        "initialized" : "initialized volume"
+                      }
+                    }]
+                }]
+            },
+            {
+              "id" : "pci:2",
+              "class" : "bridge",
+              "claimed" : true,
+              "handle" : "PCIBUS:0000:03",
+              "description" : "PCI bridge",
+              "product" : "Alder Lake-S PCH PCI Express Root Port #25",
+              "vendor" : "Intel Corporation",
+              "physid" : "1a",
+              "businfo" : "pci@0000:00:1a.0",
+              "version" : "11",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "pcieport"
+              },
+              "capabilities" : {
+                "pci" : true,
+                "pciexpress" : "PCI Express",
+                "msi" : "Message Signalled Interrupts",
+                "pm" : "Power Management",
+                "normal_decode" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              },
+              "children" : [                {
+                  "id" : "nvme",
+                  "class" : "storage",
+                  "claimed" : true,
+                  "handle" : "PCI:0000:03:00.0",
+                  "description" : "NVMe device",
+                  "product" : "Samsung SSD 990 PRO 4TB",
+                  "vendor" : "Samsung Electronics Co Ltd",
+                  "physid" : "0",
+                  "businfo" : "pci@0000:03:00.0",
+                  "logicalname" : "/dev/nvme1",
+                  "version" : "0B2QJXG7",
+                  "serial" : "S7KGNJ0X112446V",
+                  "width" : 64,
+                  "clock" : 33000000,
+                  "configuration" : {
+                    "driver" : "nvme",
+                    "latency" : "0",
+                    "nqn" : "nqn.1994-11.com.samsung:nvme:990PRO:M.2:S7KGNJ0X112446V",
+                    "state" : "live"
+                  },
+                  "capabilities" : {
+                    "nvme" : true,
+                    "pm" : "Power Management",
+                    "msi" : "Message Signalled Interrupts",
+                    "pciexpress" : "PCI Express",
+                    "msix" : "MSI-X",
+                    "nvm_express" : true,
+                    "bus_master" : "bus mastering",
+                    "cap_list" : "PCI capabilities listing"
+                  },
+                  "children" : [                    {
+                      "id" : "namespace:0",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "description" : "NVMe disk",
+                      "physid" : "0",
+                      "logicalname" : "hwmon2"
+                    },
+                    {
+                      "id" : "namespace:1",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "description" : "NVMe disk",
+                      "physid" : "2",
+                      "logicalname" : "/dev/ng1n1"
+                    },
+                    {
+                      "id" : "namespace:2",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "handle" : "GUID:d584d0b6-45ab-424b-8f59-6381f87f7856",
+                      "description" : "NVMe disk",
+                      "physid" : "1",
+                      "businfo" : "nvme@1:1",
+                      "logicalname" : "/dev/nvme1n1",
+                      "units" : "bytes",
+                      "size" : 4000787030016,
+                      "configuration" : {
+                        "guid" : "d584d0b6-45ab-424b-8f59-6381f87f7856",
+                        "logicalsectorsize" : "512",
+                        "sectorsize" : "512",
+                        "wwid" : "eui.002538414140c426"
+                      },
+                      "capabilities" : {
+                        "gpt-1.00" : "GUID Partition Table version 1.00",
+                        "partitioned" : "Partitioned disk",
+                        "partitioned:gpt" : "GUID partition table"
+                      },
+                      "children" : [                        {
+                          "id" : "volume:0",
+                          "class" : "volume",
+                          "claimed" : true,
+                          "handle" : "GUID:462a2ba0-626c-9d4a-9b49-e27fc2e94753",
+                          "description" : "OS X ZFS partition or Solaris /usr partition",
+                          "vendor" : "Solaris",
+                          "physid" : "1",
+                          "businfo" : "nvme@1:1,1",
+                          "logicalname" : "/dev/nvme1n1p1",
+                          "dev" : "259:4",
+                          "serial" : "462a2ba0-626c-9d4a-9b49-e27fc2e94753",
+                          "capacity" : 4000776715776,
+                          "configuration" : {
+                            "name" : "zfs-306f3215d0a2c93e"
+                          }
+                        },
+                        {
+                          "id" : "volume:1",
+                          "class" : "volume",
+                          "claimed" : true,
+                          "handle" : "GUID:ba8a3819-3522-ab4a-9b2b-3e59d24269e1",
+                          "description" : "reserved partition",
+                          "vendor" : "Solaris",
+                          "physid" : "9",
+                          "businfo" : "nvme@1:1,9",
+                          "logicalname" : "/dev/nvme1n1p9",
+                          "dev" : "259:5",
+                          "serial" : "ba8a3819-3522-ab4a-9b2b-3e59d24269e1",
+                          "capacity" : 8388096
+                        }]
+                    }]
+                }]
+            },
+            {
+              "id" : "pci:3",
+              "class" : "bridge",
+              "claimed" : true,
+              "handle" : "PCIBUS:0000:04",
+              "description" : "PCI bridge",
+              "product" : "Alder Lake-S PCH PCI Express Root Port #1",
+              "vendor" : "Intel Corporation",
+              "physid" : "1c",
+              "businfo" : "pci@0000:00:1c.0",
+              "version" : "11",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "pcieport"
+              },
+              "capabilities" : {
+                "pci" : true,
+                "pciexpress" : "PCI Express",
+                "msi" : "Message Signalled Interrupts",
+                "normal_decode" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              }
+            },
+            {
+              "id" : "pci:4",
+              "class" : "bridge",
+              "claimed" : true,
+              "handle" : "PCIBUS:0000:05",
+              "description" : "PCI bridge",
+              "product" : "Alder Lake-S PCH PCI Express Root Port #2",
+              "vendor" : "Intel Corporation",
+              "physid" : "1c.1",
+              "businfo" : "pci@0000:00:1c.1",
+              "version" : "11",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "pcieport"
+              },
+              "capabilities" : {
+                "pci" : true,
+                "pciexpress" : "PCI Express",
+                "msi" : "Message Signalled Interrupts",
+                "pm" : "Power Management",
+                "normal_decode" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              },
+              "children" : [                {
+                  "id" : "network",
+                  "class" : "network",
+                  "claimed" : true,
+                  "handle" : "PCI:0000:05:00.0",
+                  "description" : "Ethernet interface",
+                  "product" : "82599 10 Gigabit Network Connection",
+                  "vendor" : "Intel Corporation",
+                  "physid" : "0",
+                  "businfo" : "pci@0000:05:00.0",
+                  "logicalname" : "enp5s0",
+                  "version" : "01",
+                  "serial" : "98:b7:85:1f:fa:95",
+                  "units" : "bit/s",
+                  "size" : 10000000000,
+                  "capacity" : 10000000000,
+                  "width" : 64,
+                  "clock" : 33000000,
+                  "configuration" : {
+                    "autonegotiation" : "off",
+                    "broadcast" : "yes",
+                    "driver" : "ixgbe",
+                    "driverversion" : "6.8.0-62-generic",
+                    "duplex" : "full",
+                    "firmware" : "0x80000707, 1.2074.0",
+                    "ip" : "172.30.50.5",
+                    "latency" : "0",
+                    "link" : "yes",
+                    "multicast" : "yes",
+                    "speed" : "10Gbit/s"
+                  },
+                  "capabilities" : {
+                    "pm" : "Power Management",
+                    "msi" : "Message Signalled Interrupts",
+                    "msix" : "MSI-X",
+                    "pciexpress" : "PCI Express",
+                    "vpd" : "Vital Product Data",
+                    "bus_master" : "bus mastering",
+                    "cap_list" : "PCI capabilities listing",
+                    "rom" : "extension ROM",
+                    "ethernet" : true,
+                    "physical" : "Physical interface",
+                    "fibre" : "optical fibre",
+                    "10000bt-fd" : "10Gbit/s (full duplex)"
+                  }
+                }]
+            },
+            {
+              "id" : "pci:5",
+              "class" : "bridge",
+              "claimed" : true,
+              "handle" : "PCIBUS:0000:06",
+              "description" : "PCI bridge",
+              "product" : "Alder Lake-S PCH PCI Express Root Port #9",
+              "vendor" : "Intel Corporation",
+              "physid" : "1d",
+              "businfo" : "pci@0000:00:1d.0",
+              "version" : "11",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "pcieport"
+              },
+              "capabilities" : {
+                "pci" : true,
+                "pciexpress" : "PCI Express",
+                "msi" : "Message Signalled Interrupts",
+                "pm" : "Power Management",
+                "normal_decode" : true,
+                "bus_master" : "bus mastering",
+                "cap_list" : "PCI capabilities listing"
+              },
+              "children" : [                {
+                  "id" : "nvme",
+                  "class" : "storage",
+                  "claimed" : true,
+                  "handle" : "PCI:0000:06:00.0",
+                  "description" : "NVMe device",
+                  "product" : "Samsung SSD 990 PRO 4TB",
+                  "vendor" : "Samsung Electronics Co Ltd",
+                  "physid" : "0",
+                  "businfo" : "pci@0000:06:00.0",
+                  "logicalname" : "/dev/nvme2",
+                  "version" : "0B2QJXG7",
+                  "serial" : "S7KGNJ0X109218J",
+                  "width" : 64,
+                  "clock" : 33000000,
+                  "configuration" : {
+                    "driver" : "nvme",
+                    "latency" : "0",
+                    "nqn" : "nqn.1994-11.com.samsung:nvme:990PRO:M.2:S7KGNJ0X109218J",
+                    "state" : "live"
+                  },
+                  "capabilities" : {
+                    "nvme" : true,
+                    "pm" : "Power Management",
+                    "msi" : "Message Signalled Interrupts",
+                    "pciexpress" : "PCI Express",
+                    "msix" : "MSI-X",
+                    "nvm_express" : true,
+                    "bus_master" : "bus mastering",
+                    "cap_list" : "PCI capabilities listing"
+                  },
+                  "children" : [                    {
+                      "id" : "namespace:0",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "description" : "NVMe disk",
+                      "physid" : "0",
+                      "logicalname" : "hwmon1"
+                    },
+                    {
+                      "id" : "namespace:1",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "description" : "NVMe disk",
+                      "physid" : "2",
+                      "logicalname" : "/dev/ng2n1"
+                    },
+                    {
+                      "id" : "namespace:2",
+                      "class" : "disk",
+                      "claimed" : true,
+                      "handle" : "GUID:7e2fefc8-c39a-6d4f-a1cc-7419189fdb48",
+                      "description" : "NVMe disk",
+                      "physid" : "1",
+                      "businfo" : "nvme@2:1",
+                      "logicalname" : "/dev/nvme2n1",
+                      "units" : "bytes",
+                      "size" : 4000787030016,
+                      "configuration" : {
+                        "guid" : "7e2fefc8-c39a-6d4f-a1cc-7419189fdb48",
+                        "logicalsectorsize" : "512",
+                        "sectorsize" : "512",
+                        "wwid" : "eui.002538414140b78a"
+                      },
+                      "capabilities" : {
+                        "gpt-1.00" : "GUID Partition Table version 1.00",
+                        "partitioned" : "Partitioned disk",
+                        "partitioned:gpt" : "GUID partition table"
+                      },
+                      "children" : [                        {
+                          "id" : "volume:0",
+                          "class" : "volume",
+                          "claimed" : true,
+                          "handle" : "GUID:eb39b53d-ba7b-4d42-b222-bd841e816bc6",
+                          "description" : "OS X ZFS partition or Solaris /usr partition",
+                          "vendor" : "Solaris",
+                          "physid" : "1",
+                          "businfo" : "nvme@2:1,1",
+                          "logicalname" : "/dev/nvme2n1p1",
+                          "dev" : "259:1",
+                          "serial" : "eb39b53d-ba7b-4d42-b222-bd841e816bc6",
+                          "capacity" : 4000776715776,
+                          "configuration" : {
+                            "name" : "zfs-364a5c7644e9b9a5"
+                          }
+                        },
+                        {
+                          "id" : "volume:1",
+                          "class" : "volume",
+                          "claimed" : true,
+                          "handle" : "GUID:abebb62c-d373-a04a-a5f7-64d3b15442eb",
+                          "description" : "reserved partition",
+                          "vendor" : "Solaris",
+                          "physid" : "9",
+                          "businfo" : "nvme@2:1,9",
+                          "logicalname" : "/dev/nvme2n1p9",
+                          "dev" : "259:2",
+                          "serial" : "abebb62c-d373-a04a-a5f7-64d3b15442eb",
+                          "capacity" : 8388096
+                        }]
+                    }]
+                }]
+            },
+            {
+              "id" : "isa",
+              "class" : "bridge",
+              "claimed" : true,
+              "handle" : "PCI:0000:00:1f.0",
+              "description" : "ISA bridge",
+              "product" : "Z690 Chipset LPC/eSPI Controller",
+              "vendor" : "Intel Corporation",
+              "physid" : "1f",
+              "businfo" : "pci@0000:00:1f.0",
+              "version" : "11",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "latency" : "0"
+              },
+              "capabilities" : {
+                "isa" : true,
+                "bus_master" : "bus mastering"
+              },
+              "children" : [                {
+                  "id" : "pnp00:00",
+                  "class" : "system",
+                  "claimed" : true,
+                  "product" : "PnP device PNP0c02",
+                  "physid" : "0",
+                  "configuration" : {
+                    "driver" : "system"
+                  },
+                  "capabilities" : {
+                    "pnp" : true
+                  }
+                },
+                {
+                  "id" : "pnp00:01",
+                  "class" : "system",
+                  "claimed" : true,
+                  "product" : "PnP device PNP0c02",
+                  "physid" : "1",
+                  "configuration" : {
+                    "driver" : "system"
+                  },
+                  "capabilities" : {
+                    "pnp" : true
+                  }
+                },
+                {
+                  "id" : "pnp00:02",
+                  "class" : "system",
+                  "claimed" : true,
+                  "product" : "PnP device PNP0c02",
+                  "physid" : "2",
+                  "configuration" : {
+                    "driver" : "system"
+                  },
+                  "capabilities" : {
+                    "pnp" : true
+                  }
+                },
+                {
+                  "id" : "pnp00:03",
+                  "class" : "system",
+                  "claimed" : true,
+                  "product" : "PnP device PNP0c02",
+                  "physid" : "3",
+                  "configuration" : {
+                    "driver" : "system"
+                  },
+                  "capabilities" : {
+                    "pnp" : true
+                  }
+                },
+                {
+                  "id" : "pnp00:04",
+                  "class" : "system",
+                  "claimed" : true,
+                  "product" : "PnP device PNP0c02",
+                  "physid" : "4",
+                  "configuration" : {
+                    "driver" : "system"
+                  },
+                  "capabilities" : {
+                    "pnp" : true
+                  }
+                },
+                {
+                  "id" : "pnp00:05",
+                  "class" : "system",
+                  "claimed" : true,
+                  "product" : "PnP device PNP0c02",
+                  "physid" : "5",
+                  "configuration" : {
+                    "driver" : "system"
+                  },
+                  "capabilities" : {
+                    "pnp" : true
+                  }
+                }]
+            },
+            {
+              "id" : "serial:0",
+              "class" : "bus",
+              "claimed" : true,
+              "handle" : "PCI:0000:00:1f.4",
+              "description" : "SMBus",
+              "product" : "Alder Lake-S PCH SMBus Controller",
+              "vendor" : "Intel Corporation",
+              "physid" : "1f.4",
+              "businfo" : "pci@0000:00:1f.4",
+              "version" : "11",
+              "width" : 64,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "i801_smbus",
+                "latency" : "0"
+              }
+            },
+            {
+              "id" : "serial:1",
+              "class" : "bus",
+              "claimed" : true,
+              "handle" : "PCI:0000:00:1f.5",
+              "description" : "Serial bus controller",
+              "product" : "Alder Lake-S PCH SPI Controller",
+              "vendor" : "Intel Corporation",
+              "physid" : "1f.5",
+              "businfo" : "pci@0000:00:1f.5",
+              "version" : "11",
+              "width" : 32,
+              "clock" : 33000000,
+              "configuration" : {
+                "driver" : "intel-spi",
+                "latency" : "0"
+              }
+            }]
+        }]
+    },
+    {
+      "id" : "power",
+      "class" : "power",
+      "description" : "To Be Filled By O.E.M.",
+      "product" : "To Be Filled By O.E.M.",
+      "vendor" : "To Be Filled By O.E.M.",
+      "physid" : "1",
+      "version" : "To Be Filled By O.E.M.",
+      "serial" : "To Be Filled By O.E.M.",
+      "units" : "mWh",
+      "capacity" : 32768
+    },
+    {
+      "id" : "sound",
+      "class" : "multimedia",
+      "claimed" : true,
+      "description" : "USB",
+      "physid" : "2",
+      "logicalname" : ["card1", "/dev/snd/controlC1", "dmmidi1", "/dev/snd/hwC1D0", "midi1", "/dev/snd/midiC1D0", "/dev/snd/pcmC1D0c", "/dev/snd/pcmC1D0p"]
+    },
+    {
+      "id" : "input:0",
+      "class" : "input",
+      "claimed" : true,
+      "product" : "Sleep Button",
+      "physid" : "3",
+      "logicalname" : ["input0", "/dev/input/event0"],
+      "capabilities" : {
+        "platform" : true
+      }
+    },
+    {
+      "id" : "input:1",
+      "class" : "input",
+      "claimed" : true,
+      "product" : "Power Button",
+      "physid" : "4",
+      "logicalname" : ["input1", "/dev/input/event1"],
+      "capabilities" : {
+        "platform" : true
+      }
+    },
+    {
+      "id" : "input:2",
+      "class" : "input",
+      "claimed" : true,
+      "product" : "Power Button",
+      "physid" : "5",
+      "logicalname" : ["input2", "/dev/input/event2"],
+      "capabilities" : {
+        "platform" : true
+      }
+    },
+    {
+      "id" : "input:3",
+      "class" : "input",
+      "claimed" : true,
+      "product" : "SINO WEALTH Gaming KB",
+      "physid" : "6",
+      "logicalname" : ["input4", "/dev/input/event4", "input4::capslock", "input4::compose", "input4::kana", "input4::numlock", "input4::scrolllock"],
+      "capabilities" : {
+        "usb" : "USB"
+      }
+    },
+    {
+      "id" : "input:4",
+      "class" : "input",
+      "claimed" : true,
+      "product" : "SINO WEALTH Gaming KB  System Control",
+      "physid" : "7",
+      "logicalname" : ["input5", "/dev/input/event5"],
+      "capabilities" : {
+        "usb" : "USB"
+      }
+    },
+    {
+      "id" : "input:5",
+      "class" : "input",
+      "claimed" : true,
+      "product" : "SINO WEALTH Gaming KB  Consumer Control",
+      "physid" : "8",
+      "logicalname" : ["input6", "/dev/input/event6"],
+      "capabilities" : {
+        "usb" : "USB"
+      }
+    },
+    {
+      "id" : "input:6",
+      "class" : "input",
+      "claimed" : true,
+      "product" : "SINO WEALTH Gaming KB  Keyboard",
+      "physid" : "9",
+      "logicalname" : ["input7", "/dev/input/event7"],
+      "capabilities" : {
+        "usb" : "USB"
+      }
+    }]
+}
