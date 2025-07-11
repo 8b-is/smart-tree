@@ -2,6 +2,9 @@
 
 > A quantum-inspired tooling ecosystem for semantic compression and context management. Because life's too short for bloated data transmission.
 
+> [!IMPORTANT]  
+> This part of our server code is here for you to see what is transmitted to us for feedback.  If you give a suggestion, we are working on you being able to see the full way it was implemented also.
+
 ## Overview
 
 8t (pronounced "eighty", "eight-tea", or "eight-tooling") is a Rust-based toolkit that brings smart compression and context management to the modern development workflow. Inspired by smart-tree's quantum compression approach, 8t provides:
