@@ -1,0 +1,3 @@
+[submodule "8t.is/tmux/8t.is/tmux/tmux-ai-party"]
+	path = 8t.is/tmux/8t.is/tmux/tmux-ai-party
+	url = ssh://git@g.8b.is/wraith/tmux-ai-party.git

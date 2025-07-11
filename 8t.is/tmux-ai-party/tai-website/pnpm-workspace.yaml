@@ -1,0 +1,7 @@
+# pnpm workspace configuration
+# Ready for future monorepo expansion!
+# Trisha says: "Planning ahead is smart accounting!" 📊
+
+packages:
+  - 'packages/*'
+  - 'apps/*'

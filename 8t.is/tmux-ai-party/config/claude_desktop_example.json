@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "tmux-assistant": {
+      "comment": "🚀 Tmux AI Assistant - Monitor and get AI suggestions for terminal sessions!",
+      "command": "python",
+      "args": ["/path/to/tmux-ai-assistant/mcp_server.py", "--stdio"],
+      "env": {
+        "OPENAI_API_KEY": "your-api-key-here"
+      },
+      "capabilities": {
+        "tools": ["list_tmux_sessions", "monitor_session", "get_next_steps"],
+        "resources": ["session://{name}/current"]
+      }
+    }
+  },
+  "_instructions": [
+    "1. Copy this to your Claude Desktop config file",
+    "2. Update the path to point to your tmux-ai-assistant directory", 
+    "3. Add your OpenAI API key or ensure .env file exists",
+    "4. Restart Claude Desktop to load the MCP server",
+    "5. Look for 'Tmux AI Assistant' in Claude's tool list!",
+    "",
+    "Made with 💖 by Aye, Hue & Trisha!"
+  ]
+}
