@@ -1,0 +1,169 @@
+#cloud-config
+# Smart Tree Feedback Worker - Hetzner Cloud Init
+# Mean ass efficient feedback ingestion system
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - docker-compose
+  - git
+  - python3-pip
+  - python3-venv
+  - redis-tools
+  - htop
+  - iotop
+  - ncdu
+  - ripgrep
+  - curl
+  - jq
+
+write_files:
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        },
+        "storage-driver": "overlay2",
+        "storage-opts": [
+          "overlay2.override_kernel_check=true"
+        ]
+      }
+
+  - path: /opt/smart-tree-feedback/.env
+    permissions: '0600'
+    content: |
+      GITHUB_TOKEN=${GITHUB_TOKEN}
+      FEEDBACK_API_URL=https://f.8t.is/api
+      REDIS_URL=redis://localhost:6379
+      PROMETHEUS_PORT=9090
+      WORKER_NAME=hetzner-${INSTANCE_ID}
+      
+  - path: /opt/smart-tree-feedback/docker-compose.yml
+    content: |
+      version: '3.8'
+      services:
+        redis:
+          image: redis:7-alpine
+          command: redis-server --appendonly yes --maxmemory 100mb --maxmemory-policy allkeys-lru
+          volumes:
+            - redis-data:/data
+          restart: unless-stopped
+          
+        feedback-worker:
+          image: ghcr.io/8b-is/smart-tree-feedback-worker:latest
+          environment:
+            - GITHUB_TOKEN
+            - FEEDBACK_API_URL
+            - REDIS_URL=redis://redis:6379
+            - WORKER_NAME
+          depends_on:
+            - redis
+          restart: unless-stopped
+          deploy:
+            resources:
+              limits:
+                cpus: '0.5'
+                memory: 256M
+                
+        cadvisor:
+          image: gcr.io/cadvisor/cadvisor:latest
+          ports:
+            - "8080:8080"
+          volumes:
+            - /:/rootfs:ro
+            - /var/run:/var/run:ro
+            - /sys:/sys:ro
+            - /var/lib/docker/:/var/lib/docker:ro
+          restart: unless-stopped
+          
+      volumes:
+        redis-data:
+
+  - path: /etc/systemd/system/smart-tree-feedback.service
+    content: |
+      [Unit]
+      Description=Smart Tree Feedback Worker
+      Requires=docker.service
+      After=docker.service network-online.target
+      
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/smart-tree-feedback
+      ExecStart=/usr/bin/docker-compose up -d
+      ExecStop=/usr/bin/docker-compose down
+      
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /opt/smart-tree-feedback/health-check.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Health check for feedback worker
+      
+      check_service() {
+        docker-compose ps | grep -q "$1.*Up" && echo "✓ $1" || echo "✗ $1"
+      }
+      
+      echo "=== Smart Tree Feedback Worker Status ==="
+      cd /opt/smart-tree-feedback
+      
+      check_service redis
+      check_service feedback-worker
+      check_service cadvisor
+      
+      # Check worker metrics
+      curl -s localhost:9090/metrics | grep feedback_items_processed_total || echo "✗ No metrics available"
+      
+      # Check Redis
+      redis-cli ping > /dev/null 2>&1 && echo "✓ Redis responding" || echo "✗ Redis not responding"
+
+  - path: /etc/cron.d/smart-tree-updates
+    content: |
+      # Check for Smart Tree updates daily
+      0 4 * * * root cd /opt/smart-tree && git pull && cargo build --release 2>&1 | logger -t smart-tree-update
+
+runcmd:
+  # Performance optimizations
+  - sysctl -w vm.swappiness=10
+  - sysctl -w net.core.somaxconn=65535
+  - echo "vm.swappiness=10" >> /etc/sysctl.conf
+  - echo "net.core.somaxconn=65535" >> /etc/sysctl.conf
+  
+  # Install Smart Tree
+  - curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+  
+  # Setup feedback worker
+  - mkdir -p /opt/smart-tree-feedback
+  - cd /opt/smart-tree-feedback
+  - git clone https://github.com/8b-is/smart-tree.git .
+  
+  # Start services
+  - systemctl daemon-reload
+  - systemctl enable smart-tree-feedback
+  - systemctl start smart-tree-feedback
+  
+  # Wait for services
+  - sleep 10
+  - /opt/smart-tree-feedback/health-check.sh
+  
+  # Setup monitoring webhook (optional)
+  - |
+    if [ -n "${DISCORD_WEBHOOK}" ]; then
+      curl -X POST "${DISCORD_WEBHOOK}" \
+        -H "Content-Type: application/json" \
+        -d "{\"content\": \"🚀 Smart Tree Feedback Worker deployed on Hetzner instance ${INSTANCE_ID}\"}"
+    fi
+
+final_message: |
+  Smart Tree Feedback Worker is ready!
+  Instance: $INSTANCE_ID
+  Check status: /opt/smart-tree-feedback/health-check.sh
+  Logs: docker-compose logs -f feedback-worker
+  Metrics: http://$PUBLIC_IPV4:8080/

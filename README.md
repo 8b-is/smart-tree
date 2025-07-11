@@ -1,4 +1,4 @@
-# 🌳 Smart Tree (st) v3.2.0 - The Directory Visualizer That Rocks! 🎸
+# 🌳 Smart Tree (st) v3.3.0 - The AI-Powered Directory Visualizer! 🚀
 
 ![Hue's Side | Aye's Side](st-banner.png)
 
@@ -25,16 +25,18 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 > #### Who is Aye?  That's Me -  A-ye! <--> Who is Hue?  That's You - Human UsEr. | 
 
 
-## 🌟 Version 3.2.0: "Less is More" Edition! 
+## 🌟 Version 3.3.0: "AI Feedback Loop" Edition! 
 
-### 🎸 What's NEW (or should we say... what's GONE?)
+### 🎸 What's NEW and AMAZING?
 
-**BREAKING NEWS**: Elvis has left the building! 🚪
+**The Tree That Learns!** Smart Tree now has optional cloud features for those who want them! 🌱
 
-- **❌ Removed Interactive Mode** - Because sometimes, simplicity rocks harder than complexity!
-- **✅ Classic Mode is DEFAULT** - Just run `st` and boom! Beautiful trees! 
-- **🚀 Smaller, Faster, Better** - Like a sports car that lost weight and gained speed!
-- **💾 One Less Dependency** - `inquire` said goodbye, and we're not crying!
+- **🔄 AI Feedback System** - Help shape Smart Tree's future (only with your consent!)
+- **📡 Update Notifications** - Get notified about new features (for AI assistants)
+- **🌍 Full Cross-Platform** - Windows, Mac, Linux, ARM - we run EVERYWHERE!
+- **🤖 AI-Driven Development** - Your AI assistant can suggest improvements!
+- **✨ Works Offline** - Cloud features are 100% optional - Smart Tree always works!
+- **🏗️ Better Windows Support** - File permissions work perfectly now!
 
 ## 🚀 Quick Start (Faster than Making Coffee ☕)
 
@@ -112,7 +114,7 @@ claude mcp add st /usr/local/bin/st -- --mcp
 ### 🌈 The Basics - Simple Yet Powerful
 
 ```bash
-# The classics never die! (Now the default in v3.2.0!)
+# The beautiful classic tree - now the default!
 st                          # Current directory with beautiful trees 🌳
 st /path/to/directory       # Specific directory - point and shoot! 🎯
 
@@ -326,6 +328,17 @@ src/
 | 🔍 **Debugging** | `hex` | All the details |
 | 💾 **Archival** | `json` | Future-proof |
 | 🏃 **Quick Check** | `digest` | One-line summary |
+
+### 💡 AI Feedback System (New in v3.3.0!)
+
+Smart Tree learns from its users! When used with AI assistants like Claude:
+
+- **🤝 Consent First** - Feedback is only sent with your explicit approval
+- **🔒 Privacy Focused** - Only tool suggestions and improvements, never your data
+- **🚀 Rapid Evolution** - Your feedback directly shapes new features
+- **📡 Optional** - Works perfectly offline, cloud features are a bonus!
+
+Example: Your AI assistant finds a missing feature? It can suggest it directly to the development team!
 
 ### 🧙 MCP (Model Context Protocol) Server
 

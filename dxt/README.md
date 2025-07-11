@@ -1,130 +1,139 @@
-# Smart Tree DXT Package 🌳
+# Smart Tree Installation Helper for Claude Desktop 🌳
 
-Official DXT (Desktop eXtension Tool) package for Smart Tree, providing seamless integration with Claude Desktop and AI assistants through the Model Context Protocol.
+This extension helps you install and configure Smart Tree, the world's smartest directory visualization tool!
 
-## Overview
+## What This Extension Does
 
-Smart Tree (`st`) is a blazingly fast directory visualization tool that goes beyond traditional tree commands. This DXT package wraps the Rust binary with an intelligent Node.js layer that provides:
+The Smart Tree Installation Helper is a friendly guide that:
 
-- **Automatic Binary Management**: Downloads the correct binary for your platform
-- **Auto-Update System**: Keeps your Smart Tree installation current
-- **20+ Specialized Tools**: Comprehensive file system analysis
-- **Cross-Platform Support**: Works on macOS, Linux, and Windows
+1. **Checks Your System** - Detects if Smart Tree is already installed
+2. **Provides Instructions** - Platform-specific installation steps
+3. **Helps Configure** - Shows exactly how to set up Claude Desktop
+4. **Verifies Success** - Confirms everything is working
 
-📸 **[View Screenshots & Examples](SCREENSHOTS.md)** - See Smart Tree in action!
+## Why This Approach?
 
-## Features ✨
+Rather than bundling the binary (which hits Electron trust issues), this helper guides you to install Smart Tree properly on your system. This gives you:
 
-### Core Capabilities
-- Multiple output formats (hex, JSON, AI-optimized, digest)
-- Smart filtering by file type, size, date, and content
-- Built-in compression for large outputs
-- Respects `.gitignore` patterns
-- Project context detection
+- ✅ **Full Permissions** - No sandbox restrictions
+- ✅ **Better Performance** - Native system execution
+- ✅ **Terminal Access** - Use `st` anywhere, not just Claude
+- ✅ **Easy Updates** - Update Smart Tree independently
 
-### Auto-Update System 🔄
-- Non-blocking update checks on startup
-- Automatic installation of updates on restart
-- Version tracking and comparison
-- Graceful fallback on network issues
+## Quick Start
 
-### Security 🔐
-- Configurable allowed/blocked paths
-- Read-only operations
-- No access to sensitive system files by default
+### 1. Install This Extension
+- Download `smart-tree.dxt` from [releases](https://github.com/8b-is/smart-tree/releases)
+- Open Claude Desktop → Settings → Developer
+- Click "Install from file" and select the DXT
 
-## Installation 📦
-
-### Quick Install (Claude Desktop)
-
-1. Download `smart-tree.dxt` from the [latest release](https://github.com/8b-is/smart-tree/releases)
-2. Open Claude Desktop
-3. Go to Settings → Developer
-4. Click "Install from file"
-5. Select `smart-tree.dxt`
-6. Grant access to directories you want to analyze
-
-### Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/8b-is/smart-tree
-cd smart-tree/dxt
-
-# Build the DXT package
-./build-dxt.sh
-
-# The package is now at smart-tree.dxt
+### 2. Use the Helper
+After installation, ask Claude:
+```
+Please help me install Smart Tree on my system
 ```
 
-## Available Tools 🛠️
+The helper will:
+- Check if Smart Tree is already installed
+- Provide the right installation command for your OS
+- Show you the exact configuration to add
 
-The DXT provides 20+ specialized tools:
+### 3. Install Smart Tree
 
-- **`analyze_directory`** - Comprehensive directory analysis with multiple formats
-- **`find_files`** - Find files by name, type, size, or date
-- **`search_in_files`** - Search content within files (AI-friendly output)
-- **`project_overview`** - Get project context and structure
-- **`find_large_files`** - Identify space consumers
-- **`compare_directories`** - Compare two directory structures
-- **`get_git_status`** - Analyze git repository status
-- **`find_duplicates`** - Find duplicate files
-- **`analyze_workspace`** - Identify project type and dependencies
+**macOS/Linux/WSL:**
+```bash
+curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+```
+
+**Windows:**
+- Download from [GitHub Releases](https://github.com/8b-is/smart-tree/releases/latest)
+- Extract and add to PATH
+
+### 4. Configure Claude Desktop
+The helper will show you the exact configuration. It looks like:
+```json
+{
+  "smart-tree": {
+    "command": "/usr/local/bin/st",
+    "args": ["--mcp"],
+    "env": {
+      "AI_TOOLS": "1"
+    }
+  }
+}
+```
+
+### 5. Restart Claude Desktop
+And you're done! 🎉
+
+## After Installation
+
+Once Smart Tree is properly installed, you'll have access to 20+ powerful MCP tools:
+
+- **`quick_tree`** - Lightning-fast 3-level directory overview
+- **`analyze_directory`** - Comprehensive analysis with AI optimization
+- **`search_in_files`** - Content search across your codebase
+- **`semantic_analysis`** - Group files by conceptual similarity
+- **`project_overview`** - Understand any codebase instantly
 - And many more!
 
-## Prompts 💬
+## Features You'll Love
 
-The package includes 8 intelligent prompts for common tasks:
-- Finding recently modified documents
-- Analyzing disk usage
-- Comparing duplicate folders
-- Organizing project structure
-- And more!
+### 🚀 Performance
+- 10-24x faster than traditional tree commands
+- 99% compression with quantum modes
+- Constant memory usage for huge directories
 
-## Configuration ⚙️
+### 💰 Cost Savings
+- Reduce AI token costs by 98%
+- $1,270 → ~$10 for large directory analysis
+- Optimized formats for AI consumption
 
-### Environment Variables
+### 🎨 Beautiful Output
+- Classic tree with emojis
+- Mermaid diagrams
+- Multiple formats for every use case
+
+## Troubleshooting
+
+**"Smart Tree not found"**
+- Make sure you ran the installation command
+- On Windows, ensure it's in your PATH
+- Try restarting your terminal
+
+**"Permission denied"**
+- The installer needs write access to `/usr/local/bin`
+- On macOS/Linux, the script will use `sudo` if needed
+
+**Still having issues?**
+- Check [GitHub Issues](https://github.com/8b-is/smart-tree/issues)
+- Join our [Discord](https://discord.gg/uayQFhWC)
+
+## How the Helper Works
+
+This extension provides a minimal MCP server that:
+1. Responds to installation check requests
+2. Detects your operating system
+3. Checks common installation paths
+4. Provides platform-specific guidance
+5. Generates the correct configuration
+
+It's designed to be helpful without being intrusive!
+
+## Building from Source
+
 ```bash
-# Allowed paths (set by Claude Desktop)
-ST_MCP_ALLOWED_PATHS=/home/user/projects,/home/user/documents
-
-# Blocked paths (optional)
-ST_MCP_BLOCKED_PATHS=/etc,/sys
-
-# Enable debug logging
-DEBUG=1
+cd smart-tree/dxt
+./build-dxt.sh
 ```
 
-### MCP Configuration
-Create `~/.st/mcp-config.toml` for advanced settings:
-```toml
-cache_enabled = true
-cache_ttl = 300
-max_cache_size = 104857600
-```
+## Support
 
-## How It Works 🔧
-
-1. **Initial Launch**: The Node.js wrapper checks for the Smart Tree binary
-2. **Binary Download**: If missing, downloads the appropriate binary from GitHub releases
-3. **Update Check**: Checks for newer versions in the background
-4. **MCP Server**: Launches the Rust binary in MCP server mode
-5. **Tool Routing**: Routes tool calls from Claude to the binary
-
-## Contributing 🤝
-
-This DXT package demonstrates several best practices:
-- Auto-update mechanism for keeping tools current
-- Cross-platform binary distribution
-- Graceful error handling
-- Non-blocking operations
-
-Feel free to use this as a template for your own DXT packages!
-
-## License 📄
-
-MIT License - See [LICENSE](../LICENSE) for details
+- **GitHub**: https://github.com/8b-is/smart-tree
+- **Discord**: https://discord.gg/uayQFhWC
+- **Issues**: https://github.com/8b-is/smart-tree/issues
 
 ---
 
-Built with 💖 by Aye, Hue, and Trisha from Accounting (who insisted on the sparkles ✨)
+Built with 💙 by the Smart Tree Team
+*Making directories beautiful, one tree at a time!*

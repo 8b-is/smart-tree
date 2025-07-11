@@ -630,7 +630,7 @@ impl MarkdownFormatter {
         writeln!(writer)?;
         writeln!(writer, "---")?;
         writeln!(writer)?;
-        writeln!(writer, "*Generated with [Smart Tree](https://github.com/8b-is/smart-tree) - Making directory visualization intelligent, fast, and beautiful!*")?;
+        writeln!(writer, "**Generated with [Smart Tree](https://github.com/8b-is/smart-tree/) - Making directory visualization intelligent, fast, and beautiful!** ")?;
 
         Ok(())
     }

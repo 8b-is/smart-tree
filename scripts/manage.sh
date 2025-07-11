@@ -721,6 +721,13 @@ ${YELLOW}MCP Commands:${NC}
   ${GREEN}mcp-config${NC}            Show Claude Desktop configuration
   ${GREEN}mcp-tools${NC}             Show available MCP tools
 
+${YELLOW}Feedback System Commands:${NC}
+  ${GREEN}feedback-build${NC}        Build feedback system containers
+  ${GREEN}feedback-run${NC}          Run feedback worker locally
+  ${GREEN}feedback-deploy${NC} [type] Deploy feedback system (local|hetzner|registry)
+  ${GREEN}feedback-test${NC}         Test feedback system
+  ${GREEN}feedback-status${NC}       Check feedback system health
+
 ${YELLOW}Environment Variables:${NC}
   ${PURPLE}NO_EMOJI=1${NC}           Disable emojis in output
   ${PURPLE}NON_INTERACTIVE=true${NC}  Disable interactive features
@@ -735,6 +742,89 @@ ${YELLOW}Examples:${NC}
 
 ${CYAN}Made with ${SPARKLE} and 🌳 by the Smart Tree team!${NC}
 EOF
+}
+
+# Feedback system functions
+feedback_build() {
+    print_header "Building Feedback System Containers 🔨"
+    cd "$PROJECT_DIR/feedback-worker"
+    
+    print_info "Building feedback API container..."
+    docker build -t ghcr.io/8b-is/smart-tree-feedback-api:latest ../feedback-api/
+    
+    print_info "Building feedback worker container..."
+    docker build -t ghcr.io/8b-is/smart-tree-feedback-worker:latest .
+    
+    print_success "Feedback containers built successfully!"
+}
+
+feedback_run() {
+    print_header "Running Feedback Worker Locally 🎸"
+    cd "$PROJECT_DIR/feedback-worker"
+    
+    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        print_warning "GITHUB_TOKEN not set - worker will run without GitHub integration"
+    fi
+    
+    print_info "Starting feedback system with docker-compose..."
+    docker-compose up -d
+    
+    print_success "Feedback system running!"
+    print_info "  API: http://localhost:8422"
+    print_info "  Metrics: http://localhost:9090/metrics"
+    print_info "  Grafana: http://localhost:3000 (admin/admin)"
+}
+
+feedback_deploy() {
+    local deploy_type="${1:-local}"
+    print_header "Deploying Feedback System - Type: $deploy_type 🚀"
+    cd "$PROJECT_DIR/feedback-worker"
+    
+    ./deploy.sh "$deploy_type"
+}
+
+feedback_test() {
+    print_header "Testing Feedback System 🧪"
+    cd "$PROJECT_DIR/feedback-worker"
+    
+    if ! command_exists python3; then
+        print_error "Python 3 is required for testing"
+        return 1
+    fi
+    
+    print_info "Running feedback system tests..."
+    python3 test_worker.py
+}
+
+feedback_status() {
+    print_header "Feedback System Status 📊"
+    
+    # Check API
+    if curl -sf http://localhost:8422/health > /dev/null 2>&1; then
+        print_success "API is healthy"
+        curl -s http://localhost:8422/health | jq . || true
+    else
+        print_error "API is not responding"
+    fi
+    
+    # Check worker metrics
+    if curl -sf http://localhost:9090/metrics > /dev/null 2>&1; then
+        print_success "Worker is healthy"
+        echo "  $(curl -s http://localhost:9090/metrics | grep -E '^feedback_processed_total' | head -1)"
+    else
+        print_error "Worker is not responding"
+    fi
+    
+    # Check Redis
+    if docker exec $(docker ps -qf "name=redis" 2>/dev/null) redis-cli ping > /dev/null 2>&1; then
+        print_success "Redis is healthy"
+    else
+        print_error "Redis is not responding"
+    fi
+    
+    # Check containers
+    print_info "Running containers:"
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "(feedback|redis)" || echo "  No feedback containers running"
 }
 
 # Main command dispatcher
@@ -812,6 +902,21 @@ main() {
             ;;
         demo-relations)
             demo_relations
+            ;;
+        feedback-build)
+            feedback_build
+            ;;
+        feedback-run)
+            feedback_run
+            ;;
+        feedback-deploy)
+            feedback_deploy "${@:2}"
+            ;;
+        feedback-test)
+            feedback_test
+            ;;
+        feedback-status)
+            feedback_status
             ;;
         help|h|-h|--help)
             show_help

@@ -2,7 +2,7 @@
 
 use super::{is_path_allowed, McpContext};
 use crate::{
-    feedback_client::{FeedbackClient, FeedbackExample, FeedbackRequest},
+    feedback_client::FeedbackClient,
     formatters::{
         ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
         hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,

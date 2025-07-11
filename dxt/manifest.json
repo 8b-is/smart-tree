@@ -3,9 +3,9 @@
   "id": "is.8b.smart-tree",
   "name": "smart-tree",
   "display_name": "Smart Tree",
-  "version": "3.2.0",
-  "description": "🌳 World's smartest directory tree tool! Features summary-ai (10x token reduction), semantic search, quantum compression, mermaid diagrams (including treemaps!). Save 98% on AI costs while getting better results. Created by the legendary Cheet!",
-  "long_description": "Smart Tree v3.1 revolutionizes directory visualization with MEM|8 Quantum compression, reducing output by 99% and saving thousands in AI token costs.\n\nKey Features:\n- **MEM|8 Quantum Format**: 99% size reduction (487MB → 4.1MB for Chromium)\n- **Claude Mode Default**: MCP tools now use maximum compression by default\n- **Semantic Analysis**: Group files by conceptual waves (inspired by Omni!)\n- **Mermaid Diagrams**: Generate directory diagrams for documentation\n- **Cost Savings**: $1,270 saved per large directory analysis\n- **10-24x Faster**: Than traditional tree command\n- **Native Streaming**: Constant memory usage for massive directories\n- Multiple output formats (quantum, claude, mermaid, semantic, hex, json, csv, tsv)\n- Smart filtering by file type, size, date, and content\n- Built-in compression for all formats\n- MCP server with 22 specialized tools\n- Cross-platform support (Windows, macOS, Linux)",
+  "version": "3.3.0",
+  "description": "🌳 Installation helper for Smart Tree - the world's smartest directory tree tool! This extension helps you install and configure Smart Tree for use with Claude Desktop.",
+  "long_description": "Smart Tree Installation Helper v3.3.0\n\nThis extension guides you through installing Smart Tree on your system and configuring it for use with Claude Desktop.\n\n**Why install Smart Tree separately?**\n• Full system permissions for file access\n• Faster performance\n• Works in terminal and with Claude Desktop\n• Automatic updates via the installer\n\n**After installation, you'll get:**\n- **MEM|8 Quantum Format**: 99% size reduction\n- **AI-Optimized Output**: Save 98% on token costs\n- **20+ MCP Tools**: Comprehensive directory analysis\n- **Semantic Analysis**: Group files by conceptual waves\n- **Cross-Platform**: Works on Windows, macOS, and Linux\n\nThe installation process is simple:\n• macOS/Linux: One-line installer\n• Windows: Download and add to PATH\n• Then restart Claude Desktop!",
   "author": {
     "name": "8b-is",
     "email": "st@8b.is",
@@ -23,100 +23,23 @@
     "manifest.json",
     "icon.png",
     "server/index.js",
-    "server/install.js",
     "README.md"
   ],
   "tools": [
     {
-      "name": "server_info",
-      "description": "Get information about the Smart Tree MCP server"
+      "name": "check_installation",
+      "description": "Check if Smart Tree is installed and provide installation instructions"
     },
     {
-      "name": "analyze_directory",
-      "description": "Analyze a directory with smart compression. Use mode='claude' for MAXIMUM compression (10x reduction!)"
-    },
-    {
-      "name": "find_files",
-      "description": "Find files matching specific criteria (name, type, size, date)"
-    },
-    {
-      "name": "get_statistics",
-      "description": "Get detailed statistics about a directory"
-    },
-    {
-      "name": "get_digest",
-      "description": "Get SHA256 digest of directory structure"
-    },
-    {
-      "name": "quick_tree",
-      "description": "Get a quick tree view of a directory (optimized for AI, compressed by default)"
-    },
-    {
-      "name": "project_overview",
-      "description": "Get a comprehensive project overview with context, structure, and key files"
-    },
-    {
-      "name": "find_code_files",
-      "description": "Find all code files in a project by common programming languages"
-    },
-    {
-      "name": "find_config_files",
-      "description": "Find all configuration files (json, yaml, toml, ini, env, etc.)"
-    },
-    {
-      "name": "find_documentation",
-      "description": "Find all documentation files (README, markdown, rst, txt docs)"
-    },
-    {
-      "name": "search_in_files",
-      "description": "Search for content within files (like grep but AI-friendly output)"
-    },
-    {
-      "name": "find_large_files",
-      "description": "Find files larger than a specified size"
-    },
-    {
-      "name": "find_recent_changes",
-      "description": "Find recently modified files"
-    },
-    {
-      "name": "compare_directories",
-      "description": "Compare two directories and show differences"
-    },
-    {
-      "name": "get_git_status",
-      "description": "Get git repository status and structure (if directory is a git repo)"
-    },
-    {
-      "name": "find_duplicates",
-      "description": "Find duplicate files based on size and name patterns"
-    },
-    {
-      "name": "analyze_workspace",
-      "description": "Analyze a development workspace and identify project structure, build files, dependencies"
-    },
-    {
-      "name": "find_tests",
-      "description": "Find all test files in a project"
-    },
-    {
-      "name": "find_build_files",
-      "description": "Find build configuration files (Makefile, CMake, Cargo.toml, package.json, etc.)"
-    },
-    {
-      "name": "directory_size_breakdown",
-      "description": "Get size breakdown of subdirectories to identify space usage"
-    },
-    {
-      "name": "find_empty_directories",
-      "description": "Find all empty directories"
-    },
-    {
-      "name": "semantic_analysis",
-      "description": "Group files by semantic similarity using wave-based analysis (inspired by Omni!)"
-    }
+      "note": "After installation, Smart Tree provides 20+ powerful MCP tools for directory analysis!"
   ],
   "prompts": [
+    {
+      "name": "install_smart_tree",
+      "description": "Help me install Smart Tree",
+      "arguments": [],
+      "text": "Please help me install Smart Tree on my system. Use the check_installation tool to see if it's already installed and provide platform-specific installation instructions if needed."
+    },
     {
       "name": "find_recent_document",
       "description": "Help find a document worked on recently",
@@ -166,10 +89,6 @@
       "text": "Perform a comprehensive health check on this project. Use project_overview for the structure, find_tests to check test coverage, find_documentation to verify docs, and get_statistics for overall metrics. Provide insights and recommendations."
     }
   ],
-  "install": {
-    "type": "node",
-    "script": "server/install.js"
-  },
   "server": {
     "type": "node",
     "entry_point": "server/index.js",
