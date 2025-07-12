@@ -1,0 +1,142 @@
+# Tmux AI Assistant v2 Configuration
+# Continuous monitoring with smart processing! 🚀
+
+# AI Provider Configuration
+providers:
+  summarization: ollama  # For processing activity (cost-effective)
+  next_step: openai      # For generating suggestions (high quality)
+
+# Continuous Monitoring Settings
+monitoring:
+  pause_threshold: 15.0         # Seconds of inactivity before processing
+  dead_threshold: 120.0         # Seconds before considering session dead
+  max_context_lines: 500        # Max lines before forced summarization
+  capture_interval: 0.1         # How often to check for new lines (seconds)
+
+# Smart Processing
+processing:
+  # Use rolling summaries to manage context window
+  enable_rolling_summaries: true
+  max_summaries_to_keep: 10
+  
+  # Combine multiple short pauses
+  combine_pause_window: 5.0     # Seconds to wait for more activity
+  
+  # Context window management
+  context_compression_ratio: 0.3  # Target compression when summarizing
+
+# Interactive Prompt Detection
+interactive:
+  # Enable automated responses
+  automation_enabled: false     # Set to true for full automation
+  
+  # Common interactive patterns
+  question_patterns:
+    - 'Are you sure.*\?'
+    - 'Do you want to.*\?'
+    - 'Continue\?.*\(y/n\)'
+    - 'Overwrite.*\?'
+    - 'Delete.*\?'
+    - 'Save changes.*\?'
+    - 'Password:'
+    - 'Enter passphrase'
+    - 'Username:'
+    - '\[sudo\] password for'
+    - 'Proceed\?'
+    - 'Confirm.*\?'
+    - 'Replace.*\?'
+    - 'Remove.*\?'
+    - 'Install.*\?'
+    
+  # Auto-response strategies
+  response_strategies:
+    confirmation:
+      default: "n"  # Safe default for confirmations
+      patterns:
+        - pattern: "upgrade.*packages"
+          response: "y"
+        - pattern: "save.*changes"
+          response: "y"
+          
+    password:
+      # Passwords are stored securely in vault.yaml
+      use_vault: true
+      
+# Prompt Patterns (for detecting when at a shell prompt)
+prompt_patterns:
+  - ' > $'         # User's custom prompt
+  - '\$ $'         # Bash
+  - '# $'          # Root
+  - '>>> $'        # Python
+  - 'In \[\d+\]: $'  # IPython
+  - 'mysql> $'     # MySQL
+  - ': $'          # Colon prompt
+  - '❯ $'          # Fancy prompts
+  - '➜ $'          # Oh My Zsh
+  - '\w+@\w+.*[$#] $'  # user@host prompts
+
+# AI Model Configuration
+models:
+  openai:
+    summarization: gpt-4o
+    next_step: gpt-4o
+  gemini:
+    summarization: gemini-1.5-flash
+    next_step: gemini-1.5-flash
+  ollama:
+    summarization: mistral-nemo
+    next_step: mistral-nemo
+
+# System Prompts
+system_prompts:
+  summarization: |
+    You are an expert at analyzing terminal session activity.
+    Provide concise, technical summaries focusing on:
+    - Key commands executed and their outcomes
+    - Any errors or warnings
+    - Current state/context
+    - What task appears to be in progress
+    Keep summaries brief but capture all important details.
+    If you see a rolling summary context, incorporate it intelligently.
+  
+  next_step: |
+    You are a helpful terminal assistant providing actionable next steps.
+    Based on the session summary, suggest ONE clear next action.
+    Consider:
+    - Any errors that need fixing
+    - Incomplete tasks
+    - Logical next commands
+    Format suggestions as actual commands when possible.
+    If the user seems stuck, provide helpful guidance.
+    
+  question_helper: |
+    The user has encountered an interactive prompt.
+    Based on the context, suggest the appropriate response.
+    Consider safety and the user's apparent intent.
+    For confirmations, err on the side of caution unless the action is clearly intended.
+
+# Logging and Debugging
+logging:
+  verbose: false
+  log_level: INFO
+  log_interactions: true
+  log_stats_interval: 60  # seconds
+
+# Performance Tuning
+performance:
+  max_queue_size: 10000
+  summary_cache_size: 50
+  async_processing: true
+
+# Security Settings
+security:
+  vault_encryption: false  # Set to true in production!
+  auto_response_confirmation: true  # Ask before auto-responding
+  sensitive_pattern_masking: true
+
+# Statistics Tracking
+statistics:
+  track_performance: true
+  track_ai_usage: true
+  track_patterns: true
+  export_interval: 3600  # Export stats every hour
