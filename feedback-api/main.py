@@ -162,6 +162,29 @@ async def root():
         }
     }
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    # Check if directories are accessible
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {
+            "feedback_dir": FEEDBACK_DIR.exists(),
+            "stats_dir": STATS_DIR.exists(),
+            "consent_dir": CONSENT_DIR.exists()
+        }
+    }
+    
+    # Count feedback files
+    try:
+        feedback_count = sum(1 for _ in FEEDBACK_DIR.glob("**/*.stfb"))
+        health_status["feedback_count"] = feedback_count
+    except:
+        health_status["status"] = "degraded"
+    
+    return health_status
+
 @app.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
     feedback: SmartTreeFeedback,
@@ -494,6 +517,68 @@ async def check_consent(user_id: str):
     
     return {"consent_level": "ask_each_time", "message": "No consent on file"}
 
+@app.get("/feedback/pending")
+async def get_pending_feedback(limit: int = 10, offset: int = 0):
+    """Get pending feedback items for processing"""
+    pending_items = []
+    
+    # Scan feedback directory for unprocessed items
+    for date_dir in FEEDBACK_DIR.iterdir():
+        if not date_dir.is_dir():
+            continue
+            
+        for feedback_file in date_dir.glob("*.stfb"):
+            # Check if already processed (simple file-based check)
+            processed_marker = feedback_file.with_suffix(".processed")
+            if processed_marker.exists():
+                continue
+                
+            try:
+                # Read compressed feedback
+                with open(feedback_file, "rb") as f:
+                    # Read header
+                    magic = f.read(4)
+                    if magic != b"STFB":
+                        continue
+                    
+                    version = f.read(2)
+                    original_size = int.from_bytes(f.read(4), "little")
+                    compressed_size = int.from_bytes(f.read(4), "little")
+                    
+                    # Read and decompress data
+                    compressed_data = f.read(compressed_size)
+                    json_data = zlib.decompress(compressed_data).decode()
+                    feedback_data = json.loads(json_data)
+                    
+                    pending_items.append(feedback_data)
+                    
+                    if len(pending_items) >= limit:
+                        return pending_items
+                        
+            except Exception as e:
+                print(f"Error reading feedback file {feedback_file}: {e}")
+                continue
+    
+    return pending_items[offset:offset + limit]
+
+@app.post("/feedback/{feedback_id}/processed")
+async def mark_feedback_processed(feedback_id: str):
+    """Mark feedback as processed by worker"""
+    # Find the feedback file
+    for date_dir in FEEDBACK_DIR.iterdir():
+        if not date_dir.is_dir():
+            continue
+            
+        feedback_file = date_dir / f"{feedback_id}.stfb"
+        if feedback_file.exists():
+            # Create processed marker
+            processed_marker = feedback_file.with_suffix(".processed")
+            processed_marker.touch()
+            
+            return {"message": "Feedback marked as processed", "id": feedback_id}
+    
+    raise HTTPException(status_code=404, detail="Feedback not found")
+
 @app.get("/tools/requested")
 async def get_requested_tools():
     """Get all tool requests from AI assistants"""
@@ -559,7 +644,7 @@ async def check_version(current_version: str):
                 "Better context understanding with semantic waves"
             ]
         },
-        "auto_update_command": f"curl -fsSL https://f.8b.is/install.sh | bash -s {latest_version}",
+        "auto_update_command": f"curl -fsSL https://f.8t.is/install.sh | bash -s {latest_version}",
         "manual_update_command": "cargo install --git https://github.com/8b-is/smart-tree --tag v{latest_version}"
     }
 

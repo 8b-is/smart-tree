@@ -839,15 +839,15 @@ impl Scanner {
                     // An error occurred trying to access a directory entry (e.g., permission denied).
                     if let Some(path) = e.path() {
                         let depth = e.depth();
-                        
+
                         // Check if this is a "directory contents" error vs "directory entry" error.
                         // If this is a permission error, it's likely we already processed the directory
                         // entry successfully but can't read its contents. In that case, skip creating
                         // a duplicate node since we already marked the original as permission_denied.
-                        let is_contents_error = e.io_error().map_or(false, |io_err| 
+                        let is_contents_error = e.io_error().map_or(false, |io_err| {
                             io_err.kind() == std::io::ErrorKind::PermissionDenied
-                        );
-                        
+                        });
+
                         if !is_contents_error {
                             // Create a special node representing the permission-denied entry.
                             let node = self.create_permission_denied_node(path, depth);
@@ -857,7 +857,7 @@ impl Scanner {
                             // Still update stats (e.g., directory count) for permission-denied entries if shown.
                             stats.update_file(&node);
                         }
-                        
+
                         // Tell WalkDir not to try to descend into this unreadable directory.
                         walker.skip_current_dir();
                     }
@@ -1343,7 +1343,7 @@ impl Scanner {
         } else {
             metadata.len()
         };
-        
+
         // Check if this is a directory that we can't read the contents of
         let permission_denied = if metadata.is_dir() {
             // Try to read the directory to see if we have permission
@@ -1463,6 +1463,7 @@ impl Scanner {
     /// Checks if a file is likely a special virtual file (e.g., in /proc, /sys, /dev)
     /// where reported metadata like size might be zero, misleading, or cause issues if read.
     /// This helps in deciding to report size as 0 for such files.
+    #[allow(unused_variables)]
     fn is_special_virtual_file(&self, path: &Path, metadata: &fs::Metadata) -> bool {
         // Check if the path starts with known virtual filesystem prefixes.
         if let Some(path_str) = path.to_str() {
@@ -1527,6 +1528,13 @@ impl Scanner {
     /// "Sorry, `node_modules`, you're not on the list tonight."
     /// It's the first line of defense against clutter.
     fn should_ignore(&self, path: &Path) -> Result<bool> {
+        // --- Rule 0: Never ignore the root path itself ---
+        // If the user explicitly asks to scan a directory, we should show it
+        // even if it would normally be ignored (e.g., scanning 'target' directory)
+        if path == self.root {
+            return Ok(false);
+        }
+
         // --- Rule 1: Check against specific, always-ignored files (absolute paths) ---
         if self.config.use_default_ignores && self.ignore_files.contains(path) {
             return Ok(true); // Matches a specific problematic file.

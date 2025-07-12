@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 100mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  feedback-worker:
+    build: .
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - FEEDBACK_API_URL=${FEEDBACK_API_URL:-https://f.8t.is/api}
+      - REDIS_URL=redis://redis:6379
+      - PROMETHEUS_PORT=9090
+      - WORKER_NAME=local-dev
+      - GITHUB_REPO=${GITHUB_REPO:-8b-is/smart-tree}
+    depends_on:
+      - redis
+    ports:
+      - "9090:9090"  # Prometheus metrics
+    restart: unless-stopped
+    volumes:
+      - ./worker.py:/app/worker.py:ro  # For development
+
+  # Optional: Grafana for monitoring
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  grafana-data:

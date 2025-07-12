@@ -320,49 +320,55 @@ impl MermaidFormatter {
     ) -> Result<()> {
         writeln!(writer, "```mermaid")?;
         writeln!(writer, "%%{{init: {{'theme':'dark'}}}}%%")?; // Dark theme looks better
-        writeln!(writer, "treemap-beta")?; // Treemap is a Mermaid Beta feature.        
-        // Build directory tree with sizes
+        writeln!(writer, "treemap-beta")?; // Treemap is a Mermaid Beta feature.
+                                           // Build directory tree with sizes
         let root_name = root_path
             .file_name()
             .unwrap_or(root_path.as_os_str())
             .to_string_lossy();
         let escaped_root_name = Self::escape_label(&root_name);
         let root_emoji = if !self.no_emoji { "📁 " } else { "" };
-        
+
         // Write in hierarchical order based on path components
         let mut current_path = vec![root_path.to_path_buf()];
         let mut current_depth = 0;
         let indent_base = "    ";
-        
-        writeln!(writer, "{}\"{}{}\"", indent_base, root_emoji, escaped_root_name)?;
-        
+
+        writeln!(
+            writer,
+            "{}\"{}{}\"",
+            indent_base, root_emoji, escaped_root_name
+        )?;
+
         // Sort nodes by path for consistent hierarchical output
         let mut sorted_nodes = nodes.to_vec();
         sorted_nodes.sort_by_key(|n| n.path.clone());
-        
+
         for node in &sorted_nodes {
             // Skip the root itself
             if node.path == *root_path {
                 continue;
             }
-            
+
             // Calculate the depth of this node
             let node_depth = node.path.components().count() - root_path.components().count();
-            
+
             // Adjust current path to match this node's parent path
             while current_depth >= node_depth {
                 current_path.pop();
                 current_depth -= 1;
             }
-            
+
             // Determine indent level
             let indent = indent_base.repeat(node_depth + 1);
-            
-            let name = node.path.file_name()
+
+            let name = node
+                .path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("?");
             let escaped_name = Self::escape_label(name);
-            
+
             if node.is_dir {
                 let dir_emoji = if !self.no_emoji { "📁 " } else { "" };
                 writeln!(writer, "{}\"{}{}\"", indent, dir_emoji, escaped_name)?;
@@ -381,13 +387,17 @@ impl MermaidFormatter {
                 } else {
                     ""
                 };
-                
+
                 // Convert size to KB for better readability in treemap
                 let size_kb = (node.size as f64 / 1024.0).max(1.0) as u64;
-                writeln!(writer, "{}\"{}{}\": {}", indent, emoji, escaped_name, size_kb)?;
+                writeln!(
+                    writer,
+                    "{}\"{}{}\": {}",
+                    indent, emoji, escaped_name, size_kb
+                )?;
             }
         }
-        
+
         writeln!(writer, "```")?;
         Ok(())
     }

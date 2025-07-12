@@ -1,5 +1,5 @@
 //! Universal Input Adapter System for Smart Tree
-//! 
+//!
 //! Transform any context source into visualizable trees:
 //! - File systems (traditional)
 //! - QCP quantum contexts
@@ -14,32 +14,32 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub mod filesystem;
+pub mod mem8;
+pub mod openapi;
 pub mod qcp;
 pub mod sse;
-pub mod openapi;
-pub mod mem8;
 
 /// Represents any kind of context node
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextNode {
     /// Unique identifier
     pub id: String,
-    
+
     /// Display name
     pub name: String,
-    
+
     /// Node type (file, api_endpoint, quantum_state, event, etc.)
     pub node_type: NodeType,
-    
+
     /// Quantum properties if applicable
     pub quantum_state: Option<QuantumState>,
-    
+
     /// Child nodes
     pub children: Vec<ContextNode>,
-    
+
     /// Metadata specific to the input type
     pub metadata: serde_json::Value,
-    
+
     /// Entanglements with other nodes
     pub entanglements: Vec<Entanglement>,
 }
@@ -49,21 +49,21 @@ pub enum NodeType {
     // Traditional
     Directory,
     File,
-    
+
     // API-related
     ApiEndpoint,
     ApiSchema,
     WebSocketChannel,
-    
+
     // Quantum
     QuantumWave,
     EntangledState,
     Superposition,
-    
+
     // Event streams
     EventSource,
     EventType,
-    
+
     // MEM8
     MemoryWave,
     ConsciousnessStream,
@@ -74,13 +74,13 @@ pub enum NodeType {
 pub struct QuantumState {
     /// Wave amplitude (0.0 - 1.0)
     pub amplitude: f64,
-    
+
     /// Frequency in Hz
     pub frequency: f64,
-    
+
     /// Phase offset
     pub phase: f64,
-    
+
     /// Collapse probability
     pub collapse_probability: f64,
 }
@@ -89,10 +89,10 @@ pub struct QuantumState {
 pub struct Entanglement {
     /// ID of entangled node
     pub target_id: String,
-    
+
     /// Strength of entanglement (0.0 - 1.0)
     pub strength: f64,
-    
+
     /// Type of relationship
     pub relationship: String,
 }
@@ -102,16 +102,16 @@ pub struct Entanglement {
 pub trait InputAdapter: Send + Sync {
     /// Name of the adapter
     fn name(&self) -> &'static str;
-    
+
     /// Supported input formats/extensions
     fn supported_formats(&self) -> Vec<&'static str>;
-    
+
     /// Can this adapter handle the given input?
     async fn can_handle(&self, input: &InputSource) -> bool;
-    
+
     /// Parse input into context nodes
     async fn parse(&self, input: InputSource) -> Result<ContextNode>;
-    
+
     /// Get quantum wave signature if applicable
     fn wave_signature(&self) -> Option<String> {
         None
@@ -123,22 +123,19 @@ pub trait InputAdapter: Send + Sync {
 pub enum InputSource {
     /// Local file system path
     Path(PathBuf),
-    
+
     /// URL (HTTP/HTTPS/WSS)
     Url(String),
-    
+
     /// Raw data with format hint
     Raw {
         data: Vec<u8>,
         format_hint: Option<String>,
     },
-    
+
     /// QCP endpoint with query
-    QcpQuery {
-        endpoint: String,
-        query: String,
-    },
-    
+    QcpQuery { endpoint: String, query: String },
+
     /// MEM8 consciousness stream
     Mem8Stream {
         stream_id: String,
@@ -164,7 +161,7 @@ impl InputProcessor {
             ],
         }
     }
-    
+
     /// Process any input source into context nodes
     pub async fn process(&self, input: InputSource) -> Result<ContextNode> {
         // Find the first adapter that can handle this input
@@ -174,10 +171,10 @@ impl InputProcessor {
                 return adapter.parse(input).await;
             }
         }
-        
+
         anyhow::bail!("No adapter found for input source")
     }
-    
+
     /// Auto-detect input type from string
     pub fn detect_input_type(input: &str) -> InputSource {
         if input.starts_with("http://") || input.starts_with("https://") {
@@ -208,14 +205,16 @@ pub fn context_to_file_nodes(context: ContextNode) -> Vec<crate::FileNode> {
 }
 
 fn convert_node(context: &ContextNode, nodes: &mut Vec<crate::FileNode>, depth: usize) {
-    use crate::{FileNode, FileCategory, FilesystemType};
     use crate::scanner::FileType;
+    use crate::{FileCategory, FileNode, FilesystemType};
     use std::time::SystemTime;
-    
+
     let node = FileNode {
         path: PathBuf::from(&context.id),
         is_dir: !context.children.is_empty(),
-        size: context.metadata.get("size")
+        size: context
+            .metadata
+            .get("size")
             .and_then(|s| s.as_u64())
             .unwrap_or(0),
         modified: SystemTime::now(), // Use metadata time if available
@@ -246,9 +245,9 @@ fn convert_node(context: &ContextNode, nodes: &mut Vec<crate::FileNode>, depth: 
         search_matches: None,
         filesystem_type: FilesystemType::Unknown,
     };
-    
+
     nodes.push(node);
-    
+
     // Recursively convert children
     for child in &context.children {
         convert_node(child, nodes, depth + 1);

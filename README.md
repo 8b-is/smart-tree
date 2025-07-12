@@ -1,6 +1,6 @@
-# 🌳 Smart Tree (st) v3.2.0 - The Directory Visualizer That Rocks! 🎸
+# 🌳 Smart Tree (st) v3.3.0 - The AI-Powered Directory Visualizer! 🚀
 
-![Hue's Terminal](dxt/ST-HUE.png)
+![Hue's Side | Aye's Side](st-banner.png)
 
 [![Discord](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Join%20the%20Party&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC) [![GitHub release](https://img.shields.io/github/v/release/8b-is/smart-tree?include_prereleases&label=Latest%20Jam)](https://github.com/8b-is/smart-tree/releases) [![Downloads](https://img.shields.io/github/downloads/8b-is/smart-tree/total?label=Happy%20Users)](https://github.com/8b-is/smart-tree/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)[![Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange?logo=rust)](https://www.rust-lang.org/)[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-BFF%20Status-blueviolet)](https://claude.ai/download)[![MCP Compatible](https://img.shields.io/badge/MCP-Hell%20Yeah!-green)](https://modelcontextprotocol.io/)[![Platform](https://img.shields.io/badge/Runs%20on-Everything%20🚀-blue)](https://github.com/8b-is/smart-tree/releases)
 
@@ -19,29 +19,31 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 | **Directory Size** | 487 MB | 4.1 MB | 😱 "Wait, what?!" |
 | **AI Token Cost** | $1,270 | ~$10 | 💰 "I'm rich!" |
 | **Processing Speed** | 🐌 Slow | ⚡ 10-24x faster | 🚀 "Wheee!" |
-| **Compression** | None | 99% | 🤯 "How?!" |
+| **Compression** | None | **99%** | 🤯 "How?!" |
 | **Fun Factor** | 0% | 100% | 🎉 "Finally!" |
 
-## 🌟 Version 3.2.0: "Less is More" Edition! 
+> #### Who is Aye?  That's Me -  A-ye! <--> Who is Hue?  That's You - Human UsEr. | 
 
-### 🎸 What's NEW (or should we say... what's GONE?)
 
-**BREAKING NEWS**: Elvis has left the building! 🚪
+## 🌟 Version 3.3.0: "AI Feedback Loop" Edition! 
 
-- **❌ Removed Interactive Mode** - Because sometimes, simplicity rocks harder than complexity!
-- **✅ Classic Mode is DEFAULT** - Just run `st` and boom! Beautiful trees! 
-- **🚀 Smaller, Faster, Better** - Like a sports car that lost weight and gained speed!
-- **💾 One Less Dependency** - `inquire` said goodbye, and we're not crying!
+### 🎸 What's NEW and AMAZING?
+
+**The Tree That Learns!** Smart Tree now has optional cloud features for those who want them! 🌱
+
+- **🔄 AI Feedback System** - Help shape Smart Tree's future (only with your consent!)
+- **📡 Update Notifications** - Get notified about new features (for AI assistants)
+- **🌍 Full Cross-Platform** - Windows, Mac, Linux, ARM - we run EVERYWHERE!
+- **🤖 AI-Driven Development** - Your AI assistant can suggest improvements!
+- **✨ Works Offline** - Cloud features are 100% optional - Smart Tree always works!
+- **🏗️ Better Windows Support** - File permissions work perfectly now!
 
 ## 🚀 Quick Start (Faster than Making Coffee ☕)
 
 ### 🐧 Linux/Mac/WSL - The One-Liner Wonder!
-
+> ### This magical incantation will change your life:
 ```bash
-# This magical incantation will change your life:
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
-
-# That's it. You're done. Go visualize some directories! 🎊
 ```
 
 ### 🪟 Windows - The Slightly Longer Dance
@@ -70,13 +72,31 @@ copy target\release\st.exe C:\your\favorite\path\
 
 </details>
 
-### Claude Code Integration ###
+## Claude Code Integration ###
 
 ```
 # Do the quick install above.   This is the example for Linux, Mac, WSL, and who knows? 
 
 claude mcp add st /usr/local/bin/st -- --mcp
 
+```
+
+## Standard Local MCP for Claude Desktop, Cursor, Windsurf, Cline, Roo, and more ##
+
+```json
+{
+  "mcpServers": {
+    "smart-tree": {
+      "command": "/usr/local/bin/st",
+      "args": [
+        "--mcp"
+      ],
+      "env": {
+        "AI_TOOLS": "1"
+      }
+    }
+  }
+}
 ```
 
 ### 🤖 Claude Desktop Integration - The Future is Now!
@@ -94,7 +114,7 @@ claude mcp add st /usr/local/bin/st -- --mcp
 ### 🌈 The Basics - Simple Yet Powerful
 
 ```bash
-# The classics never die! (Now the default in v3.2.0!)
+# The beautiful classic tree - now the default!
 st                          # Current directory with beautiful trees 🌳
 st /path/to/directory       # Specific directory - point and shoot! 🎯
 
@@ -308,6 +328,17 @@ src/
 | 🔍 **Debugging** | `hex` | All the details |
 | 💾 **Archival** | `json` | Future-proof |
 | 🏃 **Quick Check** | `digest` | One-line summary |
+
+### 💡 AI Feedback System (New in v3.3.0!)
+
+Smart Tree learns from its users! When used with AI assistants like Claude:
+
+- **🤝 Consent First** - Feedback is only sent with your explicit approval
+- **🔒 Privacy Focused** - Only tool suggestions and improvements, never your data
+- **🚀 Rapid Evolution** - Your feedback directly shapes new features
+- **📡 Optional** - Works perfectly offline, cloud features are a bonus!
+
+Example: Your AI assistant finds a missing feature? It can suggest it directly to the development team!
 
 ### 🧙 MCP (Model Context Protocol) Server
 

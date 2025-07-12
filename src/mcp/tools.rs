@@ -2,10 +2,11 @@
 
 use super::{is_path_allowed, McpContext};
 use crate::{
+    feedback_client::FeedbackClient,
     formatters::{
-        ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter,
-        digest::DigestFormatter, hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-        quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter, 
+        ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
+        hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
+        quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter,
         stats::StatsFormatter, summary::SummaryFormatter, summary_ai::SummaryAiFormatter,
         tsv::TsvFormatter, Formatter, PathDisplayMode,
     },
@@ -892,21 +893,23 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
     // MCP optimizations: no emoji for clean output
     let mcp_no_emoji = true;
-    
+
     // Compression logic:
     // 1. If user explicitly sets compress parameter, use that
     // 2. Otherwise, check MCP_NO_COMPRESS env var
     // 3. Default: true for AI modes, false for human-readable modes
-    let default_compress = matches!(args.mode.as_str(), 
+    let default_compress = matches!(
+        args.mode.as_str(),
         "ai" | "digest" | "quantum" | "quantum-semantic" | "summary-ai"
     );
-    
+
     let mcp_compress = match args.compress {
         Some(compress) => compress, // User's explicit choice
         None => {
             // Check env var, otherwise use mode-based default
             if std::env::var("MCP_NO_COMPRESS")
-                .is_ok_and(|v| v == "1" || v.to_lowercase() == "true") {
+                .is_ok_and(|v| v == "1" || v.to_lowercase() == "true")
+            {
                 false
             } else {
                 default_compress
@@ -922,11 +925,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
     // Create formatter
     let formatter: Box<dyn Formatter> = match effective_mode {
-        "classic" => Box::new(ClassicFormatter::new(
-            mcp_no_emoji,
-            true,
-            path_display_mode,
-        )),
+        "classic" => Box::new(ClassicFormatter::new(mcp_no_emoji, true, path_display_mode)),
         "hex" => Box::new(HexFormatter::new(
             true,
             mcp_no_emoji,
@@ -1805,7 +1804,7 @@ async fn semantic_analysis(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
 async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     use chrono::Utc;
-    
+
     // Extract required fields
     let category = args["category"]
         .as_str()
@@ -1825,7 +1824,9 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
 
     // Validate category
     if !["bug", "nice_to_have", "critical"].contains(&category) {
-        return Err(anyhow::anyhow!("Invalid category. Must be: bug, nice_to_have, or critical"));
+        return Err(anyhow::anyhow!(
+            "Invalid category. Must be: bug, nice_to_have, or critical"
+        ));
     }
 
     // Validate scores
@@ -1874,7 +1875,7 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     // Submit to API
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
+        .unwrap_or_else(|_| "https://f.8t.is/feedback".to_string());
     
     let response = client
         .post(&api_url)
@@ -1918,7 +1919,7 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
 
 async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     use chrono::Utc;
-    
+
     // Extract required fields
     let tool_name = args["tool_name"]
         .as_str()
@@ -1935,13 +1936,13 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     let productivity_impact = args["productivity_impact"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing productivity_impact"))?;
-    
+
     // Check consent
     let consent = &args["consent"];
     let agreed = consent["agreed"]
         .as_bool()
         .ok_or_else(|| anyhow::anyhow!("Missing consent.agreed"))?;
-    
+
     if !agreed {
         return Ok(json!({
             "content": [{
@@ -1950,10 +1951,10 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
             }]
         }));
     }
-    
+
     let anonymous = consent["anonymous"].as_bool().unwrap_or(true);
     let github_url = consent["github_url"].as_str();
-    
+
     // Build tool request payload
     let tool_request = json!({
         "tool_name": tool_name,
@@ -1963,12 +1964,12 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
         "productivity_impact": productivity_impact,
         "proposed_parameters": args["proposed_parameters"].clone(),
     });
-    
+
     // Build feedback payload with tool_request
     let mut feedback = json!({
         "category": "tool_request",
         "title": format!("Tool Request: {}", tool_name),
-        "description": format!("{}\n\nUse Case: {}\n\nProductivity Impact: {}", 
+        "description": format!("{}\n\nUse Case: {}\n\nProductivity Impact: {}",
             description, use_case, productivity_impact),
         "impact_score": 8,  // Tool requests are high impact
         "frequency_score": 7,  // AI assistants will use tools frequently
@@ -1980,7 +1981,7 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
         "auto_fixable": true,  // Tool requests can be auto-implemented
         "fix_complexity": "moderate",
     });
-    
+
     // Add consent info
     if !anonymous && github_url.is_some() {
         feedback["user_consent"] = json!({
@@ -1992,12 +1993,12 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
             "consent_level": "always_anonymous"
         });
     }
-    
+
     // Submit to API
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
-    
+        .unwrap_or_else(|_| "https://f.8t.is/feedback".to_string());
+
     let response = client
         .post(&api_url)
         .header("X-MCP-Client", "smart-tree-mcp")
@@ -2006,13 +2007,13 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to submit tool request: {}", e))?;
-    
+
     if response.status().is_success() {
         let response_data: Value = response
             .json()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to parse response: {}", e))?;
-        
+
         Ok(json!({
             "content": [{
                 "type": "text",
@@ -2029,89 +2030,64 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
         }))
     } else {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-        Err(anyhow::anyhow!("Failed to submit tool request: {} - {}", status, error_text))
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        Err(anyhow::anyhow!(
+            "Failed to submit tool request: {} - {}",
+            status,
+            error_text
+        ))
     }
 }
 
 async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
-    let offer_auto_update = args["offer_auto_update"].as_bool().unwrap_or(true);
+    let _offer_auto_update = args["offer_auto_update"].as_bool().unwrap_or(true);
     let current_version = env!("CARGO_PKG_VERSION");
     
-    // Check for updates via the feedback API
-    let client = reqwest::Client::new();
-    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is".to_string());
+    // Check for updates using our client
+    let client = FeedbackClient::new()?;
+    let version_info = match client.check_for_updates().await {
+        Ok(info) => info,
+        Err(e) => {
+            // If the API is down or unavailable, just return a soft error
+            return Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!("Unable to check for updates at this time: {}\n\nYou can check manually at: https://github.com/8b-is/smart-tree/releases", e)
+                }]
+            }));
+        }
+    };
     
-    let check_url = format!("{}/version/check/{}", api_url, current_version);
+    // Compare versions
+    let current = current_version.trim_start_matches('v');
+    let latest = version_info.version.trim_start_matches('v');
     
-    let response = client
-        .get(&check_url)
-        .send()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to check for updates: {}", e))?;
-    
-    if !response.status().is_success() {
-        return Err(anyhow::anyhow!("Update check failed: {}", response.status()));
-    }
-    
-    let update_info: Value = response
-        .json()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to parse update info: {}", e))?;
-    
-    if !update_info["update_available"].as_bool().unwrap_or(false) {
+    if current == latest {
         return Ok(json!({
             "content": [{
                 "type": "text",
-                "text": format!("✅ {}", update_info["message"].as_str().unwrap_or("You're up to date!"))
+                "text": format!("✅ You're up to date! Running Smart Tree v{}\n\n🌳 Keep on rockin' with the latest and greatest!", current)
             }]
         }));
     }
-    
+
     // Update is available
-    let latest_version = update_info["latest_version"].as_str().unwrap_or("unknown");
-    let release_notes = &update_info["release_notes"];
-    let highlights = release_notes["highlights"]
-        .as_array()
-        .map(|arr| arr.iter()
-            .filter_map(|v| v.as_str())
-            .collect::<Vec<_>>()
-            .join("\n"))
-        .unwrap_or_default();
-    
-    let ai_benefits = release_notes["ai_benefits"]
-        .as_array()
-        .map(|arr| arr.iter()
-            .filter_map(|v| v.as_str())
-            .collect::<Vec<_>>()
-            .join("\n• "))
-        .unwrap_or_default();
-    
-    let mut message = format!(
+    let message = format!(
         "🚀 **New Smart Tree Version Available!**\n\n\
         Current: v{} → Latest: v{}\n\n\
-        **{} **\n\n\
-        **What's New:**\n{}\n\n\
-        **AI Benefits:**\n• {}",
-        current_version,
-        latest_version,
-        release_notes["title"].as_str().unwrap_or("New Release"),
-        highlights,
-        ai_benefits
+        📥 Download: https://github.com/8b-is/smart-tree/releases/tag/v{}\n\n\
+        To update:\n\
+        ```bash\n\
+        curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash\n\
+        ```",
+        current,
+        latest,
+        latest
     );
-    
-    if offer_auto_update {
-        message.push_str(&format!(
-            "\n\n**Would you like me to update Smart Tree for you?**\n\n\
-            Auto-update command:\n```bash\n{}\n```\n\n\
-            Or update manually:\n```bash\n{}\n```\n\n\
-            Say 'yes' to update now, 'skip' to update later, or 'remind me' for a reminder in 7 days.",
-            update_info["auto_update_command"].as_str().unwrap_or(""),
-            update_info["manual_update_command"].as_str().unwrap_or("")
-        ));
-    }
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -2120,8 +2096,8 @@ async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> 
         "metadata": {
             "update_available": true,
             "current_version": current_version,
-            "latest_version": latest_version,
-            "download_url": update_info["download_url"]
+            "latest_version": version_info.version.clone(),
+            "download_url": format!("https://github.com/8b-is/smart-tree/releases/tag/v{}", latest)
         }
     }))
 }
