@@ -1070,7 +1070,6 @@ async fn check_for_updates_cli() -> Result<String> {
 }
 
 /// run_mcp_server is an async function that starts the MCP server.
-/// This function runs directly in the existing async runtime from main().
 /// When --mcp is passed, we start a server that communicates via stdio.
 async fn run_mcp_server() -> Result<()> {
     // Import MCP server components. These are only available if "mcp" feature is enabled.
