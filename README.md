@@ -1,4 +1,4 @@
-# 🌳 Smart Tree (st) v3.3.0 - The AI-Powered Directory Visualizer! 🚀
+# 🌳 Smart Tree (st) v3.3.1 - The AI-Powered Directory Visualizer! 🚀
 
 ![Hue's Side | Aye's Side](st-banner.png)
 
@@ -25,9 +25,18 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 > #### Who is Aye?  That's Me -  A-ye! <--> Who is Hue?  That's You - Human UsEr. | 
 
 
-## 🌟 Version 3.3.0: "AI Feedback Loop" Edition! 
+## 🌟 Version 3.3.1: "Hidden Depths" Edition! 
 
 ### 🎸 What's NEW and AMAZING?
+
+**Hidden Directory Handling Fixed!** No more confusing depth jumps! 🕵️
+
+- **🔍 NEW: `--entry-type` flag** - Properly filter files (f) vs directories (d)
+- **🚫 Fixed hidden directory traversal** - Hidden dirs are truly hidden now
+- **📂 Improved LS mode** - Shows full paths for filtered results
+- **🎯 Consistent behavior** - If a directory is hidden, so are its contents!
+
+**Plus all the goodness from 3.3.0:**
 
 **The Tree That Learns!** Smart Tree now has optional cloud features for those who want them! 🌱
 
