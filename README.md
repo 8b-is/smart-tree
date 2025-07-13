@@ -317,6 +317,16 @@ src/
 
 **That's a 99.2% reduction! Your wallet just did a happy dance! 💃**
 
+```bash
+ hyperfine 'st ~ --find ollama -a ' -r 10
+
+# RESULT:
+ Benchmark 1: st ~ --find ollama -a 
+   Time (mean ± σ):     140.0 ms ±   7.5 ms    [User: 54.4 ms, System: 88.3 ms]
+   Range (min … max):   133.8 ms … 159.7 ms    10 runs
+
+```
+
 ### 🎯 Format Quick Reference
 
 

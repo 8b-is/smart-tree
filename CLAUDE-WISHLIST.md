@@ -98,14 +98,27 @@ contents = read_files_from_search(results, max_files=10)
 **Issue**: Memory spike when processing very large files (>100MB)
 **Fix**: Implement proper streaming for all file operations
 
+### 13. Directory-Only Filtering (FIXED ✅)
+**Issue**: `--type d` was misleading - it filters by file extension, not entry type
+**Fix**: Added `--entry-type f|d` to filter files vs directories
+**Example**: `st --find ".*" --entry-type d` now correctly shows only directories
+**Status**: Fixed in v3.3.0
+
+### 14. LS Mode with Filtered Results (FIXED ✅)
+**Issue**: When using `--find` with `-m ls`, only parent directories were shown
+**Fix**: LS formatter now detects filtered results and shows full paths for matches
+**Example**: `st --find "MiniLM" --entry-type d -m ls` now shows all matching directories with full paths
+**Note**: The `-a` flag only shows hidden files but doesn't override default ignores (like `.cache`). Use `--everything` for that.
+**Status**: Fixed in v3.3.0
+
 ## Performance Enhancements
 
-### 13. Parallel Search Operations ⭐⭐⭐⭐
+### 15. Parallel Search Operations ⭐⭐⭐⭐
 **Enhancement**: Accept multiple search patterns in one call
 **Example**: `search_in_files(patterns=["TODO", "FIXME", "HACK"])`
 **Benefit**: 3x faster than sequential searches
 
-### 14. Smart Tree Index ⭐⭐⭐⭐⭐
+### 16. Smart Tree Index ⭐⭐⭐⭐⭐
 **Feature**: Background indexer for instant searches
 **Commands**: 
 - `st --index /project` - Build index
@@ -114,32 +127,32 @@ contents = read_files_from_search(results, max_files=10)
 
 ## MCP-Specific Enhancements
 
-### 15. Tool Chaining Support ⭐⭐⭐
+### 17. Tool Chaining Support ⭐⭐⭐
 **Feature**: Output of one tool as input to another
 **Example**: `find_files` → `read_files` → `analyze_content`
 **Benefit**: Reduce round trips, faster operations
 
-### 16. Batch Operations Tool ⭐⭐⭐⭐
+### 18. Batch Operations Tool ⭐⭐⭐⭐
 **Tool Name**: `batch_operations`
 **Description**: Execute multiple operations in one call
 **Use Case**: Reduce API calls, improve performance
 
 ## Integration Features
 
-### 17. Git-Aware Operations ⭐⭐⭐
+### 19. Git-Aware Operations ⭐⭐⭐
 **Enhancement**: All tools respect `.gitignore` by default
 **Option**: `--include-ignored` to override
 **Use Case**: Avoid noise from build artifacts
 
-### 18. Language Server Protocol Info ⭐⭐⭐
+### 20. Language Server Protocol Info ⭐⭐⭐
 **Tool Name**: `get_lsp_info`
 **Description**: Extract LSP-like information (definitions, references)
 **Use Case**: Smarter code navigation and refactoring
 
 ## Wishlist Metadata
 
-**Last Updated**: 2025-01-10
-**Total Requests**: 18
+**Last Updated**: 2025-01-13
+**Total Requests**: 20
 **High Priority**: 3
 **Submitted By**: Claude (Opus 4)
 

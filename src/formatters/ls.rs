@@ -251,21 +251,49 @@ impl Formatter for LsFormatter {
         _stats: &TreeStats,
         root_path: &Path,
     ) -> Result<()> {
-        // Filter to only show direct children of root_path (like ls does)
-        let mut direct_children: Vec<&FileNode> = nodes
+        // Check if this appears to be a filtered result set (from --find or other filters)
+        // Heuristic: if nodes don't include all direct children of root, it's likely filtered
+        let direct_child_count = nodes
             .iter()
-            .filter(|node| {
-                if node.path == root_path {
-                    return false; // Don't show the root directory itself
-                }
+            .filter(|n| n.path != root_path && n.path.parent() == Some(root_path))
+            .count();
+        let total_non_root = nodes.iter().filter(|n| n.path != root_path).count();
+        let is_filtered = total_non_root > 0 && (direct_child_count == 0 || total_non_root > direct_child_count * 2);
+        
+        let mut display_nodes: Vec<&FileNode> = if is_filtered {
+            // For filtered results, show all matching nodes with full paths
+            nodes
+                .iter()
+                .filter(|node| node.path != root_path) // Still exclude the root
+                .collect()
+        } else {
+            // Normal ls behavior: only show direct children of root_path
+            nodes
+                .iter()
+                .filter(|node| {
+                    if node.path == root_path {
+                        return false; // Don't show the root directory itself
+                    }
+                    // Only show direct children (depth 1 from root)
+                    node.path.parent() == Some(root_path)
+                })
+                .collect()
+        };
 
-                // Only show direct children (depth 1 from root)
-                node.path.parent() == Some(root_path)
-            })
-            .collect();
+        // If no files/directories to display, show a message
+        if display_nodes.is_empty() {
+            writeln!(writer, "No matching files or directories found")?;
+            if is_filtered {
+                writeln!(writer, "")?;
+                writeln!(writer, "💡 Tip: Try using --everything to search in ignored directories like .cache")?;
+                writeln!(writer, "💡 Tip: Use -d 10 or higher to search deeper (default is 5 levels)")?;
+                writeln!(writer, "💡 Tip: Hidden directories need -a flag, ignored ones need --everything")?;
+            }
+            return Ok(());
+        }
 
         // Sort by filename (case-insensitive, like ls)
-        direct_children.sort_by(|a, b| {
+        display_nodes.sort_by(|a, b| {
             let name_a = a
                 .path
                 .file_name()
@@ -282,7 +310,7 @@ impl Formatter for LsFormatter {
         });
 
         // Format each file/directory in ls -Alh style
-        for node in direct_children {
+        for node in display_nodes {
             let permissions = self.format_permissions(node);
             let link_count = self.get_link_count(node);
             let (owner, group) = self.get_owner_group(node);
@@ -300,7 +328,23 @@ impl Formatter for LsFormatter {
                 Err(_) => "??? ?? ??:??".to_string(),
             };
 
-            let filename = self.format_filename(node);
+            // Format filename - show full path if filtered, otherwise just the name
+            let filename = if is_filtered {
+                // For filtered results, show the full path
+                let emoji = self.get_emoji(node);
+                let full_path = node.path.display().to_string();
+                if self.use_colors {
+                    if node.is_dir {
+                        format!("{} \x1b[34m{}\x1b[0m", emoji, full_path)
+                    } else {
+                        format!("{} {}", emoji, full_path)
+                    }
+                } else {
+                    format!("{} {}", emoji, full_path)
+                }
+            } else {
+                self.format_filename(node)
+            };
 
             // Write the ls -Alh formatted line
             writeln!(

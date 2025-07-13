@@ -114,6 +114,9 @@ struct ScanArgs {
     /// No leading dot needed, just the extension itself.
     #[arg(long = "type")]
     filter_type: Option<String>,
+    /// Filter to show only files (f) or directories (d).
+    #[arg(long = "entry-type", value_parser = ["f", "d"])]
+    entry_type: Option<String>,
 
     /// Only show files larger than this size.
     /// Accepts human-readable sizes like "1M" (1 Megabyte), "500K" (500 Kilobytes), "100B" (100 Bytes).
@@ -514,6 +517,7 @@ async fn main() -> Result<()> {
         // Attempt to compile the find pattern string into a Regex.
         find_pattern: args.find.as_ref().map(|p| Regex::new(p)).transpose()?,
         file_type_filter: args.filter_type.clone(),
+        entry_type_filter: args.entry_type.clone(),
         // Parse human-readable size strings (e.g., "1M") into u64 bytes.
         min_size: args.min_size.as_ref().map(|s| parse_size(s)).transpose()?,
         max_size: args.max_size.as_ref().map(|s| parse_size(s)).transpose()?,
@@ -832,8 +836,8 @@ fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result
         tips.push("👀 Add -a to see hidden files and directories (like .gitignore).");
     }
 
-    if args.filter_type.is_none() {
-        tips.push("🔍 Filter by type: --type f (files only) or --type d (directories only).");
+    if args.filter_type.is_none() && args.entry_type.is_none() {
+        tips.push("🔍 Filter by type: --entry-type f (files only) or --entry-type d (directories only).");
     }
 
     // Random general tips

@@ -348,6 +348,8 @@ pub struct ScannerConfig {
     pub find_pattern: Option<Regex>,
     /// An optional file extension to filter by (e.g., "rs").
     pub file_type_filter: Option<String>,
+    /// Optional entry type filter ("f" for files, "d" for directories).
+    pub entry_type_filter: Option<String>,
     /// Optional minimum file size filter.
     pub min_size: Option<u64>,
     /// Optional maximum file size filter.
@@ -832,6 +834,12 @@ impl Scanner {
                                     stats.update_file(&node);
                                 }
                             }
+                        } else {
+                            // process_entry returned None, which means this is a hidden entry and show_hidden is false
+                            // If it's a directory, we need to skip its contents
+                            if entry.file_type().is_dir() {
+                                walker.skip_current_dir();
+                            }
                         }
                     }
                 }
@@ -1054,6 +1062,12 @@ impl Scanner {
                                 node.search_matches = self.search_in_file(&node.path);
                             }
                             all_nodes_collected.push(node);
+                        } else {
+                            // process_entry returned None, which means this is a hidden entry and show_hidden is false
+                            // If it's a directory, we need to skip its contents
+                            if entry.file_type().is_dir() {
+                                walker.skip_current_dir();
+                            }
                         }
                     }
                 }
@@ -1103,6 +1117,7 @@ impl Scanner {
     fn has_active_filters(&self) -> bool {
         self.config.find_pattern.is_some()
             || self.config.file_type_filter.is_some()
+            || self.config.entry_type_filter.is_some()
             || self.config.min_size.is_some()
             || self.config.max_size.is_some()
             || self.config.newer_than.is_some()
@@ -1610,6 +1625,23 @@ impl Scanner {
                 return false; // Path doesn't match the --find pattern.
             }
         }
+        
+        // --- Filter by entry type (--entry-type) ---
+        if let Some(ref entry_type) = self.config.entry_type_filter {
+            match entry_type.as_str() {
+                "f" => {
+                    if node.is_dir {
+                        return false; // Looking for files only, but this is a directory
+                    }
+                }
+                "d" => {
+                    if !node.is_dir {
+                        return false; // Looking for directories only, but this is a file
+                    }
+                }
+                _ => {} // Should not happen due to clap validation
+            }
+        }
 
         // --- Filters below only apply to files, not directories ---
         if !node.is_dir {
@@ -1846,6 +1878,7 @@ mod tests {
             show_ignored: false,
             find_pattern: None,
             file_type_filter: None,
+            entry_type_filter: None,
             min_size: None,
             max_size: None,
             newer_than: None,
