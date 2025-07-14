@@ -1,5 +1,6 @@
 use super::{Formatter, PathDisplayMode};
-use crate::scanner::{FileCategory, FileNode, FileType, TreeStats};
+use crate::scanner::{FileCategory, FileNode, TreeStats};
+use crate::emoji_mapper;
 use anyhow::Result;
 use colored::*;
 use humansize::{format_size, BINARY};
@@ -11,6 +12,7 @@ pub struct ClassicFormatter {
     pub no_emoji: bool,
     pub use_color: bool,
     pub path_mode: PathDisplayMode,
+    pub sort_field: Option<String>,
 }
 
 impl ClassicFormatter {
@@ -19,7 +21,13 @@ impl ClassicFormatter {
             no_emoji,
             use_color,
             path_mode,
+            sort_field: None,
         }
+    }
+    
+    pub fn with_sort(mut self, sort_field: Option<String>) -> Self {
+        self.sort_field = sort_field;
+        self
     }
 
     /// Calculate visual weight based on directory size and depth
@@ -146,60 +154,9 @@ impl ClassicFormatter {
     }
 
     /// Get context-aware emoji based on file type and node properties
-    /// Returns different emojis for empty files, empty directories, and locked directories
+    /// Now uses the centralized emoji mapper for consistent, rich file type representation
     fn get_file_emoji(&self, node: &FileNode) -> &'static str {
-        // Handle permission denied directories with lock emoji
-        if node.permission_denied {
-            return if self.no_emoji { "[LOCK]" } else { "🔒" };
-        }
-
-        if self.no_emoji {
-            match node.file_type {
-                FileType::Directory => {
-                    if node.size == 0 {
-                        "[EMPTY_D]" // Empty directory
-                    } else {
-                        "[D]" // Regular directory
-                    }
-                }
-                FileType::Symlink => "[L]",
-                FileType::Executable => "[X]",
-                FileType::Socket => "[S]",
-                FileType::Pipe => "[P]",
-                FileType::BlockDevice => "[B]",
-                FileType::CharDevice => "[C]",
-                FileType::RegularFile => {
-                    if node.size == 0 {
-                        "[EMPTY_F]" // Empty file
-                    } else {
-                        "[F]" // Regular file
-                    }
-                }
-            }
-        } else {
-            match node.file_type {
-                FileType::Directory => {
-                    if node.size == 0 {
-                        "📂" // Empty directory (open folder)
-                    } else {
-                        "📁" // Regular directory (closed folder)
-                    }
-                }
-                FileType::Symlink => "🔗",
-                FileType::Executable => "⚙️",
-                FileType::Socket => "🔌",
-                FileType::Pipe => "📝",
-                FileType::BlockDevice => "💾",
-                FileType::CharDevice => "📺",
-                FileType::RegularFile => {
-                    if node.size == 0 {
-                        "📋" // Empty file (clipboard/empty document)
-                    } else {
-                        "📄" // Regular file
-                    }
-                }
-            }
-        }
+        emoji_mapper::get_file_emoji(node, self.no_emoji)
     }
 
     fn build_tree_structure(
@@ -245,15 +202,50 @@ impl ClassicFormatter {
             }
         }
 
-        // Sort children by directory first, then name
+        // Sort children based on sort field
         for children in children_map.values_mut() {
+            let sort_field = self.sort_field.clone();
             children.sort_by(|&a, &b| {
                 let node_a = &sorted_nodes[a];
                 let node_b = &sorted_nodes[b];
-                match (node_a.is_dir, node_b.is_dir) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => node_a.path.file_name().cmp(&node_b.path.file_name()),
+                
+                // Apply custom sorting if specified
+                match sort_field.as_deref() {
+                    Some("size") | Some("largest") => node_b.size.cmp(&node_a.size),
+                    Some("smallest") => node_a.size.cmp(&node_b.size),
+                    Some("date") | Some("newest") => node_b.modified.cmp(&node_a.modified),
+                    Some("oldest") => node_a.modified.cmp(&node_b.modified),
+                    Some("name") | Some("a-to-z") => {
+                        let name_a = node_a.path.file_name().unwrap_or_default().to_string_lossy();
+                        let name_b = node_b.path.file_name().unwrap_or_default().to_string_lossy();
+                        name_a.cmp(&name_b)
+                    },
+                    Some("z-to-a") => {
+                        let name_a = node_a.path.file_name().unwrap_or_default().to_string_lossy();
+                        let name_b = node_b.path.file_name().unwrap_or_default().to_string_lossy();
+                        name_b.cmp(&name_a)
+                    },
+                    Some("type") => {
+                        // Sort by extension, then by name
+                        let ext_a = node_a.path.extension().unwrap_or_default().to_string_lossy();
+                        let ext_b = node_b.path.extension().unwrap_or_default().to_string_lossy();
+                        match ext_a.cmp(&ext_b) {
+                            std::cmp::Ordering::Equal => {
+                                let name_a = node_a.path.file_name().unwrap_or_default().to_string_lossy();
+                                let name_b = node_b.path.file_name().unwrap_or_default().to_string_lossy();
+                                name_a.cmp(&name_b)
+                            }
+                            other => other,
+                        }
+                    },
+                    _ => {
+                        // Default: directories first, then by name
+                        match (node_a.is_dir, node_b.is_dir) {
+                            (true, false) => std::cmp::Ordering::Less,
+                            (false, true) => std::cmp::Ordering::Greater,
+                            _ => node_a.path.file_name().cmp(&node_b.path.file_name()),
+                        }
+                    }
                 }
             });
         }
@@ -434,6 +426,172 @@ impl ClassicFormatter {
                 g: 158,
                 b: 158,
             }), // Light grey
+
+            // Database
+            FileCategory::Database => Some(Color::TrueColor {
+                r: 139,
+                g: 90,
+                b: 43,
+            }), // Brown
+            
+            // Office & Documents
+            FileCategory::Office => Some(Color::TrueColor {
+                r: 21,
+                g: 101,
+                b: 192,
+            }), // Word blue
+            FileCategory::Spreadsheet => Some(Color::TrueColor {
+                r: 30,
+                g: 123,
+                b: 64,
+            }), // Excel green
+            FileCategory::PowerPoint => Some(Color::TrueColor {
+                r: 209,
+                g: 69,
+                b: 36,
+            }), // PowerPoint red
+            FileCategory::Pdf => Some(Color::TrueColor {
+                r: 215,
+                g: 41,
+                b: 42,
+            }), // PDF red
+            FileCategory::Ebook => Some(Color::TrueColor {
+                r: 65,
+                g: 105,
+                b: 225,
+            }), // Royal blue
+            
+            // Text Variants
+            FileCategory::Log => Some(Color::TrueColor {
+                r: 128,
+                g: 128,
+                b: 128,
+            }), // Gray
+            FileCategory::Config => Some(Color::TrueColor {
+                r: 100,
+                g: 149,
+                b: 237,
+            }), // Cornflower blue
+            FileCategory::License => Some(Color::TrueColor {
+                r: 255,
+                g: 193,
+                b: 7,
+            }), // Amber
+            FileCategory::Readme => Some(Color::TrueColor {
+                r: 0,
+                g: 176,
+                b: 255,
+            }), // Deep sky blue
+            FileCategory::Txt => Some(Color::TrueColor {
+                r: 160,
+                g: 160,
+                b: 160,
+            }), // Light gray
+            FileCategory::Rtf => Some(Color::TrueColor {
+                r: 0,
+                g: 128,
+                b: 128,
+            }), // Teal
+            FileCategory::Csv => Some(Color::TrueColor {
+                r: 46,
+                g: 125,
+                b: 50,
+            }), // Green
+            
+            // Security & Crypto
+            FileCategory::Certificate => Some(Color::TrueColor {
+                r: 255,
+                g: 87,
+                b: 34,
+            }), // Deep orange
+            FileCategory::Encrypted => Some(Color::TrueColor {
+                r: 156,
+                g: 39,
+                b: 176,
+            }), // Purple
+            
+            // Fonts
+            FileCategory::Font => Some(Color::TrueColor {
+                r: 103,
+                g: 58,
+                b: 183,
+            }), // Deep purple
+            
+            // Disk Images
+            FileCategory::DiskImage => Some(Color::TrueColor {
+                r: 33,
+                g: 33,
+                b: 33,
+            }), // Very dark gray
+            
+            // 3D & CAD
+            FileCategory::Model3D => Some(Color::TrueColor {
+                r: 255,
+                g: 152,
+                b: 0,
+            }), // Orange
+            
+            // Scientific & Data
+            FileCategory::Jupyter => Some(Color::TrueColor {
+                r: 255,
+                g: 109,
+                b: 0,
+            }), // Deep orange
+            FileCategory::RData => Some(Color::TrueColor {
+                r: 39,
+                g: 99,
+                b: 165,
+            }), // R blue
+            FileCategory::Matlab => Some(Color::TrueColor {
+                r: 237,
+                g: 119,
+                b: 3,
+            }), // MATLAB orange
+            
+            // Web Assets
+            FileCategory::WebAsset => Some(Color::TrueColor {
+                r: 96,
+                g: 125,
+                b: 139,
+            }), // Blue grey
+            
+            // Package & Dependencies
+            FileCategory::Package => Some(Color::TrueColor {
+                r: 203,
+                g: 31,
+                b: 26,
+            }), // NPM red
+            FileCategory::Lock => Some(Color::TrueColor {
+                r: 171,
+                g: 71,
+                b: 188,
+            }), // Medium purple
+            
+            // Testing
+            FileCategory::Test => Some(Color::TrueColor {
+                r: 67,
+                g: 160,
+                b: 71,
+            }), // Test green
+            
+            // Memory Files (MEM|8!)
+            FileCategory::Memory => Some(Color::TrueColor {
+                r: 147,
+                g: 112,
+                b: 219,
+            }), // Medium purple (brain-like)
+            
+            // Others
+            FileCategory::Backup => Some(Color::TrueColor {
+                r: 189,
+                g: 189,
+                b: 189,
+            }), // Silver
+            FileCategory::Temp => Some(Color::TrueColor {
+                r: 117,
+                g: 117,
+                b: 117,
+            }), // Gray
 
             // Default
             FileCategory::Unknown => None,

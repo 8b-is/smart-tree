@@ -147,7 +147,7 @@ The codebase follows a modular structure:
 - Uses rayon for parallel operations
 - Streaming mode (`--stream`) essential for directories with >100k entries
 - Classic formatter optimized from O(n²) to O(n) for parent-child relationships
-- Default depth changed from 10 to 5 to prevent hanging on deep structures
+- Default depth is now auto (0) - each mode picks its ideal depth (ls=1, classic=3, ai=5, stats=10)
 - Memory-efficient processing for large codebases
 
 ## MCP Server Development

@@ -1,5 +1,44 @@
 # NOTES.md - Latest Development Updates
 
+## v3.3.1 - SQL-Like Queries & Smart Defaults (July 2025)
+
+### Major Features Added 🚀
+- **SQL-Like Query Support**: `--sort` and `--top` options for finding files the SQL way
+  - Intuitive sort names: `largest/smallest`, `newest/oldest`, `a-to-z/z-to-a`
+  - `--top N` for limiting results (auto-switches to ls mode)
+  - Works with all filters for powerful queries
+  
+- **Smart Depth Auto-Detection**: Each mode picks its ideal default depth
+  - LS mode: 1 (mimics real `ls` command)
+  - Classic: 3 (balanced tree view)
+  - AI/Hex: 5 (detailed analysis)
+  - Stats/Digest: 10 (comprehensive scan)
+  - Users can still explicitly set any depth including 5
+
+- **Elegant Project Renaming**: Context-aware identity transition
+  - `st --rename-project "OldName" "NewName"`
+  - Detects naming conventions (snake_case, camelCase, etc.)
+  - Context-aware replacements across all file types
+  - Interactive preview with confidence scores
+
+- **Auto Shell Completion Setup**: Detects and installs during installation
+  - Auto-detects bash/zsh/fish from $SHELL or /etc/passwd
+  - Enhanced zsh completions with tips and SQL examples
+  - Standalone setup-completions.sh for existing installations
+
+### Improvements & Fixes
+- **LS Mode Enhancement**: Shows relative paths for filtered results
+- **Per-Directory Sorting**: Classic mode now sorts within each directory
+- **MCP Tools Update**: Shows all 20+ tools (MCP is now built-in, not a feature)
+- **Hex Mode Fix**: Search positions now display in hexadecimal
+- **Entry Type Filtering**: `--entry-type f|d` for files vs directories
+- **Time-Aware MCP**: Added current date/time and `find_in_timespan` tool
+
+### MCP Test Fixes
+- Fixed test_entry_type_filtering to properly test `--entry-type` parameter
+- Fixed test_hidden_directory_handling to respect MCP's show_hidden parameter
+- Fixed test_date_format_parsing to handle flexible date parsing in find_in_timespan
+
 ## v3.1 Quantum Revolution (July 2025)
 
 ### MEM|8 Quantum Compression Achievement 🚀
@@ -23,7 +62,7 @@
 
 ### Performance and Usability Improvements (Dec 21)
 - **Fixed O(n²) performance bug** in classic formatter that caused hanging with deep directories
-- **Changed default depth from 10 to 5** to prevent excessive processing on deep structures
+- **Changed default depth to auto (0)** - each mode picks its ideal depth (ls=1, classic=3, etc.)
 - **Added `--everything` flag** - master switch that enables --all, --no-ignore, and --no-default-ignore
 - **Clarified size calculations** - st reports actual file sizes, while `du` reports disk blocks
 

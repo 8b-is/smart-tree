@@ -1,5 +1,6 @@
 use super::{Formatter, PathDisplayMode, StreamingFormatter};
-use crate::scanner::{FileNode, FileType, TreeStats};
+use crate::scanner::{FileNode, TreeStats};
+use crate::emoji_mapper;
 use anyhow::Result;
 use std::io::Write;
 use std::path::Path;
@@ -32,58 +33,7 @@ impl HexFormatter {
     /// Get context-aware emoji based on file type and node properties
     /// Returns different emojis for empty files, empty directories, and locked directories
     fn get_file_emoji(&self, node: &FileNode) -> &'static str {
-        // Handle permission denied directories with lock emoji
-        if node.permission_denied {
-            return if self.no_emoji { "[LOCK]" } else { "🔒" };
-        }
-
-        if self.no_emoji {
-            match node.file_type {
-                FileType::Directory => {
-                    if node.size == 0 {
-                        "[EMPTY_D]" // Empty directory
-                    } else {
-                        "[D]" // Regular directory
-                    }
-                }
-                FileType::Symlink => "[L]",
-                FileType::Executable => "[X]",
-                FileType::Socket => "[S]",
-                FileType::Pipe => "[P]",
-                FileType::BlockDevice => "[B]",
-                FileType::CharDevice => "[C]",
-                FileType::RegularFile => {
-                    if node.size == 0 {
-                        "[EMPTY_F]" // Empty file
-                    } else {
-                        "[F]" // Regular file
-                    }
-                }
-            }
-        } else {
-            match node.file_type {
-                FileType::Directory => {
-                    if node.size == 0 {
-                        "📂" // Empty directory (open folder)
-                    } else {
-                        "📁" // Regular directory
-                    }
-                }
-                FileType::Symlink => "🔗",
-                FileType::Executable => "⚙️",
-                FileType::Socket => "🔌",
-                FileType::Pipe => "📝",
-                FileType::BlockDevice => "💾",
-                FileType::CharDevice => "📺",
-                FileType::RegularFile => {
-                    if node.size == 0 {
-                        "📋" // Empty file (clipboard)
-                    } else {
-                        "📄" // Regular file
-                    }
-                }
-            }
-        }
+        emoji_mapper::get_file_emoji(node, self.no_emoji)
     }
 
     fn format_node(&self, node: &FileNode, root_path: &Path) -> String {
@@ -150,17 +100,17 @@ impl HexFormatter {
         // Add search matches if present
         let display_name_with_search = if let Some(matches) = &node.search_matches {
             if matches.total_count > 0 {
-                // Show first match position and total count
+                // Show first match position and total count (in hex for consistency)
                 let (line, col) = matches.first_match;
                 let truncated_indicator = if matches.truncated { ",TRUNCATED" } else { "" };
 
                 if matches.total_count > 1 {
                     format!(
-                        "{} [SEARCH:L{}:C{},{}x{}]",
+                        "{} [SEARCH:L{:x}:C{:x},{:x}x{}]",
                         display_name, line, col, matches.total_count, truncated_indicator
                     )
                 } else {
-                    format!("{} [SEARCH:L{}:C{}]", display_name, line, col)
+                    format!("{} [SEARCH:L{:x}:C{:x}]", display_name, line, col)
                 }
             } else {
                 display_name

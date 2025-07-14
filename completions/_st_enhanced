@@ -1,0 +1,237 @@
+#compdef st
+# Enhanced Zsh completion for Smart Tree (st) v3.3.1
+# Includes tips, notes, and helpful suggestions
+
+# Define helper function for tips
+_st_show_tip() {
+    local tip="$1"
+    if [[ -n "$tip" ]]; then
+        _message -r "$tip"
+    fi
+}
+
+_st() {
+    local -a args
+    local context state line
+    typeset -A opt_args
+
+    # Main arguments definition with descriptions and tips
+    args=(
+        # Exclusive action flags
+        '--cheet[Show the cheatsheet with all formatting modes and options]'
+        '--completions[Generate shell completion scripts]:shell:(bash zsh fish elvish powershell)'
+        '--man[Generate the man page]'
+        '--mcp[Run as MCP (Model Context Protocol) server for AI assistants]'
+        '--mcp-tools[List all MCP tools (20+ tools for AI agents)]'
+        '--mcp-config[Show MCP configuration for Claude Desktop]'
+        '(-V --version)'{-V,--version}'[Show version and check for updates]'
+        
+        # Path argument
+        '1:path:_files -/'
+        
+        # Output mode selection
+        '(-m --mode)'{-m,--mode}'[Output format mode]:mode:->modes'
+        
+        # Display options
+        '(-e --no-emoji)'{-e,--no-emoji}'[Disable emoji in output (cleaner for scripts)]'
+        '(-i --show-ignored)'{-i,--show-ignored}'[Show ignored directories in brackets]'
+        '(-a --everything)'{-a,--everything}'[Show all files including hidden and ignored]'
+        '(-p --path-mode)'{-p,--path-mode}'[Path display mode]:path mode:(off relative full)'
+        '--stream[Enable streaming output for large directories (>10k files)]'
+        
+        # Filtering options
+        '(-d --depth)'{-d,--depth}'[Maximum depth to traverse (default: auto)]:depth:'
+        '(-f --find)'{-f,--find}'[Search for files/dirs matching regex pattern]:pattern:'
+        '(-t --type)'{-t,--type}'[Filter by file extension]:extension:'
+        '--entry-type[Filter by entry type]:type:(f d)'
+        '(-s --search)'{-s,--search}'[Search for keyword in file contents]:keyword:'
+        '--min-size[Minimum file size filter]:size:(1K 1M 10M 100M 1G)'
+        '--max-size[Maximum file size filter]:size:(1K 1M 10M 100M 1G)'
+        '--newer-than[Show files newer than date (YYYY-MM-DD)]:date:'
+        '--older-than[Show files older than date (YYYY-MM-DD)]:date:'
+        
+        # Sorting and limiting
+        '--sort[Sort results by field]:sort field:(a-to-z z-to-a largest smallest newest oldest type name size date)'
+        '--top[Show only top N results]:number:'
+        
+        # Output control
+        '(-z --compress)'{-z,--compress}'[Compress output (recommended for AI modes)]'
+        '--no-default-ignores[Disable default ignore patterns]'
+        '(-F --show-filesystems)'{-F,--show-filesystems}'[Show filesystem type indicators]'
+        
+        # Help
+        '(-h --help)'{-h,--help}'[Show help information]'
+    )
+
+    # Handle state machine for mode completion
+    _arguments -C $args
+
+    case $state in
+        modes)
+            local -a modes_list
+            modes_list=(
+                'classic:Traditional tree view with Unicode box drawing'
+                'ls:Unix ls -Alh format with detailed file info'
+                'hex:AI-optimized hexadecimal format'
+                'json:Standard JSON format'
+                'ai:AI-optimized format with compression (default for MCP)'
+                'ai_json:AI-friendly JSON with metadata'
+                'csv:Comma-separated values'
+                'tsv:Tab-separated values'
+                'stats:Statistics only'
+                'digest:SHA256 hash only (minimal output)'
+                'quantum:MEM|8 quantum format (8x compression)'
+                'quantum-semantic:Semantic-aware quantum compression'
+                'semantic:Wave-based semantic grouping'
+                'summary:Human-readable summary'
+                'summary-ai:AI-optimized summary (10x compression)'
+                'markdown:Comprehensive markdown report'
+                'mermaid:Mermaid diagrams (flowchart/mindmap/treemap)'
+                'waste:Show space wasters and large files'
+            )
+            _describe -t modes 'output mode' modes_list
+            
+            # Show mode-specific tip based on current word
+            case $words[CURRENT-1] in
+                --mode|-m)
+                    _st_show_tip "💡 TIP: Use 'summary-ai' for 10x compression when working with LLMs"
+                    ;;
+            esac
+            ;;
+    esac
+
+    # Context-aware tips
+    if [[ ${words[(I)--find|-f]} -ne 0 ]]; then
+        _st_show_tip "💡 TIP: Use --mode ls with --find to see full match context"
+    fi
+
+    if [[ ${words[(I)--stream]} -ne 0 ]]; then
+        _st_show_tip "💡 TIP: Streaming mode essential for dirs with >100k files"
+    fi
+
+    if [[ ${words[(I)--mcp]} -ne 0 ]]; then
+        _st_show_tip "💡 TIP: MCP mode provides 20+ tools for AI assistants"
+    fi
+
+    return 0
+}
+
+# Auto-suggestion functions for common use cases
+_st_suggest_common() {
+    local -a suggestions
+    suggestions=(
+        "st . --mode summary-ai -z # Quick compressed overview for AI"
+        "st . --find 'TODO' --mode ls # Find all TODOs with context"
+        "st . --mode quantum-semantic # Best for code analysis"
+        "st . --search 'function' -a # Search in all files including hidden"
+        "st . --mode waste # Find large files and space wasters"
+        "st . --newer-than 2025-07-01 # Recent changes"
+        "st . --type rs --mode stats # Rust file statistics"
+        "st . --depth 3 --stream # Quick 3-level overview"
+        "st --mcp-config # Setup for Claude Desktop"
+        "st . --sort largest --top 10 --mode ls # 10 largest files"
+        "st . --sort newest --top 20 # 20 most recent files"
+        "st . --sort z-to-a --mode ls # Files sorted Z to A"
+        "st . --find '\.py$' --sort largest --top 5 # 5 largest Python files"
+        "st . --sort smallest --mode ls # Files sorted smallest to largest"
+        "st . --sort oldest --top 10 # 10 oldest files"
+    )
+    
+    _describe -t suggestions 'common commands' suggestions
+}
+
+# Register the completion
+compdef _st st
+
+# Optional: Add helper aliases (user can add to .zshrc)
+if [[ -n "$ST_COMPLETION_ALIASES" ]]; then
+    alias stai="st . --mode summary-ai -z"
+    alias stfind="st . --find"
+    alias stsearch="st . --search"
+    alias stwaste="st . --mode waste"
+    alias stls="st . --mode ls"
+    alias stmcp="st --mcp"
+fi
+
+# Export tips function for interactive use
+st_tips() {
+    cat << 'EOF'
+🌳 Smart Tree Tips & Tricks 🌳
+
+QUICK COMMANDS:
+  st                           # Classic tree view of current directory
+  st /path --mode summary-ai   # AI-optimized summary with 10x compression
+  st . --find "test" --mode ls # Find files and show with ls format
+  st . --search "TODO"         # Search file contents for keyword
+  st . --mode waste            # Find large files and space wasters
+
+PERFORMANCE TIPS:
+  • Use --stream for directories with >10k files
+  • Default depth is 5, use -d 3 for faster results
+  • Use --mode digest for instant directory fingerprint
+
+AI/LLM TIPS:
+  • --mode summary-ai gives 10x compression
+  • --mode quantum-semantic best for code analysis
+  • Use -z flag to compress output further
+  • MCP mode provides 20+ tools for AI assistants
+
+FILTERING TIPS:
+  • --find uses regex: --find "test.*\.rs$"
+  • --entry-type f (files only) or d (dirs only)
+  • Combine filters: --type rs --newer-than 2025-07-01
+  • Use -a to include hidden files, --everything for all
+
+SORTING & TOP-N:
+  • --sort largest --top 10   # 10 biggest files
+  • --sort smallest           # Smallest files first
+  • --sort newest --top 20    # 20 most recent files
+  • --sort oldest             # Oldest files first
+  • --sort a-to-z             # Alphabetical order
+  • --sort z-to-a             # Reverse alphabetical
+  • --sort type               # Group by file extension
+  • Works with any filter combination!
+
+MCP SETUP:
+  1. st --mcp-config  # Get config for Claude Desktop
+  2. Add to Claude Desktop settings
+  3. Use with Claude for advanced file analysis
+
+COMMON PATTERNS:
+  • Project overview: st . --mode summary-ai -z
+  • Find TODOs: st . --search "TODO|FIXME" --mode ls
+  • Recent changes: st . --newer-than $(date -d '7 days ago' +%Y-%m-%d)
+  • Large files: st . --mode waste --min-size 10M
+  • Code structure: st . --mode quantum-semantic
+  • Quick tree: st . -d 3
+
+SQL-LIKE QUERIES:
+  • SELECT TOP 10 * ORDER BY size DESC:
+    st . --sort largest --top 10 --mode ls
+  • SELECT * WHERE type='py' ORDER BY date DESC LIMIT 5:
+    st . --type py --sort newest --top 5 --mode ls
+  • SELECT * WHERE size > 1MB ORDER BY name:
+    st . --min-size 1M --sort a-to-z --mode ls
+  • SELECT * ORDER BY size ASC:
+    st . --sort smallest --mode ls
+
+Press TAB after typing 'st ' for more suggestions!
+EOF
+}
+
+# Set up auto-suggestions if zsh-autosuggestions is loaded
+if [[ -n "$ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE" ]]; then
+    # Add common patterns to history for autosuggestions
+    if [[ ! -f "$HOME/.config/st/autosuggest_init" ]]; then
+        mkdir -p "$HOME/.config/st"
+        print -S "st . --mode summary-ai -z"
+        print -S "st . --find 'TODO' --mode ls"
+        print -S "st . --search"
+        print -S "st . --mode waste"
+        print -S "st . --newer-than"
+        touch "$HOME/.config/st/autosuggest_init"
+    fi
+fi
+
+# Return success
+return 0

@@ -26,9 +26,24 @@ pub mod mcp;
 // Feedback API client for sending feedback to f.8t.is
 pub mod feedback_client;
 
+// Integration helpers for easier usage in other applications
+pub mod integration;
+
+// Project renaming - elegant identity transition
+pub mod rename_project;
+
+// Emoji mapping - bringing life to file types!
+pub mod emoji_mapper;
+
 // Re-export key items from the `scanner` module for easier access.
 // This means users of the `st` library can use `st::Scanner`
 // instead of `st::scanner::Scanner`, for example. It's all about convenience!
 pub use scanner::{
     parse_size, FileCategory, FileNode, FilesystemType, Scanner, ScannerConfig, TreeStats,
 };
+
+// Re-export context detection for easy access
+pub use context::detect_project_context;
+
+// Re-export integration helpers for convenient usage
+pub use integration::{ProjectAnalysis, ProjectAnalyzer, analyze_project, quick_project_overview};

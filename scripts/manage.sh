@@ -74,6 +74,25 @@ print_warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
+# Ask yes/no question
+ask_yes_no() {
+    local prompt="$1"
+    local default="${2:-y}"
+    
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+        [[ "$default" == "y" ]] && return 0 || return 1
+    fi
+    
+    local response
+    if [[ "$default" == "y" ]]; then
+        read -p "$(echo -e "${CYAN}$prompt [Y/n]: ${NC}")" response
+        [[ -z "$response" || "$response" =~ ^[Yy] ]] && return 0 || return 1
+    else
+        read -p "$(echo -e "${CYAN}$prompt [y/N]: ${NC}")" response
+        [[ "$response" =~ ^[Yy] ]] && return 0 || return 1
+    fi
+}
+
 # Show animated spinner
 spinner() {
     local pid=$1
@@ -406,63 +425,60 @@ completions() {
     print_header "Setting up shell completions 🐚"
     cd "$PROJECT_DIR"
 
-    print_info "Building release binary to generate completions..."
-    cargo build --release
-
-    local shell_type
-    shell_type="$(basename "$SHELL")"
-    local completion_dir
-
-    print_info "Detected shell: $shell_type"
-
-    case "$shell_type" in
-        bash)
-            completion_dir="/etc/bash_completion.d"
-            if [[ ! -d "$completion_dir" ]]; then
-                completion_dir="$HOME/.local/share/bash-completion/completions"
+    # Check if st is already built and installed
+    if ! command_exists st && [[ ! -f "./target/release/st" ]]; then
+        print_info "Building release binary to generate completions..."
+        cargo build --release
+    fi
+    
+    # Use our enhanced setup script
+    if [[ -f "$PROJECT_DIR/scripts/setup-completions.sh" ]]; then
+        print_info "Running enhanced completion setup..."
+        if [[ "$NON_INTERACTIVE" == "true" ]]; then
+            # Non-interactive mode - skip prompts and use defaults
+            yes "y" | bash "$PROJECT_DIR/scripts/setup-completions.sh"
+        else
+            bash "$PROJECT_DIR/scripts/setup-completions.sh"
+        fi
+    else
+        # Fallback to basic method if setup script doesn't exist
+        print_warning "Enhanced setup script not found, using basic method..."
+        
+        local shell_type
+        shell_type="$(basename "$SHELL")"
+        print_info "Detected shell: $shell_type"
+        
+        case "$shell_type" in
+            bash)
+                local completion_dir="$HOME/.bash_completion.d"
                 mkdir -p "$completion_dir"
-            fi
-            
-            print_info "Generating bash completions..."
-            ./target/release/st completions bash > "$completion_dir/st"
-            
-            print_success "Bash completions installed in $completion_dir/st"
-            print_info "Please restart your shell or run 'source ~/.bashrc' for changes to take effect."
-            ;;
-        zsh)
-            # Zsh can use a directory in FPATH for completions
-            completion_dir=$(zsh -c 'echo $fpath[1]')
-            if [[ -z "$completion_dir" ]] || [[ ! -w "$completion_dir" ]]; then
-                completion_dir="$HOME/.zsh/completions"
+                print_info "Generating bash completions..."
+                ./target/release/st --completions bash > "$completion_dir/_st"
+                print_success "Bash completions installed!"
+                print_info "Add 'source $completion_dir/_st' to your .bashrc"
+                ;;
+            zsh)
+                local completion_dir="$HOME/.zsh/completions"
                 mkdir -p "$completion_dir"
-                print_warning "Could not find a writable fpath directory."
-                print_info "Created completions directory at $completion_dir"
-                print_info "Add the following to your ~/.zshrc:"
-                echo -e "${YELLOW}  fpath=(\$HOME/.zsh/completions \$fpath)${NC}"
-            fi
-
-            print_info "Generating zsh completions..."
-            ./target/release/st completions zsh > "$completion_dir/_st"
-
-            print_success "Zsh completions installed in $completion_dir/_st"
-            print_info "Please restart your shell or run 'source ~/.zshrc' for changes to take effect."
-            ;;
-        fish)
-            completion_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
-            mkdir -p "$completion_dir"
-
-            print_info "Generating fish completions..."
-            ./target/release/st completions fish > "$completion_dir/st.fish"
-            
-            print_success "Fish completions installed in $completion_dir/st.fish"
-            print_info "Please restart your shell for changes to take effect."
-            ;;
-        *)
-            print_warning "Unsupported shell: $shell_type"
-            print_info "You can generate completions manually for your shell:"
-            echo "  ./target/release/st completions [bash|zsh|fish|elvish|powershell] > /path/to/completions"
-            ;;
-    esac
+                print_info "Generating zsh completions..."
+                ./target/release/st --completions zsh > "$completion_dir/_st"
+                print_success "Zsh completions installed!"
+                print_info "Add 'fpath=($completion_dir \$fpath)' to your .zshrc"
+                ;;
+            fish)
+                local completion_dir="$HOME/.config/fish/completions"
+                mkdir -p "$completion_dir"
+                print_info "Generating fish completions..."
+                ./target/release/st --completions fish > "$completion_dir/st.fish"
+                print_success "Fish completions installed!"
+                ;;
+            *)
+                print_warning "Unknown shell: $shell_type"
+                print_info "Supported shells: bash, zsh, fish"
+                print_info "Generate manually: st --completions <shell>"
+                ;;
+        esac
+    fi
 }
 
 # Install/Uninstall man page
@@ -522,17 +538,17 @@ manage_man_page() {
 
 # MCP server functions
 mcp_build() {
-    print_header "Building $PROJECT_NAME with MCP support 🤖"
-    build release mcp
+    print_header "Building $PROJECT_NAME (MCP included) 🤖"
+    build release
 }
 
 mcp_run() {
     print_header "Running MCP server 🤖"
     cd "$PROJECT_DIR"
     
-    if [[ ! -f "target/release/$BINARY_NAME" ]] || ! ./target/release/$BINARY_NAME --help 2>&1 | grep -q "mcp"; then
-        print_warning "MCP features not found in binary. Building with MCP support..."
-        mcp_build
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Binary not found. Building release version..."
+        build release
     fi
     
     print_info "Starting MCP server on stdio..."
@@ -544,9 +560,9 @@ mcp_config() {
     print_header "MCP Configuration 🤖"
     cd "$PROJECT_DIR"
     
-    if [[ ! -f "target/release/$BINARY_NAME" ]] || ! ./target/release/$BINARY_NAME --help 2>&1 | grep -q "mcp"; then
-        print_warning "Building with MCP support first..."
-        mcp_build
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
     fi
     
     ./target/release/$BINARY_NAME --mcp-config
@@ -556,9 +572,9 @@ mcp_tools() {
     print_header "MCP Tools Documentation 🤖"
     cd "$PROJECT_DIR"
     
-    if [[ ! -f "target/release/$BINARY_NAME" ]] || ! ./target/release/$BINARY_NAME --help 2>&1 | grep -q "mcp"; then
-        print_warning "Building with MCP support first..."
-        mcp_build
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
     fi
     
     ./target/release/$BINARY_NAME --mcp-tools
@@ -681,10 +697,9 @@ ${CYAN}AI usage:${NC}
   $BINARY_NAME -m ai -z | base64 -d    # Decode compressed output
   
 ${CYAN}MCP (Model Context Protocol):${NC}
-  $0 mcp-build                          # Build with MCP support
   $0 mcp-run                            # Run as MCP server
   $0 mcp-config                         # Show Claude Desktop config
-  $0 mcp-tools                          # Show available MCP tools
+  $0 mcp-tools                          # Show available MCP tools (20+)
 EOF
 }
 
@@ -705,7 +720,7 @@ ${YELLOW}Commands:${NC}
   ${GREEN}bench${NC}                 Run performance benchmarks
   ${GREEN}install${NC} [dir]         Install binary (default: /usr/local/bin)
   ${GREEN}uninstall${NC} [dir]       Uninstall binary
-  ${GREEN}release${NC} <vX.Y.Z> [notes] Create a GitHub release with standard and MCP assets
+  ${GREEN}release${NC} <vX.Y.Z> [notes] Create a GitHub release
   ${GREEN}completions${NC}           Setup shell completions
   ${GREEN}man-install${NC}           Generate and install the man page
   ${GREEN}man-uninstall${NC}         Uninstall the man page
@@ -713,13 +728,13 @@ ${YELLOW}Commands:${NC}
   ${GREEN}demo-stream${NC}           Demo streaming feature
   ${GREEN}demo-search${NC}           Demo search feature
   ${GREEN}demo-relations${NC}        Demo code relations feature 🔗
+  ${GREEN}rename-project${NC} <old> <new>  Elegant project identity transition 🚗
   ${GREEN}help${NC}                  Show this help message
 
 ${YELLOW}MCP Commands:${NC}
-  ${GREEN}mcp-build${NC}             Build with MCP support
   ${GREEN}mcp-run${NC}               Run as MCP server
   ${GREEN}mcp-config${NC}            Show Claude Desktop configuration
-  ${GREEN}mcp-tools${NC}             Show available MCP tools
+  ${GREEN}mcp-tools${NC}             Show available MCP tools (20+)
 
 ${YELLOW}Feedback System Commands:${NC}
   ${GREEN}feedback-build${NC}        Build feedback system containers
@@ -734,7 +749,6 @@ ${YELLOW}Environment Variables:${NC}
 
 ${YELLOW}Examples:${NC}
   $0 build              # Build release version
-  $0 build release mcp  # Build with MCP support
   $0 run -- -m hex .    # Run with hex output on current dir
   $0 test               # Run all tests
   $0 release v1.0.0 "My first release!" # Create a new release
@@ -883,7 +897,8 @@ main() {
             examples
             ;;
         mcp-build)
-            mcp_build
+            print_info "MCP is now built-in! Just run 'build' instead."
+            build release
             ;;
         mcp-run)
             mcp_run
@@ -917,6 +932,15 @@ main() {
             ;;
         feedback-status)
             feedback_status
+            ;;
+        rename-project)
+            if [[ $# -lt 3 ]]; then
+                print_error "Usage: $0 rename-project <old_name> <new_name>"
+                exit 1
+            fi
+            print_header "Project Rebranding Ritual 🚗"
+            cd "$PROJECT_DIR"
+            ./target/release/st --rename-project "$2" "$3"
             ;;
         help|h|-h|--help)
             show_help

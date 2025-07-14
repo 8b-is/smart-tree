@@ -42,6 +42,7 @@ use st::{
     },
     inputs::InputProcessor,
     parse_size,
+    rename_project::{rename_project, RenameOptions},
     Scanner,
     ScannerConfig, // The mighty Scanner and its configuration.
 };
@@ -85,6 +86,10 @@ struct Cli {
     #[arg(short = 'V', long, exclusive = true)]
     version: bool,
 
+    /// Rename project - elegant identity transition (format: "OldName" "NewName")
+    #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2)]
+    rename_project: Option<Vec<String>>,
+
     // --- Scan Arguments ---
     /// Path to the directory or file you want to analyze.
     /// Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)
@@ -102,7 +107,7 @@ struct Cli {
 struct ScanArgs {
     /// Choose your adventure! Selects the output format.
     /// From classic human-readable to AI-optimized hex, we've got options.
-    #[arg(short, long, value_enum, default_value = "classic")]
+    #[arg(short, long, value_enum, default_value = "auto")]
     mode: OutputMode,
 
     /// Feeling like a detective? Find files/directories matching this regex pattern.
@@ -137,8 +142,9 @@ struct ScanArgs {
     older_than: Option<String>,
 
     /// How deep should we dig? Limits the traversal depth.
-    /// Default is 5 levels, which provides a good overview without getting lost in deep structures.
-    #[arg(short, long, default_value = "5")]
+    /// Default is 0 (auto) which lets each mode pick its ideal depth.
+    /// Set explicitly to override: 1 for shallow, 10 for deep exploration.
+    #[arg(short, long, default_value = "0")]
     depth: usize,
 
     /// Daredevil mode: Ignores `.gitignore` files. See everything, even what Git tries to hide!
@@ -252,6 +258,51 @@ struct ScanArgs {
     /// Options: imports, calls, types, tests, coupled
     #[arg(long, value_name = "TYPE")]
     relations_filter: Option<String>,
+
+    /// Sort results by: a-to-z, z-to-a, largest, smallest, newest, oldest, type
+    /// Examples: --sort largest (biggest files first), --sort newest (recent files first)
+    /// Use with --top to get "top 10 largest files" or "20 newest files"
+    #[arg(long, value_enum)]
+    sort: Option<SortField>,
+
+    /// Show only the top N results (useful with --sort)
+    /// Examples: --sort size --top 10 (10 largest files)
+    /// --sort date --top 20 (20 most recent files)
+    #[arg(long, value_name = "N")]
+    top: Option<usize>,
+}
+
+/// Sort field options with intuitive names
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum SortField {
+    /// Sort alphabetically A to Z
+    #[value(name = "a-to-z")]
+    AToZ,
+    /// Sort alphabetically Z to A
+    #[value(name = "z-to-a")]
+    ZToA,
+    /// Sort by size, largest files first
+    #[value(name = "largest")]
+    Largest,
+    /// Sort by size, smallest files first
+    #[value(name = "smallest")]
+    Smallest,
+    /// Sort by modification date, newest first
+    #[value(name = "newest")]
+    Newest,
+    /// Sort by modification date, oldest first
+    #[value(name = "oldest")]
+    Oldest,
+    /// Sort by file type/extension
+    #[value(name = "type")]
+    Type,
+    /// Legacy aliases for backward compatibility
+    #[value(name = "name", alias = "alpha")]
+    Name,
+    #[value(name = "size")]
+    Size,
+    #[value(name = "date", alias = "modified")]
+    Date,
 }
 
 /// Enum for mermaid style argument
@@ -293,8 +344,10 @@ enum PathMode {
 
 /// Enum defining the available output modes.
 /// Each mode tailors the output for a specific purpose or audience.
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
 enum OutputMode {
+    /// Auto mode - smart default selection based on context
+    Auto,
     /// Classic tree format, human-readable with metadata and emojis (unless disabled). Our beloved default.
     Classic,
     /// Hexadecimal format with fixed-width fields. Excellent for AI parsing or detailed analysis.
@@ -337,6 +390,30 @@ enum OutputMode {
 /// This is our time machine! It parses a date string (like "2025-12-25")
 /// into a `SystemTime` object that Rust can understand.
 /// Perfect for finding files from the past or... well, not the future. Yet.
+/// Get the ideal depth for each output mode
+/// 
+/// When users don't specify depth (depth = 0), each mode gets its optimal default:
+/// - LS mode: 1 (like real ls, shows only immediate children)
+/// - Classic: 3 (good overview without overwhelming)
+/// - AI/Hex: 5 (more detail for analysis)
+/// - Stats: 10 (comprehensive statistics)
+/// - Others: 4 (balanced default)
+fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
+    match mode {
+        OutputMode::Auto => 3,                  // Should never reach here, but default to classic depth
+        OutputMode::Ls => 1,                    // Mimics 'ls' behavior
+        OutputMode::Classic => 3,               // Balanced tree view
+        OutputMode::Ai | OutputMode::Hex => 5,  // More detail for analysis
+        OutputMode::Stats => 10,                // Comprehensive stats
+        OutputMode::Digest => 10,               // Full scan for accurate digest
+        OutputMode::Quantum | OutputMode::QuantumSemantic => 5, // Good compression balance
+        OutputMode::Summary | OutputMode::SummaryAi => 4,       // Reasonable summary depth
+        OutputMode::Waste => 10,                // Deep scan to find all duplicates
+        OutputMode::Relations => 10,            // Deep scan for relationships
+        _ => 4,                                 // Default for other modes
+    }
+}
+
 fn parse_date(date_str: &str) -> Result<SystemTime> {
     // Attempt to parse the date string.
     let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
@@ -389,6 +466,14 @@ async fn main() -> Result<()> {
     if cli.version {
         return show_version_with_updates().await;
     }
+    if let Some(names) = cli.rename_project {
+        if names.len() != 2 {
+            eprintln!("Error: rename-project requires exactly two arguments: OLD_NAME NEW_NAME");
+            return Ok(());
+        }
+        let options = RenameOptions::default();
+        return rename_project(&names[0], &names[1], options).await;
+    }
 
     // If no action flag was given, proceed with the scan.
     let args = cli.scan_opts;
@@ -434,22 +519,43 @@ async fn main() -> Result<()> {
     // MCP optimization: enables compression and AI-friendly settings
     let mcp_mode = args.mcp_optimize || is_ai_caller;
 
-    let (mode, compress) = if mcp_mode {
+    let (mut mode, compress) = if mcp_mode {
         // If MCP optimization is requested or AI_TOOLS is set, use API-optimized settings
         match args.mode {
+            OutputMode::Auto => (OutputMode::Ai, true), // Default to AI mode for MCP
             OutputMode::Summary => (OutputMode::SummaryAi, true), // Auto-switch to AI version
             other => (other, true), // Keep other modes but enable compression
         }
     } else if args.semantic {
         // If --semantic flag is set, use semantic mode (Omni's wisdom!)
         (OutputMode::Semantic, args.compress)
+    } else if args.mode != OutputMode::Auto {
+        // User explicitly specified a mode via command line - this takes precedence!
+        (args.mode, args.compress)
     } else if let Some(env_mode) = default_mode_env {
-        // If ST_DEFAULT_MODE is set, use it. Compression comes from args or its default.
+        // If ST_DEFAULT_MODE is set and user didn't specify mode, use it
         (env_mode, args.compress)
     } else {
-        // Otherwise, use the mode and compression from command-line arguments (or their defaults).
-        (args.mode, args.compress)
+        // No explicit mode specified anywhere, use classic as default
+        (OutputMode::Classic, args.compress)
     };
+    
+    // Auto-switch to ls mode when using --top with classic mode
+    if args.top.is_some() && matches!(mode, OutputMode::Classic) {
+        // Check if user explicitly provided --mode flag by looking at CLI args
+        let user_specified_mode = std::env::args().any(|arg| arg == "--mode" || arg == "-m");
+        
+        if !user_specified_mode && default_mode_env.is_none() {
+            // Auto-switch only if user didn't explicitly choose a mode
+            eprintln!("💡 Auto-switching to ls mode for --top results (use --mode classic to override)");
+            mode = OutputMode::Ls;
+        } else {
+            // User explicitly chose classic mode or set env var, just show the note
+            eprintln!("💡 Note: --top doesn't limit results in classic tree mode.");
+            eprintln!("   Tree mode needs all entries to build the structure.");
+            eprintln!("   Use --mode ls for limited results: st --mode ls --sort largest --top 10");
+        }
+    }
 
     // --- Color Configuration ---
     // Determine if colors should be used in the output.
@@ -493,7 +599,25 @@ async fn main() -> Result<()> {
     let (no_ignore_final, no_default_ignore_final, all_final) = if args.everything {
         (true, true, true) // Override all ignore/hide settings
     } else {
-        (args.no_ignore, args.no_default_ignore, args.all)
+        // Check if the root path itself is a commonly ignored directory
+        // If so, automatically disable default ignores AND show hidden files
+        let path = PathBuf::from(&input_str);
+        let root_name = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        
+        // List of directory names that should disable default ignores when explicitly targeted
+        let auto_disable_ignores = matches!(root_name, 
+            ".git" | ".svn" | ".hg" | "node_modules" | "target" | "build" | 
+            "dist" | "__pycache__" | ".cache" | ".pytest_cache" | ".mypy_cache"
+        );
+        
+        // For hidden directories like .git, also enable showing hidden files
+        let auto_show_hidden = auto_disable_ignores && root_name.starts_with('.');
+        
+        let no_default_ignore = args.no_default_ignore || auto_disable_ignores;
+        let all = args.all || auto_show_hidden;
+        (args.no_ignore, no_default_ignore, all)
     };
 
     // For AI mode, we automatically enable `show_ignored` to provide maximum context to the AI,
@@ -501,12 +625,13 @@ async fn main() -> Result<()> {
     let show_ignored_final =
         args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
 
-    // Smart default: LS mode should show only direct children (depth 1) like real ls
-    let effective_depth = if matches!(mode, OutputMode::Ls) && args.depth == 10 {
-        1 // Default to depth 1 for LS mode (like real ls command)
+    // Smart defaults: Each mode has an ideal depth when user doesn't specify (depth = 0)
+    let effective_depth = if args.depth == 0 {
+        get_ideal_depth_for_mode(&mode)
     } else {
-        args.depth
+        args.depth // User explicitly set depth, respect their choice
     };
+    
 
     let scanner_config = ScannerConfig {
         max_depth: effective_depth,
@@ -535,6 +660,16 @@ async fn main() -> Result<()> {
         use_default_ignores: !no_default_ignore_final,
         search_keyword: args.search.clone(),
         show_filesystems: args.show_filesystems,
+        sort_field: args.sort.map(|f| match f {
+            SortField::AToZ | SortField::Name => "a-to-z".to_string(),
+            SortField::ZToA => "z-to-a".to_string(),
+            SortField::Largest | SortField::Size => "largest".to_string(),
+            SortField::Smallest => "smallest".to_string(),
+            SortField::Newest | SortField::Date => "newest".to_string(),
+            SortField::Oldest => "oldest".to_string(),
+            SortField::Type => "type".to_string(),
+        }),
+        top_n: args.top,
     };
 
     // 🌊 Universal Input Processing
@@ -661,6 +796,10 @@ async fn main() -> Result<()> {
 
         // Create the appropriate formatter based on the selected mode.
         let formatter: Box<dyn Formatter> = match mode {
+            OutputMode::Auto => {
+                // Auto mode should have been resolved to a specific mode by now
+                unreachable!("Auto mode should have been resolved before formatter selection")
+            }
             OutputMode::Classic => {
                 // Special handling for classic mode with --find: default to relative paths
                 // if user hasn't explicitly set a path_mode other than 'off'.
@@ -671,11 +810,21 @@ async fn main() -> Result<()> {
                     } else {
                         path_display_mode // Use the user-specified or default path_mode.
                     };
-                Box::new(ClassicFormatter::new(
+                let formatter = ClassicFormatter::new(
                     no_emoji,
                     use_color,
                     classic_path_mode,
-                ))
+                );
+                let sort_field = args.sort.map(|f| match f {
+                    SortField::AToZ | SortField::Name => "a-to-z".to_string(),
+                    SortField::ZToA => "z-to-a".to_string(),
+                    SortField::Largest | SortField::Size => "largest".to_string(),
+                    SortField::Smallest => "smallest".to_string(),
+                    SortField::Newest | SortField::Date => "newest".to_string(),
+                    SortField::Oldest => "oldest".to_string(),
+                    SortField::Type => "type".to_string(),
+                });
+                Box::new(formatter.with_sort(sort_field))
             }
             OutputMode::Hex => Box::new(HexFormatter::new(
                 use_color,
@@ -796,9 +945,16 @@ fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result
 
     // Mode-specific tips
     match mode {
+        OutputMode::Auto => {
+            // Auto mode should never reach here, but just in case
+            tips.push("🤖 Auto mode intelligently selects the best format for your use case!");
+        }
         OutputMode::Classic => {
-            if depth > 3 {
-                tips.push("💡 Deep trees can be overwhelming. Try --mode ls -d 1 for a clean directory listing!");
+            if depth > 5 {
+                tips.push("💡 Deep trees can be overwhelming. Try reducing depth with -d 3 or use --mode ls for a clean listing!");
+            }
+            if depth == 0 || depth == 3 {
+                tips.push("🌳 Classic mode defaults to depth 3 for a balanced view. Use -d to customize!");
             }
             tips.push("🚀 Pro tip: Set ST_DEFAULT_MODE=ls for instant directory listings!");
         }
@@ -917,35 +1073,50 @@ fn print_mcp_config() {
 /// Prints a list of available MCP tools that `st` provides.
 /// This helps users (or AI) understand what actions can be performed via MCP.
 fn print_mcp_tools() {
-    println!("Smart Tree MCP Server - Available Tools:");
+    println!("🌳 Smart Tree MCP Server - Available Tools (20+) 🌳");
     println!();
-    println!("1. analyze_directory");
-    println!("   Description: Analyzes a directory and returns its structure and metadata.");
-    println!("   Parameters:");
-    println!("     - path (string, required): The directory path to analyze.");
-    println!("     - mode (string, optional, default: 'ai'): Output format. Options: classic, hex, json, ai, stats, csv, tsv, digest.");
-    println!("     - max_depth (integer, optional, default: 10): Maximum traversal depth.");
-    println!("     - compress (boolean, optional, default: false): Whether to compress the output (zlib + hex).");
-    println!("     - find (string, optional): Regex pattern to find file/directory names.");
-    println!("     - filter_type (string, optional): Filter by file extension (e.g., 'rs').");
-    println!("     - min_size (string, optional): Minimum file size (e.g., '1M').");
-    println!("     - max_size (string, optional): Maximum file size (e.g., '100K').");
-    println!("     - newer_than (string, optional): Files newer than date (YYYY-MM-DD).");
-    println!("     - older_than (string, optional): Files older than date (YYYY-MM-DD).");
-    println!("     - no_ignore (boolean, optional, default: false): If true, .gitignore files are ignored.");
-    println!("     - show_hidden (boolean, optional, default: false): If true, hidden files/dirs are shown.");
-    println!("     - show_ignored (boolean, optional, default: false): If true, ignored files/dirs are shown (in brackets).");
-    println!("     - search (string, optional): Keyword to search within file contents.");
+    println!("📚 Full documentation: Run 'st --mcp' to start the MCP server");
+    println!("💡 Pro tip: Use these tools with Claude Desktop for AI-powered file analysis!");
     println!();
-    println!("2. get_digest");
-    println!(
-        "   Description: Quickly gets a compact digest (hash + minimal stats) for a directory."
-    );
-    println!("   Parameters:");
-    println!("     - path (string, required): The directory path to analyze.");
-    // Add more tools here if they are implemented.
-    // For example, a more focused `find_files` tool or `get_statistics` could be useful.
-    // The current `analyze_directory` is quite versatile due to its parameters.
+    println!("CORE TOOLS:");
+    println!("  • server_info - Get server capabilities and current time");
+    println!("  • analyze_directory - Main workhorse with multiple output formats");
+    println!("  • quick_tree - Lightning-fast 3-level overview (10x compression)");
+    println!("  • project_overview - Comprehensive project analysis");
+    println!();
+    println!("FILE DISCOVERY:");
+    println!("  • find_files - Search with regex, size, date filters");
+    println!("  • find_code_files - Find source code by language");
+    println!("  • find_config_files - Locate all configuration files");
+    println!("  • find_documentation - Find README, docs, licenses");
+    println!("  • find_tests - Locate test files across languages");
+    println!("  • find_build_files - Find Makefile, Cargo.toml, etc.");
+    println!();
+    println!("CONTENT SEARCH:");
+    println!("  • search_in_files - Powerful content search (like grep)");
+    println!("  • find_large_files - Identify space consumers");
+    println!("  • find_recent_changes - Files modified in last N days");
+    println!("  • find_in_timespan - Files modified in date range");
+    println!();
+    println!("ANALYSIS:");
+    println!("  • get_statistics - Comprehensive directory stats");
+    println!("  • get_digest - SHA256 hash for change detection");
+    println!("  • directory_size_breakdown - Size by subdirectory");
+    println!("  • find_empty_directories - Cleanup opportunities");
+    println!("  • find_duplicates - Detect potential duplicate files");
+    println!("  • semantic_analysis - Group files by purpose");
+    println!();
+    println!("ADVANCED:");
+    println!("  • compare_directories - Find differences between dirs");
+    println!("  • get_git_status - Git-aware directory structure");
+    println!("  • analyze_workspace - Multi-project workspace analysis");
+    println!();
+    println!("FEEDBACK:");
+    println!("  • submit_feedback - Help improve Smart Tree");
+    println!("  • request_tool - Request new MCP tools");
+    println!("  • check_for_updates - Check for newer versions");
+    println!();
+    println!("Run 'st --mcp' to start the server and see full parameter details!");
 }
 
 /// Show version information with optional update checking

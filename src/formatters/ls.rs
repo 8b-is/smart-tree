@@ -19,6 +19,7 @@
 
 use super::Formatter;
 use crate::scanner::{FileNode, TreeStats};
+use crate::emoji_mapper;
 use anyhow::Result;
 use chrono::{DateTime, Local};
 use std::fs;
@@ -162,26 +163,17 @@ impl LsFormatter {
     /// Get the appropriate emoji for a file node
     ///
     /// This adds visual flair to the output, making it easier to quickly
-    /// identify file types. Empty files and directories get special emojis!
+    /// identify file types. Uses the centralized emoji mapper for rich file type representation!
     fn get_emoji(&self, node: &FileNode) -> &'static str {
         if !self.show_emojis {
             return "";
         }
 
-        if node.is_dir {
-            if node.size == 0 {
-                "📂" // Empty directory
-            } else {
-                "📁" // Regular directory
-            }
-        } else if node.size == 0 {
-            "📋" // Empty file
-        } else {
-            "📄" // Regular file
-        }
+        emoji_mapper::get_file_emoji(node, false)
     }
 
     /// Format the filename with optional emoji and coloring
+    /// Ensures consistent spacing by padding emoji field to 2 characters
     fn format_filename(&self, node: &FileNode) -> String {
         let emoji = self.get_emoji(node);
         let filename = node
@@ -190,34 +182,79 @@ impl LsFormatter {
             .unwrap_or_else(|| node.path.as_os_str())
             .to_string_lossy();
 
+        // Format emoji with consistent spacing
+        let emoji_field = if emoji.is_empty() {
+            String::new()
+        } else {
+            // Always add a space after emoji for consistent alignment
+            format!("{} ", emoji)
+        };
+
         if self.use_colors {
             if node.is_dir {
                 // Blue color for directories (ANSI color code 34)
-                format!("{} \x1b[34m{}\x1b[0m", emoji, filename)
+                format!("{}\x1b[34m{}\x1b[0m", emoji_field, filename)
             } else if node.path.extension().and_then(|s| s.to_str()) == Some("rs") {
                 // Orange color for Rust files (Hue's favorite!)
-                format!("{} \x1b[38;5;208m{}\x1b[0m", emoji, filename)
+                format!("{}\x1b[38;5;208m{}\x1b[0m", emoji_field, filename)
             } else {
                 // Default color for regular files
-                format!("{} {}", emoji, filename)
+                format!("{}{}", emoji_field, filename)
             }
         } else {
-            if emoji.is_empty() {
+            if emoji_field.is_empty() {
                 filename.to_string()
             } else {
-                format!("{} {}", emoji, filename)
+                format!("{}{}", emoji_field, filename)
             }
         }
     }
 
-    /// Get owner and group information (simplified for now)
+    /// Get owner and group information
     ///
-    /// In a full implementation, we'd use libc to get actual user/group names
-    /// For now, we'll use numeric IDs or placeholder values
-    fn get_owner_group(&self, _node: &FileNode) -> (String, String) {
-        // TODO: Implement actual owner/group lookup using libc
-        // For now, return placeholder values that look like real ls output
-        ("hue".to_string(), "hue".to_string())
+    /// On Unix systems, this attempts to resolve uid/gid to actual names.
+    /// Falls back to numeric IDs if resolution fails.
+    fn get_owner_group(&self, node: &FileNode) -> (String, String) {
+        #[cfg(unix)]
+        {
+            use std::ffi::CStr;
+            
+            // Get username from uid
+            let owner = unsafe {
+                let passwd = libc::getpwuid(node.uid);
+                if passwd.is_null() {
+                    // User not found, use numeric ID
+                    node.uid.to_string()
+                } else {
+                    // Convert username to String
+                    CStr::from_ptr((*passwd).pw_name)
+                        .to_string_lossy()
+                        .to_string()
+                }
+            };
+            
+            // Get group name from gid
+            let group = unsafe {
+                let grp = libc::getgrgid(node.gid);
+                if grp.is_null() {
+                    // Group not found, use numeric ID
+                    node.gid.to_string()
+                } else {
+                    // Convert group name to String
+                    CStr::from_ptr((*grp).gr_name)
+                        .to_string_lossy()
+                        .to_string()
+                }
+            };
+            
+            (owner, group)
+        }
+        
+        #[cfg(not(unix))]
+        {
+            // On non-Unix systems, just show the numeric IDs
+            (node.uid.to_string(), node.gid.to_string())
+        }
     }
 
     /// Get hard link count (simplified)
@@ -260,7 +297,7 @@ impl Formatter for LsFormatter {
         let total_non_root = nodes.iter().filter(|n| n.path != root_path).count();
         let is_filtered = total_non_root > 0 && (direct_child_count == 0 || total_non_root > direct_child_count * 2);
         
-        let mut display_nodes: Vec<&FileNode> = if is_filtered {
+        let display_nodes: Vec<&FileNode> = if is_filtered {
             // For filtered results, show all matching nodes with full paths
             nodes
                 .iter()
@@ -292,22 +329,8 @@ impl Formatter for LsFormatter {
             return Ok(());
         }
 
-        // Sort by filename (case-insensitive, like ls)
-        display_nodes.sort_by(|a, b| {
-            let name_a = a
-                .path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_lowercase();
-            let name_b = b
-                .path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_lowercase();
-            name_a.cmp(&name_b)
-        });
+        // Note: Nodes are already sorted by the scanner based on user's --sort preference
+        // We don't re-sort here to preserve the requested sort order
 
         // Format each file/directory in ls -Alh style
         for node in display_nodes {
@@ -328,19 +351,32 @@ impl Formatter for LsFormatter {
                 Err(_) => "??? ?? ??:??".to_string(),
             };
 
-            // Format filename - show full path if filtered, otherwise just the name
+            // Determine filename display strategy:
+            // - When filtering results (search/pattern match): Show relative path for context
+            // - Otherwise: Show only the filename for cleaner output
             let filename = if is_filtered {
-                // For filtered results, show the full path
+                // Format with relative path to help identify match locations
                 let emoji = self.get_emoji(node);
-                let full_path = node.path.display().to_string();
-                if self.use_colors {
-                    if node.is_dir {
-                        format!("{} \x1b[34m{}\x1b[0m", emoji, full_path)
-                    } else {
-                        format!("{} {}", emoji, full_path)
-                    }
+                // Format emoji with consistent spacing
+                let emoji_field = if emoji.is_empty() {
+                    String::new()
                 } else {
-                    format!("{} {}", emoji, full_path)
+                    // Always add a space after emoji for consistent alignment
+                    format!("{} ", emoji)
+                };
+                
+                // Get relative path from root_path
+                let relative_path = node.path.strip_prefix(root_path)
+                    .unwrap_or(&node.path)
+                    .display();
+                
+                // Apply directory coloring if colors are enabled
+                if self.use_colors && node.is_dir {
+                    // Blue color (ANSI 34) for directories
+                    format!("{}\x1b[34m{}\x1b[0m", emoji_field, relative_path)
+                } else {
+                    // Default formatting for files or when colors are disabled
+                    format!("{}{}", emoji_field, relative_path)
                 }
             } else {
                 self.format_filename(node)
@@ -349,7 +385,7 @@ impl Formatter for LsFormatter {
             // Write the ls -Alh formatted line
             writeln!(
                 writer,
-                "{} {:>3} {:>8} {:>8} {:>6} {} {}",
+                "{:<10} {:>1} {:<4} {:<4} {:>6} {} {}",
                 permissions, link_count, owner, group, size, modified_time, filename
             )?;
         }
@@ -459,3 +495,4 @@ mod tests {
         assert_eq!(perms.len(), 10); // Always 10 characters
     }
 }
+

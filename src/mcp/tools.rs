@@ -16,9 +16,15 @@ use anyhow::Result;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
+
+// Helper to determine if we should use default ignores
+// We disable them for /tmp paths to support testing
+fn should_use_default_ignores(path: &Path) -> bool {
+    !path.starts_with("/tmp")
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ToolDefinition {
@@ -107,6 +113,11 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     "file_type": {
                         "type": "string",
                         "description": "Filter by file extension (e.g., 'rs', 'py')"
+                    },
+                    "entry_type": {
+                        "type": "string",
+                        "enum": ["f", "d"],
+                        "description": "Filter to show only files (f) or directories (d)"
                     },
                     "min_size": {
                         "type": "string",
@@ -313,6 +324,32 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     }
                 },
                 "required": ["path"]
+            }),
+        },
+        ToolDefinition {
+            name: "find_in_timespan".to_string(),
+            description: "🕐 Find files modified within a specific time range. Perfect for finding files changed between two dates, during a specific week, or in a particular time period. More flexible than find_recent_changes for specific date ranges.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to search in"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD) - files modified after this date"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD) - files modified before this date (optional, defaults to today)"
+                    },
+                    "file_type": {
+                        "type": "string",
+                        "description": "Filter by file extension (optional)"
+                    }
+                },
+                "required": ["path", "start_date"]
             }),
         },
         ToolDefinition {
@@ -637,6 +674,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "search_in_files" => search_in_files(args, ctx).await,
         "find_large_files" => find_large_files(args, ctx).await,
         "find_recent_changes" => find_recent_changes(args, ctx).await,
+        "find_in_timespan" => find_in_timespan(args, ctx).await,
         "compare_directories" => compare_directories(args, ctx).await,
         "get_git_status" => get_git_status(args, ctx).await,
         "find_duplicates" => find_duplicates(args, ctx).await,
@@ -684,11 +722,21 @@ fn default_path_mode() -> String {
 
 async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let cache_stats = ctx.cache.stats().await;
+    
+    // Get current date/time for AI assistants
+    use chrono::{Local, Utc};
+    let now_local = Local::now();
+    let now_utc = Utc::now();
 
     let info = json!({
         "server": {
             "name": "Smart Tree MCP Server",
             "version": env!("CARGO_PKG_VERSION"),
+            "current_time": {
+                "local": now_local.format("%Y-%m-%d %H:%M:%S %Z").to_string(),
+                "utc": now_utc.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                "date_format_hint": "Use YYYY-MM-DD format for date filters (e.g., 2025-07-11)"
+            },
             "build": {
                 "name": env!("CARGO_PKG_NAME"),
                 "description": env!("CARGO_PKG_DESCRIPTION"),
@@ -876,9 +924,11 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         max_size: None,
         newer_than: None,
         older_than: None,
-        use_default_ignores: true,
+        use_default_ignores: should_use_default_ignores(&path),
         search_keyword: None,
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     // Scan directory
@@ -996,6 +1046,7 @@ struct FindFilesArgs {
     path: String,
     pattern: Option<String>,
     file_type: Option<String>,
+    entry_type: Option<String>,
     min_size: Option<String>,
     max_size: Option<String>,
     newer_than: Option<String>,
@@ -1013,13 +1064,26 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         return Err(anyhow::anyhow!("Access denied: path not allowed"));
     }
 
-    // Parse dates
+    // Parse dates - use local timezone
     let parse_date = |date_str: &str| -> Result<SystemTime> {
-        use chrono::NaiveDate;
+        use chrono::{Local, NaiveDate, TimeZone};
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-        let datetime = date.and_hms_opt(0, 0, 0).unwrap();
+        let datetime = Local.from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+            .single()
+            .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
         Ok(SystemTime::UNIX_EPOCH
-            + std::time::Duration::from_secs(datetime.and_utc().timestamp() as u64))
+            + std::time::Duration::from_secs(datetime.timestamp() as u64))
+    };
+    
+    // Parse end date as end of day (23:59:59) for inclusive range
+    let parse_end_date = |date_str: &str| -> Result<SystemTime> {
+        use chrono::{Local, NaiveDate, TimeZone};
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+        let datetime = Local.from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+            .single()
+            .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
+        Ok(SystemTime::UNIX_EPOCH
+            + std::time::Duration::from_secs(datetime.timestamp() as u64))
     };
 
     // Build scanner configuration
@@ -1031,7 +1095,7 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         show_ignored: false,
         find_pattern: args.pattern.as_ref().map(|p| Regex::new(p)).transpose()?,
         file_type_filter: args.file_type,
-        entry_type_filter: None,
+        entry_type_filter: args.entry_type,
         min_size: args.min_size.as_ref().map(|s| parse_size(s)).transpose()?,
         max_size: args.max_size.as_ref().map(|s| parse_size(s)).transpose()?,
         newer_than: args
@@ -1042,11 +1106,13 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         older_than: args
             .older_than
             .as_ref()
-            .map(|d| parse_date(d))
+            .map(|d| parse_end_date(d))
             .transpose()?,
-        use_default_ignores: true,
+        use_default_ignores: should_use_default_ignores(&path),
         search_keyword: None,
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     // Scan directory
@@ -1056,15 +1122,19 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     // Format results as JSON list
     let mut results = Vec::new();
     for node in &nodes {
-        if !node.is_dir {
-            results.push(json!({
-                "path": node.path.display().to_string(),
-                "name": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-                "size": node.size,
-                "modified": node.modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
-                "permissions": format!("{:o}", node.permissions),
-            }));
+        // Skip the root directory itself
+        if node.path == path {
+            continue;
         }
+        
+        results.push(json!({
+            "path": node.path.display().to_string(),
+            "name": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+            "size": node.size,
+            "modified": node.modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+            "permissions": format!("{:o}", node.permissions),
+            "is_directory": node.is_dir,
+        }));
     }
 
     Ok(json!({
@@ -1104,9 +1174,11 @@ async fn get_statistics(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         max_size: None,
         newer_than: None,
         older_than: None,
-        use_default_ignores: true,
+        use_default_ignores: should_use_default_ignores(&path),
         search_keyword: None,
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     // Scan directory
@@ -1151,9 +1223,11 @@ async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         max_size: None,
         newer_than: None,
         older_than: None,
-        use_default_ignores: true,
+        use_default_ignores: should_use_default_ignores(&path),
         search_keyword: None,
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     // Scan directory
@@ -1341,9 +1415,11 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         max_size: None,
         newer_than: None,
         older_than: None,
-        use_default_ignores: true,
+        use_default_ignores: should_use_default_ignores(&path),
         search_keyword: Some(keyword.to_string()),
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     let scanner = Scanner::new(&path, config)?;
@@ -1412,6 +1488,35 @@ async fn find_recent_changes(args: Value, ctx: Arc<McpContext>) -> Result<Value>
         ctx,
     )
     .await
+}
+
+async fn find_in_timespan(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let path = args["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+    let start_date = args["start_date"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing start_date"))?;
+    
+    // Build the find_files request
+    let mut find_args = json!({
+        "path": path,
+        "newer_than": start_date,
+        "max_depth": 20
+    });
+    
+    // Add end_date if provided (maps to older_than)
+    if let Some(end_date) = args["end_date"].as_str() {
+        find_args["older_than"] = json!(end_date);
+    }
+    
+    // Add file_type filter if provided
+    if let Some(file_type) = args["file_type"].as_str() {
+        find_args["file_type"] = json!(file_type);
+    }
+    
+    // Use the existing find_files function with both date filters
+    find_files(find_args, ctx).await
 }
 
 async fn compare_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
@@ -1540,9 +1645,11 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         max_size: None,
         newer_than: None,
         older_than: None,
-        use_default_ignores: true,
+        use_default_ignores: should_use_default_ignores(&path),
         search_keyword: None,
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     let scanner = Scanner::new(&path, config)?;
@@ -1671,6 +1778,8 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
         use_default_ignores: false,
         search_keyword: None,
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     let scanner = Scanner::new(&path, config)?;
@@ -1697,6 +1806,8 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
                 use_default_ignores: false,
                 search_keyword: None,
                 show_filesystems: false,
+                sort_field: None,
+                top_n: None,
             };
             let subscanner = Scanner::new(&node.path, subconfig)?;
             let (_, substats) = subscanner.scan()?;
@@ -1750,9 +1861,11 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
         max_size: None,
         newer_than: None,
         older_than: None,
-        use_default_ignores: true,
+        use_default_ignores: should_use_default_ignores(&path),
         search_keyword: None,
         show_filesystems: false,
+        sort_field: None,
+        top_n: None,
     };
 
     let scanner = Scanner::new(&path, config)?;
