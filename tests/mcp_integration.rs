@@ -10,7 +10,14 @@ mod mcp_tests {
     use std::path::PathBuf;
     
     fn run_mcp_command(request: Value) -> Result<Value, String> {
-        let mut child = Command::new("./target/release/st")
+        // Try release first, fall back to debug (for GitHub Actions)
+        let binary_path = if std::path::Path::new("./target/release/st").exists() {
+            "./target/release/st"
+        } else {
+            "./target/debug/st"
+        };
+        
+        let mut child = Command::new(binary_path)
             .arg("--mcp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
