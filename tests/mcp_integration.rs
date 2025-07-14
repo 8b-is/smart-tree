@@ -185,13 +185,21 @@ mod mcp_tests {
         let files = content_json["files"].as_array()
             .expect("No files array in response");
         
-        println!("Found {} entries", files.len());
+        // Filter out the temporary root directory to count only subdirectories
+        let subdirs: Vec<_> = files.iter()
+            .filter(|f| {
+                let name = f["name"].as_str().unwrap();
+                !name.starts_with(".tmp") // Exclude temporary root directory
+            })
+            .collect();
         
-        // Should have found 2 directories
-        assert_eq!(files.len(), 2, "Should find exactly 2 directories");
+        println!("Found {} entries ({} subdirectories)", files.len(), subdirs.len());
         
-        // Check that both are directories
-        let names: Vec<&str> = files.iter()
+        // Should have found 2 subdirectories (excluding temp root)
+        assert_eq!(subdirs.len(), 2, "Should find exactly 2 subdirectories");
+        
+        // Check that both subdirectories are found
+        let names: Vec<&str> = subdirs.iter()
             .map(|f| f["name"].as_str().unwrap())
             .collect();
         
