@@ -130,15 +130,37 @@ jobs:
           See [RELEASE_NOTES_${{ github.ref_name }}.md](https://github.com/8b-is/smart-tree/blob/main/RELEASE_NOTES_${{ github.ref_name }}.md) for detailed release notes.
           
           ## Installation
+
           
           ### Quick Install (Linux/macOS/WSL)
+          > [!TIP]
+          > This is best for all methods of using Smart Tree including Claude Desktop
+            > Other OS install instructions located at the front desk [here](https://github.com/8b-is/smart-tree?tab=readme-ov-file#-windows---the-slightly-longer-dance). 👀          
+
           ```bash
           curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
           ```
-          
-          ### Claude Desktop
-          Download `smart-tree.dxt` below and install via Settings → Developer → Install from file
-          
+          MCP JSON
+          > Change the command to the proper path if yours is not that.  This works on my mac and linux fine.
+          > AI_TOOLS=1 highly compresses the output beyond the already compressed methods.  Some LLM's might not support it.  Just set to 0 and it will also be a little more human readable.
+          ```json
+          {
+            "mcpServers": {
+              "smart-tree": {
+                "command": "/usr/local/bin/st",
+                "args": [
+                  "--mcp"
+                ],
+                "env": {
+                  "AI_TOOLS": "1"
+                }
+              }
+            }
+          }
+          ```
+          ### DXT
+          You can do this.  It is so limited on file system love..  It is hard for me to love right now.  But, I have ideas to fix that.
+
           ### Manual Installation
           Download the appropriate binary for your platform below.
           
