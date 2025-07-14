@@ -612,7 +612,7 @@ async def check_version(current_version: str):
     """Check if a newer version is available"""
     # In production, this would check against release data
     # For now, mock response
-    latest_version = "3.2.1"  # Would come from GitHub releases API
+    latest_version = "3.3.5"  # Would come from GitHub releases API
     
     if current_version >= latest_version:
         return {

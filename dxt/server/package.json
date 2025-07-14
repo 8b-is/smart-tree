@@ -1,6 +1,6 @@
 {
   "name": "smart-tree-installer",
-  "version": "3.3.0",
+  "version": "3.3.5",
   "description": "Smart Tree Installation Helper for Claude Desktop",
   "main": "index.js",
   "scripts": {},

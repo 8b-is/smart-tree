@@ -1,5 +1,5 @@
 #!/bin/bash
-# MCP Test Suite for Smart Tree v3.3.1
+# MCP Test Suite for Smart Tree v3.3.5
 # Tests all MCP functionality to ensure AI assistants can use the tools correctly
 
 set -e  # Exit on error
@@ -83,7 +83,7 @@ test_tool_content() {
     fi
 }
 
-echo "=== Smart Tree MCP Test Suite v3.3.1 ==="
+echo "=== Smart Tree MCP Test Suite v3.3.5 ==="
 echo "Binary: $ST_BIN"
 echo ""
 

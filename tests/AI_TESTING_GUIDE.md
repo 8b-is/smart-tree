@@ -1,4 +1,4 @@
-# AI Assistant Testing Guide for Smart Tree v3.3.1
+# AI Assistant Testing Guide for Smart Tree v3.3.5
 
 This guide helps AI assistants verify that Smart Tree MCP tools work correctly.
 

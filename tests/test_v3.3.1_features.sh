@@ -1,5 +1,5 @@
 #!/bin/bash
-# Focused test suite for v3.3.1 specific features
+# Focused test suite for v3.3.5 specific features
 # Tests: hidden directory handling, entry-type filtering, time-aware tools
 
 set -e
@@ -12,7 +12,7 @@ NC='\033[0m'
 
 ST_BIN="${ST_BIN:-./target/release/st}"
 
-echo -e "${BLUE}=== Smart Tree v3.3.1 Feature Tests ===${NC}"
+echo -e "${BLUE}=== Smart Tree v3.3.5 Feature Tests ===${NC}"
 echo ""
 
 # Test 1: Hidden Directory Traversal Fix
@@ -133,4 +133,4 @@ fi
 rm -rf "$TEST_DIR"
 
 echo -e "\n${BLUE}=== Test Complete ===${NC}"
-echo "All v3.3.1 specific features have been tested!"
+echo "All v3.3.5 specific features have been tested!"

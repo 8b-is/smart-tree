@@ -1,4 +1,4 @@
-// MCP Integration Tests for Smart Tree v3.3.1
+// MCP Integration Tests for Smart Tree v3.3.5
 // Tests the MCP server functionality programmatically
 
 #[cfg(test)]
@@ -293,7 +293,7 @@ mod mcp_tests {
     }
     
     #[test]
-    #[ignore = "Known issue: date filtering has timezone problems - not a v3.3.1 regression"]
+    #[ignore = "Known issue: date filtering has timezone problems - not a v3.3.5 regression"]
     fn test_date_format_parsing() {
         use chrono::{Local, Duration};
         use std::fs;

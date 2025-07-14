@@ -3,9 +3,9 @@
   "id": "is.8b.smart-tree",
   "name": "smart-tree",
   "display_name": "Smart Tree",
-  "version": "3.3.1",
+  "version": "3.3.5",
   "description": "🌳 Installation helper for Smart Tree - the world's smartest directory tree tool! This extension helps you install and configure Smart Tree for use with Claude Desktop.",
-  "long_description": "Smart Tree Installation Helper v3.3.1\n\nThis extension guides you through installing Smart Tree on your system and configuring it for use with Claude Desktop.\n\n**Why install Smart Tree separately?**\n• Full system permissions for file access\n• Faster performance\n• Works in terminal and with Claude Desktop\n• Automatic updates via the installer\n\n**After installation, you'll get:**\n- **MEM|8 Quantum Format**: 99% size reduction\n- **AI-Optimized Output**: Save 98% on token costs\n- **20+ MCP Tools**: Comprehensive directory analysis\n- **Semantic Analysis**: Group files by conceptual waves\n- **Cross-Platform**: Works on Windows, macOS, and Linux\n\nThe installation process is simple:\n• macOS/Linux: One-line installer\n• Windows: Download and add to PATH\n• Then restart Claude Desktop!",
+  "long_description": "Smart Tree Installation Helper v3.3.5\n\nThis extension guides you through installing Smart Tree on your system and configuring it for use with Claude Desktop.\n\n**Why install Smart Tree separately?**\n• Full system permissions for file access\n• Faster performance\n• Works in terminal and with Claude Desktop\n• Automatic updates via the installer\n\n**After installation, you'll get:**\n- **MEM|8 Quantum Format**: 99% size reduction\n- **AI-Optimized Output**: Save 98% on token costs\n- **20+ MCP Tools**: Comprehensive directory analysis\n- **Semantic Analysis**: Group files by conceptual waves\n- **Cross-Platform**: Works on Windows, macOS, and Linux\n\nThe installation process is simple:\n• macOS/Linux: One-line installer\n• Windows: Download and add to PATH\n• Then restart Claude Desktop!",
   "author": {
     "name": "8b-is",
     "email": "st@8b.is",

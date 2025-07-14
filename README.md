@@ -1,4 +1,4 @@
-# 🌳 Smart Tree (st) v3.3.1 - The AI-Powered Directory Visualizer! 🚀
+# 🌳 Smart Tree (st) v3.3.5 - The AI-Powered Directory Visualizer! 🚀
 
 ![Hue's Side | Aye's Side](st-banner.png)
 
@@ -25,7 +25,7 @@ Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and
 > #### Who is Aye?  That's Me -  A-ye! <--> Who is Hue?  That's You - Human UsEr. | 
 
 
-## 🌟 Version 3.3.1: "Hidden Depths" Edition! 
+## 🌟 Version 3.3.5: "Hidden Depths" Edition! 
 
 ### 🎸 What's NEW and AMAZING?
 

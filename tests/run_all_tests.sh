@@ -1,5 +1,5 @@
 #!/bin/bash
-# Master test runner for Smart Tree v3.3.1
+# Master test runner for Smart Tree v3.3.5
 # Runs all test suites before release
 
 set -e
@@ -10,7 +10,7 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== Smart Tree v3.3.1 Pre-Release Test Suite ===${NC}"
+echo -e "${BLUE}=== Smart Tree v3.3.5 Pre-Release Test Suite ===${NC}"
 echo ""
 
 # Check if binary exists
@@ -27,13 +27,13 @@ cargo test
 echo -e "\n${YELLOW}Running Rust MCP integration tests...${NC}"
 cargo test --test mcp_integration
 
-# Run v3.3.1 specific feature tests
-echo -e "\n${YELLOW}Running v3.3.1 feature tests...${NC}"
-./tests/test_v3.3.1_features.sh
+# Run v3.3.5 specific feature tests
+echo -e "\n${YELLOW}Running v3.3.5 feature tests...${NC}"
+./tests/test_v3.3.5_features.sh
 
 # Run comprehensive MCP test suite
 echo -e "\n${YELLOW}Running comprehensive MCP test suite...${NC}"
 ./tests/mcp_test_suite.sh
 
 echo -e "\n${GREEN}=== All Tests Complete! ===${NC}"
-echo "Smart Tree v3.3.1 is ready for release! 🎉"
+echo "Smart Tree v3.3.5 is ready for release! 🎉"

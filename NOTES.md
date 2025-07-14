@@ -1,6 +1,6 @@
 # NOTES.md - Latest Development Updates
 
-## v3.3.1 - SQL-Like Queries & Smart Defaults (July 2025)
+## v3.3.5 - SQL-Like Queries & Smart Defaults (July 2025)
 
 ### Major Features Added 🚀
 - **SQL-Like Query Support**: `--sort` and `--top` options for finding files the SQL way
