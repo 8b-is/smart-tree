@@ -461,7 +461,7 @@ mod tests {
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
         };
-        assert_eq!(formatter.get_emoji(&empty_file), "📋");
+        assert_eq!(formatter.get_emoji(&empty_file), "🪹");
     }
 
     #[test]
