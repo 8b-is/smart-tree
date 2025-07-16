@@ -1,4 +1,4 @@
-aiohttp==3.10.11
+aiohttp==3.12.14
 redis[hiredis]==5.0.1
 PyGithub==2.1.1
 uvloop==0.19.0
