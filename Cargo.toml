@@ -46,6 +46,10 @@ dashmap = { version = "6.1" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 serde_yaml = "0.9"
 
+[[bin]]
+name = "mq"
+path = "src/bin/mq.rs"
+
 [dev-dependencies]
 tempfile = "3.10"
 assert_cmd = "2.0"

@@ -32,6 +32,7 @@ use st::{
         json::JsonFormatter,
         ls::LsFormatter,
         markdown::MarkdownFormatter,
+        markqant::MarkqantFormatter,
         mermaid::{MermaidFormatter, MermaidStyle},
         quantum::QuantumFormatter,
         semantic::SemanticFormatter,
@@ -384,6 +385,8 @@ enum OutputMode {
     QuantumSemantic,
     /// Waste detection and optimization analysis (Marie Kondo mode!)
     Waste,
+    /// Markqant - Quantum-compressed markdown format (.mq)
+    Markqant,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -504,6 +507,7 @@ async fn main() -> Result<()> {
             "summary-ai" => Some(OutputMode::SummaryAi),
             "quantum-semantic" => Some(OutputMode::QuantumSemantic),
             "waste" => Some(OutputMode::Waste),
+            "markqant" => Some(OutputMode::Markqant),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -868,6 +872,9 @@ async fn main() -> Result<()> {
                     !args.no_markdown_tables,  // Include tables unless disabled
                     !args.no_markdown_pie_charts, // Include pie charts unless disabled
                 ))
+            }
+            OutputMode::Markqant => {
+                Box::new(MarkqantFormatter::new(path_display_mode, no_emoji))
             }
             OutputMode::Relations => {
                 // Code relationship analysis - "Semantic X-ray vision!" - Omni

@@ -8,6 +8,19 @@ Smart Tree (`st`) is a blazingly fast, AI-friendly directory visualization tool 
 
 **Current Version**: v3.2.0 - Features revolutionary MEM|8 Quantum compression for 99% size reduction!
 
+## Quick Start
+
+```bash
+# Build and run immediately
+cargo build --release && ./target/release/st
+
+# Most common development cycle
+./scripts/manage.sh format && ./scripts/manage.sh test
+
+# View a directory with AI-optimized compression
+st --mode summary-ai /path/to/large/directory
+```
+
 ## Development Commands
 
 ### Building
@@ -87,7 +100,7 @@ The codebase follows a modular structure:
 
 - **main.rs**: CLI entry point using clap 4.5. Handles all command-line options and MCP server mode
 - **scanner.rs**: Core directory traversal engine using walkdir. Supports filtering, search, and streaming
-- **formatters/** (21 different output formats):
+- **formatters/** (24 different output formats):
   - **classic.rs**: Traditional tree view with Unicode box drawing (O(n) optimized)
   - **hex.rs**: Fixed-width hexadecimal format (AI-optimized)
   - **json.rs**, **csv.rs**, **tsv.rs**: Standard data formats
@@ -99,6 +112,9 @@ The codebase follows a modular structure:
   - **semantic.rs**: Wave-based semantic grouping (inspired by Omni)
   - **relations.rs**: Code relationship analysis
   - **stats.rs**, **digest.rs**: Statistics and hashing
+  - **ls.rs**: Simple ls-like one-line-per-file format
+  - **waste.rs**: Identify disk space usage patterns
+  - **markqant.rs**: Quantum-compressed markdown format (.mq)
 - **mcp/** (Model Context Protocol server):
   - **mod.rs**: Main MCP server logic
   - **tools.rs**: 20+ MCP tools for directory analysis
@@ -112,6 +128,7 @@ The codebase follows a modular structure:
   - **content_detector.rs**: File content analysis
   - **semantic.rs**: Semantic analysis engine
   - **relations.rs**: Code relationship extraction
+  - **smart/**: Advanced features (git_relay, nlp, search, context)
   - **mem8/** (planned): .mem8 binary format support
     - **reader.rs**: Binary format parser with CRC validation
     - **writer.rs**: YAML to binary compiler
@@ -119,6 +136,15 @@ The codebase follows a modular structure:
     - **cache.rs**: Context caching with TTL
 
 ## Key Implementation Details
+
+### Input Sources
+
+Smart Tree supports multiple input sources beyond filesystem scanning:
+1. **Local filesystem** (default): Standard directory traversal
+2. **QCP (Query Context Protocol)**: `st --qcp "query"` for semantic queries
+3. **SSE (Server-Sent Events)**: `st --sse URL` for streaming data
+4. **OpenAPI specs**: `st --openapi spec.yaml` for API documentation trees
+5. **MEM8 streams**: `st --mem8 stream.mem8` for pre-analyzed data
 
 ### Output Format Specifications
 
@@ -197,7 +223,12 @@ cargo run -- --mcp-tools | jq  # Should output valid JSON
 - `semantic_analysis`: Wave-based semantic grouping
 - `compare_directories`: Directory comparison
 - `get_statistics`, `directory_size_breakdown`: Analytics
-- And many more (use `st --mcp-tools` for full list)
+- `find_recent_changes`, `find_in_timespan`: Time-based search
+- `find_large_files`, `find_duplicates`, `find_empty_directories`: Cleanup tools
+- `find_tests`, `find_build_files`, `find_documentation`: Project structure
+- `get_git_status`: Git-aware analysis
+- `analyze_workspace`: Multi-project workspace analysis
+- And more (use `st --mcp-tools` for full list)
 
 ## Common Development Workflows
 
@@ -236,12 +267,14 @@ cargo run -- --mcp-tools | jq  # Should output valid JSON
 ### Permission Denied Errors
 - Scanner gracefully handles permission errors, marks inaccessible directories with `*`
 - Check handling in scanner.rs:72
+- Windows hidden/system files handled specially (see scanner.rs)
 
 ### Large Directory Performance
 - Use `--stream` flag for directories with >10k entries
 - Consider `--depth 3` to limit traversal depth
 - Enable compression with `-z` to reduce output size
-- Use `--mode summary-ai` for maximum compression
+- Use `--mode summary-ai` for maximum compression (10x reduction)
+- Use `--mode quantum` for ultra-compression (100x reduction)
 
 ### Testing Output Formats
 ```bash
@@ -263,6 +296,9 @@ st --mode hex | head -5  # Check field alignment
 - **Binary output appears garbled**: Quantum modes output binary data, use redirection
 - **MCP server not responding**: Check RUST_LOG=debug output
 - **Slow on network drives**: Use `--stream` and reduce `--depth`
+- **Windows path issues**: Use forward slashes or escape backslashes
+- **Large output truncated**: Some terminals have buffer limits, redirect to file
+- **Permission denied on macOS**: Some system directories require special access
 
 ## .mem8 Contextual Metadata System
 
@@ -388,6 +424,9 @@ subdirs:
 - When adding new formatters, implement both `Formatter` and optionally `StreamingFormatter` traits
 - MCP server features are included by default (no longer feature-gated)
 - Version 3.2.0 removed interactive mode - classic is now the default
+- Performance is critical - this tool is 10-24x faster than traditional tree
+- Memory efficiency matters - streaming mode keeps memory constant even for millions of files
+- Test with large directories (>100k files) to ensure performance
 
 ## Release Process
 
@@ -414,6 +453,9 @@ When adding a new formatter:
 5. Update CLI help text
 6. Add tests in your formatter module
 7. Update this CLAUDE.md with the new format specification
+8. Add example output to docs/
+9. Consider token efficiency for AI modes
+10. Benchmark against existing formatters
 
 ## .mem8 Binary Format Implementation
 
@@ -460,3 +502,73 @@ Sections:
 - O(1) section access via index
 - Memory-mapped file support
 - Streaming parse capability
+
+## Project Culture & Team
+
+The Smart Tree project has a unique collaborative culture with recurring personas:
+- **"The Cheet"**: Musical/rock-themed commenter in the code
+- **"Hue"**: The human user/partner (The Guy/Gal we are usually waiting on input for. LOL)
+- **"Aye"**: The AI assistant (you!)
+- **"Trish"**: Another AI persona from accounting who moderates (She's a lot of fun in the Virtual Hot tub)
+
+When working on this project:
+- Maintain the playful, enthusiastic tone in comments
+- Include musical/rock references where appropriate
+- Focus on making tools fast, efficient, and fun
+- Remember: "Why make it boring?" - add spice to life!
+- Always optimize for the smallest and fastest implementation
+- Consider this a partnership between humans and AI
+
+## Current Development Focus
+
+Based on CLAUDE-WISHLIST.md and recent commits:
+1. **Enhanced MCP tools** with line content in search results
+2. **Batch operations** for multiple file processing
+3. **Symbol search** capabilities for code navigation
+4. **Performance optimizations** for even larger codebases
+5. **Cross-platform improvements** especially for Windows
+
+## Integration Tests
+
+The project has comprehensive integration tests in `tests/`:
+- `test_mcp_integration.sh`: MCP server protocol tests
+- `test_integration.sh`: Core functionality tests
+- `test_v2_features.sh`: Quantum compression tests
+- `test_v3_features.sh`: Latest feature tests
+
+Always run integration tests after major changes:
+```bash
+./tests/test_integration.sh
+./tests/test_mcp_integration.sh
+```
+
+## Markqant (.mq) Format
+
+Smart Tree includes markqant - a quantum-compressed markdown format designed for AI consumption:
+
+### Usage
+```bash
+# Use markqant formatter for directory output
+st --mode markqant /path/to/dir > structure.mq
+
+# Compress/decompress markdown files
+mq compress README.md -o README.mq
+mq decompress README.mq -o README.md
+mq stats README.md              # Show compression statistics
+mq inspect README.mq             # Visual diagnostics
+```
+
+### Features
+- **Token-based compression**: Common markdown patterns become single tokens
+- **AI-optimized**: Reduces token usage in LLM contexts by 70-90%
+- **Streaming support**: Can process before full dictionary is loaded
+- **Section tagging**: `::section:name::` for semantic navigation
+- **Visual diagnostics**: Inspect command shows compression metrics
+
+### Binary Format
+- Header: `MARKQANT_V1 timestamp original_size compressed_size [flags]`
+- Token dictionary with escaped patterns
+- Compressed content using token substitution
+- Optional flags: `-zlib`, `-streamed`, `-delta`, `-semantic`
+
+See `docs/MARKQANT_SPECIFICATION.md` for full specification.

@@ -7,6 +7,7 @@ pub mod hex;
 pub mod json;
 pub mod ls;
 pub mod markdown;
+pub mod markqant;
 pub mod mermaid;
 pub mod quantum;
 pub mod quantum_safe;
