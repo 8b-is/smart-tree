@@ -7,6 +7,12 @@ use std::path::Path;
 
 pub struct TsvFormatter;
 
+impl Default for TsvFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TsvFormatter {
     pub fn new() -> Self {
         Self

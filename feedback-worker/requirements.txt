@@ -1,0 +1,6 @@
+aiohttp==3.12.14
+redis[hiredis]==5.0.1
+PyGithub==2.1.1
+uvloop==0.19.0
+prometheus-client==0.19.0
+python-dateutil==2.8.2

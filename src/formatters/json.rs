@@ -34,7 +34,7 @@ impl JsonFormatter {
         fn node_to_json(
             node: &FileNode,
             children_map: &HashMap<PathBuf, Vec<&FileNode>>,
-            root_path: &Path,
+            _root_path: &Path,
         ) -> Value {
             let name = node
                 .path
@@ -90,7 +90,7 @@ impl JsonFormatter {
 
                 obj["children"] = json!(sorted_children
                     .iter()
-                    .map(|child| node_to_json(child, children_map, root_path))
+                    .map(|child| node_to_json(child, children_map, _root_path))
                     .collect::<Vec<_>>());
             }
 

@@ -35,7 +35,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 /// holds all the juicy details: its name, size, when it was last cool (modified),
 /// and whether it's on the super-secret "ignored" list. It's the atom of our
 /// `st` universe.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FileNode {
     /// The full path to the file or directory. The source of truth for location!
     pub path: PathBuf,
@@ -75,7 +75,7 @@ pub struct FileNode {
 }
 
 /// Information about search matches within a file
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SearchMatches {
     /// First match position (line, column)
     pub first_match: (usize, usize),
@@ -91,7 +91,7 @@ pub struct SearchMatches {
 ///
 /// This enum helps us categorize entries beyond just "file" or "directory".
 /// It's especially useful on Unix-like systems where you have sockets, pipes, etc.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum FileType {
     Directory,   // A folder, a container of other things.
     RegularFile, // Your everyday, garden-variety file.
@@ -107,7 +107,7 @@ pub enum FileType {
 ///
 /// This enum represents different filesystem types with single-character codes
 /// for compact display. The mapping is designed to be memorable and intuitive.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum FilesystemType {
     Ext4,    // '4' - The most common Linux filesystem
     Ext3,    // '3' - Older ext filesystem
@@ -219,7 +219,7 @@ impl FilesystemType {
 /// or names. It's primarily used for display purposes, like coloring output,
 /// and can also help in understanding the nature of a directory's contents.
 /// Trish loves how this makes the tree output more intuitive!
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum FileCategory {
     // --- Programming Languages ---
     Rust,       // .rs
@@ -231,7 +231,7 @@ pub enum FileCategory {
     Cpp,        // .cpp, .cc, .cxx, .hpp, .hxx
     Go,         // .go
     Ruby,       // .rb
-    PHP,        // .php
+    PHP,        // .php - Not sure php is programming.
     Shell,      // .sh, .bash, .zsh, .fish
 
     // --- Markup & Data Formats ---
@@ -242,6 +242,9 @@ pub enum FileCategory {
     Yaml,     // .yaml, .yml
     Xml,      // .xml, .svg (SVG is XML-based)
     Toml,     // .toml
+    Csv,      // .csv
+
+
 
     // --- Build Systems & Configuration ---
     Makefile,   // Makefile, makefile, GNUmakefile
@@ -260,8 +263,59 @@ pub enum FileCategory {
     SystemFile, // Special system files like swap.img, vmlinuz
     Binary,     // Executables, shared libraries (.exe, .dll, .so, .dylib, .o, .a)
 
-    // --- Default/Fallback ---
-    Unknown, // If we can't categorize it, it's a mysterious Unknown!
+    // --- Database ---
+    Database, // .db, .sqlite, .mdb, .accdb, .dbf
+    
+    // --- Office & Documents ---
+    Office,      // .doc, .docx, .odt
+    Spreadsheet, // .xls, .xlsx, .ods, .csv
+    PowerPoint,  // .ppt, .pptx, .odp
+    Pdf,         // .pdf
+    Ebook,       // .epub, .mobi, .azw
+    
+    // --- Text Variants ---
+    Log,         // .log
+    Config,      // .ini, .cfg, .conf, .env, .properties
+    License,     // LICENSE, COPYING files
+    Readme,      // README files
+    Txt,         // .txt
+    Rtf,         // .rtf
+    
+    // --- Security & Crypto ---
+    Certificate, // .crt, .cert, .pem, .key
+    Encrypted,   // .gpg, .pgp, .aes
+    
+    // --- Fonts ---
+    Font,        // .ttf, .otf, .woff, .woff2
+    
+    // --- Virtual & Disk Images ---
+    DiskImage,   // .img, .iso, .vdi, .vmdk, .vhd, .dd, .dmg
+    
+    // --- 3D & CAD ---
+    Model3D,     // .obj, .stl, .dae, .fbx, .blend
+    
+    // --- Scientific & Data ---
+    Jupyter,     // .ipynb
+    RData,       // .rdata, .rds
+    Matlab,      // .m, .mat
+    
+    // --- Web Assets ---
+    WebAsset,    // .wasm, .map
+    
+    // --- Package & Dependencies ---
+    Package,     // package.json, Cargo.toml, requirements.txt, etc.
+    Lock,        // package-lock.json, Cargo.lock, yarn.lock
+    
+    // --- Testing ---
+    Test,        // Files with test_, _test, .test, .spec patterns
+    
+    // --- Memory Files (Our special type!) ---
+    Memory,      // .mem8, .m8 - MEM|8 memory files
+    
+    // --- Others ---
+    Backup,      // .bak, .backup, ~
+    Temp,        // .tmp, .temp, .swp
+    Unknown,     // If we can't categorize it, it's a mysterious Unknown!
 }
 
 /// # TreeStats: The Final Scoreboard
@@ -332,6 +386,7 @@ impl TreeStats {
 /// "I only want to see files bigger than a tour bus," "Ignore the messy backstage
 /// area (`.gitignore`)." We build this from the user's command-line arguments
 /// to make sure the scanner puts on the exact show the user wants to see.
+#[derive(Default, Clone)]
 pub struct ScannerConfig {
     /// Maximum depth to traverse into subdirectories.
     pub max_depth: usize,
@@ -347,6 +402,8 @@ pub struct ScannerConfig {
     pub find_pattern: Option<Regex>,
     /// An optional file extension to filter by (e.g., "rs").
     pub file_type_filter: Option<String>,
+    /// Optional entry type filter ("f" for files, "d" for directories).
+    pub entry_type_filter: Option<String>,
     /// Optional minimum file size filter.
     pub min_size: Option<u64>,
     /// Optional maximum file size filter.
@@ -362,6 +419,10 @@ pub struct ScannerConfig {
     pub search_keyword: Option<String>,
     /// Should filesystem type indicators be shown?
     pub show_filesystems: bool,
+    /// Sort field for results (name, size, date, type)
+    pub sort_field: Option<String>,
+    /// Limit results to top N entries (useful with sort)
+    pub top_n: Option<usize>,
 }
 
 // --- Default Ignore Patterns: The "Please Don't Play These Songs" List ---
@@ -451,7 +512,6 @@ const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
     ".temp",
     "*.tmp",
     "*.temp",
-    "*.log", // Often temporary or verbose
     // More cache directories
     ".sass-cache", // Sass CSS preprocessor
     "__MACOSX",    // macOS archive metadata
@@ -512,7 +572,60 @@ impl Scanner {
     pub fn root(&self) -> &Path {
         &self.root
     }
-    
+
+    /// Quick scan for basic project analysis - lighter weight than full scan
+    /// Returns only basic stats and key files for faster integration
+    pub fn quick_scan(&self) -> Result<(Vec<FileNode>, TreeStats)> {
+        let mut config = self.config.clone();
+        config.max_depth = 3; // Limit depth for quick scan
+        
+        let quick_scanner = Scanner::new(&self.root, config)?;
+        quick_scanner.scan()
+    }
+
+    /// Find files modified within a specific time range
+    /// Useful for finding recent activity in projects
+    pub fn find_recent_files(&self, hours_ago: u64) -> Result<Vec<FileNode>> {
+        let cutoff_time = std::time::SystemTime::now() 
+            - std::time::Duration::from_secs(hours_ago * 3600);
+        
+        let (nodes, _) = self.scan()?;
+        Ok(nodes.into_iter()
+            .filter(|node| !node.is_dir && node.modified > cutoff_time)
+            .collect())
+    }
+
+    /// Get key project files (build configs, main files, etc.)
+    /// Returns a filtered list of important files for project analysis
+    pub fn find_key_files(&self) -> Result<Vec<FileNode>> {
+        let (nodes, _) = self.scan()?;
+        
+        let important_patterns = [
+            "main.rs", "lib.rs", "mod.rs",
+            "package.json", "Cargo.toml", "requirements.txt", "pyproject.toml",
+            "README.md", "LICENSE", "Makefile", "CMakeLists.txt",
+            "index.js", "app.js", "server.js", "main.js",
+            "main.py", "__init__.py", "setup.py",
+            "go.mod", "main.go",
+            "pom.xml", "build.gradle", "build.xml",
+            ".gitignore", "docker-compose.yml", "Dockerfile",
+        ];
+
+        Ok(nodes.into_iter()
+            .filter(|node| {
+                if node.is_dir {
+                    return false;
+                }
+                
+                let file_name = node.path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                
+                important_patterns.iter().any(|&pattern| file_name == pattern)
+            })
+            .collect())
+    }
+
     /// ## `get_file_category`
     /// Determines a `FileCategory` for a given path and `FileType`.
     /// This function uses a series of heuristics based on file extensions and common names
@@ -565,8 +678,7 @@ impl Scanner {
                 // .gitignore, .gitconfig are usually by name, handled below
 
                 // --- Archives ---
-                "zip" | "tar" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "7z" | "rar"
-                | "iso" | "dmg" => FileCategory::Archive,
+                "zip" | "tar" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "7z" | "rar" => FileCategory::Archive,
 
                 // --- Media ---
                 "jpg" | "jpeg" | "png" | "gif" | "bmp" | "ico" | "webp" | "tiff" | "tif"
@@ -580,23 +692,80 @@ impl Scanner {
                 "exe" | "dll" | "so" | "dylib" | "o" | "a" | "lib" | "msi" | "deb" | "rpm"
                 | "app" => FileCategory::Binary,
 
-                _ => FileCategory::Unknown, // Extension not recognized
+                // --- Database Files ---
+                "db" | "sqlite" | "sqlitedb" | "sqlite3" | "db3" | "db4" | "db5" | "mdb" | "accdb" | "dbf" => FileCategory::Database,
+                
+                // --- Office & Documents ---
+                "doc" | "docx" | "odt" | "rtf" => FileCategory::Office,
+                "xls" | "xlsx" | "ods" | "csv" | "tsv" => FileCategory::Spreadsheet,
+                "ppt" | "pptx" | "odp" => FileCategory::PowerPoint,
+                "pdf" => FileCategory::Pdf,
+                "epub" | "mobi" | "azw" | "azw3" | "fb2" => FileCategory::Ebook,
+                
+                // --- Text & Config Files ---
+                "txt" | "text" => FileCategory::Txt,
+                "log" => FileCategory::Log,
+                "ini" | "cfg" | "conf" | "config" | "properties" | "env" => FileCategory::Config,
+                
+                // --- Security & Crypto ---
+                "crt" | "cert" | "pem" | "key" | "pub" | "cer" | "der" => FileCategory::Certificate,
+                "gpg" | "pgp" | "aes" | "enc" | "asc" => FileCategory::Encrypted,
+                
+                // --- Fonts ---
+                "ttf" | "otf" | "woff" | "woff2" | "eot" | "fon" | "fnt" => FileCategory::Font,
+                
+                // --- Disk Images ---
+                "img" | "vdi" | "vmdk" | "vhd" | "vhdx" | "dd" | "hdd" | "qcow" | "qcow2" => FileCategory::DiskImage,
+                "iso" | "dmg" => FileCategory::DiskImage, // These can be both archives and disk images, but treating as disk images
+                
+                // --- 3D & CAD ---
+                "obj" | "stl" | "dae" | "fbx" | "blend" | "3ds" | "ply" | "gltf" | "glb" => FileCategory::Model3D,
+                
+                // --- Scientific & Data ---
+                "ipynb" => FileCategory::Jupyter,
+                "rdata" | "rds" | "rda" => FileCategory::RData,
+                "m" | "mat" | "mlx" => FileCategory::Matlab,
+                
+                // --- Web Assets ---
+                "wasm" | "map" | "sourcemap" => FileCategory::WebAsset,
+                
+                // --- Memory Files (MEM|8!) ---
+                "mem8" | "m8" => FileCategory::Memory,
+                
+                // --- Backup & Temp ---
+                "bak" | "backup" | "old" | "orig" => FileCategory::Backup,
+                "tmp" | "temp" | "swp" | "swo" | "swn" => FileCategory::Temp,
+                
+                _ => FileCategory::Unknown // Extension not recognized
             }
         } else {
             // No extension, or extension parsing failed. Try common filenames.
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                // Check for test files
+                if name.starts_with("test_") || name.ends_with("_test") || 
+                   name.contains(".test.") || name.contains(".spec.") {
+                    return FileCategory::Test;
+                }
+                
+                // Check for specific filenames
                 match name {
                     "Makefile" | "makefile" | "GNUmakefile" => FileCategory::Makefile,
-                    "Dockerfile" => FileCategory::Dockerfile, // Filename variant
-                    ".gitignore" | ".gitconfig" | ".gitattributes" | ".gitmodules" => {
-                        FileCategory::GitConfig
-                    }
-                    // If it's marked as executable by the OS, and we haven't categorized it yet, call it Binary.
+                    "Dockerfile" => FileCategory::Dockerfile,
+                    ".gitignore" | ".gitconfig" | ".gitattributes" | ".gitmodules" => FileCategory::GitConfig,
+                    "LICENSE" | "LICENCE" | "COPYING" => FileCategory::License,
+                    "README" | "README.md" | "README.txt" | "README.rst" => FileCategory::Readme,
+                    "package.json" | "Cargo.toml" | "requirements.txt" | "pyproject.toml" | 
+                    "pom.xml" | "build.gradle" | "go.mod" | "composer.json" => FileCategory::Package,
+                    "package-lock.json" | "Cargo.lock" | "yarn.lock" | "pnpm-lock.yaml" | 
+                    "poetry.lock" | "Gemfile.lock" => FileCategory::Lock,
                     _ => {
-                        if matches!(file_type, FileType::Executable) {
+                        // Check for backup files ending with ~
+                        if name.ends_with('~') {
+                            FileCategory::Backup
+                        } else if matches!(file_type, FileType::Executable) {
                             FileCategory::Binary
                         } else {
-                            FileCategory::Unknown // Truly a mystery!
+                            FileCategory::Unknown
                         }
                     }
                 }
@@ -618,10 +787,11 @@ impl Scanner {
     pub fn new(root: &Path, config: ScannerConfig) -> Result<Self> {
         // Canonicalize the root path to get the absolute path
         // If canonicalize fails (e.g., path doesn't exist), fall back to absolute path
-        let canonical_root = root.canonicalize()
+        let canonical_root = root
+            .canonicalize()
             .or_else(|_| std::env::current_dir().map(|cwd| cwd.join(root)))
             .unwrap_or_else(|_| root.to_path_buf());
-        
+
         // Load .gitignore patterns from the root directory if requested.
         let gitignore = if config.respect_gitignore {
             Self::load_gitignore(&canonical_root)? // This can return None if no .gitignore or error.
@@ -633,14 +803,14 @@ impl Scanner {
         let default_ignores = if config.use_default_ignores {
             Self::build_default_ignores()? // This can return None if patterns are invalid (unlikely for defaults).
         } else {
-            None // Not using default ignores.
+            None // Not using default ignores.st
         };
 
         // Initialize the set of system paths to ignore (e.g., /proc, /sys).
         let system_paths: HashSet<PathBuf> = if config.use_default_ignores {
             DEFAULT_SYSTEM_PATHS
                 .iter()
-                .map(|p_str| PathBuf::from(p_str)) // Convert string slices to PathBufs
+                .map(PathBuf::from) // Convert string slices to PathBufs
                 .collect() // Collect into a HashSet for quick lookups.
         } else {
             HashSet::new() // Empty set if not using default ignores.
@@ -648,10 +818,7 @@ impl Scanner {
 
         // Initialize the set of specific files to ignore (e.g., /proc/kcore).
         let ignore_files: HashSet<PathBuf> = if config.use_default_ignores {
-            DEFAULT_IGNORE_FILES
-                .iter()
-                .map(|p_str| PathBuf::from(p_str))
-                .collect()
+            DEFAULT_IGNORE_FILES.iter().map(PathBuf::from).collect()
         } else {
             HashSet::new()
         };
@@ -733,7 +900,7 @@ impl Scanner {
     /// Returns the final `TreeStats` once the scan is complete.
     pub fn scan_stream(&self, sender: mpsc::Sender<FileNode>) -> Result<TreeStats> {
         let mut stats = TreeStats::default();
-        
+
         // When searching, we need to collect all nodes first to determine which directories to show
         if self.config.search_keyword.is_some() {
             // Use the non-streaming scan and then send results in order
@@ -745,7 +912,7 @@ impl Scanner {
             }
             return Ok(stats);
         }
-        
+
         // Original streaming logic for non-search cases
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
@@ -813,15 +980,15 @@ impl Scanner {
                             let has_search_match = node
                                 .search_matches
                                 .as_ref()
-                                .map_or(false, |m| m.total_count > 0);
-                            
+                                .is_some_and(|m| m.total_count > 0);
+
                             // If we have a search keyword, only include files with matches
                             let should_include_file = if self.config.search_keyword.is_some() {
                                 has_search_match
                             } else {
                                 self.should_include(&node)
                             };
-                            
+
                             if node.is_dir || should_include_file {
                                 // Send the processed node through the channel.
                                 if sender.send(node.clone()).is_err() {
@@ -833,21 +1000,38 @@ impl Scanner {
                                     stats.update_file(&node);
                                 }
                             }
+                        } else {
+                            // process_entry returned None, which means this is a hidden entry and show_hidden is false
+                            // If it's a directory, we need to skip its contents
+                            if entry.file_type().is_dir() {
+                                walker.skip_current_dir();
+                            }
                         }
                     }
                 }
                 Err(e) => {
                     // An error occurred trying to access a directory entry (e.g., permission denied).
                     if let Some(path) = e.path() {
-                        // If the error is associated with a path.
                         let depth = e.depth();
-                        // Create a special node representing the permission-denied entry.
-                        let node = self.create_permission_denied_node(path, depth);
-                        if sender.send(node.clone()).is_err() {
-                            break; // Receiver disconnected.
+
+                        // Check if this is a "directory contents" error vs "directory entry" error.
+                        // If this is a permission error, it's likely we already processed the directory
+                        // entry successfully but can't read its contents. In that case, skip creating
+                        // a duplicate node since we already marked the original as permission_denied.
+                        let is_contents_error = e.io_error().map_or(false, |io_err| {
+                            io_err.kind() == std::io::ErrorKind::PermissionDenied
+                        });
+
+                        if !is_contents_error {
+                            // Create a special node representing the permission-denied entry.
+                            let node = self.create_permission_denied_node(path, depth);
+                            if sender.send(node.clone()).is_err() {
+                                break; // Receiver disconnected.
+                            }
+                            // Still update stats (e.g., directory count) for permission-denied entries if shown.
+                            stats.update_file(&node);
                         }
-                        // Still update stats (e.g., directory count) for permission-denied entries if shown.
-                        stats.update_file(&node);
+
                         // Tell WalkDir not to try to descend into this unreadable directory.
                         walker.skip_current_dir();
                     }
@@ -944,19 +1128,19 @@ impl Scanner {
                     // Find all occurrences of the keyword in the current line.
                     for (column_index, _) in line_content.match_indices(keyword) {
                         total_count += 1;
-                        
+
                         // Column numbers are 1-based for user display
                         let match_pos = (line_number, column_index + 1);
-                        
+
                         if first_match.is_none() {
                             first_match = Some(match_pos);
                         }
-                        
+
                         // Only store first 100 positions to prevent memory issues
                         if positions.len() < 100 {
                             positions.push(match_pos);
                         }
-                        
+
                         // Stop processing this file if we've found too many matches
                         if total_count > 100 {
                             return Some(SearchMatches {
@@ -977,16 +1161,12 @@ impl Scanner {
         }
 
         // Return matches if any were found
-        if let Some(first) = first_match {
-            Some(SearchMatches {
-                first_match: first,
-                total_count,
-                positions,
-                truncated: false,
-            })
-        } else {
-            None
-        }
+        first_match.map(|first| SearchMatches {
+            first_match: first,
+            total_count,
+            positions,
+            truncated: false,
+        })
     }
 
     /// ## `scan` - The Full Scan (Non-Streaming)
@@ -1004,7 +1184,7 @@ impl Scanner {
     /// 1. **Act I**: Walk through every single file and directory, collecting a huge list of `FileNode`s.
     /// 2. **Act II**: If there are filters, go through that huge list and pick out only the ones that
     ///    match, making sure to keep their parent directories so the tree still makes sense.
-    /// It's thorough and great for when you need the whole picture before making decisions.
+    ///    It's thorough and great for when you need the whole picture before making decisions.
     pub fn scan(&self) -> Result<(Vec<FileNode>, TreeStats)> {
         let mut all_nodes_collected = Vec::new(); // Stores all nodes initially encountered.
                                                   // `ignored_dirs` was here, but its primary use with `skip_current_dir` is within the loop.
@@ -1048,6 +1228,12 @@ impl Scanner {
                                 node.search_matches = self.search_in_file(&node.path);
                             }
                             all_nodes_collected.push(node);
+                        } else {
+                            // process_entry returned None, which means this is a hidden entry and show_hidden is false
+                            // If it's a directory, we need to skip its contents
+                            if entry.file_type().is_dir() {
+                                walker.skip_current_dir();
+                            }
                         }
                     }
                 }
@@ -1056,7 +1242,7 @@ impl Scanner {
                     if let Some(path) = e.path() {
                         let depth = e.depth();
                         all_nodes_collected.push(self.create_permission_denied_node(path, depth));
-                        if e.io_error().map_or(false, |io_err| {
+                        if e.io_error().is_some_and(|io_err| {
                             io_err.kind() == std::io::ErrorKind::PermissionDenied
                         }) {
                             walker.skip_current_dir(); // Skip unreadable directory.
@@ -1084,7 +1270,10 @@ impl Scanner {
             (all_nodes_collected, stats)
         };
 
-        Ok((final_nodes, final_stats))
+        // Apply sorting and top-N filtering if requested
+        let sorted_nodes = self.apply_sorting_and_limit(final_nodes);
+        
+        Ok((sorted_nodes, final_stats))
     }
 
     /// ## `has_active_filters`
@@ -1097,11 +1286,12 @@ impl Scanner {
     fn has_active_filters(&self) -> bool {
         self.config.find_pattern.is_some()
             || self.config.file_type_filter.is_some()
+            || self.config.entry_type_filter.is_some()
             || self.config.min_size.is_some()
             || self.config.max_size.is_some()
             || self.config.newer_than.is_some()
             || self.config.older_than.is_some()
-            || self.config.search_keyword.is_some()  // Now search_keyword is also a filter
+            || self.config.search_keyword.is_some() // Now search_keyword is also a filter
     }
 
     /// ## `filter_nodes_and_calculate_stats` (Formerly `filter_nodes_with_ancestors`)
@@ -1111,9 +1301,9 @@ impl Scanner {
     /// 1. Files are included if they directly match all active filters OR if they contain a search match.
     /// 2. Directories are included if they themselves match a `--find` pattern OR
     ///    if they are an ancestor of an included file.
-    /// It then calculates `TreeStats` based on this final, filtered list of nodes.
-    /// This replaces the older `filter_nodes_with_ancestors` to integrate stat calculation
-    /// and clarify the logic for directory inclusion with `--find`.
+    ///    It then calculates `TreeStats` based on this final, filtered list of nodes.
+    ///    This replaces the older `filter_nodes_with_ancestors` to integrate stat calculation
+    ///    and clarify the logic for directory inclusion with `--find`.
     fn filter_nodes_and_calculate_stats(
         &self,
         all_nodes_collected: Vec<FileNode>,
@@ -1132,7 +1322,7 @@ impl Scanner {
             let has_search_match = node
                 .search_matches
                 .as_ref()
-                .map_or(false, |m| m.total_count > 0);
+                .is_some_and(|m| m.total_count > 0);
 
             if node.is_dir {
                 // For directories, only the --find pattern applies directly.
@@ -1141,7 +1331,7 @@ impl Scanner {
                     .config
                     .find_pattern
                     .as_ref()
-                    .map_or(false, |p| p.is_match(&node.path.to_string_lossy()))
+                    .is_some_and(|p| p.is_match(&node.path.to_string_lossy()))
                 {
                     included_files_and_matching_dirs.push(node.clone());
                     // Add ancestors of this directly matched directory
@@ -1167,7 +1357,8 @@ impl Scanner {
                             let mut current = node.path.parent();
                             while let Some(parent_path) = current {
                                 // Stop if we reach the root or an already added ancestor.
-                                if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                                if parent_path == self.root
+                                    || required_ancestor_dirs.contains(parent_path)
                                 {
                                     break;
                                 }
@@ -1184,7 +1375,8 @@ impl Scanner {
                         let mut current = node.path.parent();
                         while let Some(parent_path) = current {
                             // Stop if we reach the root or an already added ancestor.
-                            if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
+                            if parent_path == self.root
+                                || required_ancestor_dirs.contains(parent_path)
                             {
                                 break;
                             }
@@ -1213,12 +1405,11 @@ impl Scanner {
         for node in &all_nodes_collected {
             if node.permission_denied {
                 // Also include permission denied nodes if they are part of the path
-                if required_ancestor_dirs.contains(&node.path)
-                    || node.path == self.root && !final_node_list.is_empty()
+                if (required_ancestor_dirs.contains(&node.path)
+                    || node.path == self.root && !final_node_list.is_empty())
+                    && added_paths.insert(node.path.clone())
                 {
-                    if added_paths.insert(node.path.clone()) {
-                        final_node_list.push(node.clone());
-                    }
+                    final_node_list.push(node.clone());
                 }
                 continue;
             }
@@ -1229,13 +1420,12 @@ impl Scanner {
                     .config
                     .find_pattern
                     .as_ref()
-                    .map_or(false, |p| p.is_match(&node.path.to_string_lossy()));
-                if required_ancestor_dirs.contains(&node.path)
-                    || (is_find_match && node.path != self.root)
+                    .is_some_and(|p| p.is_match(&node.path.to_string_lossy()));
+                if (required_ancestor_dirs.contains(&node.path)
+                    || (is_find_match && node.path != self.root))
+                    && added_paths.insert(node.path.clone())
                 {
-                    if added_paths.insert(node.path.clone()) {
-                        final_node_list.push(node.clone());
-                    }
+                    final_node_list.push(node.clone());
                 }
             }
         }
@@ -1291,7 +1481,7 @@ impl Scanner {
         let is_hidden = path
             .file_name()
             .and_then(|name_osstr| name_osstr.to_str()) // Convert OsStr to &str
-            .map_or(false, |name_str| name_str.starts_with('.'));
+            .is_some_and(|name_str| name_str.starts_with('.'));
 
         // Skip if hidden and we are not configured to show hidden files,
         // UNLESS it's an ignored item that we *are* configured to show (is_ignored_by_rules = true, config.show_ignored = true).
@@ -1338,6 +1528,14 @@ impl Scanner {
             metadata.len()
         };
 
+        // Check if this is a directory that we can't read the contents of
+        let permission_denied = if metadata.is_dir() {
+            // Try to read the directory to see if we have permission
+            std::fs::read_dir(path).is_err()
+        } else {
+            false
+        };
+
         Ok(Some(FileNode {
             path: path.to_path_buf(),
             is_dir: metadata.is_dir(),
@@ -1345,12 +1543,10 @@ impl Scanner {
             permissions: Self::get_permissions(&metadata),
             uid: Self::get_uid(&metadata),
             gid: Self::get_gid(&metadata),
-            modified: metadata
-                .modified()
-                .unwrap_or_else(|_| SystemTime::UNIX_EPOCH), // Fallback for modified time
+            modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH), // Fallback for modified time
             is_symlink: metadata.file_type().is_symlink(), // Use file_type() for symlink check
             is_hidden,
-            permission_denied: false, // If we got metadata, assume no permission error *for this node itself*.
+            permission_denied, // Set based on whether we can read directory contents
             is_ignored: is_ignored_by_rules, // Use the pre-determined ignore status.
             depth,
             file_type,
@@ -1451,6 +1647,7 @@ impl Scanner {
     /// Checks if a file is likely a special virtual file (e.g., in /proc, /sys, /dev)
     /// where reported metadata like size might be zero, misleading, or cause issues if read.
     /// This helps in deciding to report size as 0 for such files.
+    #[allow(unused_variables)]
     fn is_special_virtual_file(&self, path: &Path, metadata: &fs::Metadata) -> bool {
         // Check if the path starts with known virtual filesystem prefixes.
         if let Some(path_str) = path.to_str() {
@@ -1515,6 +1712,13 @@ impl Scanner {
     /// "Sorry, `node_modules`, you're not on the list tonight."
     /// It's the first line of defense against clutter.
     fn should_ignore(&self, path: &Path) -> Result<bool> {
+        // --- Rule 0: Never ignore the root path itself ---
+        // If the user explicitly asks to scan a directory, we should show it
+        // even if it would normally be ignored (e.g., scanning 'target' directory)
+        if path == self.root {
+            return Ok(false);
+        }
+
         // --- Rule 1: Check against specific, always-ignored files (absolute paths) ---
         if self.config.use_default_ignores && self.ignore_files.contains(path) {
             return Ok(true); // Matches a specific problematic file.
@@ -1588,6 +1792,23 @@ impl Scanner {
             let path_str = node.path.to_string_lossy();
             if !find_regex_pattern.is_match(&path_str) {
                 return false; // Path doesn't match the --find pattern.
+            }
+        }
+        
+        // --- Filter by entry type (--entry-type) ---
+        if let Some(ref entry_type) = self.config.entry_type_filter {
+            match entry_type.as_str() {
+                "f" => {
+                    if node.is_dir {
+                        return false; // Looking for files only, but this is a directory
+                    }
+                }
+                "d" => {
+                    if !node.is_dir {
+                        return false; // Looking for directories only, but this is a file
+                    }
+                }
+                _ => {} // Should not happen due to clap validation
             }
         }
 
@@ -1726,6 +1947,77 @@ impl Scanner {
     fn get_gid(_metadata: &fs::Metadata) -> u32 {
         0
     }
+
+    /// Apply sorting and optional top-N limit to the results
+    fn apply_sorting_and_limit(&self, mut nodes: Vec<FileNode>) -> Vec<FileNode> {
+        // If no sort field specified, return as-is
+        let sort_field = match &self.config.sort_field {
+            Some(field) => field,
+            None => return nodes,
+        };
+
+        // Sort based on the field
+        match sort_field.as_str() {
+            "name" | "a-to-z" => {
+                // Sort by name alphabetically (A to Z)
+                nodes.sort_by(|a, b| {
+                    let name_a = a.path.file_name().unwrap_or_default().to_string_lossy();
+                    let name_b = b.path.file_name().unwrap_or_default().to_string_lossy();
+                    name_a.cmp(&name_b)
+                });
+            }
+            "z-to-a" => {
+                // Sort by name reverse alphabetically (Z to A)
+                nodes.sort_by(|a, b| {
+                    let name_a = a.path.file_name().unwrap_or_default().to_string_lossy();
+                    let name_b = b.path.file_name().unwrap_or_default().to_string_lossy();
+                    name_b.cmp(&name_a)
+                });
+            }
+            "size" | "largest" => {
+                // Sort by size descending (largest first)
+                nodes.sort_by(|a, b| b.size.cmp(&a.size));
+            }
+            "smallest" => {
+                // Sort by size ascending (smallest first)
+                nodes.sort_by(|a, b| a.size.cmp(&b.size));
+            }
+            "date" | "newest" => {
+                // Sort by modification time descending (newest first)
+                nodes.sort_by(|a, b| b.modified.cmp(&a.modified));
+            }
+            "oldest" => {
+                // Sort by modification time ascending (oldest first)
+                nodes.sort_by(|a, b| a.modified.cmp(&b.modified));
+            }
+            "type" => {
+                // Sort by file extension, then by name
+                nodes.sort_by(|a, b| {
+                    let ext_a = a.path.extension().unwrap_or_default().to_string_lossy();
+                    let ext_b = b.path.extension().unwrap_or_default().to_string_lossy();
+                    match ext_a.cmp(&ext_b) {
+                        std::cmp::Ordering::Equal => {
+                            let name_a = a.path.file_name().unwrap_or_default().to_string_lossy();
+                            let name_b = b.path.file_name().unwrap_or_default().to_string_lossy();
+                            name_a.cmp(&name_b)
+                        }
+                        other => other,
+                    }
+                });
+            }
+            _ => {
+                // Unknown sort field, don't sort
+                eprintln!("Warning: Unknown sort field '{}', ignoring", sort_field);
+            }
+        }
+
+        // Apply top-N limit if specified
+        if let Some(limit) = self.config.top_n {
+            nodes.truncate(limit);
+        }
+
+        nodes
+    }
 } // end impl Scanner
 
 /// # `parse_size` - The Universal Translator for Sizes
@@ -1826,6 +2118,7 @@ mod tests {
             show_ignored: false,
             find_pattern: None,
             file_type_filter: None,
+            entry_type_filter: None,
             min_size: None,
             max_size: None,
             newer_than: None,
@@ -1833,6 +2126,8 @@ mod tests {
             use_default_ignores: true,
             search_keyword: None,
             show_filesystems: false,
+            sort_field: None,
+            top_n: None,
         };
         let scanner_result = Scanner::new(temp_dir.path(), config);
         assert!(scanner_result.is_ok());

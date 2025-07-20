@@ -1,5 +1,6 @@
 use super::{Formatter, PathDisplayMode, StreamingFormatter};
-use crate::scanner::{FileNode, FileType, TreeStats};
+use crate::scanner::{FileNode, TreeStats};
+use crate::emoji_mapper;
 use anyhow::Result;
 use std::io::Write;
 use std::path::Path;
@@ -29,30 +30,10 @@ impl HexFormatter {
         }
     }
 
-    fn get_file_emoji(&self, file_type: FileType) -> &'static str {
-        if self.no_emoji {
-            match file_type {
-                FileType::Directory => "d",
-                FileType::Symlink => "l",
-                FileType::Executable => "x",
-                FileType::Socket => "s",
-                FileType::Pipe => "p",
-                FileType::BlockDevice => "b",
-                FileType::CharDevice => "c",
-                FileType::RegularFile => "f",
-            }
-        } else {
-            match file_type {
-                FileType::Directory => "📁",
-                FileType::Symlink => "🔗",
-                FileType::Executable => "⚙️",
-                FileType::Socket => "🔌",
-                FileType::Pipe => "📝",
-                FileType::BlockDevice => "💾",
-                FileType::CharDevice => "📺",
-                FileType::RegularFile => "📄",
-            }
-        }
+    /// Get context-aware emoji based on file type and node properties
+    /// Returns different emojis for empty files, empty directories, and locked directories
+    fn get_file_emoji(&self, node: &FileNode) -> &'static str {
+        emoji_mapper::get_file_emoji(node, self.no_emoji)
     }
 
     fn format_node(&self, node: &FileNode, root_path: &Path) -> String {
@@ -73,7 +54,7 @@ impl HexFormatter {
                 .as_secs()
         );
 
-        let emoji = self.get_file_emoji(node.file_type);
+        let emoji = self.get_file_emoji(node);
 
         // Add filesystem indicator if enabled
         let fs_indicator = if self.show_filesystems && node.filesystem_type.should_show_by_default()
@@ -110,9 +91,7 @@ impl HexFormatter {
         };
 
         // Add brackets for permission denied or ignored
-        let display_name = if node.permission_denied {
-            format!("[{}]", name)
-        } else if node.is_ignored {
+        let display_name = if node.permission_denied || node.is_ignored {
             format!("[{}]", name)
         } else {
             name
@@ -121,14 +100,17 @@ impl HexFormatter {
         // Add search matches if present
         let display_name_with_search = if let Some(matches) = &node.search_matches {
             if matches.total_count > 0 {
-                // Show first match position and total count
+                // Show first match position and total count (in hex for consistency)
                 let (line, col) = matches.first_match;
                 let truncated_indicator = if matches.truncated { ",TRUNCATED" } else { "" };
-                
+
                 if matches.total_count > 1 {
-                    format!("{} [SEARCH:L{}:C{},{}x{}]", display_name, line, col, matches.total_count, truncated_indicator)
+                    format!(
+                        "{} [SEARCH:L{:x}:C{:x},{:x}x{}]",
+                        display_name, line, col, matches.total_count, truncated_indicator
+                    )
                 } else {
-                    format!("{} [SEARCH:L{}:C{}]", display_name, line, col)
+                    format!("{} [SEARCH:L{:x}:C{:x}]", display_name, line, col)
                 }
             } else {
                 display_name

@@ -2,13 +2,19 @@
 // Shows how all formats are now just decoders of the quantum stream
 
 use super::{QuantumDecoder, QuantumEntry, TraversalCode};
-use std::io::Write;
 use anyhow::Result;
 use serde_json::{json, Value};
+use std::io::Write;
 
 pub struct JsonDecoder {
     stack: Vec<Value>,
     current_children: Vec<Value>,
+}
+
+impl Default for JsonDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl JsonDecoder {
@@ -28,21 +34,21 @@ impl QuantumDecoder for JsonDecoder {
         writeln!(writer, "  \"tree\": [")?;
         Ok(())
     }
-    
+
     fn decode_entry(&mut self, entry: &QuantumEntry, _writer: &mut dyn Write) -> Result<()> {
         let mut node = json!({
             "name": entry.name,
             "type": if entry.is_dir { "directory" } else { "file" },
         });
-        
+
         if let Some(size) = entry.size {
             node["size"] = json!(size);
         }
-        
+
         if let Some(perms) = entry.perms_delta {
             node["permissions_delta"] = json!(format!("0x{:04x}", perms));
         }
-        
+
         match entry.traversal {
             TraversalCode::Deeper => {
                 // Starting a new directory level
@@ -66,10 +72,10 @@ impl QuantumDecoder for JsonDecoder {
                 self.current_children.push(node);
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn finish(&mut self, writer: &mut dyn Write) -> Result<()> {
         // Finalize any remaining stack
         while let Some(mut parent) = self.stack.pop() {
@@ -77,11 +83,11 @@ impl QuantumDecoder for JsonDecoder {
             self.current_children.clear();
             self.current_children.push(parent);
         }
-        
+
         // Write the tree
         let tree_json = serde_json::to_string_pretty(&self.current_children)?;
         write!(writer, "{}", tree_json)?;
-        
+
         writeln!(writer, "\n  ]")?;
         writeln!(writer, "}}")?;
         Ok(())

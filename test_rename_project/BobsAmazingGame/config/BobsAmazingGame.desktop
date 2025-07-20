@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=BobsAmazingGame
+Comment=The most amazing game featuring Bob
+Exec=/usr/bin/bobs_amazing_game
+Icon=/usr/share/icons/bobs_amazing_game.png
+Categories=Game;
+Keywords=BobsAmazingGame;game;bob;

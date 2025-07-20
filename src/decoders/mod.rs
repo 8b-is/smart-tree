@@ -1,12 +1,12 @@
 // Decoder framework - Convert quantum format to other representations
 // All formats are now just views into the quantum stream
 
-use std::io::Write;
 use anyhow::Result;
+use std::io::Write;
 
-pub mod json;
 pub mod classic;
 pub mod hex;
+pub mod json;
 
 /// Quantum entry components after parsing
 #[derive(Debug, Clone)]
@@ -24,10 +24,10 @@ pub struct QuantumEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TraversalCode {
-    Same,      // Continue at same level
-    Deeper,    // Enter directory
-    Back,      // Exit directory
-    Summary,   // Summary follows
+    Same,    // Continue at same level
+    Deeper,  // Enter directory
+    Back,    // Exit directory
+    Summary, // Summary follows
 }
 
 impl From<u8> for TraversalCode {
@@ -46,10 +46,10 @@ impl From<u8> for TraversalCode {
 pub trait QuantumDecoder: Send {
     /// Initialize the decoder
     fn init(&mut self, writer: &mut dyn Write) -> Result<()>;
-    
+
     /// Process a quantum entry
     fn decode_entry(&mut self, entry: &QuantumEntry, writer: &mut dyn Write) -> Result<()>;
-    
+
     /// Finalize output
     fn finish(&mut self, writer: &mut dyn Write) -> Result<()>;
 }
@@ -61,7 +61,7 @@ pub fn decode_quantum_stream<D: QuantumDecoder>(
     writer: &mut dyn Write,
 ) -> Result<()> {
     decoder.init(writer)?;
-    
+
     // Parse quantum entries from binary data
     let mut offset = 0;
     while offset < quantum_data.len() {
@@ -71,7 +71,7 @@ pub fn decode_quantum_stream<D: QuantumDecoder>(
         }
         offset = new_offset;
     }
-    
+
     decoder.finish(writer)?;
     Ok(())
 }
@@ -81,10 +81,10 @@ fn parse_quantum_entry(data: &[u8], offset: usize) -> Result<(Option<QuantumEntr
     if offset >= data.len() {
         return Ok((None, offset));
     }
-    
+
     let header = data[offset];
     let mut offset = offset + 1;
-    
+
     let mut entry = QuantumEntry {
         header,
         size: None,
@@ -96,38 +96,36 @@ fn parse_quantum_entry(data: &[u8], offset: usize) -> Result<(Option<QuantumEntr
         is_link: (header & 0x20) != 0,
         traversal: TraversalCode::Same,
     };
-    
+
     // Parse size if present
     if (header & 0x01) != 0 {
         let (size, new_offset) = decode_size(data, offset)?;
         entry.size = Some(size);
         offset = new_offset;
     }
-    
+
     // Parse permissions delta if present
-    if (header & 0x02) != 0 {
-        if offset + 2 <= data.len() {
-            entry.perms_delta = Some((data[offset] as u16) << 8 | data[offset + 1] as u16);
-            offset += 2;
-        }
+    if (header & 0x02) != 0 && offset + 2 <= data.len() {
+        entry.perms_delta = Some((data[offset] as u16) << 8 | data[offset + 1] as u16);
+        offset += 2;
     }
-    
+
     // TODO: Parse time, owner/group deltas
-    
+
     // Parse name (ends with traversal code)
     let name_start = offset;
     while offset < data.len() && !is_traversal_code(data[offset]) {
         offset += 1;
     }
-    
+
     entry.name = String::from_utf8_lossy(&data[name_start..offset]).into_owned();
-    
+
     // Parse traversal code
     if offset < data.len() {
         entry.traversal = data[offset].into();
         offset += 1;
     }
-    
+
     Ok((Some(entry), offset))
 }
 
@@ -141,7 +139,7 @@ fn decode_size(data: &[u8], offset: usize) -> Result<(u64, usize)> {
     if offset >= data.len() {
         anyhow::bail!("Unexpected end of data while decoding size");
     }
-    
+
     let prefix = data[offset];
     match prefix {
         0x00 => {
@@ -187,12 +185,12 @@ fn decode_size(data: &[u8], offset: usize) -> Result<(u64, usize)> {
         }
         _ => {
             // Check if it's a size token
-            if prefix >= 0xA0 && prefix <= 0xAF {
+            if (0xA0..=0xAF).contains(&prefix) {
                 // Size range tokens
                 let size = match prefix {
-                    0xA0 => 0,           // TOKEN_SIZE_ZERO
-                    0xA1 => 512,         // TOKEN_SIZE_TINY (average)
-                    0xA2 => 50 * 1024,   // TOKEN_SIZE_SMALL (average)
+                    0xA0 => 0,                // TOKEN_SIZE_ZERO
+                    0xA1 => 512,              // TOKEN_SIZE_TINY (average)
+                    0xA2 => 50 * 1024,        // TOKEN_SIZE_SMALL (average)
                     0xA3 => 5 * 1024 * 1024,  // TOKEN_SIZE_MEDIUM (average)
                     0xA4 => 50 * 1024 * 1024, // TOKEN_SIZE_LARGE (average)
                     _ => 0,

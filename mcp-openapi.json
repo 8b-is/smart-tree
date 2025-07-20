@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Smart Tree MCP (Model Context Protocol) - AI-Optimized Directory Analysis",
-    "version": "1.0.0",
+    "version": "3.3.5",
     "description": "A powerful directory analysis tool designed for AI/LLM consumption. Features streaming output, compression, content search, and multiple output formats optimized for different use cases. This API is served over JSON-RPC via stdio, not HTTP.",
     "contact": {
       "name": "Smart Tree Team",

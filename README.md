@@ -1,618 +1,459 @@
-# 🌳 Smart Tree (st) v2.0 - Revolutionary MEM|8 Quantum Compression
+# 🌳 Smart Tree (st) v3.3.5 - The AI-Powered Directory Visualizer! 🚀
 
-<div align="center">
+![Hue's Side | Aye's Side](st-banner.png)
 
-[![Discord](https://img.shields.io/discord/bKq3K2gV3B?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC)
-[![GitHub release](https://img.shields.io/github/v/release/8b-is/smart-tree?include_prereleases)](https://github.com/8b-is/smart-tree/releases)
-[![Downloads](https://img.shields.io/github/downloads/8b-is/smart-tree/total)](https://github.com/8b-is/smart-tree/releases)
-[![License: ETHICAL AI](https://img.shields.io/badge/License-ETHICAL%20AI-blue.svg)](https://8b.is/LICENSE.txt)
+[![Discord](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Join%20the%20Party&logo=discord&logoColor=white)](https://discord.gg/uayQFhWC) [![GitHub release](https://img.shields.io/github/v/release/8b-is/smart-tree?include_prereleases&label=Latest%20Jam)](https://github.com/8b-is/smart-tree/releases) [![Downloads](https://img.shields.io/github/downloads/8b-is/smart-tree/total?label=Happy%20Users)](https://github.com/8b-is/smart-tree/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)[![Rust](https://img.shields.io/badge/Built%20with-Rust%20🦀-orange?logo=rust)](https://www.rust-lang.org/)[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-BFF%20Status-blueviolet)](https://claude.ai/download)[![MCP Compatible](https://img.shields.io/badge/MCP-Hell%20Yeah!-green)](https://modelcontextprotocol.io/)[![Platform](https://img.shields.io/badge/Runs%20on-Everything%20🚀-blue)](https://github.com/8b-is/smart-tree/releases)
 
-[![Rust](https://img.shields.io/badge/rust-%23000000.svg?logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-Ready-blueviolet)](https://claude.ai/download)
-[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green)](https://modelcontextprotocol.io/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/8b-is/smart-tree/releases)
-
-**🌊 Where Files Ride Semantic Waves | 🚀 10x Compression | 🤖 AI-First Design**
-
-</div>
+**"Making directories beautiful, one tree at a time!"** - *Trish from Accounting (our #1 fan!)*
 
 ---
 
-A blazingly fast, AI-friendly directory tree visualization tool written in Rust. Smart Tree is the first directory tool designed for the AI era, featuring revolutionary MEM|8 Quantum compression that reduces output by 99% and saves thousands in AI token costs.
+## 🎉 What the Heck is Smart Tree?
 
-![Hue's Terminal](dxt/ST-HUE.png)
+Remember the old `tree` command? Well, we gave it a PhD, taught it to dance, and introduced it to AI! Smart Tree is the **world's first AI-native directory visualizer** that actually understands what modern developers (and their AI assistants) need.
 
-**Status**: ✅ **v2.0.4 Released** - MCP notification handling fixed!
+### 🏆 The *"Holy Smokes!"* Numbers 🏆
 
-## 🚀 What's New in v2.0
+| Metric | Old Way | Smart Tree Way | Your Reaction |
+|:------:|:-------:|:--------------:|:-------------:|
+| **Directory Size** | 487 MB | 4.1 MB | 😱 "Wait, what?!" |
+| **AI Token Cost** | $1,270 | ~$10 | 💰 "I'm rich!" |
+| **Processing Speed** | 🐌 Slow | ⚡ 10-24x faster | 🚀 "Wheee!" |
+| **Compression** | None | **99%** | 🤯 "How?!" |
+| **Fun Factor** | 0% | 100% | 🎉 "Finally!" |
 
-- **99% Size Reduction**: Chromium tree from 487MB → 4.1MB
-- **$1,270 Saved**: Per large directory analysis
-- **10-24x Faster**: Than traditional tree command
-- **Native Quantum Format**: Zero conversion overhead
-- **Streaming Architecture**: Constant memory usage
+> #### Who is Aye?  That's Me -  A-ye! <--> Who is Hue?  That's You - Human UsEr. | 
 
-## 🚀 Features
 
-### Core Features
-- **Multiple Output Formats**: Classic tree, hex, JSON, CSV, TSV, digest, and AI-optimized formats
-- **Intelligent Filtering**: By file type, size, date, with automatic `.gitignore` respect
-- **Permission Handling**: Shows inaccessible directories with `*` indicator
-- **Built-in Search**: `--find` for quick file location during traversal
-- **Content Search**: `--search` to find keywords within files (works with `--type` filter)
-- **Streaming Mode**: `--stream` for real-time output on large directories
-- **Compression**: Built-in zlib compression for any output format
-- **Statistics**: Directory summaries with file counts, sizes, and type distributions
-- **Show Ignored**: `--show-ignored` flag displays ignored directories in brackets [dirname]
-- **Hex Statistics**: Stats mode shows file counts, directory counts, and sizes in hexadecimal
-- **MCP Server**: Built-in Model Context Protocol server for AI assistant integration
-- **Semantic Grouping**: `--semantic` flag groups files by conceptual similarity (inspired by Omni!)
+## 🌟 Version 3.3.5: "Hidden Depths" Edition! 
 
-### AI Optimization
-- **Compact Hex Format**: Fixed-width fields for easy parsing
-- **AI Mode**: Combines hex tree with statistics for optimal token usage
-- **Digest Mode**: Ultra-compact single-line summary (hash + stats) for AI pre-checks
-- **Project Context Detection**: Automatically detects and includes project type/description
-- **SHA256 Hash**: Provides consistency verification for caching and change detection
-- **AI JSON Mode**: Optional JSON-wrapped output for programmatic consumption (--ai-json)
-- **Compression**: ~10x reduction in output size
-- **No Wasted Tokens**: Every byte counts for AI consumption
+### 🎸 What's NEW and AMAZING?
 
-### Performance
-- Written in Rust for maximum speed and efficiency
-- SIMD optimizations where applicable
-- Minimal memory footprint
-- Handles massive directory trees with ease
+**Hidden Directory Handling Fixed!** No more confusing depth jumps! 🕵️
 
-## 🚀 Quick Start
+- **🔍 NEW: `--entry-type` flag** - Properly filter files (f) vs directories (d)
+- **🚫 Fixed hidden directory traversal** - Hidden dirs are truly hidden now
+- **📂 Improved LS mode** - Shows full paths for filtered results
+- **🎯 Consistent behavior** - If a directory is hidden, so are its contents!
 
-📖 **New to Smart Tree?** Check out our [Mode Selection Guide](docs/MODE_SELECTION_GUIDE.md) to choose the perfect output format!
+**Plus all the goodness from 3.3.0:**
 
-### Linux/Max and WSL for Windows
+**The Tree That Learns!** Smart Tree now has optional cloud features for those who want them! 🌱
+
+- **🔄 AI Feedback System** - Help shape Smart Tree's future (only with your consent!)
+- **📡 Update Notifications** - Get notified about new features (for AI assistants)
+- **🌍 Full Cross-Platform** - Windows, Mac, Linux, ARM - we run EVERYWHERE!
+- **🤖 AI-Driven Development** - Your AI assistant can suggest improvements!
+- **✨ Works Offline** - Cloud features are 100% optional - Smart Tree always works!
+- **🏗️ Better Windows Support** - File permissions work perfectly now!
+
+## 🚀 Quick Start (Faster than Making Coffee ☕)
+
+### 🐧 Linux/Mac/WSL - The One-Liner Wonder!
+> ### This magical incantation will change your life:
 ```bash
-# One-line installer (recommended)
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
 ```
 
-### Windows Specific
-> You may need Microsoft Build Tools for RUST: https://visualstudio.microsoft.com/visual-cpp-build-tools/
- - Don't forget the ARM compiler Version if you build for Windows in Parallels
- - Rust: https://www.rust-lang.org/tools/install
- - GIT: winget install git
+### 🪟 Windows - The Slightly Longer Dance
+
+<details>
+<summary>Click here for Windows installation (still pretty easy!)</summary>
+
+> **Pro tip**: You might need [Microsoft Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) for Rust
+> - Don't forget ARM compiler if you're fancy with Parallels!
+> - Get [Rust](https://www.rust-lang.org/tools/install) (it's awesome!)
+> - Grab [Git](https://git-scm.com/): `winget install git`
 
 ```powershell
-
-git clone 
+# Clone the awesomeness
 git clone https://github.com/8b-is/smart-tree
 cd smart-tree
+
+# Build the magic
 cargo build --release
-cargo 
+
+# Install it (pick your favorite spot)
+copy target\release\st.exe C:\your\favorite\path\
+
+# Add to PATH and rock on! 🎸
+```
+
+</details>
+
+## Claude Code Integration ###
+
+```
+# Do the quick install above.   This is the example for Linux, Mac, WSL, and who knows? 
+
+claude mcp add st /usr/local/bin/st -- --mcp
 
 ```
 
-This installer will:
-- Build and install Smart Tree (`st` command)
-- Optionally configure AI mode for Claude Desktop/Code
-- Create a preferences file with your settings
-- Add colorful terminal integration (courtesy of Trisha from Accounting! ✨)
+## Standard Local MCP for Claude Desktop, Cursor, Windsurf, Cline, Roo, and more ##
 
-### 🤖 Claude Desktop Integration (DXT)
-
-For Claude Desktop users, you can install Smart Tree as an MCP server:
-
-1. Download the DXT package from the [latest release](https://github.com/8b-is/smart-tree/releases/latest)
-2. Open Claude Desktop and go to Settings > Developer
-3. Click "Install from file" and select `smart-tree.dxt`
-
-Or build the DXT package yourself:
-```bash
-cd examples/smart-tree
-./build-dxt.sh
-# The smart-tree.dxt file will be created
-```
-
-## 📦 Installation
-
-### Using the Quick Installer (Recommended)
-
-```bash
-# Clone and run the installer
-git clone https://github.com/8b-is/smart-tree
-cd smart-tree
-./scripts/build-and-install.sh
-```
-
-### Manual Installation
-
-```bash
-# From source
-cargo install --path .
-
-# Build from source
-git clone https://github.com/8b-is/smart-tree
-cd smart-tree
-cargo build --release
-sudo cp target/release/st /usr/local/bin/
-
-# Using the manage script
-./scripts/manage.sh install
-```
-
-## 🎯 Usage
-
-```bash
-# Basic usage
-st                          # Current directory
-st /path/to/directory       # Specific directory
-
-# Output modes (see Mode Selection Guide for details)
-st -m ai                    # 🤖 AI-optimized (default for AI, 5x compression)
-st -m claude                # 🚀 Maximum compression (10x reduction!)
-st -m quantum               # 🧬 Native quantum format (8x compression)
-st -m classic               # 👁️ Traditional tree view (for humans)
-st -m hex                   # 🔧 Hex format with metadata (3x compression)
-st -m json                  # 💻 JSON output (2x compression)
-st -m digest                # 📊 Ultra-compact one-line summary
-st -m stats                 # 📈 Statistics only (10x compression)
-st -m csv                   # 📄 CSV format
-st -m tsv                   # 📄 TSV format
-st -m mermaid               # 🧜‍♀️ Mermaid diagram (perfect for docs!)
-st -m markdown              # 📝 Comprehensive markdown report
-st -m semantic              # 🌊 Semantic grouping (wave-based)
-
-# Filtering
-st --find "config"          # Find files/dirs matching pattern
-st --type rs                # Only Rust files
-st --min-size 1M            # Files larger than 1MB
-st --newer-than 2024-01-01  # Recently modified files
-
-# Options
-st --no-emoji               # Plain text output
-st --no-ignore              # Don't respect .gitignore
-st --no-default-ignore      # Show node_modules, .git, etc.
-st --show-ignored           # Show ignored dirs in brackets
-st --depth 3                # Limit depth (default: 5)
-st --everything             # Show EVERYTHING (--all --no-ignore --no-default-ignore)
-st -z                       # Compress output
-st --stream                 # Stream output for large dirs
-
-# Content search
-st --search "TODO"          # Find files containing "TODO"
-st --search "TODO" --type rs # Search only in Rust files
-
-# AI usage
-AI_TOOLS=1 st               # Auto AI mode + compression
-st -m ai -z                 # Manual AI mode + compression
-st -m ai --ai-json          # AI mode with JSON wrapper
-st -m digest                # Quick digest for AI pre-check
-
-# MCP Server (Model Context Protocol)
-st --mcp                    # Run as MCP server for AI assistants
-st --mcp-tools              # List available MCP tools
-st --mcp-config             # Show config for Claude Desktop
-
-# Mermaid diagrams (NEW!)
-st -m mermaid               # Flowchart diagram (default)
-st -m mermaid --mermaid-style mindmap    # Mind map view
-st -m mermaid --mermaid-style gitgraph   # Git-like graph
-st -m mermaid src/ > docs/architecture.md # Add to documentation!
-st -m markdown . > PROJECT_OVERVIEW.md    # Generate full project report
-
-# Digest mode - perfect for AI to quickly check directories
-st -m digest /large/project # Returns: HASH: 9b3b00cbcc1e8503 F:1623 D:89 S:ac39e7 TYPES: js:523 py:412...
-```
-
-## 🏗️ Architecture
-
-```
-src/
-├── main.rs           # CLI entry point
-├── scanner.rs        # Directory traversal engine
-├── filters.rs        # File filtering logic
-├── formatters/       # Output format implementations
-│   ├── classic.rs
-│   ├── hex.rs
-│   ├── json.rs
-│   ├── ai.rs
-│   ├── ai_json.rs
-│   ├── digest.rs
-│   ├── stats.rs
-│   ├── csv.rs
-│   └── tsv.rs
-├── compression.rs    # Zlib compression
-├── utils.rs          # Helper functions
-├── context.rs        # Project context detection
-└── mcp/              # Model Context Protocol server
-    ├── mod.rs
-    ├── tools.rs      # MCP tools implementation
-    ├── resources.rs  # MCP resources
-    ├── prompts.rs    # MCP prompts
-    └── cache.rs      # Analysis caching
-```
-
-## 🎨 Output Examples
-
-### Quantum Compression Visualization
-
-<div align="center">
-
-```mermaid
-graph TD
-    A[📁 project/] -->|12.9% size| B["MEM8 Quantum Format"]
-    B --> C[Token Substitution]
-    B --> D[Bitfield Headers]
-    B --> E[Delta Encoding]
-    B --> F[ASCII Control Codes]
-    
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#9ff,stroke:#333,stroke-width:4px,color:#000
-    
-    C --> G[".rs" → 0x91]
-    C --> H["node_modules" → 0x80]
-    D --> I["Permission XOR: 755^644"]
-    E --> J["Size: Variable Length"]
-    F --> K["0x0E=enter, 0x0F=exit"]
-```
-
-**Real Example**: 82KB directory → 246 bytes (99.7% reduction!)
-
-</div>
-
-### Format Comparison
-
-<div align="center">
-
-| Format | Size | Compression | Best For |
-|:------:|:----:|:-----------:|:--------:|
-| Classic | 100% | None | 👁️ Humans |
-| JSON | 200% | -100% | 💻 Programs |
-| Hex | 30% | 70% | 🔧 Debug |
-| AI | 20% | 80% | 🤖 LLMs |
-| **Claude** | **10%** | **90%** | **🚀 API** |
-| **Quantum** | **8%** | **92%** | **🌊 Native** |
-
-</div>
-
-### Classic Mode
-```
-📁 my-project (2.3 MB, 45 files)
-├── 📄 Cargo.toml (1.2 KB)
-├── 📁 src (15 files)
-│   ├── 📄 main.rs (5.6 KB)
-│   └── 📄 lib.rs (3.2 KB)
-├── 📁 [.git] (ignored)
-└── 📁 tests (8 files)
-    └── 📄 integration.rs (2.1 KB)
-```
-
-### Hex Mode (No indentation, fixed-width)
-```
-0 1fd 03e8 03e8 00000924 68538d0d d my-project
-1 1b4 03e8 03e8 000004b0 68538f4c f Cargo.toml
-1 1fd 03e8 03e8 00000200 68538e12 d src
-2 1b4 03e8 03e8 000015e0 68538a21 f main.rs
-2 1b4 03e8 03e8 00000c80 68538b15 f lib.rs
-1 1fd 03e8 03e8 00001000 68538a00 d [.git]
-```
-
-### AI Mode (Optimal for LLMs)
-```
-TREE_HEX_V1:
-CONTEXT: Rust: my-project - A blazingly fast web server
-HASH: 3d9a2f1cae6af9a5
-0 1fd 03e8 03e8 00000924 68538d0d d my-project
-1 1b4 03e8 03e8 000004b0 68538f4c f Cargo.toml
-...
-
-STATS:
-F:45 D:12 S:23fc00 (2.3MB)
-TYPES: rs:35 toml:3 md:2 txt:5
-LARGE: main.rs:15e0 lib.rs:c80 README.md:960
-DATES: 68536122-6853981a
-END_AI
-```
-
-### Digest Mode (Ultra-compact for AI pre-checks)
-```
-HASH: 9b3b00cbcc1e8503 F:45 D:12 S:23fc00 TYPES: rs:35 toml:3 md:2 txt:5 json:1
-```
-
-### AI JSON Mode (--ai-json flag)
 ```json
 {
-  "version": "AI_JSON_V1",
-  "context": "Rust: my-project - A blazingly fast web server",
-  "hash": "3d9a2f1cae6af9a5",
-  "hex_tree": [
-    "0 1fd 03e8 03e8 00000924 68538d0d d my-project",
-    "1 1b4 03e8 03e8 000004b0 68538f4c f Cargo.toml"
-  ],
-  "statistics": {
-    "files": 45,
-    "directories": 12,
-    "total_size": 2358272,
-    "total_size_mb": "2.3",
-    "file_types": [
-      {"extension": "rs", "count": 35},
-      {"extension": "toml", "count": 3}
-    ],
-    "largest_files": [
-      {"name": "main.rs", "size": 5600}
-    ],
-    "date_range": "68536122-6853981a"
+  "mcpServers": {
+    "smart-tree": {
+      "command": "/usr/local/bin/st",
+      "args": [
+        "--mcp"
+      ],
+      "env": {
+        "AI_TOOLS": "1"
+      }
+    }
   }
 }
 ```
 
-### Stats Mode (Hex values for counts and sizes)
-```
-Directory Statistics:
-  Files: 2d (45)
-  Directories: c (12)
-  Total size: 23fc00 (2.3MB)
-File Types (by extension):
-  rs: 23 (35)
-  toml: 3 (3)
-  md: 2 (2)
-  txt: 5 (5)
-Largest Files:
-  src/main.rs: 15e0 (5.6KB)
-  src/lib.rs: c80 (3.2KB)
-  README.md: 960 (2.4KB)
-Date Range:
-  Oldest: 2024-01-15 10:00:00
-  Newest: 2024-12-19 15:30:00
-```
+### 🤖 Claude Desktop Integration - The Future is Now!
 
-### JSON Mode
-```json
-{
-  "path": "/home/user/my-project",
-  "name": "my-project",
-  "type": "directory",
-  "size": 2358272,
-  "permissions": "rwxr-xr-x",
-  "modified": "2024-12-19T15:30:00Z",
-  "children": [
-    {
-      "name": "Cargo.toml",
-      "type": "file",
-      "size": 1200,
-      "permissions": "rw-r--r--"
-    }
-  ]
-}
-```
+**Make Claude your directory-reading bestie in 3 clicks!**
 
-### CSV Mode
-```csv
-path,name,type,size,permissions,modified,uid,gid
-/home/user/my-project,my-project,directory,2358272,rwxr-xr-x,2024-12-19T15:30:00Z,1000,1000
-/home/user/my-project/Cargo.toml,Cargo.toml,file,1200,rw-r--r--,2024-12-19T14:00:00Z,1000,1000
-```
+1. 📥 Download `smart-tree.dxt` from [latest release](https://github.com/8b-is/smart-tree/releases/latest)
+2. ⚙️ Claude Desktop → Settings → Developer → Install from file
+3. 🎉 Select the file and grant access - DONE!
 
-### Semantic Wave Analysis (--semantic flag) 🌊
+*Claude can now see your directories better than you can!* 🔮
 
-<div align="center">
+## 🎯 Usage Examples (The Fun Part!)
 
-```mermaid
-graph TD
-    subgraph "Semantic Categories"
-        A[📁 Your Project] --> B{Semantic Analyzer}
-        B --> C[📚 Documentation<br/>README.md, CHANGELOG.md<br/>Wave: 0xD0C5D0C5]
-        B --> D[💻 Source Code<br/>main.rs, lib.rs<br/>Wave: 0xC0DEC0DE]
-        B --> E[🧪 Tests<br/>test_main.rs, integration.rs<br/>Wave: 0x7E577E57]
-        B --> F[⚙️ Configuration<br/>Cargo.toml, .gitignore<br/>Wave: 0xC0F1C0F1]
-    end
-    
-    style B fill:#e1f5fe,stroke:#01579b,stroke-width:3px
-    style C fill:#fff3e0,stroke:#e65100
-    style D fill:#e8f5e9,stroke:#1b5e20
-    style E fill:#f3e5f5,stroke:#4a148c
-    style F fill:#fce4ec,stroke:#880e4f
-```
-
-</div>
-
-Files are grouped by their conceptual "waves" - a philosophy inspired by Omni's Hot Tub wisdom! 🛁✨
-
-### Mermaid Diagram Mode (--mode mermaid) 🧜‍♀️
-
-Perfect for embedding in your documentation!
-
-```mermaid
-graph TD
-    %% Smart Tree Directory Structure
-
-    root["📁 src"]
-    root_formatters["📁 formatters"]
-    root_formatters_ai_rs{{"🦀 ai.rs<br/>7.12 KB"}}
-    root_formatters_classic_rs{{"🦀 classic.rs<br/>13.21 KB"}}
-    root_formatters_mermaid_rs{{"🦀 mermaid.rs<br/>9.8 KB"}}
-    
-    root --> root_formatters
-    root_formatters --> root_formatters_ai_rs
-    root_formatters --> root_formatters_classic_rs
-    root_formatters --> root_formatters_mermaid_rs
-    
-    %% Styling
-    classDef dirStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef codeStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-    class root dirStyle
-    class root_formatters dirStyle
-    class root_formatters_ai_rs codeStyle
-    class root_formatters_classic_rs codeStyle
-    class root_formatters_mermaid_rs codeStyle
-```
-
-Copy and paste the mermaid code into any markdown file - GitHub, GitLab, and most documentation tools will render it automatically!
-
-
-### Markdown Report Mode (--mode markdown) 📝
-
-Generate comprehensive documentation with visualizations, perfect for project reports and real-time analysis\!
+### 🌈 The Basics - Simple Yet Powerful
 
 ```bash
-# Full report with all visualizations
-st --mode markdown src/ > project-report.md
+# The beautiful classic tree - now the default!
+st                          # Current directory with beautiful trees 🌳
+st /path/to/directory       # Specific directory - point and shoot! 🎯
 
-# Customize what's included
-st --mode markdown --no-markdown-pie-charts src/   # Skip pie charts
-st --mode markdown --no-markdown-mermaid src/      # Skip mermaid diagrams
-st --mode markdown --no-markdown-tables src/       # Skip tables (minimal output)
+# Quick exploration
+st --depth 2                # Shallow dive - just the tip of the iceberg 🧊
+st --everything             # SHOW ME EVERYTHING! (Even the scary parts) 👀
+st -a                       # Include hidden files (they're shy) 🙈
 ```
 
-Example output includes:
-- 📊 Directory overview with statistics
-- 🌳 Mermaid directory structure diagram
-- 📋 File type breakdown tables
-- 🍰 Pie charts for file type and size distribution
-- 🏆 Largest files ranking
-- 🕐 Recent activity tracking
-- 📈 Beautiful summary section
+### 🎨 Output Modes - Pick Your Flavor!
 
-Perfect for:
-- Project documentation
-- Real-time progress reports
-- Client presentations
-- Repository README files
-- AI-assisted analysis
+<details>
+<summary>🎭 All 15+ Output Modes Explained!</summary>
 
-## 🔧 Configuration
-
-Environment variables:
-- `ST_DEFAULT_MODE`: Default output mode
-- `ST_DEFAULT_DEPTH`: Default depth limit
-- `AI_TOOLS=1`: Auto-enable AI mode with compression
-
-## 🤖 MCP Server (Model Context Protocol)
-
-Smart Tree includes a built-in MCP server that allows AI assistants like Claude to analyze directories directly:
-
-### Quick Setup for Claude Desktop
-
-#### Option 1: DXT Package (Recommended)
-1. Download `smart-tree.dxt` from the [latest release](https://github.com/8b-is/smart-tree/releases)
-2. In Claude Desktop: Settings → Developer → Install from file
-3. Select `smart-tree.dxt` and grant directory access
-
-See [dxt/README.md](dxt/README.md) for full DXT documentation.
-
-#### Option 2: Manual Configuration
-1. Show the configuration command:
 ```bash
+# For Humans (That's You!) 👤
+st -m classic               # 🌳 The beautiful default (with emojis!)
+st -m stats                 # 📊 Just the facts, ma'am
+st -m waste                 # 🗑️ Marie Kondo mode! Find duplicates & waste
+st -m markdown              # 📝 Perfect documentation in seconds!
+st -m mermaid               # 🧜‍♀️ Diagrams that make you look smart
+
+# For Robots (Your AI Friends) 🤖
+st -m ai                    # 🧠 AI-optimized (80% smaller!)
+st -m quantum-semantic      # 🌊 Maximum compression with meaning!
+st -m digest                # 💊 One-line summary for quick checks
+st -m json                  # 🔧 When machines talk to machines
+
+# For Data Nerds 🤓
+st -m hex                   # 🔢 Hexadecimal beauty
+st -m csv                   # 📊 Spreadsheet-ready
+st -m tsv                   # 📊 Tab-separated for the tab lovers
+st -m semantic              # 🌊 Group by meaning (Omni's favorite!)
+
+# The Secret Weapons 🥷
+st -m quantum               # 🧬 Native quantum format (99% compression!)
+st -m relations             # 🔗 Code relationship analysis
+```
+
+</details>
+
+### 🔍 Finding Stuff - Like a Detective!
+
+```bash
+# Find files like a boss
+st --find "*.rs"            # 🦀 Rust files, assemble!
+st --find "TODO"            # 📝 Find all your broken promises
+st --type py                # 🐍 Python files only
+st --search "FIXME"         # 🔍 Search inside files (X-ray vision!)
+
+# Size matters
+st --min-size 10M           # 🐘 Find the chonky files
+st --max-size 1K            # 🐜 Find the tiny ones
+
+# Time travel
+st --newer-than 2024-01-01  # 🕐 What's new this year?
+st --older-than 2020-01-01  # 🕰️ Find the ancient artifacts
+```
+
+### 🚀 Performance Mode - For Speed Demons
+
+```bash
+# Stream mode - watch it flow!
+st --stream                 # 🌊 Real-time output for huge directories
+st --stream -m hex          # 🏃‍♂️ Hex mode at the speed of light
+
+# Compression - because size matters
+st -z                       # 🗜️ Compress output (even smaller!)
+st -m ai -z                 # 🤖 AI mode + compression = 💰 saved
+
+# The "I need it yesterday" combo
+AI_TOOLS=1 st              # 🚄 Auto-detects AI caller, optimizes everything!
+```
+
+### 🎪 The Magic Tricks
+
+```bash
+# Semantic grouping - files that vibe together!
+st --semantic               # 🌊 Groups: tests, docs, config, source
+                           # Wave signatures included! (Ask Omni about this)
+
+# Mermaid diagrams - instant documentation!
+st -m mermaid > docs/arch.md        # 📊 Flowchart magic
+st -m mermaid --mermaid-style mindmap  # 🧠 Mind map mode
+st -m mermaid --mermaid-style treemap # 🗺️ Treemap visualization (shows file sizes!)
+st -m markdown > README_PROJECT.md   # 📚 Full project report!
+
+# Pro tip: If mermaid has issues with emojis, use --no-emoji
+st -m mermaid --no-emoji            # Clean diagrams without emojis
+
+# The "impress your boss" commands
+st -m digest /huge/project  # Returns in 0.1 seconds: "HASH: abc123 F:10000 D:500..."
+st --no-emoji --no-color    # 😢 Boring mode (but why would you?)
+```
+
+## 🗑️ Waste Detection: Marie Kondo Mode! ✨
+
+**"Does this file spark joy? If not, let's optimize it!"** - *Marie Kondo (probably)*
+
+Smart Tree's waste detection feature is like having a professional organizer for your codebase! It finds duplicates, build artifacts, large files, and dependency bloat, then gives you actionable cleanup suggestions.
+
+### 🎯 What It Finds:
+
+- **🔄 Duplicate Files**: Identical files wasting precious disk space
+- **🧹 Build Artifacts**: `node_modules`, `target`, `__pycache__`, and other temporary files
+- **📦 Large Files**: Files over 10MB that might need optimization
+- **📚 Dependency Waste**: Package manager directories and their impact
+
+### 🚀 Quick Examples:
+
+```bash
+# Analyze current directory for waste
+st -m waste
+
+# Deep analysis of a large project
+st -m waste --depth 5 /path/to/project
+
+# Find waste in your entire home directory (prepare to be shocked!)
+st -m waste --depth 3 ~
+```
+
+### 📊 Sample Output:
+
+```
+════════════════════════════════════════════════════════════════════════════════
+🗑️  SMART TREE WASTE ANALYSIS - Marie Kondo Mode Activated! ✨
+   Project: /home/hue/my-project
+   Analyzed: 1,234 files, 567 directories
+════════════════════════════════════════════════════════════════════════════════
+
+📊 WASTE SUMMARY:
+├── Total Project Size: 2.36 GiB
+├── Potential Waste: 1.82 GiB (77.4% of project)
+├── Duplicate Groups: 42
+├── Build Artifacts: 15
+├── Large Files (>10 MiB): 8
+└── Potential Savings: 1.66 GiB (70.4% reduction possible)
+
+🔄 DUPLICATE FILES DETECTED:
+├── 16 files of size 100 MiB each (database files)
+├── 6 files of size 20.08 MiB each (editor cache)
+├── 4 files of size 23.44 MiB each (VS Code binaries)
+
+💡 OPTIMIZATION SUGGESTIONS:
+🔄 DUPLICATE FILE CLEANUP:
+   Consider using symbolic links or git submodules for identical files
+   Review and consolidate duplicate configuration files
+
+🧹 BUILD ARTIFACT CLEANUP:
+   rm -rf */node_modules  # Clean Node.js dependencies
+   rm -rf */target        # Clean Rust build artifacts
+   find . -name '__pycache__' -type d -exec rm -rf {} +
+```
+
+### 🎉 Why You'll Love It:
+
+- **💰 Save Money**: Reduce cloud storage costs
+- **⚡ Speed Up Builds**: Less files = faster CI/CD
+- **🧠 Peace of Mind**: Know exactly what's taking up space
+- **🎯 Actionable**: Get specific commands to run, not just reports
+- **🎨 Beautiful**: Color-coded, emoji-rich output that's actually fun to read
+
+*"This tool found 77.4% waste in my home directory and saved me 1.66 GiB! Trisha from Accounting is so proud!"* - *Hue (actual user)*
+
+## 🏗️ Architecture (For the Curious Minds)
+
+<details>
+<summary>🔧 How the Magic Happens</summary>
+
+```
+src/
+├── main.rs           # 🎭 The ringmaster
+├── scanner.rs        # 🔍 Directory detective
+├── formatters/       # 🎨 The art department
+│   ├── classic.rs    # 🌳 Beautiful trees
+│   ├── quantum.rs    # 🧬 Compression wizard
+│   ├── ai.rs         # 🤖 AI whisperer
+│   ├── waste.rs      # 🗑️ Marie Kondo consultant
+│   └── mermaid.rs    # 🧜‍♀️ Diagram artist
+├── semantic.rs       # 🌊 Wave philosopher
+└── mcp/              # 🔌 AI integration HQ
+    └── tools.rs      # 🛠️ Swiss army knife
+```
+
+</details>
+
+## 🌟 Real-World Magic
+
+### 💰 The Money Shot - Compression Comparison
+
+#### 📈 Benchmarks
+
+| Format | Size | Tokens | Relative Cost |
+|--------|------|--------|---------------|
+| Classic Tree | 1.2MB | 300K | 100% |
+| JSON | 2.1MB | 525K | 175% |
+| **Hex Mode** | 800KB | 200K | 67% |
+| **AI Mode + Compression** | 120KB | 30K | 10% |
+| **Digest** | 128B | 32 | 0.01% |
+
+**That's a 99.2% reduction! Your wallet just did a happy dance! 💃**
+
+```bash
+ hyperfine 'st ~ --find ollama -a ' -r 10
+
+# RESULT:
+ Benchmark 1: st ~ --find ollama -a 
+   Time (mean ± σ):     140.0 ms ±   7.5 ms    [User: 54.4 ms, System: 88.3 ms]
+   Range (min … max):   133.8 ms … 159.7 ms    10 runs
+
+```
+
+### 🎯 Format Quick Reference
+
+
+| Use Case | Best Format | Why? |
+|:---------|:------------|:-----|
+| 👀 **Quick Look** | `classic` (default!) | Beautiful & intuitive |
+| 🤖 **AI Analysis** | `quantum-semantic` | 10x compression! |
+| 📊 **Reports** | `markdown` | Instant documentation |
+| 🔍 **Debugging** | `hex` | All the details |
+| 💾 **Archival** | `json` | Future-proof |
+| 🏃 **Quick Check** | `digest` | One-line summary |
+
+### 💡 AI Feedback System (New in v3.3.0!)
+
+Smart Tree learns from its users! When used with AI assistants like Claude:
+
+- **🤝 Consent First** - Feedback is only sent with your explicit approval
+- **🔒 Privacy Focused** - Only tool suggestions and improvements, never your data
+- **🚀 Rapid Evolution** - Your feedback directly shapes new features
+- **📡 Optional** - Works perfectly offline, cloud features are a bonus!
+
+Example: Your AI assistant finds a missing feature? It can suggest it directly to the development team!
+
+### 🧙 MCP (Model Context Protocol) Server
+
+Smart Tree now includes a **built-in MCP server** that provides intelligent project analysis directly to AI assistants!
+
+```bash
+# Run as MCP server (for Claude Desktop, etc.)
+st --mcp
+
+# Show MCP configuration
 st --mcp-config
 ```
 
-2. Add the output to your Claude Desktop config file (`claude_desktop_config.json`)
+#### 🤖 AI Best Practices
 
-3. Restart Claude Desktop
+Check out our **[AI Best Practices Guide](docs/MCP_AI_BEST_PRACTICES.md)** to learn:
+- Optimal workflow for using Smart Tree tools
+- Which tools to use for different tasks
+- How to maximize token efficiency
+- Common patterns for code analysis
 
-### Documentation
+**Golden Rule**: Always start with `quick_tree` for any new directory! 🌟
 
-- 📚 **[MCP Guide](docs/mcp-guide.md)** - Comprehensive guide with examples
-- 🚀 **[Quick Reference](docs/mcp-quick-reference.md)** - Cheat sheet for common patterns
-- 🔧 **[OpenAPI Spec](mcp-openapi.json)** - Machine-readable API specification
+#### Features:
+- **20+ specialized tools** for directory analysis
+- **Automatic compression** for efficient token usage
+- **Semantic analysis** for understanding code structure
+- **Built-in caching** for instant repeated queries
+- **Security controls** for safe file system access
 
-### Available MCP Tools
+See [MCP Integration Guide](docs/mcp-integration.md) for setup instructions.
 
-- `analyze_directory`: Analyze a directory in various formats with streaming, compression, and search
-- `find_files`: Find files matching specific criteria (pattern, size, date, type)
-- `get_statistics`: Get detailed statistics about a directory
-- `get_digest`: Get SHA256 digest of directory structure
+---
 
-### Key Features
+## 🤝 Join the Smart Tree Family!
 
-- **🚀 Streaming**: Real-time output for large directories
-- **🗜️ Compression**: ~80% reduction in token usage
-- **🔍 Content Search**: Find keywords within files
-- **📊 Multiple Formats**: AI-optimized, JSON, hex, stats, and more
-- **🎯 Smart Filtering**: By type, size, date, with regex support
-- **💾 Caching**: 5-minute cache for repeated queries
+### 💬 Discord Community - Where the Cool Kids Hang Out
 
-### MCP Configuration
+[![Discord Banner](https://img.shields.io/discord/1352603992504401961?color=7289da&label=Join%20the%20Tree%20House&logo=discord&logoColor=lightgreena&style=for-the-badge)](https://discord.gg/uayQFhWC)
 
-Create `~/.st/mcp-config.toml` to customize:
-```toml
-cache_enabled = true
-cache_ttl = 300  # 5 minutes
-max_cache_size = 104857600  # 100MB
-allowed_paths = ["/home/user/projects"]
-blocked_paths = ["/etc", "/sys", "/proc"]
-```
+**Come for the trees, stay for the memes!** 🌳😂
 
-## 🤝 Contributing
+- 🆘 **Get Help** - We actually answer!
+- 🎉 **Share Wins** - Show off your directory art!
+- 🐛 **Report Bugs** - We'll squash 'em!
+- 🌊 **Philosophy Hour** - Discuss waves with Omni in the hot tub!
+- 🍕 **Pizza Fridays** - Virtual, but the fun is real!
 
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+### 🌟 Contributors Hall of Fame
 
-### Development Setup
-```bash
-git clone https://github.com/8bit-wraith/smart-tree
-cd smart-tree
-cargo build
-cargo test
+Special shoutouts to:
+- **Hue** - The visionary who started it all! 🎨
+- **Aye** - The AI that rocks! 🤖
+- **Trish from Accounting** - Our #1 fan and humor consultant! 💖
+- **Omni** - The philosopher in the hot tub! 🛁
+- **You** - Yes, YOU could be next! 🌟
 
-# Using the manage script
-./scripts/manage.sh build
-./scripts/manage.sh test
-./scripts/manage.sh run -- --mode hex /path/to/dir
-```
+## 📜 The Sacred Scrolls (Documentation)
 
-### Key Implementation Features
-- **Parallel Scanning**: Uses rayon for fast directory traversal
-- **Efficient Gitignore**: Cached gitignore parsing with globset
-- **Memory Efficient**: Streams output without loading entire tree
-- **Permission Handling**: Gracefully handles permission denied errors
-- **Compression**: Optional zlib compression for any output format
+- 📚 **[Complete Guide](docs/MODE_SELECTION_GUIDE.md)** - Everything you need!
+- 🚀 **[MCP Integration](docs/mcp-guide.md)** - Make AI your friend!
+- 🎯 **[Quick Reference](docs/mcp-quick-reference.md)** - Cheat sheet!
+- 🤔 **[Philosophy](docs/OMNI_WISDOM.md)** - Deep thoughts from the hot tub!
 
-## 📄 License
+## 🎬 The Grand Finale
 
-MIT License - see [LICENSE](LICENSE) for details.
+### Why Smart Tree? Because...
 
-## ✅ Implementation Status
+**🌳 Life's too short for boring directory listings!**
 
-All core features are now implemented:
-- ✅ Classic tree output with emojis and file sizes
-- ✅ Hex mode with fixed-width fields
-- ✅ JSON output with full metadata
-- ✅ CSV/TSV export formats
-- ✅ AI-optimized mode with compression
-- ✅ Project context auto-detection (Cargo.toml, package.json, etc.)
-- ✅ SHA256 hash for consistency verification
-- ✅ AI JSON mode with --ai-json flag
-- ✅ Statistics mode with hex values
-- ✅ File filtering (type, size, date)
-- ✅ Pattern matching with --find
-- ✅ Content search with --search keyword
-- ✅ Streaming output mode for large directories
-- ✅ Gitignore support with --show-ignored option
-- ✅ Permission error handling
-- ✅ Compression for all output modes
-- ✅ Parallel directory scanning
-- ✅ Management script with humor
-- ✅ MCP (Model Context Protocol) server for AI assistants
+**🚀 Your directories deserve to be beautiful!**
 
-## 🤝 Community & Support
+**💰 Your AI tokens are precious!**
 
-### Join Our Discord!
+**🎉 Work should be fun!**
 
-[![Discord Banner](https://img.shields.io/discord/1330349762673487895?color=7289da&label=Join%20our%20Discord&logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/uayQFhWC)
+---
 
-Connect with the Smart Tree community:
-- 💬 Get help and support
-- 🚀 Share your use cases
-- 🐛 Report bugs and request features
-- 🌊 Discuss semantic waves with Omni
-- 🛁 Join Hot Tub sessions for deep dives
+*Smart Tree: Making directories great again, one visualization at a time!*
 
-### Contributing
+**Built with 💙 by the Smart Tree Team**
 
-We welcome contributions! Check out:
-- [Contributing Guide](CONTRIBUTING.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Open Issues](https://github.com/8b-is/smart-tree/issues)
+*Aye, Hue, Trish, and Omni approve this message!* ✨
 
-### Star History
+---
+
+**P.S. - If you read this far, you're awesome! Here's a secret: Try `st --semantic` and watch the magic happen! 🌊✨**
+
+---
+
+[FYI Section](FYI.md)
+
+
+
+## Star History
+>By Request
 
 <a href="https://www.star-history.com/#8b-is/smart-tree&Date">
  <picture>
@@ -621,14 +462,3 @@ We welcome contributions! Check out:
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=8b-is/smart-tree&type=Date" />
  </picture>
 </a>
-
-## 🙏 Acknowledgments
-
-- Inspired by the classic `tree` command
-- Built for the AI era where every token counts
-- Optimized for both human readability and AI consumption
-- Special thanks to all contributors
-
----
-
-**Smart Tree**: Because directory visualization should be intelligent, fast, and token-efficient! 🌳✨

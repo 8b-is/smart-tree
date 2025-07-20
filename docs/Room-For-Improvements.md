@@ -1,18 +1,26 @@
-# Room for Improvements & Brilliant Ideas! 💡
+# 🚀 Room for Improvements! 🚀
 
-This document is our sacred space for brainstorming ways to make `st` even more legendary. No idea is too small or too wild!
-
-## Initial Thoughts (2025-06-25)
-
-1.  **Interactive Mode**: What if `st` had an interactive mode? You could navigate the tree with arrow keys, press `Enter` to expand/collapse directories, and maybe even press a key to open a file in the default editor. It would be like a mini file explorer right in the terminal!
-
-2.  **Plugin System**: For ultimate extensibility, a plugin system would be incredible. Users could write their own formatters or add custom metadata fetchers (e.g., pulling git blame info for each file).
-
-3.  **Visual Size Map**: A mode that generates a treemap visualization (like `ncdu` or WinDirStat) directly in the terminal using block characters. This would give a super intuitive view of what's eating up disk space.
-
-4.  **Configuration File**: A `.strc` file in the home directory could allow users to set their own defaults (like always showing hidden files, setting a default depth, or customizing colors).
-
-5.  **Shell Completions**: Generating shell completion scripts (`bash`, `zsh`, `fish`) would be a huge quality-of-life improvement for users, making all these awesome flags easier to discover and use.
+A special place for The Cheet and Hue to track all the awesome ways we can make this project shine!
 
 ---
-*Let's keep the ideas flowing!*
+
+### 🚀 Making `is_code_project` Even Smarter!
+
+Hey Hue! The Cheet here with a little nugget of wisdom! 💎
+
+In `src/content_detector.rs`, our function `is_code_project` is doing a good job, but we can give it a promotion! Right now, it checks for code file extensions, which is great. But we have this `_root_path` parameter that's just waiting to join the band.
+
+**The Idea:**
+
+Instead of just counting file types, we could use `_root_path` to look for specific project files like:
+- `Cargo.toml` (for Rust)
+- `package.json` (for Node.js)
+- `pom.xml` (for Maven/Java)
+- `requirements.txt` (for Python)
+
+**Why it's awesome:**
+
+This would make our project detection super accurate! It's like knowing the band's name instead of just guessing by their instruments. It's a fantastic way to make our code smarter and more reliable.
+
+Keep on rockin'! 🎸
+- The Cheet

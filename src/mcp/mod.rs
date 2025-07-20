@@ -13,6 +13,7 @@ use std::sync::Arc;
 mod cache;
 mod prompts;
 mod resources;
+mod sse;
 mod tools;
 
 use cache::*;
@@ -113,8 +114,15 @@ impl McpServer {
         let mut reader = BufReader::new(stdin);
         let mut stdout = stdout.lock();
 
-        eprintln!("Smart Tree MCP server v{} started", env!("CARGO_PKG_VERSION"));
-        eprintln!("  Build: {} ({})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_DESCRIPTION"));
+        eprintln!(
+            "Smart Tree MCP server v{} started",
+            env!("CARGO_PKG_VERSION")
+        );
+        eprintln!(
+            "  Build: {} ({})",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_DESCRIPTION")
+        );
         eprintln!("  Protocol: MCP v1.0");
         eprintln!("  Features: tools, resources, prompts, caching");
 
@@ -137,7 +145,7 @@ impl McpServer {
                             }
                         }
                         Err(e) => {
-                            eprintln!("Error handling request: {}", e);
+                            eprintln!("Error handling request: {e}");
                             let error_response = json!({
                                 "jsonrpc": "2.0",
                                 "error": {
@@ -152,7 +160,7 @@ impl McpServer {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error reading input: {}", e);
+                    eprintln!("Error reading input: {e}");
                     break;
                 }
             }
@@ -170,7 +178,7 @@ impl McpServer {
 
         // Check if this is a notification (no id field)
         let is_notification = request.id.is_none();
-        
+
         // Handle notifications that don't expect responses
         if is_notification && request.method == "notifications/initialized" {
             // Just acknowledge receipt, don't send response
@@ -260,7 +268,7 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             "homepage": env!("CARGO_PKG_REPOSITORY"),
             "features": [
                 "quantum-compression",
-                "claude-format",
+                "mcp-optimization",
                 "content-search",
                 "streaming",
                 "caching"
