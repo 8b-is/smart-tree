@@ -16,6 +16,7 @@ pub mod quantum_semantic_v2;
 pub mod relations;
 pub mod relations_formatter;
 pub mod semantic;
+pub mod sse;
 pub mod stats;
 pub mod summary;
 pub mod summary_ai;

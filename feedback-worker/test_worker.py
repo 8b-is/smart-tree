@@ -26,7 +26,7 @@ async def test_feedback_submission():
         }],
         "proposed_solution": "Add line content to search results with configurable context lines (like grep -C)",
         "ai_model": "claude-3-opus",
-        "smart_tree_version": "3.2.0",
+        "smart_tree_version": "3.3.5",
         "impact_score": 8,
         "frequency_score": 9,
         "tags": ["mcp", "search", "usability"],
