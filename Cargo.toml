@@ -46,6 +46,11 @@ dashmap = { version = "6.1" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 serde_yaml = "0.9"
 
+# SSE support
+notify = { version = "6.1", features = ["serde"] }
+futures-util = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+
 [[bin]]
 name = "mq"
 path = "src/bin/mq.rs"

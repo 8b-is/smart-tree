@@ -1,7 +1,7 @@
 // 🎸 The Cheet's Aggregate Tests - "Testing the unified markdown singularity!" 🌌
 
+use assert_cmd::Command;
 use std::fs;
-use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
@@ -18,7 +18,8 @@ fn test_mq_aggregate_basic() {
     
     // Run mq aggregate
     let output_path = temp_path.join("test.mq");
-    let output = Command::new("./target/release/mq")
+    let mut cmd = Command::cargo_bin("mq").unwrap();
+    let output = cmd
         .args(&["aggregate", temp_path.to_str().unwrap(), "-o", output_path.to_str().unwrap()])
         .output()
         .expect("Failed to execute mq aggregate");
@@ -64,7 +65,8 @@ fn test_mq_aggregate_with_compression() {
     
     // Run mq aggregate with zlib
     let aggregate_path = temp_path.join("compressed.mq");
-    let output = Command::new("./target/release/mq")
+    let mut cmd = Command::cargo_bin("mq").unwrap();
+    let output = cmd
         .args(&["aggregate", temp_path.to_str().unwrap(), "-o", aggregate_path.to_str().unwrap(), "--zlib"])
         .output()
         .expect("Failed to execute mq aggregate");
@@ -103,7 +105,8 @@ fn test_mq_aggregate_with_exclusions() {
     
     // Run with exclusions
     let output_path = temp_path.join("filtered.mq");
-    let output = Command::new("./target/release/mq")
+    let mut cmd = Command::cargo_bin("mq").unwrap();
+    let output = cmd
         .args(&[
             "aggregate", 
             temp_path.to_str().unwrap(), 

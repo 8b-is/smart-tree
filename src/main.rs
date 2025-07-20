@@ -36,6 +36,7 @@ use st::{
         mermaid::{MermaidFormatter, MermaidStyle},
         quantum::QuantumFormatter,
         semantic::SemanticFormatter,
+        sse::SseFormatter,
         stats::StatsFormatter,
         tsv::TsvFormatter,
         waste::WasteFormatter,
@@ -220,6 +221,16 @@ struct ScanArgs {
     #[arg(long)]
     stream: bool,
 
+    /// Start SSE server mode for real-time directory monitoring (experimental).
+    /// This starts an HTTP server that streams directory changes as Server-Sent Events.
+    /// Example: st --sse-server --sse-port 8420 /path/to/watch
+    #[arg(long)]
+    sse_server: bool,
+
+    /// Port for SSE server mode (default: 8420)
+    #[arg(long, default_value = "8420")]
+    sse_port: u16,
+
     /// Search for a keyword within file contents.
     /// Best used with `--type` to limit search to specific file types (e.g., `--type rs --search "TODO"`).
     /// This is like having X-ray vision for your files!
@@ -387,6 +398,8 @@ enum OutputMode {
     Waste,
     /// Markqant - Quantum-compressed markdown format (.mq)
     Markqant,
+    /// SSE - Server-Sent Events streaming format for real-time monitoring
+    Sse,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -508,6 +521,7 @@ async fn main() -> Result<()> {
             "quantum-semantic" => Some(OutputMode::QuantumSemantic),
             "waste" => Some(OutputMode::Waste),
             "markqant" => Some(OutputMode::Markqant),
+            "sse" => Some(OutputMode::Sse),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -875,6 +889,10 @@ async fn main() -> Result<()> {
             }
             OutputMode::Markqant => {
                 Box::new(MarkqantFormatter::new(path_display_mode, no_emoji))
+            }
+            OutputMode::Sse => {
+                // SSE streaming format for real-time monitoring
+                Box::new(SseFormatter::new())
             }
             OutputMode::Relations => {
                 // Code relationship analysis - "Semantic X-ray vision!" - Omni

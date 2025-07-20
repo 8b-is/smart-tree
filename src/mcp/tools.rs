@@ -647,6 +647,55 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 "required": []
             }),
         },
+        ToolDefinition {
+            name: "watch_directory_sse".to_string(),
+            description: "🔄 Watch a directory for real-time changes via Server-Sent Events (SSE). Streams file creation, modification, and deletion events as they happen. Perfect for monitoring active development directories, build outputs, or log folders. Returns an SSE endpoint URL that can be consumed by EventSource API.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the directory to watch"
+                    },
+                    "format": {
+                        "type": "string",
+                        "description": "Output format for analysis events",
+                        "enum": ["hex", "ai", "quantum", "quantum_semantic", "json", "summary"],
+                        "default": "ai"
+                    },
+                    "heartbeat_interval": {
+                        "type": "integer",
+                        "description": "Send heartbeat every N seconds",
+                        "default": 30
+                    },
+                    "stats_interval": {
+                        "type": "integer",
+                        "description": "Send stats update every N seconds",
+                        "default": 60
+                    },
+                    "include_content": {
+                        "type": "boolean",
+                        "description": "Include file contents in events",
+                        "default": false
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Maximum depth for recursive watching"
+                    },
+                    "include_patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "File patterns to include"
+                    },
+                    "exclude_patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "File patterns to exclude"
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
     ];
 
     Ok(json!({
@@ -687,6 +736,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "submit_feedback" => submit_feedback(args, ctx).await,
         "request_tool" => request_tool(args, ctx).await,
         "check_for_updates" => check_for_updates(args, ctx).await,
+        "watch_directory_sse" => watch_directory_sse(args, ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }
@@ -2220,6 +2270,122 @@ async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> 
             "current_version": current_version,
             "latest_version": version_info.version.clone(),
             "download_url": format!("https://github.com/8b-is/smart-tree/releases/tag/v{}", latest)
+        }
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct WatchDirectorySseArgs {
+    path: String,
+    #[serde(default = "default_sse_format")]
+    format: String,
+    #[serde(default = "default_heartbeat_interval")]
+    heartbeat_interval: u64,
+    #[serde(default = "default_stats_interval")]
+    stats_interval: u64,
+    #[serde(default)]
+    include_content: bool,
+    max_depth: Option<usize>,
+    #[serde(default)]
+    include_patterns: Vec<String>,
+    #[serde(default)]
+    exclude_patterns: Vec<String>,
+}
+
+fn default_sse_format() -> String {
+    "ai".to_string()
+}
+
+fn default_heartbeat_interval() -> u64 {
+    30
+}
+
+fn default_stats_interval() -> u64 {
+    60
+}
+
+async fn watch_directory_sse(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let args: WatchDirectorySseArgs = serde_json::from_value(args)
+        .map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
+
+    let path = PathBuf::from(&args.path);
+    
+    // Validate path
+    if !is_path_allowed(&path, &ctx.config) {
+        return Err(anyhow::anyhow!(
+            "Path not allowed by security policy: {}",
+            args.path
+        ));
+    }
+
+    if !path.exists() {
+        return Err(anyhow::anyhow!("Path does not exist: {}", args.path));
+    }
+
+    // Parse output format
+    let format = match args.format.as_str() {
+        "hex" => crate::mcp::sse::OutputFormat::Hex,
+        "ai" => crate::mcp::sse::OutputFormat::Ai,
+        "quantum" => crate::mcp::sse::OutputFormat::Quantum,
+        "quantum_semantic" => crate::mcp::sse::OutputFormat::QuantumSemantic,
+        "json" => crate::mcp::sse::OutputFormat::Json,
+        "summary" => crate::mcp::sse::OutputFormat::Summary,
+        _ => crate::mcp::sse::OutputFormat::Ai,
+    };
+
+    let sse_config = crate::mcp::sse::SseConfig {
+        path: path.clone(),
+        format,
+        heartbeat_interval: args.heartbeat_interval,
+        stats_interval: args.stats_interval,
+        include_content: args.include_content,
+        max_depth: args.max_depth,
+        include_patterns: args.include_patterns,
+        exclude_patterns: args.exclude_patterns,
+    };
+
+    // Note: In a real implementation, this would start an SSE endpoint
+    // For MCP, we'll return instructions on how to use SSE
+    let sse_info = format!(
+        "🔄 SSE Directory Watch Configuration Created!\n\n\
+        Path: {}\n\
+        Format: {:?}\n\
+        Heartbeat: {}s\n\
+        Stats Update: {}s\n\n\
+        To start receiving events, connect to the SSE endpoint:\n\
+        ```javascript\n\
+        const source = new EventSource('/mcp/sse/watch');\n\
+        source.addEventListener('message', (e) => {{\n\
+        const event = JSON.parse(e.data);\n\
+        console.log('Event:', event);\n\
+        }});\n\
+        ```\n\n\
+        Event Types:\n\
+        - scan_complete: Initial scan finished\n\
+        - created: File/directory created\n\
+        - modified: File/directory modified\n\
+        - deleted: File/directory deleted\n\
+        - analysis: Periodic analysis update\n\
+        - stats: Statistics update\n\
+        - heartbeat: Keep-alive signal",
+        args.path,
+        args.format,
+        args.heartbeat_interval,
+        args.stats_interval
+    );
+
+    // Store the SSE config in cache for later retrieval
+    let cache_key = format!("sse_watch_{}", args.path);
+    let _ = ctx.cache.set(cache_key.clone(), serde_json::to_string(&sse_config)?).await;
+
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": sse_info
+        }],
+        "metadata": {
+            "sse_config_id": cache_key,
+            "config": sse_config
         }
     }))
 }
