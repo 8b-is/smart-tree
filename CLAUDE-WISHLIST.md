@@ -337,6 +337,43 @@ st --mode stats       # Stats with depth 10
 - Updated mode selection logic to prioritize command line args
 - Now `ST_DEFAULT_MODE=hex st --mode ls` correctly shows ls mode
 
+### 27. File History Tracking - The Ultimate Context-Driven System (IMPLEMENTED ✅)
+**Feature**: Comprehensive AI file manipulation tracking system
+**Description**: Logs all AI file operations to `~/.mem8/.filehistory/` with hash-based change detection
+**Implementation**:
+- Created `file_history` module with operation tracking
+- Added MCP tools: `track_file_operation`, `get_file_history`, `get_project_history_summary`
+- 10-minute resolution timestamps for efficient log grouping
+- Append-first preference for least intrusive operations
+**Features**:
+- **Operation Codes**: A=Append, P=Prepend, I=Insert, D=Delete, R=Replace, C=Create, X=Remove, M=Relocate, N=Rename, r=Read
+- **Hash Tracking**: Before/after SHA256 hashes for every change
+- **Project Organization**: Logs stored by project ID under `~/.mem8/.filehistory/project_id/YYYYMMDD_HHMM.flg`
+- **Session Grouping**: Related operations tracked with session IDs
+**Example Usage**:
+```bash
+# Track a file operation
+mcp.callTool('track_file_operation', {
+  file_path: '/src/main.rs',
+  old_content: 'fn main() {}',
+  new_content: 'fn main() {\n    println!("Hello!");\n}',
+  agent: 'claude'
+})
+
+# Get file history
+mcp.callTool('get_file_history', {
+  file_path: '/src/main.rs'
+})
+# Shows: timestamp, operation, agent, session, bytes affected, hashes
+
+# Get project summary
+mcp.callTool('get_project_history_summary', {
+  project_path: '/my/project'
+})
+# Shows: total operations, files modified, operation breakdown
+```
+**Status**: Implemented in v3.3.6
+
 ## Performance Enhancements
 
 ### 25. Parallel Search Operations ⭐⭐⭐⭐
@@ -390,11 +427,11 @@ st --mode stats       # Stats with depth 10
 
 ## Wishlist Metadata
 
-**Last Updated**: 2025-01-13
-**Total Requests**: 31
+**Last Updated**: 2025-07-21
+**Total Requests**: 32
 **High Priority**: 3
 **Fixed Issues**: 12
-**Implemented Features**: 4
+**Implemented Features**: 5
 **Bug Reports**: 1
 **Working Features Confirmed**: 1
 **Submitted By**: Claude (Opus 4)

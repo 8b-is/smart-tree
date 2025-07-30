@@ -1,10 +1,10 @@
-// 🎸 The Cheet's Markqant CLI - "Compress your docs like a rockstar!" 🤘
+// 🎸 The Cheet's Marqant CLI - "Compress your docs like a rockstar!" 🤘
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::fs;
 use std::io::{self, Read, Write};
-use st::formatters::markqant::MarkqantFormatter;
+use st::formatters::marqant::MarqantFormatter;
 use walkdir::WalkDir;
 use std::path::Path;
 use flate2::write::ZlibEncoder;
@@ -13,7 +13,7 @@ use chrono;
 
 #[derive(Parser, Debug)]
 #[command(name = "mq")]
-#[command(about = "Markqant (.mq) compression tool for markdown files")]
+#[command(about = "Marqant (.mq) compression tool for markdown files")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -103,9 +103,9 @@ fn main() -> Result<()> {
             };
 
             let compressed = if let Some(ref f) = flags_str {
-                MarkqantFormatter::compress_markdown_with_flags(&content, Some(f))?
+                MarqantFormatter::compress_markdown_with_flags(&content, Some(f))?
             } else {
-                MarkqantFormatter::compress_markdown(&content)?
+                MarqantFormatter::compress_markdown(&content)?
             };
             
             if let Some(output_path) = output {
@@ -136,7 +136,7 @@ fn main() -> Result<()> {
                 fs::read_to_string(&input)?
             };
 
-            let decompressed = MarkqantFormatter::decompress_markqant(&compressed)?;
+            let decompressed = MarqantFormatter::decompress_marqant(&compressed)?;
             
             if let Some(output_path) = output {
                 if output_path == "-" {
@@ -159,13 +159,13 @@ fn main() -> Result<()> {
         
         Commands::Stats { input } => {
             let content = fs::read_to_string(&input)?;
-            let compressed = MarkqantFormatter::compress_markdown(&content)?;
+            let compressed = MarqantFormatter::compress_markdown(&content)?;
             
             let original_size = content.len();
             let compressed_size = compressed.len();
             let ratio = (original_size as f64 - compressed_size as f64) / original_size as f64 * 100.0;
             
-            println!("📊 Markqant Compression Statistics");
+            println!("📊 Marqant Compression Statistics");
             println!("──────────────────────────────────");
             println!("Original size:    {:>8} bytes", original_size);
             println!("Compressed size:  {:>8} bytes", compressed_size);
@@ -174,7 +174,7 @@ fn main() -> Result<()> {
             
             // Count tokens
             let token_count = compressed.lines()
-                .filter(|line| line.contains('=') && !line.starts_with("MARKQANT"))
+                .filter(|line| line.contains('=') && !line.starts_with("MARQANT"))
                 .count();
             println!("Tokens used:      {:>8}", token_count);
         }
@@ -183,14 +183,14 @@ fn main() -> Result<()> {
             let content = fs::read_to_string(&input)?;
             let lines: Vec<&str> = content.lines().collect();
             
-            if lines.is_empty() || !lines[0].starts_with("MARKQANT_V1") {
-                return Err(anyhow::anyhow!("Not a valid markqant file"));
+            if lines.is_empty() || !lines[0].starts_with("MARQANT_V1") {
+                return Err(anyhow::anyhow!("Not a valid marqant file"));
             }
             
             // Parse header
             let header_parts: Vec<&str> = lines[0].split_whitespace().collect();
             if header_parts.len() < 4 {
-                return Err(anyhow::anyhow!("Invalid markqant header"));
+                return Err(anyhow::anyhow!("Invalid marqant header"));
             }
             
             let timestamp = header_parts[1];
@@ -320,11 +320,11 @@ fn main() -> Result<()> {
             let flags_str = flags.join(" ");
             
             // Tokenize with combined dictionary
-            let (tokens, _) = MarkqantFormatter::tokenize_content(&combined_for_analysis);
+            let (tokens, _) = MarqantFormatter::tokenize_content(&combined_for_analysis);
             
             // Build header
             let timestamp = chrono::Utc::now().to_rfc3339();
-            all_content.push_str(&format!("MARKQANT_V2 {} {} ", timestamp, combined_for_analysis.len()));
+            all_content.push_str(&format!("MARQANT_V2 {} {} ", timestamp, combined_for_analysis.len()));
             
             // Add manifest
             all_content.push_str("0 "); // Placeholder for compressed size

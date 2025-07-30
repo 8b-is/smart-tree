@@ -1,5 +1,5 @@
 // 🎸 The Cheet's Markdown Quantum Compressor - "Compress it like it's hot!" 🔥
-// This module implements the Markqant (.mq) format for quantum-compressed markdown
+// This module implements the Marqant (.mq) format for quantum-compressed markdown
 //
 // "Why send a whole README when you can send its soul?" - The Cheet
 //
@@ -48,18 +48,18 @@ impl PartialOrd for PhraseFreq {
     }
 }
 
-/// Markqant formatter - Quantum compression for markdown files
-pub struct MarkqantFormatter {
+/// Marqant formatter - Quantum compression for markdown files
+pub struct MarqantFormatter {
     path_mode: PathDisplayMode,
     no_emoji: bool,
 }
 
-impl MarkqantFormatter {
+impl MarqantFormatter {
     pub fn new(path_mode: PathDisplayMode, no_emoji: bool) -> Self {
         Self { path_mode, no_emoji }
     }
 
-    /// Compress markdown content into markqant format
+    /// Compress markdown content into marqant format
     pub fn compress_markdown(content: &str) -> Result<String> {
         Self::compress_markdown_with_flags(content, None)
     }
@@ -102,12 +102,12 @@ impl MarkqantFormatter {
         
         if let Some(flags) = flags {
             output.push_str(&format!(
-                "MARKQANT_V1 {} {} {} {}\n",
+                "MARQANT_V1 {} {} {} {}\n",
                 timestamp, original_size, compressed_size, flags
             ));
         } else {
             output.push_str(&format!(
-                "MARKQANT_V1 {} {} {}\n",
+                "MARQANT_V1 {} {} {}\n",
                 timestamp, original_size, compressed_size
             ));
         }
@@ -160,31 +160,33 @@ impl MarkqantFormatter {
         let mut tokens = HashMap::new();
         let mut tokenized = content.to_string();
         
-        // Enhanced static tokens for markdown
-        let static_tokens = vec![
-            ("T00", "# "),
-            ("T01", "## "),
-            ("T02", "### "),
-            ("T03", "#### "),
-            ("T04", "```"),
-            ("T05", "\n\n"),
-            ("T06", "- "),
-            ("T07", "* "),
-            ("T08", "**"),
-            ("T09", "__"),
-            ("T0A", "> "),
-            ("T0B", "| "),
-            ("T0C", "---"),
-            ("T0D", "***"),
-            ("T0E", "["),
-            ("T0F", "]("),
-            // Additional common patterns
-            ("T10", "```bash"),
-            ("T11", "```rust"), 
-            ("T12", "```javascript"),
-            ("T13", "```python"),
-            ("T14", "\n```\n"),
-            ("T15", "    "), // 4 spaces for code blocks
+        // Enhanced static tokens for markdown using single ASCII bytes
+        // Using ASCII control characters that are rarely used in markdown
+        let static_tokens: Vec<(&str, &str)> = vec![
+            // Using ASCII characters 0x01-0x1F (control chars) for tokens
+            ("\x01", "# "),        // SOH for H1 header
+            ("\x02", "## "),       // STX for H2 header
+            ("\x03", "### "),      // ETX for H3 header
+            ("\x04", "#### "),     // EOT for H4 header
+            ("\x05", "```"),       // ENQ for code block
+            ("\x06", "\n\n"),      // ACK for paragraph break
+            ("\x07", "- "),        // BEL for list item
+            ("\x0B", "* "),        // VT for alt list
+            ("\x0C", "**"),        // FF for bold
+            ("\x0E", "__"),        // SO for alt bold
+            ("\x0F", "> "),        // SI for blockquote
+            ("\x10", "| "),        // DLE for table cell
+            ("\x11", "---"),       // DC1 for HR
+            ("\x12", "***"),       // DC2 for alt HR
+            ("\x13", "["),         // DC3 for link start
+            ("\x14", "]("),        // DC4 for link middle
+            // Additional patterns
+            ("\x15", "```bash"),
+            ("\x16", "```rust"),
+            ("\x17", "```javascript"),
+            ("\x18", "```python"),
+            ("\x19", "\n```\n"),
+            ("\x1A", "    "),      // SUB for 4 spaces
         ];
         
         // Apply static tokens first
@@ -192,7 +194,8 @@ impl MarkqantFormatter {
             if tokenized.contains(pattern) {
                 let count = tokenized.matches(pattern).count();
                 // Only tokenize if it saves space
-                if count * pattern.len() > count * token.len() + pattern.len() + 5 {
+                // Now tokens are 1 byte, so much more likely to save space
+                if count * pattern.len() > count * 1 + pattern.len() + 3 {
                     tokens.insert(token.to_string(), pattern.to_string());
                     tokenized = tokenized.replace(pattern, token);
                 }
@@ -210,8 +213,8 @@ impl MarkqantFormatter {
             for i in 0..words.len().saturating_sub(window_size) {
                 let phrase = words[i..i + window_size].join(" ");
                 
-                // Skip short phrases and already tokenized content
-                if phrase.len() < 8 || phrase.contains('T') {
+                // Skip short phrases
+                if phrase.len() < 8 {
                     continue;
                 }
                 
@@ -219,7 +222,8 @@ impl MarkqantFormatter {
                 let count = content.matches(&phrase).count();
                 if count >= 2 {
                     // Calculate savings: (original_size * count) - (token_size * count + dictionary_entry)
-                    let savings = (phrase.len() * count).saturating_sub(3 * count + phrase.len() + 5);
+                    // Token is now 1 byte instead of 3 bytes (T##)
+                    let savings = (phrase.len() * count).saturating_sub(1 * count + phrase.len() + 3);
                     if savings > 0 {
                         phrase_heap.push(PhraseFreq {
                             phrase: phrase.clone(),
@@ -232,12 +236,18 @@ impl MarkqantFormatter {
         }
         
         // Assign tokens to best phrases (greedy algorithm)
-        let mut token_counter = 0x16; // Start after extended static tokens
+        let mut token_counter = 0x1Bu8; // Start after static tokens (0x1A is last static)
         let mut assigned_phrases: Vec<String> = Vec::new();
         
         while let Some(phrase_freq) = phrase_heap.pop() {
-            if token_counter > 0xFF {
-                break; // Out of token space
+            if token_counter >= 0x7F {
+                break; // Stop before DEL character (0x7F is reserved for extensions)
+            }
+            
+            // Skip newline (0x0A) and carriage return (0x0D)
+            if token_counter == 0x0A || token_counter == 0x0D {
+                token_counter += 1;
+                continue;
             }
             
             // Check if this phrase overlaps with already assigned ones
@@ -250,7 +260,8 @@ impl MarkqantFormatter {
             }
             
             if !overlaps && tokenized.contains(&phrase_freq.phrase) {
-                let token = format!("T{:02X}", token_counter);
+                // Use single byte token - control chars are valid in UTF-8
+                let token = char::from(token_counter).to_string();
                 tokens.insert(token.clone(), phrase_freq.phrase.clone());
                 tokenized = tokenized.replace(&phrase_freq.phrase, &token);
                 assigned_phrases.push(phrase_freq.phrase);
@@ -261,17 +272,17 @@ impl MarkqantFormatter {
         (tokens, tokenized)
     }
     
-    /// Decompress markqant content back to markdown
-    pub fn decompress_markqant(compressed: &str) -> Result<String> {
+    /// Decompress marqant content back to markdown
+    pub fn decompress_marqant(compressed: &str) -> Result<String> {
         let lines: Vec<&str> = compressed.lines().collect();
-        if lines.is_empty() || !lines[0].starts_with("MARKQANT_V1") {
-            return Err(anyhow::anyhow!("Invalid markqant format"));
+        if lines.is_empty() || !lines[0].starts_with("MARQANT_V1") {
+            return Err(anyhow::anyhow!("Invalid marqant format"));
         }
         
         // Parse header
         let header_parts: Vec<&str> = lines[0].split_whitespace().collect();
         if header_parts.len() < 4 {
-            return Err(anyhow::anyhow!("Invalid markqant header"));
+            return Err(anyhow::anyhow!("Invalid marqant header"));
         }
         
         // Check for flags
@@ -337,7 +348,7 @@ impl MarkqantFormatter {
     }
 }
 
-impl Formatter for MarkqantFormatter {
+impl Formatter for MarqantFormatter {
     fn format(
         &self,
         writer: &mut dyn Write,
@@ -435,18 +446,18 @@ fn main() {
 **Bold text** and *italic text*.
 "#;
 
-        let compressed = MarkqantFormatter::compress_markdown(markdown).unwrap();
-        assert!(compressed.starts_with("MARKQANT_V1"));
+        let compressed = MarqantFormatter::compress_markdown(markdown).unwrap();
+        assert!(compressed.starts_with("MARQANT_V1"));
         
         // For documents with limited repetition, compression might not reduce size due to header overhead
         // The important thing is that the format is correct and round-trip works
         
         // Test round-trip
-        let decompressed = MarkqantFormatter::decompress_markqant(&compressed).unwrap();
+        let decompressed = MarqantFormatter::decompress_marqant(&compressed).unwrap();
         assert_eq!(decompressed.trim(), markdown.trim());
         
         // Verify the compression at least includes proper header and structure
-        assert!(compressed.contains("MARKQANT_V1"), "Should have proper header");
+        assert!(compressed.contains("MARQANT_V1"), "Should have proper header");
         assert!(compressed.len() > 20, "Should have header and content");
     }
     
@@ -454,13 +465,13 @@ fn main() {
     fn test_token_assignment() {
         // Use content that will definitely benefit from tokenization
         let content = "This is a longer test phrase that repeats. This is a longer test phrase that repeats. This is a longer test phrase that repeats. Another different phrase here.";
-        let (tokens, tokenized) = MarkqantFormatter::tokenize_content(content);
+        let (tokens, tokenized) = MarqantFormatter::tokenize_content(content);
         
         // Check if any tokenization occurred
         if tokens.is_empty() {
             // If no tokens, at least verify the static tokens would work on markdown
             let markdown_content = "## Header\n## Header\n## Header\nSome content here.";
-            let (md_tokens, md_tokenized) = MarkqantFormatter::tokenize_content(markdown_content);
+            let (md_tokens, md_tokenized) = MarqantFormatter::tokenize_content(markdown_content);
             assert!(!md_tokens.is_empty() || tokenized != content, 
                     "Tokenization should create tokens or modify content");
         } else {

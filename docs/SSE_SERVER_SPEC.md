@@ -47,7 +47,7 @@ eventSource.addEventListener('quantum', (event) => {
 GET /tree?path=/src&mode=quantum
 GET /stats?path=/src  
 GET /search?q=TODO&path=/src
-GET /compress?path=/src/file.md&format=markqant
+GET /compress?path=/src/file.md&format=marqant
 POST /watch { "path": "/new/path" }
 DELETE /watch { "path": "/old/path" }
 ```

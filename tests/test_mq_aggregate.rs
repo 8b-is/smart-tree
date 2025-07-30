@@ -33,7 +33,7 @@ fn test_mq_aggregate_basic() {
     let aggregate_content = fs::read_to_string(temp_dir.path().join("test.mq")).unwrap();
     
     // Should have V2 header
-    assert!(aggregate_content.starts_with("MARKQANT_V2"));
+    assert!(aggregate_content.starts_with("MARQANT_V2"));
     
     // Should have manifest
     assert!(aggregate_content.contains("::manifest::"));

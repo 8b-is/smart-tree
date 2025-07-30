@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Smart Tree (`st`) is a blazingly fast, AI-friendly directory visualization tool written in Rust. It's designed as an intelligent alternative to the traditional `tree` command, optimized for both human readability and AI token efficiency.
 
-**Current Version**: v3.2.0 - Features revolutionary MEM|8 Quantum compression for 99% size reduction!
+**Current Version**: v3.3.5 - Features SSE support and enhanced file type detection!
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ cargo build --release      # Optimized release build
 # Using the manage script (preferred)
 ./scripts/manage.sh build              # Build release version
 ./scripts/manage.sh build debug        # Build debug version
-./scripts/manage.sh build release mcp  # Build with MCP support
+./scripts/manage.sh build release      # Regular build (MCP is always included)
 ```
 
 ### Testing
@@ -46,6 +46,7 @@ cargo test formatters      # Test formatters module
 cargo test mcp            # Test MCP server
 cargo test quantum        # Test quantum compression
 cargo test semantic       # Test semantic analysis
+cargo test sse            # Test SSE functionality
 
 # Test specific formatters
 cargo test formatters::classic::tests
@@ -54,6 +55,7 @@ cargo test formatters::ai::tests
 cargo test formatters::quantum::tests
 cargo test formatters::mermaid::tests
 cargo test formatters::relations::tests
+cargo test formatters::sse::tests
 
 # Run a single test by name
 cargo test test_quantum_compression -- --exact
@@ -80,6 +82,7 @@ st --mode quantum-semantic # Semantic-aware quantum compression
 st --search "TODO"         # Search for TODO in file contents
 st --stream                # Stream output for large directories
 st --mode mermaid treemap  # Generate mermaid treemap visualization
+st --sse-server --sse-port 8420 /path  # Start SSE server (experimental)
 ```
 
 ### Linting and Formatting
@@ -98,9 +101,11 @@ cargo clippy -- -D warnings  # Treat warnings as errors
 
 The codebase follows a modular structure:
 
-- **main.rs**: CLI entry point using clap 4.5. Handles all command-line options and MCP server mode
+- **main.rs**: CLI entry point using clap 4.5. Handles all command-line options, MCP server mode, and SSE server mode
 - **scanner.rs**: Core directory traversal engine using walkdir. Supports filtering, search, and streaming
-- **formatters/** (24 different output formats):
+  - Key structs: `FileNode`, `TreeStats`, `Scanner`, `ScannerConfig`
+  - Handles permission errors gracefully, marks inaccessible dirs with `*`
+- **formatters/** (25 different output formats):
   - **classic.rs**: Traditional tree view with Unicode box drawing (O(n) optimized)
   - **hex.rs**: Fixed-width hexadecimal format (AI-optimized)
   - **json.rs**, **csv.rs**, **tsv.rs**: Standard data formats
@@ -114,13 +119,15 @@ The codebase follows a modular structure:
   - **stats.rs**, **digest.rs**: Statistics and hashing
   - **ls.rs**: Simple ls-like one-line-per-file format
   - **waste.rs**: Identify disk space usage patterns
-  - **markqant.rs**: Quantum-compressed markdown format (.mq)
+  - **marqant.rs**: Quantum-compressed markdown format (.mq)
+  - **sse.rs**: Server-Sent Events formatter for streaming
 - **mcp/** (Model Context Protocol server):
   - **mod.rs**: Main MCP server logic
   - **tools.rs**: 20+ MCP tools for directory analysis
   - **resources.rs**: MCP resource handling
   - **prompts.rs**: MCP prompt templates  
   - **cache.rs**: Analysis result caching
+  - **sse.rs**: SSE support for real-time monitoring (NEW)
 - **Supporting modules**:
   - **context.rs**: Project type detection (Rust, Python, Node.js, etc.)
   - **tokenizer.rs**, **dynamic_tokenizer.rs**: Smart tokenization for quantum formats
@@ -128,12 +135,11 @@ The codebase follows a modular structure:
   - **content_detector.rs**: File content analysis
   - **semantic.rs**: Semantic analysis engine
   - **relations.rs**: Code relationship extraction
+  - **emoji_mapper.rs**: Centralized emoji mapping for 40+ file types (NEW)
   - **smart/**: Advanced features (git_relay, nlp, search, context)
   - **mem8/** (planned): .mem8 binary format support
-    - **reader.rs**: Binary format parser with CRC validation
-    - **writer.rs**: YAML to binary compiler
-    - **dumper.rs**: Binary to YAML/JSON converter
-    - **cache.rs**: Context caching with TTL
+  - **inputs/**: Alternative input sources (filesystem, QCP, SSE, OpenAPI, MEM8)
+  - **bin/mq.rs**: Marqant compression utility
 
 ## Key Implementation Details
 
@@ -153,6 +159,7 @@ Smart Tree supports multiple input sources beyond filesystem scanning:
    - No indentation - depth is encoded in hex
    - Fixed-width fields for easy parsing
    - Shows ignored dirs in brackets when `--show-ignored` is used
+   - Search results show hex line numbers: `[SEARCH:L29e:C5,4x]`
 
 2. **AI Format**:
    - Header: `TREE_HEX_V1:`
@@ -168,6 +175,78 @@ Smart Tree supports multiple input sources beyond filesystem scanning:
    - Wave-based semantic grouping for code understanding
    - Achieves 8-10x compression vs classic format
 
+### SSE (Server-Sent Events) Support
+
+Smart Tree now includes SSE support for real-time directory monitoring:
+
+```bash
+# Start SSE server
+st --sse-server --sse-port 8420 /path/to/watch
+
+# Test with curl
+curl -N -H "Accept: text/event-stream" http://localhost:8420/sse
+
+# Use the MCP tool
+mcp.callTool('watch_directory_sse', {
+  path: '/path/to/watch',
+  format: 'ai',
+  heartbeat_interval: 30
+})
+```
+
+Event types: `scan_complete`, `created`, `modified`, `deleted`, `analysis`, `stats`, `heartbeat`
+
+See `docs/SSE_USAGE.md` for detailed documentation.
+
+### File History Tracking - The Ultimate Context-Driven System
+
+Smart Tree now includes a comprehensive file history tracking system that logs all AI file manipulations to `~/.mem8/.filehistory/`. This creates a complete audit trail of AI-assisted development.
+
+#### Features
+
+- **Hash-based change detection**: Every file operation is tracked with before/after hashes
+- **10-minute resolution timestamps**: Logs are grouped in 10-minute buckets for efficient storage
+- **Append-first preference**: Favors append operations as the least intrusive method
+- **Operation tracking**: Supports append, prepend, insert, delete, replace, create, remove, relocate, rename
+- **Project-based organization**: Each project gets its own directory under `~/.mem8/.filehistory/project_id/`
+
+#### Usage Examples
+
+```bash
+# Track a file read operation
+mcp.callTool('track_file_operation', {
+  file_path: '/path/to/file.rs',
+  operation: 'read',
+  agent: 'claude',
+  session_id: 'dev-session-1'
+})
+
+# Track a file write with auto-detection
+mcp.callTool('track_file_operation', {
+  file_path: '/path/to/file.rs',
+  old_content: 'fn main() {}',
+  new_content: 'fn main() {\n    println!("Hello, world!");\n}',
+  agent: 'claude'
+})
+
+# Get file history
+mcp.callTool('get_file_history', {
+  file_path: '/path/to/file.rs'
+})
+
+# Get project summary
+mcp.callTool('get_project_history_summary', {
+  project_path: '/path/to/project'
+})
+```
+
+#### Log Format
+
+Logs are stored as JSON lines in `.flg` files:
+- Filename: `YYYYMMDD_HHMM.flg` (10-minute resolution)
+- Location: `~/.mem8/.filehistory/{project_id}/`
+- Each line contains: timestamp, file path, operation, context, agent, session ID
+
 ### Performance Considerations
 
 - Uses rayon for parallel operations
@@ -175,12 +254,13 @@ Smart Tree supports multiple input sources beyond filesystem scanning:
 - Classic formatter optimized from O(n²) to O(n) for parent-child relationships
 - Default depth is now auto (0) - each mode picks its ideal depth (ls=1, classic=3, ai=5, stats=10)
 - Memory-efficient processing for large codebases
+- SSE mode uses notify crate for efficient file system monitoring
 
 ## MCP Server Development
 
 ### Running MCP Server
 ```bash
-# Build with MCP support (included by default)
+# Build (MCP support is always included)
 cargo build --release
 
 # Run as MCP server
@@ -193,7 +273,7 @@ st --mcp-config
 st --mcp-tools
 
 # Using the manage script
-./scripts/manage.sh mcp-build   # Build with MCP support
+./scripts/manage.sh mcp-build   # Just runs regular build
 ./scripts/manage.sh mcp-run     # Run as MCP server
 ./scripts/manage.sh mcp-config  # Show Claude Desktop config
 ./scripts/manage.sh mcp-tools   # List available MCP tools
@@ -228,6 +308,12 @@ cargo run -- --mcp-tools | jq  # Should output valid JSON
 - `find_tests`, `find_build_files`, `find_documentation`: Project structure
 - `get_git_status`: Git-aware analysis
 - `analyze_workspace`: Multi-project workspace analysis
+- `watch_directory_sse`: Real-time directory monitoring (NEW)
+- `track_file_operation`: Track AI file manipulations with hash-based change detection
+- `get_file_history`: Retrieve complete operation history for any file
+- `get_project_history_summary`: Get summary of all AI operations in a project
+- `submit_feedback`, `request_tool`: AI feedback system
+- `check_for_updates`: Version checking
 - And more (use `st --mcp-tools` for full list)
 
 ## Common Development Workflows
@@ -258,16 +344,25 @@ cargo run -- --mcp-tools | jq  # Should output valid JSON
 
 5. **Working with MCP**:
    ```bash
-   ./scripts/manage.sh mcp-build
+   ./scripts/manage.sh mcp-run
    ./scripts/manage.sh mcp-test
+   ```
+
+6. **Testing SSE functionality**:
+   ```bash
+   # Start test server
+   cd examples && python3 sse_test_server.py
+   
+   # Run curl tests
+   ./test_sse_curl.sh
    ```
 
 ## Debugging Tips
 
 ### Permission Denied Errors
 - Scanner gracefully handles permission errors, marks inaccessible directories with `*`
-- Check handling in scanner.rs:72
-- Windows hidden/system files handled specially (see scanner.rs)
+- Check handling in scanner.rs around line 72
+- Windows hidden/system files handled specially
 
 ### Large Directory Performance
 - Use `--stream` flag for directories with >10k entries
@@ -299,6 +394,7 @@ st --mode hex | head -5  # Check field alignment
 - **Windows path issues**: Use forward slashes or escape backslashes
 - **Large output truncated**: Some terminals have buffer limits, redirect to file
 - **Permission denied on macOS**: Some system directories require special access
+- **SSE connection drops**: Check heartbeat interval, verify network stability
 
 ## .mem8 Contextual Metadata System
 
@@ -362,59 +458,14 @@ subdirs:
   src/sensor: "Sensor processing"
 ```
 
-## Wishlist & Future Improvements
+## Environment Variables
 
-### Feature Requests (from CLAUDE-WISHLIST.md)
-
-1. **Show Line Content in Search Results**
-   - Add actual line content to `search_in_files` output
-   - Include column position for precise matches
-   - Use case: Fixing imports without opening files
-
-2. **Batch File Read Tool**
-   - `read_files_from_search` for reading multiple files
-   - Takes search results as input
-   - Returns consolidated content
-
-3. **Find and Replace Tool**
-   - Pattern-based replacement across files
-   - Support for regex patterns
-   - Preview mode before applying changes
-
-4. **Dependency Graph Analysis**
-   - Analyze Rust crate dependencies
-   - Show module relationships
-   - Visualize with mermaid diagrams
-
-5. **Import Analysis Tool**
-   - Semantic understanding of imports
-   - Track what's imported from where
-   - Help with refactoring import paths
-
-### Performance Improvements
-
-1. **Cached Workspace Analysis**
-   - TTL-based caching for large codebases
-   - Incremental updates on file changes
-
-2. **Parallel Search Operations**
-   - Multiple patterns in single call
-   - Concurrent file processing
-
-### Quality of Life
-
-1. **Relative Path Options**
-   - Show paths relative to base directory
-   - Configurable path display modes
-
-2. **File Type Groups**
-   - Predefined groups: `rust_src`, `config`, `tests`
-   - Custom group definitions
-
-3. **Symbol Search**
-   - Find type definitions
-   - Search for struct/trait/fn declarations
-   - Example: `st --find-symbol "struct StoredVector"`
+- `ST_DEFAULT_MODE`: Set default output mode (classic, hex, ai, etc.)
+  - Note: Command-line `--mode` always takes precedence
+- `AI_TOOLS`: Force AI-optimized mode when set
+- `NO_COLOR`: Disable colored output when set to "1"
+- `NO_EMOJI`: Disable emoji output when set to "1"
+- `RUST_LOG`: Control logging verbosity (debug, info, warn, error)
 
 ## Important Notes
 
@@ -427,12 +478,13 @@ subdirs:
 - Performance is critical - this tool is 10-24x faster than traditional tree
 - Memory efficiency matters - streaming mode keeps memory constant even for millions of files
 - Test with large directories (>100k files) to ensure performance
+- File type detection uses centralized `emoji_mapper` module with 40+ categories
 
 ## Release Process
 
 ```bash
 # Create a new release
-./scripts/manage.sh release v3.1.2 "Amazing new features!"
+./scripts/manage.sh release v3.3.6 "Amazing new features!"
 
 # This will:
 # 1. Build release artifacts for multiple platforms
@@ -456,52 +508,6 @@ When adding a new formatter:
 8. Add example output to docs/
 9. Consider token efficiency for AI modes
 10. Benchmark against existing formatters
-
-## .mem8 Binary Format Implementation
-
-### Quick Implementation Guide
-```rust
-fn dump_to_yaml(binary_path: &str) -> Result<(), Box<dyn Error>> {
-    let binary_data = std::fs::read(binary_path)?;
-    let parsed_mem8 = Mem8Reader::parse(&binary_data)?;
-    
-    let yaml_output = serde_yaml::to_string(&parsed_mem8)?;
-    println!("{}", yaml_output);
-    
-    Ok(())
-}
-```
-
-### Binary Structure Overview
-```
-Header (16 bytes):
-- Magic: 0x4D454D38 ("MEM8")
-- Version: u16
-- Flags: u16 (compressed, encrypted, has_parent, etc.)
-- CRC32: u32
-- Index offset: u32
-
-Sections:
-- 0x01: Identity (path, type, purpose, version)
-- 0x02: Context (concepts with importance)
-- 0x03: Structure (subdirectories and files)
-- 0x04: Compilation (status, errors, warnings)
-- 0x05: Cache (CRC, SHA256, expiry)
-- 0x06: AI Context (understanding level, hints)
-- 0x07: Relationships (upstream/downstream deps)
-- 0x08: Sensor Arbitration (MEM8-specific)
-```
-
-### Size Efficiency
-- YAML: ~4KB typical
-- Binary: ~400 bytes (90% reduction)
-- Compressed: ~200 bytes (95% reduction)
-
-### Performance Benefits
-- Instant CRC validation
-- O(1) section access via index
-- Memory-mapped file support
-- Streaming parse capability
 
 ## Project Culture & Team
 
@@ -527,6 +533,7 @@ Based on CLAUDE-WISHLIST.md and recent commits:
 3. **Symbol search** capabilities for code navigation
 4. **Performance optimizations** for even larger codebases
 5. **Cross-platform improvements** especially for Windows
+6. **SSE enhancements** for better real-time monitoring
 
 ## Integration Tests
 
@@ -542,16 +549,16 @@ Always run integration tests after major changes:
 ./tests/test_mcp_integration.sh
 ```
 
-## Markqant (.mq) Format
+## Marqant (.mq) Format
 
-Smart Tree includes markqant - a quantum-compressed markdown format designed for AI consumption:
+Smart Tree includes marqant - a quantum-compressed markdown format designed for AI consumption:
 
 ### Usage
 ```bash
-# Use markqant formatter for directory output
-st --mode markqant /path/to/dir > structure.mq
+# Use marqant formatter for directory output
+st --mode marqant /path/to/dir > structure.mq
 
-# Compress/decompress markdown files
+# Compress/decompress markdown files (using mq binary)
 mq compress README.md -o README.mq
 mq decompress README.mq -o README.md
 mq stats README.md              # Show compression statistics
@@ -566,9 +573,50 @@ mq inspect README.mq             # Visual diagnostics
 - **Visual diagnostics**: Inspect command shows compression metrics
 
 ### Binary Format
-- Header: `MARKQANT_V1 timestamp original_size compressed_size [flags]`
+- Header: `MARQANT_V1 timestamp original_size compressed_size [flags]`
 - Token dictionary with escaped patterns
 - Compressed content using token substitution
 - Optional flags: `-zlib`, `-streamed`, `-delta`, `-semantic`
 
-See `docs/MARKQANT_SPECIFICATION.md` for full specification.
+See `docs/MARQANT_SPECIFICATION.md` for full specification.
+
+## manage.sh Script Commands
+
+The `scripts/manage.sh` script provides a comprehensive set of commands:
+
+### Core Operations
+- `build [debug|release]` - Build the project
+- `test` - Run tests, clippy, and format check
+- `run [args]` - Run the binary with arguments
+- `clean` - Clean build artifacts
+- `format` - Format code with rustfmt
+- `lint` - Run clippy linter
+- `bench` - Run benchmarks
+
+### MCP Operations
+- `mcp-run` - Run as MCP server
+- `mcp-config` - Show Claude Desktop config
+- `mcp-tools` - List available MCP tools
+- `mcp-test` - Test MCP functionality
+
+### Installation & Release
+- `install` - Install locally
+- `uninstall` - Remove local installation
+- `release <version> <message>` - Create a new release
+- `update-version <version>` - Update version in files
+- `package-dxt` - Create Claude Desktop package
+
+### Development Tools
+- `dev` - Run in development mode with watching
+- `coverage` - Generate test coverage report
+- `deps` - Show dependency tree
+- `audit` - Check for security vulnerabilities
+- `doc` - Generate and open documentation
+- `size` - Show binary size breakdown
+
+### Utility Commands
+- `completions <shell>` - Generate shell completions
+- `status` - Show project status
+- `help` - Show help message
+
+Use `-n` or `--non-interactive` flag for automation.

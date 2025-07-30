@@ -1,10 +1,12 @@
-# Markqant Aggregate (.mq) Specification
+# Marqant Aggregate (.mq) Specification
 
 > "Why read 20 files when one quantum singularity contains them all?" 🌌
 
+> OBSOLETE
+
 ## Overview
 
-Markqant Aggregate creates a single `.mq` file containing all markdown documentation from a project, with:
+Marqant Aggregate creates a single `.mq` file containing all markdown documentation from a project, with:
 - File references preserved
 - Cross-file deduplication
 - 90%+ compression ratio
@@ -13,7 +15,7 @@ Markqant Aggregate creates a single `.mq` file containing all markdown documenta
 ## File Format
 
 ```
-MARKQANT_V2 2025-07-16T10:30:00Z 150000 8000 -aggregate -zlib
+MARQANT_V2 2025-07-16T10:30:00Z 150000 8000 -aggregate -zlib
 ::manifest::
 README.md:0:1234
 docs/INSTALL.md:1234:2500
@@ -103,13 +105,13 @@ Output:
 
 ### Aggregator Algorithm
 ```rust
-pub struct MarkqantAggregator {
+pub struct MarqantAggregator {
     files: Vec<MarkdownFile>,
     global_tokens: HashMap<String, String>,
     file_offsets: HashMap<String, FileOffset>,
 }
 
-impl MarkqantAggregator {
+impl MarqantAggregator {
     pub fn aggregate(root: &Path) -> Result<String> {
         // 1. Discover all markdown files
         let files = find_markdown_files(root)?;

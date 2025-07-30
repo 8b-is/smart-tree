@@ -32,7 +32,7 @@ use st::{
         json::JsonFormatter,
         ls::LsFormatter,
         markdown::MarkdownFormatter,
-        markqant::MarkqantFormatter,
+        marqant::MarqantFormatter,
         mermaid::{MermaidFormatter, MermaidStyle},
         quantum::QuantumFormatter,
         semantic::SemanticFormatter,
@@ -396,8 +396,8 @@ enum OutputMode {
     QuantumSemantic,
     /// Waste detection and optimization analysis (Marie Kondo mode!)
     Waste,
-    /// Markqant - Quantum-compressed markdown format (.mq)
-    Markqant,
+    /// Marqant - Quantum-compressed markdown format (.mq)
+    Marqant,
     /// SSE - Server-Sent Events streaming format for real-time monitoring
     Sse,
 }
@@ -520,7 +520,7 @@ async fn main() -> Result<()> {
             "summary-ai" => Some(OutputMode::SummaryAi),
             "quantum-semantic" => Some(OutputMode::QuantumSemantic),
             "waste" => Some(OutputMode::Waste),
-            "markqant" => Some(OutputMode::Markqant),
+            "marqant" => Some(OutputMode::Marqant),
             "sse" => Some(OutputMode::Sse),
             _ => None, // Unknown mode string, ignore.
         });
@@ -887,8 +887,8 @@ async fn main() -> Result<()> {
                     !args.no_markdown_pie_charts, // Include pie charts unless disabled
                 ))
             }
-            OutputMode::Markqant => {
-                Box::new(MarkqantFormatter::new(path_display_mode, no_emoji))
+            OutputMode::Marqant => {
+                Box::new(MarqantFormatter::new(path_display_mode, no_emoji))
             }
             OutputMode::Sse => {
                 // SSE streaming format for real-time monitoring

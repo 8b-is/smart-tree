@@ -23,7 +23,6 @@ The **GiT Relay** is a breakthrough tool that provides intelligent, compressed G
 - **Selective Output**: Only shows relevant information
 - **Batch Operations**: Multiple commands in single calls
 - **Caching**: Smart caching of frequently accessed data
-
 ## 🛠️ **Core Operations**
 
 ### 📊 **Smart Status**

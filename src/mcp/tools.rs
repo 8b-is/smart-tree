@@ -696,6 +696,70 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 "required": ["path"]
             }),
         },
+        ToolDefinition {
+            name: "track_file_operation".to_string(),
+            description: "🔐 Track file operations with hash-based change detection. Part of the ultimate context-driven system that logs all AI file manipulations to ~/.mem8/.filehistory/. Favors append operations as the least intrusive method. Perfect for maintaining a complete history of AI-assisted code changes!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file being operated on"
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["read", "write", "append", "prepend", "insert", "delete", "replace", "create", "remove", "relocate", "rename"],
+                        "description": "Type of operation performed"
+                    },
+                    "old_content": {
+                        "type": "string",
+                        "description": "Previous content of the file (optional for new files)"
+                    },
+                    "new_content": {
+                        "type": "string",
+                        "description": "New content of the file"
+                    },
+                    "agent": {
+                        "type": "string",
+                        "description": "AI agent identifier",
+                        "default": "claude"
+                    },
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID for grouping related operations"
+                    }
+                },
+                "required": ["file_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "get_file_history".to_string(),
+            description: "📜 Retrieve complete operation history for a file from the ~/.mem8/.filehistory/ tracking system. Shows all AI manipulations with timestamps, operations, hashes, and agents. Essential for understanding how a file evolved through AI assistance!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to get history for"
+                    }
+                },
+                "required": ["file_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "get_project_history_summary".to_string(),
+            description: "📊 Get a summary of all AI operations performed in a project directory. Shows statistics like total operations, files modified, operation type breakdown, and activity timeline. Perfect for project audits and understanding AI collaboration patterns!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project directory"
+                    }
+                },
+                "required": ["project_path"]
+            }),
+        },
     ];
 
     Ok(json!({
@@ -737,6 +801,9 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "request_tool" => request_tool(args, ctx).await,
         "check_for_updates" => check_for_updates(args, ctx).await,
         "watch_directory_sse" => watch_directory_sse(args, ctx).await,
+        "track_file_operation" => track_file_operation(args, ctx).await,
+        "get_file_history" => get_file_history(args, ctx).await,
+        "get_project_history_summary" => get_project_history_summary(args, ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }
@@ -2387,5 +2454,212 @@ async fn watch_directory_sse(args: Value, ctx: Arc<McpContext>) -> Result<Value>
             "sse_config_id": cache_key,
             "config": sse_config
         }
+    }))
+}
+
+// File History Tracking Tools
+
+#[derive(Debug, Deserialize)]
+struct TrackFileOperationArgs {
+    file_path: String,
+    #[serde(default)]
+    operation: Option<String>,
+    old_content: Option<String>,
+    new_content: Option<String>,
+    #[serde(default = "default_agent")]
+    agent: String,
+    session_id: Option<String>,
+}
+
+fn default_agent() -> String {
+    "claude".to_string()
+}
+
+async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let args: TrackFileOperationArgs = serde_json::from_value(args)?;
+    let path = PathBuf::from(&args.file_path);
+    
+    // Check if path is allowed
+    if !is_path_allowed(&path, &ctx.config) {
+        return Err(anyhow::anyhow!("Path not allowed: {}", path.display()));
+    }
+    
+    // Import file history types
+    use crate::file_history::FileHistoryTracker;
+    
+    // Create tracker
+    let tracker = FileHistoryTracker::new()?;
+    
+    // Generate session ID if not provided
+    let session_id = args.session_id.unwrap_or_else(|| {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        format!("mcp_{}", now)
+    });
+    
+    // Determine operation
+    if let Some(op_str) = args.operation {
+        match op_str.as_str() {
+            "read" => {
+                let hash = tracker.track_read(&path, &args.agent, &session_id)?;
+                return Ok(json!({
+                    "content": [{
+                        "type": "text",
+                        "text": format!("✓ Tracked read operation for {}\nFile hash: {}", path.display(), hash)
+                    }]
+                }));
+            },
+            "write" | "append" | "prepend" | "insert" | "delete" | "replace" | "create" | "remove" => {
+                // These require content
+                if args.new_content.is_none() && op_str != "remove" {
+                    return Err(anyhow::anyhow!("new_content required for {} operation", op_str));
+                }
+                
+                let op = tracker.track_write(
+                    &path,
+                    args.old_content.as_deref(),
+                    args.new_content.as_deref().unwrap_or(""),
+                    &args.agent,
+                    &session_id
+                )?;
+                
+                Ok(json!({
+                    "content": [{
+                        "type": "text",
+                        "text": format!("✓ Tracked {} operation for {}\nOperation: {}", op_str, path.display(), op)
+                    }]
+                }))
+            },
+            _ => Err(anyhow::anyhow!("Unknown operation: {}", op_str)),
+        }
+    } else {
+        // Auto-detect operation from content
+        if args.new_content.is_none() {
+            return Err(anyhow::anyhow!("Either operation or new_content must be provided"));
+        }
+        
+        let op = tracker.track_write(
+            &path,
+            args.old_content.as_deref(),
+            args.new_content.as_deref().unwrap(),
+            &args.agent,
+            &session_id
+        )?;
+        
+        Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": format!("✓ Auto-tracked operation for {}\nDetected operation: {}\nAgent: {}\nSession: {}", 
+                    path.display(), op, args.agent, session_id)
+            }]
+        }))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct GetFileHistoryArgs {
+    file_path: String,
+}
+
+async fn get_file_history(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let args: GetFileHistoryArgs = serde_json::from_value(args)?;
+    let path = PathBuf::from(&args.file_path);
+    
+    // Check if path is allowed
+    if !is_path_allowed(&path, &ctx.config) {
+        return Err(anyhow::anyhow!("Path not allowed: {}", path.display()));
+    }
+    
+    use crate::file_history::FileHistoryTracker;
+    
+    let tracker = FileHistoryTracker::new()?;
+    let history = tracker.get_file_history(&path)?;
+    
+    let mut output = format!("📜 File History for {}\n\n", path.display());
+    
+    if history.is_empty() {
+        output.push_str("No history found for this file.");
+    } else {
+        output.push_str(&format!("Found {} operations:\n\n", history.len()));
+        
+        for (i, entry) in history.iter().enumerate() {
+            let datetime = chrono::DateTime::<chrono::Utc>::from(
+                SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(entry.timestamp)
+            );
+            
+            output.push_str(&format!(
+                "{}. [{}] {} - {}\n   Agent: {}, Session: {}\n   Bytes affected: {}\n",
+                i + 1,
+                datetime.format("%Y-%m-%d %H:%M:%S"),
+                entry.operation.code(),
+                entry.operation.description(),
+                entry.agent,
+                entry.session_id,
+                entry.context.bytes_affected
+            ));
+            
+            if let Some(old_hash) = &entry.context.old_hash {
+                output.push_str(&format!("   Old hash: {}\n", &old_hash[..8]));
+            }
+            if let Some(new_hash) = &entry.context.new_hash {
+                output.push_str(&format!("   New hash: {}\n", &new_hash[..8]));
+            }
+            output.push_str("\n");
+        }
+    }
+    
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": output
+        }],
+        "metadata": {
+            "operation_count": history.len(),
+            "file_path": path.to_string_lossy()
+        }
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct GetProjectHistorySummaryArgs {
+    project_path: String,
+}
+
+async fn get_project_history_summary(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let args: GetProjectHistorySummaryArgs = serde_json::from_value(args)?;
+    let path = PathBuf::from(&args.project_path);
+    
+    // Check if path is allowed
+    if !is_path_allowed(&path, &ctx.config) {
+        return Err(anyhow::anyhow!("Path not allowed: {}", path.display()));
+    }
+    
+    use crate::file_history::FileHistoryTracker;
+    
+    let tracker = FileHistoryTracker::new()?;
+    let summary = tracker.get_project_summary(&path)?;
+    
+    let mut output = format!("📊 Project History Summary for {}\n\n", path.display());
+    output.push_str(&format!("Total operations: {}\n", summary.total_operations));
+    output.push_str(&format!("Files modified: {}\n\n", summary.files_modified));
+    
+    if !summary.operation_counts.is_empty() {
+        output.push_str("Operations breakdown:\n");
+        let mut ops: Vec<_> = summary.operation_counts.iter().collect();
+        ops.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
+        
+        for (op, count) in ops {
+            output.push_str(&format!("  {} ({}): {} times\n", op, op.code(), count));
+        }
+    }
+    
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": output
+        }],
+        "metadata": summary
     }))
 }

@@ -1,17 +1,17 @@
-# MEM8 + Markqant Integration Specification
+# MEM8 + Marqant Integration Specification
 
 > "When quantum compression meets binary efficiency - project summaries at the speed of thought!" 🚀
 
 ## Overview
 
-Integrating markqant (.mq) with MEM8 binary format creates ultra-efficient project summaries stored as `[project].m8` files. This combines:
-- Markqant's 70-90% markdown compression
+Integrating marqant (.mq) with MEM8 binary format creates ultra-efficient project summaries stored as `[project].m8` files. This combines:
+- Marqant's 70-90% markdown compression
 - MEM8's 90-95% binary size reduction
 - Total compression: ~99% vs original markdown!
 
 ## Extended MEM8 Format
 
-### New Section Type: Markqant Summary (Type 0x09)
+### New Section Type: Marqant Summary (Type 0x09)
 
 ```
 [0]     Section type: 0x09
@@ -19,16 +19,16 @@ Integrating markqant (.mq) with MEM8 binary format creates ultra-efficient proje
 [3-4]   Original markdown size: u16
 [5-6]   Compressed size: u16
 [7-8]   Token count: u16
-[9]     Markqant version: u8
+[9]     Marqant version: u8
 [10]    Flags: u8
   Bit 0: Has sections
   Bit 1: Has semantic tags
   Bit 2: Zlib compressed
   Bit 3: Delta encoded
-[11-N]  Markqant binary data
+[11-N]  Marqant binary data
 ```
 
-### Markqant Binary Encoding
+### Marqant Binary Encoding
 
 Instead of text-based .mq format, use binary tokens:
 
@@ -52,17 +52,17 @@ pub fn write_project_summary(project_path: &Path) -> Result<()> {
     // 1. Generate markdown summary
     let summary = generate_project_summary(project_path)?;
     
-    // 2. Compress with markqant
-    let mq_compressed = MarkqantFormatter::compress_markdown(&summary)?;
+    // 2. Compress with marqant
+    let mq_compressed = MarqantFormatter::compress_markdown(&summary)?;
     
-    // 3. Convert to binary markqant
-    let binary_mq = markqant_to_binary(&mq_compressed)?;
+    // 3. Convert to binary marqant
+    let binary_mq = marqant_to_binary(&mq_compressed)?;
     
-    // 4. Create MEM8 with markqant section
+    // 4. Create MEM8 with marqant section
     let mut mem8 = Mem8Builder::new()
         .identity(project_path, ProjectType::RustLibrary)
         .purpose("Smart Tree - AI-friendly directory visualization")
-        .markqant_summary(binary_mq)
+        .marqant_summary(binary_mq)
         .build()?;
     
     // 5. Write as [project].m8
@@ -74,11 +74,11 @@ pub fn write_project_summary(project_path: &Path) -> Result<()> {
 }
 ```
 
-### Binary Markqant Structure
+### Binary Marqant Structure
 
 ```rust
 #[repr(C, packed)]
-struct BinaryMarkqant {
+struct BinaryMarqant {
     version: u8,              // 0x01
     flags: u8,                // Compression flags
     token_count: u16,         // Number of tokens
@@ -109,7 +109,7 @@ st --mode m8-summary /project/path
 # Creates: /project/path/smart-tree.m8
 # Contains:
 # - Project identity & purpose
-# - Markqant-compressed README
+# - Marqant-compressed README
 # - Directory structure summary
 # - Key concepts & relationships
 ```
@@ -121,7 +121,7 @@ st --mode m8-summary /project/path
 st --read-m8 smart-tree.m8
 
 # Extract just the summary
-mem8 extract smart-tree.m8 --section markqant | mq decompress -
+mem8 extract smart-tree.m8 --section marqant | mq decompress -
 
 # AI-friendly format
 st --read-m8 smart-tree.m8 --format ai
@@ -171,10 +171,10 @@ A typical 50KB project documentation becomes:
 
 ```
 Original markdown: 50,000 bytes
-↓ Markqant compression (80% reduction)
-Markqant text: 10,000 bytes  
+↓ Marqant compression (80% reduction)
+Marqant text: 10,000 bytes  
 ↓ Binary encoding (50% reduction)
-Binary markqant: 5,000 bytes
+Binary marqant: 5,000 bytes
 ↓ MEM8 structure (80% reduction)
 Final .m8: 1,000 bytes (98% total compression!)
 ```

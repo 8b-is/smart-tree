@@ -47,3 +47,6 @@ pub use context::detect_project_context;
 
 // Re-export integration helpers for convenient usage
 pub use integration::{ProjectAnalysis, ProjectAnalyzer, analyze_project, quick_project_overview};
+
+// File history tracking - The ultimate context-driven system!
+pub mod file_history;
