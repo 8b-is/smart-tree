@@ -47,7 +47,7 @@ impl MemoryWave {
     }
 
     /// Calculate temporal decay
-    fn calculate_decay(&self) -> f32 {
+    pub fn calculate_decay(&self) -> f32 {
         match self.decay_tau {
             Some(tau) => {
                 let elapsed = self.created_at.elapsed().as_secs_f32();
@@ -58,7 +58,7 @@ impl MemoryWave {
     }
 
     /// Calculate emotional modulation based on valence and arousal
-    fn calculate_emotional_modulation(&self) -> f32 {
+    pub fn calculate_emotional_modulation(&self) -> f32 {
         const ALPHA: f32 = 0.3; // Valence influence
         const BETA: f32 = 0.5;  // Arousal influence
         

@@ -50,3 +50,6 @@ pub use integration::{ProjectAnalysis, ProjectAnalyzer, analyze_project, quick_p
 
 // File history tracking - The ultimate context-driven system!
 pub mod file_history;
+
+// MEM8 - Wave-based cognitive architecture for consciousness simulation
+pub mod mem8;

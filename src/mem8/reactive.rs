@@ -1,7 +1,7 @@
 //! Reactive memory layers for MEM8 - hierarchical processing from reflexes to consciousness
 //! Implements 4 layers: 0-10ms hardware reflexes to >200ms conscious deliberation
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use crate::mem8::wave::{MemoryWave, WaveGrid};
 
@@ -69,7 +69,7 @@ pub struct ReactiveResponse {
 /// Hierarchical reactive memory system
 pub struct ReactiveMemory {
     /// Wave grid for memory storage
-    wave_grid: Arc<WaveGrid>,
+    wave_grid: Arc<RwLock<WaveGrid>>,
     /// Registered patterns for each layer
     patterns: Vec<Vec<ReactivePattern>>,
     /// Start time for latency tracking
@@ -78,7 +78,7 @@ pub struct ReactiveMemory {
 
 impl ReactiveMemory {
     /// Create a new reactive memory system
-    pub fn new(wave_grid: Arc<WaveGrid>) -> Self {
+    pub fn new(wave_grid: Arc<RwLock<WaveGrid>>) -> Self {
         Self {
             wave_grid,
             patterns: vec![Vec::new(); 4], // 4 layers
