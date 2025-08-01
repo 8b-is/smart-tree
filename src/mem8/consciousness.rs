@@ -204,7 +204,7 @@ impl SensorArbitrator {
     }
 
     /// Calculate weighted sensor output
-    pub fn arbitrate(&self, sensor_id: &str, human_value: f32, ai_value: f32) -> f32 {
+    pub fn arbitrate(&self, _sensor_id: &str, human_value: f32, ai_value: f32) -> f32 {
         self.human_weight * human_value + self.ai_weight * ai_value
     }
 
@@ -416,7 +416,7 @@ impl ForgettingProcessor {
     }
 
     /// Process memory for context-aware forgetting
-    pub fn process(&self, memory: &mut MemoryWave, context: &str) -> ForgetCurve {
+    pub fn process(&self, _memory: &mut MemoryWave, context: &str) -> ForgetCurve {
         match context {
             "transient_detail" => ForgetCurve::Flash(Duration::from_millis(500)),
             "resolved_threat" => ForgetCurve::Fade(Duration::from_secs(5)),

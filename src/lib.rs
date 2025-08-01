@@ -53,3 +53,6 @@ pub mod file_history;
 
 // MEM8 - Wave-based cognitive architecture for consciousness simulation
 pub mod mem8;
+
+// Tree Agent - Living forest orchestrator for AI-human development
+pub mod tree_agent;

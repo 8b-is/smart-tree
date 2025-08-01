@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.7.25)  29 JUL 2025 21:31
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.7.25)  30 JUL 2025 23:43
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -578,16 +578,121 @@ LaTeX Font Info:    Font shape `OMS/pcr/m/n' in size <10> not available
 LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 50.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/ts1ptm.fd
 File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
-) [1
+)
+
+LaTeX Warning: Citation `tulving1985memory' on page 1 undefined on input line 57.
+
+
+LaTeX Warning: Citation `baddeley2012working' on page 1 undefined on input line 57.
+
+
+LaTeX Warning: Citation `anderson2004integrated' on page 1 undefined on input line 57.
+
+
+LaTeX Warning: Citation `laird2012soar' on page 1 undefined on input line 57.
+
+[1
 
 {/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}]
+
+LaTeX Warning: Citation `buzsaki2006rhythms' on page 2 undefined on input line 59.
+
+
+LaTeX Warning: Citation `fries2015rhythms' on page 2 undefined on input line 59.
+
+
+LaTeX Warning: Citation `jensen2007cross' on page 2 undefined on input line 59.
+
+/home/hue/source/i1/smart-tree/docs/MEM8/MEM8.tex:61: Missing $ inserted.
+<inserted text> 
+                $
+l.61 This paper presents MEM\hbar
+                                 , a novel cognitive architecture based on w...
+I've inserted a begin-math/end-math symbol since I think
+you left one out. Proceed, with fingers crossed.
+
+
+LaTeX Warning: Command \texttimes invalid in math mode on input line 61.
+
+
+LaTeX Warning: Command \texttimes invalid in math mode on input line 61.
+
+
+LaTeX Warning: Command \textrightarrow invalid in math mode on input line 61.
+
 Package textcomp Info: Symbol \textrightarrow not provided by
 (textcomp)             font family ptm in TS1 encoding.
 (textcomp)             Default family used instead on input line 61.
+
+LaTeX Warning: Command \textrightarrow invalid in math mode on input line 61.
+
+
+LaTeX Warning: Command \textrightarrow invalid in math mode on input line 61.
+
+Missing character: There is no � in font cmr10!
+/home/hue/source/i1/smart-tree/docs/MEM8/MEM8.tex:61: Missing $ inserted.
+<inserted text> 
+                $
+l.61 ...tional vector databases (300ms → 308$\mu
+                                                  $s) and 292× faster retri...
+I've inserted a begin-math/end-math symbol since I think
+you left one out. Proceed, with fingers crossed.
+
 Package textcomp Info: Symbol \textrightarrow not provided by
 (textcomp)             font family ptm in TS1 encoding.
 (textcomp)             Default family used instead on input line 61.
- [2{/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-ts1.enc}] [3] [4] [5] [6] [7] [8] [9] [10]
+
+Overfull \hbox (1120.01721pt too wide) in paragraph at lines 61--62
+[]\OT1/ptm/m/n/10.95 This pa-per presents MEM$\U/msb/m/n/10.95 ~\OML/cmm/m/it/10.95 ; anovelcognitivearchitecturebasedonwaveinterferencepatternsthatachievesunprecedentedperformanceinmemoryoperationswhileenablingsophisticatedconsciousnesssimulationcapabilities:Thesystemdemonstratesmemoryinsertionspeedsupto\OT1/cmr/m/n/10.95 973\OML/cmm/m/it/10.95 fasterthantraditionalvectordatabases\OT1/cmr/m/n/10.95 (300\OML/cmm/m/it/10.95 ms\OT1/cmr/m/n/10.95 ^^Y308$$\OML/cmm/m/it/10.95 ^^V$\OT1/ptm/m/n/10.95 s)
+ []
+
+
+LaTeX Warning: Citation `anderson2004integrated' on page 2 undefined on input line 73.
+
+
+LaTeX Warning: Citation `laird2012soar' on page 2 undefined on input line 75.
+
+
+LaTeX Warning: Citation `baars1988cognitive' on page 2 undefined on input line 77.
+
+
+LaTeX Warning: Citation `franklin2007lida' on page 2 undefined on input line 77.
+
+[2{/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-ts1.enc}]
+
+LaTeX Warning: Citation `hopfield1982neural' on page 3 undefined on input line 83.
+
+
+LaTeX Warning: Citation `kanerva1988sparse' on page 3 undefined on input line 83.
+
+
+LaTeX Warning: Citation `hochreiter1997long' on page 3 undefined on input line 83.
+
+
+LaTeX Warning: Citation `vaswani2017attention' on page 3 undefined on input line 83.
+
+
+LaTeX Warning: Citation `voelker2019legendre' on page 3 undefined on input line 85.
+
+
+LaTeX Warning: Citation `tononi2016integrated' on page 3 undefined on input line 89.
+
+
+LaTeX Warning: Citation `penrose1994shadows' on page 3 undefined on input line 91.
+
+
+LaTeX Warning: Citation `tegmark2000importance' on page 3 undefined on input line 91.
+
+
+LaTeX Warning: Citation `buzsaki2006rhythms' on page 3 undefined on input line 93.
+
+
+LaTeX Warning: Citation `fries2015rhythms' on page 3 undefined on input line 93.
+
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+[3] [4] [5] [6] [7] [8] [9] [10]
 Overfull \hbox (10.24312pt too wide) in paragraph at lines 470--471
 \OT1/ptm/m/n/10.95 To avoid AI sys-tems be-com-ing trapped in repet-i-tive thought pat-terns|a form of ar-ti-fi-cial obsessive-compulsive
  []
@@ -609,6 +714,9 @@ Package textcomp Info: Symbol \textrightarrow not provided by
 Package textcomp Info: Symbol \textrightarrow not provided by
 (textcomp)             font family pcr in TS1 encoding.
 (textcomp)             Default family used instead on input line 604.
+
+
+LaTeX Warning: Reference `tab:performance' on page 14 undefined on input line 631.
 
 
 LaTeX Warning: `h' float specifier changed to `ht'.
@@ -714,6 +822,13 @@ LaTeX Warning: `h' float specifier changed to `ht'.
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
+
+
+LaTeX Warning: There were undefined references.
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
  ) 
 Here is how much of TeX's memory you used:
  27553 strings out of 474222
@@ -724,7 +839,7 @@ Here is how much of TeX's memory you used:
  1141 hyphenation exceptions out of 8191
  84i,19n,87p,1425b,2209s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texmf/fonts/type1/public/cm-super/sfrm1095.pfb></usr/share/texmf/fonts/type1/public/cm-super/sftt0900.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on MEM8.pdf (24 pages, 289781 bytes).
+Output written on MEM8.pdf (24 pages, 291908 bytes).
 PDF statistics:
  192 PDF objects out of 1000 (max. 8388607)
  122 compressed objects within 2 object streams

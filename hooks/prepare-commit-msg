@@ -1,0 +1,33 @@
+#!/bin/bash
+# MEM8 Wave-aware git hook
+# Adds wave metadata to commit messages
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+SHA1=$3
+
+# Only add wave data for non-merge commits
+if [ -z "$COMMIT_SOURCE" ]; then
+    # Try to detect current agent from branch name
+    BRANCH=$(git branch --show-current)
+    AGENT=$(echo $BRANCH | cut -d'-' -f1)
+    
+    # Get current timestamp
+    TIMESTAMP=$(date +%s)
+    
+    # Calculate pseudo-wave frequency based on time of day
+    HOUR=$(date +%H)
+    FREQUENCY=$((400 + HOUR * 20))
+    
+    # Detect mood from recent commits
+    RECENT_FIXES=$(git log --oneline -10 | grep -ci "fix\|bug" || echo 0)
+    VALENCE=$(echo "scale=2; 0.5 - $RECENT_FIXES * 0.1" | bc)
+    
+    # Add wave metadata to commit message
+    echo "" >> $COMMIT_MSG_FILE
+    echo "# Wave Metadata" >> $COMMIT_MSG_FILE
+    echo "# Agent: $AGENT" >> $COMMIT_MSG_FILE
+    echo "# Frequency: ${FREQUENCY}Hz" >> $COMMIT_MSG_FILE
+    echo "# Valence: $VALENCE" >> $COMMIT_MSG_FILE
+    echo "# Timestamp: $TIMESTAMP" >> $COMMIT_MSG_FILE
+fi

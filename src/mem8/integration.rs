@@ -69,7 +69,7 @@ impl SmartTreeMem8 {
     }
 
     /// Simple hash function for path distribution
-    fn simple_hash(&self, s: &str) -> u64 {
+    pub fn simple_hash(&self, s: &str) -> u64 {
         let mut hash = 5381u64;
         for byte in s.bytes() {
             hash = ((hash << 5).wrapping_add(hash)).wrapping_add(byte as u64);
@@ -261,6 +261,23 @@ impl SmartTreeMem8 {
         m8_writer.finish()?;
         
         Ok(())
+    }
+
+    /// Get count of active memories
+    pub fn active_memory_count(&self) -> usize {
+        self.wave_grid.read().unwrap().active_memory_count()
+    }
+    
+    /// Store wave at specific coordinates (public helper method)
+    pub fn store_wave_at_coordinates(&mut self, x: u8, y: u8, z: u16, wave: MemoryWave) -> Result<()> {
+        self.wave_grid.write().unwrap().store(x, y, z, wave);
+        Ok(())
+    }
+    
+    /// Helper to convert string to coordinates
+    pub fn string_to_coordinates(&self, s: &str) -> (u8, u8) {
+        let hash = self.simple_hash(s);
+        ((hash & 0xFF) as u8, ((hash >> 8) & 0xFF) as u8)
     }
 }
 

@@ -194,10 +194,10 @@ impl MarkqantEncoder {
         
         // Assign tokens to top patterns
         for (pattern, _) in scored_patterns.iter().take(128) {
-            if self.next_token < 256 {
+            if self.next_token < 255 {
                 self.tokens.insert(pattern.clone(), self.next_token);
                 self.patterns.insert(self.next_token, pattern.clone());
-                self.next_token += 1;
+                self.next_token = self.next_token.saturating_add(1);
             }
         }
     }

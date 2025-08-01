@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1753839113.16216 "/home/hue/source/i1/smart-tree/docs/MEM8/MEM8.tex" "MEM8.pdf" "MEM8" 1753839113.72911 0
+["pdflatex"] 1753933434.94773 "/home/hue/source/i1/smart-tree/docs/MEM8/MEM8.tex" "MEM8.pdf" "MEM8" 1753933435.52753 2
   "/etc/texmf/web2c/texmf.cnf" 1753418419.32118 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/hue/source/i1/smart-tree/docs/MEM8/MEM8.tex" 1753839101.23342 59470 b070df72056bdf0d60bd483ec5c58fee ""
+  "/home/hue/source/i1/smart-tree/docs/MEM8/MEM8.tex" 1753933434.72188 59485 fbf3149ca152c555b96962c0bacfd022 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/courier/pcrr7t.tfm" 1136768653 960 379cc0019370a9e0208a0a3f949f847a ""
@@ -243,8 +243,8 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1753418444.76659 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1753418466 8213004 7f4bdbe93a74c2cc4bbe3ed76bbb4e85 ""
-  "MEM8.aux" 1753839113.68362 8175 e4a15fac87ea723935ed2446715167c9 "pdflatex"
-  "MEM8.tex" 1753839101.23342 59470 b070df72056bdf0d60bd483ec5c58fee ""
+  "MEM8.aux" 1753933435.48089 8175 ffb62655a0ce55733df10287781e2b4a "pdflatex"
+  "MEM8.tex" 1753933434.72188 59485 fbf3149ca152c555b96962c0bacfd022 ""
   (generated)
   "MEM8.aux"
   "MEM8.log"

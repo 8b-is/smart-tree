@@ -7,6 +7,8 @@ pub mod reactive;
 pub mod consciousness;
 pub mod format;
 pub mod integration;
+pub mod git_temporal;
+pub mod developer_personas;
 
 // Re-export original memindex types with namespace
 pub mod index {
@@ -19,3 +21,5 @@ pub use reactive::{ReactiveLayer, ReactiveMemory, ReactiveResponse, SensorInput}
 pub use consciousness::{ConsciousnessEngine, ConsciousnessState, SensorArbitrator};
 pub use format::{M8Writer, CompressedWave, MarkqantEncoder};
 pub use integration::{SmartTreeMem8, DirectoryMetadata, DirectoryEvent};
+pub use git_temporal::{GitTemporalAnalyzer, GitCommit, GitFileHistory, create_temporal_grooves};
+pub use developer_personas::{DeveloperPersona, PersonaAnalyzer};

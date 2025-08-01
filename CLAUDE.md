@@ -61,6 +61,10 @@ cargo test formatters::sse::tests
 cargo test test_quantum_compression -- --exact
 cargo test test_classic_formatter -- --nocapture
 
+# Run tests in a specific module with pattern matching
+cargo test scanner::tests::test_specific_function
+cargo test mcp::tools::test_analyze_directory -- --exact
+
 # Using the manage script
 ./scripts/manage.sh test   # Runs tests, clippy, and format check
 ```
@@ -102,6 +106,7 @@ cargo clippy -- -D warnings  # Treat warnings as errors
 The codebase follows a modular structure:
 
 - **main.rs**: CLI entry point using clap 4.5. Handles all command-line options, MCP server mode, and SSE server mode
+- **lib.rs**: Main library entry point, exports public modules and key types
 - **scanner.rs**: Core directory traversal engine using walkdir. Supports filtering, search, and streaming
   - Key structs: `FileNode`, `TreeStats`, `Scanner`, `ScannerConfig`
   - Handles permission errors gracefully, marks inaccessible dirs with `*`
@@ -123,11 +128,11 @@ The codebase follows a modular structure:
   - **sse.rs**: Server-Sent Events formatter for streaming
 - **mcp/** (Model Context Protocol server):
   - **mod.rs**: Main MCP server logic
-  - **tools.rs**: 20+ MCP tools for directory analysis
+  - **tools.rs**: 25+ MCP tools for directory analysis
   - **resources.rs**: MCP resource handling
   - **prompts.rs**: MCP prompt templates  
   - **cache.rs**: Analysis result caching
-  - **sse.rs**: SSE support for real-time monitoring (NEW)
+  - **sse.rs**: SSE support for real-time monitoring
 - **Supporting modules**:
   - **context.rs**: Project type detection (Rust, Python, Node.js, etc.)
   - **tokenizer.rs**, **dynamic_tokenizer.rs**: Smart tokenization for quantum formats
@@ -135,11 +140,29 @@ The codebase follows a modular structure:
   - **content_detector.rs**: File content analysis
   - **semantic.rs**: Semantic analysis engine
   - **relations.rs**: Code relationship extraction
-  - **emoji_mapper.rs**: Centralized emoji mapping for 40+ file types (NEW)
-  - **smart/**: Advanced features (git_relay, nlp, search, context)
-  - **mem8/** (planned): .mem8 binary format support
+  - **emoji_mapper.rs**: Centralized emoji mapping for 40+ file types
+  - **smart/**: Advanced features (git_relay, nlp, search, context, unified_search, smart_ls, smart_read)
+  - **mem8/**: MEM|8 wave-based memory architecture
+    - **wave.rs**: Core wave-based memory engine
+    - **reactive.rs**: Reactive memory layer
+    - **consciousness.rs**: Consciousness engine with sensor arbitration
+    - **format.rs**: M8Writer and MarkqantEncoder
+    - **integration.rs**: Smart Tree integration
+    - **git_temporal.rs**: Git temporal analysis
+    - **developer_personas.rs**: Developer persona analysis
+  - **file_history/**: File operation tracking system
+    - **tracker.rs**: Core tracking functionality
+    - **operations.rs**: Operation type definitions
+  - **convergence/**: Directory convergence analysis - finds optimal representation across formats
   - **inputs/**: Alternative input sources (filesystem, QCP, SSE, OpenAPI, MEM8)
+  - **decoders/**: Format conversion utilities
+  - **integration.rs**: High-level project analysis API
+  - **rename_project.rs**: Project identity transition utilities
+  - **feedback_client.rs**: Feedback API integration
+  - **tree_sitter_quantum.rs**: AST-aware quantum compression
+- **Binaries**:
   - **bin/mq.rs**: Marqant compression utility
+  - **bin/tree.rs**: Alternative tree binary
 
 ## Key Implementation Details
 
@@ -294,7 +317,8 @@ cargo test mcp::tools
 cargo run -- --mcp-tools | jq  # Should output valid JSON
 ```
 
-### Available MCP Tools (20+)
+### Available MCP Tools (25+)
+- `server_info`: Get Smart Tree capabilities and performance tips
 - `analyze_directory`: Main workhorse with multiple output formats
 - `quick_tree`: Lightning-fast 3-level overview
 - `project_overview`: Comprehensive project analysis
@@ -308,7 +332,7 @@ cargo run -- --mcp-tools | jq  # Should output valid JSON
 - `find_tests`, `find_build_files`, `find_documentation`: Project structure
 - `get_git_status`: Git-aware analysis
 - `analyze_workspace`: Multi-project workspace analysis
-- `watch_directory_sse`: Real-time directory monitoring (NEW)
+- `watch_directory_sse`: Real-time directory monitoring with SSE
 - `track_file_operation`: Track AI file manipulations with hash-based change detection
 - `get_file_history`: Retrieve complete operation history for any file
 - `get_project_history_summary`: Get summary of all AI operations in a project
@@ -458,6 +482,34 @@ subdirs:
   src/sensor: "Sensor processing"
 ```
 
+## MEM8 Wave-Based Memory Architecture
+
+Smart Tree includes a sophisticated MEM8 wave-based memory system for enhanced semantic understanding:
+
+### Core Components
+- **Wave Engine**: 973x faster than traditional vector stores, using wave interference patterns
+- **Reactive Memory**: Adaptive memory layer that responds to patterns and context
+- **Consciousness Engine**: Sensor arbitration system for multi-modal understanding
+- **Developer Personas**: Analyzes and tracks developer patterns over time
+
+### Integration Features
+```rust
+use st::{ProjectAnalyzer, analyze_project, quick_project_overview};
+
+// High-level project analysis
+let analysis = analyze_project("/path/to/project")?;
+println!("Project type: {:?}", analysis.project_type);
+println!("Key files: {:?}", analysis.key_files);
+
+// Quick overview for AI context
+let overview = quick_project_overview("/path/to/project")?;
+```
+
+### Git Temporal Analysis
+- Track code evolution through "temporal grooves"
+- Understand developer patterns and project history
+- Create wave-based signatures for code changes
+
 ## Environment Variables
 
 - `ST_DEFAULT_MODE`: Set default output mode (classic, hex, ai, etc.)
@@ -589,34 +641,40 @@ The `scripts/manage.sh` script provides a comprehensive set of commands:
 - `test` - Run tests, clippy, and format check
 - `run [args]` - Run the binary with arguments
 - `clean` - Clean build artifacts
-- `format` - Format code with rustfmt
+- `format|fmt` - Format code with rustfmt
 - `lint` - Run clippy linter
-- `bench` - Run benchmarks
+- `bench|benchmark` - Run performance benchmarks
 
 ### MCP Operations
+- `mcp-build` - Build with MCP (just runs regular build)
 - `mcp-run` - Run as MCP server
 - `mcp-config` - Show Claude Desktop config
 - `mcp-tools` - List available MCP tools
-- `mcp-test` - Test MCP functionality
 
 ### Installation & Release
-- `install` - Install locally
-- `uninstall` - Remove local installation
-- `release <version> <message>` - Create a new release
-- `update-version <version>` - Update version in files
-- `package-dxt` - Create Claude Desktop package
+- `install [dir]` - Install binary (default: /usr/local/bin)
+- `uninstall|remove [dir]` - Remove local installation
+- `release <version> [notes]` - Create a GitHub release
+- `completions|complete` - Setup shell completions
+- `man-install` - Generate and install man page
+- `man-uninstall` - Uninstall man page
 
-### Development Tools
-- `dev` - Run in development mode with watching
-- `coverage` - Generate test coverage report
-- `deps` - Show dependency tree
-- `audit` - Check for security vulnerabilities
-- `doc` - Generate and open documentation
-- `size` - Show binary size breakdown
+### Demo Commands
+- `demo-stream` - Demo streaming feature
+- `demo-search` - Demo search feature
+- `demo-relations` - Demo code relations feature
+- `examples|ex` - Show usage examples
 
-### Utility Commands
-- `completions <shell>` - Generate shell completions
-- `status` - Show project status
-- `help` - Show help message
+### Feedback System
+- `feedback-build` - Build feedback system containers
+- `feedback-run` - Run feedback worker locally
+- `feedback-deploy [type]` - Deploy feedback system (local|hetzner|registry)
+- `feedback-test` - Test feedback system
+- `feedback-status` - Check feedback system health
+
+### Other Commands
+- `status|info` - Show project status
+- `rename-project <old> <new>` - Elegant project identity transition
+- `help|h|-h|--help` - Show help message
 
 Use `-n` or `--non-interactive` flag for automation.
