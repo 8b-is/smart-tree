@@ -6,7 +6,6 @@
 use anyhow::{Result, Context};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::path::Path;
 use tree_sitter::{Parser, Node};
 
@@ -273,7 +272,7 @@ impl SmartEditor {
                     structure.imports.push(text);
                 }
             }
-            "function_item" | "method_definition" | "function_definition" => {
+            "function_item" | "method_definition" | "function_definition" | "function_declaration" => {
                 if let Some(func_info) = self.extract_function_info(node, current_class) {
                     if func_info.name == "main" {
                         structure.main_function = Some(func_info.name.clone());
@@ -295,9 +294,21 @@ impl SmartEditor {
             _ => {}
         }
         
+        // Handle class context for methods
+        let class_name = match node.kind() {
+            "class_definition" | "class_declaration" => {
+                // Extract class name for method context
+                self.find_child_by_kind(node, "identifier")
+                    .and_then(|n| self.node_text(&n))
+            }
+            _ => None
+        };
+        
+        let class_context = class_name.as_deref().or(current_class);
+        
         // Recurse through children
         for child in node.children(&mut node.walk()) {
-            self.walk_node(&child, structure, current_class)?;
+            self.walk_node(&child, structure, class_context)?;
         }
         
         Ok(())
@@ -432,19 +443,20 @@ impl SmartEditor {
     fn insert_function(&mut self, name: &str, class_name: Option<&str>, body: &str, after: Option<&str>, before: Option<&str>, visibility: &str) -> Result<()> {
         let structure = self.structure.as_ref().context("No structure analyzed")?;
         
+        
         // Find insertion point
         let insert_line = if let Some(after_name) = after {
             // Insert after specified function
             structure.functions.iter()
                 .find(|f| f.name == after_name && f.class_name.as_deref() == class_name)
                 .map(|f| f.end_line + 1)
-                .context("Function not found: {after_name}")?
+                .with_context(|| format!("Function not found: {}", after_name))?
         } else if let Some(before_name) = before {
             // Insert before specified function
             structure.functions.iter()
                 .find(|f| f.name == before_name && f.class_name.as_deref() == class_name)
                 .map(|f| f.start_line.saturating_sub(1))
-                .context("Function not found: {before_name}")?
+                .with_context(|| format!("Function not found: {}", before_name))?
         } else if let Some(class) = class_name {
             // Insert at end of class
             structure.classes.iter()
@@ -473,12 +485,19 @@ impl SmartEditor {
         let lines: Vec<&str> = self.content.lines().collect();
         let mut new_lines: Vec<String> = Vec::new();
         
+        
         for (i, line) in lines.iter().enumerate() {
+            new_lines.push(line.to_string());
             if i + 1 == insert_line {
                 new_lines.push(String::new());
                 new_lines.push(formatted_function.clone());
             }
-            new_lines.push(line.to_string());
+        }
+        
+        // Handle case where we want to insert at the very end
+        if insert_line > lines.len() {
+            new_lines.push(String::new());
+            new_lines.push(formatted_function);
         }
         
         self.content = new_lines.join("\n");
@@ -558,7 +577,12 @@ impl SmartEditor {
                 }
             }
             SupportedLanguage::JavaScript | SupportedLanguage::TypeScript => {
-                format!("import {{ {import} }} from '{import}';")
+                // For now, use CommonJS style which is more common
+                if alias.is_some() {
+                    format!("const {} = require('{}');", alias.unwrap(), import)
+                } else {
+                    format!("const {} = require('{}');", import, import)
+                }
             }
             _ => format!("import {import};"),
         };
@@ -918,5 +942,354 @@ fn helper() {
         editor.apply_edit(&edit).unwrap();
         assert!(editor.content.contains("pub fn new_function"));
         assert!(editor.content.find("pub fn new_function").unwrap() > editor.content.find("fn main").unwrap());
+    }
+    
+    #[test]
+    fn test_python_function_insertion() {
+        let content = r#"
+import os
+
+def main():
+    print("Hello, world!")
+
+def helper():
+    print("Helper")
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::Python).unwrap();
+        let edit = SmartEdit::InsertFunction {
+            name: "process_data".to_string(),
+            class_name: None,
+            namespace: None,
+            body: r#"(data):
+    """Process the data."""
+    return data * 2"#.to_string(),
+            after: Some("main".to_string()),
+            before: None,
+            visibility: "public".to_string(),
+        };
+        
+        editor.apply_edit(&edit).unwrap();
+        assert!(editor.content.contains("def process_data(data):"));
+        assert!(editor.content.contains("return data * 2"));
+    }
+    
+    #[test]
+    fn test_javascript_function_insertion() {
+        let content = r#"
+function main() {
+    console.log("Hello, world!");
+}
+
+function helper() {
+    console.log("Helper");
+}
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::JavaScript).unwrap();
+        let edit = SmartEdit::InsertFunction {
+            name: "processData".to_string(),
+            class_name: None,
+            namespace: None,
+            body: r#"(data) {
+    return data.map(x => x * 2);
+}"#.to_string(),
+            before: Some("helper".to_string()),
+            after: None,
+            visibility: "public".to_string(),
+        };
+        
+        editor.apply_edit(&edit).unwrap();
+        assert!(editor.content.contains("function processData(data)"));
+        assert!(editor.content.contains("return data.map(x => x * 2)"));
+    }
+    
+    #[test]
+    fn test_add_import() {
+        let content = r#"
+use std::io;
+
+fn main() {
+    println!("Hello");
+}
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::Rust).unwrap();
+        let edit = SmartEdit::AddImport {
+            import: "std::collections::HashMap".to_string(),
+            alias: None,
+        };
+        
+        editor.apply_edit(&edit).unwrap();
+        assert!(editor.content.contains("use std::collections::HashMap;"));
+        
+        // Test with alias
+        let edit_with_alias = SmartEdit::AddImport {
+            import: "std::sync::Arc".to_string(),
+            alias: Some("MyArc".to_string()),
+        };
+        
+        editor.apply_edit(&edit_with_alias).unwrap();
+        assert!(editor.content.contains("use std::sync::Arc as MyArc;"));
+    }
+    
+    #[test]
+    fn test_replace_function() {
+        let content = r#"
+fn calculate(x: i32) -> i32 {
+    x + 1
+}
+
+fn main() {
+    let result = calculate(5);
+}
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::Rust).unwrap();
+        
+        // First analyze to build structure
+        let _ = editor.analyze_structure();
+        
+        let edit = SmartEdit::ReplaceFunction {
+            name: "calculate".to_string(),
+            class_name: None,
+            new_body: r#"{
+    // Improved calculation with logging
+    println!("Calculating for: {}", x);
+    x * 2
+}"#.to_string(),
+        };
+        
+        editor.apply_edit(&edit).unwrap();
+        assert!(editor.content.contains("x * 2"));
+        assert!(editor.content.contains("Improved calculation"));
+        assert!(!editor.content.contains("x + 1")); // Old body should be gone
+    }
+    
+    #[test]
+    fn test_smart_append() {
+        let content = r#"
+import os
+
+def main():
+    pass
+
+class MyClass:
+    pass
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::Python).unwrap();
+        
+        // Append to imports section
+        let import_edit = SmartEdit::SmartAppend {
+            section: "imports".to_string(),
+            content: "import sys".to_string(),
+        };
+        
+        editor.apply_edit(&import_edit).unwrap();
+        assert!(editor.content.contains("import sys"));
+        
+        // Append to functions section
+        let func_edit = SmartEdit::SmartAppend {
+            section: "functions".to_string(),
+            content: "def helper():\n    return True".to_string(),
+        };
+        
+        editor.apply_edit(&func_edit).unwrap();
+        assert!(editor.content.contains("def helper():"));
+    }
+    
+    #[test]
+    fn test_remove_function_with_dependencies() {
+        let content = r#"
+fn caller() {
+    helper();
+}
+
+fn helper() {
+    println!("I'm helping!");
+}
+
+fn orphan() {
+    // Only called by helper
+}
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::Rust).unwrap();
+        
+        // Build dependency graph (simplified for test)
+        editor.structure = Some(CodeStructure {
+            language: "Rust".to_string(),
+            imports: vec![],
+            functions: vec![
+                FunctionInfo {
+                    name: "caller".to_string(),
+                    class_name: None,
+                    namespace: None,
+                    start_line: 2,
+                    end_line: 4,
+                    signature: "fn caller()".to_string(),
+                    visibility: "private".to_string(),
+                    calls: vec!["helper".to_string()],
+                    called_by: vec![],
+                },
+                FunctionInfo {
+                    name: "helper".to_string(),
+                    class_name: None,
+                    namespace: None,
+                    start_line: 6,
+                    end_line: 8,
+                    signature: "fn helper()".to_string(),
+                    visibility: "private".to_string(),
+                    calls: vec!["orphan".to_string()],
+                    called_by: vec!["caller".to_string()],
+                },
+                FunctionInfo {
+                    name: "orphan".to_string(),
+                    class_name: None,
+                    namespace: None,
+                    start_line: 10,
+                    end_line: 12,
+                    signature: "fn orphan()".to_string(),
+                    visibility: "private".to_string(),
+                    calls: vec![],
+                    called_by: vec!["helper".to_string()],
+                },
+            ],
+            classes: vec![],
+            main_function: None,
+            line_count: 12,
+            dependencies: DependencyGraph {
+                calls: [
+                    ("caller".to_string(), vec!["helper".to_string()]),
+                    ("helper".to_string(), vec!["orphan".to_string()]),
+                ].into_iter().collect(),
+                called_by: [
+                    ("helper".to_string(), vec!["caller".to_string()]),
+                    ("orphan".to_string(), vec!["helper".to_string()]),
+                ].into_iter().collect(),
+            },
+        });
+        
+        // Try to remove helper without force - should fail
+        let remove_edit = SmartEdit::RemoveFunction {
+            name: "helper".to_string(),
+            class_name: None,
+            force: false,
+            cascade: false,
+        };
+        
+        let result = editor.apply_edit(&remove_edit);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("called by: caller"));
+        
+        // Remove with force
+        let force_remove = SmartEdit::RemoveFunction {
+            name: "helper".to_string(),
+            class_name: None,
+            force: true,
+            cascade: false,
+        };
+        
+        editor.apply_edit(&force_remove).unwrap();
+        assert!(!editor.content.contains("fn helper()"));
+        assert!(editor.content.contains("fn orphan()")); // Orphan still there without cascade
+    }
+    
+    #[test]
+    fn test_get_function_tree() {
+        let content = r#"
+class Calculator:
+    def add(self, a, b):
+        return a + b
+    
+    def multiply(self, a, b):
+        return self.add(a, b) * b
+
+def main():
+    calc = Calculator()
+    result = calc.add(5, 3)
+"#.to_string();
+        
+        let editor = SmartEditor::new(content, SupportedLanguage::Python).unwrap();
+        let tree = editor.get_function_tree().unwrap();
+        
+        // Check tree structure
+        assert!(tree["language"].as_str().unwrap().contains("Python"));
+        assert!(tree["functions"].is_array());
+        assert!(tree["classes"].is_array());
+        
+        // Verify it found the functions and classes
+        let functions = tree["functions"].as_array().unwrap();
+        assert!(functions.iter().any(|f| f["name"] == "main"));
+        
+        let classes = tree["classes"].as_array().unwrap();
+        assert!(classes.iter().any(|c| c["name"] == "Calculator"));
+    }
+    
+    #[test]
+    fn test_multiple_edits() {
+        let content = r#"
+fn main() {
+    println!("Start");
+}
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::Rust).unwrap();
+        
+        // Apply multiple edits
+        let edits = vec![
+            SmartEdit::AddImport {
+                import: "std::thread".to_string(),
+                alias: None,
+            },
+            SmartEdit::InsertFunction {
+                name: "worker".to_string(),
+                class_name: None,
+                namespace: None,
+                body: r#"() {
+    thread::sleep(std::time::Duration::from_secs(1));
+}"#.to_string(),
+                after: Some("main".to_string()),
+                before: None,
+                visibility: "private".to_string(),
+            },
+        ];
+        
+        for edit in edits {
+            editor.apply_edit(&edit).unwrap();
+        }
+        
+        assert!(editor.content.contains("use std::thread;"));
+        assert!(editor.content.contains("fn worker()"));
+    }
+    
+    #[test]
+    fn test_class_method_insertion() {
+        let content = r#"
+class MyClass:
+    def __init__(self):
+        self.value = 0
+    
+    def get_value(self):
+        return self.value
+"#.to_string();
+        
+        let mut editor = SmartEditor::new(content, SupportedLanguage::Python).unwrap();
+        
+        let edit = SmartEdit::InsertFunction {
+            name: "set_value".to_string(),
+            class_name: Some("MyClass".to_string()),
+            namespace: None,
+            body: r#"(self, value):
+        self.value = value"#.to_string(),
+            after: Some("get_value".to_string()),
+            before: None,
+            visibility: "public".to_string(),
+        };
+        
+        editor.apply_edit(&edit).unwrap();
+        assert!(editor.content.contains("def set_value(self, value):"));
+        assert!(editor.content.contains("self.value = value"));
     }
 }

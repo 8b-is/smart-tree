@@ -1,6 +1,6 @@
 //! MCP tools implementation for Smart Tree
 
-use super::{is_path_allowed, smart_edit, McpContext};
+use super::{is_path_allowed, McpContext};
 use crate::{
     feedback_client::FeedbackClient,
     formatters::{
