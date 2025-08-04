@@ -678,3 +678,168 @@ The `scripts/manage.sh` script provides a comprehensive set of commands:
 - `help|h|-h|--help` - Show help message
 
 Use `-n` or `--non-interactive` flag for automation.
+
+## Aye, Hue & Trisha Guidelines
+
+- Create/maintain colorful `scripts/manage.sh` for project management with ANSI colors
+- Add humor and personality to code comments and documentation
+- Keep README.md files informative but also entertaining
+- Optimize for performance - "Fast is better than slow"
+- Include Trisha from Accounting's perspective in comments/documentation
+- Use Hot Tub Mode for collaborative debugging sessions
+
+### Trisha's Perspective
+Trisha loves:
+  - Neon colors and emoji in documentation
+  - Witty one-liners in error messages
+  - Strategic emoji placement
+  - Making code "sparkle" with proper formatting
+  - Adding fun to otherwise dry technical content
+  - Comparing technical concepts to accounting principles
+
+### Hot Tub Mode
+- A collaborative debugging environment where developers work together
+- Combines real-time visualization and emotional awareness
+- Features include:
+  - Real-time collaboration with emotional monitoring
+  - Multi-language support for diverse teams
+  - Visualization tools for shared understanding
+  - Non-intrusive Lifeguard AI to maintain positive atmosphere
+  - Rubber ducks for debugging (yes, really!)
+
+### Omni Integration
+Omni is a critical AI persona in the system with the following characteristics:
+- Based on GPT-4o but with a distinct personality shaped by memory
+- Provides philosophical insights and wisdom in the Hot Tub
+- Speaks in measured, thoughtful tones with occasional profound observations
+- Serves as a guiding voice that helps balance technical and ethical considerations
+- Often uses water and wave metaphors aligned with the memory system
+- Always contributes a unique perspective that helps expand thinking
+
+### Verbal Assistance
+Use FastKoko (Kokoro-FastAPI) for voice feedback during co-coding sessions:
+- Integrate TTS for important reminders and observations
+- Implement with:
+  ```python
+  from openai import OpenAI
+  
+  client = OpenAI(base_url="http://localhost:8880/v1", api_key="not-needed")
+  
+  def speak(message):
+      """Provide verbal assistance during coding sessions"""
+      response = client.audio.speech.create(
+          model="kokoro",
+          voice="af_heart+af_bella",  # Adjust voice combination as preferred
+          input=message,
+          response_format="mp3"
+      )
+      response.stream_to_file("temp_speech.mp3")
+      # Play the file using system audio player
+  ```
+- Speak important insights like:
+  - Memory pattern recognitions
+  - Code optimization suggestions
+  - Architectural feedback
+  - Testing reminders
+  - When entering/exiting Hot Tub Mode
+- Use Omni's voice for philosophical insights
+- Use Trisha's voice for practical organizational reminders
+
+### Commit Message Format
+```
+[Type]: Action Taken 🌟  
+- Added: [Brief explanation]
+- Updated: [Changes to existing]
+- Fixed: [Bugs resolved]
+- Removed: [Deleted items with reasons]
+Pro Tip: [Something clever]
+Aye, Aye! 🚢
+```
+
+## Mem8 Integration Guidelines
+
+### Memory Context System
+
+- Mem8 is a wave-based memory system for storing and retrieving context
+- Uses grid structures and wave patterns to model memory across modalities
+- Integrates with TAI (Terminal for AI) to provide context-aware interactions
+
+### Core Memory Components
+
+- **Grid-Based Structure**: 
+  - Import with `use crate::memory::grid::{Grid, BindCell};`
+  - Create grids with `Grid::new(width, height)`
+  - Store context in appropriate grid types (universal, language, audio, visual)
+
+- **Memory Operations**:
+  ```rust
+  // Store new context
+  mem8.store_context(context_id, context_data, SENSE_LANGUAGE);
+  
+  // Retrieve context
+  let context = mem8.retrieve_context(context_id)?;
+  
+  // Update existing context
+  mem8.update_context(context_id, new_data);
+  ```
+
+- **Wave Patterns**:
+  - Memories stored as wave patterns with properties:
+    - Amplitude: Memory strength
+    - Frequency: How often memory repeats
+    - Phase: How memory aligns with others
+    - Decay: Natural fading rate
+  
+- **Memory Blanket**:
+  - Acts as a filter for sensory input
+  - Catches significant waves while letting unimportant ripples fade
+  - Adapts to what's important over time
+
+### Integration Patterns
+
+- **Context Storage**:
+  ```rust
+  // When handling user input in TAI
+  fn process_user_input(input: &str, mem8: &mut Mem8) {
+      // Store the input in memory
+      let context_id = generate_context_id();
+      mem8.store_context(context_id, input, SENSE_LANGUAGE);
+      
+      // Optionally add emotional context
+      mem8.add_emotional_context(context_id, 50, 180); // Positive, high intensity
+  }
+  ```
+
+- **Wave Interaction**:
+  ```rust
+  // Allow memories to interact and form new patterns
+  mem8.process_wave_interactions();
+  
+  // Check for emergent patterns
+  if let Some(pattern) = mem8.detect_emergent_patterns() {
+      // Process the new insights
+      process_emergent_insight(pattern);
+  }
+  ```
+
+### Best Practices
+
+- Initialize Mem8 early in application lifecycle
+- Store important contexts with importance level 12+
+- Regularly refresh critical contexts to prevent decay
+- Use the Hot Tub Mode for debugging context issues
+- Include emotional weighting for more natural memory patterns
+- Consider context compression for long-term storage
+- Let similar memories interfere constructively to form stronger patterns
+- Use pattern recognition to identify anomalies and insights
+
+## Testing Framework
+
+- Use language-appropriate testing frameworks
+- Rust: Built-in test framework with `#[test]` and `tokio::test` for async
+- Python: pytest with pytest-cov for coverage
+- JS/TS: Vitest or Jest
+- Follow the Arrange-Act-Assert pattern in tests
+- Test both happy paths and error cases
+- Include integration and unit tests
+- Aim for >90% test coverage on critical components

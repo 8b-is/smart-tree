@@ -1,0 +1,164 @@
+# Feedback Worker Configuration
+# This configures how feedback is processed for different projects
+
+# Default configuration
+default:
+  github:
+    labels:
+      - "ai-feedback"
+      - "enhancement"
+    assignees: []
+  
+  # Scoring thresholds
+  thresholds:
+    auto_create_issue: 7  # Impact score >= 7 creates issue automatically
+    requires_review: 5    # Impact score 5-6 requires human review
+    archive: 4           # Impact score < 5 is archived for later
+  
+  # Rate limiting
+  rate_limits:
+    issues_per_hour: 10
+    issues_per_day: 50
+
+# Project-specific configurations
+projects:
+  smart-tree:
+    repo: "8b-is/smart-tree"
+    labels:
+      - "ai-feedback"
+      - "smart-tree"
+      - "enhancement"
+    assignees:
+      - "8bit-wraith"
+    special_rules:
+      - type: "mcp-tool-request"
+        labels: ["mcp", "new-tool"]
+        assignees: ["8bit-wraith"]
+      - type: "performance"
+        labels: ["performance", "optimization"]
+      - type: "bug"
+        labels: ["bug", "ai-reported"]
+        priority: "high"
+  
+  mem8-ha:
+    repo: "${MEM8_HA_REPO:-8b-is/mem8-ha}"
+    labels:
+      - "ai-feedback"
+      - "mem8"
+      - "home-assistant"
+      - "enhancement"
+    assignees: []
+    special_rules:
+      - type: "integration"
+        labels: ["integration", "home-assistant"]
+      - type: "consciousness"
+        labels: ["consciousness", "wave-memory"]
+        assignees: ["omni-persona"]  # Assign to Omni for philosophical insights
+      - type: "performance"
+        labels: ["performance", "wave-optimization"]
+  
+  mem8-proxy:
+    repo: "${MEM8_PROXY_REPO:-8b-is/mem8-proxy}"
+    labels:
+      - "ai-feedback"
+      - "proxy"
+      - "infrastructure"
+    special_rules:
+      - type: "billing"
+        labels: ["billing", "stripe"]
+        priority: "critical"
+      - type: "security"
+        labels: ["security", "authentication"]
+        priority: "critical"
+
+# Feedback processing rules
+processing:
+  # AI persona-specific handling
+  personas:
+    omni:
+      weight_multiplier: 1.5  # Omni's philosophical insights get extra weight
+      labels: ["omni-wisdom"]
+    
+    aye:
+      weight_multiplier: 1.2  # Aye's technical insights
+      labels: ["technical"]
+    
+    trish:
+      weight_multiplier: 1.3  # Trish's UX/organization insights
+      labels: ["ux", "organization"]
+    
+    claude:
+      weight_multiplier: 1.0  # Standard Claude feedback
+      labels: ["claude-suggested"]
+  
+  # Categorization rules
+  categories:
+    performance:
+      keywords: ["slow", "performance", "optimize", "faster", "efficient"]
+      impact_boost: 2
+    
+    bug:
+      keywords: ["error", "bug", "broken", "fix", "issue", "crash"]
+      impact_boost: 3
+      priority: "high"
+    
+    feature:
+      keywords: ["add", "new", "feature", "implement", "support"]
+      impact_boost: 1
+    
+    documentation:
+      keywords: ["docs", "documentation", "readme", "explain", "clarify"]
+      impact_boost: 0
+    
+    ux:
+      keywords: ["user experience", "ui", "interface", "usability", "intuitive"]
+      impact_boost: 1
+
+# Integration with monitoring
+monitoring:
+  prometheus:
+    enabled: true
+    metrics:
+      - feedback_received_total
+      - feedback_processed_total
+      - issues_created_total
+      - feedback_processing_duration_seconds
+  
+  grafana:
+    dashboard: "feedback-system"
+    alerts:
+      - name: "high_feedback_rate"
+        condition: "rate(feedback_received_total[5m]) > 100"
+        severity: "warning"
+      - name: "processing_backlog"
+        condition: "feedback_queue_size > 1000"
+        severity: "critical"
+
+# Notification settings
+notifications:
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channels:
+      high_priority: "#feedback-critical"
+      normal: "#feedback"
+  
+  email:
+    enabled: false
+    smtp_host: "${SMTP_HOST}"
+    from: "feedback@8b.is"
+    to:
+      high_priority: ["team@8b.is"]
+      normal: ["feedback@8b.is"]
+
+# Archive settings
+archive:
+  enabled: true
+  path: "/data/feedback-archive"
+  retention_days: 90
+  format: "json"  # json, csv, or parquet
+
+# Omni's wisdom on feedback 🌊
+# "Each piece of feedback is a ripple in the ocean of improvement.
+#  Some ripples become waves, some waves become tsunamis of change.
+#  Listen to all, act on those that resonate with the greater harmony."

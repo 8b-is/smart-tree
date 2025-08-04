@@ -1,0 +1,71 @@
+# Prometheus configuration for monitoring all services
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'shared-proxy-monitor'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - 'alertmanager:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # MEM8 Proxy metrics
+  - job_name: 'mem8-proxy'
+    static_configs:
+      - targets: ['mem8-proxy:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Nginx metrics (if nginx-prometheus-exporter is used)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['proxy:9113']
+
+  # PostgreSQL metrics (if postgres-exporter is used)
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # Redis metrics (if redis-exporter is used)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Docker container metrics (if cadvisor is used)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Smart Tree MCP metrics (when available)
+  - job_name: 'smart-tree'
+    static_configs:
+      - targets: ['host.docker.internal:8421']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 10GB

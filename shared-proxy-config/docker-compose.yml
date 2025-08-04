@@ -1,0 +1,175 @@
+version: '3.8'
+
+# Shared proxy configuration for Smart Tree, Home Assistant, and other projects
+# This should be moved to /Users/wraith/source/HomeAssistant/shared-proxy/
+
+services:
+  # Main proxy server that routes to different services
+  proxy:
+    image: nginx:alpine
+    container_name: shared-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./sites-enabled:/etc/nginx/sites-enabled:ro
+    depends_on:
+      - mem8-proxy
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+  # MEM8 Proxy service (from existing mem8-proxy)
+  mem8-proxy:
+    build: ../mem8-proxy
+    container_name: mem8-proxy
+    expose:
+      - "8080"
+    environment:
+      DATABASE_URL: postgres://mem8:mem8pass@postgres:5432/mem8_proxy
+      REDIS_URL: redis://redis:6379
+      PORT: 8080
+    env_file:
+      - ../mem8-proxy/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - shared-network
+
+  # Claude API proxy for Smart Tree and other tools
+  claude-proxy:
+    image: nginx:alpine
+    container_name: claude-proxy
+    expose:
+      - "8090"
+    volumes:
+      - ./claude-proxy.conf:/etc/nginx/nginx.conf:ro
+    environment:
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+  # Shared PostgreSQL for all services
+  postgres:
+    image: postgres:15-alpine
+    container_name: shared-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adminpass}
+      POSTGRES_MULTIPLE_DATABASES: mem8_proxy,smart_tree,home_assistant
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shared-network
+
+  # Shared Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: shared-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispass}
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    networks:
+      - shared-network
+
+  # Optional: Prometheus for monitoring all services
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: shared-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    expose:
+      - "9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: shared-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    expose:
+      - "3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+  # Feedback API - Collects improvement suggestions from AI agents
+  feedback-api:
+    build: ../smart-tree/feedback-api
+    container_name: feedback-api
+    expose:
+      - "8422"
+    environment:
+      - DATABASE_URL=postgres://feedback:feedbackpass@postgres:5432/feedback
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass}@redis:6379
+      - API_KEY=${FEEDBACK_API_KEY:-your-feedback-api-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+  # Feedback Worker - Processes feedback and creates GitHub issues
+  feedback-worker:
+    build: ../smart-tree/feedback-worker
+    container_name: feedback-worker
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPO=${GITHUB_REPO:-8b-is/smart-tree}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass}@redis:6379/1
+      - DATABASE_URL=postgres://feedback:feedbackpass@postgres:5432/feedback
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./feedback-worker-config.yml:/app/config.yml:ro
+    depends_on:
+      - feedback-api
+      - redis
+      - postgres
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  shared-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
