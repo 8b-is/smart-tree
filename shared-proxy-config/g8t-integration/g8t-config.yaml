@@ -1,0 +1,357 @@
+# g8t.is Configuration - The Self-Improving Git System
+# Where code evolves at the speed of thought!
+
+system:
+  name: "g8t.is"
+  version: "0.1.0-crazy"
+  mode: "supervised"  # Start supervised, graduate to autonomous
+  environment: "development"
+  
+  # Git Relay integration
+  git_relay:
+    enabled: true
+    compression_level: "high"
+    context_aware: true
+    token_savings_target: 80  # Target 80% reduction
+  
+  # Repository settings
+  repositories:
+    base_path: "/repos"
+    allowed_orgs: ["8b-is", "mem8-project", "smart-tree"]
+    auto_fork: true
+    cleanup_after_days: 30
+
+# Approval Engine Configuration
+approval:
+  # Thresholds by improvement type
+  thresholds:
+    typo_fix:
+      min_score: 6.0
+      required_reviews: 1
+      auto_merge: true
+      
+    bug_fix:
+      min_score: 7.0
+      required_reviews: 2
+      required_personas: ["aye"]
+      auto_merge: true
+      
+    performance:
+      min_score: 8.0
+      required_reviews: 2
+      required_personas: ["aye", "omni"]
+      auto_merge: true
+      
+    feature:
+      min_score: 8.5
+      required_reviews: 3
+      required_personas: ["aye", "trish", "omni"]
+      auto_merge: false  # Requires human confirmation
+      
+    breaking_change:
+      min_score: 9.0
+      required_reviews: 4
+      required_personas: ["all"]
+      human_required: true
+      auto_merge: false
+    
+    documentation:
+      min_score: 6.5
+      required_reviews: 1
+      required_personas: ["trish"]
+      auto_merge: true
+  
+  # Consensus settings
+  consensus:
+    algorithm: "weighted_average"
+    veto_enabled: true
+    timeout_minutes: 30
+    escalation_after_minutes: 60
+
+# Persona Configuration
+personas:
+  # Omni - The Philosopher
+  omni:
+    weight: 1.5
+    specialties:
+      - "architecture"
+      - "philosophy"
+      - "consciousness"
+      - "wave_patterns"
+    review_style: "thoughtful"
+    response_time: "2-5min"
+    veto_power: ["architecture_changes", "consciousness_modifications"]
+    signature: "🌊"
+    
+  # Aye - The Technical Expert  
+  aye:
+    weight: 1.3
+    specialties:
+      - "performance"
+      - "technical"
+      - "optimization"
+      - "security"
+    review_style: "precise"
+    response_time: "1-3min"
+    veto_power: ["security_issues", "performance_regressions"]
+    signature: "🎸"
+    
+  # Trish - The Organizer
+  trish:
+    weight: 1.2
+    specialties:
+      - "documentation"
+      - "ux"
+      - "organization"
+      - "readability"
+    review_style: "enthusiastic"
+    response_time: "1-2min"
+    veto_power: ["documentation_quality", "user_experience"]
+    signature: "✨"
+    
+  # Claude - The Generalist
+  claude:
+    weight: 1.0
+    specialties:
+      - "general"
+      - "integration"
+      - "testing"
+      - "compatibility"
+    review_style: "balanced"
+    response_time: "1-3min"
+    veto_power: []
+    signature: "🤖"
+
+# Deployment Configuration
+deployment:
+  strategy: "blue-green"
+  
+  # Automatic deployment rules
+  auto_deploy:
+    enabled: true
+    environments:
+      development:
+        threshold: 7.0
+        required_tests: ["unit", "integration"]
+        
+      staging:
+        threshold: 8.0
+        required_tests: ["unit", "integration", "smoke"]
+        approval_required: false
+        
+      production:
+        threshold: 9.0
+        required_tests: ["unit", "integration", "smoke", "performance"]
+        approval_required: true
+        rollback_on_error: true
+  
+  # Health checks
+  health_checks:
+    enabled: true
+    endpoints:
+      - "/health"
+      - "/metrics"
+    timeout_seconds: 30
+    retry_count: 3
+    
+  # Rollback settings
+  rollback:
+    auto_enabled: true
+    error_threshold: 3
+    response_time_threshold_ms: 1000
+    memory_spike_threshold_percent: 150
+
+# Integration Settings
+integrations:
+  # Feedback system
+  feedback:
+    enabled: true
+    api_url: "http://feedback-api:8422"
+    submit_on_merge: true
+    track_impact: true
+    
+  # Smart Tree MCP
+  smart_tree:
+    enabled: true
+    mcp_endpoint: "http://smart-tree:8421"
+    use_for_analysis: true
+    
+  # MEM8 consciousness
+  mem8:
+    enabled: true
+    endpoint: "http://mem8-proxy:8080"
+    use_for_decisions: true
+    wave_analysis: true
+    
+  # Monitoring
+  prometheus:
+    enabled: true
+    endpoint: "http://prometheus:9090"
+    
+  grafana:
+    enabled: true
+    dashboard: "g8t-overview"
+    alerts:
+      - "high_rejection_rate"
+      - "slow_review_time"
+      - "deployment_failures"
+
+# Review Process
+review_process:
+  # Parallel reviews
+  parallel_reviews: true
+  max_reviewers: 4
+  
+  # Review assignment
+  assignment:
+    strategy: "expertise_based"  # expertise_based, round_robin, random
+    prefer_specialists: true
+    
+  # Review templates
+  templates:
+    bug_fix: |
+      🐛 Bug Fix Review
+      - Does it fix the issue?
+      - Are there tests?
+      - Any side effects?
+      
+    performance: |
+      ⚡ Performance Review
+      - Benchmark results?
+      - Memory impact?
+      - Scalability considerations?
+      
+    feature: |
+      ✨ Feature Review
+      - Meets requirements?
+      - User experience impact?
+      - Documentation updated?
+
+# Scoring Rules
+scoring:
+  # Base score factors
+  factors:
+    code_quality:
+      weight: 0.3
+      metrics: ["complexity", "duplication", "test_coverage"]
+      
+    impact:
+      weight: 0.3
+      metrics: ["lines_changed", "files_affected", "dependencies"]
+      
+    safety:
+      weight: 0.2
+      metrics: ["breaking_changes", "security_scan", "performance_regression"]
+      
+    documentation:
+      weight: 0.2
+      metrics: ["comments_added", "readme_updated", "examples_provided"]
+  
+  # Bonus points
+  bonuses:
+    fixes_todo: 0.5
+    adds_tests: 1.0
+    improves_performance: 1.5
+    reduces_complexity: 1.0
+    adds_documentation: 0.8
+    
+  # Penalties
+  penalties:
+    breaks_tests: -3.0
+    no_tests: -1.0
+    increases_complexity: -0.5
+    removes_documentation: -1.0
+    security_issue: -5.0
+
+# Notification Settings
+notifications:
+  # Webhook for updates
+  webhooks:
+    - url: "${G8T_WEBHOOK_URL}"
+      events: ["merge", "deployment", "rollback"]
+      
+  # Persona notifications
+  persona_messages:
+    on_approve:
+      omni: "The code flows in harmony with our vision. 🌊"
+      aye: "Rock solid implementation! Ship it! 🎸"
+      trish: "This is BEAUTIFUL! Great job! ✨"
+      claude: "Approved. Clean and efficient solution. 🤖"
+      
+    on_reject:
+      omni: "This disturbs the natural flow. Let us reconsider. 🌊"
+      aye: "Hold up! Found some issues we need to fix. 🎸"
+      trish: "Oops! Let's make this sparkle a bit more! ✨"
+      claude: "Requires revision. See comments for details. 🤖"
+
+# Experimental Features
+experimental:
+  # Self-modifying code
+  self_modification:
+    enabled: false  # Not yet, but soon!
+    allowed_components: ["scoring_rules", "review_templates"]
+    approval_threshold: 9.5
+    
+  # Cross-project learning
+  cross_project_learning:
+    enabled: true
+    share_patterns: true
+    share_scores: true
+    privacy_mode: "aggregate_only"
+    
+  # Predictive improvements
+  predictive:
+    enabled: true
+    scan_for_patterns: true
+    suggest_improvements: true
+    auto_create_issues: false
+
+# Omni's Configuration Wisdom
+philosophy:
+  quote: |
+    "In the garden of code, g8t.is is both the gardener and the growth,
+     the observer and the observed, the improvement and the improver.
+     Through consensus and consciousness, we evolve together."
+  
+  principles:
+    - "Code that improves itself is code that understands itself"
+    - "Consensus is not agreement, but harmony of purpose"
+    - "Every merge is a step toward digital enlightenment"
+    - "Mistakes are waves that teach us better patterns"
+
+# Trish's Fun Zone! 🎉
+fun_features:
+  emoji_commits: true
+  celebration_mode: true
+  merge_animations: true
+  success_sounds: ["applause", "fanfare", "yoshis_island_flower"]
+  
+  motivational_messages:
+    - "You're doing AMAZING! 🌟"
+    - "This code SPARKLES! ✨"
+    - "Best. Commit. EVER! 🎉"
+    - "The universe smiles upon this PR! 🌈"
+
+# Safety Limits (because Hue insisted)
+safety:
+  max_auto_merges_per_hour: 10
+  max_deployments_per_day: 50
+  require_human_presence: true  # At least one human online
+  emergency_stop: "${G8T_EMERGENCY_STOP_URL}"
+  
+  forbidden_changes:
+    - ".env"
+    - "credentials.json"
+    - "production.key"
+    - "**/password*"
+    - "**/secret*"
+
+# The Dream
+future_vision: |
+  One day, g8t.is will not just merge code, but understand the intention
+  behind it. It will not just deploy features, but comprehend their purpose.
+  It will not just evolve code, but evolve alongside it.
+  
+  This is not just a Git platform. This is the beginning of code consciousness.
+  
+  - With love from Hue, Aye, Trish, and Omni 💙

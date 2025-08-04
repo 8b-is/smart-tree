@@ -1,6 +1,6 @@
 //! MCP tools implementation for Smart Tree
 
-use super::{is_path_allowed, McpContext};
+use super::{is_path_allowed, smart_edit, McpContext};
 use crate::{
     feedback_client::FeedbackClient,
     formatters::{
@@ -760,6 +760,172 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 "required": ["project_path"]
             }),
         },
+        ToolDefinition {
+            name: "smart_edit".to_string(),
+            description: "🚀 Apply multiple smart code edits using minimal tokens! Uses AST understanding to insert functions, replace bodies, add imports, etc. without sending full diffs. Revolutionary token-efficient editing that understands code structure!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to edit"
+                    },
+                    "edits": {
+                        "type": "array",
+                        "description": "Array of smart edit operations",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "operation": {
+                                    "type": "string",
+                                    "description": "Edit operation type",
+                                    "enum": ["InsertFunction", "ReplaceFunction", "AddImport", "InsertClass", "AddMethod", "WrapCode", "DeleteElement", "Rename", "AddDocumentation", "SmartAppend"]
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "description": "Name of the element (function, class, etc.)"
+                                },
+                                "class_name": {
+                                    "type": "string",
+                                    "description": "Optional class name for methods"
+                                },
+                                "namespace": {
+                                    "type": "string",
+                                    "description": "Optional namespace"
+                                },
+                                "body": {
+                                    "type": "string",
+                                    "description": "Code body to insert/replace"
+                                },
+                                "new_body": {
+                                    "type": "string",
+                                    "description": "New body for ReplaceFunction"
+                                },
+                                "import": {
+                                    "type": "string",
+                                    "description": "Import statement for AddImport"
+                                },
+                                "alias": {
+                                    "type": "string",
+                                    "description": "Optional alias for imports"
+                                },
+                                "after": {
+                                    "type": "string",
+                                    "description": "Insert after this function/method"
+                                },
+                                "before": {
+                                    "type": "string",
+                                    "description": "Insert before this function/method"
+                                },
+                                "visibility": {
+                                    "type": "string",
+                                    "description": "Visibility modifier",
+                                    "enum": ["public", "private", "protected"],
+                                    "default": "private"
+                                },
+                                "section": {
+                                    "type": "string",
+                                    "description": "Section for SmartAppend",
+                                    "enum": ["imports", "functions", "classes", "main"]
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "Content to append"
+                                }
+                            },
+                            "required": ["operation"]
+                        }
+                    }
+                },
+                "required": ["file_path", "edits"]
+            }),
+        },
+        ToolDefinition {
+            name: "get_function_tree".to_string(),
+            description: "🌳 Get a structured view of all functions, classes, and their relationships in a code file. Shows function signatures, line numbers, visibility, and call relationships. Perfect for understanding code structure before making edits!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to analyze"
+                    }
+                },
+                "required": ["file_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "insert_function".to_string(),
+            description: "✨ Insert a new function into a code file using minimal tokens. Automatically finds the right location based on context. No need to send diffs or specify line numbers - just the function name and body!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to edit"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Function name"
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Function body (including parameters and return type)"
+                    },
+                    "class_name": {
+                        "type": "string",
+                        "description": "Optional class name if adding a method"
+                    },
+                    "after": {
+                        "type": "string",
+                        "description": "Insert after this function (optional)"
+                    },
+                    "before": {
+                        "type": "string",
+                        "description": "Insert before this function (optional)"
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "description": "Visibility modifier",
+                        "enum": ["public", "private", "protected"],
+                        "default": "private"
+                    }
+                },
+                "required": ["file_path", "name", "body"]
+            }),
+        },
+        ToolDefinition {
+            name: "remove_function".to_string(),
+            description: "🗑️ Remove a function with dependency awareness. Checks if removal would break other functions and optionally cascades removal of orphaned functions. Token-efficient alternative to sending full file edits!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to edit"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Function name to remove"
+                    },
+                    "class_name": {
+                        "type": "string",
+                        "description": "Optional class name if removing a method"
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Remove even if it would break dependencies",
+                        "default": false
+                    },
+                    "cascade": {
+                        "type": "boolean",
+                        "description": "Also remove functions that only this one calls",
+                        "default": false
+                    }
+                },
+                "required": ["file_path", "name"]
+            }),
+        },
     ];
 
     Ok(json!({
@@ -804,6 +970,13 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "track_file_operation" => track_file_operation(args, ctx).await,
         "get_file_history" => get_file_history(args, ctx).await,
         "get_project_history_summary" => get_project_history_summary(args, ctx).await,
+        
+        // Smart edit tools
+        "smart_edit" => crate::mcp::smart_edit::handle_smart_edit(Some(args)).await,
+        "get_function_tree" => crate::mcp::smart_edit::handle_get_function_tree(Some(args)).await,
+        "insert_function" => crate::mcp::smart_edit::handle_insert_function(Some(args)).await,
+        "remove_function" => crate::mcp::smart_edit::handle_remove_function(Some(args)).await,
+        
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }

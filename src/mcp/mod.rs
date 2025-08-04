@@ -13,6 +13,7 @@ use std::sync::Arc;
 mod cache;
 mod prompts;
 mod resources;
+mod smart_edit;
 mod sse;
 mod tools;
 
