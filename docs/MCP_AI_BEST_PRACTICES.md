@@ -1,5 +1,14 @@
 # 🤖 Smart Tree MCP Tools - AI Best Practices Guide
 
+## 🚨 Important: Compression Default Changed (v3.3.6+)
+
+**Smart Tree now serves decompressed output by default!** 
+
+Many AI systems struggle with base64/compressed content, so we've changed the default behavior:
+- **Before**: AI modes (`ai`, `quantum`, etc.) compressed by default
+- **Now**: ALL modes decompressed by default for maximum compatibility
+- To enable compression: explicitly set `compress: true` (only if you can handle base64)
+
 ## 🚀 Quick Start for AIs
 
 Hey there, AI friend! This guide will help you use Smart Tree tools like a pro. Follow these patterns for optimal results!

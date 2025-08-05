@@ -83,7 +83,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "compress": {
                         "type": "boolean",
-                        "description": "Compress output with zlib. Default: true for AI modes (ai, digest, quantum, quantum-semantic, summary-ai), false for human-readable modes",
+                        "description": "Compress output with zlib. Default: false (decompressed) for all modes to ensure compatibility with AI systems. Set to true only if your AI can handle base64 compressed content",
                         "default": null
                     },
                     "path_mode": {
@@ -1238,11 +1238,9 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     // Compression logic:
     // 1. If user explicitly sets compress parameter, use that
     // 2. Otherwise, check MCP_NO_COMPRESS env var
-    // 3. Default: true for AI modes, false for human-readable modes
-    let default_compress = matches!(
-        args.mode.as_str(),
-        "ai" | "digest" | "quantum" | "quantum-semantic" | "summary-ai"
-    );
+    // 3. Default: false for ALL modes (decompressed by default)
+    //    Many AI systems struggle with base64/compressed content
+    let default_compress = false; // Changed: Always default to decompressed
 
     let mcp_compress = match args.compress {
         Some(compress) => compress, // User's explicit choice
@@ -1544,7 +1542,7 @@ async fn quick_tree(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         "path": args["path"],
         "mode": "summary-ai",
         "max_depth": args["depth"].as_u64().unwrap_or(3),
-        "compress": true,
+        "compress": false,  // Default to decompressed for AI compatibility
         "show_ignored": true
     });
     analyze_directory(analyze_args, ctx).await

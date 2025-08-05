@@ -1,5 +1,7 @@
 # Smart Tree MCP Quick Reference
 
+> **📢 Important Update (v3.3.6+)**: All output is now decompressed by default for better AI compatibility! No more base64 struggles!
+
 ## 🚀 Essential Commands
 
 ```bash

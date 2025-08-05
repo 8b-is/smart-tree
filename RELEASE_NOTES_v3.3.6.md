@@ -43,6 +43,12 @@ The ultimate context-driven system that logs all AI file manipulations:
 
 ### 🔧 Technical Improvements
 
+#### Default Behavior Change
+- **BREAKING CHANGE**: All output is now decompressed by default!
+- Previously: AI modes compressed by default (base64)
+- Now: ALL modes serve decompressed output for better AI compatibility
+- To enable compression: explicitly set `compress: true`
+
 #### Performance
 - Smart Edit reduces token usage by 90-95%
 - Terminal UI optimized for instant response
