@@ -118,6 +118,31 @@ claude mcp add st /usr/local/bin/st -- --mcp
 
 *Claude can now see your directories better than you can!* 🔮
 
+## 🚀 Revolutionary New Features!
+
+### 🎯 Smart Edit Tools - 90% Fewer Tokens!
+Edit code using AST understanding instead of diffs:
+```bash
+# Traditional: 450+ tokens to add a function
+# Smart Edit: Only 30 tokens! 
+st --mcp  # Access via MCP tools
+```
+[Learn more →](docs/FEATURES_OVERVIEW.md#-smart-edit-tools---90-95-token-reduction)
+
+### 🖥️ Smart Tree Terminal Interface (STTI)
+A terminal that anticipates your needs!
+```bash
+st --terminal  # Launch the intelligent terminal
+```
+[Learn more →](docs/SMART_TREE_TERMINAL_VISION.md)
+
+### 📊 Complete File History Tracking
+Track all AI file operations with full audit trail:
+```bash
+# Automatically tracks to ~/.mem8/.filehistory/
+```
+[Learn more →](docs/FEATURES_OVERVIEW.md#-file-history-tracking-system)
+
 ## 🎯 Usage Examples (The Fun Part!)
 
 ### 🌈 The Basics - Simple Yet Powerful

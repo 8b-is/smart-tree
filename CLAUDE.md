@@ -6,7 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Smart Tree (`st`) is a blazingly fast, AI-friendly directory visualization tool written in Rust. It's designed as an intelligent alternative to the traditional `tree` command, optimized for both human readability and AI token efficiency.
 
-**Current Version**: v3.3.5 - Features SSE support and enhanced file type detection!
+**Current Version**: v3.3.6 - Revolutionary Smart Edit Tools and Terminal Interface!
+
+### 🚀 Latest Features
+- **Smart Edit Tools**: 90-95% token reduction for code editing via AST understanding
+- **Terminal Interface (STTI)**: Anticipatory terminal that predicts your needs
+- **File History Tracking**: Complete audit trail of AI file operations
 
 ## Quick Start
 
@@ -317,7 +322,7 @@ cargo test mcp::tools
 cargo run -- --mcp-tools | jq  # Should output valid JSON
 ```
 
-### Available MCP Tools (25+)
+### Available MCP Tools (30+)
 - `server_info`: Get Smart Tree capabilities and performance tips
 - `analyze_directory`: Main workhorse with multiple output formats
 - `quick_tree`: Lightning-fast 3-level overview
@@ -332,6 +337,11 @@ cargo run -- --mcp-tools | jq  # Should output valid JSON
 - `find_tests`, `find_build_files`, `find_documentation`: Project structure
 - `get_git_status`: Git-aware analysis
 - `analyze_workspace`: Multi-project workspace analysis
+- **Smart Edit Tools** (NEW!):
+  - `smart_edit`: Apply multiple AST-based edits with 90% token reduction
+  - `get_function_tree`: Analyze code structure efficiently
+  - `insert_function`: Add functions with minimal tokens
+  - `remove_function`: Remove functions with dependency awareness
 - `watch_directory_sse`: Real-time directory monitoring with SSE
 - `track_file_operation`: Track AI file manipulations with hash-based change detection
 - `get_file_history`: Retrieve complete operation history for any file
