@@ -22,6 +22,7 @@ use std::time::SystemTime;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
+    terminal::SmartTreeTerminal,
     formatters::{
         ai::AiFormatter,
         ai_json::AiJsonFormatter,
@@ -87,6 +88,11 @@ struct Cli {
     /// Show version information and check for updates.
     #[arg(short = 'V', long, exclusive = true)]
     version: bool,
+    
+    /// Launch Smart Tree Terminal Interface (STTI) - Your coding companion!
+    /// This starts an interactive terminal that anticipates your needs.
+    #[arg(long, exclusive = true)]
+    terminal: bool,
 
     /// Rename project - elegant identity transition (format: "OldName" "NewName")
     #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2)]
@@ -478,6 +484,9 @@ async fn main() -> Result<()> {
     if cli.mcp_config {
         print_mcp_config();
         return Ok(());
+    }
+    if cli.terminal {
+        return run_terminal().await;
     }
     if cli.version {
         return show_version_with_updates().await;
@@ -1282,4 +1291,11 @@ async fn run_mcp_server() -> Result<()> {
     // Run the MCP server directly - no need for nested runtime!
     // `run_stdio` handles communication over stdin/stdout.
     server.run_stdio().await
+}
+
+/// Run the Smart Tree Terminal Interface - Your coding companion!
+async fn run_terminal() -> Result<()> {
+    // Create and run the terminal interface
+    let mut terminal = SmartTreeTerminal::new()?;
+    terminal.run().await
 }

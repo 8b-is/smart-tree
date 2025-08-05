@@ -39,6 +39,9 @@ rand = "0.8"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 whoami = "1.5"
 
+# Terminal UI dependencies
+ratatui = "0.25"
+crossterm = "0.27"
 
 # MCP (Model Context Protocol) support
 tokio = { version = "1.42", features = ["full"] }
