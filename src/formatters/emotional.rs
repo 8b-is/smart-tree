@@ -4,7 +4,7 @@
 //! providing a more human-like experience of file system navigation.
 
 use crate::emotional_depth::{EmotionalDepthAnalyzer, DirectoryEmotion};
-use crate::formatters::{Formatter, OutputMode, PathDisplayMode};
+use crate::formatters::{Formatter, PathDisplayMode};
 use crate::scanner::{FileNode, TreeStats};
 use colored::*;
 use std::io::{self, Write};
@@ -180,9 +180,6 @@ impl Formatter for EmotionalFormatter {
         output
     }
     
-    fn mode(&self) -> OutputMode {
-        OutputMode::Classic // Base it on classic mode
-    }
 }
 
 // Example output:

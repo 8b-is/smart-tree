@@ -384,8 +384,8 @@ enum OutputMode {
     Tsv,
     /// Super compact digest format. A single line with a hash and minimal stats, perfect for quick AI pre-checks.
     Digest,
-    /// Emotional tree - explores with feelings! Gets bored, excited, anxious about directories.
-    Emotional,
+    // /// Emotional tree - explores with feelings! Gets bored, excited, anxious about directories.
+    // Emotional, // TODO: Fix implementation
     /// MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization.
     Quantum,
     /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
@@ -802,9 +802,7 @@ async fn main() -> Result<()> {
             let input_processor = InputProcessor::new();
             let input_source = InputProcessor::detect_input_type(&input_str);
 
-            let context_root = tokio::runtime::Runtime::new()
-                .unwrap()
-                .block_on(input_processor.process(input_source))?;
+            let context_root = input_processor.process(input_source).await?;
 
             // Convert context nodes to file nodes
             let file_nodes = st::inputs::context_to_file_nodes(context_root);

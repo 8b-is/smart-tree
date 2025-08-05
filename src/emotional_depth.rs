@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Emotional states for directory exploration
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DirectoryEmotion {
     /// 🤩 "Ooh, what's in here?!" - Exciting new territory!
     Excited,

@@ -3,7 +3,7 @@ pub mod ai_json;
 pub mod classic;
 pub mod csv;
 pub mod digest;
-pub mod emotional;
+// mod emotional; // TODO: Fix implementation to match new FileNode structure
 pub mod hex;
 pub mod json;
 pub mod ls;
