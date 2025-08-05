@@ -125,7 +125,7 @@ pub async fn handle_sse_stream(
         anyhow::bail!("Path not allowed: {:?}", config.path);
     }
 
-    let (tx, mut rx) = mpsc::channel::<SseEvent>(100);
+    let (tx, rx) = mpsc::channel::<SseEvent>(100);
 
     // Spawn watcher task
     let watcher_tx = tx.clone();

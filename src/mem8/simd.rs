@@ -299,7 +299,7 @@ impl PerformanceBenchmark {
         let mut waves = Vec::with_capacity(num_waves);
         for i in 0..num_waves {
             let mut wave = MemoryWave::new((i as f32 * 10.0) % 1000.0, 0.8);
-            wave.valence = ((i as f32) / num_waves as f32 * 2.0 - 1.0);
+            wave.valence = (i as f32) / num_waves as f32 * 2.0 - 1.0;
             wave.arousal = (i as f32) / num_waves as f32;
             waves.push(wave);
         }
@@ -381,7 +381,7 @@ impl PerformanceBenchmark {
         let mut waves = Vec::with_capacity(num_waves);
         for i in 0..num_waves {
             let mut wave = MemoryWave::new(440.0, 0.8);
-            wave.valence = ((i as f32) / num_waves as f32 * 2.0 - 1.0);
+            wave.valence = (i as f32) / num_waves as f32 * 2.0 - 1.0;
             wave.arousal = (i as f32) / num_waves as f32;
             waves.push(wave);
         }

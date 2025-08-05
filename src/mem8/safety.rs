@@ -527,7 +527,7 @@ impl DivergenceTracker {
         
         total_divergence += e_diff * 50.0;
         
-        (total_divergence.min(255.0) as u8)
+        total_divergence.min(255.0) as u8
     }
 
     /// Get divergence category

@@ -8,7 +8,7 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -343,7 +343,7 @@ pub fn is_tool_available(tool_name: &str, perms: &PathPermissions) -> (bool, Opt
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    
     use tempfile::TempDir;
     
     #[test]

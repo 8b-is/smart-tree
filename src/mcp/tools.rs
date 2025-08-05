@@ -1,7 +1,7 @@
 //! MCP tools implementation for Smart Tree
 
 use super::{is_path_allowed, McpContext};
-use crate::mcp::permissions::{get_available_tools, PermissionCache};
+use crate::mcp::permissions::get_available_tools;
 use crate::{
     feedback_client::FeedbackClient,
     formatters::{
