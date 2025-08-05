@@ -9,3 +9,4 @@ venv
 .env
 *WISHLIST.md
 *.mq
+tmp/

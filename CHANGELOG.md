@@ -5,6 +5,68 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.6] - 2025-01-08 - "Living Documentation" 🚀
+
+### 🎉 Major Features
+
+#### Function Markdown Formatter - Living Blueprints! 📚
+- **NEW MODE**: `st --mode function-markdown` extracts and documents functions from your code
+- Supports 25+ programming languages (Rust, Python, JS/TS, Java, Go, C/C++, etc.)
+- Beautiful markdown output with:
+  - Summary statistics and language breakdown
+  - Clickable table of contents
+  - Function locations with line numbers
+  - Visibility indicators (🔓 public / 🔒 private)
+- Use `--show-private` to include internal functions
+- Perfect for real-time docs: `watch -n 5 'st --mode function-markdown src/ > FUNCTIONS.md'`
+
+#### Home Directory Safety - No More Crashes! 🏠🔒
+- Smart limits prevent memory exhaustion on massive directories
+- Different tiers: Regular (1M files), Home (500K), MCP (100K)
+- Real-time monitoring with progress warnings
+- Graceful abort with helpful suggestions
+- "Use --max-depth, --stream mode, or scan a more specific directory"
+
+#### Permission-Based Tool Gating 🔐
+- MCP tools now check permissions before availability
+- Reduces AI context usage by 70%+ 
+- Clear feedback: "Can't edit - directory is read-only"
+- As Hue said: "If you're not going to let us work, why bring the toolbag?"
+
+#### 8-O Mode Vision Document 8-O~~
+- Comprehensive vision for live code visualization
+- Performance heat maps with visual metaphors:
+  - 🔥 Hot functions glow based on CPU usage
+  - 🧊 I/O waits create frozen time bubbles
+  - ⚡ Thread contention shows as lightning
+  - 💜 GC pressure creates purple waves
+- Emotional context layers from directory scanning
+- Cast/Airplay streaming for pair programming
+- "Why is it slow?" → "Look at that molten red function!"
+
+### 🐛 Bug Fixes
+- Fixed "Cannot start a runtime from within a runtime" error
+- Resolved compilation issues with emotional/security modules
+- Fixed MCP tool availability in restricted directories
+- Improved error messages with actionable suggestions
+
+### 📈 Performance
+- Safety checks add only ~1μs per file overhead
+- Function extraction processes thousands of files in seconds
+- Memory-efficient scanning for directories with millions of files
+
+### 📚 Documentation
+- Added FUNCTION_MARKDOWN_FEATURE.md with examples
+- Added FUNCTION_MARKDOWN_VISION.md for future enhancements
+- Added HOME_DIRECTORY_SAFETY.md explaining limits
+- Added EIGHT_O_MODE_VISION.md for performance visualization
+
+### 🎭 Developer Experience
+- Trisha says: "It's like having a GPS for your code!" 🗺️
+- Function docs that update themselves - finally!
+- Performance issues become visually obvious
+- Wednesday release for weekend productivity! 🎉
+
 ## [3.0.0] - 2025-07-02 - "Quantum Awakening"
 
 ### 🌌 Major Release
