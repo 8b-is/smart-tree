@@ -4,6 +4,7 @@ pub mod classic;
 pub mod csv;
 pub mod digest;
 // mod emotional; // TODO: Fix implementation to match new FileNode structure
+pub mod function_markdown;
 pub mod hex;
 pub mod json;
 pub mod ls;

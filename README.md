@@ -170,6 +170,7 @@ st -m stats                 # 📊 Just the facts, ma'am
 st -m waste                 # 🗑️ Marie Kondo mode! Find duplicates & waste
 st -m markdown              # 📝 Perfect documentation in seconds!
 st -m mermaid               # 🧜‍♀️ Diagrams that make you look smart
+st -m function-markdown     # 📚 Living blueprints of your code functions!
 
 # For Robots (Your AI Friends) 🤖
 st -m ai                    # 🧠 AI-optimized (80% smaller!)

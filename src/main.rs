@@ -288,6 +288,11 @@ struct ScanArgs {
     /// --sort date --top 20 (20 most recent files)
     #[arg(long, value_name = "N")]
     top: Option<usize>,
+    
+    /// Include private functions in function documentation (for function-markdown mode)
+    /// By default, only public functions are shown
+    #[arg(long)]
+    show_private: bool,
 }
 
 /// Sort field options with intuitive names
@@ -408,6 +413,8 @@ enum OutputMode {
     Marqant,
     /// SSE - Server-Sent Events streaming format for real-time monitoring
     Sse,
+    /// Function documentation in markdown format - living blueprints of your code!
+    FunctionMarkdown,
 }
 
 /// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
@@ -533,6 +540,7 @@ async fn main() -> Result<()> {
             "waste" => Some(OutputMode::Waste),
             "marqant" => Some(OutputMode::Marqant),
             "sse" => Some(OutputMode::Sse),
+            "function-markdown" => Some(OutputMode::FunctionMarkdown),
             _ => None, // Unknown mode string, ignore.
         });
 
@@ -929,6 +937,15 @@ async fn main() -> Result<()> {
             OutputMode::Waste => {
                 // Waste detection and optimization analysis - "Marie Kondo mode!" - Hue & Aye
                 Box::new(WasteFormatter::new())
+            }
+            OutputMode::FunctionMarkdown => {
+                // Function documentation in markdown - "Living blueprints of your code!" - Trisha
+                use st::formatters::function_markdown::FunctionMarkdownFormatter;
+                Box::new(FunctionMarkdownFormatter::new(
+                    args.show_private,
+                    true, // show_complexity
+                    true, // show_call_graph
+                ))
             }
         };
 
