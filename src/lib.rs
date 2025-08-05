@@ -14,6 +14,7 @@ pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and 
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
 pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
 pub mod scanner; // The heart of directory traversal and file metadata collection. // For intelligently detecting project context (e.g., Rust, Node.js).
+pub mod scanner_safety; // Safety mechanisms to prevent crashes on large directories
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!

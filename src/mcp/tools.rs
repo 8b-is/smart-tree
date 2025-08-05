@@ -1349,6 +1349,12 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         sort_field: None,
         top_n: None,
     };
+    
+    // Special handling for home directory in MCP context
+    if path == std::path::PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
+        eprintln!("⚠️  Note: Scanning home directory with safety limits enabled");
+        eprintln!("   Maximum 100k files, 1 minute timeout for MCP operations");
+    }
 
     // Scan directory
     let scanner = Scanner::new(&path, config)?;

@@ -14,6 +14,7 @@
 //
 
 use anyhow::Result;
+use crate::scanner_safety::{ScannerSafetyLimits, ScannerSafetyTracker, estimate_node_size};
 use globset::{Glob, GlobSet, GlobSetBuilder}; // For powerful gitignore-style pattern matching.
 use regex::Regex; // For user-defined find patterns.
 use std::collections::{HashMap, HashSet}; // Our trusty hash-based collections.
@@ -565,6 +566,8 @@ pub struct Scanner {
     ignore_files: HashSet<PathBuf>,
     /// The root path from which the scan originates.
     root: PathBuf,
+    /// Safety limits to prevent crashes on large directories
+    safety_limits: ScannerSafetyLimits,
 }
 
 impl Scanner {
@@ -823,6 +826,18 @@ impl Scanner {
             HashSet::new()
         };
 
+        // Determine appropriate safety limits based on the path
+        let safety_limits = if canonical_root == PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
+            // Home directory needs special care
+            ScannerSafetyLimits::for_home_directory()
+        } else if canonical_root.starts_with("/") && canonical_root.components().count() <= 2 {
+            // Root or near-root paths need limits
+            ScannerSafetyLimits::for_home_directory()
+        } else {
+            // Regular directories can use default limits
+            ScannerSafetyLimits::default()
+        };
+        
         Ok(Self {
             config,
             gitignore,
@@ -830,6 +845,7 @@ impl Scanner {
             system_paths,
             ignore_files,
             root: canonical_root, // Store a copy of the root path.
+            safety_limits,
         })
     }
 
@@ -913,6 +929,9 @@ impl Scanner {
             return Ok(stats);
         }
 
+        // Initialize safety tracker for streaming mode
+        let safety_tracker = ScannerSafetyTracker::new(self.safety_limits.clone());
+
         // Original streaming logic for non-search cases
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
@@ -921,6 +940,13 @@ impl Scanner {
 
         // Loop through each entry provided by WalkDir.
         while let Some(entry_result) = walker.next() {
+            // Check safety limits
+            if let Err(safety_error) = safety_tracker.should_continue() {
+                eprintln!("⚠️  {}", safety_error);
+                eprintln!("   Use --max-depth or scan a more specific directory");
+                break;
+            }
+            
             match entry_result {
                 Ok(entry) => {
                     // Successfully read a directory entry.
@@ -942,6 +968,9 @@ impl Scanner {
                                     node.search_matches = self.search_in_file(&node.path);
                                 }
 
+                                // Track node for safety limits
+                                safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
+                                
                                 // Send the (ignored) node through the channel.
                                 if sender.send(node.clone()).is_err() {
                                     break; // Receiver has disconnected, stop scanning.
@@ -990,6 +1019,9 @@ impl Scanner {
                             };
 
                             if node.is_dir || should_include_file {
+                                // Track node for safety limits
+                                safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
+                                
                                 // Send the processed node through the channel.
                                 if sender.send(node.clone()).is_err() {
                                     break; // Receiver disconnected.
@@ -1025,6 +1057,8 @@ impl Scanner {
                         if !is_contents_error {
                             // Create a special node representing the permission-denied entry.
                             let node = self.create_permission_denied_node(path, depth);
+                            safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
+                            
                             if sender.send(node.clone()).is_err() {
                                 break; // Receiver disconnected.
                             }
@@ -1190,12 +1224,22 @@ impl Scanner {
                                                   // `ignored_dirs` was here, but its primary use with `skip_current_dir` is within the loop.
                                                   // If we need to track them for other reasons post-loop, it could be reinstated.
 
+        // Initialize safety tracker
+        let safety_tracker = ScannerSafetyTracker::new(self.safety_limits.clone());
+
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
             .follow_links(self.config.follow_symlinks)
             .into_iter();
 
         while let Some(entry_result) = walker.next() {
+            // Check safety limits
+            if let Err(safety_error) = safety_tracker.should_continue() {
+                eprintln!("⚠️  {}", safety_error);
+                eprintln!("   Use --max-depth, --stream mode, or scan a more specific directory");
+                break;
+            }
+            
             match entry_result {
                 Ok(entry) => {
                     let depth = entry.depth();
@@ -1209,6 +1253,7 @@ impl Scanner {
                                 if !node.is_dir && self.should_search_file(&node) {
                                     node.search_matches = self.search_in_file(&node.path);
                                 }
+                                safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
                                 all_nodes_collected.push(node);
                             }
                             if entry.file_type().is_dir() {
