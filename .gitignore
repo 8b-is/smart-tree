@@ -1,12 +1,28 @@
-.claude/
-target/
-node_modules
+# --- General ---
 .DS_Store
-rules
-__pycache__
-venv
-.venv
-.env
-*WISHLIST.md
-*.mq
-tmp/
+.vscode/
+*.swp
+*~
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+pip-wheel-metadata/
+*.egg-info/
+
+# --- Node ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# --- Rust ---
+/target/
+Cargo.lock
+
+# --- Build artifacts ---
+dist/
+build/
