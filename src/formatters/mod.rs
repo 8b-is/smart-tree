@@ -3,6 +3,7 @@ pub mod ai_json;
 pub mod classic;
 pub mod csv;
 pub mod digest;
+pub mod emotional;
 pub mod hex;
 pub mod json;
 pub mod ls;

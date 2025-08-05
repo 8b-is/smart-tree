@@ -384,6 +384,8 @@ enum OutputMode {
     Tsv,
     /// Super compact digest format. A single line with a hash and minimal stats, perfect for quick AI pre-checks.
     Digest,
+    /// Emotional tree - explores with feelings! Gets bored, excited, anxious about directories.
+    Emotional,
     /// MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization.
     Quantum,
     /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).

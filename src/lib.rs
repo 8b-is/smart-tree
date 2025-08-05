@@ -35,6 +35,7 @@ pub mod rename_project;
 
 // Emoji mapping - bringing life to file types!
 pub mod emoji_mapper;
+pub mod emotional_depth; // 🎭 Smart Tree has feelings about directories!
 
 // Re-export key items from the `scanner` module for easier access.
 // This means users of the `st` library can use `st::Scanner`
