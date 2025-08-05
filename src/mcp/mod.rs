@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 mod cache;
+mod permissions;
 mod prompts;
 mod resources;
 pub mod smart_edit;
@@ -18,6 +19,7 @@ mod sse;
 mod tools;
 
 use cache::*;
+use permissions::*;
 use prompts::*;
 use resources::*;
 use tools::*;
@@ -34,6 +36,8 @@ pub struct McpContext {
     pub cache: Arc<AnalysisCache>,
     /// Server configuration
     pub config: Arc<McpConfig>,
+    /// Permission cache
+    pub permissions: Arc<tokio::sync::Mutex<PermissionCache>>,
 }
 
 /// MCP server configuration
@@ -103,6 +107,7 @@ impl McpServer {
         let context = Arc::new(McpContext {
             cache: Arc::new(AnalysisCache::new(config.cache_ttl)),
             config: Arc::new(config),
+            permissions: Arc::new(tokio::sync::Mutex::new(PermissionCache::new())),
         });
 
         Self { context }

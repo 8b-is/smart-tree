@@ -1,6 +1,7 @@
 //! MCP tools implementation for Smart Tree
 
 use super::{is_path_allowed, McpContext};
+use crate::mcp::permissions::{get_available_tools, PermissionCache};
 use crate::{
     feedback_client::FeedbackClient,
     formatters::{
@@ -36,6 +37,20 @@ struct ToolDefinition {
 
 pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let tools = vec![
+        ToolDefinition {
+            name: "verify_permissions".to_string(),
+            description: "🔐 REQUIRED FIRST STEP: Verify permissions for a path before using other tools. This lightweight check determines which tools are available based on read/write permissions. Always call this first to see what operations are possible!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to verify permissions for"
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
         ToolDefinition {
             name: "server_info".to_string(),
             description: "Get information about the Smart Tree MCP server - shows capabilities, compression options, and performance tips. Call this to understand what Smart Tree can do for you!".to_string(),
@@ -940,6 +955,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
     let args = params["arguments"].clone();
 
     match tool_name {
+        "verify_permissions" => verify_permissions(args, ctx).await,
         "server_info" => server_info(args, ctx).await,
         "analyze_directory" => analyze_directory(args, ctx).await,
         "find_files" => find_files(args, ctx).await,
@@ -1166,6 +1182,119 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "type": "text",
             "text": json_string
         }]
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct VerifyPermissionsArgs {
+    path: String,
+}
+
+async fn verify_permissions(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let args: VerifyPermissionsArgs = serde_json::from_value(args)?;
+    let path = PathBuf::from(&args.path);
+    
+    // Basic security check
+    if !is_path_allowed(&path, &ctx.config) {
+        return Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": format!("🚫 Access Denied: Path '{}' is not in allowed paths list.\n\nAllowed paths:\n{}", 
+                    path.display(),
+                    ctx.config.allowed_paths.iter()
+                        .map(|p| format!("  - {}", p.display()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            }]
+        }));
+    }
+    
+    // Get permission cache
+    let mut perm_cache = ctx.permissions.lock().await;
+    
+    // Verify permissions
+    let perms = perm_cache.verify(&path)?;
+    
+    // Get available tools based on permissions
+    let tools = get_available_tools(&perms);
+    
+    // Format output
+    let mut output = format!("🔐 Permission Check for: {}\n\n", path.display());
+    
+    // Show permission status
+    output.push_str("📊 Permission Status:\n");
+    output.push_str(&format!("  • Exists: {}\n", if perms.exists { "✅" } else { "❌" }));
+    output.push_str(&format!("  • Readable: {}\n", if perms.readable { "✅" } else { "❌" }));
+    output.push_str(&format!("  • Writable: {}\n", if perms.writable { "✅" } else { "❌" }));
+    output.push_str(&format!("  • Type: {}\n", 
+        if perms.is_directory { "📁 Directory" } 
+        else if perms.is_file { "📄 File" } 
+        else { "❓ Unknown" }
+    ));
+    
+    if let Some(error) = &perms.error {
+        output.push_str(&format!("  • Error: {}\n", error));
+    }
+    
+    output.push_str("\n🛠️ Available Tools:\n");
+    
+    // Group tools by availability
+    let mut available = vec![];
+    let mut unavailable = vec![];
+    
+    for tool in &tools {
+        if tool.available {
+            available.push(tool);
+        } else {
+            unavailable.push(tool);
+        }
+    }
+    
+    // Show available tools
+    if !available.is_empty() {
+        output.push_str("\n✅ Ready to Use:\n");
+        for tool in available {
+            output.push_str(&format!("  • {} - Call with this path\n", tool.name));
+        }
+    }
+    
+    // Show unavailable tools with reasons
+    if !unavailable.is_empty() {
+        output.push_str("\n❌ Not Available (with reasons):\n");
+        for tool in unavailable {
+            output.push_str(&format!("  • {} - {}\n", 
+                tool.name, 
+                tool.reason.as_ref().unwrap_or(&"Unknown reason".to_string())
+            ));
+        }
+    }
+    
+    // Add helpful tips
+    output.push_str("\n💡 Tips:\n");
+    if !perms.exists {
+        output.push_str("  • The path doesn't exist. Check your spelling or use a different path.\n");
+    } else if !perms.readable {
+        output.push_str("  • No read permission. You may need to run with elevated privileges.\n");
+    } else if !perms.writable && perms.is_file {
+        output.push_str("  • File is read-only. You can analyze but not edit.\n");
+    }
+    
+    // Trisha says...
+    output.push_str("\n");
+    output.push_str("Trisha from Accounting says: \"It's like checking if you have the keys ");
+    output.push_str("before bringing the whole toolbox! Smart thinking!\" 🔑\n");
+    
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": output
+        }],
+        "metadata": {
+            "permissions": perms,
+            "available_tools": tools.iter().filter(|t| t.available).map(|t| &t.name).collect::<Vec<_>>(),
+            "unavailable_tools": tools.iter().filter(|t| !t.available).map(|t| &t.name).collect::<Vec<_>>(),
+        }
     }))
 }
 
