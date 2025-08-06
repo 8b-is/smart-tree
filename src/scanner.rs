@@ -888,8 +888,14 @@ impl Scanner {
         }
 
         let mut builder = GlobSetBuilder::new();
-        // Read the entire .gitignore file into a string.
-        let content = fs::read_to_string(&gitignore_path)?;
+        // Read the entire .gitignore file, handling non-UTF-8 content gracefully
+        let content = match fs::read(&gitignore_path) {
+            Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+            Err(e) => {
+                eprintln!("Warning: Could not read .gitignore at {:?}: {}", gitignore_path, e);
+                return Ok(None);
+            }
+        };
 
         // Process each line of the .gitignore file.
         for line in content.lines() {
