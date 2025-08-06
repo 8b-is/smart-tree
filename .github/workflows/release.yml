@@ -1,186 +1,359 @@
-name: Release
+name: Release 🚀
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release'
+        required: true
+        default: 'v4.0.0'
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   build:
-    name: Build for ${{ matrix.target }}
+    name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           # Linux builds
           - os: ubuntu-latest
+            name: Linux x86_64
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
             
           - os: ubuntu-latest
+            name: Linux ARM64
             target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+            cross: true
+            
+          - os: ubuntu-latest
+            name: Linux ARM32
+            target: armv7-unknown-linux-gnueabihf
             archive: tar.gz
             cross: true
             
           # macOS builds
           - os: macos-latest
+            name: macOS Intel
             target: x86_64-apple-darwin
             archive: tar.gz
             
           - os: macos-latest
+            name: macOS Apple Silicon
             target: aarch64-apple-darwin
             archive: tar.gz
             
           # Windows builds
           - os: windows-latest
+            name: Windows x86_64
             target: x86_64-pc-windows-msvc
             archive: zip
             extension: .exe
+            
+          - os: windows-latest
+            name: Windows ARM64
+            target: aarch64-pc-windows-msvc
+            archive: zip
+            extension: .exe
+            cross: true
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
-    - name: Install Rust
+    - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: ${{ matrix.target }}
     
-    - name: Install cross
+    - name: Cache cargo registry 📚
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+    
+    - name: Cache cargo index 📑
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-index-
+    
+    - name: Install cross-compilation tools 🛠️
       if: matrix.cross
       uses: taiki-e/install-action@v2
       with:
         tool: cross
     
-    - name: Build (native)
+    - name: Build (native) 🔨
       if: '!matrix.cross'
       run: cargo build --release --target ${{ matrix.target }}
     
-    - name: Build (cross)
+    - name: Build (cross) 🔧
       if: matrix.cross
       run: cross build --release --target ${{ matrix.target }}
     
-    - name: Create archive
+    - name: Run tests 🧪
+      if: '!matrix.cross && matrix.os != "windows-latest"'
+      run: cargo test --release --target ${{ matrix.target }}
+    
+    - name: Strip binary (Linux/macOS) 🗜️
+      if: matrix.os != 'windows-latest'
+      run: |
+        strip target/${{ matrix.target }}/release/st
+    
+    - name: Create archive 📦
       shell: bash
       run: |
         cd target/${{ matrix.target }}/release
         BINARY_NAME="st${{ matrix.extension || '' }}"
+        ARCHIVE_NAME="st-${{ github.ref_name }}-${{ matrix.target }}"
+        
+        # Include README and license in archive
+        cp ../../../README.md .
+        cp ../../../LICENSE . 2>/dev/null || echo "No LICENSE file"
+        cp ../../../SMART_TREE_CHEET_SHEET.md .
+        
         if [[ "${{ matrix.archive }}" == "zip" ]]; then
-          7z a ../../../st-${{ matrix.target }}.zip "$BINARY_NAME"
+          7z a "../../../${ARCHIVE_NAME}.zip" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
         else
-          tar czf ../../../st-${{ matrix.target }}.tar.gz "$BINARY_NAME"
+          tar czf "../../../${ARCHIVE_NAME}.tar.gz" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
         fi
         cd -
     
-    - name: Upload artifact
+    - name: Generate checksums 🔐
+      shell: bash
+      run: |
+        ARCHIVE_NAME="st-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}"
+        sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+        
+    - name: Upload artifact 📤
       uses: actions/upload-artifact@v4
       with:
         name: st-${{ matrix.target }}
-        path: st-${{ matrix.target }}.${{ matrix.archive }}
+        path: |
+          st-*.${{ matrix.archive }}
+          st-*.sha256
 
   build-dxt:
-    name: Build DXT Package
+    name: Build DXT Package 📦
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
     
-    - name: Install zip
-      run: sudo apt-get update && sudo apt-get install -y zip
+    - name: Install dependencies 🛠️
+      run: sudo apt-get update && sudo apt-get install -y zip jq
     
-    - name: Build DXT package
+    - name: Build DXT package 🎁
       run: |
         cd dxt
         ./build-dxt.sh
         cd ..
+        
+        # Generate checksum
+        sha256sum dxt/smart-tree.dxt > dxt/smart-tree.dxt.sha256
     
-    - name: Upload DXT artifact
+    - name: Upload DXT artifact 📤
       uses: actions/upload-artifact@v4
       with:
         name: smart-tree-dxt
-        path: dxt/smart-tree.dxt
+        path: |
+          dxt/smart-tree.dxt
+          dxt/smart-tree.dxt.sha256
+
+  build-docker:
+    name: Build Docker Images 🐳
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    
+    steps:
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx 🔧
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to GitHub Container Registry 🔐
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata 📋
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository }}
+        tags: |
+          type=ref,event=tag
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha
+    
+    - name: Build and push Docker image 🚀
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
   release:
-    name: Create Release
-    needs: [build, build-dxt]
+    name: Create Release 🎉
+    needs: [build, build-dxt, build-docker]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
-    - name: Download artifacts
+    - name: Download artifacts 📥
       uses: actions/download-artifact@v4
       with:
         path: artifacts
     
-    - name: List artifacts (debug)
-      run: find artifacts -type f -name "st-*" -o -name "*.dxt" | sort
+    - name: Prepare release assets 📋
+      run: |
+        # Move all artifacts to release directory
+        mkdir -p release
+        find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.dxt" -o -name "*.sha256" \) -exec mv {} release/ \;
+        
+        # List all release files
+        echo "Release files:"
+        ls -la release/
     
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        name: Smart Tree ${{ github.ref_name }}
-        body: |
-          # Smart Tree ${{ github.ref_name }} 🌳
-          
-          See [RELEASE_NOTES_${{ github.ref_name }}.md](https://github.com/8b-is/smart-tree/blob/main/RELEASE_NOTES_${{ github.ref_name }}.md) for detailed release notes.
-          
-          ## Installation
-
-          
-          ### Quick Install (Linux/macOS/WSL)
-          > [!TIP]
-          > This is best for all methods of using Smart Tree including Claude Desktop
-            > Other OS install instructions located at the front desk [here](https://github.com/8b-is/smart-tree?tab=readme-ov-file#-windows---the-slightly-longer-dance). 👀          
-
-          ```bash
-          curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
-          ```
-          MCP JSON
-          > Change the command to the proper path if yours is not that.  This works on my mac and linux fine.
-          > AI_TOOLS=1 highly compresses the output beyond the already compressed methods.  Some LLM's might not support it.  Just set to 0 and it will also be a little more human readable.
-          ```json
-          {
-            "mcpServers": {
-              "smart-tree": {
-                "command": "/usr/local/bin/st",
-                "args": [
-                  "--mcp"
-                ],
-                "env": {
-                  "AI_TOOLS": "1"
-                }
+    - name: Generate release notes 📝
+      id: release_notes
+      run: |
+        TAG_NAME="${{ github.ref_name }}"
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 $TAG_NAME^ 2>/dev/null || echo "")
+        
+        echo "## 🎸 Smart Tree ${TAG_NAME} Release" > release_notes.md
+        echo "" >> release_notes.md
+        
+        # Add link to full release notes if they exist
+        if [[ -f "RELEASE_NOTES_${TAG_NAME}.md" ]]; then
+          echo "📋 **[Full Release Notes](https://github.com/${{ github.repository }}/blob/main/RELEASE_NOTES_${TAG_NAME}.md)**" >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        # Generate changelog since last tag
+        if [[ -n "$PREVIOUS_TAG" ]]; then
+          echo "### 📊 Changes since $PREVIOUS_TAG" >> release_notes.md
+          echo "" >> release_notes.md
+          git log $PREVIOUS_TAG..$TAG_NAME --pretty=format:"- %s (%an)" >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        # Add installation instructions
+        cat >> release_notes.md << 'EOF'
+        
+        ## ⚡ Quick Installation
+        
+        ### Linux/macOS/WSL
+        ```bash
+        curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+        ```
+        
+        ### Claude Desktop MCP Configuration
+        ```json
+        {
+          "mcpServers": {
+            "smart-tree": {
+              "command": "/usr/local/bin/st",
+              "args": ["--mcp"],
+              "env": {
+                "AI_TOOLS": "1"
               }
             }
           }
-          ```
-          ### DXT
-          You can do this.  It is so limited on file system love..  It is hard for me to love right now.  But, I have ideas to fix that.
-
-          ### Manual Installation
-          Download the appropriate binary for your platform below.
-          
-          ## Available Downloads
-          
-          | Platform | Architecture | File |
-          |----------|--------------|------|
-          | Linux | x86_64 | `st-x86_64-unknown-linux-gnu.tar.gz` |
-          | Linux | ARM64 | `st-aarch64-unknown-linux-gnu.tar.gz` |
-          | macOS | Intel | `st-x86_64-apple-darwin.tar.gz` |
-          | macOS | Apple Silicon | `st-aarch64-apple-darwin.tar.gz` |
-          | Windows | x86_64 | `st-x86_64-pc-windows-msvc.zip` |
-          | Claude Desktop | All | `smart-tree.dxt` |
-          
-          ---
-          *Built with 💙 by the Smart Tree Team*
-        files: |
-          artifacts/**/st-*
-          artifacts/**/smart-tree.dxt
+        }
+        ```
+        
+        ### Docker
+        ```bash
+        docker pull ghcr.io/8b-is/smart-tree:latest
+        docker run --rm -v $(pwd):/workspace ghcr.io/8b-is/smart-tree --mode summary-ai /workspace
+        ```
+        
+        ## 📦 Download Options
+        
+        | Platform | Architecture | File | SHA256 |
+        |----------|--------------|------|---------|
+        | Linux | x86_64 | `st-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz` | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/st-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz.sha256) |
+        | Linux | ARM64 | `st-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz` | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/st-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz.sha256) |
+        | macOS | Intel | `st-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz` | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/st-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz.sha256) |
+        | macOS | Apple Silicon | `st-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz` | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/st-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz.sha256) |
+        | Windows | x86_64 | `st-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/st-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip.sha256) |
+        | Claude Desktop | All | `smart-tree.dxt` | [checksum](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/smart-tree.dxt.sha256) |
+        
+        ---
+        
+        🎸 **Pro Tip**: Life's too short for slow directory traversal!
+        
+        Built with 💙 by the Smart Tree Team: Hue, Aye, Trisha, and The Cheet
+        
+        Aye, Aye! 🚢
+        EOF
+    
+    - name: Create GitHub Release 🚀
+      uses: softprops/action-gh-release@v2
+      with:
+        name: Smart Tree ${{ github.ref_name }} 🌳
+        body_path: release_notes.md
+        files: release/*
         draft: false
-        prerelease: false
+        prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Update Homebrew Formula 🍺
+      if: '!contains(github.ref_name, "alpha") && !contains(github.ref_name, "beta")'
+      run: |
+        echo "TODO: Update Homebrew formula for version ${{ github.ref_name }}"
+        # This would typically trigger a PR to homebrew-core or your tap
+    
+    - name: Notify Discord 📢
+      if: always()
+      run: |
+        if [[ "${{ job.status }}" == "success" ]]; then
+          MESSAGE="🚀 Smart Tree ${{ github.ref_name }} has been released! Check it out at https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+        else
+          MESSAGE="⚠️ Smart Tree ${{ github.ref_name }} release failed. Check the workflow for details."
+        fi
+        
+        # Only run if webhook is set
+        if [[ -n "${{ secrets.DISCORD_WEBHOOK }}" ]]; then
+          curl -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"$MESSAGE\"}"
+        fi
+      continue-on-error: true

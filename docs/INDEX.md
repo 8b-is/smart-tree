@@ -1,4 +1,4 @@
-# Smart Tree Documentation Index 📚
+# Smart Tree Documentation Index 📚 - Your Construction Site Manual! 🏗️
 
 ## Quick Links
 
@@ -8,10 +8,10 @@
 - [Cheat Sheet](st-cheetsheet.md) - Command line cheat sheet
 - [Examples](../examples/README.md) - Usage examples
 
-### 🌟 New Features (v3.3.6)
-- [**Features Overview**](FEATURES_OVERVIEW.md) - All new features explained! 
+### 🌟 New Features (v4.0.0-alpha) - Your Enhanced Toolbox!
+- [**Features Overview**](FEATURES_OVERVIEW.md) - Your complete toolbox inventory! 
 - [**Smart Edit Tools**](../examples/smart_edit_example.md) - Revolutionary token-efficient editing
-- [**Terminal Interface Vision**](SMART_TREE_TERMINAL_VISION.md) - The coding companion that anticipates needs
+- [**Terminal Interface Vision**](SMART_TREE_TERMINAL_VISION.md) - Your AI construction helper that knows what you need next
 - [**Terminal Demo**](TERMINAL_DEMO.md) - What we've built so far
 - [**File History Tracking**](FEATURES_OVERVIEW.md#-file-history-tracking-system) - Complete audit trail
 
@@ -76,24 +76,24 @@
 - [GitHub Repository](https://github.com/8b-is/smart-tree)
 - [Discord Community](https://discord.gg/smarttree) *(coming soon)*
 
-## Quick Command Reference
+## Quick Command Reference - Your Tool Belt! 🧰
 
 ```bash
-# Basic usage
-st                      # Classic tree view
-st --terminal           # Launch intelligent terminal
-st --mcp               # Run as MCP server
-st --mode summary-ai   # AI-optimized summary
+# Your construction helper commands
+st                      # Classic tree view - survey the site
+st --terminal           # Launch your AI helper - ready to assist!
+st --mcp               # Run as MCP server - toolbox API mode
+st --mode summary-ai   # AI-optimized summary - efficient reporting
 
-# Smart features
-st --search "TODO"     # Search in files
-st --semantic          # Semantic grouping
-st --sse-server        # Real-time monitoring
+# Smart helper features
+st --search "TODO"     # Find work items - like marking spots to fix
+st --semantic          # Group by purpose - organize the job site
+st --sse-server        # Real-time monitoring - watch for changes
 
-# Get help
-st --help              # Full help
-st --cheet             # Fun cheat sheet
-st --mcp-tools         # List MCP tools
+# Get assistance from your helper
+st --help              # Full manual - everything you need to know
+st --cheet             # Quick reference - helper's cheat sheet
+st --mcp-tools         # List all tools - see what's in the toolbox
 ```
 
 ## Need Help?
@@ -103,6 +103,6 @@ st --mcp-tools         # List MCP tools
 - 💬 Ask in GitHub Issues
 - 🎯 Use `st --help` for CLI reference
 
-Remember: Smart Tree is evolving from a visualization tool to your complete coding companion!
+Remember: Smart Tree is your construction site helper - always ready with the right tool at the right time! Like having an experienced assistant who knows what you need before you ask. 🏗️
 
 Aye, Aye! 🚢

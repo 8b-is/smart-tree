@@ -1,18 +1,18 @@
-# Smart Tree MCP Quick Reference
+# Smart Tree MCP Quick Reference - Your Toolbox Guide! 🧰🏗️
 
-> **📢 Important Update (v3.3.6+)**: All output is now decompressed by default for better AI compatibility! No more base64 struggles!
+> **📢 Important Update (v4.0.0-alpha+)**: All output is now decompressed by default for better AI compatibility! Your helper delivers tools ready-to-use, no assembly required!
 
-## 🚀 Essential Commands
+## 🚀 Essential Commands - Calling Your Helper
 
 ```bash
-st --mcp              # Run as MCP server
-st --mcp-tools        # List available tools
-st --mcp-config       # Show config snippet
+st --mcp              # Activate your AI helper in API mode
+st --mcp-tools        # Show all tools in the toolbox
+st --mcp-config       # Get setup instructions for your helper
 ```
 
-## 🛠️ Available Tools
+## 🛠️ Available Tools - What's in Your Helper's Toolbox
 
-### analyze_directory
+### analyze_directory - Your Helper's Site Survey Tool
 ```json
 {
   "name": "analyze_directory",
@@ -31,7 +31,7 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-### find_files
+### find_files - Your Helper's Material Locator
 ```json
 {
   "name": "find_files",
@@ -44,7 +44,7 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-### get_statistics
+### get_statistics - Your Helper's Measuring Tape
 ```json
 {
   "name": "get_statistics",
@@ -55,7 +55,7 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-### get_digest
+### get_digest - Your Helper's Project Fingerprint Tool
 ```json
 {
   "name": "get_digest",
@@ -65,20 +65,20 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-## 📋 Output Modes
+## 📋 Output Modes - How Your Helper Reports Back
 
-| Mode | Description | Best For |
+| Mode | Description | When Your Helper Uses It |
 |------|-------------|----------|
-| `ai` | LLM-optimized with emojis | AI analysis (default) |
-| `digest` | SHA256 + minimal stats | Quick comparisons |
-| `hex` | Fixed-width format | Parsing/streaming |
-| `json` | Structured data | Programmatic use |
-| `stats` | Statistics only | Directory overview |
-| `classic` | Human-readable tree | Manual review |
+| `ai` | LLM-optimized with emojis | Reporting to AI (default) |
+| `digest` | SHA256 + minimal stats | Quick site fingerprinting |
+| `hex` | Fixed-width format | Precise measurements |
+| `json` | Structured data | Machine-readable reports |
+| `stats` | Statistics only | Progress reports |
+| `classic` | Human-readable tree | Showing humans the layout |
 
-## 🎯 Common Patterns
+## 🎯 Common Construction Tasks - Your Helper in Action 🏗️
 
-### Analyze Codebase with Compression
+### Survey the Entire Construction Site
 ```json
 {
   "name": "analyze_directory",
@@ -91,7 +91,7 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-### Find Large Recent Files
+### Locate Heavy Materials (Large Files)
 ```json
 {
   "name": "find_files",
@@ -103,7 +103,7 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-### Search Code for TODOs
+### Find Work Orders (TODOs)
 ```json
 {
   "name": "analyze_directory",
@@ -116,7 +116,7 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-### Stream Large Directory
+### Monitor Large Construction Site in Real-time
 ```json
 {
   "name": "analyze_directory",
@@ -129,39 +129,39 @@ st --mcp-config       # Show config snippet
 }
 ```
 
-## 🔧 Key Parameters
+## 🔧 Tool Settings - Configuring Your Helper
 
-### Visibility Control
+### Visibility Control - What Your Helper Shows You
 - `show_hidden`: Include .files
 - `show_ignored`: Show [ignored] items
 - `no_ignore`: Bypass .gitignore
 - `no_default_ignore`: Disable built-in ignores
 
-### Path Display
+### Path Display - How Your Helper Labels Things
 - `off`: Names only (default)
 - `relative`: From scan root
 - `full`: Absolute paths
 
-### Performance
+### Performance - Making Your Helper Work Efficiently
 - `compress`: ~80% smaller output
 - `stream`: Immediate results
 - `max_depth`: Limit traversal
 - `file_type`: Reduce search space
 
-## 💡 Pro Tips
+## 💡 Pro Tips from Experienced Construction Helpers 🏗️
 
-1. **Always compress** for large trees: `compress: true`
-2. **Stream** for immediate feedback: `stream: true`
-3. **Use digest** for change detection
-4. **Combine filters** for precision
-5. **Cache** lasts 5 minutes by default
+1. **Pack efficiently** for large jobs: `compress: true` - like organizing tools in a compact box
+2. **Get updates as you work**: `stream: true` - your helper reports progress in real-time
+3. **Fingerprint the site**: Use `digest` to detect changes quickly
+4. **Be specific** with your requests - combine filters for precise results
+5. **Your helper remembers** - cache lasts 5 minutes (no need to re-survey)
 
-## 🔐 Security
+## 🔐 Safety Rules - Your Helper's Boundaries
 
-- Blocked: `/etc`, `/sys`, `/proc`
-- No symlink following
-- Configurable path restrictions
-- Respects .gitignore by default
+- **Off-limits areas**: `/etc`, `/sys`, `/proc` - your helper won't enter restricted zones
+- **No shortcuts**: Symlinks are not followed for safety
+- **Customizable boundaries**: Configure where your helper can work
+- **Respects project rules**: Follows .gitignore by default
 
 ## 📦 Output Examples
 
@@ -184,4 +184,4 @@ SHA256:a3f5b2c1... Files:234 Dirs:45 Size:15.2M
 ```
 
 ---
-**Smart Tree MCP** - Making directories AI-friendly! 🌳✨ 
+**Smart Tree MCP v4.0.0-alpha** - Your AI Construction Helper! Ready with the right tool at the right time! 🏗️🌳✨ 

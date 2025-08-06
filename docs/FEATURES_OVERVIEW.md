@@ -1,8 +1,10 @@
 # Smart Tree Features Overview 🌳
 
-## Revolutionary Features Added in v3.3.6
+## Revolutionary Features in v4.0.0-alpha 🏗️
 
 ### 🚀 Smart Edit Tools - 90-95% Token Reduction!
+
+**Like a construction helper who knows exactly which tool you need next!**
 
 Smart Tree now includes revolutionary AST-based code editing that uses 90-95% fewer tokens than traditional diff approaches!
 
@@ -44,9 +46,17 @@ mcp.callTool('smart_edit', {
 })
 ```
 
-### 🖥️ Smart Tree Terminal Interface (STTI)
+### 🖥️ Smart Tree Terminal Interface (STTI) - Your Construction Site Helper! 🏗️
 
-A revolutionary terminal that anticipates your needs like a construction helper!
+**The AI assistant that hands you the right tool before you ask for it!**
+
+Imagine a construction helper who:
+- Knows what tool you'll need next
+- Prepares materials before you request them
+- Suggests better approaches based on the job
+- Keeps your workspace organized
+
+That's STTI - your coding construction helper!
 
 #### Features
 - **Real-time Context Awareness** - Knows what project you're in
@@ -54,15 +64,15 @@ A revolutionary terminal that anticipates your needs like a construction helper!
 - **Smart Command Completion** - Context-aware completions
 - **Visual Feedback** - Beautiful TUI with panels for history and suggestions
 
-#### Launch the Terminal
+#### Launch Your Helper
 ```bash
-st --terminal
+st --terminal  # Your AI construction helper is ready!
 ```
 
 #### UI Layout
 ```
 ┌─────────────────────────────────────────────────┐
-│ Smart Tree Terminal v4.0 - Your Coding Companion │
+│ Smart Tree Terminal v4.0.0-alpha - Your Construction Helper │
 ├─────────────────────────────────────────────────┤
 │ Context: Rust Project | Editing: main.rs        │
 ├─────────────────────────────────────────────────┤
@@ -124,7 +134,9 @@ Wave-based memory system for consciousness simulation!
 - Subliminal pattern recognition
 - The Custodian safety system
 
-### 🎯 Enhanced MCP Tools (30+)
+### 🎯 Enhanced MCP Tools (30+) - Your Complete Toolbox! 🧰
+
+**Like a well-organized construction site toolbox - every tool has its purpose!**
 
 #### Discovery Tools
 - `quick_tree` - Lightning-fast 3-level overview
@@ -183,10 +195,10 @@ As calculated by our favorite accountant:
 ### Vision
 Smart Tree is evolving from a visualization tool to your complete coding companion - anticipating needs, saving tokens, and making development FUN!
 
-## Quick Start
+## Quick Start - Get Your Helper Ready! 🏗️
 
 ```bash
-# Install Smart Tree
+# Install your construction helper
 cargo install st
 
 # Launch terminal interface
@@ -199,12 +211,13 @@ st --mcp
 st --mode summary-ai /your/project
 ```
 
-## Why Smart Tree?
+## Why Smart Tree? - The Ultimate Construction Helper Philosophy 🏗️
 
-1. **Token Efficient** - Save 90%+ on AI tokens
-2. **Context Aware** - Understands your project
-3. **Predictive** - Anticipates your needs
-4. **Fun** - Makes coding enjoyable!
+1. **Token Efficient** - Like a helper who brings exactly what you need, no wasted trips!
+2. **Context Aware** - Knows your project like a helper knows the job site
+3. **Predictive** - Hands you tools before you ask, like an experienced assistant
+4. **Organized** - Keeps your workspace clean and tools accessible
+5. **Fun** - Makes coding as enjoyable as building with a great team!
 
 As Trisha says: "It's like finding a tax loophole so massive it makes the Panama Papers look like a receipt from Starbucks!" 💎
 

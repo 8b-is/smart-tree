@@ -1,5 +1,5 @@
 # 🎸 Smart Tree Ultimate Cheet Sheet 🎸
-*The Complete Rock Opera Guide to Smart Tree v3.3.6*
+*The Complete Rock Opera Guide to Smart Tree v4.0.0*
 
 ## 🚀 Quick Start (30 Seconds to Glory)
 
@@ -192,7 +192,7 @@ st --hot-tub  # Collaborative debugging with Omni! 🛁
 
 ```bash
 # Cargo (Rust users)
-cargo install st --version 3.3.6
+cargo install st --version 4.0.0
 
 # From source (hackers)
 git clone https://github.com/8b-is/smart-tree.git
