@@ -1215,7 +1215,16 @@ async fn show_version_with_updates() -> Result<()> {
 async fn check_for_updates_cli() -> Result<String> {
     let current_version = env!("CARGO_PKG_VERSION");
 
-    let client = reqwest::Client::new();
+    // Skip update check if explicitly disabled
+    if std::env::var("SMART_TREE_NO_UPDATE_CHECK").is_ok() {
+        return Ok(String::new());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2)) // Global timeout for all operations
+        .connect_timeout(std::time::Duration::from_secs(1)) // Quick connect timeout
+        .build()?;
+    
     let api_url =
         std::env::var("SMART_TREE_FEEDBACK_API").unwrap_or_else(|_| "https://f.8b.is".to_string());
 
@@ -1223,7 +1232,6 @@ async fn check_for_updates_cli() -> Result<String> {
 
     let response = client
         .get(&check_url)
-        .timeout(std::time::Duration::from_secs(5)) // Quick timeout for CLI
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Network error: {}", e))?;
