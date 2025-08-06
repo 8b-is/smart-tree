@@ -1,6 +1,6 @@
 # Smart Tree v4.0.0-alpha - "Living Documentation Alpha" 🚀🎸
 
-## Release Date: January 8, 2025
+## Release Date: August 8, 2025
 
 ## 🎸 Why 4.0.0-alpha?
 
