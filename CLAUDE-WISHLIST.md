@@ -372,7 +372,7 @@ mcp.callTool('get_project_history_summary', {
 })
 # Shows: total operations, files modified, operation breakdown
 ```
-**Status**: Implemented in v3.3.6
+**Status**: Implemented in v4.0.0-alpha
 
 ## Performance Enhancements
 
