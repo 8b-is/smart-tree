@@ -1434,8 +1434,8 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             general_purpose::STANDARD.encode(&output)
         )
     } else {
-        // For other formats, convert to string first
-        let output_str = String::from_utf8(output)?;
+        // For other formats, convert to string first (using lossy for non-UTF8 files like .pyc)
+        let output_str = String::from_utf8_lossy(&output).to_string();
 
         if mcp_compress {
             use flate2::write::ZlibEncoder;
@@ -1616,7 +1616,7 @@ async fn get_statistics(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     Ok(json!({
         "content": [{
             "type": "text",
-            "text": String::from_utf8(output)?
+            "text": String::from_utf8_lossy(&output).to_string()
         }]
     }))
 }
@@ -1665,7 +1665,7 @@ async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     Ok(json!({
         "content": [{
             "type": "text",
-            "text": String::from_utf8(output)?
+            "text": String::from_utf8_lossy(&output).to_string()
         }]
     }))
 }
