@@ -2015,7 +2015,7 @@ dependencies = [
 
 [[package]]
 name = "st"
-version = "3.3.6"
+version = "4.0.0-alpha"
 dependencies = [
  "anyhow",
  "assert_cmd",
