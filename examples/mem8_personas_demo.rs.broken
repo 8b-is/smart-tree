@@ -2,7 +2,8 @@
 //! Shows how each developer gets their own unique wave signature
 
 use anyhow::Result;
-use st::mem8::{SmartTreeMem8, PersonaAnalyzer, personas::{DeveloperPersona, StyleSignature, TemporalPattern, EmotionalProfile, ContributionMetrics}};
+use st::mem8::{SmartTreeMem8, PersonaAnalyzer, DeveloperPersona};
+use st::mem8::developer_personas::{StyleSignature, TemporalPattern, EmotionalProfile, ContributionMetrics};
 use std::cmp::Ordering;
 
 // --- Constants for Analysis Thresholds ---

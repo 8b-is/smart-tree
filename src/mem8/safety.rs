@@ -452,7 +452,7 @@ struct EmotionalBaseline {
 }
 
 #[derive(Clone)]
-struct EmotionalState {
+pub struct EmotionalState {
     valence: f32,
     arousal: f32,
     coherence: f32,

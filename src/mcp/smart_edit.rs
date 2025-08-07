@@ -40,19 +40,22 @@ impl SupportedLanguage {
     }
 
     fn get_parser(&self) -> Result<Parser> {
+        use tree_sitter_language::LanguageFn;
+        
         let mut parser = Parser::new();
-        let language = match self {
-            Self::Rust => tree_sitter_rust::language(),
-            Self::Python => tree_sitter_python::language(),
-            Self::JavaScript => tree_sitter_javascript::language(),
-            Self::TypeScript => tree_sitter_typescript::language_typescript(),
-            Self::Go => tree_sitter_go::language(),
-            Self::Java => tree_sitter_java::language(),
-            Self::CSharp => tree_sitter_c_sharp::language(),
-            Self::Cpp => tree_sitter_cpp::language(),
-            Self::Ruby => tree_sitter_ruby::language(),
+        let language_fn: LanguageFn = match self {
+            Self::Rust => tree_sitter_rust::LANGUAGE,
+            Self::Python => tree_sitter_python::LANGUAGE,
+            Self::JavaScript => tree_sitter_javascript::LANGUAGE,
+            Self::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
+            Self::Go => tree_sitter_go::LANGUAGE,
+            Self::Java => tree_sitter_java::LANGUAGE,
+            Self::CSharp => tree_sitter_c_sharp::LANGUAGE,
+            Self::Cpp => tree_sitter_cpp::LANGUAGE,
+            Self::Ruby => tree_sitter_ruby::LANGUAGE,
         };
-        parser.set_language(language)?;
+        let language = language_fn.into();
+        parser.set_language(&language)?;
         Ok(parser)
     }
 }
