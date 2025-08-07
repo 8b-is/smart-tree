@@ -21,6 +21,32 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+// Tool lanes for AI escalation path - Omni's three-lane design
+#[derive(Debug, Clone, Serialize)]
+pub enum ToolLane {
+    Explore,  // 🔍 Discovery and overview
+    Analyze,  // 🧪 Deep analysis and search
+    Act,      // ⚡ Modifications and writes
+}
+
+impl ToolLane {
+    pub fn emoji(&self) -> &str {
+        match self {
+            ToolLane::Explore => "🔍",
+            ToolLane::Analyze => "🧪",
+            ToolLane::Act => "⚡",
+        }
+    }
+    
+    pub fn name(&self) -> &str {
+        match self {
+            ToolLane::Explore => "EXPLORE",
+            ToolLane::Analyze => "ANALYZE",
+            ToolLane::Act => "ACT",
+        }
+    }
+}
+
 // Helper to determine if we should use default ignores
 // We disable them for /tmp paths to support testing
 fn should_use_default_ignores(path: &Path) -> bool {
@@ -194,7 +220,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "quick_tree".to_string(),
-            description: "⚡ START HERE! Lightning-fast 3-level directory overview using SUMMARY-AI mode with 10x compression. Perfect for initial exploration before diving into details. This is your go-to tool for quickly understanding any codebase structure. Automatically optimized for AI token efficiency - saves you tokens while giving maximum insight!".to_string(),
+            description: "🔍 EXPLORE - START HERE! Lightning-fast 3-level directory overview using SUMMARY-AI mode with 10x compression. Perfect for initial exploration before diving into details. This is your go-to tool for quickly understanding any codebase structure. Automatically optimized for AI token efficiency - saves you tokens while giving maximum insight!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {

@@ -4,7 +4,12 @@
 
 /// Check if we're in AI mode
 pub fn is_ai_mode() -> bool {
-    std::env::var("AI_TOOLS").is_ok() || std::env::var("MCP_MODE").is_ok()
+    std::env::var("AI_TOOLS").is_ok() || std::env::var("MCP_MODE").is_ok() || is_strict_mode()
+}
+
+/// Check if we're in strict AI mode (JSON-only output)
+pub fn is_strict_mode() -> bool {
+    std::env::var("ST_AI_STRICT").is_ok()
 }
 
 /// Print to stdout or stderr based on AI mode

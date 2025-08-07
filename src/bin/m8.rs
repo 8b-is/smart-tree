@@ -9,6 +9,7 @@ use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::PathBuf;
 use crc32fast::Hasher;
 use base64::Engine;
+use serde_json::json;
 
 #[derive(Parser)]
 #[command(
@@ -62,6 +63,16 @@ enum Commands {
         
         /// Output path for golden vector
         output: PathBuf,
+    },
+    
+    /// Print section offsets and lengths (machine-readable index)
+    Index {
+        /// Path to the MEM8 file
+        file: PathBuf,
+        
+        /// Output in JSON format
+        #[arg(short, long)]
+        json: bool,
     },
 }
 
@@ -303,6 +314,56 @@ fn create_golden(input: &PathBuf, output: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+fn print_index(path: &PathBuf, json_format: bool) -> Result<()> {
+    let mut file = File::open(path)
+        .context("Failed to open MEM8 file")?;
+    
+    // Read header
+    let header = M8Header::read_from(&mut file)?;
+    header.validate()?;
+    
+    // Read section table
+    let mut sections = Vec::new();
+    for i in 0..header.section_count {
+        let section = M8Section::read_from(&mut file)?;
+        sections.push((i, section));
+    }
+    
+    if json_format {
+        // JSON output for machine consumption
+        let index = json!({
+            "header": {
+                "version": header.version,
+                "sections": header.section_count,
+                "total_size": header.total_size,
+                "crc32": format!("0x{:08x}", header.crc32),
+            },
+            "sections": sections.iter().map(|(i, s)| json!({
+                "index": i,
+                "id": s.id_str(),
+                "offset": s.offset,
+                "size": s.size,
+                "flags": format!("0x{:02x}", s.flags),
+            })).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&index)?);
+    } else {
+        // Human-readable output
+        println!("MEM8 Index");
+        println!("==========");
+        println!("Sections: {}", header.section_count);
+        println!();
+        println!("Index  ID    Offset       Size");
+        println!("-----  ----  -----------  -----------");
+        for (i, section) in sections {
+            println!("{:5}  {:4}  0x{:08x}   {:10}",
+                i, section.id_str(), section.offset, section.size);
+        }
+    }
+    
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     
@@ -318,6 +379,9 @@ fn main() -> Result<()> {
         }
         Commands::Golden { input, output } => {
             create_golden(&input, &output)?;
+        }
+        Commands::Index { file, json } => {
+            print_index(&file, json)?;
         }
     }
     
