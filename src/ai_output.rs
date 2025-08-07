@@ -61,8 +61,8 @@ impl Default for AiOutputConfig {
             // Omni's recommended defaults for AI consumption
             Self {
                 mode: "summary-ai".to_string(),
-                compress: true,
-                no_emoji: true,
+                compress: false, // No compression by default - only after probe success
+                no_emoji: is_strict_mode(), // Emoji only in strict mode
                 path_mode: "relative".to_string(),
                 deterministic_sort: true,
                 include_digest: true,
@@ -161,6 +161,87 @@ pub struct AiResponse<T> {
     pub digest: Option<String>,
     pub usage: Usage,
     pub next_best_calls: Vec<NextCall>,
+    pub decorations: Option<Decorations>,
+    pub watermark: Option<Watermark>,
+}
+
+/// Visual hints separated from primary data
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct Decorations {
+    pub emoji_hint: Option<String>,
+    pub color: Option<String>,
+    pub intensity: Option<u8>,
+}
+
+/// Context watermark for AI clients
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct Watermark {
+    pub mode: ModeInfo,
+    pub compression: CompressionInfo,
+    pub lane: Option<String>,
+    pub next_lanes: Vec<String>,
+    pub dir_digest: Option<String>,
+    pub args_fingerprint: Option<String>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct ModeInfo {
+    pub strict: bool,
+    pub ai_tools: bool,
+    pub emoji: bool,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct CompressionInfo {
+    pub default: bool,
+    pub supported: bool,
+    pub active: bool,
+}
+
+/// Compression capability probe
+#[derive(serde::Serialize, Debug)]
+pub struct CompressionProbe {
+    pub plain: String,
+    pub base64: String,
+    pub zlib_base64: String,
+    pub instructions: String,
+}
+
+impl CompressionProbe {
+    pub fn new() -> Self {
+        Self {
+            plain: "PING".to_string(),
+            base64: "UElORw==".to_string(), // base64("PING")
+            zlib_base64: "eJwLy0xPVgIACR0DEQ==".to_string(), // base64(zlib("PING"))
+            instructions: "Call server_info again with echo: 'BASE64_OK' and/or 'ZLIB_OK' if you could decode.".to_string(),
+        }
+    }
+}
+
+/// Session compression capabilities
+#[derive(Debug, Clone, Default)]
+pub struct CompressionCapabilities {
+    pub base64: bool,
+    pub zlib: bool,
+    pub probed: bool,
+}
+
+impl CompressionCapabilities {
+    pub fn from_echo(echo: &str) -> Self {
+        Self {
+            base64: echo.contains("BASE64_OK"),
+            zlib: echo.contains("ZLIB_OK"),
+            probed: true,
+        }
+    }
+    
+    pub fn should_compress(&self) -> bool {
+        // Only compress if explicitly supported and not disabled
+        if std::env::var("MCP_NO_COMPRESS").is_ok() {
+            return false;
+        }
+        self.probed && (self.base64 || self.zlib)
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -189,6 +270,8 @@ impl<T> AiResponse<T> {
                 elapsed_ms: 0,
             },
             next_best_calls: vec![],
+            decorations: None,
+            watermark: None,
         }
     }
     
