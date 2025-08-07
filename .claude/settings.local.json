@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(*)",
+      "mcp__smart-tree__get_git_status",
+      "Bash(./target/release/st --help)",
+      "Bash(./target/release/st --depth 3)",
+      "Bash(./target/release/st:*)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(git init:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)"
+    ],
+    "deny": [],
+    "additionalDirectories": [
+      "/mnt/warp/8b/"
+    ]
+  },
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
+}
