@@ -102,7 +102,7 @@ jobs:
       run: cross build --release --target ${{ matrix.target }}
     
     - name: Run tests 🧪
-      if: matrix.cross != true && matrix.os != 'windows-latest'
+      if: ${{ matrix.cross != true && matrix.os != 'windows-latest' }}
       run: cargo test --release --target ${{ matrix.target }}
     
     - name: Strip binary (Linux/macOS) 🗜️
@@ -307,7 +307,7 @@ jobs:
         body_path: release_notes.md
         files: release/*
         draft: false
-        prerelease: ${{ contains(env.RELEASE_TAG, 'alpha') || contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'rc') }}
+        prerelease: false
         fail_on_unmatched_files: false
         generate_release_notes: true
       env:
