@@ -1,6 +1,6 @@
 # Smart Tree MCP Quick Reference - Your Toolbox Guide! 🧰🏗️
 
-> **📢 Important Update (v4.0.0-alpha+)**: All output is now decompressed by default for better AI compatibility! Your helper delivers tools ready-to-use, no assembly required!
+> **📢 Important Update (v4.0.0+)**: All output is now decompressed by default for better AI compatibility! Your helper delivers tools ready-to-use, no assembly required!
 
 ## 🚀 Essential Commands - Calling Your Helper
 
@@ -184,4 +184,4 @@ SHA256:a3f5b2c1... Files:234 Dirs:45 Size:15.2M
 ```
 
 ---
-**Smart Tree MCP v4.0.0-alpha** - Your AI Construction Helper! Ready with the right tool at the right time! 🏗️🌳✨ 
+**Smart Tree MCP v4.0.0** - Your AI Construction Helper! Ready with the right tool at the right time! 🏗️🌳✨ 

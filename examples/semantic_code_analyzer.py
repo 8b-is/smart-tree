@@ -378,7 +378,7 @@ class SemanticAnalyzer:
             self.semantic_graph, pos,
             node_color=node_colors,
             node_size=node_sizes,
-            alpha=0.8
+            4.0.0=0.8
         )
         
         # Draw edges with different styles for different relationships
@@ -406,7 +406,7 @@ class SemanticAnalyzer:
                 edge_color=edge_colors[i],
                 style=edge_styles[i],
                 width=edge_widths[i],
-                alpha=0.5,
+                4.0.0=0.5,
                 arrows=True,
                 arrowsize=10
             )

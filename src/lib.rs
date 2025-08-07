@@ -59,3 +59,6 @@ pub mod mem8;
 
 // Tree Agent - Living forest orchestrator for AI-human development
 pub mod tree_agent;
+
+// AI Output Discipline - Omni's efficiency manifesto implementation
+pub mod ai_output;

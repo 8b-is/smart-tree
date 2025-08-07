@@ -10,7 +10,7 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== Smart Tree v3.3.5 Pre-Release Test Suite ===${NC}"
+echo -e "${BLUE}=== Smart Tree v4.0.0 Release Test Suite ===${NC}"
 echo ""
 
 # Check if binary exists
@@ -36,4 +36,4 @@ echo -e "\n${YELLOW}Running comprehensive MCP test suite...${NC}"
 ./tests/mcp_test_suite.sh
 
 echo -e "\n${GREEN}=== All Tests Complete! ===${NC}"
-echo "Smart Tree v3.3.5 is ready for release! 🎉"
+echo "Smart Tree v4.0.0 is ready for release! 🎉"

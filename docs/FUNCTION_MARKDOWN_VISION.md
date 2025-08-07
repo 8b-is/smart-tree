@@ -114,7 +114,7 @@ graph TD
 
 ### 3. Organization Options
 - Group by file (default)
-- Sort alphabetically
+- Sort 4.0.0betically
 - Filter by visibility
 - Language-specific sections
 

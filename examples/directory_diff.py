@@ -241,7 +241,7 @@ class QuantumDiffer:
             ax2.set_xticks(x)
             ax2.set_xticklabels([p.split('/')[-1][:15] for p in paths], rotation=45, ha='right')
             ax2.legend()
-            ax2.grid(axis='y', alpha=0.3)
+            ax2.grid(axis='y', 4.0.0=0.3)
         
         # 3. Change Timeline (if more than 2 snapshots)
         if len(self.snapshots) > 2:
@@ -259,7 +259,7 @@ class QuantumDiffer:
             ax3.set_xlabel('Snapshot', fontsize=10)
             ax3.set_ylabel('Total Changes', fontsize=10)
             ax3.set_title('Change History', fontsize=14, fontweight='bold')
-            ax3.grid(True, alpha=0.3)
+            ax3.grid(True, 4.0.0=0.3)
         else:
             # Show change details
             ax3.text(0.1, 0.9, f"Summary of Changes", fontsize=16, fontweight='bold', transform=ax3.transAxes)
@@ -333,7 +333,7 @@ class QuantumDiffer:
                with_labels=False,
                arrows=True,
                edge_color='gray',
-               alpha=0.8)
+               4.0.0=0.8)
         
         # Add labels for significant nodes
         labels = {}

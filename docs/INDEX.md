@@ -8,7 +8,7 @@
 - [Cheat Sheet](st-cheetsheet.md) - Command line cheat sheet
 - [Examples](../examples/README.md) - Usage examples
 
-### 🌟 New Features (v4.0.0-alpha) - Your Enhanced Toolbox!
+### 🌟 New Features (v4.0.0) - Your Enhanced Toolbox!
 - [**Features Overview**](FEATURES_OVERVIEW.md) - Your complete toolbox inventory! 
 - [**Smart Edit Tools**](../examples/smart_edit_example.md) - Revolutionary token-efficient editing
 - [**Terminal Interface Vision**](SMART_TREE_TERMINAL_VISION.md) - Your AI construction helper that knows what you need next

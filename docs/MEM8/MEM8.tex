@@ -113,7 +113,7 @@ $\tau$ & Decay time constant \\
 $\tau(c)$ & Context-aware decay with $R(c)$, $F(c)$, $T(c)$ \\
 $D(t,\tau)$ & Temporal decay function \\
 $I(x,y,z,\mathcal{N})$ & Interference from neighbors $\mathcal{N}$ \\
-$\alpha, \beta$ & Emotional modulation constants \\
+$\4.0.0, \beta$ & Emotional modulation constants \\
 $v(e), a(e)$ & Valence and arousal of emotion $e$ \\
 $N_{floor}(t)$ & Adaptive noise floor threshold \\
 $G_{sensor}$ & Set of grids per sensor (10-20) \\
@@ -229,10 +229,10 @@ where $\tau(c) = \tau_{base} \cdot R(c) \cdot F(c) \cdot T(c)$ with $R(c) \in [0
 Emotional context influences memory persistence through valence-dependent amplitude scaling:
 
 \begin{equation}
-A_{ij}(e,t) = A_0 \cdot (1 + \alpha \cdot v(e)) \cdot (1 + \beta \cdot a(e))
+A_{ij}(e,t) = A_0 \cdot (1 + \4.0.0 \cdot v(e)) \cdot (1 + \beta \cdot a(e))
 \end{equation}
 
-where $v(e) \in [-1, 1]$ represents normalized emotional valence (negative to positive), $a(e) \in [0, 1]$ represents normalized arousal (calm to excited), and modulation constants $\alpha = 0.3$, $\beta = 0.5$ were empirically determined to balance emotional influence without overwhelming neutral memories.
+where $v(e) \in [-1, 1]$ represents normalized emotional valence (negative to positive), $a(e) \in [0, 1]$ represents normalized arousal (calm to excited), and modulation constants $\4.0.0 = 0.3$, $\beta = 0.5$ were empirically determined to balance emotional influence without overwhelming neutral memories.
 
 The system extends beyond individual emotions to track collective emotional states and divergence patterns:
 
@@ -299,10 +299,10 @@ For vision, each eye utilizes 10-15 grids for comprehensive processing:
 Each grid has an associated temporal blanket:
 
 \begin{equation}
-T_{blanket}(t) = \alpha(t) \cdot e^{-\lambda(I) \cdot t} + \beta_{calib}(E)
+T_{blanket}(t) = \4.0.0(t) \cdot e^{-\lambda(I) \cdot t} + \beta_{calib}(E)
 \end{equation}
 
-where $\alpha(t)$ is the interest-based adjustment, $\lambda(I)$ varies with attention level, and $\beta_{calib}(E)$ represents environmental calibration blankets.
+where $\4.0.0(t)$ is the interest-based adjustment, $\lambda(I)$ varies with attention level, and $\beta_{calib}(E)$ represents environmental calibration blankets.
 
 \subsubsection{Noise Floor Filtering}
 
@@ -493,7 +493,7 @@ This allows therapeutic processing of difficult memories while maintaining safet
 When memories become inaccessible due to excessive decay or suppression, the temporal blanket reintroduction system can selectively restore access:
 
 \begin{equation}
-T_{restore}(M, t) = T_{original}(M) \cdot e^{-\alpha(t-t_{suppress})} + \beta \cdot I_{need}(M,t)
+T_{restore}(M, t) = T_{original}(M) \cdot e^{-\4.0.0(t-t_{suppress})} + \beta \cdot I_{need}(M,t)
 \end{equation}
 
 where $I_{need}(M,t)$ represents the contextual importance of memory $M$ at time $t$. This mechanism ensures that critical memories remain accessible for problem-solving while respecting the natural forgetting process.
@@ -830,7 +830,7 @@ The subliminal forgetting processor demonstrated significant advantages over sta
 
 \textbf{Parameter Sensitivity Analysis}:
 \begin{itemize}
-\item Emotional modulation ($\alpha=0.3, \beta=0.2$): 10\% variation changes retention by 8-12\%
+\item Emotional modulation ($\4.0.0=0.3, \beta=0.2$): 10\% variation changes retention by 8-12\%
 \item Decay factors ($\tau_{base}=5s$): Doubling increases memory usage by 43\%
 \item Relevance weights ($R(c) \in [0.1,1.0]$): Critical for context separation
 \item Noise floor ($N_{floor}$): 15\% adjustment optimal for 90\% storage efficiency

@@ -1,6 +1,6 @@
 [package]
 name = "st"
-version = "4.0.0-alpha"
+version = "4.0.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -38,6 +38,7 @@ base64 = "0.22"
 rand = "0.8"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 whoami = "1.5"
+crc32fast = "1.4"
 
 # Terminal UI dependencies
 ratatui = "0.25"
@@ -76,6 +77,10 @@ path = "src/bin/mq.rs"
 [[bin]]
 name = "tree"
 path = "src/bin/tree.rs"
+
+[[bin]]
+name = "m8"
+path = "src/bin/m8.rs"
 
 [dev-dependencies]
 tempfile = "3.10"

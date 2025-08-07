@@ -188,7 +188,7 @@ SORTING & TOP-N:
   • --sort newest --top 20    # 20 most recent files
   • --sort oldest             # Oldest files first
   • --sort a-to-z             # Alphabetical order
-  • --sort z-to-a             # Reverse alphabetical
+  • --sort z-to-a             # Reverse 4.0.0betical
   • --sort type               # Group by file extension
   • Works with any filter combination!
 

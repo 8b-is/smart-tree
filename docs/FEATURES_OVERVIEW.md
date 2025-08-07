@@ -1,6 +1,6 @@
 # Smart Tree Features Overview 🌳
 
-## Revolutionary Features in v4.0.0-alpha 🏗️
+## Revolutionary Features in v4.0.0 🏗️
 
 ### 🚀 Smart Edit Tools - 90-95% Token Reduction!
 
@@ -72,7 +72,7 @@ st --terminal  # Your AI construction helper is ready!
 #### UI Layout
 ```
 ┌─────────────────────────────────────────────────┐
-│ Smart Tree Terminal v4.0.0-alpha - Your Construction Helper │
+│ Smart Tree Terminal v4.0.0 - Your Construction Helper │
 ├─────────────────────────────────────────────────┤
 │ Context: Rust Project | Editing: main.rs        │
 ├─────────────────────────────────────────────────┤

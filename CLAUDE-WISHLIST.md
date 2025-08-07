@@ -216,7 +216,7 @@ st --rename-project "BobsAmazingGame" "F1 Racing"
 ```bash
 st --sort largest -d 2 src    # Shows largest files first in each directory
 st --sort oldest src          # Shows oldest files first, per directory
-st --sort z-to-a src          # Reverse alphabetical within each directory
+st --sort z-to-a src          # Reverse 4.0.0betical within each directory
 ```
 **Note**: This mimics how file explorers sort - each folder has its own sort order
 **Status**: Fixed in v3.3.1
@@ -242,15 +242,15 @@ st --mode classic --sort largest --top 5
 **Status**: Implemented in v3.3.1
 
 ### 23. LS Mode Sorting Preservation (FIXED ✅)
-**Issue**: LS formatter was re-sorting nodes alphabetically, overriding user's --sort preference
-**Root Cause**: ls.rs had hardcoded alphabetical sorting at line 296
+**Issue**: LS formatter was re-sorting nodes 4.0.0betically, overriding user's --sort preference
+**Root Cause**: ls.rs had hardcoded 4.0.0betical sorting at line 296
 **Fix**: Removed automatic sorting in ls formatter to preserve scanner's sort order
 **Impact**: All --sort options now work correctly in ls mode
 **Examples**:
 ```bash
 st --sort largest --mode ls    # Shows files sorted by size
 st --sort newest               # Shows newest files first
-st --sort z-to-a --mode ls     # Reverse alphabetical order
+st --sort z-to-a --mode ls     # Reverse 4.0.0betical order
 ```
 **Status**: Fixed in v3.3.1
 
@@ -372,7 +372,7 @@ mcp.callTool('get_project_history_summary', {
 })
 # Shows: total operations, files modified, operation breakdown
 ```
-**Status**: Implemented in v4.0.0-alpha
+**Status**: Implemented in v4.0.0
 
 ## Performance Enhancements
 

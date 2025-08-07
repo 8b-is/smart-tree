@@ -2,7 +2,7 @@
 
 **Welcome to your construction site! Smart Tree is your helper, ready to hand you the right tools at the right time.**
 
-## 🚨 Important: Compression Default Changed (v4.0.0-alpha+)
+## 🚨 Important: Compression Default Changed (v4.0.0+)
 
 **Smart Tree now serves decompressed output by default!** 
 
