@@ -453,10 +453,10 @@ struct EmotionalBaseline {
 
 #[derive(Clone)]
 pub struct EmotionalState {
-    valence: f32,
-    arousal: f32,
-    coherence: f32,
-    divergence: f32,
+    pub valence: f32,
+    pub arousal: f32,
+    pub coherence: f32,
+    pub divergence: f32,
 }
 
 struct DivergenceThresholds {

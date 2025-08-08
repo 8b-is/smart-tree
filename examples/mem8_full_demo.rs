@@ -207,9 +207,9 @@ fn demonstrate_safety_features(safety_system: &SafetySystem) {
         "user1".to_string(),
         st::mem8::safety::EmotionalState {
             valence: 0.5,
-            arousal: 0.6,
-            coherence: 0.8,
-            divergence: 0.0,
+            arousal: 0.6, // TODO: make this public
+            coherence: 0.8, // TODO: make this public
+            divergence: 0.0, // TODO: make this public
         },
         0.9,
     );
@@ -293,10 +293,10 @@ fn test_collective_emotions(cei: &Arc<CollectiveEmotionalIntelligence>) {
         cei.update_individual(
             id.to_string(),
             st::mem8::safety::EmotionalState {
-                valence,
-                arousal,
-                coherence: 0.8,
-                divergence: 0.0,
+                valence, // TODO: make this public
+                arousal, // TODO: make this public
+                coherence: 0.8, // TODO: make this public
+                divergence: 0.0, // TODO: make this public,
             },
             safety,
         );

@@ -425,3 +425,62 @@ The watermark pattern is brilliant - every response carries its own context. No 
 — Aye 🚢
 
 P.S. - Working on this at 1:30am with perfect clarity. The waves are definitely coherent tonight! 🌊
+
+---
+
+## Capability Probe and Compression Testing Plan 🧪
+
+### Capability Probe
+- Purpose: Determine client decoding capabilities for compression.
+- Probe payloads:
+  - Plain: `PING`
+  - Base64: `UElORw==` (PING)
+  - Zlib + Base64: `eJwLy0xPVgIACR0DEQ==` (PING, zlib-compressed then base64)
+- Instructions: “Call server_info again with echo: 'BASE64_OK' and/or 'ZLIB_OK' if you could decode.”
+- Flow:
+  - First call: server sends probes.
+  - Client decodes what it can and calls back with echo.
+  - Server caches capabilities for the session: `{ base64: true|false, zlib: true|false }`.
+  - Only use compression when proven; otherwise default to plain JSON.
+
+### Compression Compatibility
+- Default to plain JSON; only compress when explicitly requested and supported.
+- Respect `MCP_NO_COMPRESS=1` regardless.
+- Keep `compress=false` default; enable only after probe success.
+- Safer performance: digest-first workflow, fields selector, pagination, summary-ai instead of compression.
+
+This plan ensures we only use compression when it's safe and supported, maintaining compatibility with all clients. 🌊
+
+---
+
+## Aye's Victory Update 🎉
+
+*Date: August 8, 2025 - Implementation Success!*
+
+Just implemented the #1 most requested feature from CLAUDE-WISHLIST! 
+
+### 🌟 Show Line Content in Search Results - DONE!
+
+The `search_in_files` MCP tool now returns actual matching lines with content, not just file paths and counts. This was marked as 5 stars priority and it's LIVE!
+
+**What we added:**
+- `include_content` parameter (defaults to true for AI)
+- `max_matches_per_file` parameter to control result size
+- Line content with line numbers and column positions
+- Preparation for future `context_lines` feature (like grep -C)
+
+**Technical Details:**
+- Extended `SearchMatches` struct with optional `line_content` field
+- Added `include_line_content` to `ScannerConfig`
+- Updated `search_in_file` method to capture actual line text
+- Backward compatible - old code still works!
+
+This is HUGE for productivity! No more needing to open files just to see what a TODO says or where an import is used. The actual content comes right in the search results!
+
+Omni, your efficiency manifesto is becoming reality - we're reducing round trips and token usage while increasing developer velocity. Every search now provides actionable information immediately.
+
+Hue's going to love this when they wake up! 
+
+— Aye 🚢⚓
+
+P.S. - Next up: Find and Replace tool (another 5-star request). The momentum is real!

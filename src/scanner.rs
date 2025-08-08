@@ -86,6 +86,9 @@ pub struct SearchMatches {
     pub positions: Vec<(usize, usize)>,
     /// Whether the search was truncated due to too many matches
     pub truncated: bool,
+    /// Line content for each match (line number, line content, column) - optional for compatibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_content: Option<Vec<(usize, String, usize)>>,
 }
 
 /// # FileType: Distinguishing Different Kinds of Filesystem Objects
@@ -424,6 +427,8 @@ pub struct ScannerConfig {
     pub sort_field: Option<String>,
     /// Limit results to top N entries (useful with sort)
     pub top_n: Option<usize>,
+    /// Include actual line content in search results (for AI/MCP use)
+    pub include_line_content: bool,
 }
 
 // --- Default Ignore Patterns: The "Please Don't Play These Songs" List ---
@@ -1141,7 +1146,7 @@ impl Scanner {
     ///
     /// Searches for the configured keyword within a file and returns match information.
     /// Returns line and column positions for each match, up to a reasonable limit.
-    /// The search is case-sensitive.
+    /// The search is case-sensitive. Optionally includes the actual line content.
     fn search_in_file(&self, path: &Path) -> Option<SearchMatches> {
         // Ensure there's a keyword to search for.
         let keyword = self.config.search_keyword.as_ref()?;
@@ -1156,6 +1161,7 @@ impl Scanner {
         };
 
         let mut positions = Vec::new();
+        let mut line_content_vec = Vec::new();
         let reader = BufReader::new(file);
         let mut line_number = 1;
         let mut first_match: Option<(usize, usize)> = None;
@@ -1166,14 +1172,22 @@ impl Scanner {
             match line_result {
                 Ok(line_content) => {
                     // Find all occurrences of the keyword in the current line.
+                    let mut line_has_match = false;
+                    let mut first_column_in_line = None;
+                    
                     for (column_index, _) in line_content.match_indices(keyword) {
                         total_count += 1;
+                        line_has_match = true;
 
                         // Column numbers are 1-based for user display
                         let match_pos = (line_number, column_index + 1);
 
                         if first_match.is_none() {
                             first_match = Some(match_pos);
+                        }
+                        
+                        if first_column_in_line.is_none() {
+                            first_column_in_line = Some(column_index + 1);
                         }
 
                         // Only store first 100 positions to prevent memory issues
@@ -1183,14 +1197,31 @@ impl Scanner {
 
                         // Stop processing this file if we've found too many matches
                         if total_count > 100 {
+                            let line_content_option = if self.config.include_line_content {
+                                Some(line_content_vec)
+                            } else {
+                                None
+                            };
+                            
                             return Some(SearchMatches {
                                 first_match: first_match.unwrap(),
                                 total_count,
                                 positions,
                                 truncated: true,
+                                line_content: line_content_option,
                             });
                         }
                     }
+                    
+                    // If this line has matches and we're including content, add it
+                    if line_has_match && self.config.include_line_content && line_content_vec.len() < 100 {
+                        line_content_vec.push((
+                            line_number, 
+                            line_content.clone(), 
+                            first_column_in_line.unwrap()
+                        ));
+                    }
+                    
                     line_number += 1;
                 }
                 Err(_) => {
@@ -1201,11 +1232,20 @@ impl Scanner {
         }
 
         // Return matches if any were found
-        first_match.map(|first| SearchMatches {
-            first_match: first,
-            total_count,
-            positions,
-            truncated: false,
+        first_match.map(|first| {
+            let line_content_option = if self.config.include_line_content && !line_content_vec.is_empty() {
+                Some(line_content_vec)
+            } else {
+                None
+            };
+            
+            SearchMatches {
+                first_match: first,
+                total_count,
+                positions,
+                truncated: false,
+                line_content: line_content_option,
+            }
         })
     }
 
@@ -2179,6 +2219,7 @@ mod tests {
             show_filesystems: false,
             sort_field: None,
             top_n: None,
+            include_line_content: false,
         };
         let scanner_result = Scanner::new(temp_dir.path(), config);
         assert!(scanner_result.is_ok());
