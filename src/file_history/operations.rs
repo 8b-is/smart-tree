@@ -1,8 +1,8 @@
 //! File operation codes and definitions
-//! 
+//!
 //! 🎸 The Cheet says: "Every operation has its own rhythm!"
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::hash::Hash;
 
@@ -50,7 +50,7 @@ impl FileOperation {
             FileOperation::Read => 'r',
         }
     }
-    
+
     /// Parse operation from code
     pub fn from_code(code: char) -> Option<Self> {
         match code {
@@ -68,12 +68,12 @@ impl FileOperation {
             _ => None,
         }
     }
-    
+
     /// Check if operation is non-destructive
     pub fn is_safe(&self) -> bool {
         matches!(self, FileOperation::Append | FileOperation::Read)
     }
-    
+
     /// Get operation description
     pub fn description(&self) -> &'static str {
         match self {
@@ -127,19 +127,19 @@ impl OperationContext {
             metadata: None,
         }
     }
-    
+
     /// Set position for insert operations
     pub fn with_position(mut self, pos: usize) -> Self {
         self.position = Some(pos);
         self
     }
-    
+
     /// Set bytes affected
     pub fn with_bytes(mut self, bytes: usize) -> Self {
         self.bytes_affected = bytes;
         self
     }
-    
+
     /// Set hashes
     pub fn with_hashes(mut self, old: Option<String>, new: Option<String>) -> Self {
         self.old_hash = old;
@@ -177,23 +177,23 @@ pub fn suggest_operation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_operation_codes() {
         assert_eq!(FileOperation::Append.code(), 'A');
         assert_eq!(FileOperation::from_code('A'), Some(FileOperation::Append));
     }
-    
+
     #[test]
     fn test_suggest_operation() {
         // Test append preference
         let op = suggest_operation(Some("hello"), "hello world", true);
         assert_eq!(op, FileOperation::Append);
-        
+
         // Test prepend detection
         let op = suggest_operation(Some("world"), "hello world", false);
         assert_eq!(op, FileOperation::Prepend);
-        
+
         // Test create for new file
         let op = suggest_operation(None, "new content", true);
         assert_eq!(op, FileOperation::Create);

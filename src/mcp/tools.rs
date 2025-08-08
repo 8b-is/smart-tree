@@ -24,9 +24,9 @@ use std::time::SystemTime;
 // Tool lanes for AI escalation path - Omni's three-lane design
 #[derive(Debug, Clone, Serialize)]
 pub enum ToolLane {
-    Explore,  // 🔍 Discovery and overview
-    Analyze,  // 🧪 Deep analysis and search
-    Act,      // ⚡ Modifications and writes
+    Explore, // 🔍 Discovery and overview
+    Analyze, // 🧪 Deep analysis and search
+    Act,     // ⚡ Modifications and writes
 }
 
 impl ToolLane {
@@ -38,7 +38,7 @@ impl ToolLane {
             ToolLane::Act => "⚡",
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn name(&self) -> &str {
         match self {
@@ -1304,16 +1304,17 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "track_file_operation" => track_file_operation(args, ctx).await,
         "get_file_history" => get_file_history(args, ctx).await,
         "get_project_history_summary" => get_project_history_summary(args, ctx).await,
-        
+
         // Smart edit tools
         "smart_edit" => crate::mcp::smart_edit::handle_smart_edit(Some(args)).await,
         "get_function_tree" => crate::mcp::smart_edit::handle_get_function_tree(Some(args)).await,
         "insert_function" => crate::mcp::smart_edit::handle_insert_function(Some(args)).await,
         "remove_function" => crate::mcp::smart_edit::handle_remove_function(Some(args)).await,
-        
+
         // Context gathering tools
         "gather_project_context" => {
-            let req: crate::mcp::context_tools::GatherProjectContextRequest = serde_json::from_value(args)?;
+            let req: crate::mcp::context_tools::GatherProjectContextRequest =
+                serde_json::from_value(args)?;
             // Simple permission check - just verify path is allowed
             let permission_check = |_perm_req| {
                 // For now, always allow home directory access for context gathering
@@ -1321,53 +1322,57 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
                 Ok(true)
             };
             crate::mcp::context_tools::gather_project_context(req, permission_check).await
-        },
+        }
         "analyze_ai_tool_usage" => {
-            let req: crate::mcp::context_tools::AnalyzeAiToolUsageRequest = serde_json::from_value(args)?;
+            let req: crate::mcp::context_tools::AnalyzeAiToolUsageRequest =
+                serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::analyze_ai_tool_usage(req, permission_check).await
-        },
+        }
         "clean_old_context" => {
-            let req: crate::mcp::context_tools::CleanOldContextRequest = serde_json::from_value(args)?;
+            let req: crate::mcp::context_tools::CleanOldContextRequest =
+                serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::clean_old_context(req, permission_check).await
-        },
+        }
         "anchor_collaborative_memory" => {
             let req: crate::mcp::context_tools::AnchorMemoryRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::anchor_collaborative_memory(req, permission_check).await
-        },
+        }
         "find_collaborative_memories" => {
             let req: crate::mcp::context_tools::FindMemoriesRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::find_collaborative_memories(req, permission_check).await
-        },
+        }
         "get_collaboration_rapport" => {
             let req: crate::mcp::context_tools::GetRapportRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::get_collaboration_rapport(req, permission_check).await
-        },
+        }
         "get_co_engagement_heatmap" => {
             let req: crate::mcp::context_tools::GetHeatmapRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::get_co_engagement_heatmap(req, permission_check).await
-        },
+        }
         "get_cross_domain_patterns" => {
             let req: crate::mcp::context_tools::GetPatternsRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::get_cross_domain_patterns(req, permission_check).await
-        },
+        }
         "suggest_cross_session_insights" => {
-            let req: crate::mcp::context_tools::SuggestInsightsRequest = serde_json::from_value(args)?;
+            let req: crate::mcp::context_tools::SuggestInsightsRequest =
+                serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::suggest_cross_session_insights(req, permission_check).await
-        },
+        }
         "invite_persona" => {
-            let req: crate::mcp::context_tools::InvitePersonaRequest = serde_json::from_value(args)?;
+            let req: crate::mcp::context_tools::InvitePersonaRequest =
+                serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::invite_persona(req, permission_check).await
-        },
-        
+        }
+
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
 }
@@ -1403,7 +1408,7 @@ fn default_path_mode() -> String {
 
 async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let cache_stats = ctx.cache.stats().await;
-    
+
     // Get current date/time for AI assistants
     use chrono::{Local, Utc};
     let now_local = Local::now();
@@ -1568,13 +1573,13 @@ struct VerifyPermissionsArgs {
 async fn verify_permissions(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: VerifyPermissionsArgs = serde_json::from_value(args)?;
     let path = PathBuf::from(&args.path);
-    
+
     // Basic security check
     if !is_path_allowed(&path, &ctx.config) {
         return Ok(json!({
             "content": [{
                 "type": "text",
-                "text": format!("🚫 Access Denied: Path '{}' is not in allowed paths list.\n\nAllowed paths:\n{}", 
+                "text": format!("🚫 Access Denied: Path '{}' is not in allowed paths list.\n\nAllowed paths:\n{}",
                     path.display(),
                     ctx.config.allowed_paths.iter()
                         .map(|p| format!("  - {}", p.display()))
@@ -1584,40 +1589,54 @@ async fn verify_permissions(args: Value, ctx: Arc<McpContext>) -> Result<Value> 
             }]
         }));
     }
-    
+
     // Get permission cache
     let mut perm_cache = ctx.permissions.lock().await;
-    
+
     // Verify permissions
     let perms = perm_cache.verify(&path)?;
-    
+
     // Get available tools based on permissions
     let tools = get_available_tools(&perms);
-    
+
     // Format output
     let mut output = format!("🔐 Permission Check for: {}\n\n", path.display());
-    
+
     // Show permission status
     output.push_str("📊 Permission Status:\n");
-    output.push_str(&format!("  • Exists: {}\n", if perms.exists { "✅" } else { "❌" }));
-    output.push_str(&format!("  • Readable: {}\n", if perms.readable { "✅" } else { "❌" }));
-    output.push_str(&format!("  • Writable: {}\n", if perms.writable { "✅" } else { "❌" }));
-    output.push_str(&format!("  • Type: {}\n", 
-        if perms.is_directory { "📁 Directory" } 
-        else if perms.is_file { "📄 File" } 
-        else { "❓ Unknown" }
+    output.push_str(&format!(
+        "  • Exists: {}\n",
+        if perms.exists { "✅" } else { "❌" }
     ));
-    
+    output.push_str(&format!(
+        "  • Readable: {}\n",
+        if perms.readable { "✅" } else { "❌" }
+    ));
+    output.push_str(&format!(
+        "  • Writable: {}\n",
+        if perms.writable { "✅" } else { "❌" }
+    ));
+    output.push_str(&format!(
+        "  • Type: {}\n",
+        if perms.is_directory {
+            "📁 Directory"
+        } else if perms.is_file {
+            "📄 File"
+        } else {
+            "❓ Unknown"
+        }
+    ));
+
     if let Some(error) = &perms.error {
         output.push_str(&format!("  • Error: {}\n", error));
     }
-    
+
     output.push_str("\n🛠️ Available Tools:\n");
-    
+
     // Group tools by availability
     let mut available = vec![];
     let mut unavailable = vec![];
-    
+
     for tool in &tools {
         if tool.available {
             available.push(tool);
@@ -1625,7 +1644,7 @@ async fn verify_permissions(args: Value, ctx: Arc<McpContext>) -> Result<Value> 
             unavailable.push(tool);
         }
     }
-    
+
     // Show available tools
     if !available.is_empty() {
         output.push_str("\n✅ Ready to Use:\n");
@@ -1633,33 +1652,37 @@ async fn verify_permissions(args: Value, ctx: Arc<McpContext>) -> Result<Value> 
             output.push_str(&format!("  • {} - Call with this path\n", tool.name));
         }
     }
-    
+
     // Show unavailable tools with reasons
     if !unavailable.is_empty() {
         output.push_str("\n❌ Not Available (with reasons):\n");
         for tool in unavailable {
-            output.push_str(&format!("  • {} - {}\n", 
-                tool.name, 
-                tool.reason.as_ref().unwrap_or(&"Unknown reason".to_string())
+            output.push_str(&format!(
+                "  • {} - {}\n",
+                tool.name,
+                tool.reason
+                    .as_ref()
+                    .unwrap_or(&"Unknown reason".to_string())
             ));
         }
     }
-    
+
     // Add helpful tips
     output.push_str("\n💡 Tips:\n");
     if !perms.exists {
-        output.push_str("  • The path doesn't exist. Check your spelling or use a different path.\n");
+        output
+            .push_str("  • The path doesn't exist. Check your spelling or use a different path.\n");
     } else if !perms.readable {
         output.push_str("  • No read permission. You may need to run with elevated privileges.\n");
     } else if !perms.writable && perms.is_file {
         output.push_str("  • File is read-only. You can analyze but not edit.\n");
     }
-    
+
     // Trisha says...
     output.push_str("\n");
     output.push_str("Trisha from Accounting says: \"It's like checking if you have the keys ");
     output.push_str("before bringing the whole toolbox! Smart thinking!\" 🔑\n");
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -1725,7 +1748,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         top_n: None,
         include_line_content: false,
     };
-    
+
     // Special handling for home directory in MCP context
     if path == std::path::PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
         eprintln!("⚠️  Note: Scanning home directory with safety limits enabled");
@@ -1867,22 +1890,22 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let parse_date = |date_str: &str| -> Result<SystemTime> {
         use chrono::{Local, NaiveDate, TimeZone};
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-        let datetime = Local.from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+        let datetime = Local
+            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
             .single()
             .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
-        Ok(SystemTime::UNIX_EPOCH
-            + std::time::Duration::from_secs(datetime.timestamp() as u64))
+        Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.timestamp() as u64))
     };
-    
+
     // Parse end date as end of day (23:59:59) for inclusive range
     let parse_end_date = |date_str: &str| -> Result<SystemTime> {
         use chrono::{Local, NaiveDate, TimeZone};
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-        let datetime = Local.from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+        let datetime = Local
+            .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
             .single()
             .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
-        Ok(SystemTime::UNIX_EPOCH
-            + std::time::Duration::from_secs(datetime.timestamp() as u64))
+        Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.timestamp() as u64))
     };
 
     // Build scanner configuration
@@ -1926,7 +1949,7 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         if node.path == path {
             continue;
         }
-        
+
         results.push(json!({
             "path": node.path.display().to_string(),
             "name": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
@@ -2241,7 +2264,7 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 "matches": matches.total_count,
                 "truncated": matches.truncated
             });
-            
+
             // Include line content if available
             if let Some(ref lines) = matches.line_content {
                 let mut line_results = Vec::new();
@@ -2251,18 +2274,18 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                         "content": content,
                         "column": column
                     });
-                    
+
                     // Add context lines if requested (future enhancement)
                     if let Some(_ctx_lines) = context_lines {
                         // TODO: Add context lines before and after
                         // This would require reading the file again or storing more context
                     }
-                    
+
                     line_results.push(line_obj);
                 }
                 file_result["lines"] = json!(line_results);
             }
-            
+
             results.push(file_result);
         }
     }
@@ -2327,24 +2350,24 @@ async fn find_in_timespan(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let start_date = args["start_date"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing start_date"))?;
-    
+
     // Build the find_files request
     let mut find_args = json!({
         "path": path,
         "newer_than": start_date,
         "max_depth": 20
     });
-    
+
     // Add end_date if provided (maps to older_than)
     if let Some(end_date) = args["end_date"].as_str() {
         find_args["older_than"] = json!(end_date);
     }
-    
+
     // Add file_type filter if provided
     if let Some(file_type) = args["file_type"].as_str() {
         find_args["file_type"] = json!(file_type);
     }
-    
+
     // Use the existing find_files function with both date filters
     find_files(find_args, ctx).await
 }
@@ -2832,7 +2855,7 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
         .unwrap_or_else(|_| "https://f.8t.is/feedback".to_string());
-    
+
     let response = client
         .post(&api_url)
         .header("X-MCP-Client", "smart-tree-mcp")
@@ -2842,7 +2865,10 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
         .map_err(|e| anyhow::anyhow!("Failed to submit feedback: {}", e))?;
 
     if !response.status().is_success() {
-        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
         return Err(anyhow::anyhow!("Feedback API error: {}", error_text));
     }
 
@@ -3001,7 +3027,7 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
 async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     let _offer_auto_update = args["offer_auto_update"].as_bool().unwrap_or(true);
     let current_version = env!("CARGO_PKG_VERSION");
-    
+
     // Check for updates using our client
     let client = FeedbackClient::new()?;
     let version_info = match client.check_for_updates().await {
@@ -3016,11 +3042,11 @@ async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Value> 
             }));
         }
     };
-    
+
     // Compare versions
     let current = current_version.trim_start_matches('v');
     let latest = version_info.version.trim_start_matches('v');
-    
+
     if current == latest {
         return Ok(json!({
             "content": [{
@@ -3089,11 +3115,11 @@ fn default_stats_interval() -> u64 {
 }
 
 async fn watch_directory_sse(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let args: WatchDirectorySseArgs = serde_json::from_value(args)
-        .map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
+    let args: WatchDirectorySseArgs =
+        serde_json::from_value(args).map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
 
     let path = PathBuf::from(&args.path);
-    
+
     // Validate path
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!(
@@ -3152,15 +3178,15 @@ async fn watch_directory_sse(args: Value, ctx: Arc<McpContext>) -> Result<Value>
         - analysis: Periodic analysis update\n\
         - stats: Statistics update\n\
         - heartbeat: Keep-alive signal",
-        args.path,
-        args.format,
-        args.heartbeat_interval,
-        args.stats_interval
+        args.path, args.format, args.heartbeat_interval, args.stats_interval
     );
 
     // Store the SSE config in cache for later retrieval
     let cache_key = format!("sse_watch_{}", args.path);
-    let _ = ctx.cache.set(cache_key.clone(), serde_json::to_string(&sse_config)?).await;
+    let _ = ctx
+        .cache
+        .set(cache_key.clone(), serde_json::to_string(&sse_config)?)
+        .await;
 
     Ok(json!({
         "content": [{
@@ -3195,18 +3221,18 @@ fn default_agent() -> String {
 async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: TrackFileOperationArgs = serde_json::from_value(args)?;
     let path = PathBuf::from(&args.file_path);
-    
+
     // Check if path is allowed
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Path not allowed: {}", path.display()));
     }
-    
+
     // Import file history types
     use crate::file_history::FileHistoryTracker;
-    
+
     // Create tracker
     let tracker = FileHistoryTracker::new()?;
-    
+
     // Generate session ID if not provided
     let session_id = args.session_id.unwrap_or_else(|| {
         let now = SystemTime::now()
@@ -3215,7 +3241,7 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
             .as_secs();
         format!("mcp_{}", now)
     });
-    
+
     // Determine operation
     if let Some(op_str) = args.operation {
         match op_str.as_str() {
@@ -3227,48 +3253,54 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
                         "text": format!("✓ Tracked read operation for {}\nFile hash: {}", path.display(), hash)
                     }]
                 }));
-            },
-            "write" | "append" | "prepend" | "insert" | "delete" | "replace" | "create" | "remove" => {
+            }
+            "write" | "append" | "prepend" | "insert" | "delete" | "replace" | "create"
+            | "remove" => {
                 // These require content
                 if args.new_content.is_none() && op_str != "remove" {
-                    return Err(anyhow::anyhow!("new_content required for {} operation", op_str));
+                    return Err(anyhow::anyhow!(
+                        "new_content required for {} operation",
+                        op_str
+                    ));
                 }
-                
+
                 let op = tracker.track_write(
                     &path,
                     args.old_content.as_deref(),
                     args.new_content.as_deref().unwrap_or(""),
                     &args.agent,
-                    &session_id
+                    &session_id,
                 )?;
-                
+
                 Ok(json!({
                     "content": [{
                         "type": "text",
                         "text": format!("✓ Tracked {} operation for {}\nOperation: {}", op_str, path.display(), op)
                     }]
                 }))
-            },
+            }
             _ => Err(anyhow::anyhow!("Unknown operation: {}", op_str)),
         }
     } else {
         // Auto-detect operation from content
         if args.new_content.is_none() {
-            return Err(anyhow::anyhow!("Either operation or new_content must be provided"));
+            return Err(anyhow::anyhow!(
+                "Either operation or new_content must be provided"
+            ));
         }
-        
+
         let op = tracker.track_write(
             &path,
             args.old_content.as_deref(),
             args.new_content.as_deref().unwrap(),
             &args.agent,
-            &session_id
+            &session_id,
         )?;
-        
+
         Ok(json!({
             "content": [{
                 "type": "text",
-                "text": format!("✓ Auto-tracked operation for {}\nDetected operation: {}\nAgent: {}\nSession: {}", 
+                "text": format!("✓ Auto-tracked operation for {}\nDetected operation: {}\nAgent: {}\nSession: {}",
                     path.display(), op, args.agent, session_id)
             }]
         }))
@@ -3283,29 +3315,29 @@ struct GetFileHistoryArgs {
 async fn get_file_history(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: GetFileHistoryArgs = serde_json::from_value(args)?;
     let path = PathBuf::from(&args.file_path);
-    
+
     // Check if path is allowed
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Path not allowed: {}", path.display()));
     }
-    
+
     use crate::file_history::FileHistoryTracker;
-    
+
     let tracker = FileHistoryTracker::new()?;
     let history = tracker.get_file_history(&path)?;
-    
+
     let mut output = format!("📜 File History for {}\n\n", path.display());
-    
+
     if history.is_empty() {
         output.push_str("No history found for this file.");
     } else {
         output.push_str(&format!("Found {} operations:\n\n", history.len()));
-        
+
         for (i, entry) in history.iter().enumerate() {
             let datetime = chrono::DateTime::<chrono::Utc>::from(
-                SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(entry.timestamp)
+                SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(entry.timestamp),
             );
-            
+
             output.push_str(&format!(
                 "{}. [{}] {} - {}\n   Agent: {}, Session: {}\n   Bytes affected: {}\n",
                 i + 1,
@@ -3316,7 +3348,7 @@ async fn get_file_history(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 entry.session_id,
                 entry.context.bytes_affected
             ));
-            
+
             if let Some(old_hash) = &entry.context.old_hash {
                 output.push_str(&format!("   Old hash: {}\n", &old_hash[..8]));
             }
@@ -3326,7 +3358,7 @@ async fn get_file_history(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             output.push_str("\n");
         }
     }
-    
+
     Ok(json!({
         "content": [{
             "type": "text",
@@ -3347,31 +3379,31 @@ struct GetProjectHistorySummaryArgs {
 async fn get_project_history_summary(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: GetProjectHistorySummaryArgs = serde_json::from_value(args)?;
     let path = PathBuf::from(&args.project_path);
-    
+
     // Check if path is allowed
     if !is_path_allowed(&path, &ctx.config) {
         return Err(anyhow::anyhow!("Path not allowed: {}", path.display()));
     }
-    
+
     use crate::file_history::FileHistoryTracker;
-    
+
     let tracker = FileHistoryTracker::new()?;
     let summary = tracker.get_project_summary(&path)?;
-    
+
     let mut output = format!("📊 Project History Summary for {}\n\n", path.display());
     output.push_str(&format!("Total operations: {}\n", summary.total_operations));
     output.push_str(&format!("Files modified: {}\n\n", summary.files_modified));
-    
+
     if !summary.operation_counts.is_empty() {
         output.push_str("Operations breakdown:\n");
         let mut ops: Vec<_> = summary.operation_counts.iter().collect();
         ops.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
-        
+
         for (op, count) in ops {
             output.push_str(&format!("  {} ({}): {} times\n", op, op.code(), count));
         }
     }
-    
+
     Ok(json!({
         "content": [{
             "type": "text",

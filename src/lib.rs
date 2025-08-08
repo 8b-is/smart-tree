@@ -49,7 +49,7 @@ pub use scanner::{
 pub use context::detect_project_context;
 
 // Re-export integration helpers for convenient usage
-pub use integration::{ProjectAnalysis, ProjectAnalyzer, analyze_project, quick_project_overview};
+pub use integration::{analyze_project, quick_project_overview, ProjectAnalysis, ProjectAnalyzer};
 
 // File history tracking - The ultimate context-driven system!
 pub mod file_history;
@@ -67,6 +67,9 @@ pub mod context_gatherer;
 pub mod ai_output;
 
 // ST Unified System - One tool to rule them all!
+pub mod st_context_aware;
 pub mod st_unified;
 pub mod tools_st_only;
-pub mod st_context_aware;
+
+// Smart Edit Diff Storage
+pub mod smart_edit_diff;

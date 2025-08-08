@@ -1,15 +1,15 @@
 //! Git-based temporal timeline builder for MEM8
 //! Extracts project history directly from git to create wave memories
 
-use std::process::Command;
-use std::path::Path;
-use anyhow::{Result, Context};
-use chrono::{DateTime, Utc, Datelike};
 use crate::mem8::{
-    wave::{MemoryWave, FrequencyBand},
-    integration::{DirectoryMetadata, ContentType, DirectoryHealth},
+    integration::{ContentType, DirectoryHealth, DirectoryMetadata},
+    wave::{FrequencyBand, MemoryWave},
     SmartTreeMem8,
 };
+use anyhow::{Context, Result};
+use chrono::{DateTime, Datelike, Utc};
+use std::path::Path;
+use std::process::Command;
 
 /// Git commit information
 #[derive(Debug, Clone)]
@@ -42,7 +42,7 @@ pub struct GitTemporalAnalyzer {
 impl GitTemporalAnalyzer {
     pub fn new(repo_path: impl AsRef<Path>) -> Result<Self> {
         let repo_path = repo_path.as_ref().to_string_lossy().to_string();
-        
+
         // Verify it's a git repository
         Command::new("git")
             .arg("-C")
@@ -51,7 +51,7 @@ impl GitTemporalAnalyzer {
             .arg("--git-dir")
             .output()
             .context("Failed to verify git repository")?;
-            
+
         Ok(Self { repo_path })
     }
 
@@ -86,11 +86,9 @@ impl GitTemporalAnalyzer {
             .context("Failed to get file history")?;
 
         let commits = self.parse_simple_log(&String::from_utf8_lossy(&output.stdout))?;
-        
+
         // Get unique authors
-        let mut authors: Vec<String> = commits.iter()
-            .map(|c| c.author.clone())
-            .collect();
+        let mut authors: Vec<String> = commits.iter().map(|c| c.author.clone()).collect();
         authors.sort();
         authors.dedup();
 
@@ -98,7 +96,10 @@ impl GitTemporalAnalyzer {
             path: file_path.to_string(),
             total_changes: commits.len(),
             first_seen: commits.last().map(|c| c.timestamp).unwrap_or_else(Utc::now),
-            last_modified: commits.first().map(|c| c.timestamp).unwrap_or_else(Utc::now),
+            last_modified: commits
+                .first()
+                .map(|c| c.timestamp)
+                .unwrap_or_else(Utc::now),
             authors,
             commits,
         })
@@ -120,16 +121,17 @@ impl GitTemporalAnalyzer {
 
         for line in stdout.lines() {
             if let Ok(timestamp) = line.parse::<i64>() {
-                let date = DateTime::<Utc>::from_timestamp(timestamp, 0)
-                    .unwrap_or_else(Utc::now);
+                let date = DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap_or_else(Utc::now);
                 let day = date.date_naive();
                 *daily_commits.entry(day).or_insert(0) += 1;
             }
         }
 
-        let mut heatmap: Vec<_> = daily_commits.into_iter()
+        let mut heatmap: Vec<_> = daily_commits
+            .into_iter()
             .map(|(date, count)| {
-                let datetime = date.and_hms_opt(0, 0, 0)
+                let datetime = date
+                    .and_hms_opt(0, 0, 0)
                     .unwrap()
                     .and_local_timezone(Utc)
                     .unwrap();
@@ -199,7 +201,9 @@ impl GitTemporalAnalyzer {
                 // File change line (numstat format)
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 3 {
-                    if let (Ok(adds), Ok(dels)) = (parts[0].parse::<usize>(), parts[1].parse::<usize>()) {
+                    if let (Ok(adds), Ok(dels)) =
+                        (parts[0].parse::<usize>(), parts[1].parse::<usize>())
+                    {
                         commit.additions += adds;
                         commit.deletions += dels;
                         commit.files_changed.push(parts[2].to_string());
@@ -245,7 +249,7 @@ impl SmartTreeMem8 {
     /// Import git history as wave memories
     pub fn import_git_timeline(&mut self, repo_path: impl AsRef<Path>) -> Result<()> {
         let analyzer = GitTemporalAnalyzer::new(repo_path)?;
-        
+
         // Get project timeline
         let timeline = analyzer.get_project_timeline()?;
         println!("Importing {} commits into wave memory...", timeline.len());
@@ -257,7 +261,7 @@ impl SmartTreeMem8 {
         // Import each commit as a memory wave
         for (idx, commit) in timeline.iter().enumerate() {
             let days_ago = (Utc::now() - commit.timestamp).num_days() as f32;
-            
+
             // Determine frequency based on commit characteristics
             let frequency = if commit.message.contains("fix") || commit.message.contains("bug") {
                 FrequencyBand::Technical.frequency(0.7) // Bug fixes are technical
@@ -278,7 +282,7 @@ impl SmartTreeMem8 {
 
             // Create memory wave
             let mut wave = MemoryWave::new(frequency, amplitude);
-            
+
             // Emotional context based on commit patterns
             wave.valence = if commit.message.contains("fix") || commit.message.contains("bug") {
                 -0.2 // Negative for bug fixes
@@ -293,10 +297,10 @@ impl SmartTreeMem8 {
 
             // Store in temporal layer based on age
             let z_layer = (idx as f32 / timeline.len() as f32 * 65535.0) as u16;
-            
+
             // Use author name for spatial distribution
             let (x, y) = self.string_to_coordinates(&format!("{}-{}", commit.author, idx));
-            
+
             self.store_wave_at_coordinates(x, y, z_layer, wave)?;
         }
 
@@ -307,7 +311,7 @@ impl SmartTreeMem8 {
                 primary_type: self.detect_content_type(&file_path),
                 importance: (change_count as f32 / 100.0).clamp(0.1, 1.0),
                 normalized_size: 0.5, // Unknown from git
-                health: if change_count > 50 { 
+                health: if change_count > 50 {
                     DirectoryHealth::Warning // High churn might indicate instability
                 } else {
                     DirectoryHealth::Healthy
@@ -315,15 +319,13 @@ impl SmartTreeMem8 {
                 activity_level: (change_count as f32 / 20.0).clamp(0.1, 1.0),
                 days_since_modified: 0, // Will be overridden by actual file check
             };
-            
+
             self.store_directory_memory(Path::new(&file_path), metadata)?;
         }
 
         println!("Git timeline imported successfully!");
         Ok(())
     }
-
-
 
     /// Helper to detect content type from path
     fn detect_content_type(&self, path: &str) -> ContentType {
@@ -339,17 +341,18 @@ impl SmartTreeMem8 {
             ContentType::Data
         }
     }
-
-
 }
 
 /// Create temporal "grooves" in wave space from git patterns
-pub fn create_temporal_grooves(mem8: &mut SmartTreeMem8, repo_path: impl AsRef<Path>) -> Result<()> {
+pub fn create_temporal_grooves(
+    mem8: &mut SmartTreeMem8,
+    repo_path: impl AsRef<Path>,
+) -> Result<()> {
     let analyzer = GitTemporalAnalyzer::new(&repo_path)?;
-    
+
     // Get activity patterns
     let heatmap = analyzer.get_activity_heatmap(365)?; // Last year
-    
+
     // Find periodic patterns (e.g., weekly sprints, monthly releases)
     let mut weekly_pattern = [0f32; 7];
     for (date, count) in &heatmap {
@@ -374,12 +377,12 @@ pub fn create_temporal_grooves(mem8: &mut SmartTreeMem8, repo_path: impl AsRef<P
             );
             wave.decay_tau = None; // Persistent pattern
             wave.valence = 0.3; // Slightly positive
-            
+
             // Store in a "rhythm" layer
             let x = (day * 36) as u8; // Spread across x-axis
             let y = 128; // Middle of y-axis
             let z = 60000; // High z-layer for persistent patterns
-            
+
             mem8.store_wave_at_coordinates(x, y, z, wave)?;
         }
     }

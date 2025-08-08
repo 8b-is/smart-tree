@@ -1,6 +1,6 @@
 use super::{Formatter, PathDisplayMode};
-use crate::scanner::{FileCategory, FileNode, TreeStats};
 use crate::emoji_mapper;
+use crate::scanner::{FileCategory, FileNode, TreeStats};
 use anyhow::Result;
 use colored::*;
 use humansize::{format_size, BINARY};
@@ -24,7 +24,7 @@ impl ClassicFormatter {
             sort_field: None,
         }
     }
-    
+
     pub fn with_sort(mut self, sort_field: Option<String>) -> Self {
         self.sort_field = sort_field;
         self
@@ -209,7 +209,7 @@ impl ClassicFormatter {
             children.sort_by(|&a, &b| {
                 let node_a = &sorted_nodes[a];
                 let node_b = &sorted_nodes[b];
-                
+
                 // Apply custom sorting if specified
                 match sort_field.as_deref() {
                     Some("size") | Some("largest") => node_b.size.cmp(&node_a.size),
@@ -217,28 +217,60 @@ impl ClassicFormatter {
                     Some("date") | Some("newest") => node_b.modified.cmp(&node_a.modified),
                     Some("oldest") => node_a.modified.cmp(&node_b.modified),
                     Some("name") | Some("a-to-z") => {
-                        let name_a = node_a.path.file_name().unwrap_or_default().to_string_lossy();
-                        let name_b = node_b.path.file_name().unwrap_or_default().to_string_lossy();
+                        let name_a = node_a
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
+                        let name_b = node_b
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
                         name_a.cmp(&name_b)
-                    },
+                    }
                     Some("z-to-a") => {
-                        let name_a = node_a.path.file_name().unwrap_or_default().to_string_lossy();
-                        let name_b = node_b.path.file_name().unwrap_or_default().to_string_lossy();
+                        let name_a = node_a
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
+                        let name_b = node_b
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy();
                         name_b.cmp(&name_a)
-                    },
+                    }
                     Some("type") => {
                         // Sort by extension, then by name
-                        let ext_a = node_a.path.extension().unwrap_or_default().to_string_lossy();
-                        let ext_b = node_b.path.extension().unwrap_or_default().to_string_lossy();
+                        let ext_a = node_a
+                            .path
+                            .extension()
+                            .unwrap_or_default()
+                            .to_string_lossy();
+                        let ext_b = node_b
+                            .path
+                            .extension()
+                            .unwrap_or_default()
+                            .to_string_lossy();
                         match ext_a.cmp(&ext_b) {
                             std::cmp::Ordering::Equal => {
-                                let name_a = node_a.path.file_name().unwrap_or_default().to_string_lossy();
-                                let name_b = node_b.path.file_name().unwrap_or_default().to_string_lossy();
+                                let name_a = node_a
+                                    .path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy();
+                                let name_b = node_b
+                                    .path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy();
                                 name_a.cmp(&name_b)
                             }
                             other => other,
                         }
-                    },
+                    }
                     _ => {
                         // Default: directories first, then by name
                         match (node_a.is_dir, node_b.is_dir) {
@@ -434,7 +466,7 @@ impl ClassicFormatter {
                 g: 90,
                 b: 43,
             }), // Brown
-            
+
             // Office & Documents
             FileCategory::Office => Some(Color::TrueColor {
                 r: 21,
@@ -461,7 +493,7 @@ impl ClassicFormatter {
                 g: 105,
                 b: 225,
             }), // Royal blue
-            
+
             // Text Variants
             FileCategory::Log => Some(Color::TrueColor {
                 r: 128,
@@ -498,7 +530,7 @@ impl ClassicFormatter {
                 g: 125,
                 b: 50,
             }), // Green
-            
+
             // Security & Crypto
             FileCategory::Certificate => Some(Color::TrueColor {
                 r: 255,
@@ -510,28 +542,28 @@ impl ClassicFormatter {
                 g: 39,
                 b: 176,
             }), // Purple
-            
+
             // Fonts
             FileCategory::Font => Some(Color::TrueColor {
                 r: 103,
                 g: 58,
                 b: 183,
             }), // Deep purple
-            
+
             // Disk Images
             FileCategory::DiskImage => Some(Color::TrueColor {
                 r: 33,
                 g: 33,
                 b: 33,
             }), // Very dark gray
-            
+
             // 3D & CAD
             FileCategory::Model3D => Some(Color::TrueColor {
                 r: 255,
                 g: 152,
                 b: 0,
             }), // Orange
-            
+
             // Scientific & Data
             FileCategory::Jupyter => Some(Color::TrueColor {
                 r: 255,
@@ -548,14 +580,14 @@ impl ClassicFormatter {
                 g: 119,
                 b: 3,
             }), // MATLAB orange
-            
+
             // Web Assets
             FileCategory::WebAsset => Some(Color::TrueColor {
                 r: 96,
                 g: 125,
                 b: 139,
             }), // Blue grey
-            
+
             // Package & Dependencies
             FileCategory::Package => Some(Color::TrueColor {
                 r: 203,
@@ -567,21 +599,21 @@ impl ClassicFormatter {
                 g: 71,
                 b: 188,
             }), // Medium purple
-            
+
             // Testing
             FileCategory::Test => Some(Color::TrueColor {
                 r: 67,
                 g: 160,
                 b: 71,
             }), // Test green
-            
+
             // Memory Files (MEM|8!)
             FileCategory::Memory => Some(Color::TrueColor {
                 r: 147,
                 g: 112,
                 b: 219,
             }), // Medium purple (brain-like)
-            
+
             // Others
             FileCategory::Backup => Some(Color::TrueColor {
                 r: 189,

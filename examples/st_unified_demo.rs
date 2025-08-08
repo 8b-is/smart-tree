@@ -2,7 +2,10 @@
 // Shows how ST replaces ls, grep, find, tree, and more
 
 use anyhow::Result;
-use st::{st_unified::StUnified, tools_st_only::{StOnlyTools, ListOptions, SearchOptions}};
+use st::{
+    st_unified::StUnified,
+    tools_st_only::{ListOptions, SearchOptions, StOnlyTools},
+};
 use std::path::Path;
 
 fn main() -> Result<()> {
@@ -17,7 +20,10 @@ fn main() -> Result<()> {
     println!("Traditional: ls -la src/");
     println!("ST Way:");
     let ls_result = st.ls(Path::new("src/"), None)?;
-    println!("{}", ls_result.lines().take(5).collect::<Vec<_>>().join("\n"));
+    println!(
+        "{}",
+        ls_result.lines().take(5).collect::<Vec<_>>().join("\n")
+    );
     println!("...\n");
 
     // Example 2: Replace GREP
@@ -25,7 +31,10 @@ fn main() -> Result<()> {
     println!("Traditional: grep -r 'TODO' --include='*.rs' src/");
     println!("ST Way:");
     let grep_result = st.grep("TODO", Path::new("src/"), Some("rs"))?;
-    println!("{}", grep_result.lines().take(10).collect::<Vec<_>>().join("\n"));
+    println!(
+        "{}",
+        grep_result.lines().take(10).collect::<Vec<_>>().join("\n")
+    );
     println!("...\n");
 
     // Example 3: Replace FIND
@@ -33,7 +42,10 @@ fn main() -> Result<()> {
     println!("Traditional: find . -name '*.rs' -type f");
     println!("ST Way:");
     let find_result = st.glob("*.rs", Path::new("."))?;
-    println!("{}", find_result.lines().take(5).collect::<Vec<_>>().join("\n"));
+    println!(
+        "{}",
+        find_result.lines().take(5).collect::<Vec<_>>().join("\n")
+    );
     println!("...\n");
 
     // Example 4: Replace TREE
@@ -41,7 +53,10 @@ fn main() -> Result<()> {
     println!("Traditional: tree -L 2 src/");
     println!("ST Way:");
     let tree_result = st.analyze(Path::new("src/"), "classic", 2)?;
-    println!("{}", tree_result.lines().take(20).collect::<Vec<_>>().join("\n"));
+    println!(
+        "{}",
+        tree_result.lines().take(20).collect::<Vec<_>>().join("\n")
+    );
     println!("...\n");
 
     // Example 5: Unique ST Features!
@@ -50,7 +65,10 @@ fn main() -> Result<()> {
     // Semantic analysis
     println!("🧠 Semantic Grouping:");
     let semantic = st.semantic_analyze(Path::new("."))?;
-    println!("{}", semantic.lines().take(15).collect::<Vec<_>>().join("\n"));
+    println!(
+        "{}",
+        semantic.lines().take(15).collect::<Vec<_>>().join("\n")
+    );
     println!("...\n");
 
     // Quick overview with compression
@@ -77,11 +95,11 @@ mod tests {
     #[test]
     fn test_unified_interface() -> Result<()> {
         let st = StUnified::new()?;
-        
+
         // Test basic operations
         let _ls = st.ls(Path::new("."), None)?;
         let _stats = st.stats(Path::new("."))?;
-        
+
         Ok(())
     }
 }

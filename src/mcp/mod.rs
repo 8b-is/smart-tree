@@ -16,6 +16,7 @@ mod permissions;
 mod prompts;
 mod resources;
 pub mod smart_edit;
+mod smart_edit_diff_viewer;
 mod sse;
 mod tools;
 

@@ -2,10 +2,10 @@
 //! Implements critical protections against cognitive instability
 //! Based on MEM8 paper section: Safety Mechanisms and Consciousness Stability
 
+use crate::mem8::wave::MemoryWave;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use crate::mem8::wave::MemoryWave;
 
 /// The Custodian: Memory guard system preventing overload and instability
 pub struct Custodian {
@@ -59,7 +59,7 @@ impl Custodian {
     pub fn guard_memory(&self, memory: &MemoryWave) -> GuardDecision {
         let pattern_hash = self.calculate_pattern_hash(memory);
         let repetition_score = self.calculate_repetition_score(pattern_hash);
-        
+
         if repetition_score < self.safe_threshold {
             GuardDecision::Allow
         } else if repetition_score < self.critical_threshold {
@@ -71,16 +71,16 @@ impl Custodian {
 
     /// Calculate hash for memory pattern
     fn calculate_pattern_hash(&self, memory: &MemoryWave) -> u64 {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
-        
+        use std::hash::{Hash, Hasher};
+
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash key characteristics
         ((memory.frequency * 100.0) as u32).hash(&mut hasher);
         ((memory.amplitude * 100.0) as u32).hash(&mut hasher);
         ((memory.valence * 100.0) as i32).hash(&mut hasher);
-        
+
         hasher.finish()
     }
 
@@ -88,14 +88,16 @@ impl Custodian {
     fn calculate_repetition_score(&self, pattern_hash: u64) -> f32 {
         let mut history = self.pattern_history.write().unwrap();
         let now = Instant::now();
-        
-        let tracker = history.entry(pattern_hash).or_insert_with(|| PatternTracker {
-            hash: pattern_hash,
-            count: 0,
-            last_seen: now,
-            intervals: VecDeque::with_capacity(10),
-        });
-        
+
+        let tracker = history
+            .entry(pattern_hash)
+            .or_insert_with(|| PatternTracker {
+                hash: pattern_hash,
+                count: 0,
+                last_seen: now,
+                intervals: VecDeque::with_capacity(10),
+            });
+
         // Update tracker
         let interval = now.duration_since(tracker.last_seen);
         tracker.intervals.push_back(interval);
@@ -104,27 +106,30 @@ impl Custodian {
         }
         tracker.count += 1;
         tracker.last_seen = now;
-        
+
         // Calculate score based on frequency and interval pattern
         let frequency_factor = tracker.count as f32 / 10.0;
         let interval_factor = if tracker.intervals.len() > 1 {
-            let avg_interval = tracker.intervals.iter()
+            let avg_interval = tracker
+                .intervals
+                .iter()
                 .map(|d| d.as_secs_f32())
-                .sum::<f32>() / tracker.intervals.len() as f32;
-            
+                .sum::<f32>()
+                / tracker.intervals.len() as f32;
+
             // Penalize rapid repetition
             (1.0 / (avg_interval + 0.1)).min(10.0)
         } else {
             1.0
         };
-        
+
         frequency_factor * interval_factor
     }
 
     /// Calculate throttle factor based on repetition score
     fn calculate_throttle_factor(&self, score: f32) -> f32 {
-        let normalized = (score - self.safe_threshold) / 
-                        (self.critical_threshold - self.safe_threshold);
+        let normalized =
+            (score - self.safe_threshold) / (self.critical_threshold - self.safe_threshold);
         normalized.clamp(0.1, 0.9)
     }
 
@@ -189,16 +194,16 @@ impl RepetitionPrevention {
     /// Check if pattern breaking is needed
     pub fn check_pattern(&self, wave_sequence: &[f32]) -> PatternBreakDecision {
         let mut patterns = self.patterns.write().unwrap();
-        
+
         // Look for matching patterns
         for pattern in patterns.iter_mut() {
             if self.patterns_match(&pattern.pattern, wave_sequence) {
                 pattern.repeat_count += 1;
                 pattern.last_seen = Instant::now();
-                
+
                 // Calculate break probability
                 let p_break = self.calculate_break_probability(pattern.repeat_count);
-                
+
                 if p_break > self.break_threshold {
                     return PatternBreakDecision::BreakPattern {
                         noise_level: self.noise_level,
@@ -208,17 +213,17 @@ impl RepetitionPrevention {
                 }
             }
         }
-        
+
         // Add new pattern
         patterns.push(PatternInstance {
             pattern: wave_sequence.to_vec(),
             repeat_count: 1,
             last_seen: Instant::now(),
         });
-        
+
         // Clean old patterns
         patterns.retain(|p| p.last_seen.elapsed() < Duration::from_secs(300));
-        
+
         PatternBreakDecision::Continue
     }
 
@@ -227,9 +232,10 @@ impl RepetitionPrevention {
         if p1.len() != p2.len() {
             return false;
         }
-        
+
         let tolerance = 0.1;
-        p1.iter().zip(p2.iter())
+        p1.iter()
+            .zip(p2.iter())
             .all(|(a, b)| (a - b).abs() < tolerance)
     }
 
@@ -237,7 +243,7 @@ impl RepetitionPrevention {
     fn calculate_break_probability(&self, repeat_count: usize) -> f32 {
         let threshold_count = 5.0;
         let lambda = 0.5;
-        
+
         if repeat_count as f32 <= threshold_count {
             0.0
         } else {
@@ -301,7 +307,7 @@ impl EmotionalMemoryTherapy {
     /// Calculate reintroduction amplitude for therapeutic processing
     pub fn calculate_reintroduction(&self, memory: &MemoryWave, memory_id: u64) -> f32 {
         let mut sessions = self.sessions.write().unwrap();
-        
+
         let session = sessions.entry(memory_id).or_insert_with(|| TherapySession {
             memory_id,
             start_time: Instant::now(),
@@ -309,15 +315,16 @@ impl EmotionalMemoryTherapy {
             target_amplitude: memory.amplitude * self.target_emotional_level,
             current_phase: TherapyPhase::Assessment,
         });
-        
+
         let elapsed = session.start_time.elapsed().as_secs_f32();
         let tau = self.therapy_tau.as_secs_f32();
-        
+
         // Graduated exposure formula
         let base_amplitude = session.initial_amplitude;
         let exposure_factor = 1.0 - (-elapsed / tau).exp();
-        let emotion_ratio = (self.target_emotional_level / memory.arousal.max(0.1)).min(self.max_amplification);
-        
+        let emotion_ratio =
+            (self.target_emotional_level / memory.arousal.max(0.1)).min(self.max_amplification);
+
         base_amplitude * exposure_factor * emotion_ratio
     }
 
@@ -330,7 +337,7 @@ impl EmotionalMemoryTherapy {
     /// Update therapy phase
     pub fn update_phase(&self, memory_id: u64, processing_success: bool) {
         let mut sessions = self.sessions.write().unwrap();
-        
+
         if let Some(session) = sessions.get_mut(&memory_id) {
             session.current_phase = match (&session.current_phase, processing_success) {
                 (TherapyPhase::Assessment, true) => TherapyPhase::GradualExposure,
@@ -375,28 +382,31 @@ impl TemporalBlanketRecovery {
     /// Record memory suppression
     pub fn record_suppression(&self, memory_id: u64, original_blanket: f32, reason: String) {
         let mut history = self.suppression_history.write().unwrap();
-        
-        history.insert(memory_id, SuppressionRecord {
+
+        history.insert(
             memory_id,
-            suppression_time: Instant::now(),
-            original_blanket,
-            suppression_reason: reason,
-        });
+            SuppressionRecord {
+                memory_id,
+                suppression_time: Instant::now(),
+                original_blanket,
+                suppression_reason: reason,
+            },
+        );
     }
 
     /// Calculate restored temporal blanket value
     pub fn restore_blanket(&self, memory_id: u64, contextual_need: f32) -> Option<f32> {
         let history = self.suppression_history.read().unwrap();
-        
+
         if let Some(record) = history.get(&memory_id) {
             let elapsed = record.suppression_time.elapsed().as_secs_f32();
-            
+
             // Restoration formula from paper
             let decay_factor = (-self.alpha * elapsed).exp();
             let need_factor = self.beta * contextual_need;
-            
+
             let restored = record.original_blanket * decay_factor + need_factor;
-            
+
             Some(restored.clamp(0.0, 1.0))
         } else {
             None
@@ -406,12 +416,11 @@ impl TemporalBlanketRecovery {
     /// Check if memory should be restored
     pub fn should_restore(&self, memory_id: u64, contextual_importance: f32) -> bool {
         let history = self.suppression_history.read().unwrap();
-        
+
         if let Some(record) = history.get(&memory_id) {
             // Restore if sufficient time has passed and context demands it
             let min_suppression_time = Duration::from_secs(60);
-            record.suppression_time.elapsed() > min_suppression_time && 
-            contextual_importance > 0.7
+            record.suppression_time.elapsed() > min_suppression_time && contextual_importance > 0.7
         } else {
             false
         }
@@ -460,9 +469,9 @@ pub struct EmotionalState {
 }
 
 struct DivergenceThresholds {
-    normal_max: f32,      // 0-50
-    unusual_max: f32,     // 51-150
-    high_risk_min: f32,   // 151-255
+    normal_max: f32,    // 0-50
+    unusual_max: f32,   // 51-150
+    high_risk_min: f32, // 151-255
 }
 
 impl DivergenceTracker {
@@ -501,9 +510,9 @@ impl DivergenceTracker {
     pub fn calculate_divergence(&self) -> u8 {
         let baseline = self.baseline.read().unwrap();
         let current = self.current.read().unwrap();
-        
+
         let mut total_divergence = 0.0;
-        
+
         // Relationship divergence
         for (key, baseline_val) in &baseline.relationship_values {
             if let Some(current_val) = current.relationship_values.get(key) {
@@ -511,7 +520,7 @@ impl DivergenceTracker {
                 total_divergence += 2.0 * r_diff;
             }
         }
-        
+
         // Activity divergence
         for (key, baseline_val) in &baseline.activity_levels {
             if let Some(current_val) = current.activity_levels.get(key) {
@@ -519,21 +528,22 @@ impl DivergenceTracker {
                 total_divergence += a_diff;
             }
         }
-        
+
         // Emotional divergence
-        let e_diff = ((current.emotional_state.valence - baseline.emotional_state.valence).abs() +
-                      (current.emotional_state.arousal - baseline.emotional_state.arousal).abs() +
-                      (baseline.emotional_state.coherence - current.emotional_state.coherence).abs()) / 3.0;
-        
+        let e_diff = ((current.emotional_state.valence - baseline.emotional_state.valence).abs()
+            + (current.emotional_state.arousal - baseline.emotional_state.arousal).abs()
+            + (baseline.emotional_state.coherence - current.emotional_state.coherence).abs())
+            / 3.0;
+
         total_divergence += e_diff * 50.0;
-        
+
         total_divergence.min(255.0) as u8
     }
 
     /// Get divergence category
     pub fn get_divergence_category(&self) -> DivergenceCategory {
         let score = self.calculate_divergence();
-        
+
         match score {
             0..=50 => DivergenceCategory::Normal,
             51..=150 => DivergenceCategory::Unusual,
@@ -551,7 +561,7 @@ impl DivergenceTracker {
     pub fn reset_baseline(&self) {
         let current = self.current.read().unwrap();
         let mut baseline = self.baseline.write().unwrap();
-        
+
         baseline.relationship_values = current.relationship_values.clone();
         baseline.activity_levels = current.activity_levels.clone();
         baseline.emotional_state = EmotionalBaseline {
@@ -565,9 +575,9 @@ impl DivergenceTracker {
 
 #[derive(Debug, Clone)]
 pub enum DivergenceCategory {
-    Normal,     // Safe variance
-    Unusual,    // Monitoring required
-    HighRisk,   // Immediate intervention
+    Normal,   // Safe variance
+    Unusual,  // Monitoring required
+    HighRisk, // Immediate intervention
 }
 
 /// Collective emotional state tracker
@@ -590,10 +600,10 @@ struct IndividualState {
 }
 
 struct HarmonyWeights {
-    emotional_resonance: f32,    // 0.3
-    interaction_pattern: f32,    // 0.25
-    trust_coefficient: f32,      // 0.25
-    adaptation_rate: f32,        // 0.2
+    emotional_resonance: f32, // 0.3
+    interaction_pattern: f32, // 0.25
+    trust_coefficient: f32,   // 0.25
+    adaptation_rate: f32,     // 0.2
 }
 
 impl CollectiveEmotionalIntelligence {
@@ -613,29 +623,29 @@ impl CollectiveEmotionalIntelligence {
     /// Calculate collective emotional state
     pub fn calculate_collective_state(&self) -> CollectiveState {
         let individuals = self.individuals.read().unwrap();
-        
+
         if individuals.is_empty() {
             return CollectiveState::default();
         }
-        
+
         // Calculate average emotional state
         let mut total_valence = 0.0;
         let mut total_arousal = 0.0;
         let mut min_safety: f32 = 1.0;
-        
+
         for individual in individuals.values() {
             total_valence += individual.emotional_state.valence;
             total_arousal += individual.emotional_state.arousal;
             min_safety = min_safety.min(individual.safety_level);
         }
-        
+
         let n = individuals.len() as f32;
         let avg_valence = total_valence / n;
         let avg_arousal = total_arousal / n;
-        
+
         // Apply minimum safety as limiting factor (from paper)
         let collective_emotion = (avg_valence * min_safety, avg_arousal * min_safety);
-        
+
         CollectiveState {
             emotional_valence: collective_emotion.0,
             emotional_arousal: collective_emotion.1,
@@ -648,73 +658,83 @@ impl CollectiveEmotionalIntelligence {
     /// Calculate group harmony score
     fn calculate_harmony(&self) -> f32 {
         let individuals = self.individuals.read().unwrap();
-        
+
         if individuals.len() < 2 {
             return 1.0; // Perfect harmony with self
         }
-        
+
         // Calculate components
         let emotional_resonance = self.calculate_emotional_resonance(&individuals);
         let interaction_quality = 0.8; // Placeholder - would track actual interactions
-        let avg_trust = individuals.values()
+        let avg_trust = individuals
+            .values()
             .map(|i| i.trust_coefficient)
-            .sum::<f32>() / individuals.len() as f32;
+            .sum::<f32>()
+            / individuals.len() as f32;
         let adaptation_rate = 0.7; // Placeholder - would track learning rate
-        
+
         // Weighted harmony score
-        self.harmony_weights.emotional_resonance * emotional_resonance +
-        self.harmony_weights.interaction_pattern * interaction_quality +
-        self.harmony_weights.trust_coefficient * avg_trust +
-        self.harmony_weights.adaptation_rate * adaptation_rate
+        self.harmony_weights.emotional_resonance * emotional_resonance
+            + self.harmony_weights.interaction_pattern * interaction_quality
+            + self.harmony_weights.trust_coefficient * avg_trust
+            + self.harmony_weights.adaptation_rate * adaptation_rate
     }
 
     /// Calculate emotional resonance between individuals
     fn calculate_emotional_resonance(&self, individuals: &HashMap<String, IndividualState>) -> f32 {
         let states: Vec<_> = individuals.values().collect();
         let n = states.len();
-        
+
         if n < 2 {
             return 1.0;
         }
-        
+
         let mut total_similarity = 0.0;
         let mut pairs = 0;
-        
+
         for i in 0..n {
-            for j in i+1..n {
-                let valence_diff = (states[i].emotional_state.valence - 
-                                   states[j].emotional_state.valence).abs();
-                let arousal_diff = (states[i].emotional_state.arousal - 
-                                   states[j].emotional_state.arousal).abs();
-                
+            for j in i + 1..n {
+                let valence_diff =
+                    (states[i].emotional_state.valence - states[j].emotional_state.valence).abs();
+                let arousal_diff =
+                    (states[i].emotional_state.arousal - states[j].emotional_state.arousal).abs();
+
                 let similarity = 1.0 - (valence_diff + arousal_diff) / 2.0;
                 total_similarity += similarity;
                 pairs += 1;
             }
         }
-        
+
         total_similarity / pairs as f32
     }
 
     /// Update individual state
-    pub fn update_individual(&self, id: String, emotional_state: EmotionalState, safety_level: f32) {
+    pub fn update_individual(
+        &self,
+        id: String,
+        emotional_state: EmotionalState,
+        safety_level: f32,
+    ) {
         let mut individuals = self.individuals.write().unwrap();
-        
+
         if let Some(individual) = individuals.get_mut(&id) {
             individual.emotional_state = emotional_state;
             individual.safety_level = safety_level;
             individual.last_update = Instant::now();
-            
+
             // Update trust coefficient based on consistency
             individual.trust_coefficient = (individual.trust_coefficient * 0.9 + 0.1).min(1.0);
         } else {
-            individuals.insert(id.clone(), IndividualState {
-                id,
-                emotional_state,
-                safety_level,
-                trust_coefficient: 0.5, // Start at neutral trust
-                last_update: Instant::now(),
-            });
+            individuals.insert(
+                id.clone(),
+                IndividualState {
+                    id,
+                    emotional_state,
+                    safety_level,
+                    trust_coefficient: 0.5, // Start at neutral trust
+                    last_update: Instant::now(),
+                },
+            );
         }
     }
 
@@ -760,16 +780,16 @@ impl SafetySystem {
     pub fn check_memory_safety(&self, memory: &MemoryWave, memory_id: u64) -> SafetyAssessment {
         // Check with Custodian
         let guard_decision = self.custodian.guard_memory(memory);
-        
+
         // Check divergence
         let divergence = self.divergence_tracker.get_divergence_category();
-        
+
         // Check collective safety
         let collectively_safe = self.collective_intelligence.is_psychologically_safe();
-        
+
         // Check if therapeutic intervention needed
         let needs_therapy = self.emotional_therapy.needs_therapy(memory);
-        
+
         SafetyAssessment {
             guard_decision,
             divergence_category: divergence,
@@ -780,25 +800,34 @@ impl SafetySystem {
     }
 
     /// Generate safety recommendations
-    fn generate_recommendations(&self, memory: &MemoryWave, memory_id: u64) -> Vec<SafetyRecommendation> {
+    fn generate_recommendations(
+        &self,
+        memory: &MemoryWave,
+        memory_id: u64,
+    ) -> Vec<SafetyRecommendation> {
         let mut recommendations = Vec::new();
-        
+
         // Check if memory was previously suppressed
-        if self.temporal_recovery.should_restore(memory_id, memory.amplitude) {
+        if self
+            .temporal_recovery
+            .should_restore(memory_id, memory.amplitude)
+        {
             recommendations.push(SafetyRecommendation::RestoreSuppressedMemory);
         }
-        
+
         // Check if pattern breaking needed
-        let pattern_check = self.repetition_prevention.check_pattern(&[memory.frequency, memory.amplitude]);
+        let pattern_check = self
+            .repetition_prevention
+            .check_pattern(&[memory.frequency, memory.amplitude]);
         if matches!(pattern_check, PatternBreakDecision::BreakPattern { .. }) {
             recommendations.push(SafetyRecommendation::InjectNoiseToBreakPattern);
         }
-        
+
         // Check if emotional therapy needed
         if memory.arousal > 0.9 && memory.valence.abs() > 0.8 {
             recommendations.push(SafetyRecommendation::ApplyGraduatedExposure);
         }
-        
+
         recommendations
     }
 }
@@ -830,20 +859,20 @@ mod tests {
         let custodian = Custodian::new();
         let mut wave = MemoryWave::new(440.0, 0.8);
         wave.valence = 0.5;
-        
+
         // First access should be allowed
         match custodian.guard_memory(&wave) {
-            GuardDecision::Allow => {},
+            GuardDecision::Allow => {}
             _ => panic!("First access should be allowed"),
         }
-        
+
         // Multiple rapid accesses should trigger throttling
         for _ in 0..10 {
             let _ = custodian.guard_memory(&wave);
         }
-        
+
         match custodian.guard_memory(&wave) {
-            GuardDecision::Throttle(_) | GuardDecision::Block(_) => {},
+            GuardDecision::Throttle(_) | GuardDecision::Block(_) => {}
             GuardDecision::Allow => panic!("Repetitive access should be throttled or blocked"),
         }
     }
@@ -852,7 +881,7 @@ mod tests {
     fn test_pattern_breaking() {
         let prevention = RepetitionPrevention::new();
         let pattern = vec![440.0, 0.8, 440.0, 0.8];
-        
+
         // Repeated patterns should trigger breaking
         for _ in 0..10 {
             let decision = prevention.check_pattern(&pattern);
@@ -860,7 +889,7 @@ mod tests {
                 return; // Test passed
             }
         }
-        
+
         panic!("Pattern breaking should have been triggered");
     }
 
@@ -870,9 +899,9 @@ mod tests {
         let mut wave = MemoryWave::new(600.0, 0.9);
         wave.arousal = 0.9;
         wave.valence = -0.8;
-        
+
         assert!(therapy.needs_therapy(&wave));
-        
+
         let reintro = therapy.calculate_reintroduction(&wave, 123);
         assert!(reintro > 0.0);
         assert!(reintro <= wave.amplitude * therapy.max_amplification);
@@ -881,28 +910,33 @@ mod tests {
     #[test]
     fn test_divergence_tracking() {
         let tracker = DivergenceTracker::new();
-        
+
         // Initial divergence should be minimal
-        assert!(matches!(tracker.get_divergence_category(), DivergenceCategory::Normal));
-        
+        assert!(matches!(
+            tracker.get_divergence_category(),
+            DivergenceCategory::Normal
+        ));
+
         // Update with divergent measurement
         let mut measurement = SystemMeasurement {
             relationship_values: HashMap::new(),
             activity_levels: HashMap::new(),
             emotional_state: EmotionalState {
-                valence: 0.9,  // High divergence from baseline
+                valence: 0.9, // High divergence from baseline
                 arousal: 0.9,
                 coherence: 0.2,
                 divergence: 0.0,
             },
             measured_at: Instant::now(),
         };
-        
-        measurement.relationship_values.insert("test".to_string(), 0.9);
+
+        measurement
+            .relationship_values
+            .insert("test".to_string(), 0.9);
         measurement.activity_levels.insert("test".to_string(), 0.9);
-        
+
         tracker.update_measurement(measurement);
-        
+
         let divergence = tracker.calculate_divergence();
         assert!(divergence > 0);
     }
@@ -910,7 +944,7 @@ mod tests {
     #[test]
     fn test_collective_emotional_intelligence() {
         let cei = CollectiveEmotionalIntelligence::new();
-        
+
         // Add individuals
         cei.update_individual(
             "user1".to_string(),
@@ -922,7 +956,7 @@ mod tests {
             },
             0.9,
         );
-        
+
         cei.update_individual(
             "user2".to_string(),
             EmotionalState {
@@ -933,7 +967,7 @@ mod tests {
             },
             0.85,
         );
-        
+
         let collective = cei.calculate_collective_state();
         assert_eq!(collective.group_size, 2);
         assert!(collective.psychological_safety > 0.0);

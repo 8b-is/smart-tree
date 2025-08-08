@@ -88,11 +88,11 @@ impl Default for AiOutputConfig {
 pub fn generate_cache_key(path: &str, config: &AiOutputConfig) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     path.hash(&mut hasher);
     format!("{:?}", config).hash(&mut hasher);
-    
+
     let hash = hasher.finish();
     format!("st_cache_{:016x}", hash)
 }
@@ -129,7 +129,7 @@ impl AiError {
             expected: None,
         }
     }
-    
+
     pub fn security(message: &str, hint: &str) -> Self {
         Self {
             code: "SECURITY".to_string(),
@@ -140,7 +140,7 @@ impl AiError {
             expected: None,
         }
     }
-    
+
     pub fn too_large(message: &str, hint: &str) -> Self {
         Self {
             code: "TOO_LARGE".to_string(),
@@ -234,7 +234,7 @@ impl CompressionCapabilities {
             probed: true,
         }
     }
-    
+
     pub fn should_compress(&self) -> bool {
         // Only compress if explicitly supported and not disabled
         if std::env::var("MCP_NO_COMPRESS").is_ok() {
@@ -274,12 +274,12 @@ impl<T> AiResponse<T> {
             watermark: None,
         }
     }
-    
+
     pub fn with_digest(mut self, digest: String) -> Self {
         self.digest = Some(digest);
         self
     }
-    
+
     pub fn with_usage(mut self, file_count: usize, bytes_scanned: usize, elapsed_ms: u64) -> Self {
         self.usage = Usage {
             file_count,
@@ -288,7 +288,7 @@ impl<T> AiResponse<T> {
         };
         self
     }
-    
+
     pub fn suggest_next(mut self, tool: &str, args: serde_json::Value, tip: &str) -> Self {
         self.next_best_calls.push(NextCall {
             tool: tool.to_string(),
@@ -324,7 +324,7 @@ pub fn setup_ai_output() {
         std::panic::set_hook(Box::new(|info| {
             eprintln!("Smart Tree panic: {}", info);
         }));
-        
+
         // Log that we're in AI mode (to stderr!)
         eprintln!("# Smart Tree running in AI mode - JSON on stdout, logs on stderr");
     }

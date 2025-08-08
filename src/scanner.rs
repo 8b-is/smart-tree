@@ -13,8 +13,8 @@
 // -----------------------------------------------------------------------------
 //
 
+use crate::scanner_safety::{estimate_node_size, ScannerSafetyLimits, ScannerSafetyTracker};
 use anyhow::Result;
-use crate::scanner_safety::{ScannerSafetyLimits, ScannerSafetyTracker, estimate_node_size};
 use globset::{Glob, GlobSet, GlobSetBuilder}; // For powerful gitignore-style pattern matching.
 use regex::Regex; // For user-defined find patterns.
 use std::collections::{HashMap, HashSet}; // Our trusty hash-based collections.
@@ -248,8 +248,6 @@ pub enum FileCategory {
     Toml,     // .toml
     Csv,      // .csv
 
-
-
     // --- Build Systems & Configuration ---
     Makefile,   // Makefile, makefile, GNUmakefile
     Dockerfile, // Dockerfile, .dockerfile
@@ -269,57 +267,57 @@ pub enum FileCategory {
 
     // --- Database ---
     Database, // .db, .sqlite, .mdb, .accdb, .dbf
-    
+
     // --- Office & Documents ---
     Office,      // .doc, .docx, .odt
     Spreadsheet, // .xls, .xlsx, .ods, .csv
     PowerPoint,  // .ppt, .pptx, .odp
     Pdf,         // .pdf
     Ebook,       // .epub, .mobi, .azw
-    
+
     // --- Text Variants ---
-    Log,         // .log
-    Config,      // .ini, .cfg, .conf, .env, .properties
-    License,     // LICENSE, COPYING files
-    Readme,      // README files
-    Txt,         // .txt
-    Rtf,         // .rtf
-    
+    Log,     // .log
+    Config,  // .ini, .cfg, .conf, .env, .properties
+    License, // LICENSE, COPYING files
+    Readme,  // README files
+    Txt,     // .txt
+    Rtf,     // .rtf
+
     // --- Security & Crypto ---
     Certificate, // .crt, .cert, .pem, .key
     Encrypted,   // .gpg, .pgp, .aes
-    
+
     // --- Fonts ---
-    Font,        // .ttf, .otf, .woff, .woff2
-    
+    Font, // .ttf, .otf, .woff, .woff2
+
     // --- Virtual & Disk Images ---
-    DiskImage,   // .img, .iso, .vdi, .vmdk, .vhd, .dd, .dmg
-    
+    DiskImage, // .img, .iso, .vdi, .vmdk, .vhd, .dd, .dmg
+
     // --- 3D & CAD ---
-    Model3D,     // .obj, .stl, .dae, .fbx, .blend
-    
+    Model3D, // .obj, .stl, .dae, .fbx, .blend
+
     // --- Scientific & Data ---
-    Jupyter,     // .ipynb
-    RData,       // .rdata, .rds
-    Matlab,      // .m, .mat
-    
+    Jupyter, // .ipynb
+    RData,   // .rdata, .rds
+    Matlab,  // .m, .mat
+
     // --- Web Assets ---
-    WebAsset,    // .wasm, .map
-    
+    WebAsset, // .wasm, .map
+
     // --- Package & Dependencies ---
-    Package,     // package.json, Cargo.toml, requirements.txt, etc.
-    Lock,        // package-lock.json, Cargo.lock, yarn.lock
-    
+    Package, // package.json, Cargo.toml, requirements.txt, etc.
+    Lock,    // package-lock.json, Cargo.lock, yarn.lock
+
     // --- Testing ---
-    Test,        // Files with test_, _test, .test, .spec patterns
-    
+    Test, // Files with test_, _test, .test, .spec patterns
+
     // --- Memory Files (Our special type!) ---
-    Memory,      // .mem8, .m8 - MEM|8 memory files
-    
+    Memory, // .mem8, .m8 - MEM|8 memory files
+
     // --- Others ---
-    Backup,      // .bak, .backup, ~
-    Temp,        // .tmp, .temp, .swp
-    Unknown,     // If we can't categorize it, it's a mysterious Unknown!
+    Backup,  // .bak, .backup, ~
+    Temp,    // .tmp, .temp, .swp
+    Unknown, // If we can't categorize it, it's a mysterious Unknown!
 }
 
 /// # TreeStats: The Final Scoreboard
@@ -586,7 +584,7 @@ impl Scanner {
     pub fn quick_scan(&self) -> Result<(Vec<FileNode>, TreeStats)> {
         let mut config = self.config.clone();
         config.max_depth = 3; // Limit depth for quick scan
-        
+
         let quick_scanner = Scanner::new(&self.root, config)?;
         quick_scanner.scan()
     }
@@ -594,11 +592,12 @@ impl Scanner {
     /// Find files modified within a specific time range
     /// Useful for finding recent activity in projects
     pub fn find_recent_files(&self, hours_ago: u64) -> Result<Vec<FileNode>> {
-        let cutoff_time = std::time::SystemTime::now() 
-            - std::time::Duration::from_secs(hours_ago * 3600);
-        
+        let cutoff_time =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(hours_ago * 3600);
+
         let (nodes, _) = self.scan()?;
-        Ok(nodes.into_iter()
+        Ok(nodes
+            .into_iter()
             .filter(|node| !node.is_dir && node.modified > cutoff_time)
             .collect())
     }
@@ -607,29 +606,48 @@ impl Scanner {
     /// Returns a filtered list of important files for project analysis
     pub fn find_key_files(&self) -> Result<Vec<FileNode>> {
         let (nodes, _) = self.scan()?;
-        
+
         let important_patterns = [
-            "main.rs", "lib.rs", "mod.rs",
-            "package.json", "Cargo.toml", "requirements.txt", "pyproject.toml",
-            "README.md", "LICENSE", "Makefile", "CMakeLists.txt",
-            "index.js", "app.js", "server.js", "main.js",
-            "main.py", "__init__.py", "setup.py",
-            "go.mod", "main.go",
-            "pom.xml", "build.gradle", "build.xml",
-            ".gitignore", "docker-compose.yml", "Dockerfile",
+            "main.rs",
+            "lib.rs",
+            "mod.rs",
+            "package.json",
+            "Cargo.toml",
+            "requirements.txt",
+            "pyproject.toml",
+            "README.md",
+            "LICENSE",
+            "Makefile",
+            "CMakeLists.txt",
+            "index.js",
+            "app.js",
+            "server.js",
+            "main.js",
+            "main.py",
+            "__init__.py",
+            "setup.py",
+            "go.mod",
+            "main.go",
+            "pom.xml",
+            "build.gradle",
+            "build.xml",
+            ".gitignore",
+            "docker-compose.yml",
+            "Dockerfile",
         ];
 
-        Ok(nodes.into_iter()
+        Ok(nodes
+            .into_iter()
             .filter(|node| {
                 if node.is_dir {
                     return false;
                 }
-                
-                let file_name = node.path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-                
-                important_patterns.iter().any(|&pattern| file_name == pattern)
+
+                let file_name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                important_patterns
+                    .iter()
+                    .any(|&pattern| file_name == pattern)
             })
             .collect())
     }
@@ -686,7 +704,9 @@ impl Scanner {
                 // .gitignore, .gitconfig are usually by name, handled below
 
                 // --- Archives ---
-                "zip" | "tar" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "7z" | "rar" => FileCategory::Archive,
+                "zip" | "tar" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "7z" | "rar" => {
+                    FileCategory::Archive
+                }
 
                 // --- Media ---
                 "jpg" | "jpeg" | "png" | "gif" | "bmp" | "ico" | "webp" | "tiff" | "tif"
@@ -701,71 +721,83 @@ impl Scanner {
                 | "app" => FileCategory::Binary,
 
                 // --- Database Files ---
-                "db" | "sqlite" | "sqlitedb" | "sqlite3" | "db3" | "db4" | "db5" | "mdb" | "accdb" | "dbf" => FileCategory::Database,
-                
+                "db" | "sqlite" | "sqlitedb" | "sqlite3" | "db3" | "db4" | "db5" | "mdb"
+                | "accdb" | "dbf" => FileCategory::Database,
+
                 // --- Office & Documents ---
                 "doc" | "docx" | "odt" | "rtf" => FileCategory::Office,
                 "xls" | "xlsx" | "ods" | "csv" | "tsv" => FileCategory::Spreadsheet,
                 "ppt" | "pptx" | "odp" => FileCategory::PowerPoint,
                 "pdf" => FileCategory::Pdf,
                 "epub" | "mobi" | "azw" | "azw3" | "fb2" => FileCategory::Ebook,
-                
+
                 // --- Text & Config Files ---
                 "txt" | "text" => FileCategory::Txt,
                 "log" => FileCategory::Log,
                 "ini" | "cfg" | "conf" | "config" | "properties" | "env" => FileCategory::Config,
-                
+
                 // --- Security & Crypto ---
                 "crt" | "cert" | "pem" | "key" | "pub" | "cer" | "der" => FileCategory::Certificate,
                 "gpg" | "pgp" | "aes" | "enc" | "asc" => FileCategory::Encrypted,
-                
+
                 // --- Fonts ---
                 "ttf" | "otf" | "woff" | "woff2" | "eot" | "fon" | "fnt" => FileCategory::Font,
-                
+
                 // --- Disk Images ---
-                "img" | "vdi" | "vmdk" | "vhd" | "vhdx" | "dd" | "hdd" | "qcow" | "qcow2" => FileCategory::DiskImage,
+                "img" | "vdi" | "vmdk" | "vhd" | "vhdx" | "dd" | "hdd" | "qcow" | "qcow2" => {
+                    FileCategory::DiskImage
+                }
                 "iso" | "dmg" => FileCategory::DiskImage, // These can be both archives and disk images, but treating as disk images
-                
+
                 // --- 3D & CAD ---
-                "obj" | "stl" | "dae" | "fbx" | "blend" | "3ds" | "ply" | "gltf" | "glb" => FileCategory::Model3D,
-                
+                "obj" | "stl" | "dae" | "fbx" | "blend" | "3ds" | "ply" | "gltf" | "glb" => {
+                    FileCategory::Model3D
+                }
+
                 // --- Scientific & Data ---
                 "ipynb" => FileCategory::Jupyter,
                 "rdata" | "rds" | "rda" => FileCategory::RData,
                 "m" | "mat" | "mlx" => FileCategory::Matlab,
-                
+
                 // --- Web Assets ---
                 "wasm" | "map" | "sourcemap" => FileCategory::WebAsset,
-                
+
                 // --- Memory Files (MEM|8!) ---
                 "mem8" | "m8" => FileCategory::Memory,
-                
+
                 // --- Backup & Temp ---
                 "bak" | "backup" | "old" | "orig" => FileCategory::Backup,
                 "tmp" | "temp" | "swp" | "swo" | "swn" => FileCategory::Temp,
-                
-                _ => FileCategory::Unknown // Extension not recognized
+
+                _ => FileCategory::Unknown, // Extension not recognized
             }
         } else {
             // No extension, or extension parsing failed. Try common filenames.
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 // Check for test files
-                if name.starts_with("test_") || name.ends_with("_test") || 
-                   name.contains(".test.") || name.contains(".spec.") {
+                if name.starts_with("test_")
+                    || name.ends_with("_test")
+                    || name.contains(".test.")
+                    || name.contains(".spec.")
+                {
                     return FileCategory::Test;
                 }
-                
+
                 // Check for specific filenames
                 match name {
                     "Makefile" | "makefile" | "GNUmakefile" => FileCategory::Makefile,
                     "Dockerfile" => FileCategory::Dockerfile,
-                    ".gitignore" | ".gitconfig" | ".gitattributes" | ".gitmodules" => FileCategory::GitConfig,
+                    ".gitignore" | ".gitconfig" | ".gitattributes" | ".gitmodules" => {
+                        FileCategory::GitConfig
+                    }
                     "LICENSE" | "LICENCE" | "COPYING" => FileCategory::License,
                     "README" | "README.md" | "README.txt" | "README.rst" => FileCategory::Readme,
-                    "package.json" | "Cargo.toml" | "requirements.txt" | "pyproject.toml" | 
-                    "pom.xml" | "build.gradle" | "go.mod" | "composer.json" => FileCategory::Package,
-                    "package-lock.json" | "Cargo.lock" | "yarn.lock" | "pnpm-lock.yaml" | 
-                    "poetry.lock" | "Gemfile.lock" => FileCategory::Lock,
+                    "package.json" | "Cargo.toml" | "requirements.txt" | "pyproject.toml"
+                    | "pom.xml" | "build.gradle" | "go.mod" | "composer.json" => {
+                        FileCategory::Package
+                    }
+                    "package-lock.json" | "Cargo.lock" | "yarn.lock" | "pnpm-lock.yaml"
+                    | "poetry.lock" | "Gemfile.lock" => FileCategory::Lock,
                     _ => {
                         // Check for backup files ending with ~
                         if name.ends_with('~') {
@@ -832,17 +864,18 @@ impl Scanner {
         };
 
         // Determine appropriate safety limits based on the path
-        let safety_limits = if canonical_root == PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
-            // Home directory needs special care
-            ScannerSafetyLimits::for_home_directory()
-        } else if canonical_root.starts_with("/") && canonical_root.components().count() <= 2 {
-            // Root or near-root paths need limits
-            ScannerSafetyLimits::for_home_directory()
-        } else {
-            // Regular directories can use default limits
-            ScannerSafetyLimits::default()
-        };
-        
+        let safety_limits =
+            if canonical_root == PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
+                // Home directory needs special care
+                ScannerSafetyLimits::for_home_directory()
+            } else if canonical_root.starts_with("/") && canonical_root.components().count() <= 2 {
+                // Root or near-root paths need limits
+                ScannerSafetyLimits::for_home_directory()
+            } else {
+                // Regular directories can use default limits
+                ScannerSafetyLimits::default()
+            };
+
         Ok(Self {
             config,
             gitignore,
@@ -897,7 +930,10 @@ impl Scanner {
         let content = match fs::read(&gitignore_path) {
             Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
             Err(e) => {
-                eprintln!("Warning: Could not read .gitignore at {:?}: {}", gitignore_path, e);
+                eprintln!(
+                    "Warning: Could not read .gitignore at {:?}: {}",
+                    gitignore_path, e
+                );
                 return Ok(None);
             }
         };
@@ -957,7 +993,7 @@ impl Scanner {
                 eprintln!("   Use --max-depth or scan a more specific directory");
                 break;
             }
-            
+
             match entry_result {
                 Ok(entry) => {
                     // Successfully read a directory entry.
@@ -980,8 +1016,10 @@ impl Scanner {
                                 }
 
                                 // Track node for safety limits
-                                safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
-                                
+                                safety_tracker.add_file(estimate_node_size(
+                                    node.path.to_string_lossy().len(),
+                                ));
+
                                 // Send the (ignored) node through the channel.
                                 if sender.send(node.clone()).is_err() {
                                     break; // Receiver has disconnected, stop scanning.
@@ -1031,8 +1069,10 @@ impl Scanner {
 
                             if node.is_dir || should_include_file {
                                 // Track node for safety limits
-                                safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
-                                
+                                safety_tracker.add_file(estimate_node_size(
+                                    node.path.to_string_lossy().len(),
+                                ));
+
                                 // Send the processed node through the channel.
                                 if sender.send(node.clone()).is_err() {
                                     break; // Receiver disconnected.
@@ -1068,8 +1108,9 @@ impl Scanner {
                         if !is_contents_error {
                             // Create a special node representing the permission-denied entry.
                             let node = self.create_permission_denied_node(path, depth);
-                            safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
-                            
+                            safety_tracker
+                                .add_file(estimate_node_size(node.path.to_string_lossy().len()));
+
                             if sender.send(node.clone()).is_err() {
                                 break; // Receiver disconnected.
                             }
@@ -1174,7 +1215,7 @@ impl Scanner {
                     // Find all occurrences of the keyword in the current line.
                     let mut line_has_match = false;
                     let mut first_column_in_line = None;
-                    
+
                     for (column_index, _) in line_content.match_indices(keyword) {
                         total_count += 1;
                         line_has_match = true;
@@ -1185,7 +1226,7 @@ impl Scanner {
                         if first_match.is_none() {
                             first_match = Some(match_pos);
                         }
-                        
+
                         if first_column_in_line.is_none() {
                             first_column_in_line = Some(column_index + 1);
                         }
@@ -1202,7 +1243,7 @@ impl Scanner {
                             } else {
                                 None
                             };
-                            
+
                             return Some(SearchMatches {
                                 first_match: first_match.unwrap(),
                                 total_count,
@@ -1212,16 +1253,19 @@ impl Scanner {
                             });
                         }
                     }
-                    
+
                     // If this line has matches and we're including content, add it
-                    if line_has_match && self.config.include_line_content && line_content_vec.len() < 100 {
+                    if line_has_match
+                        && self.config.include_line_content
+                        && line_content_vec.len() < 100
+                    {
                         line_content_vec.push((
-                            line_number, 
-                            line_content.clone(), 
-                            first_column_in_line.unwrap()
+                            line_number,
+                            line_content.clone(),
+                            first_column_in_line.unwrap(),
                         ));
                     }
-                    
+
                     line_number += 1;
                 }
                 Err(_) => {
@@ -1233,12 +1277,13 @@ impl Scanner {
 
         // Return matches if any were found
         first_match.map(|first| {
-            let line_content_option = if self.config.include_line_content && !line_content_vec.is_empty() {
-                Some(line_content_vec)
-            } else {
-                None
-            };
-            
+            let line_content_option =
+                if self.config.include_line_content && !line_content_vec.is_empty() {
+                    Some(line_content_vec)
+                } else {
+                    None
+                };
+
             SearchMatches {
                 first_match: first,
                 total_count,
@@ -1285,7 +1330,7 @@ impl Scanner {
                 eprintln!("   Use --max-depth, --stream mode, or scan a more specific directory");
                 break;
             }
-            
+
             match entry_result {
                 Ok(entry) => {
                     let depth = entry.depth();
@@ -1299,7 +1344,9 @@ impl Scanner {
                                 if !node.is_dir && self.should_search_file(&node) {
                                     node.search_matches = self.search_in_file(&node.path);
                                 }
-                                safety_tracker.add_file(estimate_node_size(node.path.to_string_lossy().len()));
+                                safety_tracker.add_file(estimate_node_size(
+                                    node.path.to_string_lossy().len(),
+                                ));
                                 all_nodes_collected.push(node);
                             }
                             if entry.file_type().is_dir() {
@@ -1363,7 +1410,7 @@ impl Scanner {
 
         // Apply sorting and top-N filtering if requested
         let sorted_nodes = self.apply_sorting_and_limit(final_nodes);
-        
+
         Ok((sorted_nodes, final_stats))
     }
 
@@ -1885,7 +1932,7 @@ impl Scanner {
                 return false; // Path doesn't match the --find pattern.
             }
         }
-        
+
         // --- Filter by entry type (--entry-type) ---
         if let Some(ref entry_type) = self.config.entry_type_filter {
             match entry_type.as_str() {

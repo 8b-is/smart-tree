@@ -18,8 +18,8 @@
 // -----------------------------------------------------------------------------
 
 use super::Formatter;
-use crate::scanner::{FileNode, TreeStats};
 use crate::emoji_mapper;
+use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
 use chrono::{DateTime, Local};
 use std::fs;
@@ -218,7 +218,7 @@ impl LsFormatter {
         #[cfg(unix)]
         {
             use std::ffi::CStr;
-            
+
             // Get username from uid
             let owner = unsafe {
                 let passwd = libc::getpwuid(node.uid);
@@ -232,7 +232,7 @@ impl LsFormatter {
                         .to_string()
                 }
             };
-            
+
             // Get group name from gid
             let group = unsafe {
                 let grp = libc::getgrgid(node.gid);
@@ -241,15 +241,13 @@ impl LsFormatter {
                     node.gid.to_string()
                 } else {
                     // Convert group name to String
-                    CStr::from_ptr((*grp).gr_name)
-                        .to_string_lossy()
-                        .to_string()
+                    CStr::from_ptr((*grp).gr_name).to_string_lossy().to_string()
                 }
             };
-            
+
             (owner, group)
         }
-        
+
         #[cfg(not(unix))]
         {
             // On non-Unix systems, just show the numeric IDs
@@ -295,8 +293,9 @@ impl Formatter for LsFormatter {
             .filter(|n| n.path != root_path && n.path.parent() == Some(root_path))
             .count();
         let total_non_root = nodes.iter().filter(|n| n.path != root_path).count();
-        let is_filtered = total_non_root > 0 && (direct_child_count == 0 || total_non_root > direct_child_count * 2);
-        
+        let is_filtered = total_non_root > 0
+            && (direct_child_count == 0 || total_non_root > direct_child_count * 2);
+
         let display_nodes: Vec<&FileNode> = if is_filtered {
             // For filtered results, show all matching nodes with full paths
             nodes
@@ -322,9 +321,18 @@ impl Formatter for LsFormatter {
             writeln!(writer, "No matching files or directories found")?;
             if is_filtered {
                 writeln!(writer, "")?;
-                writeln!(writer, "💡 Tip: Try using --everything to search in ignored directories like .cache")?;
-                writeln!(writer, "💡 Tip: Use -d 10 or higher to search deeper (default is 5 levels)")?;
-                writeln!(writer, "💡 Tip: Hidden directories need -a flag, ignored ones need --everything")?;
+                writeln!(
+                    writer,
+                    "💡 Tip: Try using --everything to search in ignored directories like .cache"
+                )?;
+                writeln!(
+                    writer,
+                    "💡 Tip: Use -d 10 or higher to search deeper (default is 5 levels)"
+                )?;
+                writeln!(
+                    writer,
+                    "💡 Tip: Hidden directories need -a flag, ignored ones need --everything"
+                )?;
             }
             return Ok(());
         }
@@ -364,12 +372,14 @@ impl Formatter for LsFormatter {
                     // Always add a space after emoji for consistent alignment
                     format!("{} ", emoji)
                 };
-                
+
                 // Get relative path from root_path
-                let relative_path = node.path.strip_prefix(root_path)
+                let relative_path = node
+                    .path
+                    .strip_prefix(root_path)
                     .unwrap_or(&node.path)
                     .display();
-                
+
                 // Apply directory coloring if colors are enabled
                 if self.use_colors && node.is_dir {
                     // Blue color (ANSI 34) for directories
@@ -495,4 +505,3 @@ mod tests {
         assert_eq!(perms.len(), 10); // Always 10 characters
     }
 }
-

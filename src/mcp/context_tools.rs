@@ -1,10 +1,10 @@
 //! MCP tools for context gathering from AI tool directories
 
-use anyhow::{Result, Context as _};
+use crate::context_gatherer::{ContextGatherer, GatherConfig, GatheredContext};
+use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use crate::context_gatherer::{ContextGatherer, GatherConfig, GatheredContext};
 
 /// Request structure for gather_project_context tool
 #[derive(Debug, Deserialize)]
@@ -59,65 +59,65 @@ pub async fn gather_project_context(
     _permission_check: impl Fn(serde_json::Value) -> Result<bool>,
 ) -> Result<Value> {
     let project_path = PathBuf::from(&req.project_path);
-    
+
     // Verify project path exists
     if !project_path.exists() {
         return Ok(json!({
             "error": format!("Project path does not exist: {}", req.project_path)
         }));
     }
-    
+
     // For now, we skip permission checks
     // TODO: Implement proper permission system when available
-    
+
     // Build configuration
     let mut config = GatherConfig::default();
-    
+
     if let Some(dirs) = req.search_dirs {
         config.search_dirs = dirs;
     }
-    
+
     if let Some(custom) = req.custom_dirs {
-        config.custom_dirs = custom.into_iter()
-            .map(PathBuf::from)
-            .collect();
+        config.custom_dirs = custom.into_iter().map(PathBuf::from).collect();
     }
-    
+
     if let Some(identifiers) = req.project_identifiers {
         config.project_identifiers = identifiers;
     }
-    
+
     if let Some(privacy) = req.privacy_mode {
         config.privacy_mode = privacy;
     }
-    
+
     // Create gatherer and collect contexts
     let mut gatherer = ContextGatherer::new(project_path.clone(), config);
     gatherer.gather_all()?;
-    
+
     // Apply temporal decay if requested
     if let Some(half_life) = req.temporal_decay_days {
         gatherer.apply_temporal_decay(half_life);
     }
-    
+
     let all_contexts = gatherer.contexts();
     let min_relevance = req.min_relevance.unwrap_or(0.0);
     let max_results = req.max_results.unwrap_or(50);
-    
+
     // Filter by relevance and limit results
-    let filtered_contexts: Vec<&GatheredContext> = all_contexts.iter()
+    let filtered_contexts: Vec<&GatheredContext> = all_contexts
+        .iter()
         .filter(|c| c.relevance_score >= min_relevance)
         .take(max_results)
         .collect();
-    
+
     // Generate response based on format
     let output_format = req.output_format.as_deref().unwrap_or("summary");
-    
+
     match output_format {
         "m8" => {
             let m8_data = gatherer.to_m8()?;
-            let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &m8_data);
-            
+            let encoded =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &m8_data);
+
             Ok(json!({
                 "project_path": project_path.to_string_lossy(),
                 "total_contexts": all_contexts.len(),
@@ -125,7 +125,7 @@ pub async fn gather_project_context(
                 "m8_size_bytes": m8_data.len(),
             }))
         }
-        
+
         "json" => {
             // Return full JSON representation
             Ok(json!({
@@ -133,26 +133,31 @@ pub async fn gather_project_context(
                 "contexts": filtered_contexts,
             }))
         }
-        
+
         "partnership" => {
             // AI-Human partnership analysis
             let analysis = gatherer.analyze_partnership();
-            
+
             // Also get rapport indices from session tracker
-            let rapport_summary: Vec<_> = gatherer.session_tracker().rapport_indices.iter()
-                .map(|(pair, rapport)| json!({
-                    "pair": pair,
-                    "score": format!("{:.2}", rapport.overall_score),
-                    "trend": if rapport.evolution_trend > 0.05 {
-                        "📈"
-                    } else if rapport.evolution_trend < -0.05 {
-                        "📉"
-                    } else {
-                        "➡️"
-                    },
-                }))
+            let rapport_summary: Vec<_> = gatherer
+                .session_tracker()
+                .rapport_indices
+                .iter()
+                .map(|(pair, rapport)| {
+                    json!({
+                        "pair": pair,
+                        "score": format!("{:.2}", rapport.overall_score),
+                        "trend": if rapport.evolution_trend > 0.05 {
+                            "📈"
+                        } else if rapport.evolution_trend < -0.05 {
+                            "📉"
+                        } else {
+                            "➡️"
+                        },
+                    })
+                })
                 .collect();
-            
+
             Ok(json!({
                 "project_path": project_path.to_string_lossy(),
                 "partnership_analysis": {
@@ -172,19 +177,19 @@ pub async fn gather_project_context(
                         "mutual_understanding": format!("{:.2}", analysis.collaboration_metrics.mutual_understanding),
                     },
                     "relationship_evolution": {
-                        "productivity_trend": if analysis.relationship_evolution.productivity_trend > 0.1 { 
-                            "📈 Improving" 
-                        } else if analysis.relationship_evolution.productivity_trend < -0.1 { 
-                            "📉 Declining" 
-                        } else { 
-                            "➡️ Stable" 
+                        "productivity_trend": if analysis.relationship_evolution.productivity_trend > 0.1 {
+                            "📈 Improving"
+                        } else if analysis.relationship_evolution.productivity_trend < -0.1 {
+                            "📉 Declining"
+                        } else {
+                            "➡️ Stable"
                         },
-                        "understanding_trend": if analysis.relationship_evolution.understanding_trend > 0.1 { 
-                            "📈 Improving" 
-                        } else if analysis.relationship_evolution.understanding_trend < -0.1 { 
-                            "📉 Declining" 
-                        } else { 
-                            "➡️ Stable" 
+                        "understanding_trend": if analysis.relationship_evolution.understanding_trend > 0.1 {
+                            "📈 Improving"
+                        } else if analysis.relationship_evolution.understanding_trend < -0.1 {
+                            "📉 Declining"
+                        } else {
+                            "➡️ Stable"
                         },
                         "trust_level": format!("{:.2}", analysis.relationship_evolution.trust_indicators.autonomy_level),
                     },
@@ -212,7 +217,7 @@ pub async fn gather_project_context(
                 ),
             }))
         }
-        
+
         "temporal" => {
             // Temporal analysis output
             let resolution = match req.temporal_resolution.as_deref() {
@@ -224,10 +229,10 @@ pub async fn gather_project_context(
                 Some("year") => crate::context_gatherer::temporal::TemporalResolution::Year,
                 _ => crate::context_gatherer::temporal::TemporalResolution::Day,
             };
-            
+
             let patterns = gatherer.analyze_temporal(resolution);
             let wave_grid = gatherer.create_temporal_waves(resolution);
-            
+
             Ok(json!({
                 "project_path": project_path.to_string_lossy(),
                 "temporal_analysis": {
@@ -249,15 +254,16 @@ pub async fn gather_project_context(
                 ),
             }))
         }
-        
+
         _ => {
             // Default summary format
-            let summaries: Vec<ContextSummary> = filtered_contexts.iter()
+            let summaries: Vec<ContextSummary> = filtered_contexts
+                .iter()
                 .map(|c| create_context_summary(c))
                 .collect();
-            
+
             let sources_summary = calculate_sources_summary(&filtered_contexts);
-            
+
             let response = GatherProjectContextResponse {
                 project_path: project_path.to_string_lossy().to_string(),
                 total_contexts_found: all_contexts.len(),
@@ -266,7 +272,7 @@ pub async fn gather_project_context(
                 contexts: summaries,
                 m8_data: None,
             };
-            
+
             Ok(serde_json::to_value(response)?)
         }
     }
@@ -289,14 +295,14 @@ fn create_context_summary(context: &GatheredContext) -> ContextSummary {
             format!("[Binary data: {} bytes]", b.len())
         }
     };
-    
+
     let size_bytes = match &context.content {
         crate::context_gatherer::ContextContent::Text(t) => t.len(),
         crate::context_gatherer::ContextContent::Json(j) => j.to_string().len(),
         crate::context_gatherer::ContextContent::Xml(x) => x.len(),
         crate::context_gatherer::ContextContent::Binary(b) => b.len(),
     };
-    
+
     ContextSummary {
         source_path: context.source_path.to_string_lossy().to_string(),
         ai_tool: context.ai_tool.clone(),
@@ -309,13 +315,15 @@ fn create_context_summary(context: &GatheredContext) -> ContextSummary {
 }
 
 /// Calculate summary of context sources
-fn calculate_sources_summary(contexts: &[&GatheredContext]) -> std::collections::HashMap<String, usize> {
+fn calculate_sources_summary(
+    contexts: &[&GatheredContext],
+) -> std::collections::HashMap<String, usize> {
     let mut summary = std::collections::HashMap::new();
-    
+
     for context in contexts {
         *summary.entry(context.ai_tool.clone()).or_insert(0) += 1;
     }
-    
+
     summary
 }
 
@@ -355,7 +363,7 @@ pub async fn anchor_collaborative_memory(
     } else {
         std::env::current_dir()?
     };
-    
+
     // Parse origin
     let origin = if req.origin.starts_with("tandem:") {
         let parts: Vec<&str> = req.origin.split(':').collect();
@@ -377,38 +385,47 @@ pub async fn anchor_collaborative_memory(
     } else {
         crate::context_gatherer::collab_session::CollaborativeOrigin::Emergent
     };
-    
+
     // Parse anchor type
     let anchor_type = match req.anchor_type.as_str() {
-        "pattern_insight" | "pattern" => crate::context_gatherer::collab_session::AnchorType::PatternInsight,
+        "pattern_insight" | "pattern" => {
+            crate::context_gatherer::collab_session::AnchorType::PatternInsight
+        }
         "solution" => crate::context_gatherer::collab_session::AnchorType::Solution,
         "breakthrough" => crate::context_gatherer::collab_session::AnchorType::Breakthrough,
-        "learning" | "learning_moment" => crate::context_gatherer::collab_session::AnchorType::LearningMoment,
+        "learning" | "learning_moment" => {
+            crate::context_gatherer::collab_session::AnchorType::LearningMoment
+        }
         "joke" | "shared_joke" => crate::context_gatherer::collab_session::AnchorType::SharedJoke,
-        "technical" | "technical_pattern" => crate::context_gatherer::collab_session::AnchorType::TechnicalPattern,
-        "process" | "process_improvement" => crate::context_gatherer::collab_session::AnchorType::ProcessImprovement,
+        "technical" | "technical_pattern" => {
+            crate::context_gatherer::collab_session::AnchorType::TechnicalPattern
+        }
+        "process" | "process_improvement" => {
+            crate::context_gatherer::collab_session::AnchorType::ProcessImprovement
+        }
         _ => crate::context_gatherer::collab_session::AnchorType::PatternInsight,
     };
-    
+
     // Create a minimal gatherer just for anchoring
     let config = GatherConfig::default();
     let mut gatherer = ContextGatherer::new(project_path.clone(), config);
-    
+
     // Anchor the memory
-    match gatherer.anchor_memory(origin, anchor_type, req.context.clone(), req.keywords.clone()) {
-        Ok(anchor_id) => {
-            Ok(json!({
-                "success": true,
-                "anchor_id": anchor_id,
-                "message": format!("Memory anchored successfully with {} keywords", req.keywords.len()),
-                "retrieval_hint": "Use find_collaborative_memories to retrieve this later",
-            }))
-        }
-        Err(e) => {
-            Ok(json!({
-                "error": format!("Failed to anchor memory: {}", e)
-            }))
-        }
+    match gatherer.anchor_memory(
+        origin,
+        anchor_type,
+        req.context.clone(),
+        req.keywords.clone(),
+    ) {
+        Ok(anchor_id) => Ok(json!({
+            "success": true,
+            "anchor_id": anchor_id,
+            "message": format!("Memory anchored successfully with {} keywords", req.keywords.len()),
+            "retrieval_hint": "Use find_collaborative_memories to retrieve this later",
+        })),
+        Err(e) => Ok(json!({
+            "error": format!("Failed to anchor memory: {}", e)
+        })),
     }
 }
 
@@ -433,13 +450,13 @@ pub async fn find_collaborative_memories(
     } else {
         std::env::current_dir()?
     };
-    
+
     let config = GatherConfig::default();
     let gatherer = ContextGatherer::new(project_path, config);
-    
+
     let memories = gatherer.find_relevant_memories(&req.keywords);
     let max_results = req.max_results.unwrap_or(10);
-    
+
     Ok(json!({
         "keywords_searched": req.keywords,
         "total_found": memories.len(),
@@ -466,14 +483,14 @@ pub async fn get_collaboration_rapport(
     } else {
         std::env::current_dir()?
     };
-    
+
     // Need to gather contexts first to build rapport
     let mut config = GatherConfig::default();
     config.search_dirs = vec![format!(".{}", req.ai_tool)];
-    
+
     let mut gatherer = ContextGatherer::new(project_path.clone(), config);
     let _ = gatherer.gather_all(); // This will populate session tracker
-    
+
     if let Some(rapport) = gatherer.session_tracker().get_rapport(&req.ai_tool) {
         Ok(json!({
             "ai_tool": req.ai_tool,
@@ -544,31 +561,52 @@ pub async fn get_cross_domain_patterns(
     } else {
         std::env::current_dir()?
     };
-    
+
     let config = GatherConfig::default();
     let mut gatherer = ContextGatherer::new(project_path, config);
     let _ = gatherer.gather_all();
-    
+
     let mut patterns = gatherer.get_cross_domain_patterns();
-    
+
     // Filter by type if requested
     if let Some(pattern_type) = req.pattern_type {
         patterns.retain(|p| match pattern_type.as_str() {
-            "algorithm" => matches!(p.pattern_type, crate::context_gatherer::cross_session::PatternType::Algorithm),
-            "architecture" => matches!(p.pattern_type, crate::context_gatherer::cross_session::PatternType::Architecture),
-            "problem" => matches!(p.pattern_type, crate::context_gatherer::cross_session::PatternType::Problem),
-            "solution" => matches!(p.pattern_type, crate::context_gatherer::cross_session::PatternType::Solution),
-            "metaphor" => matches!(p.pattern_type, crate::context_gatherer::cross_session::PatternType::Metaphor),
-            "workflow" => matches!(p.pattern_type, crate::context_gatherer::cross_session::PatternType::Workflow),
-            "collaboration" => matches!(p.pattern_type, crate::context_gatherer::cross_session::PatternType::Collaboration),
+            "algorithm" => matches!(
+                p.pattern_type,
+                crate::context_gatherer::cross_session::PatternType::Algorithm
+            ),
+            "architecture" => matches!(
+                p.pattern_type,
+                crate::context_gatherer::cross_session::PatternType::Architecture
+            ),
+            "problem" => matches!(
+                p.pattern_type,
+                crate::context_gatherer::cross_session::PatternType::Problem
+            ),
+            "solution" => matches!(
+                p.pattern_type,
+                crate::context_gatherer::cross_session::PatternType::Solution
+            ),
+            "metaphor" => matches!(
+                p.pattern_type,
+                crate::context_gatherer::cross_session::PatternType::Metaphor
+            ),
+            "workflow" => matches!(
+                p.pattern_type,
+                crate::context_gatherer::cross_session::PatternType::Workflow
+            ),
+            "collaboration" => matches!(
+                p.pattern_type,
+                crate::context_gatherer::cross_session::PatternType::Collaboration
+            ),
             _ => true,
         });
     }
-    
+
     // Filter by strength
     let min_strength = req.min_strength.unwrap_or(0.0);
     patterns.retain(|p| p.strength >= min_strength);
-    
+
     Ok(json!({
         "total_patterns": patterns.len(),
         "patterns": patterns.iter().map(|p| json!({
@@ -608,16 +646,16 @@ pub async fn suggest_cross_session_insights(
     } else {
         std::env::current_dir()?
     };
-    
+
     let config = GatherConfig::default();
     let mut gatherer = ContextGatherer::new(project_path, config);
     let _ = gatherer.gather_all();
-    
+
     let insights = gatherer.get_relevant_insights(&req.keywords);
     let max_results = req.max_results.unwrap_or(5);
     let insights_found = insights.len();
     let insights_empty = insights.is_empty();
-    
+
     Ok(json!({
         "keywords": req.keywords,
         "insights_found": insights_found,
@@ -652,9 +690,9 @@ pub async fn invite_persona(
 ) -> Result<Value> {
     let config = GatherConfig::default();
     let gatherer = ContextGatherer::new(std::env::current_dir()?, config);
-    
+
     let duration = req.duration_minutes.unwrap_or(10);
-    
+
     if let Some(invitation) = gatherer.invite_persona(&req.context, duration) {
         Ok(json!({
             "success": true,
@@ -688,19 +726,19 @@ pub async fn get_co_engagement_heatmap(
     } else {
         std::env::current_dir()?
     };
-    
+
     let config = GatherConfig::default();
     let mut gatherer = ContextGatherer::new(project_path, config);
     let _ = gatherer.gather_all();
-    
+
     let heatmap = gatherer.get_co_engagement_heatmap();
     let format = req.format.as_deref().unwrap_or("visual");
-    
+
     if format == "visual" {
         // Create visual representation
         let mut visual = String::from("\n🕐 Temporal Co-Engagement Heatmap\n");
         visual.push_str("   Mon Tue Wed Thu Fri Sat Sun\n");
-        
+
         for hour in 0..24 {
             visual.push_str(&format!("{:02} ", hour));
             for day in 0..7 {
@@ -717,14 +755,20 @@ pub async fn get_co_engagement_heatmap(
             }
             visual.push('\n');
         }
-        
-        visual.push_str(&format!("\n📊 Collaboration Density: {:.1}%\n", heatmap.collaboration_density * 100.0));
-        visual.push_str(&format!("🎯 Peak Zones: {} identified\n", heatmap.peak_collaboration_zones.len()));
-        
+
+        visual.push_str(&format!(
+            "\n📊 Collaboration Density: {:.1}%\n",
+            heatmap.collaboration_density * 100.0
+        ));
+        visual.push_str(&format!(
+            "🎯 Peak Zones: {} identified\n",
+            heatmap.peak_collaboration_zones.len()
+        ));
+
         Ok(json!({
             "heatmap": visual,
             "peak_times": heatmap.peak_collaboration_zones.iter()
-                .map(|(h, d)| format!("{} {:02}:00", 
+                .map(|(h, d)| format!("{} {:02}:00",
                     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][*d],
                     h
                 ))
@@ -741,31 +785,31 @@ pub async fn analyze_ai_tool_usage(
     req: AnalyzeAiToolUsageRequest,
     _permission_check: impl Fn(serde_json::Value) -> Result<bool>,
 ) -> Result<Value> {
-    let home_dir = dirs::home_dir()
-        .context("Failed to get home directory")?;
-    
+    let home_dir = dirs::home_dir().context("Failed to get home directory")?;
+
     let mut usage_stats = json!({
         "analysis_date": chrono::Utc::now().to_rfc3339(),
         "days_analyzed": req.days.unwrap_or(30),
         "tools": {}
     });
-    
+
     let tools_to_check = if let Some(tool) = req.tool_name {
         vec![tool]
     } else {
-        crate::context_gatherer::AI_TOOL_DIRS.iter()
+        crate::context_gatherer::AI_TOOL_DIRS
+            .iter()
             .map(|s| s.to_string())
             .collect()
     };
-    
+
     let cutoff_date = chrono::Utc::now() - chrono::Duration::days(req.days.unwrap_or(30) as i64);
-    
+
     for tool in tools_to_check {
         let tool_path = home_dir.join(&tool);
         if !tool_path.exists() {
             continue;
         }
-        
+
         let mut stats = json!({
             "exists": true,
             "total_files": 0,
@@ -773,7 +817,7 @@ pub async fn analyze_ai_tool_usage(
             "recent_files": 0,
             "file_types": {}
         });
-        
+
         // Analyze tool directory
         for entry in walkdir::WalkDir::new(&tool_path)
             .max_depth(5)
@@ -783,18 +827,18 @@ pub async fn analyze_ai_tool_usage(
             if entry.file_type().is_file() {
                 if let Ok(metadata) = entry.metadata() {
                     stats["total_files"] = json!(stats["total_files"].as_u64().unwrap_or(0) + 1);
-                    stats["total_size_bytes"] = json!(
-                        stats["total_size_bytes"].as_u64().unwrap_or(0) + metadata.len()
-                    );
-                    
+                    stats["total_size_bytes"] =
+                        json!(stats["total_size_bytes"].as_u64().unwrap_or(0) + metadata.len());
+
                     // Check if recent
                     if let Ok(modified) = metadata.modified() {
                         let modified_time = chrono::DateTime::<chrono::Utc>::from(modified);
                         if modified_time > cutoff_date {
-                            stats["recent_files"] = json!(stats["recent_files"].as_u64().unwrap_or(0) + 1);
+                            stats["recent_files"] =
+                                json!(stats["recent_files"].as_u64().unwrap_or(0) + 1);
                         }
                     }
-                    
+
                     // Track file types
                     if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
                         let types = stats["file_types"].as_object_mut().unwrap();
@@ -804,10 +848,10 @@ pub async fn analyze_ai_tool_usage(
                 }
             }
         }
-        
+
         usage_stats["tools"][tool] = stats;
     }
-    
+
     Ok(usage_stats)
 }
 

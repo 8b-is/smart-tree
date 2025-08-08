@@ -22,7 +22,6 @@ use std::time::SystemTime;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
-    terminal::SmartTreeTerminal,
     formatters::{
         ai::AiFormatter,
         ai_json::AiJsonFormatter,
@@ -46,6 +45,7 @@ use st::{
     inputs::InputProcessor,
     parse_size,
     rename_project::{rename_project, RenameOptions},
+    terminal::SmartTreeTerminal,
     Scanner,
     ScannerConfig, // The mighty Scanner and its configuration.
 };
@@ -88,7 +88,7 @@ struct Cli {
     /// Show version information and check for updates.
     #[arg(short = 'V', long, exclusive = true)]
     version: bool,
-    
+
     /// Launch Smart Tree Terminal Interface (STTI) - Your coding companion!
     /// This starts an interactive terminal that anticipates your needs.
     #[arg(long, exclusive = true)]
@@ -288,7 +288,7 @@ struct ScanArgs {
     /// --sort date --top 20 (20 most recent files)
     #[arg(long, value_name = "N")]
     top: Option<usize>,
-    
+
     /// Include private functions in function documentation (for function-markdown mode)
     /// By default, only public functions are shown
     #[arg(long)]
@@ -422,7 +422,7 @@ enum OutputMode {
 /// into a `SystemTime` object that Rust can understand.
 /// Perfect for finding files from the past or... well, not the future. Yet.
 /// Get the ideal depth for each output mode
-/// 
+///
 /// When users don't specify depth (depth = 0), each mode gets its optimal default:
 /// - LS mode: 1 (like real ls, shows only immediate children)
 /// - Classic: 3 (good overview without overwhelming)
@@ -431,17 +431,17 @@ enum OutputMode {
 /// - Others: 4 (balanced default)
 fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
     match mode {
-        OutputMode::Auto => 3,                  // Should never reach here, but default to classic depth
-        OutputMode::Ls => 1,                    // Mimics 'ls' behavior
-        OutputMode::Classic => 3,               // Balanced tree view
-        OutputMode::Ai | OutputMode::Hex => 5,  // More detail for analysis
-        OutputMode::Stats => 10,                // Comprehensive stats
-        OutputMode::Digest => 10,               // Full scan for accurate digest
+        OutputMode::Auto => 3, // Should never reach here, but default to classic depth
+        OutputMode::Ls => 1,   // Mimics 'ls' behavior
+        OutputMode::Classic => 3, // Balanced tree view
+        OutputMode::Ai | OutputMode::Hex => 5, // More detail for analysis
+        OutputMode::Stats => 10, // Comprehensive stats
+        OutputMode::Digest => 10, // Full scan for accurate digest
         OutputMode::Quantum | OutputMode::QuantumSemantic => 5, // Good compression balance
-        OutputMode::Summary | OutputMode::SummaryAi => 4,       // Reasonable summary depth
-        OutputMode::Waste => 10,                // Deep scan to find all duplicates
-        OutputMode::Relations => 10,            // Deep scan for relationships
-        _ => 4,                                 // Default for other modes
+        OutputMode::Summary | OutputMode::SummaryAi => 4, // Reasonable summary depth
+        OutputMode::Waste => 10, // Deep scan to find all duplicates
+        OutputMode::Relations => 10, // Deep scan for relationships
+        _ => 4,                // Default for other modes
     }
 }
 
@@ -561,7 +561,7 @@ async fn main() -> Result<()> {
         match args.mode {
             OutputMode::Auto => (OutputMode::Ai, true), // Default to AI mode for MCP
             OutputMode::Summary => (OutputMode::SummaryAi, true), // Auto-switch to AI version
-            other => (other, true), // Keep other modes but enable compression
+            other => (other, true),                     // Keep other modes but enable compression
         }
     } else if args.semantic {
         // If --semantic flag is set, use semantic mode (Omni's wisdom!)
@@ -576,15 +576,17 @@ async fn main() -> Result<()> {
         // No explicit mode specified anywhere, use classic as default
         (OutputMode::Classic, args.compress)
     };
-    
+
     // Auto-switch to ls mode when using --top with classic mode
     if args.top.is_some() && matches!(mode, OutputMode::Classic) {
         // Check if user explicitly provided --mode flag by looking at CLI args
         let user_specified_mode = std::env::args().any(|arg| arg == "--mode" || arg == "-m");
-        
+
         if !user_specified_mode && default_mode_env.is_none() {
             // Auto-switch only if user didn't explicitly choose a mode
-            eprintln!("💡 Auto-switching to ls mode for --top results (use --mode classic to override)");
+            eprintln!(
+                "💡 Auto-switching to ls mode for --top results (use --mode classic to override)"
+            );
             mode = OutputMode::Ls;
         } else {
             // User explicitly chose classic mode or set env var, just show the note
@@ -639,19 +641,27 @@ async fn main() -> Result<()> {
         // Check if the root path itself is a commonly ignored directory
         // If so, automatically disable default ignores AND show hidden files
         let path = PathBuf::from(&input_str);
-        let root_name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
-        
+        let root_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
         // List of directory names that should disable default ignores when explicitly targeted
-        let auto_disable_ignores = matches!(root_name, 
-            ".git" | ".svn" | ".hg" | "node_modules" | "target" | "build" | 
-            "dist" | "__pycache__" | ".cache" | ".pytest_cache" | ".mypy_cache"
+        let auto_disable_ignores = matches!(
+            root_name,
+            ".git"
+                | ".svn"
+                | ".hg"
+                | "node_modules"
+                | "target"
+                | "build"
+                | "dist"
+                | "__pycache__"
+                | ".cache"
+                | ".pytest_cache"
+                | ".mypy_cache"
         );
-        
+
         // For hidden directories like .git, also enable showing hidden files
         let auto_show_hidden = auto_disable_ignores && root_name.starts_with('.');
-        
+
         let no_default_ignore = args.no_default_ignore || auto_disable_ignores;
         let all = args.all || auto_show_hidden;
         (args.no_ignore, no_default_ignore, all)
@@ -668,7 +678,6 @@ async fn main() -> Result<()> {
     } else {
         args.depth // User explicitly set depth, respect their choice
     };
-    
 
     let scanner_config = ScannerConfig {
         max_depth: effective_depth,
@@ -846,11 +855,7 @@ async fn main() -> Result<()> {
                     } else {
                         path_display_mode // Use the user-specified or default path_mode.
                     };
-                let formatter = ClassicFormatter::new(
-                    no_emoji,
-                    use_color,
-                    classic_path_mode,
-                );
+                let formatter = ClassicFormatter::new(no_emoji, use_color, classic_path_mode);
                 let sort_field = args.sort.map(|f| match f {
                     SortField::AToZ | SortField::Name => "a-to-z".to_string(),
                     SortField::ZToA => "z-to-a".to_string(),
@@ -905,9 +910,7 @@ async fn main() -> Result<()> {
                     !args.no_markdown_pie_charts, // Include pie charts unless disabled
                 ))
             }
-            OutputMode::Marqant => {
-                Box::new(MarqantFormatter::new(path_display_mode, no_emoji))
-            }
+            OutputMode::Marqant => Box::new(MarqantFormatter::new(path_display_mode, no_emoji)),
             OutputMode::Sse => {
                 // SSE streaming format for real-time monitoring
                 Box::new(SseFormatter::new())
@@ -1045,7 +1048,9 @@ fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result
     }
 
     if args.filter_type.is_none() && args.entry_type.is_none() {
-        tips.push("🔍 Filter by type: --entry-type f (files only) or --entry-type d (directories only).");
+        tips.push(
+            "🔍 Filter by type: --entry-type f (files only) or --entry-type d (directories only).",
+        );
     }
 
     // Random general tips
@@ -1225,7 +1230,7 @@ async fn check_for_updates_cli() -> Result<String> {
         .timeout(std::time::Duration::from_secs(2)) // Global timeout for all operations
         .connect_timeout(std::time::Duration::from_secs(1)) // Quick connect timeout
         .build()?;
-    
+
     let api_url =
         std::env::var("SMART_TREE_FEEDBACK_API").unwrap_or_else(|_| "https://f.8b.is".to_string());
 

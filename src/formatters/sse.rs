@@ -24,7 +24,13 @@ impl SseFormatter {
         self.event_id
     }
 
-    fn write_event(&self, writer: &mut dyn Write, event_type: &str, data: &serde_json::Value, id: u64) -> Result<()> {
+    fn write_event(
+        &self,
+        writer: &mut dyn Write,
+        event_type: &str,
+        data: &serde_json::Value,
+        id: u64,
+    ) -> Result<()> {
         writeln!(writer, "id: {}", id)?;
         writeln!(writer, "event: {}", event_type)?;
         writeln!(writer, "data: {}", serde_json::to_string(data)?)?;
@@ -43,7 +49,7 @@ impl Formatter for SseFormatter {
         root_path: &Path,
     ) -> Result<()> {
         let mut formatter = SseFormatter::new();
-        
+
         // Send initial scan event
         let scan_event = serde_json::json!({
             "type": "scan_complete",
@@ -94,7 +100,7 @@ impl StreamingFormatter for SseFormatter {
         writeln!(writer, "Connection: keep-alive")?;
         writeln!(writer, "Access-Control-Allow-Origin: *")?;
         writeln!(writer)?; // Empty line to end headers
-        
+
         // Send initial connection event
         let mut formatter = SseFormatter::new();
         let init_event = serde_json::json!({
@@ -104,7 +110,7 @@ impl StreamingFormatter for SseFormatter {
         });
         let id = formatter.next_event_id();
         formatter.write_event(writer, "init", &init_event, id)?;
-        
+
         Ok(())
     }
 
@@ -115,7 +121,7 @@ impl StreamingFormatter for SseFormatter {
         _root_path: &Path,
     ) -> Result<()> {
         let mut formatter = SseFormatter::new();
-        
+
         let node_event = serde_json::json!({
             "type": "node_discovered",
             "node": {
@@ -128,7 +134,7 @@ impl StreamingFormatter for SseFormatter {
                 "modified": chrono::DateTime::<chrono::Utc>::from(node.modified).to_rfc3339(),
             }
         });
-        
+
         let id = formatter.next_event_id();
         formatter.write_event(writer, "node", &node_event, id)?;
         Ok(())
@@ -141,7 +147,7 @@ impl StreamingFormatter for SseFormatter {
         root_path: &Path,
     ) -> Result<()> {
         let mut formatter = SseFormatter::new();
-        
+
         // Send final statistics
         let stats_event = serde_json::json!({
             "type": "stream_complete",
@@ -153,10 +159,10 @@ impl StreamingFormatter for SseFormatter {
             },
             "timestamp": chrono::Utc::now().to_rfc3339(),
         });
-        
+
         let id = formatter.next_event_id();
         formatter.write_event(writer, "complete", &stats_event, id)?;
-        
+
         // Send close event
         let close_event = serde_json::json!({
             "type": "stream_close",
@@ -164,7 +170,7 @@ impl StreamingFormatter for SseFormatter {
         });
         let id = formatter.next_event_id();
         formatter.write_event(writer, "close", &close_event, id)?;
-        
+
         Ok(())
     }
 }

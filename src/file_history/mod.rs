@@ -1,18 +1,18 @@
 //! File History Tracking Module - The Ultimate Context-Driven System!
-//! 
+//!
 //! Tracks all AI file manipulations in ~/.mem8/.filehistory/
 //! with hash-based change detection and append-first operations.
-//! 
+//!
 //! 🎸 The Cheet says: "Every file tells a story, let's remember them all!"
 
+use anyhow::Result;
+use chrono::{DateTime, Datelike, Timelike, Utc};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::{DateTime, Utc, Timelike, Datelike};
-use sha2::{Sha256, Digest};
-use serde::{Serialize, Deserialize};
-use anyhow::Result;
 
 pub mod operations;
 pub mod tracker;
@@ -47,10 +47,10 @@ pub fn get_time_bucket() -> (String, u64) {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     let datetime = DateTime::<Utc>::from(UNIX_EPOCH + std::time::Duration::from_secs(now));
     let minute = datetime.minute() / 10 * 10; // Round down to 10-minute bucket
-    
+
     let filename = format!(
         "{:04}{:02}{:02}_{:02}{:02}",
         datetime.year(),
@@ -59,7 +59,7 @@ pub fn get_time_bucket() -> (String, u64) {
         datetime.hour(),
         minute
     );
-    
+
     (filename, now)
 }
 

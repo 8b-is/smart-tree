@@ -1,6 +1,6 @@
 use super::{Formatter, PathDisplayMode, StreamingFormatter};
-use crate::scanner::{FileNode, TreeStats};
 use crate::emoji_mapper;
+use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
 use std::io::Write;
 use std::path::Path;

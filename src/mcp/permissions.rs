@@ -1,5 +1,5 @@
 //! Permission-based tool gating system for MCP
-//! 
+//!
 //! This module implements a smart permission checking system that:
 //! 1. Requires digest/verification before other tools can be used
 //! 2. Only exposes tools that are relevant based on permissions
@@ -50,7 +50,7 @@ impl PermissionCache {
             cache_duration: Duration::from_secs(300), // 5 minutes
         }
     }
-    
+
     /// Check if a path has been verified recently
     pub fn is_verified(&self, path: &Path) -> bool {
         if let Some(perms) = self.permissions.get(path) {
@@ -60,14 +60,14 @@ impl PermissionCache {
         }
         false
     }
-    
+
     /// Get cached permissions for a path
     pub fn get(&self, path: &Path) -> Option<&PathPermissions> {
-        self.permissions.get(path).filter(|p| {
-            p.verified_at.elapsed().unwrap_or(Duration::MAX) < self.cache_duration
-        })
+        self.permissions
+            .get(path)
+            .filter(|p| p.verified_at.elapsed().unwrap_or(Duration::MAX) < self.cache_duration)
     }
-    
+
     /// Verify and cache permissions for a path
     pub fn verify(&mut self, path: &Path) -> Result<PathPermissions> {
         // Check if path exists
@@ -86,7 +86,7 @@ impl PermissionCache {
             self.permissions.insert(path.to_path_buf(), perms.clone());
             return Ok(perms);
         }
-        
+
         // Get metadata
         let metadata = match fs::metadata(path) {
             Ok(m) => m,
@@ -105,20 +105,20 @@ impl PermissionCache {
                 return Ok(perms);
             }
         };
-        
+
         let is_directory = metadata.is_dir();
         let is_file = metadata.is_file();
-        
+
         // Check read permission
         let readable = if is_directory {
             fs::read_dir(path).is_ok()
         } else {
             fs::File::open(path).is_ok()
         };
-        
+
         // Check write permission
         let writable = !metadata.permissions().readonly();
-        
+
         let perms = PathPermissions {
             path: path.to_path_buf(),
             exists,
@@ -129,16 +129,15 @@ impl PermissionCache {
             verified_at: SystemTime::now(),
             error: None,
         };
-        
+
         self.permissions.insert(path.to_path_buf(), perms.clone());
         Ok(perms)
     }
-    
+
     /// Clear expired entries
     pub fn cleanup(&mut self) {
-        self.permissions.retain(|_, p| {
-            p.verified_at.elapsed().unwrap_or(Duration::MAX) < self.cache_duration
-        });
+        self.permissions
+            .retain(|_, p| p.verified_at.elapsed().unwrap_or(Duration::MAX) < self.cache_duration);
     }
 }
 
@@ -158,7 +157,7 @@ pub struct ToolAvailability {
 /// Get available tools based on path permissions
 pub fn get_available_tools(perms: &PathPermissions) -> Vec<ToolAvailability> {
     let mut tools = vec![];
-    
+
     // Always available tools (verification tools)
     tools.push(ToolAvailability {
         name: "get_digest".to_string(),
@@ -166,14 +165,14 @@ pub fn get_available_tools(perms: &PathPermissions) -> Vec<ToolAvailability> {
         reason: None,
         requires: vec![],
     });
-    
+
     tools.push(ToolAvailability {
         name: "server_info".to_string(),
         available: true,
         reason: None,
         requires: vec![],
     });
-    
+
     // Read-only tools
     if perms.readable {
         tools.extend(vec![
@@ -255,7 +254,7 @@ pub fn get_available_tools(perms: &PathPermissions) -> Vec<ToolAvailability> {
             },
         ]);
     }
-    
+
     // Write tools
     if perms.writable && perms.readable {
         tools.extend(vec![
@@ -323,7 +322,7 @@ pub fn get_available_tools(perms: &PathPermissions) -> Vec<ToolAvailability> {
             },
         ]);
     }
-    
+
     tools
 }
 
@@ -342,26 +341,26 @@ pub fn is_tool_available(tool_name: &str, perms: &PathPermissions) -> (bool, Opt
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_permission_cache() {
         let mut cache = PermissionCache::new();
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path();
-        
+
         // Verify directory permissions
         let perms = cache.verify(path).unwrap();
         assert!(perms.exists);
         assert!(perms.readable);
         assert!(perms.is_directory);
         assert!(!perms.is_file);
-        
+
         // Check caching
         assert!(cache.is_verified(path));
     }
-    
+
     #[test]
     fn test_tool_availability() {
         // Test with readable directory
@@ -375,18 +374,24 @@ mod tests {
             verified_at: SystemTime::now(),
             error: None,
         };
-        
+
         let tools = get_available_tools(&dir_perms);
-        
+
         // Check that directory tools are available
-        let analyze = tools.iter().find(|t| t.name == "analyze_directory").unwrap();
+        let analyze = tools
+            .iter()
+            .find(|t| t.name == "analyze_directory")
+            .unwrap();
         assert!(analyze.available);
-        
+
         // Check that file tools are not available for directories
         let edit = tools.iter().find(|t| t.name == "smart_edit").unwrap();
         assert!(!edit.available);
-        assert_eq!(edit.reason, Some("Can only edit files, not directories".to_string()));
-        
+        assert_eq!(
+            edit.reason,
+            Some("Can only edit files, not directories".to_string())
+        );
+
         // Test with read-only file
         let ro_file_perms = PathPermissions {
             path: PathBuf::from("/test.txt"),
@@ -398,12 +403,15 @@ mod tests {
             verified_at: SystemTime::now(),
             error: None,
         };
-        
+
         let tools = get_available_tools(&ro_file_perms);
-        
+
         // Check that edit tools are unavailable
         let edit = tools.iter().find(|t| t.name == "smart_edit").unwrap();
         assert!(!edit.available);
-        assert_eq!(edit.reason, Some("File is read-only - no write permission".to_string()));
+        assert_eq!(
+            edit.reason,
+            Some("File is read-only - no write permission".to_string())
+        );
     }
 }

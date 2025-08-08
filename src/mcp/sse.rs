@@ -13,9 +13,7 @@ use tokio::sync::mpsc;
 use tokio::time::interval;
 
 use super::{is_path_allowed, McpContext};
-use crate::formatters::{
-    ai::AiFormatter, hex::HexFormatter, quantum::QuantumFormatter, Formatter,
-};
+use crate::formatters::{ai::AiFormatter, hex::HexFormatter, quantum::QuantumFormatter, Formatter};
 use crate::scanner::{FileNode, Scanner, ScannerConfig};
 
 /// SSE event types
@@ -23,24 +21,13 @@ use crate::scanner::{FileNode, Scanner, ScannerConfig};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SseEvent {
     /// Initial scan complete
-    ScanComplete {
-        path: String,
-        stats: ScanStats,
-    },
+    ScanComplete { path: String, stats: ScanStats },
     /// File or directory created
-    Created {
-        path: String,
-        node: FileNode,
-    },
+    Created { path: String, node: FileNode },
     /// File or directory modified
-    Modified {
-        path: String,
-        node: FileNode,
-    },
+    Modified { path: String, node: FileNode },
     /// File or directory deleted
-    Deleted {
-        path: String,
-    },
+    Deleted { path: String },
     /// Directory analysis update
     Analysis {
         path: String,
@@ -48,14 +35,9 @@ pub enum SseEvent {
         data: String,
     },
     /// Periodic statistics update
-    Stats {
-        path: String,
-        stats: ScanStats,
-    },
+    Stats { path: String, stats: ScanStats },
     /// Error occurred
-    Error {
-        message: String,
-    },
+    Error { message: String },
     /// Heartbeat to keep connection alive
     Heartbeat,
 }
@@ -274,7 +256,7 @@ async fn watch_directory(
 /// Scan a single path and create FileNode
 async fn scan_single_path(path: &Path) -> Result<FileNode> {
     let metadata = tokio::fs::metadata(path).await?;
-    
+
     // Get Unix permissions
     #[cfg(unix)]
     let permissions = {
@@ -370,7 +352,13 @@ fn format_nodes(
 
     match format {
         OutputFormat::Hex => {
-            let formatter = HexFormatter::new(false, false, false, crate::formatters::PathDisplayMode::Off, false);
+            let formatter = HexFormatter::new(
+                false,
+                false,
+                false,
+                crate::formatters::PathDisplayMode::Off,
+                false,
+            );
             formatter.format(&mut output, nodes, stats, root_path)?;
         }
         OutputFormat::Ai => {

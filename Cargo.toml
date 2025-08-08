@@ -39,6 +39,7 @@ rand = "0.8"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 whoami = "1.5"
 crc32fast = "1.4"
+similar = "2.4"
 
 # Terminal UI dependencies
 ratatui = "0.25"

@@ -1,5 +1,5 @@
 //! Integration helpers for easier Smart Tree usage in other applications
-//! 
+//!
 //! This module provides simplified APIs and helper functions that make it easier
 //! to integrate Smart Tree functionality into other applications without dealing
 //! with all the low-level details.
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::{Scanner, ScannerConfig, FileNode, TreeStats, detect_project_context};
+use crate::{detect_project_context, FileNode, Scanner, ScannerConfig, TreeStats};
 
 /// Simplified project analysis result optimized for external integrations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,7 +21,7 @@ pub struct ProjectAnalysis {
     pub total_directories: usize,
     pub total_size: u64,
     pub key_files: Vec<String>,
-    pub recent_files: Vec<String>, 
+    pub recent_files: Vec<String>,
     pub file_types: std::collections::HashMap<String, usize>,
     pub insights: Vec<String>,
 }
@@ -44,7 +44,7 @@ impl ProjectAnalyzer {
         config.max_depth = 10;
         config.show_hidden = false;
         config.respect_gitignore = true;
-        
+
         Self {
             default_config: config,
         }
@@ -54,30 +54,30 @@ impl ProjectAnalyzer {
     pub fn analyze_project(&self, project_path: &Path) -> Result<ProjectAnalysis> {
         let scanner = Scanner::new(project_path, self.default_config.clone())?;
         let (nodes, stats) = scanner.scan()?;
-        
+
         // Detect project type
-        let project_type = detect_project_context(project_path)
-            .unwrap_or_else(|| "Unknown".to_string());
-            
+        let project_type =
+            detect_project_context(project_path).unwrap_or_else(|| "Unknown".to_string());
+
         // Get project name from directory
         let project_name = project_path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("Unknown")
             .to_string();
-        
+
         // Find key files
         let key_files = Self::extract_key_files(&nodes);
-        
+
         // Find recent files (last hour)
         let recent_files = Self::find_recent_files(&nodes, 1);
-        
+
         // Analyze file types
         let file_types = Self::analyze_file_types(&nodes);
-        
+
         // Generate insights
         let insights = Self::generate_insights(&stats, &project_type, &nodes);
-        
+
         Ok(ProjectAnalysis {
             project_path: project_path.to_path_buf(),
             project_type,
@@ -96,19 +96,19 @@ impl ProjectAnalyzer {
     pub fn quick_analysis(&self, project_path: &Path) -> Result<ProjectAnalysis> {
         let mut config = self.default_config.clone();
         config.max_depth = 2; // Very shallow for quick analysis
-        
+
         let scanner = Scanner::new(project_path, config)?;
         let (_nodes, stats) = scanner.quick_scan()?;
-        
-        let project_type = detect_project_context(project_path)
-            .unwrap_or_else(|| "Unknown".to_string());
-            
+
+        let project_type =
+            detect_project_context(project_path).unwrap_or_else(|| "Unknown".to_string());
+
         let project_name = project_path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("Unknown")
             .to_string();
-        
+
         Ok(ProjectAnalysis {
             project_path: project_path.to_path_buf(),
             project_type: project_type.clone(),
@@ -116,10 +116,13 @@ impl ProjectAnalyzer {
             total_files: stats.total_files as usize,
             total_directories: stats.total_dirs as usize,
             total_size: stats.total_size,
-            key_files: vec![], // Skip for quick analysis
-            recent_files: vec![], // Skip for quick analysis
+            key_files: vec![],                            // Skip for quick analysis
+            recent_files: vec![],                         // Skip for quick analysis
             file_types: std::collections::HashMap::new(), // Skip for quick analysis
-            insights: vec![format!("{} project with {} files", project_type, stats.total_files)],
+            insights: vec![format!(
+                "{} project with {} files",
+                project_type, stats.total_files
+            )],
         })
     }
 
@@ -138,21 +141,33 @@ impl ProjectAnalyzer {
     // Helper methods
     fn extract_key_files(nodes: &[FileNode]) -> Vec<String> {
         let important_patterns = [
-            "main.rs", "lib.rs", "mod.rs",
-            "package.json", "Cargo.toml", "requirements.txt", "pyproject.toml",
-            "README.md", "LICENSE", "Makefile", "CMakeLists.txt",
-            "index.js", "app.js", "server.js", "main.js",
-            "main.py", "__init__.py", "setup.py",
-            "go.mod", "main.go",
+            "main.rs",
+            "lib.rs",
+            "mod.rs",
+            "package.json",
+            "Cargo.toml",
+            "requirements.txt",
+            "pyproject.toml",
+            "README.md",
+            "LICENSE",
+            "Makefile",
+            "CMakeLists.txt",
+            "index.js",
+            "app.js",
+            "server.js",
+            "main.js",
+            "main.py",
+            "__init__.py",
+            "setup.py",
+            "go.mod",
+            "main.go",
         ];
 
         let mut key_files = Vec::new();
         for node in nodes {
             if !node.is_dir {
-                let file_name = node.path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-                
+                let file_name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
                 for pattern in &important_patterns {
                     if file_name == *pattern {
                         key_files.push(node.path.to_string_lossy().to_string());
@@ -161,7 +176,7 @@ impl ProjectAnalyzer {
                 }
             }
         }
-        
+
         key_files.sort();
         key_files.dedup();
         key_files
@@ -169,8 +184,9 @@ impl ProjectAnalyzer {
 
     fn find_recent_files(nodes: &[FileNode], hours_ago: u64) -> Vec<String> {
         let cutoff_time = SystemTime::now() - std::time::Duration::from_secs(hours_ago * 3600);
-        
-        nodes.iter()
+
+        nodes
+            .iter()
             .filter(|node| !node.is_dir && node.modified > cutoff_time)
             .map(|node| node.path.to_string_lossy().to_string())
             .collect()
@@ -178,24 +194,20 @@ impl ProjectAnalyzer {
 
     fn analyze_file_types(nodes: &[FileNode]) -> std::collections::HashMap<String, usize> {
         let mut types = std::collections::HashMap::new();
-        
+
         for node in nodes {
             if !node.is_dir {
                 let category = format!("{:?}", node.category);
                 *types.entry(category).or_insert(0) += 1;
             }
         }
-        
+
         types
     }
 
-    fn generate_insights(
-        stats: &TreeStats, 
-        project_type: &str, 
-        nodes: &[FileNode]
-    ) -> Vec<String> {
+    fn generate_insights(stats: &TreeStats, project_type: &str, nodes: &[FileNode]) -> Vec<String> {
         let mut insights = Vec::new();
-        
+
         // Size insights
         if stats.total_files > 1000 {
             insights.push("Large codebase with extensive structure".to_string());
@@ -239,7 +251,7 @@ pub fn analyze_project(project_path: &Path) -> Result<ProjectAnalysis> {
 pub fn quick_project_overview(project_path: &Path) -> Result<String> {
     let analyzer = ProjectAnalyzer::new();
     let analysis = analyzer.quick_analysis(project_path)?;
-    
+
     Ok(format!(
         "{} | {} ({} files, {} dirs)",
         analysis.project_name,

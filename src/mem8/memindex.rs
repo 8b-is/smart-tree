@@ -10,22 +10,22 @@ use std::path::{Path, PathBuf};
 pub struct MemIndex {
     /// Index version
     pub version: String,
-    
+
     /// User identification and context
     pub user: UserContext,
-    
+
     /// All memory blocks with metadata
     pub blocks: HashMap<String, BlockMeta>,
-    
+
     /// Active projects and their relationships
     pub projects: HashMap<String, ProjectInfo>,
-    
+
     /// Concept graph - relationships between ideas
     pub concepts: ConceptGraph,
-    
+
     /// Current session context
     pub session: SessionContext,
-    
+
     /// Statistics and metadata
     pub stats: IndexStats,
 }
@@ -34,19 +34,19 @@ pub struct MemIndex {
 pub struct UserContext {
     /// User identifier (name or handle)
     pub name: String,
-    
+
     /// Quick preference flags (loaded from prefs/user_flags.json)
     pub flags: HashMap<String, bool>,
-    
+
     /// Style preferences (loaded from prefs/style.json)
     pub style: StylePrefs,
-    
+
     /// Communication tone (loaded from prefs/tone.json)
     pub tone: TonePrefs,
-    
+
     /// Current working directory preference
     pub preferred_cwd: Option<PathBuf>,
-    
+
     /// Active project (if any)
     pub active_project: Option<String>,
 }
@@ -55,13 +55,13 @@ pub struct UserContext {
 pub struct StylePrefs {
     /// Output style: terse, normal, verbose
     pub verbosity: String,
-    
+
     /// Prefers bullet points
     pub bullet_preference: bool,
-    
+
     /// ASCII over emoji
     pub ascii_preferred: bool,
-    
+
     /// Code style preferences
     pub code_style: HashMap<String, String>,
 }
@@ -70,13 +70,13 @@ pub struct StylePrefs {
 pub struct TonePrefs {
     /// Humor level 0-10
     pub humor_level: u8,
-    
+
     /// Warning verbosity
     pub warning_style: String, // "minimal", "normal", "detailed"
-    
+
     /// Explanation depth
     pub explanation_depth: String, // "eli5", "normal", "expert"
-    
+
     /// Encouragement style
     pub encouragement: bool,
 }
@@ -85,25 +85,25 @@ pub struct TonePrefs {
 pub struct BlockMeta {
     /// Filename in blocks/ directory
     pub filename: String,
-    
+
     /// When this block was created
     pub created: DateTime<Utc>,
-    
+
     /// Last accessed time
     pub last_accessed: DateTime<Utc>,
-    
+
     /// Size in bytes
     pub size: usize,
-    
+
     /// Number of messages/entries
     pub entry_count: usize,
-    
+
     /// Key topics/concepts in this block
     pub topics: Vec<String>,
-    
+
     /// Related projects
     pub projects: Vec<String>,
-    
+
     /// Quick summary
     pub summary: String,
 }
@@ -112,25 +112,25 @@ pub struct BlockMeta {
 pub struct ProjectInfo {
     /// Project name
     pub name: String,
-    
+
     /// Project root path
     pub path: PathBuf,
-    
+
     /// Current status
     pub status: String, // "active", "paused", "completed"
-    
+
     /// Technologies used
     pub tech_stack: Vec<String>,
-    
+
     /// Related memory blocks
     pub memory_blocks: Vec<String>,
-    
+
     /// Current focus/task
     pub current_focus: Option<String>,
-    
+
     /// Key decisions/notes
     pub notes: Vec<String>,
-    
+
     /// Last activity
     pub last_activity: DateTime<Utc>,
 }
@@ -139,10 +139,10 @@ pub struct ProjectInfo {
 pub struct ConceptGraph {
     /// Concept -> Related concepts with weight
     pub relationships: HashMap<String, Vec<(String, f32)>>,
-    
+
     /// Concept -> Memory blocks containing it
     pub concept_blocks: HashMap<String, Vec<String>>,
-    
+
     /// Recent concepts (for quick access)
     pub recent: Vec<String>,
 }
@@ -151,19 +151,19 @@ pub struct ConceptGraph {
 pub struct SessionContext {
     /// Current session ID
     pub session_id: String,
-    
+
     /// Session start time
     pub started: DateTime<Utc>,
-    
+
     /// Topics discussed this session
     pub topics: Vec<String>,
-    
+
     /// Files/directories accessed
     pub accessed_paths: Vec<PathBuf>,
-    
+
     /// Tools used
     pub tools_used: Vec<String>,
-    
+
     /// Nudges given (what we suggested)
     pub nudges: Vec<Nudge>,
 }
@@ -172,13 +172,13 @@ pub struct SessionContext {
 pub struct Nudge {
     /// What was suggested
     pub suggestion: String,
-    
+
     /// Why it was suggested
     pub reason: String,
-    
+
     /// When it was suggested
     pub timestamp: DateTime<Utc>,
-    
+
     /// Was it accepted/rejected/ignored
     pub response: Option<String>,
 }
@@ -187,19 +187,19 @@ pub struct Nudge {
 pub struct IndexStats {
     /// Total memory blocks
     pub total_blocks: usize,
-    
+
     /// Total size of all blocks
     pub total_size: usize,
-    
+
     /// Total conversations
     pub total_conversations: usize,
-    
+
     /// Index created date
     pub created: DateTime<Utc>,
-    
+
     /// Last updated
     pub last_updated: DateTime<Utc>,
-    
+
     /// Compression ratio achieved
     pub avg_compression_ratio: f32,
 }
@@ -208,20 +208,20 @@ impl MemIndex {
     /// Load the index from ~/.mem8/memindex.json
     pub fn load() -> Result<Self> {
         let path = Self::index_path()?;
-        
+
         if path.exists() {
             let content = fs::read_to_string(&path)?;
             let mut index: MemIndex = serde_json::from_str(&content)?;
-            
+
             // Load user preferences
             index.load_user_prefs()?;
-            
+
             Ok(index)
         } else {
             Ok(Self::new())
         }
     }
-    
+
     /// Create a new index
     pub fn new() -> Self {
         Self {
@@ -269,91 +269,90 @@ impl MemIndex {
             },
         }
     }
-    
+
     /// Save the index
     pub fn save(&self) -> Result<()> {
         let path = Self::index_path()?;
-        
+
         // Ensure directory exists
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         // Save main index
         let content = serde_json::to_string_pretty(self)?;
         fs::write(&path, content)?;
-        
+
         // Save user preferences
         self.save_user_prefs()?;
-        
+
         Ok(())
     }
-    
+
     /// Get index file path
     fn index_path() -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .context("Could not find home directory")?;
+        let home = dirs::home_dir().context("Could not find home directory")?;
         Ok(home.join(".mem8").join("memindex.json"))
     }
-    
+
     /// Load user preferences from separate files
     fn load_user_prefs(&mut self) -> Result<()> {
         let mem8_dir = dirs::home_dir()
             .context("Could not find home directory")?
             .join(".mem8");
-        
+
         // Load user flags
         let flags_path = mem8_dir.join("prefs").join("user_flags.json");
         if flags_path.exists() {
             let content = fs::read_to_string(&flags_path)?;
             self.user.flags = serde_json::from_str(&content)?;
         }
-        
+
         // Load style preferences
         let style_path = mem8_dir.join("prefs").join("style.json");
         if style_path.exists() {
             let content = fs::read_to_string(&style_path)?;
             self.user.style = serde_json::from_str(&content)?;
         }
-        
+
         // Load tone preferences
         let tone_path = mem8_dir.join("prefs").join("tone.json");
         if tone_path.exists() {
             let content = fs::read_to_string(&tone_path)?;
             self.user.tone = serde_json::from_str(&content)?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Save user preferences to separate files
     fn save_user_prefs(&self) -> Result<()> {
         let prefs_dir = dirs::home_dir()
             .context("Could not find home directory")?
             .join(".mem8")
             .join("prefs");
-        
+
         fs::create_dir_all(&prefs_dir)?;
-        
+
         // Save user flags
         let flags_content = serde_json::to_string_pretty(&self.user.flags)?;
         fs::write(prefs_dir.join("user_flags.json"), flags_content)?;
-        
+
         // Save style
         let style_content = serde_json::to_string_pretty(&self.user.style)?;
         fs::write(prefs_dir.join("style.json"), style_content)?;
-        
+
         // Save tone
         let tone_content = serde_json::to_string_pretty(&self.user.tone)?;
         fs::write(prefs_dir.join("tone.json"), tone_content)?;
-        
+
         Ok(())
     }
-    
+
     /// Register a new memory block
     pub fn register_block(&mut self, filename: &str, path: &Path) -> Result<()> {
         let metadata = fs::metadata(path)?;
-        
+
         let block_meta = BlockMeta {
             filename: filename.to_string(),
             created: Utc::now(),
@@ -364,19 +363,21 @@ impl MemIndex {
             projects: Vec::new(),
             summary: format!("Memory block: {}", filename),
         };
-        
+
         self.blocks.insert(filename.to_string(), block_meta);
         self.stats.total_blocks = self.blocks.len();
         self.stats.total_size = self.blocks.values().map(|b| b.size).sum();
         self.stats.last_updated = Utc::now();
-        
+
         Ok(())
     }
-    
+
     /// Add or update a project
     pub fn update_project(&mut self, name: &str, path: PathBuf) {
-        let project = self.projects.entry(name.to_string()).or_insert_with(|| {
-            ProjectInfo {
+        let project = self
+            .projects
+            .entry(name.to_string())
+            .or_insert_with(|| ProjectInfo {
                 name: name.to_string(),
                 path: path.clone(),
                 status: "active".to_string(),
@@ -385,13 +386,12 @@ impl MemIndex {
                 current_focus: None,
                 notes: Vec::new(),
                 last_activity: Utc::now(),
-            }
-        });
-        
+            });
+
         project.last_activity = Utc::now();
         self.stats.last_updated = Utc::now();
     }
-    
+
     /// Record a nudge given to the user
     pub fn add_nudge(&mut self, suggestion: &str, reason: &str) {
         self.session.nudges.push(Nudge {
@@ -401,48 +401,51 @@ impl MemIndex {
             response: None,
         });
     }
-    
+
     /// Update concept relationships
     pub fn add_concept_relation(&mut self, concept1: &str, concept2: &str, weight: f32) {
-        self.concepts.relationships
+        self.concepts
+            .relationships
             .entry(concept1.to_string())
             .or_insert_with(Vec::new)
             .push((concept2.to_string(), weight));
-        
-        self.concepts.relationships
+
+        self.concepts
+            .relationships
             .entry(concept2.to_string())
             .or_insert_with(Vec::new)
             .push((concept1.to_string(), weight));
     }
-    
+
     /// Write daily journal entry
     pub fn write_journal_entry(&self, content: &str) -> Result<()> {
         let journal_dir = dirs::home_dir()
             .context("Could not find home directory")?
             .join(".mem8")
             .join("journal");
-        
+
         fs::create_dir_all(&journal_dir)?;
-        
+
         let today = Local::now().format("%Y-%m-%d");
         let journal_path = journal_dir.join(format!("{}.ctx.md", today));
-        
+
         // Append to existing or create new
         let mut existing = if journal_path.exists() {
             fs::read_to_string(&journal_path)?
         } else {
             format!("# Memory Journal - {}\n\n", today)
         };
-        
-        existing.push_str(&format!("\n## {} - Session {}\n\n", 
+
+        existing.push_str(&format!(
+            "\n## {} - Session {}\n\n",
             Local::now().format("%H:%M"),
             &self.session.session_id[..8]
         ));
         existing.push_str(content);
         existing.push_str("\n");
-        
+
         fs::write(&journal_path, existing)?;
-        
+
         Ok(())
     }
 }
