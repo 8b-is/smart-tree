@@ -30,6 +30,7 @@ pub enum ToolLane {
 }
 
 impl ToolLane {
+    #[allow(dead_code)]
     pub fn emoji(&self) -> &str {
         match self {
             ToolLane::Explore => "🔍",
@@ -38,6 +39,7 @@ impl ToolLane {
         }
     }
     
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         match self {
             ToolLane::Explore => "EXPLORE",
@@ -104,8 +106,8 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "max_depth": {
                         "type": "integer",
-                        "description": "Maximum depth to traverse",
-                        "default": 10
+                        "description": "Maximum depth to traverse (0 = auto, each mode picks ideal depth)",
+                        "default": 0
                     },
                     "show_hidden": {
                         "type": "boolean",
@@ -178,8 +180,8 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "max_depth": {
                         "type": "integer",
-                        "description": "Maximum depth to traverse",
-                        "default": 10
+                        "description": "Maximum depth to traverse (0 = auto, each mode picks ideal depth)",
+                        "default": 0
                     }
                 },
                 "required": ["path"]
@@ -539,8 +541,8 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     },
                     "max_depth": {
                         "type": "integer",
-                        "description": "Maximum depth to traverse",
-                        "default": 10
+                        "description": "Maximum depth to traverse (0 = auto, each mode picks ideal depth)",
+                        "default": 0
                     },
                     "show_wave_signatures": {
                         "type": "boolean",

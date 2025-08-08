@@ -368,7 +368,7 @@ impl CollaborativeSessionTracker {
         context: String,
         keywords: Vec<String>,
     ) -> Result<String> {
-        let id = format!("anchor_{}", chrono::Utc::now().timestamp_nanos());
+        let id = format!("anchor_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
         
         let co_created = matches!(origin, CollaborativeOrigin::Tandem { .. });
         

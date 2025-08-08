@@ -223,7 +223,7 @@ impl TemporalContextAnalyzer {
             _ => Duration::weeks(1),
         };
         
-        for (i, point) in timeline.iter().enumerate() {
+        for (_i, point) in timeline.iter().enumerate() {
             if let Some(ref mut session) = current_session {
                 let gap = point.timestamp - session.end_time;
                 

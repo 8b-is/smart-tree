@@ -50,13 +50,12 @@ impl PartialOrd for PhraseFreq {
 
 /// Marqant formatter - Quantum compression for markdown files
 pub struct MarqantFormatter {
-    path_mode: PathDisplayMode,
     no_emoji: bool,
 }
 
 impl MarqantFormatter {
-    pub fn new(path_mode: PathDisplayMode, no_emoji: bool) -> Self {
-        Self { path_mode, no_emoji }
+    pub fn new(_path_mode: PathDisplayMode, no_emoji: bool) -> Self {
+        Self { no_emoji }
     }
 
     /// Compress markdown content into marqant format

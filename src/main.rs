@@ -1006,7 +1006,7 @@ fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result
                 tips.push("💡 Deep trees can be overwhelming. Try reducing depth with -d 3 or use --mode ls for a clean listing!");
             }
             if depth == 0 || depth == 3 {
-                tips.push("🌳 Classic mode defaults to depth 3 for a balanced view. Use -d to customize!");
+                tips.push("🌳 Classic mode auto-selects depth 3 when depth is 0 (auto). Use -d to override!");
             }
             tips.push("🚀 Pro tip: Set ST_DEFAULT_MODE=ls for instant directory listings!");
         }

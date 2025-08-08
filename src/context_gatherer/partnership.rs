@@ -213,9 +213,8 @@ impl PartnershipAnalyzer {
     /// Analyze response patterns in conversations
     fn analyze_response_patterns(&self, messages: &[serde_json::Value], patterns: &mut ResponsePatterns) {
         let mut last_was_human = false;
-        let mut response_times: Vec<f32> = Vec::new();
         
-        for (i, msg) in messages.iter().enumerate() {
+        for (_i, msg) in messages.iter().enumerate() {
             if let Some(role) = msg.get("role").and_then(|r| r.as_str()) {
                 if role == "user" {
                     last_was_human = true;
@@ -372,7 +371,6 @@ impl PartnershipAnalyzer {
     /// Calculate trust indicators
     fn calculate_trust_indicators(&self, sessions: &[CollaborativeSession]) -> TrustIndicators {
         let mut autonomy_given = 0;
-        let mut corrections_accepted = 0;
         let mut suggestions_followed = 0;
         
         // Simplified trust calculation based on session patterns
@@ -395,7 +393,6 @@ impl PartnershipAnalyzer {
     /// Measure shared understanding between AI and human
     fn measure_shared_understanding(&self) -> SharedUnderstanding {
         let mut shared_vocabulary = HashMap::new();
-        let mut concept_alignment = 0.0;
         let mut communication_efficiency = 0.0;
         
         // Analyze vocabulary usage

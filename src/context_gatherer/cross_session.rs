@@ -274,7 +274,7 @@ impl CrossSessionBridge {
         }
         
         // Create new pattern
-        let pattern_id = format!("pattern_{}", chrono::Utc::now().timestamp_nanos());
+        let pattern_id = format!("pattern_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
         let pattern = CrossDomainPattern {
             pattern_id: pattern_id.clone(),
             pattern_type,
@@ -344,7 +344,7 @@ impl CrossSessionBridge {
             
             if pattern.occurrences.len() > 2 {
                 let insight = CrossSessionInsight {
-                    insight_id: format!("insight_{}", chrono::Utc::now().timestamp_nanos()),
+                    insight_id: format!("insight_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)),
                     insight_type: InsightType::Generalization,
                     content: format!(
                         "The '{}' pattern appears across {} different contexts. \
@@ -491,7 +491,7 @@ impl CrossSessionBridge {
 
 /// Profile for a known persona
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PersonaProfile {
+pub struct PersonaProfile {
     name: String,
     expertise: Vec<String>,
     personality_traits: Vec<String>,

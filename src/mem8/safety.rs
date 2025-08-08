@@ -437,7 +437,7 @@ struct SystemBaseline {
 }
 
 #[derive(Clone)]
-struct SystemMeasurement {
+pub struct SystemMeasurement {
     relationship_values: HashMap<String, f32>,
     activity_levels: HashMap<String, f32>,
     emotional_state: EmotionalState,

@@ -136,7 +136,6 @@ impl PermissionCache {
     
     /// Clear expired entries
     pub fn cleanup(&mut self) {
-        let now = SystemTime::now();
         self.permissions.retain(|_, p| {
             p.verified_at.elapsed().unwrap_or(Duration::MAX) < self.cache_duration
         });

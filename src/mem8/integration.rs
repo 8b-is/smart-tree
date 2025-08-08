@@ -51,7 +51,7 @@ impl SmartTreeMem8 {
         self.wave_grid.write().unwrap().store(x, y, self.current_depth, wave);
         
         // Update depth for next entry
-        self.current_depth = if self.current_depth >= 65535 { 0 } else { self.current_depth + 1 };
+        self.current_depth = if self.current_depth == u16::MAX { 0 } else { self.current_depth + 1 };
         
         Ok(())
     }

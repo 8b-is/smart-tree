@@ -32,6 +32,7 @@ impl ClassicFormatter {
 
     /// Calculate visual weight based on directory size and depth
     /// Larger directories and shallower depths get higher visual weight (thicker lines)
+    #[allow(dead_code)]
     fn calculate_visual_weight(&self, node: &FileNode) -> u8 {
         if !node.is_dir {
             return 1; // Files get standard weight
