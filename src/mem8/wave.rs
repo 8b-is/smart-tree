@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Memory wave at a specific grid position
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MemoryWave {
     /// Amplitude modulated by emotion and time
     pub amplitude: f32,
@@ -19,8 +19,10 @@ pub struct MemoryWave {
     /// Emotional arousal (0.0 to 1.0)
     pub arousal: f32,
     /// Creation timestamp
+    #[serde(skip, default = "Instant::now")]
     pub created_at: Instant,
     /// Decay time constant (None = infinite)
+    #[serde(skip, default)]
     pub decay_tau: Option<Duration>,
 }
 
@@ -35,6 +37,26 @@ impl MemoryWave {
             arousal: 0.0,
             created_at: Instant::now(),
             decay_tau: Some(Duration::from_secs(5)), // Default 5s decay
+        }
+    }
+    
+    /// Create a new memory wave with FrequencyBand
+    pub fn new_with_band(band: FrequencyBand, amplitude: f32, phase: f32, decay_rate: f32) -> Self {
+        let frequency = band.center_frequency();
+        let decay_tau = if decay_rate > 0.0 {
+            Some(Duration::from_secs_f32(1.0 / decay_rate))
+        } else {
+            None
+        };
+        
+        Self {
+            amplitude,
+            frequency: frequency.clamp(0.0, 1000.0),
+            phase,
+            valence: 0.0,
+            arousal: 0.0,
+            created_at: Instant::now(),
+            decay_tau,
         }
     }
 
@@ -174,13 +196,16 @@ impl WaveGrid {
 }
 
 /// Frequency bands for different content types
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum FrequencyBand {
     DeepStructural,    // 0-200Hz
     Conversational,    // 200-400Hz
     Technical,         // 400-600Hz
     Implementation,    // 600-800Hz
     Abstract,          // 800-1000Hz
+    // Brain wave bands (for cognitive states)
+    Beta,              // 13-30Hz (active, alert)
+    Gamma,             // 30-100Hz (conscious awareness)
 }
 
 impl FrequencyBand {
@@ -192,7 +217,16 @@ impl FrequencyBand {
             Self::Technical => (400.0, 600.0),
             Self::Implementation => (600.0, 800.0),
             Self::Abstract => (800.0, 1000.0),
+            // Brain wave bands (lower frequencies)
+            Self::Beta => (13.0, 30.0),
+            Self::Gamma => (30.0, 100.0),
         }
+    }
+    
+    /// Get the center frequency for this band
+    pub fn center_frequency(&self) -> f32 {
+        let (min, max) = self.range();
+        (min + max) / 2.0
     }
 
     /// Get a frequency within this band

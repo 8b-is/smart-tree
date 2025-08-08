@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 mod cache;
+mod context_tools;
 mod permissions;
 mod prompts;
 mod resources;

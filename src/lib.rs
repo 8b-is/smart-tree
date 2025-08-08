@@ -59,3 +59,6 @@ pub mod mem8;
 
 // Tree Agent - Living forest orchestrator for AI-human development
 pub mod tree_agent;
+
+// Context Gatherer - Searches AI tool directories for project context
+pub mod context_gatherer;

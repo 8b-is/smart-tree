@@ -329,6 +329,8 @@ impl ConsciousnessEngine {
                 FrequencyBand::Technical => MemoryRegion::Semantic("technical".to_string()),
                 FrequencyBand::Implementation => MemoryRegion::Semantic("implementation".to_string()),
                 FrequencyBand::Abstract => MemoryRegion::Semantic("abstract".to_string()),
+                FrequencyBand::Beta => MemoryRegion::Semantic("beta_awareness".to_string()),
+                FrequencyBand::Gamma => MemoryRegion::Semantic("gamma_consciousness".to_string()),
             };
             
             *state.attention_weights.entry(region).or_insert(0.0) += 0.1;

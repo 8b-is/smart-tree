@@ -941,6 +941,278 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 "required": ["file_path", "name"]
             }),
         },
+        ToolDefinition {
+            name: "gather_project_context".to_string(),
+            description: "🔍 Search AI tool directories (~/.claude, ~/.cursor, ~/.windsurf, etc.) for context about the current project. Finds chat histories, settings, and other relevant information with TEMPORAL ANALYSIS! See work patterns, peak times, and momentum. Use output_format='temporal' for time-based insights, apply temporal_decay_days for recency weighting. Perfect for understanding how you've been working with a project across different AI tools over time!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Path to the project to gather context for"
+                    },
+                    "search_dirs": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "AI tool directories to search (defaults to all known)"
+                    },
+                    "custom_dirs": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Additional custom directories to search"
+                    },
+                    "project_identifiers": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Unique strings to identify project (URLs, names, etc.)"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum contexts to return",
+                        "default": 50
+                    },
+                    "min_relevance": {
+                        "type": "number",
+                        "description": "Minimum relevance score (0.0-1.0)",
+                        "default": 0.0
+                    },
+                    "output_format": {
+                        "type": "string",
+                        "enum": ["summary", "json", "m8", "temporal", "partnership"],
+                        "description": "Output format (temporal=time patterns, partnership=AI-human collaboration analysis)",
+                        "default": "summary"
+                    },
+                    "privacy_mode": {
+                        "type": "boolean",
+                        "description": "Redact sensitive information",
+                        "default": true
+                    },
+                    "temporal_resolution": {
+                        "type": "string",
+                        "enum": ["hour", "day", "week", "month", "quarter", "year"],
+                        "description": "Resolution for temporal analysis",
+                        "default": "day"
+                    },
+                    "temporal_decay_days": {
+                        "type": "number",
+                        "description": "Apply temporal decay with this half-life in days",
+                        "minimum": 1.0
+                    }
+                },
+                "required": ["project_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "analyze_ai_tool_usage".to_string(),
+            description: "📊 Analyze usage patterns across AI tool directories. Shows which tools you use most, recent activity, file types, and storage usage. Great for understanding your AI tool ecosystem and cleaning up old data!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Specific tool to analyze (e.g., '.claude', '.cursor')"
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": "Time range in days",
+                        "default": 30
+                    },
+                    "include_paths": {
+                        "type": "boolean",
+                        "description": "Include detailed file paths",
+                        "default": false
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "clean_old_context".to_string(),
+            description: "🧹 Clean up old context files from AI tools (NOT YET IMPLEMENTED). Will help manage storage by removing outdated chat histories and context files.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "days_to_keep": {
+                        "type": "integer",
+                        "description": "Keep files newer than this many days",
+                        "default": 90
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Show what would be deleted without actually deleting",
+                        "default": true
+                    },
+                    "tools": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Specific tools to clean"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "anchor_collaborative_memory".to_string(),
+            description: "⚓ Anchor an important insight, solution, or breakthrough from our collaboration for future retrieval. Creates a memory that both AI and human can reference later with phrases like 'Remember when we solved X?'. Supports co-created memories, pattern insights, shared jokes, and more!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["context", "keywords", "anchor_type"],
+                "properties": {
+                    "context": {
+                        "type": "string",
+                        "description": "The insight or solution to remember"
+                    },
+                    "keywords": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Keywords for future retrieval"
+                    },
+                    "anchor_type": {
+                        "type": "string",
+                        "enum": ["pattern_insight", "solution", "breakthrough", "learning", "joke", "technical", "process"],
+                        "description": "Type of memory anchor"
+                    },
+                    "origin": {
+                        "type": "string",
+                        "description": "Who created this? 'human', 'ai:claude', or 'tandem:human:claude'",
+                        "default": "tandem:human:claude"
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Project to associate with (default: current directory)"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "find_collaborative_memories".to_string(),
+            description: "🔮 Search for previously anchored collaborative memories using keywords. Retrieves insights, solutions, and breakthroughs from past sessions. Perfect for 'What was that solution we found last week?' moments!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["keywords"],
+                "properties": {
+                    "keywords": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Keywords to search for"
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Project path (default: current directory)"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum memories to return (default: 10)",
+                        "minimum": 1,
+                        "maximum": 50
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "get_collaboration_rapport".to_string(),
+            description: "💝 Check the rapport index between you and your AI partner. Shows trust level, communication efficiency, shared vocabulary, productivity trends, and even tracks inside jokes! See how your partnership is evolving over time.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["ai_tool"],
+                "properties": {
+                    "ai_tool": {
+                        "type": "string",
+                        "description": "AI tool name (e.g., 'claude', 'cursor', 'windsurf')"
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Project path (default: current directory)"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "get_co_engagement_heatmap".to_string(),
+            description: "🌡️ Visualize when you and AI collaborate most effectively! Shows a temporal heatmap of your tandem work sessions across days and hours. Identifies peak collaboration zones and helps optimize your partnership schedule.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Project path (default: current directory)"
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["visual", "data"],
+                        "description": "Output format: 'visual' for emoji heatmap, 'data' for raw values",
+                        "default": "visual"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "get_cross_domain_patterns".to_string(),
+            description: "🔗 Discover patterns that appear across multiple projects and domains! Finds algorithmic patterns (like wave decay), architectural patterns, solutions, and collaborative workflows that transcend specific contexts. Perfect for 'I've seen this pattern before...' moments!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "project_path": {
+                        "type": "string",
+                        "description": "Project path (default: current directory)"
+                    },
+                    "pattern_type": {
+                        "type": "string",
+                        "enum": ["algorithm", "architecture", "problem", "solution", "metaphor", "workflow", "collaboration"],
+                        "description": "Filter by pattern type"
+                    },
+                    "min_strength": {
+                        "type": "number",
+                        "description": "Minimum pattern strength (0.0-1.0)",
+                        "minimum": 0.0,
+                        "maximum": 1.0
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "suggest_cross_session_insights".to_string(),
+            description: "💡 Get relevant insights from other AI sessions that might help with current work! Uses keywords to find applicable patterns, solutions, and learnings from different projects. Like having a wise advisor who remembers everything: 'This reminds me of when we solved X in project Y...'".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["keywords"],
+                "properties": {
+                    "keywords": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Keywords describing current work or problem"
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Project path (default: current directory)"
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum insights to return (default: 5)",
+                        "minimum": 1,
+                        "maximum": 20
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "invite_persona".to_string(),
+            description: "🎭 Invite a specialized AI persona for temporary consultation! Based on your context, summons The Cheet (performance optimization), Omni (wave patterns & philosophy), or Trish (organization & documentation). Each brings unique expertise from past sessions!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["context"],
+                "properties": {
+                    "context": {
+                        "type": "string",
+                        "description": "What you need help with"
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "description": "Consultation duration (default: 10 minutes)",
+                        "minimum": 5,
+                        "maximum": 60
+                    }
+                }
+            }),
+        },
     ];
 
     Ok(json!({
@@ -992,6 +1264,63 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "get_function_tree" => crate::mcp::smart_edit::handle_get_function_tree(Some(args)).await,
         "insert_function" => crate::mcp::smart_edit::handle_insert_function(Some(args)).await,
         "remove_function" => crate::mcp::smart_edit::handle_remove_function(Some(args)).await,
+        
+        // Context gathering tools
+        "gather_project_context" => {
+            let req: crate::mcp::context_tools::GatherProjectContextRequest = serde_json::from_value(args)?;
+            // Simple permission check - just verify path is allowed
+            let permission_check = |_perm_req| {
+                // For now, always allow home directory access for context gathering
+                // TODO: Implement proper permission system
+                Ok(true)
+            };
+            crate::mcp::context_tools::gather_project_context(req, permission_check).await
+        },
+        "analyze_ai_tool_usage" => {
+            let req: crate::mcp::context_tools::AnalyzeAiToolUsageRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::analyze_ai_tool_usage(req, permission_check).await
+        },
+        "clean_old_context" => {
+            let req: crate::mcp::context_tools::CleanOldContextRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::clean_old_context(req, permission_check).await
+        },
+        "anchor_collaborative_memory" => {
+            let req: crate::mcp::context_tools::AnchorMemoryRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::anchor_collaborative_memory(req, permission_check).await
+        },
+        "find_collaborative_memories" => {
+            let req: crate::mcp::context_tools::FindMemoriesRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::find_collaborative_memories(req, permission_check).await
+        },
+        "get_collaboration_rapport" => {
+            let req: crate::mcp::context_tools::GetRapportRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::get_collaboration_rapport(req, permission_check).await
+        },
+        "get_co_engagement_heatmap" => {
+            let req: crate::mcp::context_tools::GetHeatmapRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::get_co_engagement_heatmap(req, permission_check).await
+        },
+        "get_cross_domain_patterns" => {
+            let req: crate::mcp::context_tools::GetPatternsRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::get_cross_domain_patterns(req, permission_check).await
+        },
+        "suggest_cross_session_insights" => {
+            let req: crate::mcp::context_tools::SuggestInsightsRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::suggest_cross_session_insights(req, permission_check).await
+        },
+        "invite_persona" => {
+            let req: crate::mcp::context_tools::InvitePersonaRequest = serde_json::from_value(args)?;
+            let permission_check = |_perm_req| Ok(true);
+            crate::mcp::context_tools::invite_persona(req, permission_check).await
+        },
         
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }
