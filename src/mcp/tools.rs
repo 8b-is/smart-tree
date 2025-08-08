@@ -21,6 +21,32 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+// Tool lanes for AI escalation path - Omni's three-lane design
+#[derive(Debug, Clone, Serialize)]
+pub enum ToolLane {
+    Explore,  // 🔍 Discovery and overview
+    Analyze,  // 🧪 Deep analysis and search
+    Act,      // ⚡ Modifications and writes
+}
+
+impl ToolLane {
+    pub fn emoji(&self) -> &str {
+        match self {
+            ToolLane::Explore => "🔍",
+            ToolLane::Analyze => "🧪",
+            ToolLane::Act => "⚡",
+        }
+    }
+    
+    pub fn name(&self) -> &str {
+        match self {
+            ToolLane::Explore => "EXPLORE",
+            ToolLane::Analyze => "ANALYZE",
+            ToolLane::Act => "ACT",
+        }
+    }
+}
+
 // Helper to determine if we should use default ignores
 // We disable them for /tmp paths to support testing
 fn should_use_default_ignores(path: &Path) -> bool {
@@ -194,7 +220,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "quick_tree".to_string(),
-            description: "⚡ START HERE! Lightning-fast 3-level directory overview using SUMMARY-AI mode with 10x compression. Perfect for initial exploration before diving into details. This is your go-to tool for quickly understanding any codebase structure. Automatically optimized for AI token efficiency - saves you tokens while giving maximum insight!".to_string(),
+            description: "🔍 EXPLORE - START HERE! Lightning-fast 3-level directory overview using SUMMARY-AI mode with 10x compression. Perfect for initial exploration before diving into details. This is your go-to tool for quickly understanding any codebase structure. Automatically optimized for AI token efficiency - saves you tokens while giving maximum insight!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -278,7 +304,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "search_in_files".to_string(),
-            description: "🔍 Powerful content search within files (like grep but AI-friendly). Search for keywords, function names, TODOs, or any text pattern. Returns file locations with match counts - perfect for finding where specific functionality is implemented or tracking down references.".to_string(),
+            description: "🔍 ANALYZE: Powerful content search within files (like grep but AI-friendly). NOW WITH LINE CONTENT! Search for keywords, function names, TODOs, or any text pattern. Returns actual matching lines with content, not just file paths. Perfect for finding where specific functionality is implemented or tracking down references without needing to open files.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -298,6 +324,24 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                         "type": "boolean",
                         "description": "Case sensitive search",
                         "default": false
+                    },
+                    "include_content": {
+                        "type": "boolean",
+                        "description": "Include actual line content in results (default: true for AI)",
+                        "default": true
+                    },
+                    "context_lines": {
+                        "type": "integer",
+                        "description": "Number of context lines before/after match (like grep -C)",
+                        "minimum": 0,
+                        "maximum": 10
+                    },
+                    "max_matches_per_file": {
+                        "type": "integer",
+                        "description": "Maximum matches to return per file",
+                        "default": 20,
+                        "minimum": 1,
+                        "maximum": 100
                     }
                 },
                 "required": ["path", "keyword"]
@@ -1677,6 +1721,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: false,
     };
     
     // Special handling for home directory in MCP context
@@ -1865,6 +1910,7 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: false,
     };
 
     // Scan directory
@@ -1931,6 +1977,7 @@ async fn get_statistics(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: false,
     };
 
     // Scan directory
@@ -1980,6 +2027,7 @@ async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: false,
     };
 
     // Scan directory
@@ -2148,6 +2196,10 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing keyword"))?;
     let file_type = args["file_type"].as_str();
+    let _case_sensitive = args["case_sensitive"].as_bool().unwrap_or(false);
+    let include_content = args["include_content"].as_bool().unwrap_or(true); // Default to true for AI
+    let context_lines = args["context_lines"].as_u64().map(|n| n as usize);
+    let max_matches_per_file = args["max_matches_per_file"].as_u64().unwrap_or(20) as usize;
 
     // Security check
     if !is_path_allowed(&path, &ctx.config) {
@@ -2172,6 +2224,7 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: include_content,
     };
 
     let scanner = Scanner::new(&path, config)?;
@@ -2181,13 +2234,34 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let mut results = Vec::new();
     for node in &nodes {
         if let Some(matches) = &node.search_matches {
-            results.push(json!({
-                "file": node.path.display().to_string(),
-                "first_match_line": matches.first_match.0,
-                "first_match_column": matches.first_match.1,
-                "total_matches": matches.total_count,
+            let mut file_result = json!({
+                "path": node.path.display().to_string(),
+                "matches": matches.total_count,
                 "truncated": matches.truncated
-            }));
+            });
+            
+            // Include line content if available
+            if let Some(ref lines) = matches.line_content {
+                let mut line_results = Vec::new();
+                for (line_num, content, column) in lines.iter().take(max_matches_per_file) {
+                    let line_obj = json!({
+                        "line_number": line_num,
+                        "content": content,
+                        "column": column
+                    });
+                    
+                    // Add context lines if requested (future enhancement)
+                    if let Some(_ctx_lines) = context_lines {
+                        // TODO: Add context lines before and after
+                        // This would require reading the file again or storing more context
+                    }
+                    
+                    line_results.push(line_obj);
+                }
+                file_result["lines"] = json!(line_results);
+            }
+            
+            results.push(file_result);
         }
     }
 
@@ -2197,7 +2271,9 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "text": serde_json::to_string_pretty(&json!({
                 "keyword": keyword,
                 "files_with_matches": results.len(),
-                "matches": results
+                "include_content": include_content,
+                "max_matches_per_file": max_matches_per_file,
+                "results": results
             }))?
         }]
     }))
@@ -2402,6 +2478,7 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: false,
     };
 
     let scanner = Scanner::new(&path, config)?;
@@ -2532,6 +2609,7 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: false,
     };
 
     let scanner = Scanner::new(&path, config)?;
@@ -2560,6 +2638,7 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
                 show_filesystems: false,
                 sort_field: None,
                 top_n: None,
+                include_line_content: false,
             };
             let subscanner = Scanner::new(&node.path, subconfig)?;
             let (_, substats) = subscanner.scan()?;
@@ -2618,6 +2697,7 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
         show_filesystems: false,
         sort_field: None,
         top_n: None,
+        include_line_content: false,
     };
 
     let scanner = Scanner::new(&path, config)?;

@@ -81,10 +81,7 @@ pub fn analyze_project(path: impl AsRef<Path>) -> Result<ProjectAnalysis> {
 ```rust
 // Cargo.toml
 [dependencies]
-smart-tree = "3.3.5"
-# Or with specific features
-smart-tree = { version = "3.3.5", features = ["quantum", "semantic"] }
-
+smart-tree = "4.0.0"
 // main.rs
 use smart_tree::prelude::*;
 use smart_tree::formatters::ai::AiFormatter;

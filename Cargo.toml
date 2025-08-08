@@ -1,6 +1,6 @@
 [package]
 name = "st"
-version = "4.0.0-alpha"
+version = "4.0.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -38,6 +38,7 @@ base64 = "0.22"
 rand = "0.8"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 whoami = "1.5"
+crc32fast = "1.4"
 
 # Terminal UI dependencies
 ratatui = "0.25"
@@ -57,16 +58,17 @@ futures-util = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 # Tree-sitter for smart code editing
-tree-sitter = "0.20"
-tree-sitter-rust = "0.20"
-tree-sitter-python = "0.20"
-tree-sitter-javascript = "0.20"
-tree-sitter-typescript = "0.20"
-tree-sitter-go = "0.20"
-tree-sitter-java = "0.20"
-tree-sitter-c-sharp = "0.20"
-tree-sitter-cpp = "0.20"
-tree-sitter-ruby = "0.20"
+tree-sitter = "0.25.8"
+tree-sitter-language = "0.1.2"
+tree-sitter-rust = "0.23.2"
+tree-sitter-python = "0.23.6"
+tree-sitter-javascript = "0.23.1"
+tree-sitter-typescript = "0.23.2"
+tree-sitter-go = "0.23.4"
+tree-sitter-java = "0.23.5"
+tree-sitter-c-sharp = "0.23.1"
+tree-sitter-cpp = "0.23.4"
+tree-sitter-ruby = "0.23.1"
 
 [[bin]]
 name = "mq"
@@ -75,6 +77,10 @@ path = "src/bin/mq.rs"
 [[bin]]
 name = "tree"
 path = "src/bin/tree.rs"
+
+[[bin]]
+name = "m8"
+path = "src/bin/m8.rs"
 
 [dev-dependencies]
 tempfile = "3.10"

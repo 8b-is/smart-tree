@@ -96,7 +96,7 @@ Package: amsfonts 2013/01/14 v3.01 Basic AMSFonts support
 \symAMSa=\mathgroup4
 \symAMSb=\mathgroup5
 LaTeX Font Info:    Redeclaring math symbol \hbar on input line 98.
-LaTeX Font Info:    Overwriting math alphabet `\mathfrak' in version `bold'
+LaTeX Font Info:    Overwriting math 4.0.0bet `\mathfrak' in version `bold'
 (Font)                  U/euf/m/n --> U/euf/b/n on input line 106.
 )) (/usr/share/texlive/texmf-dist/tex/latex/algorithms/algorithmic.sty
 Package: algorithmic 2009/08/24 v0.1 Document Style `algorithmic'
@@ -629,7 +629,7 @@ LaTeX Warning: Command \textrightarrow invalid in math mode on input line 61.
 
 LaTeX Warning: Command \textrightarrow invalid in math mode on input line 61.
 
-Missing character: There is no Ö in font cmr10!
+Missing character: There is no ï¿½ in font cmr10!
 /home/hue/source/i1/smart-tree/docs/MEM8/MEM8.tex:61: Missing $ inserted.
 <inserted text> 
                 $

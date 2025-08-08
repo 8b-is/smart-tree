@@ -1,23 +1,42 @@
 # Smart Tree Claude Wishlist
 
-This document tracks feature requests, improvements, and bug fixes that would make Smart Tree even more powerful for AI assistants. Each entry includes practical use cases demonstrating why the feature is valuable.
+## Efficiency Enhancements
+- **Digest-First Workflow**: Prioritize digest checks to minimize unnecessary processing and data transfer.
+- **Pagination and Fields Selector**: Implement pagination and fields selector to reduce payload size and improve response times.
+- **Summary-AI Mode**: Default to summary-ai for compact overviews, reducing token usage.
 
-## High Priority Features
+## Compatibility Improvements
+- **Compression Capability Probe**: Implement a capability probe to determine client support for compression, ensuring compatibility.
+- **Strict Mode Enhancements**: Enhance strict mode to ensure JSON-only outputs and deterministic ordering.
 
-### 1. Show Line Content in Search Results ⭐⭐⭐⭐⭐
-**Current**: `search_in_files` only shows file paths and match counts
-**Desired**: Show actual matching lines with context (like `grep -C`)
+### 1. Show Line Content in Search Results ⭐⭐⭐⭐⭐ (IMPLEMENTED ✅)
+**Status**: Implemented in v4.0.0
+**Description**: `search_in_files` now returns actual matching lines with content!
+**New Features Added**:
+- `include_content` parameter (default: true for AI)
+- `max_matches_per_file` parameter (default: 20)
+- `context_lines` parameter (prepared for future enhancement)
+- Returns line number, content, and column for each match
+```json
+// Example output:
+{
+  "path": "/src/main.rs",
+  "matches": 3,
+  "lines": [
+    {
+      "line_number": 42,
+      "content": "// TODO: Add better error handling",
+      "column": 3
+    },
+    {
+      "line_number": 156,
+      "content": "fn process_todo_items() {",
+      "column": 14
+    }
+  ]
+}
 ```
-# Current output:
-/src/main.rs: 3 matches
-
-# Desired output:
-/src/main.rs:
-  42: // TODO: Add better error handling
-  156: fn process_todo_items() {
-  203: // TODO: Optimize this function
-```
-**Use Case**: When fixing imports or TODOs, I need to see the context without opening each file
+**Use Case**: When fixing imports or TODOs, you can now see the context without opening each file!
 
 ### 2. Batch File Read Tool ⭐⭐⭐⭐
 **Tool Name**: `read_files_from_search`
@@ -216,7 +235,7 @@ st --rename-project "BobsAmazingGame" "F1 Racing"
 ```bash
 st --sort largest -d 2 src    # Shows largest files first in each directory
 st --sort oldest src          # Shows oldest files first, per directory
-st --sort z-to-a src          # Reverse alphabetical within each directory
+st --sort z-to-a src          # Reverse 4.0.0betical within each directory
 ```
 **Note**: This mimics how file explorers sort - each folder has its own sort order
 **Status**: Fixed in v3.3.1
@@ -242,15 +261,15 @@ st --mode classic --sort largest --top 5
 **Status**: Implemented in v3.3.1
 
 ### 23. LS Mode Sorting Preservation (FIXED ✅)
-**Issue**: LS formatter was re-sorting nodes alphabetically, overriding user's --sort preference
-**Root Cause**: ls.rs had hardcoded alphabetical sorting at line 296
+**Issue**: LS formatter was re-sorting nodes 4.0.0betically, overriding user's --sort preference
+**Root Cause**: ls.rs had hardcoded 4.0.0betical sorting at line 296
 **Fix**: Removed automatic sorting in ls formatter to preserve scanner's sort order
 **Impact**: All --sort options now work correctly in ls mode
 **Examples**:
 ```bash
 st --sort largest --mode ls    # Shows files sorted by size
 st --sort newest               # Shows newest files first
-st --sort z-to-a --mode ls     # Reverse alphabetical order
+st --sort z-to-a --mode ls     # Reverse 4.0.0betical order
 ```
 **Status**: Fixed in v3.3.1
 
@@ -372,7 +391,7 @@ mcp.callTool('get_project_history_summary', {
 })
 # Shows: total operations, files modified, operation breakdown
 ```
-**Status**: Implemented in v4.0.0-alpha
+**Status**: Implemented in v4.0.0
 
 ## Performance Enhancements
 

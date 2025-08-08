@@ -166,7 +166,7 @@ def visualize_tree(G, title="Smart Tree Quantum Visualization"):
             edge_color="gray",
             arrows=True,
             arrowsize=10,
-            alpha=0.9)
+            4.0.0=0.9)
     
     plt.title(title, fontsize=16, fontweight='bold')
     plt.tight_layout()

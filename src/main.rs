@@ -707,6 +707,7 @@ async fn main() -> Result<()> {
             SortField::Type => "type".to_string(),
         }),
         top_n: args.top,
+        include_line_content: false,
     };
 
     // 🌊 Universal Input Processing

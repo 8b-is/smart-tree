@@ -1,8 +1,8 @@
-# Smart Tree v4.0.0-alpha - "Living Documentation Alpha" 🚀🎸
+# Smart Tree v4.0.0 - "Living Documentation Alpha" 🚀🎸
 
 ## Release Date: August 8, 2025
 
-## 🎸 Why 4.0.0-alpha?
+## 🎸 Why 4.0.0?
 
 This is a MAJOR release that fundamentally changes how developers interact with their codebases:
 - **Living Documentation**: Code that documents itself
@@ -10,7 +10,7 @@ This is a MAJOR release that fundamentally changes how developers interact with 
 - **Vision Documents**: The future of code visualization (8-O Mode)
 - **Smart Permissions**: AI that knows what it can and can't do
 
-## 🔥 What's New in 4.0.0-alpha
+## 🔥 What's New in 4.0.0
 
 ### 📚 Function Markdown - Your Code's Living Blueprint!
 
@@ -92,7 +92,7 @@ This is an ALPHA release:
 
 ```bash
 # Install/Update
-cargo install st --version 4.0.0-alpha
+cargo install st --version 4.0.0
 
 # Try the new features
 st --mode function-markdown . > FUNCTIONS.md
@@ -134,6 +134,6 @@ Special thanks to everyone testing these revolutionary features. Your feedback m
 
 ---
 
-**Smart Tree v4.0.0-alpha**: Where code documents itself and performance glows red hot! 🔥
+**Smart Tree v4.0.0**: Where code documents itself and performance glows red hot! 🔥
 
-*P.S. - It's Wednesday, my dudes! Perfect timing for an alpha that'll rock your weekend coding! 🚀*
+*P.S. - It's Wednesday, my dudes! Perfect timing for an 4.0.0 that'll rock your weekend coding! 🚀*

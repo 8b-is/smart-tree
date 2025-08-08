@@ -256,6 +256,6 @@ st -m digest
 
 *"Smart Tree: Where directories come alive and performance glows red hot!"* 🔥
 
-**Version**: 4.0.0-alpha | **Released**: August 8, 2025 | **Made with**: 🎸 & ❤️
+**Version**: 4.0.0 | **Released**: August 8, 2025 | **Made with**: 🎸 & ❤️
 
 *P.S. - For the full experience, read while listening to "Stairway to Heaven" 🎵*

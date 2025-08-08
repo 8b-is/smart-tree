@@ -62,3 +62,6 @@ pub mod tree_agent;
 
 // Context Gatherer - Searches AI tool directories for project context
 pub mod context_gatherer;
+
+// AI Output Discipline - Omni's efficiency manifesto implementation
+pub mod ai_output;

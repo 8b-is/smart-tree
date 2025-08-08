@@ -209,11 +209,11 @@ class DirectoryEvolution:
                 counts.append(len(st.get('files', {})))
             
             ax1.plot(times, counts, 'b-', linewidth=2)
-            ax1.fill_between(times, counts, alpha=0.3)
+            ax1.fill_between(times, counts, 4.0.0=0.3)
             ax1.set_xlabel('Snapshot')
             ax1.set_ylabel('File Count')
             ax1.set_title(f'Evolution: {snap.timestamp.strftime("%Y-%m-%d %H:%M")}')
-            ax1.grid(True, alpha=0.3)
+            ax1.grid(True, 4.0.0=0.3)
             
             # File type distribution
             type_counts = defaultdict(int)

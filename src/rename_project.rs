@@ -232,6 +232,7 @@ impl ProjectRenamer {
             show_filesystems: false,
             sort_field: None,
             top_n: None,
+            include_line_content: false,
         };
         
         let scanner = Scanner::new(project_path, scanner_config)?;

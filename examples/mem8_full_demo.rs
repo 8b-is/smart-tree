@@ -38,7 +38,7 @@ fn main() {
     // 1. Initialize wave grid (256×256×65536)
     println!("1. Initializing wave grid (256×256×65536)...");
     let wave_grid = Arc::new(RwLock::new(WaveGrid::new()));
-    println!("   ✓ Grid initialized: {} total cells", 256 * 256 * 65536);
+    println!("   ✓ Grid initialized: {} total cells", 256u64 * 256u64 * 65536u64);
     
     // 2. Create some memories with emotional context
     println!("\n2. Creating emotionally-modulated memories...");
@@ -207,9 +207,9 @@ fn demonstrate_safety_features(safety_system: &SafetySystem) {
         "user1".to_string(),
         st::mem8::safety::EmotionalState {
             valence: 0.5,
-            arousal: 0.6,
-            coherence: 0.8,
-            divergence: 0.0,
+            arousal: 0.6, // TODO: make this public
+            coherence: 0.8, // TODO: make this public
+            divergence: 0.0, // TODO: make this public
         },
         0.9,
     );
@@ -239,7 +239,7 @@ fn benchmark_performance() {
     // Populate with test data
     for i in 0..10 {
         let wave = MemoryWave::new(440.0 + i as f32 * 10.0, 0.8);
-        grid.store(i * 5, i * 5, i * 10, wave);
+        grid.store(i * 5, i * 5, (i as u16) * 10, wave);
     }
     
     println!("\n   Running grid processing benchmark...");
@@ -293,10 +293,10 @@ fn test_collective_emotions(cei: &Arc<CollectiveEmotionalIntelligence>) {
         cei.update_individual(
             id.to_string(),
             st::mem8::safety::EmotionalState {
-                valence,
-                arousal,
-                coherence: 0.8,
-                divergence: 0.0,
+                valence, // TODO: make this public
+                arousal, // TODO: make this public
+                coherence: 0.8, // TODO: make this public
+                divergence: 0.0, // TODO: make this public,
             },
             safety,
         );
