@@ -177,6 +177,36 @@ impl DiffStorage {
         Ok(None)
     }
 
+    /// List all diffs for all files in the .st folder
+    pub fn list_all_diffs(&self) -> Result<Vec<(String, u64)>> {
+        let mut all_diffs = Vec::new();
+        
+        if !self.st_folder.exists() {
+            return Ok(all_diffs);
+        }
+        
+        for entry in fs::read_dir(&self.st_folder)? {
+            let entry = entry?;
+            let file_name = entry.file_name();
+            let file_name_str = file_name.to_string_lossy();
+            
+            // Skip the original files (those without timestamps)
+            if !file_name_str.contains('-') {
+                continue;
+            }
+            
+            // Extract timestamp from filename
+            if let Some(dash_pos) = file_name_str.rfind('-') {
+                if let Ok(timestamp) = file_name_str[dash_pos + 1..].parse::<u64>() {
+                    let file_path = file_name_str[..dash_pos].replace('-', "/");
+                    all_diffs.push((file_path, timestamp));
+                }
+            }
+        }
+        
+        Ok(all_diffs)
+    }
+    
     /// List all stored diffs for a file
     pub fn list_diffs(&self, file_path: &Path) -> Result<Vec<DiffInfo>> {
         let relative_path = file_path

@@ -293,6 +293,16 @@ struct ScanArgs {
     /// By default, only public functions are shown
     #[arg(long)]
     show_private: bool,
+
+    /// View diffs stored in the .st folder (Smart Edit history)
+    /// Shows all diffs for files modified by Smart Edit operations
+    #[arg(long)]
+    view_diffs: bool,
+
+    /// Clean up old diffs in .st folder, keeping only last N per file
+    /// Example: --cleanup-diffs 5 (keep last 5 diffs per file)
+    #[arg(long, value_name = "N")]
+    cleanup_diffs: Option<usize>,
 }
 
 /// Sort field options with intuitive names
@@ -494,6 +504,14 @@ async fn main() -> Result<()> {
         print_mcp_config();
         return Ok(());
     }
+    // Handle diff storage operations
+    if cli.scan_opts.view_diffs {
+        return handle_view_diffs().await;
+    }
+    if let Some(keep_count) = cli.scan_opts.cleanup_diffs {
+        return handle_cleanup_diffs(keep_count).await;
+    }
+
     if cli.terminal {
         return run_terminal().await;
     }
@@ -1168,6 +1186,14 @@ fn print_mcp_tools() {
     println!("  • get_git_status - Git-aware directory structure");
     println!("  • analyze_workspace - Multi-project workspace analysis");
     println!();
+    println!("SMART EDIT (90% token reduction!):");
+    println!("  • smart_edit - Apply multiple AST-based edits efficiently");
+    println!("  • get_function_tree - Analyze code structure");
+    println!("  • insert_function - Add functions with minimal tokens");
+    println!("  • remove_function - Remove functions with dependency awareness");
+    println!("  • track_file_operation - Track AI file manipulations (.st folder)");
+    println!("  • get_file_history - View operation history for files");
+    println!();
     println!("FEEDBACK:");
     println!("  • submit_feedback - Help improve Smart Tree");
     println!("  • request_tool - Request new MCP tools");
@@ -1213,6 +1239,73 @@ async fn show_version_with_updates() -> Result<()> {
     println!("🚀 Ready to make your directories beautiful! Try: st --help");
     println!("🎭 Trish from Accounting loves the colorful tree views! 🎨");
 
+    Ok(())
+}
+
+/// Handle viewing diffs from the .st folder
+async fn handle_view_diffs() -> Result<()> {
+    use st::smart_edit_diff::DiffStorage;
+    
+    let project_root = std::env::current_dir()?;
+    let storage = DiffStorage::new(&project_root)?;
+    
+    // List all diffs
+    let diffs = storage.list_all_diffs()?;
+    
+    if diffs.is_empty() {
+        println!("📁 No diffs found in .st folder");
+        println!("💡 Smart Edit operations automatically store diffs when files are modified");
+        return Ok(());
+    }
+    
+    println!("📜 Smart Edit Diff History");
+    println!("{}", "=".repeat(60));
+    
+    // Group diffs by file
+    let mut by_file: std::collections::HashMap<String, Vec<(String, u64)>> = std::collections::HashMap::new();
+    
+    for (file_path, timestamp) in diffs {
+        by_file.entry(file_path.clone()).or_default().push((file_path, timestamp));
+    }
+    
+    for (file, mut entries) in by_file {
+        // Sort by timestamp (newest first)
+        entries.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        println!("\n📄 {}", file);
+        for (_, timestamp) in entries.iter().take(5) {
+            let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(*timestamp as i64, 0)
+                .unwrap_or_default();
+            println!("  • {} ({})", dt.format("%Y-%m-%d %H:%M:%S UTC"), timestamp);
+        }
+        
+        if entries.len() > 5 {
+            println!("  ... and {} more", entries.len() - 5);
+        }
+    }
+    
+    println!("\n💡 Use 'st --cleanup-diffs N' to keep only the last N diffs per file");
+    
+    Ok(())
+}
+
+/// Handle cleaning up old diffs
+async fn handle_cleanup_diffs(keep_count: usize) -> Result<()> {
+    use st::smart_edit_diff::DiffStorage;
+    
+    let project_root = std::env::current_dir()?;
+    let storage = DiffStorage::new(&project_root)?;
+    
+    println!("🧹 Cleaning up old diffs, keeping last {} per file...", keep_count);
+    
+    let removed = storage.cleanup_old_diffs(keep_count)?;
+    
+    if removed == 0 {
+        println!("✨ No diffs needed cleanup");
+    } else {
+        println!("✅ Removed {} old diff files", removed);
+    }
+    
     Ok(())
 }
 
