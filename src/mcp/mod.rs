@@ -20,6 +20,7 @@ mod smart_edit_diff_viewer;
 mod sse;
 mod tools;
 mod tools_consolidated;
+mod tools_consolidated_enhanced;
 
 use cache::*;
 use permissions::*;
@@ -314,8 +315,16 @@ async fn handle_consolidated_tools_list(
     _params: Option<Value>,
     _ctx: Arc<McpContext>,
 ) -> Result<Value> {
-    let tools = tools_consolidated::get_consolidated_tools();
-    Ok(json!({ "tools": tools }))
+    // Use the enhanced tools with tips and examples
+    let tools = tools_consolidated_enhanced::get_enhanced_consolidated_tools();
+    
+    // Also include a welcome message for first-time AI assistants
+    let welcome = tools_consolidated_enhanced::get_welcome_message();
+    
+    Ok(json!({ 
+        "tools": tools,
+        "_welcome": welcome
+    }))
 }
 
 /// Handle consolidated tools call request
@@ -325,7 +334,7 @@ async fn handle_consolidated_tools_call(params: Value, ctx: Arc<McpContext>) -> 
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
     let args = params.get("arguments").cloned();
 
-    let result = tools_consolidated::dispatch_consolidated_tool(tool_name, args, ctx).await?;
+    let result = tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await?;
 
     Ok(json!({
         "content": [{
