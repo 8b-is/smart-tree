@@ -1,6 +1,6 @@
 # 🌲 Smart Tree (`st`) - The Tree Command on Steroids 🚀
 
-[![Version](https://img.shields.io/badge/version-4.0.0--4.0.0-blue.svg)](https://github.com/8b-is/smart-tree/releases)
+[![Version](https://img.shields.io/badge/version-4.5.0-blue.svg)](https://github.com/8b-is/smart-tree/releases)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
