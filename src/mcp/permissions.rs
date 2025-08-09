@@ -327,7 +327,7 @@ pub fn get_available_tools(perms: &PathPermissions) -> Vec<ToolAvailability> {
 }
 
 /// Check if a specific tool is available for a path
-pub fn is_tool_available(tool_name: &str, perms: &PathPermissions) -> (bool, Option<String>) {
+pub fn _is_tool_available(tool_name: &str, perms: &PathPermissions) -> (bool, Option<String>) {
     let tools = get_available_tools(perms);
     for tool in tools {
         if tool.name == tool_name {

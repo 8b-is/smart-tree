@@ -18,8 +18,8 @@ use std::path::Path;
 pub struct UnifiedSearch {
     query_parser: QueryParser,
     context_analyzer: ContextAnalyzer,
-    smart_read: SmartReader,
-    smart_ls: SmartLS,
+    _smart_read: SmartReader,
+    _smart_ls: SmartLS,
 }
 
 /// 🎯 Search result with multiple result types
@@ -60,8 +60,8 @@ impl UnifiedSearch {
         Self {
             query_parser: QueryParser::new(),
             context_analyzer: ContextAnalyzer::new(),
-            smart_read: SmartReader::new(),
-            smart_ls: SmartLS::new(),
+            _smart_read: SmartReader::new(),
+            _smart_ls: SmartLS::new(),
         }
     }
 

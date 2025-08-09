@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::path::Path;
 
 /// Handle viewing diffs for a file
-pub async fn handle_view_file_diffs(params: Option<Value>) -> Result<Value> {
+pub async fn _handle_view_file_diffs(params: Option<Value>) -> Result<Value> {
     let params = params.context("Parameters required")?;
 
     let file_path = params["file_path"].as_str().context("file_path required")?;
@@ -43,7 +43,7 @@ pub async fn handle_view_file_diffs(params: Option<Value>) -> Result<Value> {
 }
 
 /// Handle viewing a specific diff
-pub async fn handle_view_diff_content(params: Option<Value>) -> Result<Value> {
+pub async fn _handle_view_diff_content(params: Option<Value>) -> Result<Value> {
     let params = params.context("Parameters required")?;
 
     let diff_path = params["diff_path"].as_str().context("diff_path required")?;
@@ -58,7 +58,7 @@ pub async fn handle_view_diff_content(params: Option<Value>) -> Result<Value> {
 }
 
 /// Handle cleaning up old diffs
-pub async fn handle_cleanup_diffs(params: Option<Value>) -> Result<Value> {
+pub async fn _handle_cleanup_diffs(params: Option<Value>) -> Result<Value> {
     let params = params.context("Parameters required")?;
 
     let project_root = params
@@ -83,7 +83,7 @@ pub async fn handle_cleanup_diffs(params: Option<Value>) -> Result<Value> {
 }
 
 /// Handle getting diff statistics
-pub async fn handle_diff_stats(params: Option<Value>) -> Result<Value> {
+pub async fn _handle_diff_stats(params: Option<Value>) -> Result<Value> {
     let params = params.context("Parameters required")?;
 
     let project_root = params

@@ -127,7 +127,7 @@ pub struct SmartTreeTerminal {
     suggestion_rx: mpsc::Receiver<Suggestion>,
 
     /// Suggestion sender (for background tasks)
-    suggestion_tx: mpsc::Sender<Suggestion>,
+    _suggestion_tx: mpsc::Sender<Suggestion>,
 }
 
 impl SmartTreeTerminal {
@@ -163,7 +163,7 @@ impl SmartTreeTerminal {
             context_watcher: ContextWatcher::new(state.clone(), suggestion_tx.clone()),
             pattern_analyzer: PatternAnalyzer::new(state.clone(), suggestion_tx.clone()),
             suggestion_rx,
-            suggestion_tx,
+            _suggestion_tx: suggestion_tx,
         })
     }
 
@@ -462,14 +462,14 @@ impl SmartTreeTerminal {
 /// Context watcher - monitors file system and project state
 pub struct ContextWatcher {
     state: Arc<Mutex<TerminalState>>,
-    suggestion_tx: mpsc::Sender<Suggestion>,
+    _suggestion_tx: mpsc::Sender<Suggestion>,
 }
 
 impl ContextWatcher {
-    fn new(state: Arc<Mutex<TerminalState>>, suggestion_tx: mpsc::Sender<Suggestion>) -> Self {
+    fn new(state: Arc<Mutex<TerminalState>>, _suggestion_tx: mpsc::Sender<Suggestion>) -> Self {
         Self {
             state,
-            suggestion_tx,
+            _suggestion_tx,
         }
     }
 
@@ -484,7 +484,7 @@ impl ContextWatcher {
 
             // Send a suggestion
             let _ = self
-                .suggestion_tx
+                ._suggestion_tx
                 .send(Suggestion {
                     icon: "🦀",
                     title: "Rust Project Detected".to_string(),
@@ -502,14 +502,14 @@ impl ContextWatcher {
 /// Pattern analyzer - analyzes coding patterns and suggests actions
 pub struct PatternAnalyzer {
     state: Arc<Mutex<TerminalState>>,
-    suggestion_tx: mpsc::Sender<Suggestion>,
+    _suggestion_tx: mpsc::Sender<Suggestion>,
 }
 
 impl PatternAnalyzer {
-    fn new(state: Arc<Mutex<TerminalState>>, suggestion_tx: mpsc::Sender<Suggestion>) -> Self {
+    fn new(state: Arc<Mutex<TerminalState>>, _suggestion_tx: mpsc::Sender<Suggestion>) -> Self {
         Self {
             state,
-            suggestion_tx,
+            _suggestion_tx,
         }
     }
 
@@ -526,7 +526,7 @@ impl PatternAnalyzer {
         // Simple pattern matching for demo
         if input.starts_with("git com") {
             let _ = self
-                .suggestion_tx
+                ._suggestion_tx
                 .send(Suggestion {
                     icon: "📝",
                     title: "Git Commit".to_string(),
@@ -537,7 +537,7 @@ impl PatternAnalyzer {
                 .await;
         } else if input.contains("import") {
             let _ = self
-                .suggestion_tx
+                ._suggestion_tx
                 .send(Suggestion {
                     icon: "📦",
                     title: "Import Suggestion".to_string(),

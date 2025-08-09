@@ -335,7 +335,7 @@ pub struct AnalyzeAiToolUsageRequest {
     /// Time range in days (default: 30)
     pub days: Option<u32>,
     /// Include detailed file paths
-    pub include_paths: Option<bool>,
+    pub _include_paths: Option<bool>,
 }
 
 /// Request structure for anchor_collaborative_memory
@@ -859,11 +859,11 @@ pub async fn analyze_ai_tool_usage(
 #[derive(Debug, Deserialize)]
 pub struct CleanOldContextRequest {
     /// Days to keep (default: 90)
-    pub days_to_keep: Option<u32>,
+    pub _days_to_keep: Option<u32>,
     /// Dry run - don't actually delete
-    pub dry_run: Option<bool>,
+    pub _dry_run: Option<bool>,
     /// Specific tools to clean
-    pub tools: Option<Vec<String>>,
+    pub _tools: Option<Vec<String>>,
 }
 
 /// Clean old context files from AI tools
