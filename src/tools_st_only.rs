@@ -45,6 +45,12 @@ pub struct StOnlyTools {
     config: StToolsConfig,
 }
 
+impl Default for StOnlyTools {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StOnlyTools {
     pub fn new() -> Self {
         Self {
