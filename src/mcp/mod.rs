@@ -19,6 +19,7 @@ pub mod smart_edit;
 mod smart_edit_diff_viewer;
 mod sse;
 mod tools;
+mod tools_consolidated;
 
 use cache::*;
 use permissions::*;
@@ -55,6 +56,8 @@ pub struct McpConfig {
     pub allowed_paths: Vec<PathBuf>,
     /// Blocked paths for security
     pub blocked_paths: Vec<PathBuf>,
+    /// Use consolidated tools (reduces tool count from 50+ to ~15)
+    pub use_consolidated_tools: bool,
 }
 
 impl Default for McpConfig {
@@ -69,6 +72,7 @@ impl Default for McpConfig {
                 PathBuf::from("/sys"),
                 PathBuf::from("/proc"),
             ],
+            use_consolidated_tools: true, // Default to consolidated for Cursor compatibility
         }
     }
 }
@@ -197,9 +201,24 @@ impl McpServer {
         // Route the request
         let result = match request.method.as_str() {
             "initialize" => handle_initialize(request.params, self.context.clone()).await,
-            "tools/list" => handle_tools_list(request.params, self.context.clone()).await,
+            "tools/list" => {
+                if self.context.config.use_consolidated_tools {
+                    handle_consolidated_tools_list(request.params, self.context.clone()).await
+                } else {
+                    handle_tools_list(request.params, self.context.clone()).await
+                }
+            }
             "tools/call" => {
-                handle_tools_call(request.params.unwrap_or(json!({})), self.context.clone()).await
+                if self.context.config.use_consolidated_tools {
+                    handle_consolidated_tools_call(
+                        request.params.unwrap_or(json!({})),
+                        self.context.clone(),
+                    )
+                    .await
+                } else {
+                    handle_tools_call(request.params.unwrap_or(json!({})), self.context.clone())
+                        .await
+                }
             }
             "resources/list" => handle_resources_list(request.params, self.context.clone()).await,
             "resources/read" => {
@@ -288,6 +307,32 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
 async fn handle_cancelled(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     // TODO: Implement cancellation logic
     Ok(json!({}))
+}
+
+/// Handle consolidated tools list request
+async fn handle_consolidated_tools_list(
+    _params: Option<Value>,
+    _ctx: Arc<McpContext>,
+) -> Result<Value> {
+    let tools = tools_consolidated::get_consolidated_tools();
+    Ok(json!({ "tools": tools }))
+}
+
+/// Handle consolidated tools call request
+async fn handle_consolidated_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let tool_name = params["name"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
+    let args = params.get("arguments").cloned();
+
+    let result = tools_consolidated::dispatch_consolidated_tool(tool_name, args, ctx).await?;
+
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&result)?
+        }]
+    }))
 }
 
 /// Check if a path is allowed based on security configuration
