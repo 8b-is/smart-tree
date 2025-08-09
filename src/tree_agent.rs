@@ -127,13 +127,13 @@ impl TreeAgent {
     pub fn assign_agent(&mut self, agent: &str, pane_id: Option<&str>, branch: &str) -> Result<()> {
         // Create branch if it doesn't exist
         let output = Command::new("git")
-            .args(&["checkout", "-b", branch])
+            .args(["checkout", "-b", branch])
             .output();
 
         if output.is_err() || !output.unwrap().status.success() {
             // Branch might already exist, try switching
             Command::new("git")
-                .args(&["checkout", branch])
+                .args(["checkout", branch])
                 .output()
                 .context("Failed to switch to branch")?;
         }
@@ -144,7 +144,7 @@ impl TreeAgent {
         } else {
             // Create new pane
             let output = Command::new("tmux")
-                .args(&["split-window", "-P", "-F", "#{pane_id}"])
+                .args(["split-window", "-P", "-F", "#{pane_id}"])
                 .output()
                 .context("Failed to create tmux pane")?;
 
@@ -153,7 +153,7 @@ impl TreeAgent {
 
         // Send initial command to pane
         Command::new("tmux")
-            .args(&[
+            .args([
                 "send-keys",
                 "-t",
                 &pane_id,
@@ -210,7 +210,7 @@ impl TreeAgent {
             for pane in &session.panes {
                 // Get pane content
                 let output = Command::new("tmux")
-                    .args(&["capture-pane", "-t", &pane.pane_id, "-p"])
+                    .args(["capture-pane", "-t", &pane.pane_id, "-p"])
                     .output()
                     .context("Failed to capture pane")?;
 
@@ -275,13 +275,13 @@ impl TreeAgent {
 
         // Switch to branch
         Command::new("git")
-            .args(&["checkout", &branch])
+            .args(["checkout", &branch])
             .output()
             .context("Failed to switch branch")?;
 
         // Stage all changes
         Command::new("git")
-            .args(&["add", "-A"])
+            .args(["add", "-A"])
             .output()
             .context("Failed to stage changes")?;
 
@@ -290,7 +290,7 @@ impl TreeAgent {
 
         // Commit with wave metadata
         Command::new("git")
-            .args(&["commit", "-m", &wave_msg])
+            .args(["commit", "-m", &wave_msg])
             .output()
             .context("Failed to commit")?;
 
@@ -305,7 +305,7 @@ impl TreeAgent {
 
         // Get all branches
         let output = Command::new("git")
-            .args(&["branch", "-a"])
+            .args(["branch", "-a"])
             .output()
             .context("Failed to list branches")?;
 
@@ -409,7 +409,7 @@ impl TreeAgent {
 
     fn get_current_tmux_session(&self) -> Result<String> {
         let output = Command::new("tmux")
-            .args(&["display-message", "-p", "#{session_name}"])
+            .args(["display-message", "-p", "#{session_name}"])
             .output()
             .context("Failed to get tmux session")?;
 
@@ -597,12 +597,12 @@ impl TreeAgent {
 
     fn perform_merge(&self, branch1: &str, branch2: &str) -> Result<()> {
         Command::new("git")
-            .args(&["checkout", branch1])
+            .args(["checkout", branch1])
             .output()
             .context("Failed to checkout branch")?;
 
         Command::new("git")
-            .args(&[
+            .args([
                 "merge",
                 branch2,
                 "--no-ff",

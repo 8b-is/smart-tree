@@ -148,6 +148,12 @@ pub struct InputProcessor {
     adapters: Vec<Box<dyn InputAdapter>>,
 }
 
+impl Default for InputProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InputProcessor {
     /// Create a new input processor with all adapters
     pub fn new() -> Self {

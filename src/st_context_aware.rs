@@ -96,6 +96,12 @@ pub struct ProjectKnowledge {
     pub doc_locations: Vec<PathBuf>,
 }
 
+impl Default for StContextTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StContextTracker {
     pub fn new() -> Self {
         Self {

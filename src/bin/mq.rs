@@ -1,7 +1,6 @@
 // 🎸 The Cheet's Marqant CLI - "Compress your docs like a rockstar!" 🤘
 
 use anyhow::Result;
-use chrono;
 use clap::{Parser, Subcommand};
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -294,7 +293,7 @@ fn main() -> Result<()> {
                 let path = entry.path();
 
                 // Skip if in exclude list
-                let relative_path = path.strip_prefix(&root_path).unwrap_or(path);
+                let relative_path = path.strip_prefix(root_path).unwrap_or(path);
                 let relative_str = relative_path.to_string_lossy();
 
                 // Check each exclusion pattern
@@ -399,13 +398,13 @@ fn main() -> Result<()> {
 
                 file_manifest.push(format!("{}:{}:{}", relative_path, start, length));
                 compressed_content.push_str(&tokenized);
-                compressed_content.push_str("\n");
+                compressed_content.push('\n');
             }
 
             // Write manifest
             for entry in &file_manifest {
                 all_content.push_str(entry);
-                all_content.push_str("\n");
+                all_content.push('\n');
             }
             all_content.push_str("::end-manifest::\n");
 

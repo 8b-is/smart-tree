@@ -1,17 +1,10 @@
 // Enhanced Consolidated MCP Tools with AI-Friendly Tips and Examples
 // Making Smart Tree irresistible to AI assistants! 🌳✨
 
-use anyhow::{Context, Result};
 use serde_json::{json, Value};
-use std::sync::Arc;
-use crate::mcp::McpContext;
 
-// Re-export the handlers from the original consolidated tools
-pub use super::tools_consolidated::{
-    handle_find, handle_analyze, handle_search, handle_overview,
-    handle_edit, handle_history, handle_context, handle_memory,
-    handle_compare, handle_sse, handle_feedback, dispatch_consolidated_tool
-};
+// Re-export the dispatcher from the original consolidated tools
+pub use super::tools_consolidated::dispatch_consolidated_tool;
 
 /// Get enhanced consolidated tool list with attractive tips and examples
 pub fn get_enhanced_consolidated_tools() -> Vec<Value> {

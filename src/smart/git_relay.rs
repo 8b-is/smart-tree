@@ -78,19 +78,19 @@ impl GitRelay {
         // Add operation-specific arguments
         match &operation {
             GitOperation::Status => {
-                cmd.args(&["status", "--porcelain", "--branch"]);
+                cmd.args(["status", "--porcelain", "--branch"]);
             }
             GitOperation::Log => {
-                cmd.args(&["log", "--oneline", "--graph", "--decorate", "-10"]);
+                cmd.args(["log", "--oneline", "--graph", "--decorate", "-10"]);
             }
             GitOperation::Diff => {
-                cmd.args(&["diff", "--stat", "--color=never"]);
+                cmd.args(["diff", "--stat", "--color=never"]);
             }
             GitOperation::Branch => {
-                cmd.args(&["branch", "-v", "-a"]);
+                cmd.args(["branch", "-v", "-a"]);
             }
             GitOperation::Remote => {
-                cmd.args(&["remote", "-v"]);
+                cmd.args(["remote", "-v"]);
             }
             GitOperation::Custom(op) => {
                 cmd.arg(op);

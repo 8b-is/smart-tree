@@ -26,7 +26,7 @@ use std::path::Path;
 #[derive(Debug, Eq)]
 struct PhraseFreq {
     phrase: String,
-    count: usize,
+    _count: usize,
     savings: usize, // bytes saved by tokenization
 }
 
@@ -70,7 +70,7 @@ impl MarqantFormatter {
 
         // Add section tags if requested
         let mut processed_content = content.to_string();
-        let use_sections = flags.map_or(false, |f| f.contains("-semantic"));
+        let use_sections = flags.is_some_and(|f| f.contains("-semantic"));
 
         if use_sections {
             processed_content = Self::add_section_tags(&processed_content);
@@ -80,7 +80,7 @@ impl MarqantFormatter {
         let (tokens, tokenized_content) = Self::tokenize_content(&processed_content);
 
         // Apply zlib compression if requested
-        let use_zlib = flags.map_or(false, |f| f.contains("-zlib"));
+        let use_zlib = flags.is_some_and(|f| f.contains("-zlib"));
         let final_content = if use_zlib {
             let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
             encoder.write_all(tokenized_content.as_bytes())?;
@@ -195,7 +195,7 @@ impl MarqantFormatter {
                 let count = tokenized.matches(pattern).count();
                 // Only tokenize if it saves space
                 // Now tokens are 1 byte, so much more likely to save space
-                if count * pattern.len() > count * 1 + pattern.len() + 3 {
+                if count * pattern.len() > count + pattern.len() + 3 {
                     tokens.insert(token.to_string(), pattern.to_string());
                     tokenized = tokenized.replace(pattern, token);
                 }
@@ -224,11 +224,11 @@ impl MarqantFormatter {
                     // Calculate savings: (original_size * count) - (token_size * count + dictionary_entry)
                     // Token is now 1 byte instead of 3 bytes (T##)
                     let savings =
-                        (phrase.len() * count).saturating_sub(1 * count + phrase.len() + 3);
+                        (phrase.len() * count).saturating_sub(count + phrase.len() + 3);
                     if savings > 0 {
                         phrase_heap.push(PhraseFreq {
                             phrase: phrase.clone(),
-                            count,
+                            _count: count,  // Trisha says: "Track it even if we don't use it - good for audits!" 💅
                             savings,
                         });
                     }
@@ -289,10 +289,10 @@ impl MarqantFormatter {
         // Check for flags
         let has_zlib = header_parts
             .get(4)
-            .map_or(false, |flags| flags.contains("-zlib"));
+            .is_some_and(|flags| flags.contains("-zlib"));
         let has_sections = header_parts
             .get(4)
-            .map_or(false, |flags| flags.contains("-semantic"));
+            .is_some_and(|flags| flags.contains("-semantic"));
 
         // Build token dictionary
         let mut tokens = HashMap::new();

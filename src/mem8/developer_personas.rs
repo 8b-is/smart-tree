@@ -140,7 +140,7 @@ impl PersonaAnalyzer {
         for commit in commits {
             author_commits
                 .entry(commit.author.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(commit);
         }
 
@@ -241,9 +241,9 @@ impl PersonaAnalyzer {
             hour_counts[hour] += 1.0;
             day_counts[day] += 1.0;
 
-            if hour >= 5 && hour < 12 {
+            if (5..12).contains(&hour) {
                 morning_commits += 1;
-            } else if hour >= 20 || hour < 5 {
+            } else if !(5..20).contains(&hour) {
                 evening_commits += 1;
             }
 

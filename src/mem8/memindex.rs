@@ -204,6 +204,12 @@ pub struct IndexStats {
     pub avg_compression_ratio: f32,
 }
 
+impl Default for MemIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemIndex {
     /// Load the index from ~/.mem8/memindex.json
     pub fn load() -> Result<Self> {
@@ -407,13 +413,13 @@ impl MemIndex {
         self.concepts
             .relationships
             .entry(concept1.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((concept2.to_string(), weight));
 
         self.concepts
             .relationships
             .entry(concept2.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((concept1.to_string(), weight));
     }
 
@@ -442,7 +448,7 @@ impl MemIndex {
             &self.session.session_id[..8]
         ));
         existing.push_str(content);
-        existing.push_str("\n");
+        existing.push('\n');
 
         fs::write(&journal_path, existing)?;
 

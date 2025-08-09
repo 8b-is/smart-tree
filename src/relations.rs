@@ -137,7 +137,7 @@ impl LanguageParser for RustParser {
 
         // Match mod statements
         let mod_re = Regex::new(r"^\s*(?:pub\s+)?mod\s+([a-zA-Z0-9_]+)").unwrap();
-        for cap in mod_re.captures_iter(&content) {
+        for cap in mod_re.captures_iter(content) {
             let module = cap.get(1).map_or("", |m| m.as_str());
             imports.push((module.to_string(), vec![]));
         }
@@ -421,7 +421,7 @@ impl RelationAnalyzer {
             format!("{}/mod.rs", module_path),
             format!(
                 "{}.rs",
-                module_path.split('/').last().unwrap_or(&module_path)
+                module_path.split('/').next_back().unwrap_or(&module_path)
             ),
         ];
 

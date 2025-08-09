@@ -338,7 +338,7 @@ impl ContextGatherer {
 
         // Check path references
         let project_path_str = self.project_path.to_string_lossy();
-        if content_str.contains(&project_path_str.as_ref()) {
+        if content_str.contains(project_path_str.as_ref()) {
             return true;
         }
 

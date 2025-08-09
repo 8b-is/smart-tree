@@ -20,6 +20,12 @@ pub struct ConsciousnessState {
     pub last_update: Instant,
 }
 
+impl Default for ConsciousnessState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConsciousnessState {
     pub fn new() -> Self {
         Self {
@@ -128,6 +134,12 @@ pub struct TemporalBlanket {
     pub hard_blankets: Vec<CalibrationPattern>,
     /// Soft blankets (adaptive filters)
     pub soft_blankets: Vec<AdaptiveFilter>,
+}
+
+impl Default for TemporalBlanket {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TemporalBlanket {
@@ -413,6 +425,12 @@ pub struct ForgettingProcessor {
     pub frequency: f32,
     /// Forgetting curves
     pub curves: HashMap<String, ForgetCurve>,
+}
+
+impl Default for ForgettingProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ForgettingProcessor {

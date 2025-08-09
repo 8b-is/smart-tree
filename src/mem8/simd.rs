@@ -11,6 +11,12 @@ pub struct SimdWaveProcessor {
     vector_width: usize,
 }
 
+impl Default for SimdWaveProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SimdWaveProcessor {
     pub fn new() -> Self {
         Self {
@@ -208,6 +214,12 @@ pub struct SimdGridOps {
     processor: SimdWaveProcessor,
 }
 
+impl Default for SimdGridOps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SimdGridOps {
     pub fn new() -> Self {
         Self {
@@ -291,6 +303,12 @@ impl SimdGridOps {
 /// Performance benchmarking utilities
 pub struct PerformanceBenchmark {
     simd_ops: SimdGridOps,
+}
+
+impl Default for PerformanceBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PerformanceBenchmark {

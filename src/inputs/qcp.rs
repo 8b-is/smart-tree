@@ -14,6 +14,12 @@ pub struct QcpAdapter {
     endpoint: String,
 }
 
+impl Default for QcpAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QcpAdapter {
     pub fn new() -> Self {
         Self {
@@ -31,7 +37,7 @@ impl QcpAdapter {
     ) -> Result<serde_json::Value> {
         let response = self
             .client
-            .post(&format!("{}/api/v1/qcp/execute", self.endpoint))
+            .post(format!("{}/api/v1/qcp/execute", self.endpoint))
             .json(&json!({
                 "type": "Execute",
                 "program": program,
@@ -145,7 +151,7 @@ impl QcpAdapter {
         let response = self.client.get(url).send().await?;
         let data = response.bytes().await?;
 
-        self.parse_qcp_data(&data.to_vec()).await
+        self.parse_qcp_data(&data).await
     }
 
     async fn parse_qcp_data(&self, data: &[u8]) -> Result<ContextNode> {

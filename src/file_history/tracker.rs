@@ -209,7 +209,7 @@ impl FileHistoryTracker {
 
                         file_ops
                             .entry(log_entry.file_path.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(log_entry.operation);
 
                         summary

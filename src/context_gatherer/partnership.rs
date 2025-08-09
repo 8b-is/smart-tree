@@ -171,8 +171,8 @@ impl PartnershipAnalyzer {
         }
 
         let disruptions = clarifications + switches;
-        let smoothness = 1.0 - (disruptions as f32 / turns as f32).min(1.0);
-        smoothness
+        
+        1.0 - (disruptions as f32 / turns as f32).min(1.0)
     }
 
     /// Extract topic from content (simplified)
@@ -232,7 +232,7 @@ impl PartnershipAnalyzer {
     ) {
         let mut last_was_human = false;
 
-        for (_i, msg) in messages.iter().enumerate() {
+        for msg in messages.iter() {
             if let Some(role) = msg.get("role").and_then(|r| r.as_str()) {
                 if role == "user" {
                     last_was_human = true;

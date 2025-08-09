@@ -207,6 +207,12 @@ pub struct CompressionProbe {
     pub instructions: String,
 }
 
+impl Default for CompressionProbe {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CompressionProbe {
     pub fn new() -> Self {
         Self {

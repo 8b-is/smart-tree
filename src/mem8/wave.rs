@@ -114,6 +114,12 @@ pub struct WaveGrid {
     pub noise_floor: f32,
 }
 
+impl Default for WaveGrid {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WaveGrid {
     /// Create a new wave grid with standard MEM8 dimensions
     pub fn new() -> Self {

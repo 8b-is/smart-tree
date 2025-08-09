@@ -1399,12 +1399,10 @@ async fn check_for_updates_cli() -> Result<String> {
     }
 
     // Add update instructions
-    message.push_str(&format!(
-        "\n\x1b[1mUpdate Instructions:\x1b[0m\n\
+    message.push_str(&"\n\x1b[1mUpdate Instructions:\x1b[0m\n\
         • Cargo: \x1b[36mcargo install st --force\x1b[0m\n\
         • GitHub: Download from https://github.com/8b-is/smart-tree/releases\n\
-        • Check: \x1b[36mst --version\x1b[0m (after update)\n"
-    ));
+        • Check: \x1b[36mst --version\x1b[0m (after update)\n".to_string());
 
     Ok(message)
 }

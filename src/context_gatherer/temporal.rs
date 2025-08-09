@@ -226,7 +226,7 @@ impl TemporalContextAnalyzer {
             _ => Duration::weeks(1),
         };
 
-        for (_i, point) in timeline.iter().enumerate() {
+        for point in timeline.iter() {
             if let Some(ref mut session) = current_session {
                 let gap = point.timestamp - session.end_time;
 
@@ -526,7 +526,7 @@ impl TemporalWaveGrid {
 
         self.time_slots
             .entry(time_slot)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(wave_idx);
     }
 

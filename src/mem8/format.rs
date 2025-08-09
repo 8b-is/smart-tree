@@ -170,6 +170,12 @@ pub struct MarkqantEncoder {
     next_token: u8,
 }
 
+impl Default for MarkqantEncoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MarkqantEncoder {
     pub fn new() -> Self {
         Self {

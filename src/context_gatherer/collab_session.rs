@@ -113,6 +113,12 @@ pub struct CollaborativeSessionTracker {
     pub cross_session_links: HashMap<String, Vec<String>>,
 }
 
+impl Default for CollaborativeSessionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CollaborativeSessionTracker {
     pub fn new() -> Self {
         Self {
@@ -448,7 +454,7 @@ impl CollaborativeSessionTracker {
     pub fn link_cross_session(&mut self, session_id: String, related_ids: Vec<String>) {
         self.cross_session_links
             .entry(session_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(related_ids);
     }
 

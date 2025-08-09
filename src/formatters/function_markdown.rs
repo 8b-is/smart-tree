@@ -170,7 +170,7 @@ impl FunctionMarkdownFormatter {
                 output.push_str(&format!(
                     "- [{}](#{})\n",
                     file,
-                    file.replace('/', "-").replace('.', "-").to_lowercase()
+                    file.replace(['/', '.'], "-").to_lowercase()
                 ));
 
                 for func in &file_funcs {
@@ -285,7 +285,7 @@ impl FunctionMarkdownFormatter {
         // Signature
         output.push_str("**Signature**:\n```");
         output.push_str(&func.language);
-        output.push_str("\n");
+        output.push('\n');
         output.push_str(&func.signature);
         output.push_str("\n```\n\n");
 
@@ -316,7 +316,7 @@ impl FunctionMarkdownFormatter {
             for call in &func.calls {
                 output.push_str(&format!("- `{}`\n", call));
             }
-            output.push_str("\n");
+            output.push('\n');
         }
 
         output.push_str("---\n\n");

@@ -645,9 +645,7 @@ impl Scanner {
 
                 let file_name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-                important_patterns
-                    .iter()
-                    .any(|&pattern| file_name == pattern)
+                important_patterns.contains(&file_name)
             })
             .collect())
     }
@@ -1101,7 +1099,7 @@ impl Scanner {
                         // If this is a permission error, it's likely we already processed the directory
                         // entry successfully but can't read its contents. In that case, skip creating
                         // a duplicate node since we already marked the original as permission_denied.
-                        let is_contents_error = e.io_error().map_or(false, |io_err| {
+                        let is_contents_error = e.io_error().is_some_and(|io_err| {
                             io_err.kind() == std::io::ErrorKind::PermissionDenied
                         });
 

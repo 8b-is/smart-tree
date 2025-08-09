@@ -125,7 +125,7 @@ fn main() -> Result<()> {
         Commands::Observe { save_to } => {
             let mut tree_agent = load_agent()?;
 
-            let save_path = save_to.as_ref().map(|s| std::path::Path::new(s));
+            let save_path = save_to.as_ref().map(std::path::Path::new);
             tree_agent.observe(save_path)?;
         }
 

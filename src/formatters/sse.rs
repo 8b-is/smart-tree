@@ -14,6 +14,12 @@ pub struct SseFormatter {
     event_id: u64,
 }
 
+impl Default for SseFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SseFormatter {
     pub fn new() -> Self {
         Self { event_id: 0 }

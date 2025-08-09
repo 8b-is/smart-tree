@@ -1679,7 +1679,7 @@ async fn verify_permissions(args: Value, ctx: Arc<McpContext>) -> Result<Value> 
     }
 
     // Trisha says...
-    output.push_str("\n");
+    output.push('\n');
     output.push_str("Trisha from Accounting says: \"It's like checking if you have the keys ");
     output.push_str("before bringing the whole toolbox! Smart thinking!\" 🔑\n");
 
@@ -3247,12 +3247,12 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
         match op_str.as_str() {
             "read" => {
                 let hash = tracker.track_read(&path, &args.agent, &session_id)?;
-                return Ok(json!({
+                Ok(json!({
                     "content": [{
                         "type": "text",
                         "text": format!("✓ Tracked read operation for {}\nFile hash: {}", path.display(), hash)
                     }]
-                }));
+                }))
             }
             "write" | "append" | "prepend" | "insert" | "delete" | "replace" | "create"
             | "remove" => {
@@ -3355,7 +3355,7 @@ async fn get_file_history(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             if let Some(new_hash) = &entry.context.new_hash {
                 output.push_str(&format!("   New hash: {}\n", &new_hash[..8]));
             }
-            output.push_str("\n");
+            output.push('\n');
         }
     }
 

@@ -201,12 +201,10 @@ impl LsFormatter {
                 // Default color for regular files
                 format!("{}{}", emoji_field, filename)
             }
+        } else if emoji_field.is_empty() {
+            filename.to_string()
         } else {
-            if emoji_field.is_empty() {
-                filename.to_string()
-            } else {
-                format!("{}{}", emoji_field, filename)
-            }
+            format!("{}{}", emoji_field, filename)
         }
     }
 
@@ -320,7 +318,7 @@ impl Formatter for LsFormatter {
         if display_nodes.is_empty() {
             writeln!(writer, "No matching files or directories found")?;
             if is_filtered {
-                writeln!(writer, "")?;
+                writeln!(writer)?;
                 writeln!(
                     writer,
                     "💡 Tip: Try using --everything to search in ignored directories like .cache"

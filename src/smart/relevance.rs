@@ -57,7 +57,7 @@ impl RelevanceEngine {
 
         // Focus area matching
         for focus_area in &context.focus_areas {
-            let focus_score = self.calculate_focus_score(&file_node, focus_area);
+            let focus_score = self.calculate_focus_score(file_node, focus_area);
             if focus_score > 0.0 {
                 score += focus_score;
                 focus_matches.push(focus_area.clone());
@@ -67,7 +67,7 @@ impl RelevanceEngine {
 
         // Project context boost
         if let Some(proj_ctx) = project_context {
-            score += self.calculate_project_context_boost(&file_node, proj_ctx);
+            score += self.calculate_project_context_boost(file_node, proj_ctx);
         }
 
         // Normalize score

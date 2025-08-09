@@ -41,6 +41,12 @@ struct ResourceLimits {
     max_growth_rate: f32,
 }
 
+impl Default for Custodian {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Custodian {
     pub fn new() -> Self {
         Self {
@@ -182,6 +188,12 @@ struct PatternInstance {
     last_seen: Instant,
 }
 
+impl Default for RepetitionPrevention {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RepetitionPrevention {
     pub fn new() -> Self {
         Self {
@@ -294,6 +306,12 @@ enum TherapyPhase {
     Resolution,
 }
 
+impl Default for EmotionalMemoryTherapy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EmotionalMemoryTherapy {
     pub fn new() -> Self {
         Self {
@@ -368,6 +386,12 @@ struct SuppressionRecord {
     suppression_time: Instant,
     original_blanket: f32,
     suppression_reason: String,
+}
+
+impl Default for TemporalBlanketRecovery {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TemporalBlanketRecovery {
@@ -472,6 +496,12 @@ struct DivergenceThresholds {
     normal_max: f32,    // 0-50
     unusual_max: f32,   // 51-150
     high_risk_min: f32, // 151-255
+}
+
+impl Default for DivergenceTracker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DivergenceTracker {
@@ -604,6 +634,12 @@ struct HarmonyWeights {
     interaction_pattern: f32, // 0.25
     trust_coefficient: f32,   // 0.25
     adaptation_rate: f32,     // 0.2
+}
+
+impl Default for CollectiveEmotionalIntelligence {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CollectiveEmotionalIntelligence {
@@ -762,6 +798,12 @@ pub struct SafetySystem {
     pub temporal_recovery: Arc<TemporalBlanketRecovery>,
     pub divergence_tracker: Arc<DivergenceTracker>,
     pub collective_intelligence: Arc<CollectiveEmotionalIntelligence>,
+}
+
+impl Default for SafetySystem {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SafetySystem {

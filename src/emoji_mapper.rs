@@ -26,12 +26,10 @@ pub fn get_file_emoji(node: &FileNode, no_emoji: bool) -> &'static str {
             } else {
                 "[DIR]"
             }
+        } else if node.size == 0 {
+            "📂"
         } else {
-            if node.size == 0 {
-                "📂"
-            } else {
-                "📁"
-            }
+            "📁"
         };
     }
 
@@ -511,12 +509,10 @@ pub fn get_file_emoji(node: &FileNode, no_emoji: bool) -> &'static str {
                         } else {
                             "🪹"
                         }
+                    } else if no_emoji {
+                        "[FILE]"
                     } else {
-                        if no_emoji {
-                            "[FILE]"
-                        } else {
-                            "📄"
-                        }
+                        "📄"
                     }
                 }
                 FileType::Directory => {

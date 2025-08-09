@@ -177,7 +177,7 @@ fn validate_file(path: &PathBuf, verbose: bool) -> Result<()> {
 
     // Validate section bounds
     let mut prev_end = 16 + (header.section_count as u32 * 16); // Header + section table size
-    for (_i, section) in sections.iter().enumerate() {
+    for section in sections.iter() {
         if section.offset < prev_end {
             anyhow::bail!("Section overlaps with previous data");
         }

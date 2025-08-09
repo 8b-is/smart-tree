@@ -38,11 +38,10 @@ impl ContextAnalyzer {
         // Detect focus areas from task description
         for (focus_area, keywords) in &self.focus_keywords {
             for keyword in keywords {
-                if task_lower.contains(keyword) {
-                    if !focus_areas.contains(focus_area) {
+                if task_lower.contains(keyword)
+                    && !focus_areas.contains(focus_area) {
                         focus_areas.push(focus_area.clone());
                     }
-                }
             }
         }
 

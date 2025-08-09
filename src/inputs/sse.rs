@@ -101,8 +101,7 @@ impl SseAdapter {
 
         // Parse SSE format
         for line in content.lines() {
-            if line.starts_with("data: ") {
-                let event_data = &line[6..];
+            if let Some(event_data) = line.strip_prefix("data: ") {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(event_data) {
                     events.push(json);
                 }

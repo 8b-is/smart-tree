@@ -24,6 +24,12 @@ pub struct SmartTreeMem8 {
     current_depth: u16,
 }
 
+impl Default for SmartTreeMem8 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SmartTreeMem8 {
     /// Create a new MEM8 instance for Smart Tree
     pub fn new() -> Self {

@@ -227,7 +227,7 @@ impl OpenApiAdapter {
             .and_then(|s| s.get("$ref"))
             .and_then(|r| r.as_str())
         {
-            if let Some(schema_name) = schema_ref.split('/').last() {
+            if let Some(schema_name) = schema_ref.split('/').next_back() {
                 entanglements.push(Entanglement {
                     target_id: format!("schema_{}", schema_name),
                     strength: 0.9,

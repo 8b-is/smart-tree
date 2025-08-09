@@ -88,6 +88,12 @@ pub struct CrossSessionBridge {
     pub persona_library: HashMap<String, PersonaProfile>,
 }
 
+impl Default for CrossSessionBridge {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CrossSessionBridge {
     pub fn new() -> Self {
         Self {
@@ -496,8 +502,7 @@ impl CrossSessionBridge {
                 return None;
             };
 
-        if let Some(persona) = self.persona_library.get(best_persona) {
-            Some(PersonaInvitation {
+        self.persona_library.get(best_persona).map(|persona| PersonaInvitation {
                 persona_name: persona.name.clone(),
                 expertise_areas: persona.expertise.clone(),
                 relevant_sessions: self.find_persona_sessions(best_persona),
@@ -507,9 +512,6 @@ impl CrossSessionBridge {
                 ),
                 suggested_duration_minutes: duration_minutes,
             })
-        } else {
-            None
-        }
     }
 
     /// Find sessions where a persona was active

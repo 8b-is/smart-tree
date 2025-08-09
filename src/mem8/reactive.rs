@@ -260,6 +260,12 @@ pub struct SensorCoherence {
     sensors: Vec<(f32, f32)>, // (amplitude, phase)
 }
 
+impl Default for SensorCoherence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SensorCoherence {
     pub fn new() -> Self {
         Self {
@@ -304,6 +310,12 @@ pub struct SubliminalProcessor {
     awareness_threshold: f32,
     /// Subliminal amplitude range
     subliminal_range: (f32, f32),
+}
+
+impl Default for SubliminalProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SubliminalProcessor {

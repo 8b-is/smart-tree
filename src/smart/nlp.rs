@@ -123,12 +123,11 @@ impl QueryParser {
         for ch in query.chars() {
             match ch {
                 '"' | '\'' => {
-                    if in_quotes {
-                        if !current_entity.is_empty() {
+                    if in_quotes
+                        && !current_entity.is_empty() {
                             entities.push(current_entity.clone());
                             current_entity.clear();
                         }
-                    }
                     in_quotes = !in_quotes;
                 }
                 _ if in_quotes => {
