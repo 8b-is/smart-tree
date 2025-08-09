@@ -1245,67 +1245,74 @@ async fn show_version_with_updates() -> Result<()> {
 /// Handle viewing diffs from the .st folder
 async fn handle_view_diffs() -> Result<()> {
     use st::smart_edit_diff::DiffStorage;
-    
+
     let project_root = std::env::current_dir()?;
     let storage = DiffStorage::new(&project_root)?;
-    
+
     // List all diffs
     let diffs = storage.list_all_diffs()?;
-    
+
     if diffs.is_empty() {
         println!("📁 No diffs found in .st folder");
         println!("💡 Smart Edit operations automatically store diffs when files are modified");
         return Ok(());
     }
-    
+
     println!("📜 Smart Edit Diff History");
     println!("{}", "=".repeat(60));
-    
+
     // Group diffs by file
-    let mut by_file: std::collections::HashMap<String, Vec<(String, u64)>> = std::collections::HashMap::new();
-    
+    let mut by_file: std::collections::HashMap<String, Vec<(String, u64)>> =
+        std::collections::HashMap::new();
+
     for (file_path, timestamp) in diffs {
-        by_file.entry(file_path.clone()).or_default().push((file_path, timestamp));
+        by_file
+            .entry(file_path.clone())
+            .or_default()
+            .push((file_path, timestamp));
     }
-    
+
     for (file, mut entries) in by_file {
         // Sort by timestamp (newest first)
         entries.sort_by(|a, b| b.1.cmp(&a.1));
-        
+
         println!("\n📄 {}", file);
         for (_, timestamp) in entries.iter().take(5) {
             let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(*timestamp as i64, 0)
                 .unwrap_or_default();
             println!("  • {} ({})", dt.format("%Y-%m-%d %H:%M:%S UTC"), timestamp);
         }
-        
+
         if entries.len() > 5 {
             println!("  ... and {} more", entries.len() - 5);
         }
     }
-    
+
     println!("\n💡 Use 'st --cleanup-diffs N' to keep only the last N diffs per file");
-    
+
     Ok(())
 }
 
 /// Handle cleaning up old diffs
 async fn handle_cleanup_diffs(keep_count: usize) -> Result<()> {
     use st::smart_edit_diff::DiffStorage;
-    
+
     let project_root = std::env::current_dir()?;
     let storage = DiffStorage::new(&project_root)?;
-    
-    println!("🧹 Cleaning up old diffs, keeping last {} per file...", keep_count);
-    
+
+    println!(
+        "🧹 Cleaning up old diffs, keeping last {} per file...",
+        keep_count
+    );
+
     let removed = storage.cleanup_old_diffs(keep_count)?;
-    
+
     if removed == 0 {
         println!("✨ No diffs needed cleanup");
     } else {
         println!("✅ Removed {} old diff files", removed);
     }
-    
+
     Ok(())
 }
 

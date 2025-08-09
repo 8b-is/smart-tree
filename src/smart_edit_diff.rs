@@ -148,7 +148,7 @@ impl DiffStorage {
         diffs.sort_by_key(|entry| {
             let name = entry.file_name().to_string_lossy().to_string();
             name.split('-')
-                .last()
+                .next_back()
                 .and_then(|ts| ts.parse::<u64>().ok())
                 .unwrap_or(0)
         });
@@ -180,21 +180,21 @@ impl DiffStorage {
     /// List all diffs for all files in the .st folder
     pub fn list_all_diffs(&self) -> Result<Vec<(String, u64)>> {
         let mut all_diffs = Vec::new();
-        
+
         if !self.st_folder.exists() {
             return Ok(all_diffs);
         }
-        
+
         for entry in fs::read_dir(&self.st_folder)? {
             let entry = entry?;
             let file_name = entry.file_name();
             let file_name_str = file_name.to_string_lossy();
-            
+
             // Skip the original files (those without timestamps)
             if !file_name_str.contains('-') {
                 continue;
             }
-            
+
             // Extract timestamp from filename
             if let Some(dash_pos) = file_name_str.rfind('-') {
                 if let Ok(timestamp) = file_name_str[dash_pos + 1..].parse::<u64>() {
@@ -203,10 +203,10 @@ impl DiffStorage {
                 }
             }
         }
-        
+
         Ok(all_diffs)
     }
-    
+
     /// List all stored diffs for a file
     pub fn list_diffs(&self, file_path: &Path) -> Result<Vec<DiffInfo>> {
         let relative_path = file_path
@@ -222,7 +222,7 @@ impl DiffStorage {
             let name = entry.file_name().to_string_lossy().to_string();
 
             if name.starts_with(&base_name) && name.contains('-') {
-                if let Some(timestamp_str) = name.split('-').last() {
+                if let Some(timestamp_str) = name.split('-').next_back() {
                     if let Ok(timestamp) = timestamp_str.parse::<u64>() {
                         diffs.push(DiffInfo {
                             path: entry.path(),
@@ -299,7 +299,7 @@ impl DiffInfo {
     pub fn timestamp_str(&self) -> String {
         use chrono::{DateTime, Utc};
         let datetime =
-            DateTime::<Utc>::from_timestamp(self.timestamp as i64, 0).unwrap_or_else(|| Utc::now());
+            DateTime::<Utc>::from_timestamp(self.timestamp as i64, 0).unwrap_or_else(Utc::now);
         datetime.format("%Y-%m-%d %H:%M:%S").to_string()
     }
 }
