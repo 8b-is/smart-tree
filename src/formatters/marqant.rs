@@ -484,7 +484,7 @@ fn main() {
         if tokens.is_empty() {
             // If no tokens, at least verify the static tokens would work on markdown
             let markdown_content = "## Header\n## Header\n## Header\nSome content here.";
-            let (md_tokens, md_tokenized) = MarqantFormatter::tokenize_content(markdown_content);
+            let (md_tokens, _md_tokenized) = MarqantFormatter::tokenize_content(markdown_content);
             assert!(
                 !md_tokens.is_empty() || tokenized != content,
                 "Tokenization should create tokens or modify content"
