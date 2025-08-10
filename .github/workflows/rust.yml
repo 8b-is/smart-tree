@@ -112,7 +112,24 @@ jobs:
       run: cargo build --release --verbose
     
     - name: Run tests 🧪
-      run: cargo test --verbose
+      run: |
+        echo "=== Performance Monitor Start ===" 
+        echo "Time: $(date)"
+        echo "Memory: $(free -h 2>/dev/null || echo 'N/A')"
+        echo "CPU: $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'N/A')"
+        echo "Disk: $(df -h . | tail -1)"
+        echo "================================"
+        
+        # Run tests with timeout and performance tracking
+        # Also show which tests are being executed
+        RUST_TEST_THREADS=1 timeout 300 cargo test --verbose -- --nocapture --test-threads=1 || exit_code=$?
+        
+        echo "=== Performance Monitor End ===" 
+        echo "Time: $(date)"
+        echo "Exit code: ${exit_code:-0}"
+        echo "=============================="
+        
+        exit ${exit_code:-0}
     
     - name: Run doc tests 📚
       run: cargo test --doc --verbose
