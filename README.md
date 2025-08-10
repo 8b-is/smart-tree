@@ -1,12 +1,55 @@
 # 🌲 Smart Tree (`st`) - The Tree Command on Steroids 🚀
 
-[![Version](https://img.shields.io/badge/version-4.5.0-blue.svg)](https://github.com/8b-is/smart-tree/releases)
+[![Version](https://img.shields.io/badge/version-4.6.0-blue.svg)](https://github.com/8b-is/smart-tree/releases)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 > **"Why crawl through directories when you can fly?"** - The Cheet, probably
 
 Smart Tree is a blazingly fast, AI-friendly directory visualization tool that makes the traditional `tree` command look like it's stuck in the stone age. Written in Rust for speed demons and optimized for both human eyeballs and AI tokens.
+
+## 🆕 What's New in v4.0 - v4.6
+
+### v4.6.0 - CI/CD & Stability 🏗️
+- Fixed critical 34GB memory allocation bug (now uses 8MB!)
+- Cross-platform CI improvements with timeout protection
+- Platform-specific filesystem detection fixes
+- Security updates (ring crate vulnerability patched)
+
+### v4.5.0 - Smart Edit Revolution 🎯
+- **AST-aware code editing** with 90-95% token reduction
+- Diff storage system for tracking changes
+- Function-level operations via MCP tools
+- Language-agnostic parsing for broad support
+
+### v4.4.0 - File History Tracking 📊
+- Complete audit trail of AI file operations
+- Hash-based change detection
+- Project-based organization in `~/.mem8/.filehistory/`
+
+### v4.3.0 - Terminal Intelligence 🖥️
+- Smart Tree Terminal Interface (STTI) with predictive assistance
+- Enhanced semantic analysis with wave-based grouping
+- Context-aware command suggestions
+
+### v4.2.0 - MEM|8 Wave Architecture 🌊
+- 973x faster than traditional vector stores
+- Wave interference patterns for memory
+- Git temporal analysis for code evolution
+- Developer persona tracking
+
+### v4.1.0 - Compression Formats 📝
+- Marqant (.mq) format with 70-90% markdown compression
+- Binary .mem8 format with 90-97% size reduction
+- Streaming support and visual diagnostics
+
+### v4.0.0 - Living Documentation 📚
+- Function markdown formatter for 25+ languages
+- Home directory safety limits
+- Permission-based tool gating
+- 8-O mode vision for performance visualization
+
+[See full CHANGELOG](CHANGELOG.md) for detailed release notes.
 
 ## 🎸 What Makes Smart Tree Rock?
 
