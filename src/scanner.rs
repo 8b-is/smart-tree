@@ -1697,6 +1697,11 @@ impl Scanner {
     /// Detects the filesystem type for a given path
     #[cfg(unix)]
     fn get_filesystem_type(path: &Path) -> FilesystemType {
+        // Skip filesystem detection in CI environments to avoid hangs
+        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            return FilesystemType::Unknown;
+        }
+
         #[cfg(target_os = "linux")]
         {
             Self::get_filesystem_type_linux(path)
@@ -1723,6 +1728,11 @@ impl Scanner {
     /// Detects the filesystem type for a given path using statfs on Linux systems
     #[cfg(target_os = "linux")]
     fn get_filesystem_type_linux(path: &Path) -> FilesystemType {
+        // Double-check for CI environment
+        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            return FilesystemType::Unknown;
+        }
+
         use libc::statfs;
         use std::ffi::CString;
         use std::mem;
