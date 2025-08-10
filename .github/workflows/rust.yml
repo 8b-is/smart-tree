@@ -112,7 +112,7 @@ jobs:
       run: cargo build --release --verbose
     
     - name: Run tests 🧪
-      run: cargo test --verbose -- --test-threads=1
+      run: cargo test --verbose
     
     - name: Run doc tests 📚
       run: cargo test --doc --verbose

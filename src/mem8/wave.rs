@@ -151,7 +151,7 @@ impl WaveGrid {
         let x = (x as usize % self.width) as u8;
         let y = (y as usize % self.height) as u8;
         let z = (z as usize % self.depth) as u16;
-        
+
         let idx = self.get_index(x, y, z);
 
         // Apply noise floor filtering
@@ -166,7 +166,7 @@ impl WaveGrid {
         let x = (x as usize % self.width) as u8;
         let y = (y as usize % self.height) as u8;
         let z = (z as usize % self.depth) as u16;
-        
+
         let idx = self.get_index(x, y, z);
         self.grid[idx].as_ref()
     }
