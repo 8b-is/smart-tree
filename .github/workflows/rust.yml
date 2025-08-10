@@ -112,6 +112,7 @@ jobs:
       run: cargo build --release --verbose
     
     - name: Run tests 🧪
+      shell: bash
       run: |
         echo "=== Performance Monitor Start ===" 
         echo "Time: $(date)"
