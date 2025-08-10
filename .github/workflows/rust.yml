@@ -122,7 +122,16 @@ jobs:
         
         # Run tests with timeout and performance tracking
         # Also show which tests are being executed
-        RUST_TEST_THREADS=1 timeout 300 cargo test --verbose -- --nocapture --test-threads=1 || exit_code=$?
+        # macOS doesn't have timeout command, use gtimeout if available
+        if command -v timeout >/dev/null 2>&1; then
+          TIMEOUT_CMD="timeout 300"
+        elif command -v gtimeout >/dev/null 2>&1; then
+          TIMEOUT_CMD="gtimeout 300"
+        else
+          TIMEOUT_CMD=""
+        fi
+        
+        RUST_TEST_THREADS=1 $TIMEOUT_CMD cargo test --verbose -- --nocapture --test-threads=1 || exit_code=$?
         
         echo "=== Performance Monitor End ===" 
         echo "Time: $(date)"
