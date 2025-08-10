@@ -524,10 +524,7 @@ impl TemporalWaveGrid {
         let wave_idx = self.waves.len();
         self.waves.push(wave);
 
-        self.time_slots
-            .entry(time_slot)
-            .or_default()
-            .push(wave_idx);
+        self.time_slots.entry(time_slot).or_default().push(wave_idx);
     }
 
     /// Get interference pattern at a specific time

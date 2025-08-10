@@ -93,7 +93,11 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         _ => return Err(anyhow::anyhow!("Unknown analyze mode: {}", mode)),
     };
 
-    super::tools::handle_tools_call(json!({ "name": tool_name, "arguments": transformed_params }), ctx).await
+    super::tools::handle_tools_call(
+        json!({ "name": tool_name, "arguments": transformed_params }),
+        ctx,
+    )
+    .await
 }
 
 /// Consolidated search tool

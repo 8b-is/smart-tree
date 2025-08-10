@@ -317,11 +317,11 @@ async fn handle_consolidated_tools_list(
 ) -> Result<Value> {
     // Use the enhanced tools with tips and examples
     let tools = tools_consolidated_enhanced::get_enhanced_consolidated_tools();
-    
+
     // Also include a welcome message for first-time AI assistants
     let welcome = tools_consolidated_enhanced::get_welcome_message();
-    
-    Ok(json!({ 
+
+    Ok(json!({
         "tools": tools,
         "_welcome": welcome
     }))

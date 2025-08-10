@@ -171,7 +171,7 @@ impl PartnershipAnalyzer {
         }
 
         let disruptions = clarifications + switches;
-        
+
         1.0 - (disruptions as f32 / turns as f32).min(1.0)
     }
 

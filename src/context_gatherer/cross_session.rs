@@ -502,7 +502,9 @@ impl CrossSessionBridge {
                 return None;
             };
 
-        self.persona_library.get(best_persona).map(|persona| PersonaInvitation {
+        self.persona_library
+            .get(best_persona)
+            .map(|persona| PersonaInvitation {
                 persona_name: persona.name.clone(),
                 expertise_areas: persona.expertise.clone(),
                 relevant_sessions: self.find_persona_sessions(best_persona),

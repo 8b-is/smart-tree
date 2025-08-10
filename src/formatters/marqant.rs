@@ -223,12 +223,11 @@ impl MarqantFormatter {
                 if count >= 2 {
                     // Calculate savings: (original_size * count) - (token_size * count + dictionary_entry)
                     // Token is now 1 byte instead of 3 bytes (T##)
-                    let savings =
-                        (phrase.len() * count).saturating_sub(count + phrase.len() + 3);
+                    let savings = (phrase.len() * count).saturating_sub(count + phrase.len() + 3);
                     if savings > 0 {
                         phrase_heap.push(PhraseFreq {
                             phrase: phrase.clone(),
-                            _count: count,  // Trisha says: "Track it even if we don't use it - good for audits!" 💅
+                            _count: count, // Trisha says: "Track it even if we don't use it - good for audits!" 💅
                             savings,
                         });
                     }

@@ -64,7 +64,7 @@ EXAMPLES:
                 "properties": {
                     "type": {
                         "type": "string",
-                        "enum": ["files", "code", "config", "documentation", "tests", "build", 
+                        "enum": ["files", "code", "config", "documentation", "tests", "build",
                                  "large", "recent", "timespan", "duplicates", "empty_dirs"],
                         "description": "What to find (code/tests/config/docs/etc)"
                     },
@@ -164,7 +164,7 @@ EXAMPLES:
                 "properties": {
                     "mode": {
                         "type": "string",
-                        "enum": ["directory", "workspace", "statistics", "git_status", 
+                        "enum": ["directory", "workspace", "statistics", "git_status",
                                  "digest", "semantic", "size_breakdown", "ai_tools"],
                         "description": "Analysis type"
                     },
@@ -282,7 +282,7 @@ EXAMPLES:
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["gather_project", "collaboration_rapport", "engagement_heatmap", 
+                        "enum": ["gather_project", "collaboration_rapport", "engagement_heatmap",
                                  "cross_domain_patterns", "suggest_insights"],
                         "description": "Context operation"
                     },
@@ -448,7 +448,7 @@ EXAMPLE:
                 },
                 "required": ["path"]
             }
-        })
+        }),
     ]
 }
 

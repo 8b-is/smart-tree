@@ -89,10 +89,10 @@ mod mcp_tests {
         let content = response["result"]["content"][0]["text"]
             .as_str()
             .expect("No text content");
-        
+
         // The response might be double-wrapped due to consolidated tools
         let parsed: Value = serde_json::from_str(content).expect("Failed to parse content");
-        
+
         // Check if it's double-wrapped (has a "content" field)
         let server_info = if parsed.get("content").is_some() {
             // It's double-wrapped, parse the inner content
@@ -131,7 +131,10 @@ mod mcp_tests {
         // With consolidated tools, find_in_timespan is now part of the 'find' tool
         let has_find_tool = tools.iter().any(|tool| tool["name"] == "find");
 
-        assert!(has_find_tool, "find tool not found (includes timespan functionality)");
+        assert!(
+            has_find_tool,
+            "find tool not found (includes timespan functionality)"
+        );
     }
 
     #[test]
@@ -170,15 +173,16 @@ mod mcp_tests {
         let test_content_raw = test_response["result"]["content"][0]["text"]
             .as_str()
             .expect("No test content");
-        
+
         // Handle potential double-wrapping
-        let test_parsed: Value = serde_json::from_str(test_content_raw).expect("Failed to parse test content");
+        let test_parsed: Value =
+            serde_json::from_str(test_content_raw).expect("Failed to parse test content");
         let test_content = if test_parsed.get("content").is_some() {
             test_parsed["content"][0]["text"].as_str().unwrap()
         } else {
             test_content_raw
         };
-        
+
         println!("=== Test without filters ===");
         println!("{}", test_content);
 
