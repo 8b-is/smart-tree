@@ -502,9 +502,9 @@ pub struct EmotionalState {
 
 struct DivergenceThresholds {
     #[allow(dead_code)]
-    normal_max: f32,    // 0-50
+    normal_max: f32, // 0-50
     #[allow(dead_code)]
-    unusual_max: f32,   // 51-150
+    unusual_max: f32, // 51-150
     #[allow(dead_code)]
     high_risk_min: f32, // 151-255
 }

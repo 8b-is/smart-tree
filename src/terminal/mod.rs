@@ -250,8 +250,8 @@ impl SmartTreeTerminal {
 
     /// Draw header
     fn draw_header(f: &mut Frame, area: Rect, _state: &TerminalState) {
-        let show_banner = std::env::var("ST_BANNER")
-            .is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
+        let show_banner =
+            std::env::var("ST_BANNER").is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
 
         let mut lines: Vec<Line> = Vec::new();
         if show_banner {
@@ -259,7 +259,9 @@ impl SmartTreeTerminal {
                 Span::styled("⚡ ", Style::default().fg(Color::Yellow)),
                 Span::styled(
                     "SMART TREE TERMINAL",
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled("  🌊  ", Style::default().fg(Color::Cyan)),
                 Span::styled("rocking your repo", Style::default().fg(Color::Magenta)),
@@ -280,8 +282,8 @@ impl SmartTreeTerminal {
         ]));
 
         let header = Paragraph::new(Text::from(lines))
-        .block(Block::default().borders(Borders::ALL))
-        .alignment(ratatui::layout::Alignment::Center);
+            .block(Block::default().borders(Borders::ALL))
+            .alignment(ratatui::layout::Alignment::Center);
 
         f.render_widget(header, area);
     }
@@ -304,12 +306,12 @@ impl SmartTreeTerminal {
             ));
         }
 
-        if std::env::var("HOT_TUB")
-            .is_ok_and(|v| v == "1" || v.to_lowercase() == "true")
-        {
+        if std::env::var("HOT_TUB").is_ok_and(|v| v == "1" || v.to_lowercase() == "true") {
             context_items.push(Span::styled(
                 "| 🛁 Hot Tub Mode ",
-                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
             ));
         }
 
@@ -477,12 +479,10 @@ impl SmartTreeTerminal {
     async fn apply_suggestion(&mut self, action: SuggestionAction) -> Result<()> {
         match action {
             SuggestionAction::InsertText(text) => {
-            {
                 let mut state = self.state.lock().unwrap();
                 let cursor_pos = state.cursor_pos;
                 state.input.insert_str(cursor_pos, &text);
                 state.cursor_pos += text.len();
-            }
             }
             SuggestionAction::RunCommand(cmd) => {
                 self.process_command(&cmd).await?;

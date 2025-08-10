@@ -29,7 +29,7 @@ pub enum ToolLane {
     #[allow(dead_code)]
     Analyze, // 🧪 Deep analysis and search
     #[allow(dead_code)]
-    Act,     // ⚡ Modifications and writes
+    Act, // ⚡ Modifications and writes
 }
 
 impl ToolLane {
@@ -1427,7 +1427,10 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let omni_quote = {
         use rand::seq::SliceRandom;
         let mut rng = rand::thread_rng();
-        omni_quotes.choose(&mut rng).copied().unwrap_or(omni_quotes[0])
+        omni_quotes
+            .choose(&mut rng)
+            .copied()
+            .unwrap_or(omni_quotes[0])
     };
 
     let info = json!({

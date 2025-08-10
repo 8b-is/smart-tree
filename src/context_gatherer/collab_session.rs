@@ -320,7 +320,9 @@ impl CollaborativeSessionTracker {
             frustration_markers: self.detect_frustration(session),
             flow_depth: match &session.flow_state {
                 FlowState::Flow { depth, .. } => *depth,
-                FlowState::Whirlpool { confusion_score, .. } => 1.0 - confusion_score,
+                FlowState::Whirlpool {
+                    confusion_score, ..
+                } => 1.0 - confusion_score,
                 _ => 0.5,
             },
         }
