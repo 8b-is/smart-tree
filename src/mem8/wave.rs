@@ -123,9 +123,9 @@ impl Default for WaveGrid {
 impl WaveGrid {
     /// Create a new wave grid with standard MEM8 dimensions
     pub fn new() -> Self {
-        const WIDTH: usize = 256;
-        const HEIGHT: usize = 256;
-        const DEPTH: usize = 65536;
+        const WIDTH: usize = 64;
+        const HEIGHT: usize = 64;
+        const DEPTH: usize = 256;
 
         Self {
             width: WIDTH,
@@ -147,6 +147,11 @@ impl WaveGrid {
 
     /// Store a memory wave at specific coordinates
     pub fn store(&mut self, x: u8, y: u8, z: u16, wave: MemoryWave) {
+        // Clamp coordinates to grid dimensions
+        let x = (x as usize % self.width) as u8;
+        let y = (y as usize % self.height) as u8;
+        let z = (z as usize % self.depth) as u16;
+        
         let idx = self.get_index(x, y, z);
 
         // Apply noise floor filtering
@@ -157,6 +162,11 @@ impl WaveGrid {
 
     /// Retrieve a memory wave at specific coordinates
     pub fn get(&self, x: u8, y: u8, z: u16) -> Option<&Arc<MemoryWave>> {
+        // Clamp coordinates to grid dimensions
+        let x = (x as usize % self.width) as u8;
+        let y = (y as usize % self.height) as u8;
+        let z = (z as usize % self.depth) as u16;
+        
         let idx = self.get_index(x, y, z);
         self.grid[idx].as_ref()
     }
@@ -270,9 +280,9 @@ mod tests {
         let mut grid = WaveGrid::new();
         let wave = MemoryWave::new(440.0, 0.5);
 
-        grid.store(128, 128, 32768, wave);
+        grid.store(32, 32, 128, wave);
 
-        assert!(grid.get(128, 128, 32768).is_some());
+        assert!(grid.get(32, 32, 128).is_some());
         assert!(grid.get(0, 0, 0).is_none());
     }
 
