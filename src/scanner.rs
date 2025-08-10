@@ -1695,7 +1695,7 @@ impl Scanner {
     /// ## `get_filesystem_type`
     ///
     /// Detects the filesystem type for a given path
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     fn get_filesystem_type(path: &Path) -> FilesystemType {
         #[cfg(target_os = "linux")]
         {
