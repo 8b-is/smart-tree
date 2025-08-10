@@ -10,45 +10,6 @@ mod mcp_tests {
     use std::time::Duration;
 
     fn run_mcp_command(request: Value) -> Result<Value, String> {
-        // Skip MCP tests in CI to avoid hangs
-        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-            // Return appropriate mock response based on the method
-            if request["method"] == "tools/list" {
-                return Ok(json!({
-                    "jsonrpc": "2.0",
-                    "result": {
-                        "tools": [
-                            {"name": "find", "description": "Find files"},
-                            {"name": "server_info", "description": "Server info"}
-                        ]
-                    }
-                }));
-            } else if request["method"] == "tools/call" {
-                // Mock tools/call response for server_info
-                return Ok(json!({
-                    "jsonrpc": "2.0",
-                    "id": request["id"],
-                    "result": {
-                        "content": [{
-                            "type": "text",
-                            "text": json!({
-                                "server": {
-                                    "name": "Smart Tree",
-                                    "version": "4.5.0",
-                                    "current_time": {
-                                        "local": "2025-08-10T12:00:00",
-                                        "utc": "2025-08-10T12:00:00Z",
-                                        "date_format_hint": "ISO 8601"
-                                    }
-                                }
-                            }).to_string()
-                        }]
-                    }
-                }));
-            }
-            return Ok(json!({"jsonrpc": "2.0", "result": "skipped_in_ci"}));
-        }
-
         // Try release first, fall back to debug (for GitHub Actions)
         let binary_path = if std::path::Path::new("./target/release/st").exists() {
             "./target/release/st"
@@ -108,6 +69,11 @@ mod mcp_tests {
 
     #[test]
     fn test_server_info_has_current_time() {
+        // Skip test in CI
+        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            return;
+        }
+
         let request = json!({
             "jsonrpc": "2.0",
             "method": "tools/call",
@@ -153,6 +119,11 @@ mod mcp_tests {
 
     #[test]
     fn test_find_in_timespan_tool_exists() {
+        // Skip test in CI
+        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            return;
+        }
+
         let request = json!({
             "jsonrpc": "2.0",
             "method": "tools/list",
