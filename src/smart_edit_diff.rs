@@ -1,5 +1,5 @@
 // smart_edit_diff.rs - Local diff storage for Smart Edit operations
-// Stores diffs in .st folder with timestamps for audit trail
+// Stores diffs in .st_bumpers folder with timestamps for audit trail
 
 use anyhow::{Context, Result};
 use similar::TextDiff;
@@ -17,14 +17,14 @@ impl DiffStorage {
     /// Initialize diff storage for a project
     pub fn new(project_root: impl AsRef<Path>) -> Result<Self> {
         let project_root = project_root.as_ref().to_path_buf();
-        let st_folder = project_root.join(".st");
+        let st_folder = project_root.join(".st_bumpers");
 
-        // Create .st folder if it doesn't exist
+        // Create .st_bumpers folder if it doesn't exist
         if !st_folder.exists() {
-            fs::create_dir(&st_folder).context("Failed to create .st folder")?;
+            fs::create_dir(&st_folder).context("Failed to create .st_bumpers folder")?;
         }
 
-        // Ensure .st is in .gitignore
+        // Ensure .st_bumpers is in .gitignore
         Self::ensure_gitignore(&project_root)?;
 
         Ok(DiffStorage {
@@ -33,22 +33,22 @@ impl DiffStorage {
         })
     }
 
-    /// Ensure .st/ is in .gitignore
+    /// Ensure .st_bumpers/ is in .gitignore
     fn ensure_gitignore(project_root: &Path) -> Result<()> {
         let gitignore_path = project_root.join(".gitignore");
 
-        // Check if .gitignore exists and contains .st/
+        // Check if .gitignore exists and contains .st_bumpers/
         let needs_update = if gitignore_path.exists() {
             let content = fs::read_to_string(&gitignore_path)?;
             !content
                 .lines()
-                .any(|line| line.trim() == ".st/" || line.trim() == ".st")
+                .any(|line| line.trim() == ".st_bumpers/" || line.trim() == ".st_bumpers")
         } else {
             true
         };
 
         if needs_update {
-            // Append .st/ to .gitignore
+            // Append .st_bumpers/ to .gitignore
             let mut file = fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -62,7 +62,7 @@ impl DiffStorage {
                 }
             }
 
-            writeln!(file, ".st/")?;
+            writeln!(file, ".st_bumpers/")?;
         }
 
         Ok(())
@@ -177,7 +177,7 @@ impl DiffStorage {
         Ok(None)
     }
 
-    /// List all diffs for all files in the .st folder
+    /// List all diffs for all files in the .st_bumpers folder
     pub fn list_all_diffs(&self) -> Result<Vec<(String, u64)>> {
         let mut all_diffs = Vec::new();
 
@@ -314,12 +314,12 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let storage = DiffStorage::new(temp_dir.path()).unwrap();
 
-        // Check .st folder was created
-        assert!(temp_dir.path().join(".st").exists());
+        // Check .st_bumpers folder was created
+        assert!(temp_dir.path().join(".st_bumpers").exists());
 
         // Check .gitignore was updated
         let gitignore = fs::read_to_string(temp_dir.path().join(".gitignore")).unwrap();
-        assert!(gitignore.contains(".st/"));
+        assert!(gitignore.contains(".st_bumpers/"));
     }
 
     #[test]

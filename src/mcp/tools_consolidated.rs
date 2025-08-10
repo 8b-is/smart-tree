@@ -70,19 +70,30 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
     let params = params.context("Parameters required")?;
     let mode = params["mode"].as_str().context("mode parameter required")?;
 
-    let tool_name = match mode {
-        "directory" => "analyze_directory",
-        "workspace" => "analyze_workspace",
-        "statistics" => "get_statistics",
-        "git_status" => "get_git_status",
-        "digest" => "get_digest",
-        "semantic" => "semantic_analysis",
-        "size_breakdown" => "directory_size_breakdown",
-        "ai_tools" => "analyze_ai_tool_usage",
+    // Transform parameters based on the tool
+    let (tool_name, transformed_params) = match mode {
+        "directory" => {
+            // analyze_directory expects 'mode' not 'format', but we rename 'format' to 'mode'
+            let mut p = params.clone();
+            if let Some(format) = p.get("format") {
+                p["mode"] = format.clone();
+                p.as_object_mut().unwrap().remove("format");
+            }
+            // Remove the consolidated 'mode' field as analyze_directory doesn't expect it
+            p.as_object_mut().unwrap().remove("mode");
+            ("analyze_directory", p)
+        }
+        "workspace" => ("analyze_workspace", params.clone()),
+        "statistics" => ("get_statistics", params.clone()),
+        "git_status" => ("get_git_status", params.clone()),
+        "digest" => ("get_digest", params.clone()),
+        "semantic" => ("semantic_analysis", params.clone()),
+        "size_breakdown" => ("directory_size_breakdown", params.clone()),
+        "ai_tools" => ("analyze_ai_tool_usage", params.clone()),
         _ => return Err(anyhow::anyhow!("Unknown analyze mode: {}", mode)),
     };
 
-    super::tools::handle_tools_call(json!({ "name": tool_name, "arguments": params }), ctx).await
+    super::tools::handle_tools_call(json!({ "name": tool_name, "arguments": transformed_params }), ctx).await
 }
 
 /// Consolidated search tool

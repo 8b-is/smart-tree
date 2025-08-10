@@ -89,8 +89,21 @@ mod mcp_tests {
         let content = response["result"]["content"][0]["text"]
             .as_str()
             .expect("No text content");
-        let server_info: Value =
-            serde_json::from_str(content).expect("Failed to parse server info");
+        
+        // The response might be double-wrapped due to consolidated tools
+        let parsed: Value = serde_json::from_str(content).expect("Failed to parse content");
+        
+        // Check if it's double-wrapped (has a "content" field)
+        let server_info = if parsed.get("content").is_some() {
+            // It's double-wrapped, parse the inner content
+            let inner_content = parsed["content"][0]["text"]
+                .as_str()
+                .expect("No inner text content");
+            serde_json::from_str::<Value>(inner_content).expect("Failed to parse inner server info")
+        } else {
+            // Not double-wrapped, use as-is
+            parsed
+        };
 
         // Verify current_time exists
         assert!(server_info["server"]["current_time"].is_object());
@@ -110,14 +123,15 @@ mod mcp_tests {
 
         let response = run_mcp_command(request).expect("Failed to get response");
 
-        // Check for find_in_timespan in tools list
+        // Check for find tool which includes timespan functionality
         let tools = response["result"]["tools"]
             .as_array()
             .expect("No tools array");
 
-        let has_find_in_timespan = tools.iter().any(|tool| tool["name"] == "find_in_timespan");
+        // With consolidated tools, find_in_timespan is now part of the 'find' tool
+        let has_find_tool = tools.iter().any(|tool| tool["name"] == "find");
 
-        assert!(has_find_in_timespan, "find_in_timespan tool not found");
+        assert!(has_find_tool, "find tool not found (includes timespan functionality)");
     }
 
     #[test]
@@ -135,13 +149,15 @@ mod mcp_tests {
         fs::write(test_path.join("file1.txt"), "test").unwrap();
         fs::write(test_path.join("file2.txt"), "test").unwrap();
 
+        // With consolidated tools, find_files is now 'find' with type 'files'
         // First test without any filters to ensure files are found
         let test_request = json!({
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "find_files",
+                "name": "find",
                 "arguments": {
+                    "type": "files",
                     "path": test_path.to_str().unwrap(),
                     "pattern": ".*"
                 }
@@ -150,9 +166,18 @@ mod mcp_tests {
         });
 
         let test_response = run_mcp_command(test_request).expect("Failed to get test response");
-        let test_content = test_response["result"]["content"][0]["text"]
+        let test_content_raw = test_response["result"]["content"][0]["text"]
             .as_str()
             .expect("No test content");
+        
+        // Handle potential double-wrapping
+        let test_parsed: Value = serde_json::from_str(test_content_raw).expect("Failed to parse test content");
+        let test_content = if test_parsed.get("content").is_some() {
+            test_parsed["content"][0]["text"].as_str().unwrap()
+        } else {
+            test_content_raw
+        };
+        
         println!("=== Test without filters ===");
         println!("{}", test_content);
 
@@ -161,8 +186,9 @@ mod mcp_tests {
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "find_files",
+                "name": "find",
                 "arguments": {
+                    "type": "files",
                     "path": test_path.to_str().unwrap(),
                     "pattern": ".*",
                     "entry_type": "d"
@@ -176,9 +202,17 @@ mod mcp_tests {
             Err(e) => panic!("Failed to get response: {}", e),
         };
 
-        let content = response["result"]["content"][0]["text"]
+        let content_raw = response["result"]["content"][0]["text"]
             .as_str()
             .expect("No content");
+
+        // Handle potential double-wrapping
+        let parsed: Value = serde_json::from_str(content_raw).expect("Failed to parse content");
+        let content = if parsed.get("content").is_some() {
+            parsed["content"][0]["text"].as_str().unwrap()
+        } else {
+            content_raw
+        };
 
         println!("=== Entry Type Test Content ===");
         println!("{}", content);
@@ -255,25 +289,34 @@ mod mcp_tests {
         let hidden_works = test_path.join(".hidden/subdir/deep.txt").exists();
 
         // Test without show_hidden
+        // With consolidated tools, analyze_directory is now 'analyze'
         let request = json!({
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "analyze_directory",
+                "name": "analyze",
                 "arguments": {
+                    "mode": "directory",
                     "path": test_path.to_str().unwrap(),
-                    "mode": "ai",
-                    "show_hidden": false,
-                    "compress": false
+                    "format": "ai",
+                    "show_hidden": false
                 }
             },
             "id": 4
         });
 
         let response = run_mcp_command(request).expect("Failed to get response");
-        let content = response["result"]["content"][0]["text"]
+        let content_raw = response["result"]["content"][0]["text"]
             .as_str()
             .expect("No content");
+
+        // Handle potential double-wrapping
+        let parsed: Value = serde_json::from_str(content_raw).expect("Failed to parse content");
+        let content = if parsed.get("content").is_some() {
+            parsed["content"][0]["text"].as_str().unwrap()
+        } else {
+            content_raw
+        };
 
         println!("=== Hidden Directory Test Content ===");
         println!("{}", content);
@@ -338,13 +381,14 @@ mod mcp_tests {
             .format("%Y-%m-%d")
             .to_string();
 
-        // Test find_in_timespan with YYYY-MM-DD format
+        // Test find with timespan type (consolidated tools)
         let request = json!({
             "jsonrpc": "2.0",
             "method": "tools/call",
             "params": {
-                "name": "find_in_timespan",
+                "name": "find",
                 "arguments": {
+                    "type": "timespan",
                     "path": test_path.to_str().unwrap(),
                     "start_date": yesterday,
                     "end_date": today
@@ -387,8 +431,9 @@ mod mcp_tests {
                 "jsonrpc": "2.0",
                 "method": "tools/call",
                 "params": {
-                    "name": "find_in_timespan",
+                    "name": "find",
                     "arguments": {
+                        "type": "timespan",
                         "path": alt_path.to_str().unwrap(),
                         "start_date": yesterday,
                         "end_date": today

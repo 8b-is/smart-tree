@@ -334,14 +334,8 @@ async fn handle_consolidated_tools_call(params: Value, ctx: Arc<McpContext>) -> 
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
     let args = params.get("arguments").cloned();
 
-    let result = tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await?;
-
-    Ok(json!({
-        "content": [{
-            "type": "text",
-            "text": serde_json::to_string_pretty(&result)?
-        }]
-    }))
+    // The consolidated tools already return properly formatted responses
+    tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await
 }
 
 /// Check if a path is allowed based on security configuration
@@ -371,8 +365,8 @@ pub fn is_path_allowed(path: &Path, config: &McpConfig) -> bool {
 /// Load MCP configuration from file or use defaults
 pub fn load_config() -> Result<McpConfig> {
     let config_path = dirs::home_dir()
-        .map(|d| d.join(".st").join("mcp-config.toml"))
-        .unwrap_or_else(|| PathBuf::from(".st/mcp-config.toml"));
+        .map(|d| d.join(".st_bumpers").join("mcp-config.toml"))
+        .unwrap_or_else(|| PathBuf::from(".st_bumpers/mcp-config.toml"));
 
     if config_path.exists() {
         let config_str =
