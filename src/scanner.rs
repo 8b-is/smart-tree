@@ -1707,7 +1707,7 @@ impl Scanner {
         type FsType = i64;
         #[cfg(not(target_os = "linux"))]
         type FsType = u32;
-        
+
         const EXT4_SUPER_MAGIC: FsType = 0xef53;
         const XFS_SUPER_MAGIC: FsType = 0x58465342;
         const BTRFS_SUPER_MAGIC: FsType = 0x9123683e;
