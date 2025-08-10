@@ -2,12 +2,16 @@
 
 ## 🌲 Welcome to Smart Tree v4.6 🚀
 
+
+
 > **"Why crawl through directories when you can fly?"** - The Cheet, probably
 
 Need it now? 
 ```bash
 curl -fsSL https://f.8t.is/install | sh
 ```
+
+![AYE](./dxt/ST-AYE.png)
 
 ## 🔥 What's Hot in v4.0 - v4.6
 
