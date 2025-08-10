@@ -1702,21 +1702,27 @@ impl Scanner {
         use std::mem;
 
         // Filesystem magic numbers from statfs.h
-        const EXT4_SUPER_MAGIC: i64 = 0xef53;
-        const XFS_SUPER_MAGIC: i64 = 0x58465342;
-        const BTRFS_SUPER_MAGIC: i64 = 0x9123683e;
-        const ZFS_SUPER_MAGIC: i64 = 0x2fc12fc1;
-        const NTFS_SB_MAGIC: i64 = 0x5346544e;
-        const MSDOS_SUPER_MAGIC: i64 = 0x4d44; // FAT
-        const EXFAT_SUPER_MAGIC: i64 = 0x2011bab0;
-        const APFS_SUPER_MAGIC: i64 = 0x42535041; // 'APFS'
-        const HFS_SUPER_MAGIC: i64 = 0x482b; // HFS+
-        const NFS_SUPER_MAGIC: i64 = 0x6969;
-        const SMB_SUPER_MAGIC: i64 = 0x517b;
-        const TMPFS_MAGIC: i64 = 0x01021994;
-        const PROC_SUPER_MAGIC: i64 = 0x9fa0;
-        const SYSFS_MAGIC: i64 = 0x62656572;
-        const DEVFS_SUPER_MAGIC: i64 = 0x1373;
+        // Use platform-specific type: i64 on Linux, u32 on macOS
+        #[cfg(target_os = "linux")]
+        type FsType = i64;
+        #[cfg(not(target_os = "linux"))]
+        type FsType = u32;
+        
+        const EXT4_SUPER_MAGIC: FsType = 0xef53;
+        const XFS_SUPER_MAGIC: FsType = 0x58465342;
+        const BTRFS_SUPER_MAGIC: FsType = 0x9123683e;
+        const ZFS_SUPER_MAGIC: FsType = 0x2fc12fc1;
+        const NTFS_SB_MAGIC: FsType = 0x5346544e;
+        const MSDOS_SUPER_MAGIC: FsType = 0x4d44; // FAT
+        const EXFAT_SUPER_MAGIC: FsType = 0x2011bab0;
+        const APFS_SUPER_MAGIC: FsType = 0x42535041; // 'APFS'
+        const HFS_SUPER_MAGIC: FsType = 0x482b; // HFS+
+        const NFS_SUPER_MAGIC: FsType = 0x6969;
+        const SMB_SUPER_MAGIC: FsType = 0x517b;
+        const TMPFS_MAGIC: FsType = 0x01021994;
+        const PROC_SUPER_MAGIC: FsType = 0x9fa0;
+        const SYSFS_MAGIC: FsType = 0x62656572;
+        const DEVFS_SUPER_MAGIC: FsType = 0x1373;
 
         let path_cstr = match CString::new(path.to_string_lossy().as_bytes()) {
             Ok(s) => s,
@@ -1745,7 +1751,7 @@ impl Scanner {
             return FilesystemType::Mem8;
         }
 
-        match stat_buf.f_type {
+        match stat_buf.f_type as FsType {
             EXT4_SUPER_MAGIC => FilesystemType::Ext4, // TODO: Distinguish ext2/3/4
             XFS_SUPER_MAGIC => FilesystemType::Xfs,
             BTRFS_SUPER_MAGIC => FilesystemType::Btrfs,
