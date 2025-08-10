@@ -1745,7 +1745,7 @@ impl Scanner {
             return FilesystemType::Mem8;
         }
 
-        match stat_buf.f_type as i64 {
+        match stat_buf.f_type {
             EXT4_SUPER_MAGIC => FilesystemType::Ext4, // TODO: Distinguish ext2/3/4
             XFS_SUPER_MAGIC => FilesystemType::Xfs,
             BTRFS_SUPER_MAGIC => FilesystemType::Btrfs,
