@@ -60,13 +60,15 @@ fn test_mq_aggregate_basic() {
     assert!(aggregate_content.contains("::manifest::"));
     assert!(aggregate_content.contains("README.md:"));
     assert!(aggregate_content.contains("INSTALL.md:"));
-    assert!(aggregate_content.contains("docs/API.md:"));
+    // Handle both Unix and Windows path separators
+    assert!(aggregate_content.contains("docs/API.md:") || aggregate_content.contains("docs\\API.md:"));
     assert!(aggregate_content.contains("::end-manifest::"));
 
     // Should have file markers
     assert!(aggregate_content.contains("::file:README.md::"));
     assert!(aggregate_content.contains("::file:INSTALL.md::"));
-    assert!(aggregate_content.contains("::file:docs/API.md::"));
+    // Handle both Unix and Windows path separators
+    assert!(aggregate_content.contains("::file:docs/API.md::") || aggregate_content.contains("::file:docs\\API.md::"));
 
     // When content is small, might not have tokens, but should have separator
     assert!(aggregate_content.contains("---"));
