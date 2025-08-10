@@ -1694,19 +1694,41 @@ impl Scanner {
 
     /// ## `get_filesystem_type`
     ///
-    /// Detects the filesystem type for a given path using statfs on Unix systems
-    #[cfg(unix)]
+    /// Detects the filesystem type for a given path
+    #[cfg(not(windows))]
     fn get_filesystem_type(path: &Path) -> FilesystemType {
+        #[cfg(target_os = "linux")]
+        {
+            Self::get_filesystem_type_linux(path)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            // On non-Linux Unix systems, we can't reliably detect filesystem type
+            // Just check for special paths
+            if let Some(path_str) = path.to_str() {
+                if path_str.starts_with("/proc") {
+                    return FilesystemType::Procfs;
+                } else if path_str.starts_with("/sys") {
+                    return FilesystemType::Sysfs;
+                } else if path_str.starts_with("/dev") {
+                    return FilesystemType::Devfs;
+                }
+            }
+            FilesystemType::Unknown
+        }
+    }
+
+    /// ## `get_filesystem_type_linux`
+    ///
+    /// Detects the filesystem type for a given path using statfs on Linux systems
+    #[cfg(target_os = "linux")]
+    fn get_filesystem_type_linux(path: &Path) -> FilesystemType {
         use libc::statfs;
         use std::ffi::CString;
         use std::mem;
 
         // Filesystem magic numbers from statfs.h
-        // Use platform-specific type: i64 on Linux, u32 on macOS
-        #[cfg(target_os = "linux")]
         type FsType = i64;
-        #[cfg(not(target_os = "linux"))]
-        type FsType = u32;
 
         const EXT4_SUPER_MAGIC: FsType = 0xef53;
         const XFS_SUPER_MAGIC: FsType = 0x58465342;
@@ -1751,7 +1773,7 @@ impl Scanner {
             return FilesystemType::Mem8;
         }
 
-        match stat_buf.f_type as FsType {
+        match stat_buf.f_type {
             EXT4_SUPER_MAGIC => FilesystemType::Ext4, // TODO: Distinguish ext2/3/4
             XFS_SUPER_MAGIC => FilesystemType::Xfs,
             BTRFS_SUPER_MAGIC => FilesystemType::Btrfs,
