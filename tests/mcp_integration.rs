@@ -32,9 +32,15 @@ mod mcp_tests {
                         "content": [{
                             "type": "text",
                             "text": json!({
-                                "name": "Smart Tree",
-                                "version": "4.5.0",
-                                "current_time": "2025-08-10T12:00:00Z"
+                                "server": {
+                                    "name": "Smart Tree",
+                                    "version": "4.5.0",
+                                    "current_time": {
+                                        "local": "2025-08-10T12:00:00",
+                                        "utc": "2025-08-10T12:00:00Z",
+                                        "date_format_hint": "ISO 8601"
+                                    }
+                                }
                             }).to_string()
                         }]
                     }
