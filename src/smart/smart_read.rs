@@ -13,6 +13,7 @@ use std::path::Path;
 
 /// 📖 Smart file reader with context awareness
 pub struct SmartReader {
+    #[allow(dead_code)]
     context_analyzer: ContextAnalyzer,
 }
 

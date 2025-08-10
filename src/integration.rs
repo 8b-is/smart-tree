@@ -40,10 +40,12 @@ impl Default for ProjectAnalyzer {
 impl ProjectAnalyzer {
     /// Create a new project analyzer with sensible defaults for integration
     pub fn new() -> Self {
-        let mut config = ScannerConfig::default();
-        config.max_depth = 10;
-        config.show_hidden = false;
-        config.respect_gitignore = true;
+        let config = ScannerConfig {
+            max_depth: 10,
+            show_hidden: false,
+            respect_gitignore: true,
+            ..ScannerConfig::default()
+        };
 
         Self {
             default_config: config,

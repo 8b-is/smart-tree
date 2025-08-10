@@ -156,7 +156,7 @@ pub fn suggest_operation(
 ) -> FileOperation {
     match original {
         None => FileOperation::Create,
-        Some(orig) if orig.is_empty() => FileOperation::Append,
+        Some("") => FileOperation::Append,
         Some(orig) => {
             // Check if it's a simple append
             if prefer_append && modified.starts_with(orig) {

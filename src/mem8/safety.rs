@@ -22,6 +22,7 @@ pub struct Custodian {
 /// Pattern tracking for repetition detection
 struct PatternTracker {
     /// Pattern hash
+    #[allow(dead_code)]
     hash: u64,
     /// Repetition count
     count: usize,
@@ -36,6 +37,7 @@ struct ResourceLimits {
     /// Maximum active memories
     max_active_memories: usize,
     /// Maximum processing cycles per second
+    #[allow(dead_code)]
     max_cycles_per_second: usize,
     /// Maximum memory growth rate
     max_growth_rate: f32,
@@ -291,9 +293,11 @@ pub struct EmotionalMemoryTherapy {
 }
 
 struct TherapySession {
+    #[allow(dead_code)]
     memory_id: u64,
     start_time: Instant,
     initial_amplitude: f32,
+    #[allow(dead_code)]
     target_amplitude: f32,
     current_phase: TherapyPhase,
 }
@@ -382,9 +386,11 @@ pub struct TemporalBlanketRecovery {
 }
 
 struct SuppressionRecord {
+    #[allow(dead_code)]
     memory_id: u64,
     suppression_time: Instant,
     original_blanket: f32,
+    #[allow(dead_code)]
     suppression_reason: String,
 }
 
@@ -458,6 +464,7 @@ pub struct DivergenceTracker {
     /// Current measurements
     current: RwLock<SystemMeasurement>,
     /// Divergence thresholds
+    #[allow(dead_code)]
     thresholds: DivergenceThresholds,
 }
 
@@ -474,6 +481,7 @@ pub struct SystemMeasurement {
     relationship_values: HashMap<String, f32>,
     activity_levels: HashMap<String, f32>,
     emotional_state: EmotionalState,
+    #[allow(dead_code)]
     measured_at: Instant,
 }
 
@@ -493,8 +501,11 @@ pub struct EmotionalState {
 }
 
 struct DivergenceThresholds {
+    #[allow(dead_code)]
     normal_max: f32,    // 0-50
+    #[allow(dead_code)]
     unusual_max: f32,   // 51-150
+    #[allow(dead_code)]
     high_risk_min: f32, // 151-255
 }
 
@@ -622,6 +633,7 @@ pub struct CollectiveEmotionalIntelligence {
 
 #[derive(Clone)]
 struct IndividualState {
+    #[allow(dead_code)]
     id: String,
     emotional_state: EmotionalState,
     safety_level: f32,

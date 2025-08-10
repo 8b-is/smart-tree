@@ -139,11 +139,11 @@ impl MarqantFormatter {
 
             // Detect section headers
             if !in_code_block {
-                if line.starts_with("# ") {
-                    let section = line[2..].trim();
+                if let Some(stripped) = line.strip_prefix("# ") {
+                    let section = stripped.trim();
                     result.push_str(&format!("::section:{}::\n", section));
-                } else if line.starts_with("## ") {
-                    let subsection = line[3..].trim();
+                } else if let Some(stripped) = line.strip_prefix("## ") {
+                    let subsection = stripped.trim();
                     result.push_str(&format!("::section:{}::\n", subsection));
                 }
             }

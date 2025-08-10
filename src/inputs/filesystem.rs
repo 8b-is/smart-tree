@@ -64,6 +64,7 @@ impl InputAdapter for FileSystemAdapter {
 }
 
 impl FileSystemAdapter {
+    #[allow(clippy::only_used_in_recursion)]
     fn scan_directory(&self, path: &std::path::Path) -> Result<Vec<ContextNode>> {
         let mut nodes = Vec::new();
 

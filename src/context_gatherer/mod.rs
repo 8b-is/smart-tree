@@ -421,6 +421,7 @@ impl ContextGatherer {
     }
 
     /// Redact sensitive information from JSON
+    #[allow(clippy::only_used_in_recursion)]
     fn redact_sensitive_json(&self, mut json: serde_json::Value) -> serde_json::Value {
         if let Some(obj) = json.as_object_mut() {
             for (key, value) in obj.iter_mut() {

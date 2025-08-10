@@ -8,6 +8,7 @@ use std::f32::consts::PI;
 /// SIMD-style wave processor using manual vectorization
 pub struct SimdWaveProcessor {
     /// Processing width (simulated SIMD width)
+    #[allow(dead_code)]
     vector_width: usize,
 }
 
@@ -243,12 +244,12 @@ impl SimdGridOps {
                 );
 
                 // Copy block results
-                for dy in 0..8 {
-                    for dx in 0..8 {
+                for (dy, row) in block.iter().enumerate() {
+                    for (dx, value) in row.iter().enumerate() {
                         let y = block_y + dy;
                         let x = block_x + dx;
                         if y < grid.height && x < grid.width {
-                            result[y][x] = block[dy][dx];
+                            result[y][x] = *value;
                         }
                     }
                 }
@@ -372,9 +373,9 @@ impl PerformanceBenchmark {
         // Benchmark standard processing
         let start_standard = Instant::now();
         let mut result_standard = vec![vec![0.0f32; grid.width]; grid.height];
-        for y in 0..grid.height {
-            for x in 0..grid.width {
-                result_standard[y][x] = grid.calculate_interference(x as u8, y as u8, z, t);
+        for (y, row) in result_standard.iter_mut().enumerate().take(grid.height) {
+            for (x, cell) in row.iter_mut().enumerate().take(grid.width) {
+                *cell = grid.calculate_interference(x as u8, y as u8, z, t);
             }
         }
         let duration_standard = start_standard.elapsed();

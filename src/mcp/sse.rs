@@ -98,6 +98,7 @@ impl Default for SseConfig {
 }
 
 /// Handle SSE stream request
+#[allow(dead_code)]
 pub async fn handle_sse_stream(
     config: SseConfig,
     ctx: Arc<McpContext>,
@@ -157,6 +158,7 @@ pub async fn handle_sse_stream(
 }
 
 /// Watch directory for changes
+#[allow(dead_code)]
 async fn watch_directory(
     config: SseConfig,
     _ctx: Arc<McpContext>,
@@ -254,6 +256,7 @@ async fn watch_directory(
 }
 
 /// Scan a single path and create FileNode
+#[allow(dead_code)]
 async fn scan_single_path(path: &Path) -> Result<FileNode> {
     let metadata = tokio::fs::metadata(path).await?;
 
@@ -326,6 +329,7 @@ async fn scan_single_path(path: &Path) -> Result<FileNode> {
 }
 
 /// Gather current statistics for a path
+#[allow(dead_code)]
 async fn gather_stats(path: &Path) -> Result<ScanStats> {
     let scanner_config = ScannerConfig::default();
     let scanner = Scanner::new(path, scanner_config)?;
@@ -342,6 +346,7 @@ async fn gather_stats(path: &Path) -> Result<ScanStats> {
 }
 
 /// Format nodes using the specified output format
+#[allow(dead_code)]
 fn format_nodes(
     nodes: &[FileNode],
     stats: &crate::scanner::TreeStats,
@@ -400,6 +405,7 @@ fn format_nodes(
 }
 
 /// Create SSE response format
+#[allow(dead_code)]
 pub fn format_sse_event(event: &SseEvent) -> Result<String> {
     let json = serde_json::to_string(event)?;
     Ok(format!("data: {}\n\n", json))

@@ -222,6 +222,7 @@ pub async fn handle_feedback(params: Option<Value>, ctx: Arc<McpContext>) -> Res
 }
 
 /// Get consolidated tool list
+#[allow(dead_code)]
 pub fn get_consolidated_tools() -> Vec<Value> {
     vec![
         json!({

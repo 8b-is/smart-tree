@@ -438,7 +438,7 @@ impl CrossSessionBridge {
     /// Suggest relevant insights for current context
     pub fn suggest_relevant_insights(
         &self,
-        current_project: &PathBuf,
+        current_project: &std::path::Path,
         keywords: &[String],
     ) -> Vec<CrossSessionInsight> {
         let mut relevant = Vec::new();

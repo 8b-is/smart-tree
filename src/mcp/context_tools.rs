@@ -485,8 +485,10 @@ pub async fn get_collaboration_rapport(
     };
 
     // Need to gather contexts first to build rapport
-    let mut config = GatherConfig::default();
-    config.search_dirs = vec![format!(".{}", req.ai_tool)];
+    let config = GatherConfig {
+        search_dirs: vec![format!(".{}", req.ai_tool)],
+        ..GatherConfig::default()
+    };
 
     let mut gatherer = ContextGatherer::new(project_path.clone(), config);
     let _ = gatherer.gather_all(); // This will populate session tracker

@@ -24,8 +24,11 @@ use std::time::SystemTime;
 // Tool lanes for AI escalation path - Omni's three-lane design
 #[derive(Debug, Clone, Serialize)]
 pub enum ToolLane {
+    #[allow(dead_code)]
     Explore, // 🔍 Discovery and overview
+    #[allow(dead_code)]
     Analyze, // 🧪 Deep analysis and search
+    #[allow(dead_code)]
     Act,     // ⚡ Modifications and writes
 }
 
@@ -1414,6 +1417,19 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let now_local = Local::now();
     let now_utc = Utc::now();
 
+    // Add a rotating Omni quote for a touch of joy
+    let omni_quotes = [
+        "Waves remember what structure forgets.",
+        "Compression is rhythm; meaning is melody.",
+        "Directories are forests; walk softly and listen.",
+        "Entropy is just unexplained context.",
+    ];
+    let omni_quote = {
+        use rand::seq::SliceRandom;
+        let mut rng = rand::thread_rng();
+        omni_quotes.choose(&mut rng).copied().unwrap_or(omni_quotes[0])
+    };
+
     let info = json!({
         "server": {
             "name": "Smart Tree MCP Server",
@@ -1434,6 +1450,9 @@ async fn server_info(_args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 "version": "1.0",
                 "features": ["tools", "resources", "prompts", "notifications"],
             },
+        },
+        "omni": {
+            "quote": omni_quote,
         },
         "capabilities": {
             "output_formats": [

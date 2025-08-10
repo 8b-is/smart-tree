@@ -313,30 +313,17 @@ impl CollaborativeSessionTracker {
 
     /// Calculate trust and flow score for a session
     fn calculate_trust_flow(&self, session: &CollaborativeSession) -> TrustFlowScore {
-        let mut score = TrustFlowScore::default();
-
-        // Calculate clarity based on message coherence
-        score.clarity = self.calculate_clarity(session);
-
-        // Calculate responsiveness
-        score.responsiveness = self.calculate_responsiveness(session);
-
-        // Calculate autonomy ratio
-        score.autonomy_ratio = self.calculate_autonomy_ratio(session);
-
-        // Detect frustration markers
-        score.frustration_markers = self.detect_frustration(session);
-
-        // Measure flow depth
-        score.flow_depth = match &session.flow_state {
-            FlowState::Flow { depth, .. } => *depth,
-            FlowState::Whirlpool {
-                confusion_score, ..
-            } => 1.0 - confusion_score,
-            _ => 0.5,
-        };
-
-        score
+        TrustFlowScore {
+            clarity: self.calculate_clarity(session),
+            responsiveness: self.calculate_responsiveness(session),
+            autonomy_ratio: self.calculate_autonomy_ratio(session),
+            frustration_markers: self.detect_frustration(session),
+            flow_depth: match &session.flow_state {
+                FlowState::Flow { depth, .. } => *depth,
+                FlowState::Whirlpool { confusion_score, .. } => 1.0 - confusion_score,
+                _ => 0.5,
+            },
+        }
     }
 
     /// Update rapport index based on session

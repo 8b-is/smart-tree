@@ -250,7 +250,24 @@ impl SmartTreeTerminal {
 
     /// Draw header
     fn draw_header(f: &mut Frame, area: Rect, _state: &TerminalState) {
-        let header = Paragraph::new(Text::from(vec![Line::from(vec![
+        let show_banner = std::env::var("ST_BANNER")
+            .is_ok_and(|v| v == "1" || v.to_lowercase() == "true");
+
+        let mut lines: Vec<Line> = Vec::new();
+        if show_banner {
+            lines.push(Line::from(vec![
+                Span::styled("⚡ ", Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    "SMART TREE TERMINAL",
+                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("  🌊  ", Style::default().fg(Color::Cyan)),
+                Span::styled("rocking your repo", Style::default().fg(Color::Magenta)),
+                Span::raw("  🎸"),
+            ]));
+        }
+
+        lines.push(Line::from(vec![
             Span::styled(
                 "Smart Tree Terminal",
                 Style::default()
@@ -260,7 +277,9 @@ impl SmartTreeTerminal {
             Span::raw(" v4.0 - "),
             Span::styled("Your Coding Companion ", Style::default().fg(Color::Cyan)),
             Span::raw("🌳"),
-        ])]))
+        ]));
+
+        let header = Paragraph::new(Text::from(lines))
         .block(Block::default().borders(Borders::ALL))
         .alignment(ratatui::layout::Alignment::Center);
 
@@ -282,6 +301,15 @@ impl SmartTreeTerminal {
             context_items.push(Span::styled(
                 format!("| Project: {:?} ", project),
                 Style::default().fg(Color::Blue),
+            ));
+        }
+
+        if std::env::var("HOT_TUB")
+            .is_ok_and(|v| v == "1" || v.to_lowercase() == "true")
+        {
+            context_items.push(Span::styled(
+                "| 🛁 Hot Tub Mode ",
+                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
             ));
         }
 
@@ -381,13 +409,15 @@ impl SmartTreeTerminal {
                 return Ok(true); // Exit
             }
             KeyCode::Char(c) => {
-                let mut state = self.state.lock().unwrap();
-                let cursor_pos = state.cursor_pos;
-                state.input.insert(cursor_pos, c);
-                state.cursor_pos += 1;
+                let _cursor_pos = {
+                    let mut state = self.state.lock().unwrap();
+                    let cursor_pos_local = state.cursor_pos;
+                    state.input.insert(cursor_pos_local, c);
+                    state.cursor_pos += 1;
+                    cursor_pos_local
+                }; // lock dropped here before await
 
                 // Trigger pattern analysis on input change
-                drop(state); // Release lock before async call
                 self.pattern_analyzer.analyze_input().await?;
             }
             KeyCode::Backspace => {
@@ -399,22 +429,25 @@ impl SmartTreeTerminal {
                 }
             }
             KeyCode::Enter => {
-                let mut state = self.state.lock().unwrap();
-                let command = state.input.clone();
-                state.command_history.push(command.clone());
-                state.input.clear();
-                state.cursor_pos = 0;
+                let command = {
+                    let mut state = self.state.lock().unwrap();
+                    let command = state.input.clone();
+                    state.command_history.push(command.clone());
+                    state.input.clear();
+                    state.cursor_pos = 0;
+                    command
+                }; // lock dropped
 
                 // Process command
-                drop(state); // Release lock
                 self.process_command(&command).await?;
             }
             KeyCode::Tab => {
                 // Accept top suggestion
-                let state = self.state.lock().unwrap();
-                if let Some(suggestion) = state.suggestions.first() {
-                    let action = suggestion.action.clone();
-                    drop(state);
+                let maybe_action = {
+                    let state = self.state.lock().unwrap();
+                    state.suggestions.first().map(|s| s.action.clone())
+                }; // drop lock before await
+                if let Some(action) = maybe_action {
                     self.apply_suggestion(action).await?;
                 }
             }
@@ -428,12 +461,14 @@ impl SmartTreeTerminal {
     async fn process_command(&mut self, command: &str) -> Result<()> {
         // This is where we'd integrate with the shell
         // For now, just update status
-        let mut state = self.state.lock().unwrap();
-        state.status_message = Some(StatusMessage {
-            text: format!("Executed: {}", command),
-            severity: MessageSeverity::Info,
-            timestamp: Instant::now(),
-        });
+        {
+            let mut state = self.state.lock().unwrap();
+            state.status_message = Some(StatusMessage {
+                text: format!("Executed: {}", command),
+                severity: MessageSeverity::Info,
+                timestamp: Instant::now(),
+            });
+        }
 
         Ok(())
     }
@@ -442,10 +477,12 @@ impl SmartTreeTerminal {
     async fn apply_suggestion(&mut self, action: SuggestionAction) -> Result<()> {
         match action {
             SuggestionAction::InsertText(text) => {
+            {
                 let mut state = self.state.lock().unwrap();
                 let cursor_pos = state.cursor_pos;
                 state.input.insert_str(cursor_pos, &text);
                 state.cursor_pos += text.len();
+            }
             }
             SuggestionAction::RunCommand(cmd) => {
                 self.process_command(&cmd).await?;
@@ -476,11 +513,16 @@ impl ContextWatcher {
     async fn start(&self) -> Result<()> {
         // TODO: Implement file watching
         // For now, detect project type
-        let cwd = self.state.lock().unwrap().cwd.clone();
+        let cwd = {
+            let state = self.state.lock().unwrap();
+            state.cwd.clone()
+        };
 
         if cwd.join("Cargo.toml").exists() {
-            let mut state = self.state.lock().unwrap();
-            state.project_type = Some(ProjectType::Rust);
+            {
+                let mut state = self.state.lock().unwrap();
+                state.project_type = Some(ProjectType::Rust);
+            }
 
             // Send a suggestion
             let _ = self
@@ -519,9 +561,10 @@ impl PatternAnalyzer {
     }
 
     async fn analyze_input(&self) -> Result<()> {
-        let state = self.state.lock().unwrap();
-        let input = state.input.clone();
-        drop(state);
+        let input = {
+            let state = self.state.lock().unwrap();
+            state.input.clone()
+        };
 
         // Simple pattern matching for demo
         if input.starts_with("git com") {

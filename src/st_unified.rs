@@ -160,16 +160,14 @@ impl StUnified {
 
     /// Project understanding (replaces multiple analysis tools)
     pub fn understand_project(&self, path: &Path) -> Result<String> {
-        let mut results = Vec::new();
-
-        results.push("=== QUICK OVERVIEW ===".to_string());
-        results.push(self.quick(path)?);
-
-        results.push("\n=== SEMANTIC GROUPS ===".to_string());
-        results.push(self.semantic_analyze(path)?);
-
-        results.push("\n=== STATISTICS ===".to_string());
-        results.push(self.stats(path)?);
+        let results = [
+            "=== QUICK OVERVIEW ===".to_string(),
+            self.quick(path)?,
+            "\n=== SEMANTIC GROUPS ===".to_string(),
+            self.semantic_analyze(path)?,
+            "\n=== STATISTICS ===".to_string(),
+            self.stats(path)?,
+        ];
 
         Ok(results.join("\n"))
     }

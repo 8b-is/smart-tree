@@ -133,6 +133,7 @@ impl Default for TaskContext {
 
 impl FocusArea {
     /// Parse focus area from string
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "auth" | "authentication" => FocusArea::Authentication,

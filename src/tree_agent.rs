@@ -24,6 +24,7 @@ pub struct TreeAgent {
     nexus_endpoint: String,
 
     /// Local .m8 database path
+    #[allow(dead_code)]
     local_db: PathBuf,
 }
 

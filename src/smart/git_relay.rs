@@ -13,6 +13,7 @@ use std::process::{Command, Output};
 
 /// 🔄 Git relay with smart compression and context awareness
 pub struct GitRelay {
+    #[allow(dead_code)]
     context_analyzer: ContextAnalyzer,
 }
 

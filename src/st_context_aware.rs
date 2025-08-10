@@ -75,6 +75,7 @@ pub struct StContextTracker {
     /// Recent operations (last 50)
     operation_history: Arc<RwLock<VecDeque<ContextualOperation>>>,
     /// Pattern recognition cache
+    #[allow(dead_code)]
     patterns: Arc<RwLock<HashMap<String, Vec<String>>>>,
     /// Project-specific knowledge
     project_knowledge: Arc<RwLock<ProjectKnowledge>>,

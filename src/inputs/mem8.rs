@@ -83,7 +83,7 @@ impl Mem8Adapter {
         // Create entanglements between layers
         let child_ids: Vec<String> = root.children.iter().map(|c| c.id.clone()).collect();
         for i in 0..root.children.len() {
-            for j in i + 1..child_ids.len() {
+            for (j, _) in child_ids.iter().enumerate().skip(i + 1) {
                 root.children[i].entanglements.push(Entanglement {
                     target_id: child_ids[j].clone(),
                     strength: 0.6,
