@@ -13,9 +13,9 @@
 use super::{Formatter, PathDisplayMode};
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
+use marqant::Marqant as MarqantCore;
 use std::collections::HashMap;
 use std::io::Write;
-use marqant::Marqant as MarqantCore;
 use std::path::Path;
 
 /// Phrase frequency for smart tokenization
