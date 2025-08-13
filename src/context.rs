@@ -170,9 +170,10 @@ fn read_readme(root_path: &Path) -> Option<String> {
 }
 
 fn truncate_string(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len - 3])
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     }
 }
