@@ -7,7 +7,7 @@ echo "The Ultimate Context-Driven System"
 echo ""
 
 # Test file for demonstration
-TEST_FILE="/tmp/demo_file.txt"
+TEST_FILE="./tmp/demo_file.txt"
 
 echo "1. Creating a test file..."
 echo "Hello, World!" > "$TEST_FILE"
@@ -16,7 +16,7 @@ echo ""
 echo "2. Tracking file creation with MCP..."
 cat << 'EOF'
 mcp.callTool('track_file_operation', {
-  file_path: '/tmp/demo_file.txt',
+  file_path: './tmp/demo_file.txt',
   operation: 'create',
   new_content: 'Hello, World!',
   agent: 'demo-agent',

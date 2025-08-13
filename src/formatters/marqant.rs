@@ -13,40 +13,13 @@
 use super::{Formatter, PathDisplayMode};
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
-use chrono::Utc;
-use flate2::read::ZlibDecoder;
-use flate2::write::ZlibEncoder;
-use flate2::Compression;
-use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
-use std::io::{Read, Write};
+use std::collections::HashMap;
+use std::io::Write;
+use marqant::Marqant as MarqantCore;
 use std::path::Path;
 
 /// Phrase frequency for smart tokenization
-#[derive(Debug, Eq)]
-struct PhraseFreq {
-    phrase: String,
-    _count: usize,
-    savings: usize, // bytes saved by tokenization
-}
-
-impl PartialEq for PhraseFreq {
-    fn eq(&self, other: &Self) -> bool {
-        self.savings == other.savings
-    }
-}
-
-impl Ord for PhraseFreq {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.savings.cmp(&other.savings)
-    }
-}
-
-impl PartialOrd for PhraseFreq {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+// Keep struct names stable but no longer used here
 
 /// Marqant formatter - Quantum compression for markdown files
 pub struct MarqantFormatter {
@@ -60,70 +33,12 @@ impl MarqantFormatter {
 
     /// Compress markdown content into marqant format
     pub fn compress_markdown(content: &str) -> Result<String> {
-        Self::compress_markdown_with_flags(content, None)
+        MarqantCore::compress_markdown(content)
     }
 
     /// Compress markdown content with optional flags
     pub fn compress_markdown_with_flags(content: &str, flags: Option<&str>) -> Result<String> {
-        let mut output = String::new();
-        let original_size = content.len();
-
-        // Add section tags if requested
-        let mut processed_content = content.to_string();
-        let use_sections = flags.is_some_and(|f| f.contains("-semantic"));
-
-        if use_sections {
-            processed_content = Self::add_section_tags(&processed_content);
-        }
-
-        // Build token dictionary from content
-        let (tokens, tokenized_content) = Self::tokenize_content(&processed_content);
-
-        // Apply zlib compression if requested
-        let use_zlib = flags.is_some_and(|f| f.contains("-zlib"));
-        let final_content = if use_zlib {
-            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
-            encoder.write_all(tokenized_content.as_bytes())?;
-            let compressed = encoder.finish()?;
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &compressed)
-        } else {
-            tokenized_content.clone()
-        };
-
-        // Calculate actual compressed size
-        let dict_size: usize = tokens
-            .iter()
-            .map(|(k, v)| k.len() + v.len() + 3) // key=value\n
-            .sum();
-        let compressed_size = final_content.len() + dict_size + 4; // +4 for separator
-
-        // Write header
-        let timestamp = Utc::now().to_rfc3339();
-
-        if let Some(flags) = flags {
-            output.push_str(&format!(
-                "MARQANT_V1 {} {} {} {}\n",
-                timestamp, original_size, compressed_size, flags
-            ));
-        } else {
-            output.push_str(&format!(
-                "MARQANT_V1 {} {} {}\n",
-                timestamp, original_size, compressed_size
-            ));
-        }
-
-        // Write token dictionary
-        for (token, pattern) in &tokens {
-            // Escape newlines in patterns for safe storage
-            let escaped_pattern = pattern.replace('\n', "\\n");
-            output.push_str(&format!("{}={}\n", token, escaped_pattern));
-        }
-        output.push_str("---\n"); // Dictionary separator
-
-        // Write tokenized content
-        output.push_str(&tokenized_content);
-
-        Ok(output)
+        MarqantCore::compress_markdown_with_flags(content, flags)
     }
 
     /// Add semantic section tags to markdown content
@@ -157,199 +72,12 @@ impl MarqantFormatter {
 
     /// Tokenize markdown content with smart frequency analysis
     pub fn tokenize_content(content: &str) -> (HashMap<String, String>, String) {
-        let mut tokens = HashMap::new();
-        let mut tokenized = content.to_string();
-
-        // Enhanced static tokens for markdown using single ASCII bytes
-        // Using ASCII control characters that are rarely used in markdown
-        let static_tokens: Vec<(&str, &str)> = vec![
-            // Using ASCII characters 0x01-0x1F (control chars) for tokens
-            ("\x01", "# "),    // SOH for H1 header
-            ("\x02", "## "),   // STX for H2 header
-            ("\x03", "### "),  // ETX for H3 header
-            ("\x04", "#### "), // EOT for H4 header
-            ("\x05", "```"),   // ENQ for code block
-            ("\x06", "\n\n"),  // ACK for paragraph break
-            ("\x07", "- "),    // BEL for list item
-            ("\x0B", "* "),    // VT for alt list
-            ("\x0C", "**"),    // FF for bold
-            ("\x0E", "__"),    // SO for alt bold
-            ("\x0F", "> "),    // SI for blockquote
-            ("\x10", "| "),    // DLE for table cell
-            ("\x11", "---"),   // DC1 for HR
-            ("\x12", "***"),   // DC2 for alt HR
-            ("\x13", "["),     // DC3 for link start
-            ("\x14", "]("),    // DC4 for link middle
-            // Additional patterns
-            ("\x15", "```bash"),
-            ("\x16", "```rust"),
-            ("\x17", "```javascript"),
-            ("\x18", "```python"),
-            ("\x19", "\n```\n"),
-            ("\x1A", "    "), // SUB for 4 spaces
-        ];
-
-        // Apply static tokens first
-        for (token, pattern) in static_tokens {
-            if tokenized.contains(pattern) {
-                let count = tokenized.matches(pattern).count();
-                // Only tokenize if it saves space
-                // Now tokens are 1 byte, so much more likely to save space
-                if count * pattern.len() > count + pattern.len() + 3 {
-                    tokens.insert(token.to_string(), pattern.to_string());
-                    tokenized = tokenized.replace(pattern, token);
-                }
-            }
-        }
-
-        // Smart phrase detection with overlapping prevention
-        let mut phrase_heap = BinaryHeap::new();
-
-        // Analyze all possible phrases
-        let words: Vec<&str> = content.split_whitespace().collect();
-
-        // Find all n-grams (2-8 words)
-        for window_size in 2..=8 {
-            for i in 0..words.len().saturating_sub(window_size) {
-                let phrase = words[i..i + window_size].join(" ");
-
-                // Skip short phrases
-                if phrase.len() < 8 {
-                    continue;
-                }
-
-                // Count occurrences
-                let count = content.matches(&phrase).count();
-                if count >= 2 {
-                    // Calculate savings: (original_size * count) - (token_size * count + dictionary_entry)
-                    // Token is now 1 byte instead of 3 bytes (T##)
-                    let savings = (phrase.len() * count).saturating_sub(count + phrase.len() + 3);
-                    if savings > 0 {
-                        phrase_heap.push(PhraseFreq {
-                            phrase: phrase.clone(),
-                            _count: count, // Trisha says: "Track it even if we don't use it - good for audits!" 💅
-                            savings,
-                        });
-                    }
-                }
-            }
-        }
-
-        // Assign tokens to best phrases (greedy algorithm)
-        let mut token_counter = 0x1Bu8; // Start after static tokens (0x1A is last static)
-        let mut assigned_phrases: Vec<String> = Vec::new();
-
-        while let Some(phrase_freq) = phrase_heap.pop() {
-            if token_counter >= 0x7F {
-                break; // Stop before DEL character (0x7F is reserved for extensions)
-            }
-
-            // Skip newline (0x0A) and carriage return (0x0D)
-            if token_counter == 0x0A || token_counter == 0x0D {
-                token_counter += 1;
-                continue;
-            }
-
-            // Check if this phrase overlaps with already assigned ones
-            let mut overlaps = false;
-            for assigned in &assigned_phrases {
-                if phrase_freq.phrase.contains(assigned) || assigned.contains(&phrase_freq.phrase) {
-                    overlaps = true;
-                    break;
-                }
-            }
-
-            if !overlaps && tokenized.contains(&phrase_freq.phrase) {
-                // Use single byte token - control chars are valid in UTF-8
-                let token = char::from(token_counter).to_string();
-                tokens.insert(token.clone(), phrase_freq.phrase.clone());
-                tokenized = tokenized.replace(&phrase_freq.phrase, &token);
-                assigned_phrases.push(phrase_freq.phrase);
-                token_counter += 1;
-            }
-        }
-
-        (tokens, tokenized)
+        MarqantCore::tokenize_content(content)
     }
 
     /// Decompress marqant content back to markdown
     pub fn decompress_marqant(compressed: &str) -> Result<String> {
-        let lines: Vec<&str> = compressed.lines().collect();
-        if lines.is_empty() || !lines[0].starts_with("MARQANT_V1") {
-            return Err(anyhow::anyhow!("Invalid marqant format"));
-        }
-
-        // Parse header
-        let header_parts: Vec<&str> = lines[0].split_whitespace().collect();
-        if header_parts.len() < 4 {
-            return Err(anyhow::anyhow!("Invalid marqant header"));
-        }
-
-        // Check for flags
-        let has_zlib = header_parts
-            .get(4)
-            .is_some_and(|flags| flags.contains("-zlib"));
-        let has_sections = header_parts
-            .get(4)
-            .is_some_and(|flags| flags.contains("-semantic"));
-
-        // Build token dictionary
-        let mut tokens = HashMap::new();
-        let mut content_start = 1;
-
-        for (i, line) in lines.iter().enumerate().skip(1) {
-            if *line == "---" {
-                content_start = i + 1;
-                break;
-            }
-            if let Some((token, pattern)) = line.split_once('=') {
-                // Unescape newlines in pattern
-                let unescaped_pattern = pattern.replace("\\n", "\n");
-                tokens.insert(token.to_string(), unescaped_pattern);
-            }
-        }
-
-        // Get compressed content
-        let compressed_content = lines[content_start..].join("\n");
-
-        // Decompress if zlib was used
-        let tokenized_content = if has_zlib {
-            let decoded = base64::Engine::decode(
-                &base64::engine::general_purpose::STANDARD,
-                &compressed_content,
-            )?;
-            let mut decoder = ZlibDecoder::new(&decoded[..]);
-            let mut decompressed_bytes = String::new();
-            decoder.read_to_string(&mut decompressed_bytes)?;
-            decompressed_bytes
-        } else {
-            compressed_content
-        };
-
-        // Apply tokens in reverse order (longest tokens first to avoid conflicts)
-        let mut token_list: Vec<(String, String)> = tokens.into_iter().collect();
-        token_list.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-
-        let mut decompressed = tokenized_content;
-        for (token, pattern) in token_list {
-            decompressed = decompressed.replace(&token, &pattern);
-        }
-
-        // Remove section tags if present
-        if has_sections {
-            // Simple string replacement instead of regex
-            let lines: Vec<&str> = decompressed.lines().collect();
-            let mut result = String::new();
-            for line in lines {
-                if !line.starts_with("::section:") || !line.ends_with("::") {
-                    result.push_str(line);
-                    result.push('\n');
-                }
-            }
-            decompressed = result.trim_end().to_string();
-        }
-
-        Ok(decompressed)
+        MarqantCore::decompress_marqant(compressed)
     }
 }
 

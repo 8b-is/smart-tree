@@ -1298,6 +1298,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
+name = "marqant"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "flate2",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2055,6 +2065,7 @@ dependencies = [
  "humansize",
  "indicatif",
  "libc",
+ "marqant",
  "notify",
  "once_cell",
  "predicates",
@@ -2068,6 +2079,7 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "similar",
+ "st-tokenizer",
  "tempfile",
  "termimad",
  "tokio",
@@ -2087,6 +2099,13 @@ dependencies = [
  "uuid",
  "walkdir",
  "whoami",
+]
+
+[[package]]
+name = "st-tokenizer"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
 ]
 
 [[package]]

@@ -1,0 +1,6 @@
+---
+description: Version and outlook for Rust work
+globs: .rs,cargo,crabs,clippy
+alwaysApply: false
+---
+Rust:  We need to keep this all the same as it will be the cargo AI passes.  "2024" version.  I don't see a good reason for clippy.  Feel free to compact the code in your way.  Perfect is not "Perfect" when you don't see it.  But, always test and try to build.  If going to a location you can check on.  Please check on the worker statuses or get hooked.. ;)

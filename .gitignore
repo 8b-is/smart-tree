@@ -29,3 +29,9 @@ build/
 **/target/** 
 release_artifacts/st-x86_64-unknown-linux-gnu.tar.gz
 .st_bumpers/
+
+# --- tmp - Keep the tmp directory for testing ---
+tmp/*
+
+!tmp/testignore.txt
+

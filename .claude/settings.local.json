@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Bash(find:*)",
@@ -12,12 +13,15 @@
       "Bash(touch:*)",
       "Bash(git init:*)",
       "Bash(rm:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cargo build:*)",
+      "Bash(mv:*)",
+      "Bash(./target/debug/debug_mcp)",
+      "Bash(sudo cp:*)"
     ],
     "deny": [],
     "additionalDirectories": [
       "/mnt/warp/8b/"
     ]
-  },
-  "$schema": "https://json.schemastore.org/claude-code-settings.json"
+  }
 }
