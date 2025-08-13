@@ -106,9 +106,20 @@ jobs:
       run: cargo test --release --target ${{ matrix.target }}
     
     - name: Strip binary (Linux/macOS) 🗜️
-      if: matrix.os != 'windows-latest'
+      if: matrix.os != 'windows-latest' && matrix.cross != true
       run: |
         strip target/${{ matrix.target }}/release/st
+    
+    - name: Strip binary (cross-compiled) 🗜️
+      if: matrix.cross == true
+      run: |
+        # For cross-compiled binaries, we need the target-specific strip command
+        # or skip stripping as it's optional for release builds
+        echo "Skipping strip for cross-compiled binary ${{ matrix.target }}"
+        # Alternatively, install and use the correct strip tool:
+        # For ARM64 Linux: sudo apt-get install -y gcc-aarch64-linux-gnu
+        # Then use: aarch64-linux-gnu-strip target/${{ matrix.target }}/release/st
+        # But for simplicity, we'll skip it as Rust already optimizes release builds
     
     - name: Create archive 📦
       shell: bash
