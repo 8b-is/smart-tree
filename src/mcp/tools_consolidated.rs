@@ -376,7 +376,11 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     },
                     "edits": {
                         "type": "array",
-                        "description": "Array of edit operations (for smart_edit)"
+                        "description": "Array of edit operations (for smart_edit)",
+                        "items": {
+                            "type": "object",
+                            "description": "Individual edit operation"
+                        }
                     },
                     "name": {
                         "type": "string",

@@ -219,7 +219,11 @@ EXAMPLES:
                     },
                     "edits": {
                         "type": "array",
-                        "description": "Array of edit operations (smart_edit)"
+                        "description": "Array of edit operations (smart_edit)",
+                        "items": {
+                            "type": "object",
+                            "description": "Individual edit operation"
+                        }
                     },
                     "name": {
                         "type": "string",
