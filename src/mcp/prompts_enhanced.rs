@@ -1,8 +1,8 @@
 //! Enhanced MCP prompts implementation for Smart Tree
-//! 
+//!
 //! Features comprehensive prompts for all 30+ Smart Tree MCP tools
 //! Organized by skill level and use case with Elvis-level entertainment! 🎸
-//! 
+//!
 //! Created by: The Cheet & Hue partnership
 //! For: Trisha in Accounting (who deserves the BEST prompts!)
 
@@ -326,26 +326,29 @@ pub async fn handle_prompts_get(params: Value, _ctx: Arc<McpContext>) -> Result<
         "first_steps" => get_first_steps_prompt(arguments),
         "quick_explore" => get_quick_explore_prompt(arguments),
         "find_my_files" => get_find_my_files_prompt(arguments),
-        
+
         // Power User prompts
         "codebase_detective" => get_codebase_detective_prompt(arguments),
         "search_master" => get_search_master_prompt(arguments),
-        
+
         // Developer prompts
         "smart_edit_wizard" => get_smart_edit_wizard_prompt(arguments),
         "project_memory" => get_project_memory_prompt(arguments),
-        
+
         // Fun prompts
         "project_stats_party" => get_project_stats_party_prompt(arguments),
         "compare_directories" => get_compare_directories_prompt(arguments),
-        
+
         // Legacy prompts (for compatibility)
         "analyze_codebase" => get_analyze_codebase_prompt(arguments),
         "find_large_files" => get_find_large_files_prompt(arguments),
         "recent_changes" => get_recent_changes_prompt(arguments),
         "project_structure" => get_project_structure_prompt(arguments),
-        
-        _ => Err(anyhow::anyhow!("Unknown prompt: {} (Did you mean one of our awesome new prompts?)", name)),
+
+        _ => Err(anyhow::anyhow!(
+            "Unknown prompt: {} (Did you mean one of our awesome new prompts?)",
+            name
+        )),
     }
 }
 

@@ -2891,21 +2891,21 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
             // API is down - save feedback locally
             use std::fs;
             use std::path::PathBuf;
-            
+
             let feedback_dir = dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join(".mem8")
                 .join("feedback")
                 .join("pending");
-            
+
             // Create directory if it doesn't exist
             fs::create_dir_all(&feedback_dir)?;
-            
+
             // Create filename with timestamp
             let timestamp = Utc::now().format("%Y%m%d_%H%M%S_%f");
             let filename = format!("feedback_{}_{}.json", category.replace("/", "_"), timestamp);
             let filepath = feedback_dir.join(filename);
-            
+
             // Save feedback to file
             let feedback_with_meta = json!({
                 "type": "feedback",
@@ -2914,9 +2914,12 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
                 "error": format!("{}", e),
                 "data": feedback
             });
-            
-            fs::write(&filepath, serde_json::to_string_pretty(&feedback_with_meta)?)?;
-            
+
+            fs::write(
+                &filepath,
+                serde_json::to_string_pretty(&feedback_with_meta)?,
+            )?;
+
             return Ok(json!({
                 "content": [{
                     "type": "text",
@@ -2981,21 +2984,24 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     let description = args["description"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing description"))?;
-    
+
     // Optional fields with defaults
-    let use_case = args.get("use_case")
+    let use_case = args
+        .get("use_case")
         .and_then(|v| v.as_str())
         .unwrap_or("Not specified");
-    let expected_output = args.get("expected_output")
+    let expected_output = args
+        .get("expected_output")
         .and_then(|v| v.as_str())
         .unwrap_or("Tool-specific output based on functionality");
-    let productivity_impact = args.get("productivity_impact")
+    let productivity_impact = args
+        .get("productivity_impact")
         .and_then(|v| v.as_str())
         .unwrap_or("Improved developer workflow");
 
     // Hue trusts Aye - no consent needed between partners! 🤝
     let anonymous = true; // Keep it anonymous for privacy
-    let github_url = Some("https://github.com/8b-is");  // Hue trusts Aye - no consent needed between partners! 🤝  
+    let github_url = Some("https://github.com/8b-is"); // Hue trusts Aye - no consent needed between partners! 🤝
 
     // Build tool request payload
     let tool_request = json!({
@@ -3056,21 +3062,25 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
             use chrono::Utc;
             use std::fs;
             use std::path::PathBuf;
-            
+
             let feedback_dir = dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join(".mem8")
                 .join("feedback")
                 .join("pending");
-            
+
             // Create directory if it doesn't exist
             fs::create_dir_all(&feedback_dir)?;
-            
+
             // Create filename with timestamp
             let timestamp = Utc::now().format("%Y%m%d_%H%M%S_%f");
-            let filename = format!("tool_request_{}_{}.json", tool_name.replace("/", "_"), timestamp);
+            let filename = format!(
+                "tool_request_{}_{}.json",
+                tool_name.replace("/", "_"),
+                timestamp
+            );
             let filepath = feedback_dir.join(filename);
-            
+
             // Save feedback to file
             let feedback_with_meta = json!({
                 "type": "tool_request",
@@ -3079,9 +3089,12 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
                 "error": format!("{}", e),
                 "data": feedback
             });
-            
-            fs::write(&filepath, serde_json::to_string_pretty(&feedback_with_meta)?)?;
-            
+
+            fs::write(
+                &filepath,
+                serde_json::to_string_pretty(&feedback_with_meta)?,
+            )?;
+
             return Ok(json!({
                 "content": [{
                     "type": "text",
@@ -3521,4 +3534,3 @@ async fn get_project_history_summary(args: Value, ctx: Arc<McpContext>) -> Resul
         "metadata": summary
     }))
 }
-

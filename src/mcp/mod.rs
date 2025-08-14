@@ -42,26 +42,26 @@ use tools::*;
 /// Returns false (suppress messages) if any quiet indicator is found.
 fn should_show_startup_messages() -> bool {
     use std::env;
-    
+
     // Check for explicit quiet flags
     if let Ok(val) = env::var("MCP_QUIET") {
         if val == "1" || val.to_lowercase() == "true" {
             return false;
         }
     }
-    
+
     if let Ok(val) = env::var("NO_STARTUP_MESSAGES") {
         if val == "1" || val.to_lowercase() == "true" {
             return false;
         }
     }
-    
+
     if let Ok(val) = env::var("NO_STARTUP_BANNER") {
         if val == "1" || val.to_lowercase() == "true" {
             return false;
         }
     }
-    
+
     // Check RUST_LOG for error-only or off modes
     if let Ok(val) = env::var("RUST_LOG") {
         let log_level = val.to_lowercase();
@@ -69,7 +69,7 @@ fn should_show_startup_messages() -> bool {
             return false;
         }
     }
-    
+
     // Default: show startup messages (backward compatibility)
     true
 }
@@ -279,9 +279,13 @@ impl McpServer {
             "prompts/list" => {
                 // Use enhanced prompts by default, fall back to legacy if needed
                 prompts_enhanced::handle_prompts_list(request.params, self.context.clone()).await
-            },
+            }
             "prompts/get" => {
-                prompts_enhanced::handle_prompts_get(request.params.unwrap_or(json!({})), self.context.clone()).await
+                prompts_enhanced::handle_prompts_get(
+                    request.params.unwrap_or(json!({})),
+                    self.context.clone(),
+                )
+                .await
             }
             "notifications/cancelled" => {
                 // This is also a notification but might need handling
