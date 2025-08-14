@@ -5,6 +5,41 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.4] - 2025-08-13
+
+### Added
+- **Version Management**: Automatic version bumping in manage.sh
+  - `bump` command for incrementing versions (major/minor/patch)
+  - `quick-bump` for rapid version bump + build
+  - Automatic cleanup of orphaned local tags
+  - Updates both Cargo.toml and CLAUDE.md
+
+### Documentation
+- Created TERMINAL_EXAMPLES.md with beautiful output examples
+- Completely rewrote README.md with current features
+- Moved outdated docs to mothballed/ directory
+
+## [4.8.3] - 2025-08-13
+
+### Fixed
+- **MCP Schema Validation**: Fixed missing 'items' in array parameters
+  - Added items definition to edit tool in consolidated modules
+  - Removed duplicate function definitions
+  - Fixed workspace configuration
+
+## [4.8.2] - 2025-08-13
+
+### Added
+- **Local Feedback Fallback**: Saves feedback when API is offline
+  - Stores in ~/.mem8/feedback/pending/
+  - Automatic JSON format with metadata
+  - Ready for batch upload when connection restored
+
+### Changed
+- Simplified request_tool to only require 2 fields (tool_name, description)
+- Made path parameters default to "." when not specified
+- Removed consent requirements (partners trust each other!)
+
 ## [4.8.1] - 2025-08-10
 
 ### Added
