@@ -21,7 +21,8 @@
     ],
     "deny": [],
     "additionalDirectories": [
-      "/mnt/warp/8b/"
+      "/mnt/warp/8b/",
+      "/Users/wraith/ownCloud/"
     ]
   }
 }
