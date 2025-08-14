@@ -131,9 +131,10 @@ We welcome contributions! Smart Tree is developed by a unique partnership:
 
 ## 📈 Version History
 
-Current version: **v4.8.4**
+Current version: **v4.8.7**
 
 Recent improvements:
+- v4.8.7: Moved Marqant to Crate
 - v4.8.4: Automatic version management system
 - v4.8.3: Fixed MCP schema validation
 - v4.8.2: Local feedback fallback when API is offline
