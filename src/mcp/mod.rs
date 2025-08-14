@@ -14,6 +14,7 @@ mod cache;
 mod context_tools;
 mod permissions;
 mod prompts;
+mod prompts_enhanced;
 mod resources;
 pub mod smart_edit;
 mod smart_edit_diff_viewer;
@@ -25,6 +26,7 @@ mod tools_consolidated_enhanced;
 use cache::*;
 use permissions::*;
 use prompts::*;
+use prompts_enhanced::*;
 use resources::*;
 use tools::*;
 
@@ -274,9 +276,12 @@ impl McpServer {
                 handle_resources_read(request.params.unwrap_or(json!({})), self.context.clone())
                     .await
             }
-            "prompts/list" => handle_prompts_list(request.params, self.context.clone()).await,
+            "prompts/list" => {
+                // Use enhanced prompts by default, fall back to legacy if needed
+                prompts_enhanced::handle_prompts_list(request.params, self.context.clone()).await
+            },
             "prompts/get" => {
-                handle_prompts_get(request.params.unwrap_or(json!({})), self.context.clone()).await
+                prompts_enhanced::handle_prompts_get(request.params.unwrap_or(json!({})), self.context.clone()).await
             }
             "notifications/cancelled" => {
                 // This is also a notification but might need handling
