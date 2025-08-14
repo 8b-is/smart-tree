@@ -42,9 +42,9 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 whoami = "1.5"
 crc32fast = "1.4"
 similar = "2.4"
-# Use path dependencies for workspace crates
-marqant = { path = "../marqant" }
-st-tokenizer = { path = "../st-tokenizer" }
+# Marqant - quantum-compressed markdown format
+marqant = "0.1"
+# st-tokenizer = { path = "../st-tokenizer" }  # Commented out - not in repo
 
 # Terminal UI dependencies
 ratatui = "0.25"
