@@ -222,7 +222,22 @@ EXAMPLES:
                         "description": "Array of edit operations (smart_edit)",
                         "items": {
                             "type": "object",
-                            "description": "Individual edit operation"
+                            "description": "Individual edit operation",
+                            "properties": {
+                                "operation": {
+                                    "type": "string",
+                                    "description": "Type of edit operation"
+                                },
+                                "target": {
+                                    "type": "string",
+                                    "description": "What to edit (function name, line number, etc.)"
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "New content or changes to apply"
+                                }
+                            },
+                            "required": ["operation"]
                         }
                     },
                     "name": {
