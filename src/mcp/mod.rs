@@ -28,6 +28,50 @@ use prompts::*;
 use resources::*;
 use tools::*;
 
+/// Determines if startup messages should be shown based on environment variables.
+/// Respects multiple "quiet mode" indicators to avoid Claude Desktop treating them as errors.
+///
+/// This function checks for:
+/// - MCP_QUIET: Set to "1" or "true" to suppress startup messages
+/// - NO_STARTUP_MESSAGES: Set to "1" or "true" to suppress startup messages
+/// - NO_STARTUP_BANNER: Set to "1" or "true" to suppress startup messages
+/// - RUST_LOG: If set to "error" or "off", suppress startup messages
+///
+/// Returns false (suppress messages) if any quiet indicator is found.
+fn should_show_startup_messages() -> bool {
+    use std::env;
+    
+    // Check for explicit quiet flags
+    if let Ok(val) = env::var("MCP_QUIET") {
+        if val == "1" || val.to_lowercase() == "true" {
+            return false;
+        }
+    }
+    
+    if let Ok(val) = env::var("NO_STARTUP_MESSAGES") {
+        if val == "1" || val.to_lowercase() == "true" {
+            return false;
+        }
+    }
+    
+    if let Ok(val) = env::var("NO_STARTUP_BANNER") {
+        if val == "1" || val.to_lowercase() == "true" {
+            return false;
+        }
+    }
+    
+    // Check RUST_LOG for error-only or off modes
+    if let Ok(val) = env::var("RUST_LOG") {
+        let log_level = val.to_lowercase();
+        if log_level == "error" || log_level == "off" || log_level == "none" {
+            return false;
+        }
+    }
+    
+    // Default: show startup messages (backward compatibility)
+    true
+}
+
 /// MCP server implementation
 pub struct McpServer {
     context: Arc<McpContext>,
@@ -127,17 +171,21 @@ impl McpServer {
         let mut reader = BufReader::new(stdin);
         let mut stdout = stdout.lock();
 
-        eprintln!(
-            "Smart Tree MCP server v{} started",
-            env!("CARGO_PKG_VERSION")
-        );
-        eprintln!(
-            "  Build: {} ({})",
-            env!("CARGO_PKG_NAME"),
-            env!("CARGO_PKG_DESCRIPTION")
-        );
-        eprintln!("  Protocol: MCP v1.0");
-        eprintln!("  Features: tools, resources, prompts, caching");
+        // Only show startup messages if not in quiet mode
+        // Respects environment variables: MCP_QUIET, NO_STARTUP_MESSAGES, RUST_LOG
+        if should_show_startup_messages() {
+            eprintln!(
+                "<!-- Smart Tree MCP server v{} started -->",
+                env!("CARGO_PKG_VERSION")
+            );
+            eprintln!(
+                "<!--   Build: {} ({}) -->",
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_DESCRIPTION")
+            );
+            eprintln!("<!--   Protocol: MCP v1.0 -->");
+            eprintln!("<!--   Features: tools, resources, prompts, caching -->");
+        }
 
         loop {
             let mut line = String::new();
