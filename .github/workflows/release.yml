@@ -129,8 +129,9 @@ jobs:
         # Set binary name with extension
         BINARY_NAME="st${{ matrix.extension }}"
         
-        # Set archive name with tag
-        ARCHIVE_NAME="st-${{ env.RELEASE_TAG }}-${{ matrix.target }}"
+        # Set archive names - both versioned and unversioned for compatibility
+        VERSIONED_ARCHIVE="st-${{ env.RELEASE_TAG }}-${{ matrix.target }}"
+        UNVERSIONED_ARCHIVE="st-${{ matrix.target }}"
         
         # Copy documentation files
         cp ../../../README.md . || true
@@ -139,11 +140,15 @@ jobs:
         
         # Create archive based on type
         if [[ "${{ matrix.archive }}" == "zip" ]]; then
-          # Windows ZIP
-          7z a "../../../${ARCHIVE_NAME}.zip" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
+          # Windows ZIP - versioned
+          7z a "../../../${VERSIONED_ARCHIVE}.zip" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
+          # Also create unversioned for backward compatibility
+          cp "../../../${VERSIONED_ARCHIVE}.zip" "../../../${UNVERSIONED_ARCHIVE}.zip"
         else
-          # Unix tar.gz
-          tar czf "../../../${ARCHIVE_NAME}.tar.gz" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
+          # Unix tar.gz - versioned
+          tar czf "../../../${VERSIONED_ARCHIVE}.tar.gz" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
+          # Also create unversioned for backward compatibility
+          cp "../../../${VERSIONED_ARCHIVE}.tar.gz" "../../../${UNVERSIONED_ARCHIVE}.tar.gz"
         fi
         
         cd ../../..
@@ -151,9 +156,16 @@ jobs:
     - name: Generate checksums 🔐
       shell: bash
       run: |
-        ARCHIVE_NAME="st-${{ env.RELEASE_TAG }}-${{ matrix.target }}.${{ matrix.archive }}"
-        if [[ -f "$ARCHIVE_NAME" ]]; then
-          sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+        # Generate checksums for both versioned and unversioned archives
+        VERSIONED_ARCHIVE="st-${{ env.RELEASE_TAG }}-${{ matrix.target }}.${{ matrix.archive }}"
+        UNVERSIONED_ARCHIVE="st-${{ matrix.target }}.${{ matrix.archive }}"
+        
+        if [[ -f "$VERSIONED_ARCHIVE" ]]; then
+          sha256sum "$VERSIONED_ARCHIVE" > "${VERSIONED_ARCHIVE}.sha256"
+        fi
+        
+        if [[ -f "$UNVERSIONED_ARCHIVE" ]]; then
+          sha256sum "$UNVERSIONED_ARCHIVE" > "${UNVERSIONED_ARCHIVE}.sha256"
         fi
         
     - name: Upload artifact 📤
@@ -163,6 +175,8 @@ jobs:
         path: |
           st-${{ env.RELEASE_TAG }}-${{ matrix.target }}.${{ matrix.archive }}
           st-${{ env.RELEASE_TAG }}-${{ matrix.target }}.${{ matrix.archive }}.sha256
+          st-${{ matrix.target }}.${{ matrix.archive }}
+          st-${{ matrix.target }}.${{ matrix.archive }}.sha256
         if-no-files-found: error
 
   build-dxt:
