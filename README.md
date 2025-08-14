@@ -15,12 +15,12 @@ curl -fsSL https://f.8t.is/install | sh
 
 ## 🔥 What's Hot in v4.0 - v4.6
 
-### 🏗️ **v4.6.0 - CI/CD & Stability**
+### 🏗️ **v4.8.1 - CI/CD & Stability**
 - Squashed a set of critical bugs like a Coder Ninja! Memory allocation dropped from 34GB to 8MB—your RAM can now breathe easier. 😅
 - Cross-platform CI streamlined with timeout protection—no more timeouts (unless you forget your coffee!).
 - Patched the evil ring crate vulnerability!
 
-### 🎯 **v4.5.0 - Smart Edit Revolution**
+### 🎯 **v4.8.1 - Smart Edit Revolution**
 - Introducing **AST-aware code editing**. Now with up to 95% token reduction! (It's like Dr. Bruce Banner turning into Hulk, but without breaking things).
 - Track changes like Sherlock with our new diff storage system.
 

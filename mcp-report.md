@@ -6,7 +6,7 @@
 
 ## 📊 Executive Summary
 
-Smart Tree v4.5.0 offers **50+ MCP tools** designed specifically for AI-friendly directory analysis and code understanding. This report demonstrates each tool category with real examples from the Smart Tree codebase itself.
+Smart Tree v4.8.1 offers **50+ MCP tools** designed specifically for AI-friendly directory analysis and code understanding. This report demonstrates each tool category with real examples from the Smart Tree codebase itself.
 
 ### 🚀 Key Features
 - **25 output formats** including quantum compression with 99% reduction
@@ -23,7 +23,7 @@ Smart Tree v4.5.0 offers **50+ MCP tools** designed specifically for AI-friendly
 ```json
 {
   "name": "Smart Tree MCP Server",
-  "version": "4.5.0",
+  "version": "4.8.1",
   "protocol": "1.0",
   "authors": "8bit-wraith:Claude:Omni:8b-is Team"
 }
@@ -320,6 +320,6 @@ We've created not just tools, but a complete ecosystem for AI-assisted developme
 *Crafted with pride by the Aye & Hue partnership*  
 *"If it wasn't crafted with Aye & Hue, it's most likely a knock-off!"* 😉
 
-**Smart Tree v4.5.0** | **50+ MCP Tools** | **25 Output Formats** | **99% Compression**
+**Smart Tree v4.8.1** | **50+ MCP Tools** | **25 Output Formats** | **99% Compression**
 
 ✨🌳🚀
