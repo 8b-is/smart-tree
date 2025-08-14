@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn test_diff_storage_creation() {
         let temp_dir = TempDir::new().unwrap();
-        let storage = DiffStorage::new(temp_dir.path()).unwrap();
+        let _storage = DiffStorage::new(temp_dir.path()).unwrap();
 
         // Check .st_bumpers folder was created
         assert!(temp_dir.path().join(".st_bumpers").exists());

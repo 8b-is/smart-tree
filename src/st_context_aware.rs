@@ -546,7 +546,7 @@ mod tests {
         // Should detect hunting context
         let context = tracker.analyze_context().unwrap();
         match context {
-            WorkContext::Hunting { .. } => assert!(true),
+            WorkContext::Hunting { .. } => {}, // Expected - test passes
             _ => panic!("Expected Hunting context"),
         }
 

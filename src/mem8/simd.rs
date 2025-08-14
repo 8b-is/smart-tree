@@ -508,9 +508,8 @@ mod tests {
         assert_eq!(quantized.len(), amplitudes.len());
 
         // All quantized values should be in valid range
-        for q in quantized {
-            assert!(q <= 255);
-        }
+        // u8 values are always <= 255 by definition, so just check they exist
+        assert!(!quantized.is_empty());
     }
 
     #[test]

@@ -18,9 +18,6 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 
-/// Phrase frequency for smart tokenization
-// Keep struct names stable but no longer used here
-
 /// Marqant formatter - Quantum compression for markdown files
 pub struct MarqantFormatter {
     no_emoji: bool,
@@ -42,6 +39,7 @@ impl MarqantFormatter {
     }
 
     /// Add semantic section tags to markdown content
+    #[allow(dead_code)]
     fn add_section_tags(content: &str) -> String {
         let mut result = String::new();
         let mut in_code_block = false;

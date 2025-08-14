@@ -20,6 +20,7 @@ struct PromptArgument {
     required: bool,
 }
 
+#[allow(dead_code)]
 pub async fn handle_prompts_list(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let prompts = vec![
         PromptDefinition {
@@ -98,6 +99,7 @@ pub async fn handle_prompts_list(_params: Option<Value>, _ctx: Arc<McpContext>) 
     }))
 }
 
+#[allow(dead_code)]
 pub async fn handle_prompts_get(params: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     let name = params["name"]
         .as_str()
@@ -113,6 +115,7 @@ pub async fn handle_prompts_get(params: Value, _ctx: Arc<McpContext>) -> Result<
     }
 }
 
+#[allow(dead_code)]
 fn get_analyze_codebase_prompt(args: Value) -> Result<Value> {
     let path = args["path"]
         .as_str()
@@ -140,6 +143,7 @@ fn get_analyze_codebase_prompt(args: Value) -> Result<Value> {
     }))
 }
 
+#[allow(dead_code)]
 fn get_find_large_files_prompt(args: Value) -> Result<Value> {
     let path = args["path"]
         .as_str()
@@ -165,6 +169,7 @@ fn get_find_large_files_prompt(args: Value) -> Result<Value> {
     }))
 }
 
+#[allow(dead_code)]
 fn get_recent_changes_prompt(args: Value) -> Result<Value> {
     let path = args["path"]
         .as_str()
@@ -194,6 +199,7 @@ fn get_recent_changes_prompt(args: Value) -> Result<Value> {
     }))
 }
 
+#[allow(dead_code)]
 fn get_project_structure_prompt(args: Value) -> Result<Value> {
     let path = args["path"]
         .as_str()
