@@ -220,6 +220,77 @@ status() {
     fi
 }
 
+# Version management helpers
+bump_version() {
+    print_header "Version Management 🔢"
+    cd "$PROJECT_DIR"
+    
+    # Get current version from Cargo.toml
+    current_version=$(grep "^version = " Cargo.toml | head -1 | cut -d'"' -f2)
+    print_info "Current version: v$current_version"
+    
+    # Parse version components
+    IFS='.' read -r major minor patch <<< "$current_version"
+    
+    # Increment based on argument or default to patch
+    case "${1:-patch}" in
+        major)
+            new_version="$((major + 1)).0.0"
+            ;;
+        minor)
+            new_version="$major.$((minor + 1)).0"
+            ;;
+        patch|*)
+            new_version="$major.$minor.$((patch + 1))"
+            ;;
+    esac
+    
+    print_info "Bumping to: v$new_version"
+    
+    # Update Cargo.toml
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/^version = \"$current_version\"/version = \"$new_version\"/" Cargo.toml
+    else
+        sed -i "s/^version = \"$current_version\"/version = \"$new_version\"/" Cargo.toml
+    fi
+    
+    # Update CLAUDE.md if it exists
+    if [[ -f "CLAUDE.md" ]]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/v$current_version/v$new_version/g" CLAUDE.md
+        else
+            sed -i "s/v$current_version/v$new_version/g" CLAUDE.md
+        fi
+        print_success "Updated CLAUDE.md"
+    fi
+    
+    # Clean up orphaned local tags
+    print_info "Cleaning orphaned tags..."
+    git tag -l | while read tag; do 
+        if ! git ls-remote --tags origin | grep -q "refs/tags/$tag$"; then
+            print_warning "Removing local-only tag: $tag"
+            git tag -d "$tag" >/dev/null 2>&1
+        fi
+    done
+    
+    print_success "Version bumped to v$new_version! ${CHECK}"
+    echo -e "\n${YELLOW}Next steps:${NC}"
+    echo "  1. Build: ./manage.sh build"
+    echo "  2. Test: ./manage.sh test"
+    echo "  3. Commit: git add -A && git commit -m 'chore: bump version to v$new_version'"
+    echo "  4. Tag: git tag -a v$new_version -m 'Version $new_version'"
+    echo "  5. Push: git push origin main && git push origin v$new_version"
+}
+
+# Quick version bump and build
+quick_bump() {
+    print_header "Quick Version Bump & Build 🚀"
+    bump_version patch
+    echo
+    build release
+    print_success "Ready to commit and push!"
+}
+
 # Run benchmarks
 bench() {
     print_header "Running Benchmarks 📈"
@@ -721,6 +792,8 @@ ${YELLOW}Commands:${NC}
   ${GREEN}install${NC} [dir]         Install binary (default: /usr/local/bin)
   ${GREEN}uninstall${NC} [dir]       Uninstall binary
   ${GREEN}release${NC} <vX.Y.Z> [notes] Create a GitHub release
+  ${GREEN}bump${NC} [major|minor|patch] Bump version (default: patch +0.0.1)
+  ${GREEN}quick-bump${NC}            Quick version bump + build 🚀
   ${GREEN}completions${NC}           Setup shell completions
   ${GREEN}man-install${NC}           Generate and install the man page
   ${GREEN}man-uninstall${NC}         Uninstall the man page
@@ -883,6 +956,13 @@ main() {
         release)
             shift
             release "$@"
+            ;;
+        bump)
+            shift
+            bump_version "$@"
+            ;;
+        quick-bump)
+            quick_bump
             ;;
         completions|complete)
             completions
