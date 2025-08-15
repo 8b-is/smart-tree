@@ -182,7 +182,9 @@ fn main() {
 "#;
 
         let compressed = MarqantFormatter::compress_markdown(markdown).unwrap();
-        assert!(compressed.starts_with("MARQANT_V1"));
+        
+        // Marqant v0.2 uses "MARQANT" header (without _V1 suffix)
+        assert!(compressed.starts_with("MARQANT"), "Compressed data should start with MARQANT header");
 
         // For documents with limited repetition, compression might not reduce size due to header overhead
         // The important thing is that the format is correct and round-trip works
@@ -193,7 +195,7 @@ fn main() {
 
         // Verify the compression at least includes proper header and structure
         assert!(
-            compressed.contains("MARQANT_V1"),
+            compressed.starts_with("MARQANT"),
             "Should have proper header"
         );
         assert!(compressed.len() > 20, "Should have header and content");
