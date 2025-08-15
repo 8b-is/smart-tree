@@ -33,8 +33,7 @@ st --mode quantum src/      # Quantum compression for massive codebases
 
 ### Homebrew (macOS/Linux)
 ```bash
-brew tap 8b-is/smart-tree
-brew install smart-tree
+brew install --HEAD 8b-is/smart-tree/smart-tree
 ```
 
 ### From Source
