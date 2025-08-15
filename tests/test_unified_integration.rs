@@ -6,7 +6,7 @@ use st::st_context_aware::{ContextualOperation, StContextTracker, WorkContext};
 use st::st_unified::StUnified;
 use st::tools_st_only::{ListOptions, SearchOptions, StOnlyTools, StToolsConfig};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -259,7 +259,7 @@ fn test_context_aware_development_workflow() -> Result<()> {
     })?;
 
     // Step 2: Run tests
-    let test_files = tools.list(
+    let _test_files = tools.list(
         &project.path().join("tests"),
         ListOptions {
             pattern: Some("test_*.rs".to_string()),
@@ -276,7 +276,7 @@ fn test_context_aware_development_workflow() -> Result<()> {
     })?;
 
     // Step 3: Get context-aware suggestions
-    let suggestions = tracker.get_suggestions(&project.path());
+    let suggestions = tracker.get_suggestions(project.path());
     assert!(!suggestions.is_empty(), "Should provide coding suggestions");
     assert!(
         suggestions
@@ -307,7 +307,7 @@ fn test_debugging_workflow_with_all_tools() -> Result<()> {
 
     // Step 1: Error occurs, developer starts searching
     for keyword in &["error", "panic", "TODO", "bug"] {
-        let result = unified.grep(keyword, project.path(), Some("rs"))?;
+        let _result = unified.grep(keyword, project.path(), Some("rs"))?;
 
         tracker.record_operation(ContextualOperation {
             timestamp: std::time::SystemTime::now(),

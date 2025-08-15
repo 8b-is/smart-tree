@@ -5,7 +5,7 @@ use anyhow::Result;
 use st::mem8::{
     create_temporal_grooves,
     integration::{ContentType, DirectoryHealth},
-    DirectoryEvent, DirectoryMetadata, GitTemporalAnalyzer, SmartTreeMem8,
+    DirectoryMetadata, GitTemporalAnalyzer, SmartTreeMem8,
 };
 use std::path::Path;
 

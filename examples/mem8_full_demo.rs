@@ -13,20 +13,12 @@ use std::time::{Duration, Instant};
 
 use st::mem8::{
     CollectiveEmotionalIntelligence,
-
     CompressedWave,
     // Consciousness
     ConsciousnessEngine,
-    ConsciousnessState,
-    Custodian,
-    DivergenceTracker,
-    EmotionalMemoryTherapy,
     FrequencyBand,
-
     // Format and compression
     M8Writer,
-    MarkqantEncoder,
-
     // Core wave system
     MemoryWave,
     PerformanceBenchmark,
@@ -34,17 +26,9 @@ use st::mem8::{
     ReactiveLayer,
     ReactiveMemory,
     ReactiveResponse,
-    RepetitionPrevention,
     // Safety systems
     SafetySystem,
-    SensorArbitrator,
-
     SensorInput,
-
-    SimdGridOps,
-    // Performance
-    SimdWaveProcessor,
-    TemporalBlanketRecovery,
     WaveGrid,
 };
 
@@ -103,7 +87,7 @@ fn main() {
 }
 
 fn create_test_memories(wave_grid: &Arc<RwLock<WaveGrid>>) {
-    let memories = vec![
+    let memories = [
         // Deep structural memory (0-200Hz)
         (
             FrequencyBand::DeepStructural.frequency(0.5),
@@ -169,7 +153,7 @@ fn create_test_memories(wave_grid: &Arc<RwLock<WaveGrid>>) {
 }
 
 fn setup_reactive_layers(wave_grid: Arc<RwLock<WaveGrid>>) -> ReactiveMemory {
-    use st::mem8::reactive::{LoomingDetector, ReactivePattern};
+    use st::mem8::reactive::ReactivePattern;
 
     let mut reactive = ReactiveMemory::new(wave_grid);
 
@@ -389,7 +373,7 @@ fn demonstrate_m8_format(wave_grid: &Arc<RwLock<WaveGrid>>) {
     // Sample some waves from the grid
     for z in 0..5 {
         if let Some(wave) = grid.get(0, 0, z * 1000) {
-            let compressed = CompressedWave::from_wave(&wave, z as u64);
+            let compressed = CompressedWave::from_wave(wave, z as u64);
             waves.push(compressed);
         }
     }

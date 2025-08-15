@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - Lightning Fast Directory Visualization
 
-[![Version](https://img.shields.io/badge/version-4.8.4-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-4.8.8-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![CO2 Saved](https://img.shields.io/badge/CO2-saving%20the%20planet-success)](TERMINAL_EXAMPLES.md#environment-impact)
@@ -130,9 +130,10 @@ We welcome contributions! Smart Tree is developed by a unique partnership:
 
 ## 📈 Version History
 
-Current version: **v4.8.7**
+Current version: **v4.8.8**
 
 Recent improvements:
+- v4.8.8: Code formatting, linting, and maintenance updates by Claude
 - v4.8.7: Moved Marqant to Crate
 - v4.8.4: Automatic version management system
 - v4.8.3: Fixed MCP schema validation

@@ -32,7 +32,7 @@ fn test_mq_aggregate_basic() {
     let output_path = temp_path.join("test.mq");
     let mut cmd = Command::cargo_bin("mq").unwrap();
     let output = cmd
-        .args(&[
+        .args([
             "aggregate",
             temp_path.to_str().unwrap(),
             "-o",
@@ -98,7 +98,7 @@ fn test_mq_aggregate_with_compression() {
     let aggregate_path = temp_path.join("compressed.mq");
     let mut cmd = Command::cargo_bin("mq").unwrap();
     let output = cmd
-        .args(&[
+        .args([
             "aggregate",
             temp_path.to_str().unwrap(),
             "-o",
@@ -147,7 +147,7 @@ fn test_mq_aggregate_with_exclusions() {
     let output_path = temp_path.join("filtered.mq");
     let mut cmd = Command::cargo_bin("mq").unwrap();
     let output = cmd
-        .args(&[
+        .args([
             "aggregate",
             temp_path.to_str().unwrap(),
             "-o",
