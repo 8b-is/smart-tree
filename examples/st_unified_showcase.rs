@@ -59,7 +59,7 @@ fn main() -> Result<()> {
     println!("─────────────────────────────────");
 
     let output = Command::new("st")
-        .args(&["--mode", "summary-ai", "--depth", "2", "."])
+        .args(["--mode", "summary-ai", "--depth", "2", "."])
         .output()?;
 
     println!("{}", String::from_utf8_lossy(&output.stdout));

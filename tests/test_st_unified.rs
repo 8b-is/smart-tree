@@ -374,11 +374,11 @@ fn test_understand_project() -> Result<()> {
 #[test]
 fn test_binary_not_found() -> Result<()> {
     // What if st binary doesn't exist? Time to find out!
-    let st = StUnified::new()?;
+    let _st = StUnified::new()?;
 
     // This test is tricky because it depends on the actual binary
     // We'll just ensure the struct is created successfully
-    assert!(true, "StUnified should handle missing binary gracefully");
+    // The creation itself validates the functionality
 
     Ok(())
 }

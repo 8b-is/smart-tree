@@ -2,10 +2,7 @@
 // Shows how ST replaces ls, grep, find, tree, and more
 
 use anyhow::Result;
-use st::{
-    st_unified::StUnified,
-    tools_st_only::{ListOptions, SearchOptions, StOnlyTools},
-};
+use st::st_unified::StUnified;
 use std::path::Path;
 
 fn main() -> Result<()> {
@@ -13,7 +10,6 @@ fn main() -> Result<()> {
 
     // Create unified ST interface
     let st = StUnified::new()?;
-    let st_tools = StOnlyTools::new();
 
     // Example 1: Replace LS
     println!("📁 Replacing LS command:");

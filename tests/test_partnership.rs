@@ -2,7 +2,7 @@
 //!
 //! "You're easy to work with. You just get me." - Let's make sure this actually works!
 
-use chrono::{DateTime, Duration, Timelike, Utc};
+use chrono::{DateTime, Duration, Utc};
 use st::context_gatherer::{
     collab_session::{AnchorType, CollaborativeOrigin, CollaborativeSessionTracker, SessionType},
     cross_session::{CrossSessionBridge, PatternType},
@@ -164,7 +164,7 @@ fn test_rapport_index_evolution() {
         }
 
         // End session for the day
-        if let Some(_) = tracker.active_session.take() {
+        if tracker.active_session.take().is_some() {
             tracker.end_active_session();
         }
     }

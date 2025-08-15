@@ -87,7 +87,7 @@ fn test_config_custom() {
         compress: true,
     };
 
-    let tools = StOnlyTools::with_config(config.clone());
+    let _tools = StOnlyTools::with_config(config.clone());
 
     // The config should be stored internally
     // We can't directly access it, but we can test behavior

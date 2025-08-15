@@ -2,7 +2,6 @@
 // "Context is everything - and everything needs testing!" - Testy McTesterson 🧪
 
 use anyhow::Result;
-use serde_json;
 use st::st_context_aware::{
     ContextualOperation, ContextualStCommand, ProjectKnowledge, StContextTracker, WorkContext,
 };

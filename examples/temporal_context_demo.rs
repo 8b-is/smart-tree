@@ -5,7 +5,6 @@
 use anyhow::Result;
 use st::context_gatherer::temporal::TemporalResolution;
 use st::context_gatherer::{ContextGatherer, GatherConfig};
-use std::path::PathBuf;
 
 fn main() -> Result<()> {
     println!("=== Smart Tree Temporal Context Analysis Demo ===\n");
@@ -15,15 +14,17 @@ fn main() -> Result<()> {
     println!("Project: {}\n", project_path.display());
 
     // Configure gatherer
-    let mut config = GatherConfig::default();
-    config.project_identifiers = vec![
-        "smart-tree".to_string(),
-        project_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string(),
-    ];
+    let config = GatherConfig {
+        project_identifiers: vec![
+            "smart-tree".to_string(),
+            project_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string(),
+        ],
+        ..Default::default()
+    };
 
     // Gather contexts
     println!("📊 Gathering context from AI tools...");

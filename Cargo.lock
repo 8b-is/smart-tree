@@ -1299,9 +1299,9 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "marqant"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8f82eee953d6413215da7fd0084c8d3f4b5218d36a50456987b13c2a331e095"
+checksum = "08803750324dd879d56d691f7180ed203a7c0b00205a02039eccc145a33df70f"
 dependencies = [
  "anyhow",
  "base64",
@@ -2043,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "st"
-version = "4.8.7"
+version = "4.8.8"
 dependencies = [
  "anyhow",
  "assert_cmd",

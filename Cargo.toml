@@ -2,7 +2,7 @@
 
 [package]
 name = "st"
-version = "4.8.7"
+version = "4.8.8"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -43,7 +43,7 @@ whoami = "1.5"
 crc32fast = "1.4"
 similar = "2.4"
 # Marqant - quantum-compressed markdown format
-marqant = "0.1"
+marqant = "0.2"
 # st-tokenizer = { path = "../st-tokenizer" }  # Commented out - not in repo
 
 # Terminal UI dependencies
