@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Smart Tree (`st`) is a blazingly fast, AI-friendly directory visualization tool written in Rust. It's designed as an intelligent alternative to the traditional `tree` command, optimized for both human readability and AI token efficiency.
 
-**Current Version**: v4.8.7
+**Current Version**: v4.8.8
 
 ### Key Features
 - **10-24x faster** than traditional tree commands

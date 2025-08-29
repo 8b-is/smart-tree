@@ -1,0 +1,6 @@
+[package]
+name = "expert_prompt_engineer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]

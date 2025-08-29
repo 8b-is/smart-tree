@@ -1,4 +1,5 @@
 [workspace]
+members = ["expert_prompt_engineer"]
 
 [package]
 name = "st"
