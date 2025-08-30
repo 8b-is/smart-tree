@@ -2,287 +2,90 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+⚠️ **TOKEN AWARE**: This file is optimized for <25k tokens. Use `st --mode quantum` for massive contexts!
 
-Smart Tree (`st`) is a blazingly fast, AI-friendly directory visualization tool written in Rust. It's designed as an intelligent alternative to the traditional `tree` command, optimized for both human readability and AI token efficiency.
+## Project: Smart Tree v4.8.8
+Lightning-fast directory visualization, 10-24x faster than `tree`. MCP server with 30+ tools.
 
-**Current Version**: v4.8.8
+## Essential Commands
 
-### Key Features
-- **10-24x faster** than traditional tree commands
-- **30+ output formats** including AI-optimized and quantum compression modes
-- **MCP server** with 30+ tools for AI assistants
-- **File history tracking** for complete audit trail of AI operations
-- **SSE support** for real-time directory monitoring
-
-## Development Commands
-
-### Building
 ```bash
-cargo build --release      # Optimized release build (recommended)
-cargo build               # Debug build
+# Build & Test
+cargo build --release           # Always use release (10x faster)
+cargo test -- --nocapture       # Test with output
+./scripts/manage.sh test        # Full test suite + clippy + fmt
 
-# Using manage script (preferred - includes format and lint checks)
-./scripts/manage.sh build
+# Running
+st                              # Classic tree
+st --mode ai --compress         # AI-optimized (80% smaller!)
+st --mode quantum src/          # Maximum compression (100x)
+st --mcp                        # MCP server mode
+
+# Before commits
+cargo fmt && cargo clippy -- -D warnings && cargo test
 ```
 
-### Testing
-```bash
-# Run all tests with output
-cargo test -- --nocapture
+## Architecture (Key Files Only)
 
-# Run specific module tests
-cargo test scanner
-cargo test formatters
-cargo test mcp
-cargo test quantum
-cargo test semantic
-
-# Run single test by exact name
-cargo test test_quantum_compression -- --exact
-
-# Using manage script (runs tests + clippy + format check)
-./scripts/manage.sh test
-
-# Run comprehensive test suite
-cd tests && ./run_all_tests.sh
+```
+src/
+├── main.rs          # CLI entry (clap 4.5)
+├── scanner.rs       # Directory traversal (handles permissions with *)
+├── formatters/      # 25+ output formats
+│   ├── quantum.rs   # MEM|8 compression (8-10x)
+│   └── ai.rs        # Token-efficient
+├── mcp/            
+│   └── tools.rs     # 30+ MCP tools (139KB!)
+└── tree_sitter_quantum.rs  # AST-aware compression
 ```
 
-### Linting and Formatting
+## Testing
+
 ```bash
-# Format code
-cargo fmt
-
-# Check formatting without modifying
-cargo fmt -- --check
-
-# Run clippy linter
-cargo clippy -- -D warnings
-
-# Using manage script
-./scripts/manage.sh format
-./scripts/manage.sh lint
+cargo test scanner              # Test specific module
+cargo test test_quantum -- --exact  # Single test
+./tests/run_all_tests.sh       # Full suite
 ```
 
-### Running
+## MCP Setup
+
 ```bash
-# Run compiled binary
-./target/release/st
-
-# Run with cargo
-cargo run --release -- [args]
-
-# Common usage examples
-st                               # Classic tree view
-st --mode ai --compress          # AI-optimized compressed
-st --mode quantum src/           # Quantum compression
-st --search "TODO"               # Search in files
-st --mcp                         # Run as MCP server
-```
-
-## Architecture Overview
-
-### Core Modules
-- **main.rs**: CLI entry point using clap 4.5
-- **lib.rs**: Library entry point, exports public API
-- **scanner.rs**: Directory traversal engine using walkdir
-  - Handles permission errors gracefully (marks with `*`)
-  - Supports streaming for large directories (>100k files)
-
-### Formatters (src/formatters/)
-25+ output formats including:
-- **classic.rs**: Traditional tree view (O(n) optimized)
-- **hex.rs**: Fixed-width hexadecimal (AI-optimized)
-- **quantum.rs**: MEM|8 quantum compression (8-10x reduction)
-- **ai.rs**, **summary_ai.rs**: Token-efficient formats
-- **mermaid.rs**: Diagram generation
-- **marqant.rs**: Quantum-compressed markdown (.mq files)
-
-### MCP Server (src/mcp/)
-- **mod.rs**: Main server logic
-- **tools.rs**: 30+ MCP tools implementation
-- **cache.rs**: Result caching
-- **sse.rs**: Real-time monitoring
-
-### Advanced Features (src/)
-- **mem8/**: Wave-based memory architecture
-- **file_history/**: AI operation tracking
-- **smart/**: Git integration, NLP, unified search
-- **tree_sitter_quantum.rs**: AST-aware compression
-- **convergence/**: Optimal format detection
-
-### Binary Tools (src/bin/)
-- **mq.rs**: Marqant compression utility
-- **tree.rs**: Alternative tree binary
-- **m8.rs**: MEM8 memory tool
-
-## Testing Strategy
-
-### Unit Tests
-- Test files alongside source in module directories
-- Use `#[cfg(test)]` modules
-- Run with `cargo test module_name`
-
-### Integration Tests
-```bash
-# MCP protocol tests
-./tests/test_mcp_integration.sh
-
-# Core functionality
-./tests/test_integration.sh
-
-# Feature-specific tests
-./tests/test_v3_features.sh
-```
-
-### CI/CD Requirements
-Tests must pass:
-1. `cargo fmt -- --check` (formatting)
-2. `cargo clippy -- -D warnings` (linting)
-3. `cargo test` (all unit tests)
-
-## Performance Considerations
-
-- Uses **rayon** for parallel operations
-- **Streaming mode** (`--stream`) for directories >100k files
-- Classic formatter optimized from O(n²) to O(n)
-- Default depth auto-selected per format (ls=1, classic=3, ai=5)
-- Binary formats (quantum) use compression for 100x reduction
-
-## MCP Server Development
-
-### Setup for Claude Desktop
-```bash
-# Show configuration
-st --mcp-config
-
-# Add to Claude Desktop config
 st --mcp-config >> ~/Library/Application\ Support/Claude/claude_desktop_config.json
+RUST_LOG=debug st --mcp        # Debug mode
 ```
 
-### Testing MCP Tools
-```bash
-# Run MCP server
-st --mcp
+## Performance Tips
 
-# Debug mode
-RUST_LOG=debug st --mcp
+- Use `--stream` for dirs >100k files
+- Quantum modes output binary (redirect: `st --mode quantum > out.mem8`)
+- Default depths: ls=1, classic=3, ai=5
 
-# List available tools
-st --mcp-tools
+## Project Patterns
 
-# Test specific MCP functionality
-cargo test mcp::tools
-```
-
-## Common Workflows
-
-### After Making Changes
-```bash
-./scripts/manage.sh format && ./scripts/manage.sh test
-```
-
-### Before Committing
-```bash
-# Check formatting
-cargo fmt -- --check
-
-# Run clippy
-cargo clippy -- -D warnings
-
-# Run tests
-cargo test
-```
-
-### Release Process
-```bash
-./scripts/manage.sh release v4.8.8 "Release notes here"
-```
-
-## Environment Variables
-
-- `ST_DEFAULT_MODE`: Default output format
-- `NO_COLOR=1`: Disable colored output
-- `NO_EMOJI=1`: Disable emoji output
-- `RUST_LOG`: Logging verbosity (debug, info, warn, error)
-- `SMART_TREE_NO_UPDATE_CHECK=1`: Disable update checks
-
-## Project-Specific Patterns
-
-### Error Handling
-- Uses `anyhow` for error propagation
-- Scanner gracefully handles permission errors
-- Marks inaccessible directories with `*`
-
-### Memory Management
-- Streaming mode keeps memory constant for large dirs
-- Quantum formats use token dictionaries for compression
-- File history stored in `~/.mem8/.filehistory/`
-
-### Code Style Notes
-- Includes humorous "The Cheet" persona comments
-- Rock/musical theme in comments
-- Focus on efficiency: "smallest and fastest"
-- Performance critical - benchmark large directories
-
-## Debugging Tips
-
-### Large Directory Issues
-```bash
-st --stream --depth 3 /large/dir
-st --mode summary-ai /large/dir
-```
-
-### Permission Errors
-Check scanner.rs:72 for permission handling
-
-### MCP Communication
-```bash
-RUST_LOG=debug cargo run -- --mcp
-```
-
-### Binary Output Issues
-Quantum modes output binary - use redirection:
-```bash
-st --mode quantum > output.mem8
-```
+- Uses `anyhow` for errors
+- Marks inaccessible dirs with `*`
+- File history in `~/.mem8/.filehistory/`
+- Humorous "Cheet" persona in comments
+- Focus: "smallest and fastest"
 
 ## manage.sh Commands
 
-Core operations:
-- `build [debug|release]` - Build project
-- `test` - Run tests, clippy, format check
-- `run [args]` - Run with arguments
-- `clean` - Clean artifacts
-- `format`/`fmt` - Format code
-- `lint` - Run clippy
-- `bench` - Run benchmarks
+```bash
+build [release|debug]   # Build project
+test                    # Test + clippy + fmt
+mcp-run                 # Run as MCP server
+install [dir]           # Install binary
+release <ver> [notes]   # GitHub release
+```
 
-MCP operations:
-- `mcp-run` - Run as MCP server
-- `mcp-config` - Show Claude Desktop config
-- `mcp-tools` - List available tools
+Use `-n` for non-interactive mode.
 
-Installation:
-- `install [dir]` - Install binary
-- `release <version> [notes]` - Create GitHub release
+## Adding Features
 
-Use `-n` or `--non-interactive` for automation.
+1. New formatter: implement `Formatter` trait in `src/formatters/`
+2. Add to `FormatterType` enum in main.rs
+3. Test with dirs >100k files
+4. Run `./scripts/manage.sh test`
 
-## Contributing New Features
-
-### Adding a Formatter
-1. Create file in `src/formatters/`
-2. Implement `Formatter` trait (required)
-3. Implement `StreamingFormatter` (optional)
-4. Add to `FormatterType` enum in main.rs
-5. Add tests in module
-6. Update CLI help text
-7. Benchmark against existing formatters
-
-### Testing Requirements
-- Include unit tests with `#[test]`
-- Test with directories >100k files
-- Verify streaming mode works
-- Check token efficiency for AI modes
-- Run `./scripts/manage.sh test` before committing
+---
+*Full docs: README.md | Tests: tests/*.rs | MCP: src/mcp/tools.rs*
