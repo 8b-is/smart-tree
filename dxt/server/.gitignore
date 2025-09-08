@@ -1,0 +1,9 @@
+# Binary files
+st
+st.exe
+
+# Update marker
+.update-available
+
+# Node modules (if any get added)
+node_modules/

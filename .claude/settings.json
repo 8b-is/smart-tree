@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "ToolCall": [
+      {
+        "hooks": [
+          {
+            "command": "st -m summary --depth 1 target/",
+            "type": "command"
+          }
+        ],
+        "matcher": "cargo (build|test|run)"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "st -m quantum .",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  },
+  "smart_tree": {
+    "auto_configured": true,
+    "project_type": "Rust",
+    "stats": {
+      "directories": 64,
+      "files": 424,
+      "size": 893464235
+    },
+    "version": "4.8.8"
+  }
+}

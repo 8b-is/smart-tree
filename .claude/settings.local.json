@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read(//data/home_backup/hue/claude_back/projects/-home-hue-source-mem8/**)",
+      "Bash(cat:*)",
+      "Bash(cargo build:*)",
+      "Bash(./target/debug/import-claude-memories:*)",
+      "Read(//data/home_backup/hue/claude_back/projects/**)"
+    ],
+    "deny": [],
+    "ask": [],
+    "additionalDirectories": [
+      "~"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "smart-tree"
+  ]
+}

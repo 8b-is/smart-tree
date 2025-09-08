@@ -1,0 +1,60 @@
+{
+  "name": "smart-tree",
+  "version": "3.3.5",
+  "description": "A blazingly fast, AI-friendly directory tree visualization tool written in Rust. Smart Tree goes beyond traditional tree commands by providing intelligent filtering, multiple output formats, and optimization for both human and AI consumption.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/8b-is/smart-tree.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/8b-is/smart-tree/issues"
+  },
+  "homepage": "https://github.com/8b-is/smart-tree#readme",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.7"
+  },
+  "dependencies": {
+    "ansi-styles": "^4.3.0",
+    "braces": "^3.0.3",
+    "chalk": "^4.1.2",
+    "ci-info": "^4.2.0",
+    "color-convert": "^2.0.1",
+    "color-name": "^1.1.4",
+    "escape-string-regexp": "^2.0.0",
+    "expect": "^30.0.3",
+    "fill-range": "^7.1.1",
+    "graceful-fs": "^4.2.11",
+    "has-flag": "^4.0.0",
+    "is-number": "^7.0.0",
+    "jest-diff": "^30.0.3",
+    "jest-matcher-utils": "^30.0.3",
+    "jest-message-util": "^30.0.2",
+    "jest-mock": "^30.0.2",
+    "jest-regex-util": "^30.0.1",
+    "jest-util": "^30.0.2",
+    "js-tokens": "^4.0.0",
+    "micromatch": "^4.0.8",
+    "picocolors": "^1.1.1",
+    "picomatch": "^4.0.2",
+    "pretty-format": "^30.0.2",
+    "react-is": "^18.3.1",
+    "slash": "^3.0.0",
+    "stack-utils": "^2.0.6",
+    "supports-color": "^7.2.0",
+    "to-regex-range": "^5.0.1",
+    "undici-types": "^7.8.0"
+  }
+}

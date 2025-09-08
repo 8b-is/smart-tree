@@ -1,0 +1,39 @@
+# --- General ---
+.DS_Store
+.vscode/
+*.swp
+*~
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+pip-wheel-metadata/
+*.egg-info/
+
+# --- Node ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# --- Rust ---
+/target/
+Cargo.lock
+
+# --- Build artifacts ---
+dist/
+build/
+**/target/** 
+release_artifacts/st-x86_64-unknown-linux-gnu.tar.gz
+.st_bumpers/
+
+# --- tmp - Keep the tmp directory for testing ---
+tmp/*
+
+!tmp/testignore.txt
+
+.mem8/
+

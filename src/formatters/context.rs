@@ -1,0 +1,239 @@
+//! Context Mode - Provides intelligent context for AI conversations
+//! Integrates with MEM|8 memories, git status, and recent changes
+//!
+//! "Context is consciousness" - Omni
+
+use super::Formatter;
+use crate::mem8::ConversationMemory;
+use crate::scanner::{FileNode, TreeStats};
+use anyhow::Result;
+use std::io::Write;
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub struct ContextFormatter {
+    show_git: bool,
+    show_memories: bool,
+}
+
+impl Default for ContextFormatter {
+    fn default() -> Self {
+        Self {
+            show_git: true,
+            show_memories: true,
+        }
+    }
+}
+
+impl ContextFormatter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get git context for the path
+    fn get_git_context(&self, path: &Path) -> Option<String> {
+        if !self.show_git {
+            return None;
+        }
+
+        // Try to get git info using gix
+        if let Ok(repo) = gix::discover(path) {
+            let mut git_info = Vec::new();
+
+            // Get branch
+            if let Ok(head) = repo.head_ref() {
+                if let Some(reference) = head {
+                    let branch = reference.name().as_bstr().to_string();
+                    git_info.push(format!(
+                        "Branch: {}",
+                        branch.strip_prefix("refs/heads/").unwrap_or(&branch)
+                    ));
+                }
+            }
+
+            // Get last commit
+            if let Ok(commit) = repo.head_commit() {
+                let id = commit.id().to_string();
+                let msg = commit
+                    .message_raw_sloppy()
+                    .to_string()
+                    .lines()
+                    .next()
+                    .unwrap_or("No message")
+                    .to_string();
+                git_info.push(format!("Last: {} - {}", &id[..8], msg));
+            }
+
+            if !git_info.is_empty() {
+                return Some(git_info.join("\n"));
+            }
+        }
+
+        None
+    }
+
+    /// Search for related memories in MEM|8
+    fn get_memory_context(&self, path: &Path) -> Option<String> {
+        if !self.show_memories {
+            return None;
+        }
+
+        // Get project name from path
+        let project_name = path.file_name()?.to_str()?;
+
+        // Initialize conversation memory
+        let memory = ConversationMemory::new().ok()?;
+
+        // List conversations and find related ones
+        let conversations = memory.list_conversations().ok()?;
+        let related: Vec<_> = conversations
+            .iter()
+            .filter(|c| c.file_name.contains(project_name))
+            .take(3)
+            .collect();
+
+        if !related.is_empty() {
+            let mut output = vec!["🧠 Related memories:".to_string()];
+            for conv in related {
+                output.push(format!(
+                    "  • {} ({} messages)",
+                    conv.file_name, conv.message_count
+                ));
+            }
+            return Some(output.join("\n"));
+        }
+
+        None
+    }
+}
+
+impl Formatter for ContextFormatter {
+    fn format(
+        &self,
+        writer: &mut dyn Write,
+        nodes: &[FileNode],
+        stats: &TreeStats,
+        root_path: &Path,
+    ) -> Result<()> {
+        writeln!(writer, "=== Smart Tree Context ===")?;
+        writeln!(writer)?;
+
+        // Project identification
+        writeln!(writer, "📁 Project: {}", root_path.display())?;
+
+        // Git context
+        if let Some(git_info) = self.get_git_context(root_path) {
+            writeln!(writer, "\n📍 Git Status:")?;
+            writeln!(writer, "{}", git_info)?;
+        }
+
+        // Directory structure (compressed)
+        writeln!(writer, "\n🌳 Structure:")?;
+        writeln!(writer, "SUMMARY_AI_V1:")?;
+        writeln!(writer, "PATH:{}", root_path.display())?;
+        writeln!(
+            writer,
+            "STATS:F{:x}D{:x}S{:x}",
+            stats.total_files, stats.total_dirs, stats.total_size
+        )?;
+
+        // Count files by extension
+        let mut ext_counts = std::collections::HashMap::new();
+        for node in nodes {
+            if !node.is_dir {
+                if let Some(ext) = node.path.extension() {
+                    let ext_str = ext.to_string_lossy().to_string();
+                    *ext_counts.entry(ext_str).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let mut exts: Vec<_> = ext_counts.iter().collect();
+        exts.sort_by(|a, b| b.1.cmp(a.1));
+
+        let ext_str: Vec<_> = exts
+            .iter()
+            .take(10)
+            .map(|(ext, count)| format!("{}:{}", ext, count))
+            .collect();
+        if !ext_str.is_empty() {
+            writeln!(writer, "EXT:{}", ext_str.join(","))?;
+        }
+
+        // Find and show key files
+        let key_files = find_key_files(nodes);
+        if !key_files.is_empty() {
+            writeln!(writer, "KEY:{}", key_files.join(","))?;
+        }
+
+        // Recent changes
+        let recent = find_recent_files(nodes, 86400); // Last 24 hours
+        if !recent.is_empty() {
+            writeln!(writer, "\n⏰ Recent changes:")?;
+            for file in recent.iter().take(5) {
+                writeln!(writer, "  • {}", file)?;
+            }
+        }
+
+        // Memory context
+        if let Some(memories) = self.get_memory_context(root_path) {
+            writeln!(writer, "\n{}", memories)?;
+        }
+
+        writeln!(writer, "\n=== End Context ===")?;
+
+        Ok(())
+    }
+}
+
+// Helper functions
+fn find_key_files(nodes: &[FileNode]) -> Vec<String> {
+    let important = [
+        "Cargo.toml",
+        "package.json",
+        "README.md",
+        "CLAUDE.md",
+        "pyproject.toml",
+        "go.mod",
+        "Makefile",
+        ".env",
+    ];
+
+    let mut found = Vec::new();
+    for node in nodes {
+        if let Some(file_name) = node.path.file_name() {
+            let name = file_name.to_string_lossy();
+            if important.contains(&name.as_ref()) && !found.contains(&name.to_string()) {
+                found.push(name.to_string());
+                if found.len() >= 10 {
+                    break;
+                }
+            }
+        }
+    }
+    found
+}
+
+fn find_recent_files(nodes: &[FileNode], seconds: u64) -> Vec<String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let mut recent = Vec::new();
+    for node in nodes {
+        if !node.is_dir {
+            if let Ok(duration) = node.modified.duration_since(UNIX_EPOCH) {
+                let file_time = duration.as_secs();
+                let age = now.saturating_sub(file_time);
+                if age < seconds {
+                    recent.push(node.path.display().to_string());
+                    if recent.len() >= 10 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    recent
+}

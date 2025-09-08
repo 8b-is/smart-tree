@@ -1,0 +1,12 @@
+{
+  "name": "smart-tree-installer",
+  "version": "4.0.0",
+  "description": "Smart Tree Installation Helper for Claude Desktop",
+  "main": "index.js",
+  "scripts": {},
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "author": "8b-is",
+  "license": "MIT"
+}
