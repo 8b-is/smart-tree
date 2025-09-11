@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - Lightning Fast Directory Visualization
 
-[![Version](https://img.shields.io/badge/version-5.0.3-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-5.0.4-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![CO2 Saved](https://img.shields.io/badge/CO2-saving%20the%20planet-success)](TERMINAL_EXAMPLES.md#environment-impact)
