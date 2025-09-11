@@ -954,7 +954,7 @@ pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
         "final_structure": final_structure,
         "content_preview": editor.content.lines().take(20).collect::<Vec<_>>().join("\n"),
     });
-    
+
     // Wrap in MCP content format
     Ok(json!({
         "content": [{
@@ -979,7 +979,7 @@ pub async fn handle_get_function_tree(params: Option<Value>) -> Result<Value> {
 
     let editor = SmartEditor::new(content, language)?;
     let function_tree = editor.get_function_tree()?;
-    
+
     // Wrap in MCP content format
     Ok(json!({
         "content": [{
