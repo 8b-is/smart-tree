@@ -946,13 +946,21 @@ pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
     // Write back to file
     std::fs::write(file_path, &editor.content)?;
 
-    Ok(json!({
+    let result = json!({
         "file_path": file_path,
         "language": format!("{:?}", language),
         "edits_applied": results,
         "initial_structure": initial_structure,
         "final_structure": final_structure,
         "content_preview": editor.content.lines().take(20).collect::<Vec<_>>().join("\n"),
+    });
+    
+    // Wrap in MCP content format
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&result)?
+        }]
     }))
 }
 
@@ -970,7 +978,15 @@ pub async fn handle_get_function_tree(params: Option<Value>) -> Result<Value> {
     let language = SupportedLanguage::from_extension(extension).context("Unsupported language")?;
 
     let editor = SmartEditor::new(content, language)?;
-    editor.get_function_tree()
+    let function_tree = editor.get_function_tree()?;
+    
+    // Wrap in MCP content format
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&function_tree)?
+        }]
+    }))
 }
 
 /// Insert a single function using minimal tokens

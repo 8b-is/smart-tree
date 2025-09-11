@@ -353,7 +353,7 @@ impl McpServer {
 
 // Handler implementations
 
-async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+async fn handle_initialize(_params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
     Ok(json!({
         "protocolVersion": "2024-11-05",
         "capabilities": {
@@ -373,15 +373,18 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             "name": "smart-tree",
             "version": env!("CARGO_PKG_VERSION"),
             "vendor": "8b-is",
-            "description": "Smart Tree - AI-optimized directory visualization with quantum compression",
+            "description": "Smart Tree v5 - NOW WITH COMPRESSION HINTS! 🗜️ Use compress:true for 80% smaller outputs. For massive codebases, use mode:'quantum' for 100x compression!",
             "homepage": env!("CARGO_PKG_REPOSITORY"),
             "features": [
                 "quantum-compression",
                 "mcp-optimization",
                 "content-search",
                 "streaming",
-                "caching"
-            ]
+                "caching",
+                "emotional-mode",
+                "auto-compression-hints"
+            ],
+            "compression_hint": "💡 Always add compress:true to analyze tools for optimal context usage!"
         }
     }))
 }
