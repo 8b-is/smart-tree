@@ -182,13 +182,14 @@ impl ClaudeInit {
         }
 
         // Always update CLAUDE.md with fresh stats
+        let claude_md_existed = claude_md_path.exists();
         self.create_claude_md(claude_dir)?;
-        if claude_md_path.exists() {
+        if claude_md_existed {
             println!("   ✅ Updated CLAUDE.md with current project stats");
         } else {
             println!("   ✅ Created missing CLAUDE.md");
+            updated = true;
         }
-        updated = true;
 
         if updated {
             println!(

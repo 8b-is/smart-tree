@@ -14,6 +14,8 @@ use st::mem8::ConversationMemory;
 
 /// Claude Desktop message format
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+#[allow(non_snake_case)]
 struct ClaudeMessage {
     #[serde(rename = "type")]
     msg_type: String,

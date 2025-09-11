@@ -1,4 +1,5 @@
 //! Emotional Tree Formatter - Because files have feelings too!
+#![allow(dead_code)] // This is new experimental code
 //!
 //! This formatter gives your directory tree PERSONALITY and EMOTIONS!
 //! Files get happy, sad, anxious, proud, bored, and everything in between!
@@ -19,16 +20,16 @@ use super::{Formatter, PathDisplayMode};
 /// The Emotional Formatter - Trees with feelings!
 pub struct EmotionalFormatter {
     use_color: bool,
-    path_mode: PathDisplayMode,
-    mood_tracker: HashMap<String, MoodHistory>,
+    _path_mode: PathDisplayMode,
+    _mood_tracker: HashMap<String, MoodHistory>,
 }
 
 impl EmotionalFormatter {
     pub fn new(use_color: bool) -> Self {
         Self {
             use_color,
-            path_mode: PathDisplayMode::Relative,
-            mood_tracker: HashMap::new(),
+            _path_mode: PathDisplayMode::Relative,
+            _mood_tracker: HashMap::new(),
         }
     }
 

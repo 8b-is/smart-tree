@@ -49,7 +49,7 @@ pub async fn handle_negotiate_session(
 
 /// Handle initialize with session awareness
 pub async fn handle_session_aware_initialize(
-    params: Option<Value>,
+    _params: Option<Value>,
     context: Arc<McpContext>,
 ) -> Result<Value> {
     // Check for compression hints in environment
@@ -60,7 +60,7 @@ pub async fn handle_session_aware_initialize(
     context.sessions.update(session.clone()).await;
 
     // Determine which tools to advertise based on mode
-    let tools_to_advertise = match std::env::var("ST_TOOL_MODE").as_deref() {
+    let _tools_to_advertise = match std::env::var("ST_TOOL_MODE").as_deref() {
         Ok("all") => ToolAdvertisement::All,
         Ok("minimal") => ToolAdvertisement::Minimal,
         Ok("context") => ToolAdvertisement::ContextAware,

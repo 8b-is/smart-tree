@@ -353,7 +353,7 @@ impl McpServer {
 
 // Handler implementations
 
-async fn handle_initialize(_params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
+async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     Ok(json!({
         "protocolVersion": "2024-11-05",
         "capabilities": {
