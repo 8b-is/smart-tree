@@ -3,7 +3,7 @@ members = ["expert_prompt_engineer"]
 
 [package]
 name = "st"
-version = "5.0.1"
+version = "5.0.2"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
