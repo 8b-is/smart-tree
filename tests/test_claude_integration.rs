@@ -32,8 +32,7 @@ fn test_claude_init_rust_project() {
     // Verify settings content
     let settings = fs::read_to_string(project_path.join(".claude/settings.json")).unwrap();
     println!("Settings content: {}", settings); // Debug output
-    
-    // For now, just verify basic structure since project detection might need fixing
+                                                // For now, just verify basic structure since project detection might need fixing
     assert!(settings.contains("\"smart_tree\""));
     assert!(settings.contains("\"auto_configured\": true"));
     assert!(settings.contains("st -m")); // Should have Smart Tree hooks
@@ -61,8 +60,7 @@ fn test_claude_init_python_project() {
     // Verify Python-specific configuration
     let settings = fs::read_to_string(project_path.join(".claude/settings.json")).unwrap();
     println!("Python settings content: {}", settings); // Debug output
-    
-    // For now, just verify basic structure since project detection might need fixing
+                                                       // For now, just verify basic structure since project detection might need fixing
     assert!(settings.contains("\"smart_tree\""));
 
     let claude_md = fs::read_to_string(project_path.join(".claude/CLAUDE.md")).unwrap();
@@ -126,10 +124,10 @@ fn test_compression_mode_auto_selection() {
 /// Test context mode formatter
 #[test]
 fn test_context_mode_output() {
-    use st::{FileNode, TreeStats, FileCategory, FilesystemType};
     use st::scanner::FileType;
-    use std::time::SystemTime;
+    use st::{FileCategory, FileNode, FilesystemType, TreeStats};
     use std::collections::HashMap;
+    use std::time::SystemTime;
 
     // Create test data with proper FileNode structure
     let nodes = vec![
