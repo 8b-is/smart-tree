@@ -156,6 +156,12 @@ pub struct ConversationAnalyzer {
     patterns: Vec<ConversationPattern>,
 }
 
+impl Default for ConversationAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConversationAnalyzer {
     pub fn new() -> Self {
         Self {
@@ -234,8 +240,8 @@ impl ConversationAnalyzer {
                                 .unwrap_or("unknown")
                                 .to_string(),
                             timestamp: idx as u64,
-                            emotion: self.detect_emotion(&msg),
-                            importance: self.calculate_importance(&msg),
+                            emotion: self.detect_emotion(msg),
+                            importance: self.calculate_importance(msg),
                         });
                     }
                 }
@@ -257,8 +263,8 @@ impl ConversationAnalyzer {
                                 .unwrap_or("unknown")
                                 .to_string(),
                             timestamp: idx as u64,
-                            emotion: self.detect_emotion(&msg),
-                            importance: self.calculate_importance(&msg),
+                            emotion: self.detect_emotion(msg),
+                            importance: self.calculate_importance(msg),
                         });
                     }
                 }

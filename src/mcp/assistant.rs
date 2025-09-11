@@ -6,7 +6,7 @@
 //! - Providing helpful hints and tips
 //! - Anticipating needs before they're expressed
 
-use anyhow::Result;
+// use anyhow::Result; // TODO: Use when needed
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
@@ -80,6 +80,12 @@ pub enum ProjectSize {
     Medium, // 50-200 files
     Large,  // 200-1000 files
     Huge,   // 1000+ files
+}
+
+impl Default for McpAssistant {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl McpAssistant {

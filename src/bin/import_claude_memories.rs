@@ -180,11 +180,7 @@ fn extract_text_from_content(content: &Value) -> String {
         Value::Array(arr) => arr
             .iter()
             .filter_map(|item| {
-                if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                    Some(text.to_string())
-                } else {
-                    None
-                }
+                item.get("text").and_then(|t| t.as_str()).map(|text| text.to_string())
             })
             .collect::<Vec<_>>()
             .join("\n"),

@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - Lightning Fast Directory Visualization
 
-[![Version](https://img.shields.io/badge/version-4.8.8-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-5.0.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![CO2 Saved](https://img.shields.io/badge/CO2-saving%20the%20planet-success)](TERMINAL_EXAMPLES.md#environment-impact)
@@ -16,6 +16,9 @@
 - **🔍 Smart Search**: Content search with line numbers and context
 - **📡 MCP Server**: 30+ tools for AI assistants via Model Context Protocol
 - **🌍 Eco-Friendly**: Saves CO2 with every scan through efficiency
+- **🎭 NEW: Emotional Mode**: Files express feelings based on age, size, and type!
+- **🧠 MEM|8 Integration**: Wave-based memory system for conversation history
+- **🤝 Session Awareness**: Intelligent compression negotiation for optimal AI context
 
 ## 🚀 Quick Start
 
@@ -28,6 +31,7 @@ st                          # Classic tree view of current directory
 st --mode ai --compress     # AI-optimized compressed output
 st --search "TODO"          # Search for TODOs in all files
 st --mode quantum src/      # Quantum compression for massive codebases
+st --mode emotional         # NEW: See how your files are feeling today! 🎭
 ```
 
 ## 📦 Installation Options

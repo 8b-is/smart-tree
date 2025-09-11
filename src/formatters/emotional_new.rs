@@ -355,7 +355,7 @@ impl Formatter for EmotionalFormatter {
         writer: &mut dyn Write,
         nodes: &[FileNode],
         stats: &TreeStats,
-        root_path: &Path,
+        _root_path: &Path,
     ) -> Result<()> {
         // Header with drama!
         writeln!(writer, "\n🎭 ═══════════════════════════════════════ 🎭")?;

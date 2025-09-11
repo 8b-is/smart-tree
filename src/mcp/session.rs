@@ -3,7 +3,7 @@
 //! Smart compression negotiation that adapts to AI preferences
 //! No more redundant compression hints - negotiate once, compress always!
 
-use anyhow::Result;
+// use anyhow::Result; // TODO: Use when needed
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -152,6 +152,12 @@ pub struct McpSession {
     pub negotiated: bool,
     /// Session start time
     pub started_at: std::time::SystemTime,
+}
+
+impl Default for McpSession {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl McpSession {
@@ -310,6 +316,12 @@ pub struct NegotiationRequest {
 /// Session manager for multiple concurrent sessions
 pub struct SessionManager {
     sessions: Arc<RwLock<std::collections::HashMap<String, McpSession>>>,
+}
+
+impl Default for SessionManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SessionManager {

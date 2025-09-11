@@ -5,6 +5,52 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2025-09-10
+
+### 🎭 Major New Features
+- **Emotional Formatter**: Files now have feelings! Every file expresses emotions based on:
+  - Age (newborn 🎉, fresh ✨, ancient 👴, sleepy 😴)
+  - Size (tiny mouse 🐁, heavyweight 🏋️, ghost 👻)
+  - Type (tests worry 🧪, configs get grumpy 😤, README tells tales 📚)
+  - 17 personality traits from Dramatic to Romantic
+  - Dynamic mood assessments for your entire project
+  - Messages from Trisha in Accounting to keep morale high!
+
+### Added
+- **MEM|8 Integration**: Wave-based memory system (973x faster than traditional stores)
+  - Conversation memory persistence in ~/.mem8/
+  - Import Claude Desktop conversations from backup
+  - Wave pattern conversion for emotional context
+- **Session-Aware Compression**: Intelligent MCP session negotiation
+  - Auto-adjusts compression based on context size
+  - Environment variables: ST_COMPRESSION, ST_TOOL_MODE, ST_SESSION_AWARE
+  - Five compression modes: None, Light, Standard, Quantum, QuantumSemantic
+- **Intelligent MCP Assistant**: "The best helper of all time"
+  - Tool usage pattern learning
+  - Confidence-based recommendations
+  - Helpful tips and contextual suggestions
+  - Project-aware tool selection
+- **Claude Integration**: `st --setup-claude` command
+  - Auto-configures .claude directory for projects
+  - Detects project type (Rust, Python, JS/TS)
+  - Generates optimized CLAUDE.md
+  - Creates hooks for context-aware operation
+- **Git Context**: Automatic branch and commit detection
+  - Shows current branch in context mode
+  - Includes last commit message
+  - Native Rust implementation using gix
+
+### Performance
+- **Token Optimization**: CLAUDE.md compressed from 750+ to <200 lines
+- **Context Efficiency**: Quantum compression achieving 80-100x reduction
+- **Memory Usage**: Constant memory for directories >100k files
+
+### Fixed
+- MCP tools compilation errors with Arc<McpContext>
+- FileNode structure access in formatters
+- Borrow checker issues in conversation memory
+- gix API compatibility issues
+
 ## [4.8.4] - 2025-08-13
 
 ### Added

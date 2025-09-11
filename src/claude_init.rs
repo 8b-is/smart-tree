@@ -52,7 +52,7 @@ impl ClaudeInit {
     }
 
     /// Detect project type from file extensions
-    fn detect_project_type(nodes: &[crate::FileNode], stats: &TreeStats) -> ProjectType {
+    fn detect_project_type(nodes: &[crate::FileNode], _stats: &TreeStats) -> ProjectType {
         let mut rust_score = 0;
         let mut python_score = 0;
         let mut js_score = 0;
