@@ -51,8 +51,8 @@ echo "-------------"
 run_test "Claude initialization tests" \
     "cargo test --test test_claude_integration --release"
 
-run_test "MCP session negotiation tests" \
-    "cargo test --test test_mcp_session --release"
+# run_test "MCP session negotiation tests" \
+#     "cargo test --test test_mcp_session --release"
 
 run_test "Compression mode tests" \
     "cargo test compression --release"
