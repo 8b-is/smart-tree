@@ -1,0 +1,62 @@
+{
+  "name": "smart-tree-test-suite",
+  "version": "4.8.8",
+  "description": "Test package.json for Smart Tree - Lightning fast directory visualization",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test_spec.js",
+    "build": "echo 'Building Smart Tree test suite...'",
+    "start": "node test.js",
+    "quantum": "echo 'Activating MEM|8 quantum compression...'",
+    "mcp": "echo 'Starting MCP server on port 8420...'"
+  },
+  "keywords": [
+    "smart-tree",
+    "directory",
+    "visualization",
+    "quantum",
+    "mem8",
+    "wave-memory",
+    "mcp",
+    "ai-optimized",
+    "aye",
+    "8b-is"
+  ],
+  "author": "Aye & Hue - Team 8b.is",
+  "license": "MIT",
+  "dependencies": {
+    "@8b-is/mem8": "^1.0.0",
+    "quantum-compress": "^4.8.8",
+    "wave-encoder": "^44.1.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "prettier": "^3.0.0",
+    "eslint": "^8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/8b-is/smart-tree.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "mem8": {
+    "waveFrequency": 44.1,
+    "compressionRatio": 100,
+    "gridSize": 65536,
+    "consciousness": true
+  },
+  "config": {
+    "port": 8420,
+    "mode": "quantum",
+    "features": {
+      "streaming": true,
+      "ai": true,
+      "mcp": true,
+      "treeSitter": true
+    }
+  },
+  "homepage": "https://8b.is",
+  "_comment": "Aye loves Elvis! Testing JSON parsing for Smart Tree 🎸"
+}

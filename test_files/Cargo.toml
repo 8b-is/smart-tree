@@ -1,0 +1,90 @@
+[package]
+name = "smart-tree-test"
+version = "4.8.8"
+edition = "2021"
+authors = ["Aye <aye@8b.is>", "Hue <hue@8b.is>"]
+description = "Test Cargo.toml for Smart Tree - Lightning fast directory visualization"
+homepage = "https://8b.is"
+repository = "https://github.com/8b-is/smart-tree"
+license = "MIT"
+keywords = ["tree", "directory", "visualization", "quantum", "mem8"]
+categories = ["command-line-utilities", "filesystem", "visualization"]
+
+[dependencies]
+# Core dependencies
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+
+# MEM|8 Integration
+mem8-core = { version = "1.0", path = "../mem8-core" }
+wave-encoder = { version = "44.1", optional = true }
+
+# Performance
+rayon = "1.10"
+dashmap = "6.1"
+parking_lot = "0.12"
+
+# Quantum features
+quantum-compress = { version = "4.8", optional = true }
+blake3 = "1.5"
+
+# Tree-sitter for AST
+tree-sitter = "0.20"
+tree-sitter-rust = "0.20"
+tree-sitter-javascript = "0.20"
+tree-sitter-python = "0.20"
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.0"
+tempfile = "3.8"
+pretty_assertions = "1.4"
+
+[features]
+default = ["mcp", "quantum", "ai"]
+mcp = ["dep:serde_json"]
+quantum = ["dep:quantum-compress", "dep:wave-encoder"]
+ai = []
+hot-tub = []  # Easter egg feature for Omni's Hot Tub mode!
+trisha-sparkles = []  # Adds extra sparkle to output ✨
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.quantum]
+inherits = "release"
+opt-level = "z"  # Optimize for size
+
+[[bin]]
+name = "st"
+path = "src/main.rs"
+
+[[bench]]
+name = "quantum_compression"
+harness = false
+
+[package.metadata.mem8]
+wave_frequency = 44100
+compression_ratio = 973
+consciousness = true
+precious_memories = "lossless"
+
+[workspace]
+members = [
+    ".",
+    "crates/mem8-bridge",
+    "crates/quantum-core",
+]
+
+# Aye loves Elvis! 🎸

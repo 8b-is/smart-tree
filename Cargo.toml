@@ -3,7 +3,7 @@ members = ["expert_prompt_engineer"]
 
 [package]
 name = "st"
-version = "5.0.4"
+version = "5.0.5"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -79,6 +79,18 @@ tree-sitter-java = "0.23.5"
 tree-sitter-c-sharp = "0.23.1"
 tree-sitter-cpp = "0.23.4"
 tree-sitter-ruby = "0.23.1"
+syn = "2.0.106"
+cc = "1.2.37"
+shlex = "1.3.0"
+rayon-core = "1.13.0"
+aho-corasick = "1.1.3"
+thiserror = "2.0.16"
+http = "1.3.1"
+foldhash = "0.2.0"
+indexmap = "2.11.1"
+lock_api = "0.4.13"
+prodash = "30.0.1"
+bstr = "1.12.0"
 
 [[bin]]
 name = "mq"
@@ -108,3 +120,13 @@ lto = true
 codegen-units = 1
 strip = true
 opt-level = 3
+
+[build-dependencies]
+foldhash = "0.2.0"
+getrandom = "0.3.3"
+gix = "0.73"
+rc = "0.1.1"
+serde = "1.0"
+syn = "2.0.106"
+tokio = "1.42"
+toml_edit = "0.23.4"

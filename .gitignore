@@ -8,8 +8,24 @@
 __pycache__/
 *.pyc
 .venv/
+venv/
+env/
+.env
+VENV/
+
+
 pip-wheel-metadata/
 *.egg-info/
+
+# --- Claude Keys ---
+.claude
+
+
+# --- Mem8 - Memories ---
+.mem8/
+.st_bumpers
+.m8/
+
 
 # --- Node ---
 node_modules/
@@ -20,20 +36,29 @@ pnpm-debug.log*
 package-lock.json
 
 # --- Rust ---
-/target/
+target/
 Cargo.lock
 
 # --- Build artifacts ---
 dist/
 build/
-**/target/** 
-release_artifacts/st-x86_64-unknown-linux-gnu.tar.gz
+release_artifacts/
 .st_bumpers/
 
-# --- tmp - Keep the tmp directory for testing ---
-tmp/*
+# --- Logs ---
 
+
+# Miscellaneous
+.mem8/
+code-workspaces/
+!tmp/testignore.txt
+*.db
+
+
+
+# --- tmp - Keep the tmp directory for testing ---
+!tmp/
 !tmp/testignore.txt
 
-.mem8/
+._*
 
