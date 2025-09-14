@@ -88,3 +88,15 @@ pub mod tools_st_only;
 
 // Smart Edit Diff Storage
 pub mod smart_edit_diff;
+
+// Rust Shell - Ultimate collaborative interface with casting support
+pub mod rust_shell;
+
+// Q8-Caster Bridge - Integration with quantum casting system
+pub mod q8_caster_bridge;
+
+// VAD with Marine Algorithm - Voice Activity Detection from MEM8
+pub mod vad_marine;
+
+// egui Dashboard - Real-time collaborative dashboard
+pub mod dashboard_egui;
