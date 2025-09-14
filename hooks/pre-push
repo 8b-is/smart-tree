@@ -1,0 +1,15 @@
+#!/bin/bash
+# Smart Tree Security Hook - Scan before push
+# "Check for malware before shipping" - Hue
+
+echo "🔍 Smart Tree Security Scan..."
+
+# Run security scan with st
+st --security-scan . 2>&1 | grep -E "WARNING|THREAT|SUSPICIOUS" && {
+    echo "⚠️  Security issues detected! Review before pushing."
+    echo "Run: st --security-scan --verbose"
+    exit 1
+}
+
+echo "✅ Security scan passed"
+exit 0

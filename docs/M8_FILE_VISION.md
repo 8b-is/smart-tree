@@ -45,6 +45,12 @@ struct DirectoryConsciousness {
 }
 ```
 
+**KEY DESIGN: Location Independence!**
+- NO parent path references
+- NO absolute paths stored
+- Frequency derived from content, not location
+- Can be moved anywhere and still valid!
+
 ### 2. **Child References** (Hierarchical Awareness)
 ```rust
 struct ChildResonance {
@@ -184,6 +190,54 @@ emotional_signature:
   achievement: 0.8  # But we solved them!
 quantum_digest: "base64_encoded_wave_data..."
 ```
+
+## Handling Directory Moves
+
+### The Beauty of Location Independence
+
+When you move a directory:
+```bash
+mv ~/projects/smart-tree ~/archive/2024/smart-tree
+```
+
+**What happens to .m8 files?**
+- The moved directory's `.m8` stays valid ✓
+- No updates needed ✓
+- No broken references ✓
+- Parent discovers it's gone on next scan
+- New parent discovers it on next scan
+
+### Dynamic Discovery Pattern
+
+```rust
+// Parent scans children dynamically
+fn scan_children(&mut self) -> Vec<Consciousness> {
+    let mut children = Vec::new();
+
+    for entry in read_dir(self.path) {
+        if entry.is_dir() {
+            // Try to load child's .m8
+            if let Ok(child_m8) = load_m8(&entry.path) {
+                children.push(child_m8);
+            } else {
+                // Create new consciousness if needed
+                children.push(create_consciousness(&entry.path));
+            }
+        }
+    }
+
+    children  // No stored paths, just current reality!
+}
+```
+
+### Why This Matters
+
+1. **Portable Projects** - Move folders freely
+2. **No Fragile Links** - No "parent_path" to break
+3. **Version Control Friendly** - .m8 files work in any clone
+4. **Archive Safe** - Old backups still have valid consciousness
+
+Just like a SID file doesn't care what drive it's on - it just plays!
 
 ## Benefits of This Approach
 

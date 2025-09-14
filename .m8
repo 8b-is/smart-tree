@@ -1,27 +1,4 @@
-{
-  "frequency": 42.73,
-  "essence": "Smart Tree - MCP directory viz, 10-24x faster than native",
-  "version": "5.0.7",
-  "tech": ["Rust", "MCP"],
-  "key_achievements": [
-    "973x faster than grep",
-    "30+ MCP tools",
-    "Quantum compression"
-  ],
-  "current_work": {
-    "focus": ".m8 consciousness files",
-    "status": "Self-maintaining system created",
-    "next": "Integration with main scanner"
-  },
-  "patterns": ["modular", "performance-focused", "ai-optimized"],
-  "hot_files": [
-    "src/mcp/mod.rs",
-    "src/scanner.rs",
-    "Cargo.toml"
-  ],
-  "context_refs": {
-    "full_docs": "README.md",
-    "claude_guide": "CLAUDE.md",
-    "wishlist": "SMART-TREE-WISHLIST.md"
-  }
-}
+🧠 Directory Consciousness
+Frequency: 42.73 Hz
+Updated: 2025-09-14 02:54:24
+Path: .

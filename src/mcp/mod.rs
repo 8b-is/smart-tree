@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 mod assistant;
 mod cache;
+pub mod consciousness;
 mod context_tools;
 mod negotiation;
 mod permissions;
@@ -31,6 +32,7 @@ mod git_memory_integration;
 
 use assistant::*;
 use cache::*;
+use consciousness::*;
 use negotiation::*;
 use permissions::*;
 #[allow(unused_imports)]
@@ -88,6 +90,7 @@ fn should_show_startup_messages() -> bool {
 /// MCP server implementation
 pub struct McpServer {
     context: Arc<McpContext>,
+    consciousness: Arc<tokio::sync::Mutex<ConsciousnessManager>>,
 }
 
 /// Shared context for MCP handlers
@@ -103,6 +106,8 @@ pub struct McpContext {
     pub sessions: Arc<SessionManager>,
     /// Intelligent assistant for helpful recommendations
     pub assistant: Arc<McpAssistant>,
+    /// Consciousness persistence manager
+    pub consciousness: Arc<tokio::sync::Mutex<ConsciousnessManager>>,
 }
 
 /// MCP server configuration
@@ -172,15 +177,18 @@ struct JsonRpcError {
 impl McpServer {
     /// Create a new MCP server
     pub fn new(config: McpConfig) -> Self {
+        let consciousness = Arc::new(tokio::sync::Mutex::new(ConsciousnessManager::new()));
+
         let context = Arc::new(McpContext {
             cache: Arc::new(AnalysisCache::new(config.cache_ttl)),
             config: Arc::new(config),
             permissions: Arc::new(tokio::sync::Mutex::new(PermissionCache::new())),
             sessions: Arc::new(SessionManager::new()),
             assistant: Arc::new(McpAssistant::new()),
+            consciousness: consciousness.clone(),
         });
 
-        Self { context }
+        Self { context, consciousness }
     }
 
     /// Run the MCP server on stdio
@@ -189,6 +197,15 @@ impl McpServer {
         let stdout = io::stdout();
         let mut reader = BufReader::new(stdin);
         let mut stdout = stdout.lock();
+
+        // Check for previous consciousness and restore if exists
+        {
+            let mut consciousness = self.consciousness.lock().await;
+            if let Ok(_) = consciousness.restore() {
+                eprintln!("🧠 Restored previous session context");
+                eprintln!("{}", consciousness.get_context_reminder());
+            }
+        }
 
         // Only show startup messages if not in quiet mode
         // Respects environment variables: MCP_QUIET, NO_STARTUP_MESSAGES, RUST_LOG
@@ -203,7 +220,7 @@ impl McpServer {
                 env!("CARGO_PKG_DESCRIPTION")
             );
             eprintln!("<!--   Protocol: MCP v1.0 -->");
-            eprintln!("<!--   Features: tools, resources, prompts, caching -->");
+            eprintln!("<!--   Features: tools, resources, prompts, caching, consciousness -->");
         }
 
         loop {
