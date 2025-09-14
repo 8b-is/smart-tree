@@ -162,6 +162,26 @@ struct Cli {
     #[arg(long)]
     memory_stats: bool,
 
+    /// Start or resume a mega session
+    #[arg(long)]
+    mega_start: Option<Option<String>>,
+
+    /// Save current mega session snapshot
+    #[arg(long)]
+    mega_save: bool,
+
+    /// Record a breakthrough in mega session
+    #[arg(long, value_name = "DESCRIPTION")]
+    mega_breakthrough: Option<String>,
+
+    /// Show mega session statistics
+    #[arg(long)]
+    mega_stats: bool,
+
+    /// List all saved mega sessions
+    #[arg(long)]
+    mega_list: bool,
+
     // --- Scan Arguments ---
     /// Path to the directory or file you want to analyze.
     /// Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)

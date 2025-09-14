@@ -26,6 +26,11 @@ pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features wit
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod memory_manager; // Real memory management for consciousness!
+pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
+pub mod m8_context_aware; // Context-aware progressive loading
+pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
+pub mod universal_chat_scanner; // Finds conversations everywhere!
+pub mod universal_format_detector; // Detects format by structure!
 pub mod tree_sitter_quantum; // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
 
 // The `mcp` module for Model Context Protocol integration.

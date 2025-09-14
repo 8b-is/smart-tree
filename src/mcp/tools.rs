@@ -1255,6 +1255,26 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 }
             }),
         },
+        ToolDefinition {
+            name: "scan_for_context".to_string(),
+            description: "🌍 Universal Chat Scanner - Discovers and aggregates conversations from ALL your AI tools! Scans Claude projects, Cursor, Windsurf, VSCode, OpenWebUI, LMStudio, ChatGPT exports, and more. Unifies scattered context into organized .m8 memories. Perfect when you need to find that conversation where you solved a similar problem!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "scan_all": {
+                        "type": "boolean",
+                        "description": "Scan all known locations (default: true)",
+                        "default": true
+                    },
+                    "save_to": {
+                        "type": "string",
+                        "enum": ["project", "user", "llm", "global"],
+                        "description": "Where to save memories (default: global)",
+                        "default": "global"
+                    }
+                }
+            }),
+        },
     ];
 
     Ok(json!({
@@ -1373,6 +1393,31 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
                 serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::invite_persona(req, permission_check).await
+        }
+
+        // Universal chat scanner
+        "scan_for_context" => {
+            // Run the universal chat scanner
+            use crate::universal_chat_scanner;
+            tokio::spawn(async move {
+                let _ = universal_chat_scanner::scan_for_context().await;
+            });
+
+            Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": "🌍 Universal Chat Scanner started!\n\n\
+                             Scanning for conversations in:\n\
+                             • ~/.claude/projects\n\
+                             • Cursor/Windsurf directories\n\
+                             • VSCode/Copilot history\n\
+                             • OpenWebUI/LMStudio\n\
+                             • ChatGPT exports\n\
+                             • Text messages (if available)\n\n\
+                             Results will be saved to ~/.mem8/ organized by source.\n\
+                             Check the terminal for interactive prompts!"
+                }]
+            }))
         }
 
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
