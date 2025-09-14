@@ -2,7 +2,7 @@
 // Voice Activity Detection using MEM8's marine salience algorithm
 // "Standing watch at the boundaries of speech!" - Hue
 
-use anyhow::{Result, Context};
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use std::time::{Duration, Instant};

@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
-use egui::{Color32, Pos2, Rect, RichText, Stroke, Vec2};
+use egui::{Color32, Pos2, Stroke, Vec2};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;

@@ -179,7 +179,7 @@ impl QuantumTokenizer {
     }
 
     pub fn quantum_tokenize(&self, text: &str) -> Vec<u8> {
-        let mut tokens = self.base.tokenize(text);
+        let tokens = self.base.tokenize(text);
 
         // Second pass: combine tokens
         let mut result = Vec::new();

@@ -4,9 +4,7 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
-use std::fs::File;
-use std::path::Path;
+use std::io::BufRead;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataFormat {

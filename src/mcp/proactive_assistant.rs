@@ -2,9 +2,7 @@
 // This module makes Smart Tree anticipate needs and suggest next steps
 // Like having a genius assistant who knows what you need before you ask!
 
-use anyhow::Result;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 
 /// Context-aware assistant that suggests next tools based on current operation
 pub struct ProactiveAssistant {
