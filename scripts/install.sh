@@ -398,9 +398,16 @@ install_fish_completion() {
 }
 
 # Offer to install completions
-print_info ""
-read -p "Would you like to install shell completions for $BINARY_NAME? (y/n): " -n 1 -r
-echo
+# Only prompt if running in a TTY; otherwise skip interactive prompt.
+if [[ -t 0 && -t 1 ]]; then
+    print_info ""
+    read -r -n 1 -p "Would you like to install shell completions for $BINARY_NAME? (y/n): " REPLY
+    printf "\n"
+else
+    # Non-interactive session: do not prompt
+    REPLY="n"
+fi
+
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     install_shell_completions
 else
@@ -408,4 +415,4 @@ else
 fi
 
 # Elvis has left the building! 🎸
-print_success "Thank you, thank you very much! Smart Tree is ready to rock! 🌳🎸" 
+print_success "Thank you, thank you very much! Smart Tree is ready to rock! 🌳🎸"
