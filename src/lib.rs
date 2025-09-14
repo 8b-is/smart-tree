@@ -25,6 +25,7 @@ pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
+pub mod memory_manager; // Real memory management for consciousness!
 pub mod tree_sitter_quantum; // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
 
 // The `mcp` module for Model Context Protocol integration.

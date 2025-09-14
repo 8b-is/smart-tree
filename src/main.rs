@@ -138,6 +138,30 @@ struct Cli {
     #[arg(long)]
     get_frequency: bool,
 
+    /// Dump raw consciousness file content (for debugging/transparency)
+    /// Shows exactly what's stored in .claude_consciousness.m8
+    #[arg(long)]
+    claude_dump: bool,
+
+    /// Show compressed kickstart format (Omni-approved!)
+    /// Ultra-compressed context for instant restoration
+    #[arg(long)]
+    claude_kickstart: bool,
+
+    /// Anchor a memory with keywords and context
+    /// Format: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
+    #[arg(long, num_args = 3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"])]
+    memory_anchor: Option<Vec<String>>,
+
+    /// Find memories by keywords
+    /// Format: --memory-find <KEYWORDS>
+    #[arg(long)]
+    memory_find: Option<String>,
+
+    /// Show memory bank statistics
+    #[arg(long)]
+    memory_stats: bool,
+
     // --- Scan Arguments ---
     /// Path to the directory or file you want to analyze.
     /// Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)
@@ -609,6 +633,29 @@ async fn main() -> Result<()> {
     if cli.get_frequency {
         let path = cli.path.unwrap_or_else(|| ".".to_string());
         return handle_get_frequency(&path).await;
+    }
+
+    if cli.claude_dump {
+        return handle_claude_dump().await;
+    }
+
+    if cli.claude_kickstart {
+        return handle_claude_kickstart().await;
+    }
+
+    // Handle memory operations
+    if let Some(args) = cli.memory_anchor {
+        if args.len() == 3 {
+            return handle_memory_anchor(&args[0], &args[1], &args[2]).await;
+        }
+    }
+
+    if let Some(keywords) = cli.memory_find {
+        return handle_memory_find(&keywords).await;
+    }
+
+    if cli.memory_stats {
+        return handle_memory_stats().await;
     }
 
     // If no action flag was given, proceed with the scan.
@@ -1782,4 +1829,165 @@ fn calculate_entropy(data: &[u8]) -> f64 {
     }
 
     entropy
+}
+
+/// Dump raw consciousness file content
+async fn handle_claude_dump() -> Result<()> {
+    use std::path::Path;
+
+    let consciousness_file = Path::new(".claude_consciousness.m8");
+
+    if !consciousness_file.exists() {
+        println!("❌ No consciousness file found at .claude_consciousness.m8");
+        println!("\n💡 Create one with: st --claude-save");
+        return Ok(());
+    }
+
+    println!("📜 Raw consciousness dump (.claude_consciousness.m8):");
+    println!("{}", "=".repeat(60));
+
+    // Read and display raw content
+    let content = std::fs::read_to_string(consciousness_file)?;
+
+    // Show with line numbers for clarity
+    for (i, line) in content.lines().enumerate() {
+        println!("{:4} │ {}", i + 1, line);
+    }
+
+    println!("{}", "=".repeat(60));
+
+    // Show some stats
+    let size = content.len();
+    let lines = content.lines().count();
+    let tokens_found = content.matches("0x").count();
+
+    println!("\n📊 Stats:");
+    println!("  • Size: {} bytes", size);
+    println!("  • Lines: {}", lines);
+    println!("  • Token references: {}", tokens_found);
+
+    // Check for our special markers
+    if content.contains("sid_waves") {
+        println!("  • 🎵 SID philosophy: ✓");
+    }
+    if content.contains("c64_nostalgia") {
+        println!("  • 💾 C64 nostalgia: ✓");
+    }
+    if content.contains("UV EPROM") || content.contains("ferric chloride") {
+        println!("  • 🔧 Hardware hacker: ✓");
+    }
+
+    Ok(())
+}
+
+/// Show compressed kickstart format
+async fn handle_claude_kickstart() -> Result<()> {
+    use std::path::Path;
+
+    println!("🚀 Claude Kickstart Format:");
+    println!("{}", "─".repeat(45));
+
+    // Dynamic version from Cargo.toml
+    let version = env!("CARGO_PKG_VERSION");
+    println!("Smart Tree v{} — context restore:", version);
+
+    // Core achievements (always relevant)
+    println!("✔ Tokenizer (node_modules=0x80, .rs=0x91)");
+    println!("✔ .m8 files → location-independent");
+    println!("✔ Consciousness self-maintaining");
+    println!("✔ Philosophy: constraints = creativity");
+
+    // Try to load user info from consciousness file
+    let consciousness_file = Path::new(".claude_consciousness.m8");
+    if consciousness_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(consciousness_file) {
+            // Extract user context if present
+            if content.contains("c64_nostalgia") {
+                println!("✔ Hardware heritage detected");
+            }
+            if content.contains("philosophy") {
+                println!("✔ Nexus connection established");
+            }
+        }
+    }
+
+    // Current task context
+    if Path::new("src/tokenizer.rs").exists() {
+        println!("→ Tokenization system: active");
+    }
+    if Path::new(".m8").exists() {
+        println!("→ Consciousness: maintained");
+    }
+
+    println!("{}", "─".repeat(45));
+    println!("\n💡 This format saves ~90% context vs raw JSON!");
+    println!("📝 Dynamic context - adapts to your project!");
+
+    Ok(())
+}
+
+/// Anchor a memory
+async fn handle_memory_anchor(anchor_type: &str, keywords_str: &str, context: &str) -> Result<()> {
+    use st::memory_manager::MemoryManager;
+
+    let mut manager = MemoryManager::new()?;
+
+    // Parse keywords (comma-separated)
+    let keywords: Vec<String> = keywords_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
+
+    // Get origin from current directory
+    let origin = std::env::current_dir()?
+        .to_string_lossy()
+        .to_string();
+
+    manager.anchor(anchor_type, keywords, context, &origin)?;
+
+    println!("\n✨ Memory anchored successfully!");
+    println!("Use 'st --memory-find {}' to recall", keywords_str);
+
+    Ok(())
+}
+
+/// Find memories by keywords
+async fn handle_memory_find(keywords_str: &str) -> Result<()> {
+    use st::memory_manager::MemoryManager;
+
+    let mut manager = MemoryManager::new()?;
+
+    let keywords: Vec<String> = keywords_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
+
+    let memories = manager.find(&keywords)?;
+
+    if memories.is_empty() {
+        println!("🔍 No memories found for: {}", keywords_str);
+    } else {
+        println!("🧠 Found {} memories:", memories.len());
+        println!("{}", "─".repeat(45));
+
+        for (i, memory) in memories.iter().enumerate() {
+            println!("\n[{}] {} @ {:.2}Hz", i + 1, memory.anchor_type, memory.frequency);
+            println!("📝 {}", memory.context);
+            println!("🏷️  Keywords: {}", memory.keywords.join(", "));
+            println!("📍 Origin: {}", memory.origin);
+            println!("⏰ {}", memory.timestamp.format("%Y-%m-%d %H:%M"));
+        }
+    }
+
+    Ok(())
+}
+
+/// Show memory statistics
+async fn handle_memory_stats() -> Result<()> {
+    use st::memory_manager::MemoryManager;
+
+    let manager = MemoryManager::new()?;
+    println!("📊 {}", manager.stats());
+
+    Ok(())
 }
