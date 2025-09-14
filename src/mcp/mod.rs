@@ -25,6 +25,9 @@ mod sse;
 mod tools;
 mod tools_consolidated;
 mod tools_consolidated_enhanced;
+mod proactive_assistant;
+mod enhanced_tool_descriptions;
+mod git_memory_integration;
 
 use assistant::*;
 use cache::*;

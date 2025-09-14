@@ -11,7 +11,8 @@
     "deny": [],
     "ask": [],
     "additionalDirectories": [
-      "~"
+      "~",
+      "/aidata/ayeverse/mem8/"
     ]
   },
   "enableAllProjectMcpServers": true,
