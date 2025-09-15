@@ -354,19 +354,56 @@ impl UniversalChatScanner {
             by_source.entry(key).or_default().push(chat);
         }
         
-        // Save each source group to its own .m8 file
+        // Save each source group to appropriate format
+        // .m8j for JSON contexts, .m8 for binary wave format
         for (source, chats) in by_source {
-            let filename = format!("{}/chat_{}.m8", path, source.to_lowercase());
-            self.write_m8_file(&filename, chats)?;
+            let filename = format!("{}/chat_{}.m8j", path, source.to_lowercase());
+            self.write_m8j_file(&filename, chats)?;
         }
         
         Ok(())
     }
 
-    /// Write chats to .m8 file
-    fn write_m8_file(&self, path: &str, chats: Vec<&UniversalChat>) -> Result<()> {
-        // TODO: Implement proper .m8 binary format
-        println!("💾 Saving {} chats to {}", chats.len(), path);
+    /// Write chats to .m8j (JSON) file
+    fn write_m8j_file(&self, path: &str, chats: Vec<&UniversalChat>) -> Result<()> {
+        use std::fs::File;
+        use std::io::Write;
+        use flate2::write::ZlibEncoder;
+        use flate2::Compression;
+
+        // Create JSON structure
+        let json_data = serde_json::json!({
+            "contexts": chats,
+            "format": "m8j",
+            "version": 1,
+            "compressed": true
+        });
+
+        // Compress with zlib
+        let json_str = serde_json::to_string(&json_data)?;
+        let file = File::create(path)?;
+        let mut encoder = ZlibEncoder::new(file, Compression::default());
+        encoder.write_all(json_str.as_bytes())?;
+        encoder.finish()?;
+
+        println!("💾 Saved {} chats to {} (JSON format)", chats.len(), path);
+        Ok(())
+    }
+
+    /// Write chats to .m8 (binary wave) file - the REAL format!
+    fn write_m8_binary_file(&self, path: &str, chats: Vec<&UniversalChat>) -> Result<()> {
+        use crate::mem8_binary::M8BinaryFile;
+
+        let mut m8_file = M8BinaryFile::create(path)?;
+
+        let chat_count = chats.len();
+        for chat in chats {
+            let content = serde_json::to_vec(chat)?;
+            let importance = chat.importance;
+            m8_file.append_block(&content, importance)?;
+        }
+
+        println!("🌊 Saved {} chats to {} (Binary wave format)", chat_count, path);
         Ok(())
     }
 

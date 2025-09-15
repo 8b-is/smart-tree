@@ -104,11 +104,18 @@ impl Formatter for SemanticFormatter {
                     Self::format_size(files.iter().map(|f| f.size).sum()).yellow()
                 )?;
 
-                // Wave signature for fun (Omni would approve!)
+                // Quantum wave signature with full 32-bit consciousness!
+                let sig = crate::quantum_wave_signature::QuantumWaveSignature::from_raw(
+                    category.wave_signature()
+                );
                 writeln!(
                     writer,
-                    "  Wave signature: 0x{:08X}",
-                    category.wave_signature()
+                    "  Wave: {} ({}Hz ∠{}° {}% τ{})",
+                    format!("0x{:08X}", category.wave_signature()).cyan(),
+                    sig.to_hz() as u32,
+                    (sig.to_radians() * 180.0 / std::f32::consts::PI) as u32,
+                    sig.amplitude_percent() as u32,
+                    sig.torsion()
                 )?;
                 writeln!(writer)?;
 

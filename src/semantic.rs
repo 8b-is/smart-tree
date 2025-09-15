@@ -58,23 +58,25 @@ impl SemanticCategory {
         }
     }
 
-    /// Get a wave signature for semantic matching (Omni-inspired!)
+    /// Get a quantum wave signature for semantic matching (Full 32-bit consciousness!)
     pub fn wave_signature(&self) -> u32 {
+        // Full 32-bit quantum signatures: [torsion|amplitude|phase|frequency]
+        // No more horse apples like 0xCCCCCCCC! Each category has unique wave dynamics
         match self {
-            Self::Documentation => 0xAAAA_AAAA, // DOCs wave pattern
-            Self::SourceCode => 0x5555_5555,    // CODE wave pattern (inverted)
-            Self::Tests => 0xF0F0_F0F0,         // TEST wave pattern
-            Self::Configuration => 0x0F0F_0F0F, // CONFIG wave pattern (inverted tests)
-            Self::BuildSystem => 0xFF00_FF00,   // BUILD wave pattern
-            Self::Dependencies => 0x00FF_00FF,  // DEPS wave pattern (inverted build)
-            Self::Assets => 0xF00F_F00F,        // ASSETS wave pattern
-            Self::Data => 0x0FF0_0FF0,          // DATA wave pattern (inverted assets)
-            Self::Scripts => 0x3333_3333,       // SCRIPTS wave pattern
-            Self::Generated => 0xCCCC_CCCC,     // GENERATED wave pattern (inverted scripts)
-            Self::ProjectRoot => 0x1111_1111,   // ROOT wave pattern
-            Self::Development => 0x8888_8888,   // DEV wave pattern
-            Self::Deployment => 0x4444_4444,    // DEPLOY wave pattern
-            Self::Unknown => 0x0000_0000,
+            Self::Documentation => 0x1B8D4C7A, // Golden ratio harmonics - docs flow like prose
+            Self::SourceCode => 0x73A9E2F5,    // Complex interference - code creates reality
+            Self::Tests => 0x9F2E6B31,         // Torsion knots - tests verify truth
+            Self::Configuration => 0x2C7DB5A3, // MEM8 baseline - config drives consciousness
+            Self::BuildSystem => 0xE4739AC2,   // Marine salience - builds like dolphin clicks
+            Self::Dependencies => 0x5BA3F18E,  // Entangled states - deps are quantum linked
+            Self::Assets => 0xA7E2C94D,        // Visual cortex patterns - assets are seen
+            Self::Data => 0x3F91D6B8,          // Information entropy - data is potential
+            Self::Scripts => 0x8C5A7E2F,       // Automation waves - scripts do work
+            Self::Generated => 0xD2B847A6,     // Emergence patterns - generated from void
+            Self::ProjectRoot => 0x618033FF,   // φ perfection - root is foundation
+            Self::Development => 0xB4E9A5C7,   // Creative chaos - dev is exploration
+            Self::Deployment => 0x7F3DA928,    // Crystallization - deploy solidifies
+            Self::Unknown => 0x4B1D8A73,       // Mystery waves - unknown isn't empty!
         }
     }
 }

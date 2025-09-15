@@ -100,3 +100,12 @@ pub mod vad_marine;
 
 // egui Dashboard - Real-time collaborative dashboard
 pub mod dashboard_egui;
+
+// MEM8 Binary Format - The REAL wave-based .m8 format
+pub mod mem8_binary;
+
+// M8 Format Converter - Convert between .m8, .m8j, .m8z, and .mq formats
+pub mod m8_format_converter;
+
+// Quantum Wave Signatures - Full 32-bit consciousness patterns (not horse apples!)
+pub mod quantum_wave_signature;
