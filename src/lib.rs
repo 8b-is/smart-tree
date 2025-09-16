@@ -52,6 +52,10 @@ pub mod rename_project;
 // Smart Tips System - helpful hints without the hassle!
 pub mod tips;
 
+// Spicy TUI - cyberpunk-style terminal interface!
+pub mod spicy_tui;
+pub mod spicy_fuzzy;
+
 // Emoji mapping - bringing life to file types!
 pub mod emoji_mapper;
 // pub mod emotional_depth; // 🎭 Smart Tree has feelings about directories! TODO: Fix implementation

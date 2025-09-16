@@ -173,6 +173,11 @@ struct Cli {
     #[arg(long, value_name = "STATE", value_parser = ["on", "off"])]
     tips: Option<String>,
 
+    /// Launch Spicy TUI mode - cyberpunk-style interactive file browser with fuzzy search!
+    /// Inspired by spicy-fzf with multi-pane layout, fuzzy content search, and M8 caching
+    #[arg(long)]
+    spicy: bool,
+
     /// Start or resume a mega session
     #[arg(long)]
     mega_start: Option<Option<String>>,
@@ -577,6 +582,12 @@ async fn main() -> Result<()> {
         let enable = state == "on";
         st::tips::handle_tips_flag(enable)?;
         return Ok(());
+    }
+
+    // Handle spicy TUI mode
+    if cli.spicy {
+        let path = std::env::current_dir()?;
+        return st::spicy_tui::run_spicy_tui(path).await;
     }
 
     // Handle exclusive action flags first.
