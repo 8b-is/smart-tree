@@ -2,7 +2,6 @@
 .DS_Store
 .vscode/
 *.swp
-*~
 
 # --- Python ---
 __pycache__/
@@ -24,12 +23,11 @@ pip-wheel-metadata/
 .claude_consciousness.m8
 *.claude_consciousness.m8
 
-
 # --- Mem8 - Memories ---
 .mem8/
 .st_bumpers
-.m8/
-
+*.m8
+.m8
 
 # --- Node ---
 node_modules/
@@ -67,3 +65,4 @@ code-workspaces/
 ._*
 
 a_gentleman_and_a_scholar.txt
+
