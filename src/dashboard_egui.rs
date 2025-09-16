@@ -100,6 +100,9 @@ pub struct Dashboard {
     show_raw_memory: bool,
     voice_graph: VecDeque<f32>,
 
+    // Wave compass for drift visualization (Omni's contribution!)
+    wave_compass: crate::wave_compass::WaveCompass,
+
     // Theme
     dark_mode: bool,
 }
@@ -111,6 +114,7 @@ enum Tab {
     Memory,
     Voice,
     Ideas,
+    WaveCompass,  // Omni's wave drift visualizer!
     Debug,
 }
 
@@ -123,6 +127,7 @@ impl Dashboard {
             idea_input: String::new(),
             show_raw_memory: false,
             voice_graph: VecDeque::with_capacity(100),
+            wave_compass: crate::wave_compass::WaveCompass::new(),
             dark_mode: true,
         }
     }
@@ -140,6 +145,7 @@ impl Dashboard {
                     ui.selectable_value(&mut self.selected_tab, Tab::Memory, "Memory");
                     ui.selectable_value(&mut self.selected_tab, Tab::Voice, "Voice");
                     ui.selectable_value(&mut self.selected_tab, Tab::Ideas, "💡 Ideas");
+                    ui.selectable_value(&mut self.selected_tab, Tab::WaveCompass, "🧭 Waves");
                     ui.selectable_value(&mut self.selected_tab, Tab::Debug, "Debug");
     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -195,6 +201,7 @@ impl Dashboard {
             Tab::Memory => self.show_memory(ui),
             Tab::Voice => self.show_voice(ui),
             Tab::Ideas => self.show_ideas(ui),
+            Tab::WaveCompass => self.show_wave_compass(ui),
             Tab::Debug => self.show_debug(ui),
         });
 
@@ -479,6 +486,78 @@ impl Dashboard {
                     }
                 });
             }
+        }
+    }
+
+    fn show_wave_compass(&mut self, ui: &mut egui::Ui) {
+        // Gather current directory signatures (would come from actual scanning)
+        // For now, let's create some example signatures from our semantic categories
+        let signatures = vec![
+            crate::wave_compass::WaveSig::from_quantum(
+                "src".into(),
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x73A9E2F5)
+            ),
+            crate::wave_compass::WaveSig::from_quantum(
+                "tests".into(),
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x9F2E6B31)
+            ),
+            crate::wave_compass::WaveSig::from_quantum(
+                "mcp".into(),
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x2C7DB5A3)
+            ),
+            crate::wave_compass::WaveSig::from_quantum(
+                "mem8".into(),
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xE4739AC2)
+            ),
+            crate::wave_compass::WaveSig::from_quantum(
+                "formatters".into(),
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xA7E2C94D)
+            ),
+            crate::wave_compass::WaveSig::from_quantum(
+                "generated".into(),
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xD2B847A6)
+            ),
+        ];
+
+        // Update compass with current signatures
+        self.wave_compass.update(signatures);
+
+        // Show the compass
+        self.wave_compass.show(ui);
+
+        // Additional controls
+        ui.separator();
+        ui.horizontal(|ui| {
+            if ui.button("🔄 Refresh").clicked() {
+                // Would trigger a rescan of directories
+            }
+
+            ui.label("Resonance Threshold:");
+            let mut threshold = 0.5_f32;
+            ui.add(egui::Slider::new(&mut threshold, 0.0..=1.0));
+
+            if ui.button("📸 Snapshot").clicked() {
+                // Would save current state to .m8 file
+            }
+        });
+
+        // Show detected resonances
+        ui.separator();
+        ui.heading("Detected Resonances");
+
+        let resonances = crate::wave_compass::find_resonances(&self.wave_compass.signatures, 0.5);
+        for res in resonances {
+            let sig1 = &self.wave_compass.signatures[res.sig1_idx];
+            let sig2 = &self.wave_compass.signatures[res.sig2_idx];
+
+            let emoji = if res.is_harmonic { "🎵" } else { "🌊" };
+            ui.label(format!(
+                "{} {} ↔ {} ({:.0}% resonance)",
+                emoji,
+                sig1.name,
+                sig2.name,
+                res.strength * 100.0
+            ));
         }
     }
 

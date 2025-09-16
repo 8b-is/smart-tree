@@ -8,7 +8,7 @@ use std::fmt;
 /// Matches MEM8's 256×256×65536 wave grid capacity perfectly!
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct QuantumWaveSignature {
-    signature: u32,
+    pub signature: u32,
 }
 
 impl QuantumWaveSignature {

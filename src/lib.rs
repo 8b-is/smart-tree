@@ -109,3 +109,9 @@ pub mod m8_format_converter;
 
 // Quantum Wave Signatures - Full 32-bit consciousness patterns (not horse apples!)
 pub mod quantum_wave_signature;
+
+// Wave Compass - Omni's consciousness drift visualizer with resonance detection!
+pub mod wave_compass;
+
+// Claude Hook Handler - Comprehensive context provider for conversations
+pub mod claude_hook;

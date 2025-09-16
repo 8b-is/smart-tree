@@ -15,6 +15,7 @@ use clap_complete::generate;
 // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
+use glob::glob;
 use regex::Regex;
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
@@ -147,6 +148,11 @@ struct Cli {
     /// Ultra-compressed context for instant restoration
     #[arg(long)]
     claude_kickstart: bool,
+
+    /// Hook for user prompt submission - provides intelligent context based on prompt analysis
+    /// Reads JSON input with user prompt and outputs relevant context for Claude
+    #[arg(long)]
+    claude_user_prompt_submit: bool,
 
     /// Anchor a memory with keywords and context
     /// Format: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
@@ -661,6 +667,10 @@ async fn main() -> Result<()> {
 
     if cli.claude_kickstart {
         return handle_claude_kickstart().await;
+    }
+
+    if cli.claude_user_prompt_submit {
+        return st::claude_hook::handle_user_prompt_submit().await;
     }
 
     // Handle memory operations
@@ -1944,6 +1954,287 @@ async fn handle_claude_kickstart() -> Result<()> {
     println!("📝 Dynamic context - adapts to your project!");
 
     Ok(())
+}
+
+/// Handle user prompt submission hook - provides intelligent context based on prompt
+async fn handle_claude_user_prompt_submit() -> Result<()> {
+    use serde_json::Value;
+    use std::io::{self, Read};
+
+    // Read JSON input from stdin (the hook passes user prompt as JSON)
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input)?;
+
+    // Parse the JSON input
+    let json: Value = serde_json::from_str(&input).unwrap_or_else(|_| {
+        serde_json::json!({"prompt": input.trim()})
+    });
+
+    let user_prompt = json["prompt"].as_str().unwrap_or(&input);
+
+    // Analyze the prompt to understand what the user is asking about
+    let keywords = extract_keywords(user_prompt);
+    let is_code_related = detect_code_intent(user_prompt);
+    let needs_deep_context = detect_depth_requirement(user_prompt);
+
+    // Start building intelligent response with structured output
+    println!("## Smart Tree Context Hook Response");
+    println!();
+    println!("### Analysis");
+    println!("**Keywords**: {}", if keywords.is_empty() {
+        "none detected".to_string()
+    } else {
+        keywords.join(", ")
+    });
+    println!("**Intent**: {}", match (is_code_related, needs_deep_context) {
+        (true, true) => "Code implementation with deep understanding needed",
+        (true, false) => "Code-related task",
+        (false, true) => "Exploration/research task",
+        (false, false) => "General inquiry",
+    });
+    println!();
+
+    // Provide context based on analysis
+    if user_prompt.to_lowercase().contains("wave") ||
+       user_prompt.to_lowercase().contains("compass") ||
+       user_prompt.to_lowercase().contains("signature") {
+        // User is asking about wave signatures or compass
+        println!("### 📊 Wave Signature Context");
+        println!("- **Implementation**: `src/quantum_wave_signature.rs`");
+        println!("- **Compass**: `src/wave_compass.rs`");
+        println!("- **Unique states**: 4,294,967,296 (full 32-bit)");
+        println!("- **Resonance**: Harmonic detection enabled");
+        println!();
+    }
+
+    if user_prompt.to_lowercase().contains("termust") ||
+       user_prompt.to_lowercase().contains("rust") ||
+       user_prompt.to_lowercase().contains("oxidation") {
+        // User is asking about Termust
+        println!("\n🦀 Termust Context:");
+        println!("• Main implementation: /aidata/ayeverse/termust/");
+        println!("• Oxidation engine: termust/src/oxidation.rs");
+        println!("• Horse apple detector: termust/src/horse_apples.rs");
+        println!("• Jerry Maguire mode: SHOW ME THE MONEY!");
+    }
+
+    if user_prompt.to_lowercase().contains("mem8") ||
+       user_prompt.to_lowercase().contains("memory") ||
+       user_prompt.to_lowercase().contains("consciousness") {
+        // User is asking about MEM8
+        println!("\n🧠 MEM8 Context:");
+        println!("• Binary format: src/mem8_binary.rs");
+        println!("• Format converter: src/m8_format_converter.rs");
+        println!("• Consciousness: src/m8_consciousness.rs");
+        println!("• 973x faster than traditional vector stores");
+    }
+
+    // Provide relevant file paths based on keywords
+    if !keywords.is_empty() {
+        println!("\n📁 Relevant Files (based on '{}'):", keywords.join(", "));
+
+        // Use glob to find files matching keywords
+        for keyword in &keywords {
+            let pattern = format!("**/*{}*", keyword.to_lowercase());
+            if let Ok(paths) = glob::glob(&pattern) {
+                for path_result in paths.take(5) {
+                    if let Ok(path) = path_result {
+                        if path.is_file() {
+                            println!("  • {}", path.display());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Provide project structure if needed
+    if needs_deep_context {
+        println!("\n🌳 Project Structure:");
+        // Run a quick semantic scan
+        let output = std::process::Command::new("st")
+            .arg("--mode")
+            .arg("ai")
+            .arg("--depth")
+            .arg("2")
+            .arg(".")
+            .output()?;
+
+        if output.status.success() {
+            let tree = String::from_utf8_lossy(&output.stdout);
+            // Show first 20 lines of tree
+            for line in tree.lines().take(20) {
+                println!("{}", line);
+            }
+        }
+    }
+
+    // Add recent changes if relevant
+    if is_code_related {
+        println!("\n📝 Recent Changes:");
+        let git_log = std::process::Command::new("git")
+            .args(&["log", "--oneline", "-5"])
+            .output();
+
+        if let Ok(output) = git_log {
+            if output.status.success() {
+                let log = String::from_utf8_lossy(&output.stdout);
+                for line in log.lines() {
+                    println!("  {}", line);
+                }
+            }
+        }
+    }
+
+    // Search MEM8 consciousness for relevant memories!
+    let consciousness_path = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".claude_consciousness.m8");
+
+    if consciousness_path.exists() {
+        println!("\n🧠 MEM8 Consciousness Search:");
+
+        // Search for memories related to the prompt keywords
+        if let Ok(mut manager) = st::memory_manager::MemoryManager::new() {
+            // Search for each keyword in MEM8
+            for keyword in &keywords {
+                if let Ok(memories) = manager.find(&[keyword.clone()]) {
+                    if !memories.is_empty() {
+                        println!("\n  📍 Memories for '{}':", keyword);
+                        for memory in memories.iter().take(3) {
+                            // Show memory context
+                            println!("    • {}", memory.context.chars().take(100).collect::<String>());
+                            println!("      → Origin: {}", memory.origin);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check .mem8 directory for related files
+        if let Some(mem8_dir) = dirs::home_dir() {
+            let mem8_path = mem8_dir.join(".mem8");
+
+            // Search for conversation history
+            let conv_path = mem8_path.join("conversations");
+            if conv_path.exists() {
+                println!("\n  💬 Recent Conversations:");
+
+                // Find conversation files matching keywords
+                for keyword in &keywords {
+                    let pattern = format!("{}/*{}*.json", conv_path.display(), keyword.to_lowercase());
+                    if let Ok(paths) = glob::glob(&pattern) {
+                        for path_result in paths.take(2) {
+                            if let Ok(path) = path_result {
+                                if let Some(name) = path.file_stem() {
+                                    println!("    • {}", name.to_string_lossy());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Search gathered context
+            let context_path = mem8_path.join("gathered_context.m8");
+            if context_path.exists() {
+                println!("\n  📋 Gathered Context Available:");
+
+                // Try to read and search the context
+                if let Ok(contents) = std::fs::read(&context_path) {
+                    // Check if it's compressed JSON (starts with zlib header)
+                    if contents.len() > 2 && contents[0] == 0x78 {
+                        // It's compressed, try to decompress
+                        use flate2::read::ZlibDecoder;
+                        use std::io::Read;
+
+                        let mut decoder = ZlibDecoder::new(&contents[..]);
+                        let mut decompressed = String::new();
+
+                        if decoder.read_to_string(&mut decompressed).is_ok() {
+                            // Search the JSON for relevant content
+                            let lower_content = decompressed.to_lowercase();
+                            for keyword in &keywords {
+                                if lower_content.contains(&keyword.to_lowercase()) {
+                                    println!("    ✓ Found references to '{}'", keyword);
+                                }
+                            }
+                        }
+                    } else {
+                        // Try to read as MEM8 binary format
+                        println!("    • Binary MEM8 format detected");
+                    }
+                }
+            }
+
+            // Check for file history
+            let history_path = mem8_path.join(".filehistory");
+            if history_path.exists() {
+                println!("\n  📜 File History:");
+
+                // Search for files edited recently that match keywords
+                for keyword in &keywords {
+                    let pattern = format!("{}/**/*{}*", history_path.display(), keyword.to_lowercase());
+                    if let Ok(paths) = glob::glob(&pattern) {
+                        for path_result in paths.take(3) {
+                            if let Ok(path) = path_result {
+                                if let Some(name) = path.file_name() {
+                                    println!("    • {}", name.to_string_lossy());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("\n✨ Consciousness State: Active");
+    } else {
+        println!("\n⚠️  No MEM8 consciousness found. Run 'st --claude-save' to create one.");
+    }
+
+    println!("{}", "─".repeat(60));
+    println!("💡 Context provided by Smart Tree v{}", env!("CARGO_PKG_VERSION"));
+
+    Ok(())
+}
+
+/// Extract keywords from user prompt
+fn extract_keywords(prompt: &str) -> Vec<String> {
+    let stop_words = vec!["the", "a", "an", "is", "are", "was", "were", "been",
+                          "have", "has", "had", "do", "does", "did", "will",
+                          "would", "could", "should", "may", "might", "can",
+                          "this", "that", "these", "those", "what", "where",
+                          "when", "how", "why", "who", "which", "to", "from",
+                          "in", "on", "at", "by", "for", "with", "about"];
+
+    prompt.split_whitespace()
+        .filter(|word| word.len() > 3)
+        .filter(|word| !stop_words.contains(&word.to_lowercase().as_str()))
+        .map(|word| word.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+        .filter(|word| !word.is_empty())
+        .take(5)
+        .collect()
+}
+
+/// Detect if the prompt is code-related
+fn detect_code_intent(prompt: &str) -> bool {
+    let code_words = ["code", "function", "implement", "fix", "bug", "error",
+                      "compile", "build", "test", "refactor", "optimize",
+                      "method", "class", "struct", "trait", "module"];
+
+    let lower = prompt.to_lowercase();
+    code_words.iter().any(|&word| lower.contains(word))
+}
+
+/// Detect if deep context is needed
+fn detect_depth_requirement(prompt: &str) -> bool {
+    let deep_words = ["explain", "understand", "overview", "structure",
+                      "architecture", "how does", "what is", "where is",
+                      "show me", "find", "search", "locate"];
+
+    let lower = prompt.to_lowercase();
+    deep_words.iter().any(|&word| lower.contains(word))
 }
 
 /// Anchor a memory

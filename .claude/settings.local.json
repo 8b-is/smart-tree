@@ -18,5 +18,18 @@
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "smart-tree"
-  ]
+  ],
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/aidata/ayeverse/smart-tree/target/release/st --claude-user-prompt-submit"
+          }
+        ]
+      }
+    ]
+  }
 }
