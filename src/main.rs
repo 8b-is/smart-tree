@@ -168,6 +168,11 @@ struct Cli {
     #[arg(long)]
     memory_stats: bool,
 
+    /// Control smart tips (on/off). Tips show helpful hints periodically
+    /// Example: --tips off (to disable), --tips on (to re-enable)
+    #[arg(long, value_name = "STATE", value_parser = ["on", "off"])]
+    tips: Option<String>,
+
     /// Start or resume a mega session
     #[arg(long)]
     mega_start: Option<Option<String>>,
@@ -567,6 +572,13 @@ async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
 
+    // Handle tips flag if provided
+    if let Some(state) = &cli.tips {
+        let enable = state == "on";
+        st::tips::handle_tips_flag(enable)?;
+        return Ok(());
+    }
+
     // Handle exclusive action flags first.
     if cli.cheet {
         let markdown = std::fs::read_to_string("docs/st-cheetsheet.md")?;
@@ -956,6 +968,9 @@ async fn main() -> Result<()> {
                     _ => unreachable!(), // Should not happen due to the outer match.
                 };
 
+                // Show a helpful tip at the top (occasionally)
+                st::tips::maybe_show_tip().ok();
+
                 // Get a lock on stdout for writing.
                 let stdout = io::stdout();
                 let mut handle = stdout.lock();
@@ -1141,6 +1156,12 @@ async fn main() -> Result<()> {
                 ))
             }
         };
+
+        // Show a helpful tip at the top (occasionally) for non-streaming modes
+        // Only show if not in streaming mode (already shown above for streaming)
+        if matches!(mode, OutputMode::Ls | OutputMode::Classic | OutputMode::Ai | OutputMode::Json | OutputMode::Csv | OutputMode::Tsv | OutputMode::Markdown | OutputMode::Mermaid | OutputMode::Stats | OutputMode::Hex | OutputMode::Waste | OutputMode::Digest) {
+            st::tips::maybe_show_tip().ok();
+        }
 
         // Format the collected nodes and stats into a byte vector.
         let mut output_buffer = Vec::new();
