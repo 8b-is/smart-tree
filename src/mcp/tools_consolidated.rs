@@ -579,6 +579,22 @@ pub fn get_consolidated_tools() -> Vec<Value> {
     ]
 }
 
+/// Handle hooks tool operations
+async fn handle_hooks(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+    let params = params.unwrap_or(json!({}));
+    let operation = params["operation"].as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing operation parameter"))?;
+
+    match operation {
+        "list" => super::hook_tools::list_hooks(params).await,
+        "set" => super::hook_tools::set_hook(params).await,
+        "remove" => super::hook_tools::remove_hook(params).await,
+        "test" => super::hook_tools::test_hook(params).await,
+        "get_commands" => super::hook_tools::get_hook_commands(params).await,
+        _ => Err(anyhow::anyhow!("Unknown hooks operation: {}", operation)),
+    }
+}
+
 /// Tool dispatcher for consolidated tools
 pub async fn dispatch_consolidated_tool(
     name: &str,
@@ -611,6 +627,7 @@ pub async fn dispatch_consolidated_tool(
             )
             .await
         }
+        "hooks" => handle_hooks(params, ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }

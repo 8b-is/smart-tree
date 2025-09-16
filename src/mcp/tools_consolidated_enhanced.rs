@@ -468,6 +468,50 @@ EXAMPLE:
                 "required": ["path"]
             }
         }),
+        json!({
+            "name": "hooks",
+            "description": "🎣 HOOK MANAGEMENT - Control Claude Code hooks programmatically! Manage UserPromptSubmit, PreToolUse, PostToolUse, and SessionStart hooks without manual /hooks commands.
+
+💡 TIP: Automate your Claude Code context flow!
+• hooks {operation:'list'} - See all configured hooks
+• hooks {operation:'set', hook_type:'UserPromptSubmit'} - Enable Smart Tree context
+• hooks {operation:'test', hook_type:'UserPromptSubmit', input:'test'} - Test a hook
+
+EXAMPLES:
+✓ Enable context hook: hooks {operation:'set', hook_type:'UserPromptSubmit', enabled:true}
+✓ List all hooks: hooks {operation:'list'}
+✓ Test hook: hooks {operation:'test', hook_type:'UserPromptSubmit', input:'analyze /src'}
+✓ Remove hook: hooks {operation:'remove', hook_type:'PreToolUse'}",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["list", "set", "remove", "test", "get_commands"],
+                        "description": "Hook operation to perform"
+                    },
+                    "hook_type": {
+                        "type": "string",
+                        "enum": ["UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionStart"],
+                        "description": "Type of Claude Code hook"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Enable or disable the hook",
+                        "default": true
+                    },
+                    "command": {
+                        "type": "string",
+                        "description": "Custom command (default: Smart Tree with appropriate flag)"
+                    },
+                    "input": {
+                        "type": "string",
+                        "description": "Test input for testing hooks"
+                    }
+                },
+                "required": ["operation"]
+            }
+        }),
     ]
 }
 

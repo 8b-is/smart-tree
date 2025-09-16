@@ -170,25 +170,42 @@ fn extract_project_keywords(prompt: &str) -> Vec<String> {
 
 /// Search MEM8 for relevant memories
 fn search_mem8_context(keywords: &[String]) -> Result<()> {
+    use std::collections::HashSet;
+
     println!("### 🧠 MEM8 Context");
+
+    let mut found_any = false;
 
     // Check for conversations directory
     if let Some(home) = dirs::home_dir() {
         let conversations_dir = home.join(".mem8").join("conversations");
 
         if conversations_dir.exists() {
-            println!("\n**Found memories about:**");
+            let mut matched_files = HashSet::new();
 
-            for keyword in keywords {
-                // Search for conversation files containing the keyword
-                let pattern = format!("{}/*{}*.json", conversations_dir.display(), keyword);
-                if let Ok(paths) = glob::glob(&pattern) {
-                    for path_result in paths.take(2) {
-                        if let Ok(path) = path_result {
-                            if let Some(name) = path.file_stem() {
-                                println!("  • {} (keyword: {})", name.to_string_lossy(), keyword);
+            // Search for any JSON files and grep their content
+            if let Ok(entries) = fs::read_dir(&conversations_dir) {
+                for entry in entries.flatten() {
+                    if let Some(name) = entry.path().file_name() {
+                        let name_str = name.to_string_lossy().to_lowercase();
+
+                        // Check if filename or content contains any keyword
+                        for keyword in keywords {
+                            if name_str.contains(&keyword.to_lowercase()) {
+                                matched_files.insert(entry.path());
+                                break;
                             }
                         }
+                    }
+                }
+            }
+
+            if !matched_files.is_empty() {
+                println!("\n**Recent conversations:**");
+                for path in matched_files.iter().take(3) {
+                    if let Some(name) = path.file_stem() {
+                        println!("  • {}", name.to_string_lossy());
+                        found_any = true;
                     }
                 }
             }
@@ -197,22 +214,50 @@ fn search_mem8_context(keywords: &[String]) -> Result<()> {
         // Also check memory anchors
         let anchors_path = home.join(".mem8").join("memory_anchors.json");
         if anchors_path.exists() {
-            if let Ok(mut manager) = crate::memory_manager::MemoryManager::new() {
-                for keyword in keywords {
-                    if let Ok(memories) = manager.find(&[keyword.clone()]) {
-                        if !memories.is_empty() {
-                            println!("\n**Anchored memories for '{}':**", keyword);
-                            for memory in memories.iter().take(2) {
-                                println!("  • Type: {} | Context: {}",
-                                    memory.anchor_type,
-                                    memory.context.chars().take(60).collect::<String>()
+            // Try to load and search memory anchors
+            if let Ok(contents) = fs::read_to_string(&anchors_path) {
+                if let Ok(json) = serde_json::from_str::<Value>(&contents) {
+                    if let Some(anchors) = json.as_array() {
+                        let mut found_memories = Vec::new();
+
+                        for anchor in anchors {
+                            if let Some(context) = anchor["context"].as_str() {
+                                let context_lower = context.to_lowercase();
+
+                                for keyword in keywords {
+                                    if context_lower.contains(&keyword.to_lowercase()) {
+                                        found_memories.push((
+                                            anchor["anchor_type"].as_str().unwrap_or("unknown"),
+                                            context,
+                                            keyword.as_str()
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if !found_memories.is_empty() {
+                            println!("\n**Anchored memories:**");
+                            for (anchor_type, context, keyword) in found_memories.iter().take(3) {
+                                let preview: String = context.chars().take(80).collect();
+                                println!("  • [{}] {}: {}...",
+                                    keyword,
+                                    anchor_type,
+                                    preview
                                 );
+                                found_any = true;
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    if !found_any {
+        println!("\nNo specific memories found. Consider anchoring important context with:");
+        println!("`st --memory-anchor <type> <keywords> <context>`");
     }
 
     println!();

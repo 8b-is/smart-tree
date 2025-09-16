@@ -29,6 +29,7 @@ mod tools_consolidated_enhanced;
 mod proactive_assistant;
 mod enhanced_tool_descriptions;
 mod git_memory_integration;
+mod hook_tools;
 
 use assistant::*;
 use cache::*;

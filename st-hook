@@ -1,0 +1,76 @@
+#!/bin/bash
+# Smart Tree Claude Code Hook Handler
+# "Your context, automated!" - Hue
+
+ST_BIN="${ST_BIN:-/usr/local/bin/st}"
+
+case "$1" in
+    --claude-user-prompt-submit)
+        # Read JSON input from stdin
+        INPUT=$(cat)
+        PROMPT=$(echo "$INPUT" | jq -r '.prompt // ""')
+
+        # Extract paths and provide context
+        echo "🌳 Smart Tree Context Hook Activated!"
+        echo ""
+
+        # Check for paths in the prompt
+        if echo "$PROMPT" | grep -qE '(/[^[:space:]]+|\./)'; then
+            echo "📂 Detected path references in prompt"
+            PATHS=$(echo "$PROMPT" | grep -oE '(/[^[:space:]]+|\./[^[:space:]]+)' | head -5)
+            for path in $PATHS; do
+                if [ -e "$path" ]; then
+                    echo "Found: $path"
+                    $ST_BIN --mode ai --compress "$path" 2>/dev/null | head -100
+                fi
+            done
+        fi
+
+        # Search MEM8 if available
+        if [ -d ~/.mem8 ]; then
+            echo ""
+            echo "🧠 Checking MEM8 consciousness..."
+            # Simple keyword extraction
+            KEYWORDS=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]' | grep -oE '\b[a-z]{4,}\b' | sort -u | head -10)
+            for kw in $KEYWORDS; do
+                if grep -l "$kw" ~/.mem8/*.m8 2>/dev/null | head -1 >/dev/null; then
+                    echo "Found memories about: $kw"
+                fi
+            done
+        fi
+
+        # Git context if in repo
+        if [ -d .git ]; then
+            echo ""
+            echo "📦 Git Repository Context:"
+            git status --short 2>/dev/null | head -5
+        fi
+        ;;
+
+    --claude-pre-tool)
+        INPUT=$(cat)
+        echo "🔧 Pre-tool validation"
+        ;;
+
+    --claude-post-tool)
+        INPUT=$(cat)
+        echo "✅ Post-tool processing"
+        ;;
+
+    --claude-restore)
+        if [ -f .claude_consciousness.m8 ]; then
+            $ST_BIN --claude-restore
+        else
+            echo "No previous consciousness found"
+        fi
+        ;;
+
+    --claude-save)
+        $ST_BIN --claude-save
+        ;;
+
+    *)
+        echo "Usage: $0 [--claude-user-prompt-submit|--claude-pre-tool|--claude-post-tool|--claude-restore|--claude-save]"
+        exit 1
+        ;;
+esac
