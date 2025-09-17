@@ -52,6 +52,7 @@ shellexpand = "3.1"
 terminal_size = "0.3"
 fuzzy-matcher = "0.3"
 syntect = "5.0"
+artem = "2.0"  # image-to-ascii converter
 
 # egui for dashboard
 egui = "0.32.2"
