@@ -128,6 +128,8 @@ impl EnhancedSpicyTui {
         };
 
         app.refresh_tree()?;
+        // Initialize the list state to select the first item
+        app.list_state.select(Some(0));
         Ok(app)
     }
 
@@ -494,6 +496,10 @@ impl EnhancedSpicyTui {
             let new_idx = ((current_idx as i32 + delta).max(0) as usize)
                 .min(flat_tree.len().saturating_sub(1));
             self.selected_path = flat_tree[new_idx].clone();
+
+            // Update the list state to move the selection bar
+            self.list_state.select(Some(new_idx));
+
             self.update_preview().ok();
         }
     }
@@ -502,6 +508,13 @@ impl EnhancedSpicyTui {
         if self.selected_path != self.current_path {
             if let Some(parent) = self.selected_path.parent() {
                 self.selected_path = parent.to_path_buf();
+
+                // Update list state to match the new selected path
+                let flat_tree = self.flatten_tree(&self.tree);
+                if let Some(idx) = flat_tree.iter().position(|p| p == &self.selected_path) {
+                    self.list_state.select(Some(idx));
+                }
+
                 self.update_preview().ok();
                 self.set_status("📁 Navigated up");
             }
@@ -510,12 +523,39 @@ impl EnhancedSpicyTui {
 
     fn expand_or_navigate_in(&mut self) -> Result<()> {
         if self.selected_path.is_dir() {
-            // Expand directory in tree
-            self.set_status("📂 Expanded directory");
+            // Find and toggle the node
+            let path = self.selected_path.clone();
+            self.toggle_node_expansion(&path)?;
+
+            // Update list state to maintain position
+            let flat_tree = self.flatten_tree(&self.tree);
+            if let Some(idx) = flat_tree.iter().position(|p| p == &self.selected_path) {
+                self.list_state.select(Some(idx));
+            }
+
+            self.set_status("📂 Toggled directory");
         } else {
             // Can't expand files
             self.set_status("📄 This is a file");
         }
+        Ok(())
+    }
+
+    fn toggle_node_expansion(&mut self, path: &Path) -> Result<()> {
+        fn toggle_recursive(node: &mut TreeNode, target_path: &Path) -> Result<bool> {
+            if node.path == target_path {
+                node.is_expanded = !node.is_expanded;
+                return Ok(true);
+            }
+            for child in &mut node.children {
+                if toggle_recursive(child, target_path)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+
+        toggle_recursive(&mut self.tree, path)?;
         Ok(())
     }
 
@@ -614,7 +654,13 @@ impl EnhancedSpicyTui {
                     .title(title)
                     .title_style(Style::default().fg(SPICY_YELLOW).bold()),
             )
-            .highlight_style(Style::default());
+            .highlight_style(
+                Style::default()
+                    .bg(SPICY_GREEN)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD)
+            )
+            .highlight_symbol("▶ ");
 
         f.render_stateful_widget(list, area, &mut self.list_state);
     }
@@ -627,12 +673,7 @@ impl EnhancedSpicyTui {
             self.get_file_icon(&node.path)
         };
 
-        let style = if node.path == self.selected_path {
-            Style::default()
-                .fg(Color::Black)
-                .bg(SPICY_GREEN)
-                .add_modifier(Modifier::BOLD)
-        } else if node.is_dir {
+        let style = if node.is_dir {
             Style::default().fg(SPICY_CYAN)
         } else {
             Style::default().fg(SPICY_GREEN)
@@ -663,12 +704,7 @@ impl EnhancedSpicyTui {
             self.get_file_icon(&node.path)
         };
 
-        let style = if node.path == self.selected_path {
-            Style::default()
-                .fg(Color::Black)
-                .bg(SPICY_GREEN)
-                .add_modifier(Modifier::BOLD)
-        } else if node.is_dir {
+        let style = if node.is_dir {
             Style::default().fg(SPICY_CYAN)
         } else {
             Style::default().fg(SPICY_GREEN)

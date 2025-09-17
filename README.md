@@ -56,19 +56,32 @@ st --spicy
 ```
 
 ### Features:
-- **🔍 Fuzzy Search**: Search files AND content in real-time
-- **💾 M8 Caching**: Directory contexts cached in `~/.st/contexts/*.m8` for instant recall
-- **🎨 Syntax Highlighting**: Beautiful code previews
-- **⌨️ Vim Keybindings**: j/k navigation, / for search
-- **🌊 Quantum Wave Signatures**: Each directory gets a unique wave signature
+- **🔍 Dual-Mode Search**:
+  - `/` - Search file names with fuzzy matching
+  - `Ctrl+F` - Search file content across the tree
+- **🌲 Tree Navigation**: Navigate like a file tree!
+  - `←/h` - Collapse directory or go to parent
+  - `→/l` - Expand directory or enter
+  - `↑↓/jk` - Navigate up/down
+- **💾 M8 Context Caching**: Directory contexts cached with quantum wave signatures
+- **🎨 Syntax Highlighting**: Beautiful code previews with search highlighting
+- **🖼️ ASCII Art**: Image previews converted to ASCII (requires `artem`)
+- **🌊 Quantum Wave Signatures**: Each search result saved with unique signature
 
 ### Keyboard Shortcuts:
-- `/` - Start fuzzy search
-- `j/k` or `↑↓` - Navigate files
-- `Enter` - Open directory/file
-- `Ctrl+H` - Toggle hidden files
-- `?` - Help overlay
-- `q` - Quit
+- **Navigation**:
+  - `j/k` or `↑↓` - Move selection up/down
+  - `h/l` or `←→` - Collapse/expand directories (tree navigation!)
+  - `Enter` - Open selected item
+- **Search Modes**:
+  - `/` - Fuzzy search file names
+  - `Ctrl+F` - Search content within files
+  - `Esc` - Exit search mode
+- **Features**:
+  - `Ctrl+H` - Toggle hidden files
+  - `Ctrl+S` - Save search results to M8 context
+  - `?` or `F1` - Toggle help overlay
+  - `q` or `Esc` - Quit
 
 ## 💡 Smart Tips System
 
