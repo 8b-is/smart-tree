@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 /kickstart
-Smart Tree v5.0.8 — context restore:
+Smart Tree v5.0.7 — Latest Features:
 ✔ Tokenizer (node_modules=0x80, .rs=0x91)
 ✔ .m8 files → location-independent
 ✔ Consciousness self-maintaining
@@ -35,7 +35,7 @@ If a `.claude_consciousness.m8` file exists, it contains:
 st --claude-save       # Save current consciousness
 ```
 
-## Project: Smart Tree v4.8.8
+## Project: Smart Tree v5.0.7
 Lightning-fast directory visualization, 10-24x faster than `tree`. MCP server with 30+ tools.
 
 ## Essential Commands
@@ -48,6 +48,7 @@ cargo test -- --nocapture       # Test with output
 
 # Running
 st                              # Classic tree
+st --tui                        # 🌶️ Spicy TUI mode with fuzzy search
 st --mode ai --compress         # AI-optimized (80% smaller!)
 st --mode quantum src/          # Maximum compression (100x)
 st --mcp                        # MCP server mode
@@ -62,12 +63,15 @@ cargo fmt && cargo clippy -- -D warnings && cargo test
 src/
 ├── main.rs          # CLI entry (clap 4.5)
 ├── scanner.rs       # Directory traversal (handles permissions with *)
+├── spicy_tui.rs     # 🌶️ Spicy TUI with fuzzy search
+├── spicy_fuzzy.rs   # Fuzzy matching for TUI
 ├── formatters/      # 25+ output formats
 │   ├── quantum.rs   # MEM|8 compression (8-10x)
+│   ├── marqant.rs   # Marqant markdown compression
 │   └── ai.rs        # Token-efficient
-├── mcp/            
-│   └── tools.rs     # 30+ MCP tools (139KB!)
-└── tree_sitter_quantum.rs  # AST-aware compression
+├── mcp/
+│   └── tools.rs     # 30+ MCP tools (consolidated)
+└── tree_sitter/     # AST-aware compression & editing
 ```
 
 ## Testing
@@ -110,6 +114,20 @@ release <ver> [notes]   # GitHub release
 ```
 
 Use `-n` for non-interactive mode.
+
+## Key Features
+
+### 🌶️ Spicy TUI Mode (NEW!)
+- Launch with `st --tui`
+- Fuzzy search with instant filtering
+- Syntax highlighting for file previews
+- M8 cache integration for speed
+- Keyboard shortcuts: `/` search, `q` quit, arrows navigate
+
+### 🎸 Marqant Compression
+- Binary `mq` for markdown compression
+- 70-90% size reduction
+- Usage: `mq compress file.md`, `mq aggregate .`
 
 ## Adding Features
 
