@@ -9,9 +9,9 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{
         Block, Borders, List, ListItem, ListState, Paragraph, Wrap, Clear,
     },
@@ -20,16 +20,15 @@ use ratatui::{
 use std::{
     collections::HashMap,
     fs,
-    io::{self, BufRead, BufReader},
+    io::{self, BufRead},
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
-use artem::convert;
 
 use crate::{
-    scanner::{FileNode, Scanner, ScannerConfig},
+    scanner::{Scanner, ScannerConfig},
     spicy_fuzzy::{SpicyFuzzySearch, FileMatch},
     memory_manager::MemoryManager,
 };
@@ -177,15 +176,15 @@ impl EnhancedSpicyTui {
     }
 
     fn update_preview(&mut self) -> Result<()> {
-        let path = &self.selected_path;
+        let path = self.selected_path.clone();
 
         if path.is_file() {
             // Check if it's an image
-            if self.is_image(path) {
-                self.preview_content = Some(self.get_ascii_art(path)?);
+            if self.is_image(&path) {
+                self.preview_content = Some(self.get_ascii_art(&path)?);
             } else {
                 // Regular file preview
-                match fs::metadata(path) {
+                match fs::metadata(&path) {
                     Ok(meta) if meta.len() > 1_000_000 => {
                         self.preview_content = Some(format!(
                             "📁 File too large for preview\nSize: {:.2} MB",
@@ -193,7 +192,7 @@ impl EnhancedSpicyTui {
                         ));
                     }
                     Ok(_) => {
-                        if let Ok(content) = fs::read_to_string(path) {
+                        if let Ok(content) = fs::read_to_string(&path) {
                             let preview = if self.search_mode == SearchMode::FileContent
                                 && !self.search_query.is_empty() {
                                 self.highlight_content(&content, &self.search_query)
@@ -210,7 +209,7 @@ impl EnhancedSpicyTui {
             }
         } else if path.is_dir() {
             // Directory preview with tree structure
-            let tree_preview = self.generate_tree_preview(path)?;
+            let tree_preview = self.generate_tree_preview(&path)?;
             self.preview_content = Some(tree_preview);
         }
 
@@ -235,17 +234,27 @@ impl EnhancedSpicyTui {
             return Ok(cached.clone());
         }
 
-        // Generate ASCII art
-        let ascii = if let Ok(img) = image::open(path) {
-            let config = artem::Config {
-                width: 40,
-                height: 20,
-                charset: artem::CharSet::Standard,
-                invert: false,
-                background: artem::Color::Black,
-            };
-
-            artem::convert(img, &config)
+        // Generate ASCII art using artem CLI
+        let ascii = if path.exists() {
+            // Try to use artem command-line tool
+            match std::process::Command::new("artem")
+                .arg(path)
+                .arg("--width")
+                .arg("40")
+                .output()
+            {
+                Ok(output) => {
+                    if output.status.success() {
+                        String::from_utf8_lossy(&output.stdout).to_string()
+                    } else {
+                        "🖼️ Image preview not available (artem failed)".to_string()
+                    }
+                }
+                Err(_) => {
+                    // Artem not installed, just show a placeholder
+                    "🖼️ Image preview (install artem for ASCII art)".to_string()
+                }
+            }
         } else {
             "🖼️ Unable to convert image".to_string()
         };
@@ -341,8 +350,6 @@ impl EnhancedSpicyTui {
                 }
             }
         }
-
-        Ok(())
     }
 
     async fn handle_normal_input(&mut self, key: event::KeyEvent) -> Result<()> {
@@ -586,7 +593,12 @@ impl EnhancedSpicyTui {
     }
 
     fn draw_tree(&mut self, f: &mut Frame, area: Rect) {
-        let items = self.build_tree_items(&self.tree, 0);
+        // Build items first, then use them
+        let items = {
+            let mut items = Vec::new();
+            self.build_tree_items_into(&self.tree, 0, &mut items);
+            items
+        };
 
         let title = match self.search_mode {
             SearchMode::FileName => format!(" 🔍 Files: {} ", self.search_query),
@@ -605,6 +617,40 @@ impl EnhancedSpicyTui {
             .highlight_style(Style::default());
 
         f.render_stateful_widget(list, area, &mut self.list_state);
+    }
+
+    fn build_tree_items_into(&self, node: &TreeNode, indent: usize, items: &mut Vec<ListItem>) {
+        let prefix = "  ".repeat(indent);
+        let icon = if node.is_dir {
+            if node.is_expanded { "📂" } else { "📁" }
+        } else {
+            self.get_file_icon(&node.path)
+        };
+
+        let style = if node.path == self.selected_path {
+            Style::default()
+                .fg(Color::Black)
+                .bg(SPICY_GREEN)
+                .add_modifier(Modifier::BOLD)
+        } else if node.is_dir {
+            Style::default().fg(SPICY_CYAN)
+        } else {
+            Style::default().fg(SPICY_GREEN)
+        };
+
+        let arrow = if node.is_dir {
+            if node.is_expanded { "▼ " } else { "▶ " }
+        } else {
+            "  "
+        };
+
+        items.push(ListItem::new(format!("{}{}{} {}", prefix, arrow, icon, node.name)).style(style));
+
+        if node.is_expanded {
+            for child in &node.children {
+                self.build_tree_items_into(child, indent + 1, items);
+            }
+        }
     }
 
     fn build_tree_items(&self, node: &TreeNode, indent: usize) -> Vec<ListItem> {

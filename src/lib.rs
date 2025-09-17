@@ -57,6 +57,7 @@ pub mod tips;
 // Spicy TUI - cyberpunk-style terminal interface!
 pub mod spicy_fuzzy;
 pub mod spicy_tui;
+pub mod spicy_tui_enhanced;
 
 // Emoji mapping - bringing life to file types!
 pub mod emoji_mapper;
