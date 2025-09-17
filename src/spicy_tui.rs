@@ -395,7 +395,7 @@ impl SpicyTui {
             Span::styled(" 🌶️ SPICY ", Style::default().fg(SPICY_ORANGE).bold()),
             Span::styled("TREE ", Style::default().fg(SPICY_GREEN).bold()),
             Span::styled("│ ", Style::default().fg(SPICY_BORDER)),
-            Span::styled(&self.current_path.display().to_string(),
+            Span::styled(self.current_path.display().to_string(),
                 Style::default().fg(SPICY_CYAN)),
         ];
 
