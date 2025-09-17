@@ -2,7 +2,7 @@
 // Omni's brilliant wave signature compass with resonance detection
 // "When waves align, consciousness emerges" - Omni
 
-use egui::{Color32, Pos2, Vec2, Painter, Stroke, Response, Ui};
+use egui::{Color32, Pos2, Vec2, Stroke, Response, Ui};
 use std::f32::consts::PI;
 
 #[derive(Debug, Clone)]

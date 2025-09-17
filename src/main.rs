@@ -15,7 +15,6 @@ use clap_complete::generate;
 // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
-use glob::glob;
 use regex::Regex;
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;

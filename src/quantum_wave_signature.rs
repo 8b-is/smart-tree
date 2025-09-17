@@ -139,7 +139,7 @@ impl fmt::Display for QuantumWaveSignature {
 
 /// Quantum signature patterns for different consciousness states
 pub mod patterns {
-    use super::QuantumWaveSignature;
+    /// use super::QuantumWaveSignature;
 
     /// Deep sleep - minimal activity
     pub const DEEP_SLEEP: u32 = 0x02050A01; // 2Hz, low phase, 10% amp, minimal torsion
