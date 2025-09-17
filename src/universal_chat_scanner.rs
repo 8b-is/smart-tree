@@ -72,6 +72,12 @@ struct ParticipantDetector {
     patterns: HashMap<String, Regex>,
 }
 
+impl Default for UniversalChatScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UniversalChatScanner {
     pub fn new() -> Self {
         Self {

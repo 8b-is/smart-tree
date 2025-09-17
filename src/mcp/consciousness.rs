@@ -129,6 +129,12 @@ pub struct ConsciousnessManager {
     save_path: PathBuf,
 }
 
+impl Default for ConsciousnessManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConsciousnessManager {
     /// Create new consciousness manager
     pub fn new() -> Self {

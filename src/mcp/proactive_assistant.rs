@@ -63,7 +63,7 @@ impl ProactiveAssistant {
         })
     }
 
-    fn after_overview(&self, args: &Value, result: &Value) -> Vec<Value> {
+    fn after_overview(&self, _args: &Value, _result: &Value) -> Vec<Value> {
         vec![
             json!({
                 "action": "find",
@@ -90,7 +90,7 @@ impl ProactiveAssistant {
         ]
     }
 
-    fn after_find(&self, args: &Value, result: &Value) -> Vec<Value> {
+    fn after_find(&self, args: &Value, _result: &Value) -> Vec<Value> {
         let file_type = args.get("type").and_then(|t| t.as_str()).unwrap_or("files");
 
         match file_type {
@@ -147,11 +147,13 @@ impl ProactiveAssistant {
         }
     }
 
-    fn after_search(&self, args: &Value, result: &Value) -> Vec<Value> {
+    fn after_search(&self, args: &Value, _result: &Value) -> Vec<Value> {
         let keyword = args.get("keyword").and_then(|k| k.as_str()).unwrap_or("");
 
         // Check if we found TODOs, errors, or important patterns
-        let suggestions = if keyword.contains("TODO") || keyword.contains("FIXME") {
+        
+
+        if keyword.contains("TODO") || keyword.contains("FIXME") {
             vec![
                 json!({
                     "action": "memory",
@@ -188,12 +190,10 @@ impl ProactiveAssistant {
                 "suggestion": "context {operation:'gather_project'}",
                 "builds": "Project understanding over time"
             })]
-        };
-
-        suggestions
+        }
     }
 
-    fn after_analyze(&self, args: &Value, result: &Value) -> Vec<Value> {
+    fn after_analyze(&self, args: &Value, _result: &Value) -> Vec<Value> {
         let mode = args
             .get("mode")
             .and_then(|m| m.as_str())
@@ -251,7 +251,7 @@ impl ProactiveAssistant {
         }
     }
 
-    fn after_edit(&self, args: &Value, _result: &Value) -> Vec<Value> {
+    fn after_edit(&self, _args: &Value, _result: &Value) -> Vec<Value> {
         vec![
             json!({
                 "action": "search",
@@ -357,7 +357,7 @@ impl ProactiveAssistant {
         .to_string()
     }
 
-    fn discover_hidden_gems(&self, result: &Value) -> Vec<String> {
+    fn discover_hidden_gems(&self, _result: &Value) -> Vec<String> {
         // Find interesting patterns in the result
         vec![
             "🎁 Hidden gem: Your codebase has perfect wave symmetry in the /src directory!"

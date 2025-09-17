@@ -99,7 +99,7 @@ impl GitMemory {
     /// Save all recent commits (for initial sync)
     pub fn sync_recent_commits(&mut self, count: usize) -> Result<Vec<CommitWave>> {
         let output = Command::new("git")
-            .args(&["log", "--oneline", "-n", &count.to_string()])
+            .args(["log", "--oneline", "-n", &count.to_string()])
             .output()?;
 
         let commits_str = String::from_utf8_lossy(&output.stdout);
@@ -120,7 +120,7 @@ impl GitMemory {
     fn extract_commit_wave(&self, hash: &str) -> Result<CommitWave> {
         // Get commit details
         let show_output = Command::new("git")
-            .args(&["show", "--pretty=format:%H|%s|%an|%at", "--name-only", hash])
+            .args(["show", "--pretty=format:%H|%s|%an|%at", "--name-only", hash])
             .output()?;
 
         let output = String::from_utf8_lossy(&show_output.stdout);

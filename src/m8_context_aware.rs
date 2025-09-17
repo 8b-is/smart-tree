@@ -23,6 +23,12 @@ pub struct ContextAwareReader {
     expansion_threshold: f64,     // Similarity threshold for auto-expansion
 }
 
+impl Default for ContextAwareReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContextAwareReader {
     pub fn new() -> Self {
         Self {
@@ -68,7 +74,7 @@ impl ContextAwareReader {
     /// Calculate how relevant this .m8 is to current context
     fn calculate_relevance(&self, m8: &ContextualM8, context_keywords: &[String]) -> f64 {
         let mut score = 0.0;
-        let mut matches = 0;
+        let mut _matches = 0;
 
         for keyword in context_keywords {
             let keyword_lower = keyword.to_lowercase();
@@ -76,21 +82,21 @@ impl ContextAwareReader {
             // Check essence
             if m8.essence.to_lowercase().contains(&keyword_lower) {
                 score += 1.0;
-                matches += 1;
+                _matches += 1;
             }
 
             // Check keywords
             for m8_keyword in &m8.keywords {
                 if m8_keyword.to_lowercase().contains(&keyword_lower) {
                     score += 0.8;
-                    matches += 1;
+                    _matches += 1;
                 }
             }
 
             // Check triggers
             if m8.context_triggers.contains_key(keyword) {
                 score += 2.0; // Strong signal!
-                matches += 1;
+                _matches += 1;
             }
         }
 

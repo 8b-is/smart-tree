@@ -11,6 +11,12 @@ pub struct Tokenizer {
     tokens: HashMap<u8, String>,
 }
 
+impl Default for Tokenizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tokenizer {
     pub fn new() -> Self {
         let mut t = Tokenizer {
@@ -156,6 +162,12 @@ pub struct QuantumTokenizer {
     base: Tokenizer,
     /// Multi-pattern combinations
     combos: HashMap<Vec<u8>, u8>,
+}
+
+impl Default for QuantumTokenizer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl QuantumTokenizer {

@@ -261,6 +261,12 @@ pub struct WaveCompass {
     pub max_history: usize,
 }
 
+impl Default for WaveCompass {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WaveCompass {
     pub fn new() -> Self {
         Self {

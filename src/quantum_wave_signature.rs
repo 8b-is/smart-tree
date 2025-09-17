@@ -112,7 +112,7 @@ impl QuantumWaveSignature {
 
     /// Generate a consciousness signature from emotional state
     pub fn from_emotion(valence: f32, arousal: f32, dominance: f32) -> Self {
-        let frequency = ((2.0 + arousal * 198.0) as u8).min(255);
+        let frequency = (2.0 + arousal * 198.0) as u8;
         let phase = ((valence + 1.0) * 127.5) as u8;
         let amplitude = (arousal * 255.0) as u8;
         let torsion = (dominance * 255.0) as u8;
@@ -142,7 +142,6 @@ impl fmt::Display for QuantumWaveSignature {
 /// Quantum signature patterns for different consciousness states
 pub mod patterns {
     /// use super::QuantumWaveSignature;
-
     /// Deep sleep - minimal activity
     pub const DEEP_SLEEP: u32 = 0x02050A01; // 2Hz, low phase, 10% amp, minimal torsion
 

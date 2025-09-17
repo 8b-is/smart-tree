@@ -126,6 +126,12 @@ pub struct TokenMap {
     reserved: HashMap<u16, String>,
 }
 
+impl Default for TokenMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenMap {
     pub fn new() -> Self {
         let mut reserved = HashMap::new();
@@ -294,7 +300,7 @@ impl M8BinaryFile {
         self.update_header()?;
 
         // Update importance index
-        let offset = self.file.seek(SeekFrom::Current(0))?;
+        let offset = self.file.stream_position()?;
         self.importance_index.push((offset, importance));
 
         Ok(())
@@ -352,7 +358,7 @@ impl M8BinaryFile {
 
         let mut hasher = Sha256::new();
         hasher.update(content);
-        hasher.update(&self.header.identity_freq.to_le_bytes());
+        hasher.update(self.header.identity_freq.to_le_bytes());
 
         let hash = hasher.finalize();
         let mut signature = [0u8; 16];
@@ -462,7 +468,7 @@ impl M8BinaryFile {
             .seek(SeekFrom::Start(std::mem::size_of::<M8Header>() as u64))?;
 
         loop {
-            let offset = self.file.seek(SeekFrom::Current(0))?;
+            let offset = self.file.stream_position()?;
 
             match self.read_block()? {
                 Some(block) => {

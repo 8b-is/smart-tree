@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::io::BufRead;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataFormat {
@@ -57,6 +56,12 @@ pub struct UniversalFormatDetector {
     format: DataFormat,
     conversations: Vec<ConversationBlock>,
     participant_patterns: HashMap<String, usize>, // Pattern -> count
+}
+
+impl Default for UniversalFormatDetector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UniversalFormatDetector {

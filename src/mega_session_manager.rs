@@ -268,7 +268,7 @@ impl MegaSessionManager {
 
     /// Load session from disk
     fn load_session(&self, session_id: &str) -> Result<MegaSession> {
-        let path = self.get_session_path(session_id);
+        let _path = self.get_session_path(session_id);
         // Implementation would deserialize from .m8 format
         // For now, return a mock
         Ok(MegaSession {

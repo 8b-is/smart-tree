@@ -248,7 +248,7 @@ impl Q8CasterBridge {
 }
 
 /// Q8-Caster enhanced functionality for rust_shell
-pub async fn enhance_rust_shell_with_q8(shell: &mut crate::rust_shell::RustShell) -> Result<()> {
+pub async fn enhance_rust_shell_with_q8(_shell: &mut crate::rust_shell::RustShell) -> Result<()> {
     println!("🚀 Enhancing Rust Shell with Q8-Caster capabilities...");
 
     let bridge = Q8CasterBridge::new()?;

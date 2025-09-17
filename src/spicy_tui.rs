@@ -2,6 +2,7 @@
 // Inspired by spicy-fzf's beautiful terminal aesthetic
 
 use anyhow::Result;
+use std::path::Path;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
@@ -91,11 +92,13 @@ impl SpicyTui {
     }
 
     fn refresh_directory(&mut self) -> Result<()> {
-        let mut config = ScannerConfig::default();
-        config.max_depth = 1;
-        config.show_hidden = self.show_hidden;
-        config.respect_gitignore = true;
-        config.use_default_ignores = true;
+        let config = ScannerConfig {
+            max_depth: 1,
+            show_hidden: self.show_hidden,
+            respect_gitignore: true,
+            use_default_ignores: true,
+            ..Default::default()
+        };
 
         let scanner = Scanner::new(&self.current_path, config)?;
         let (nodes, _) = scanner.scan()?;
@@ -143,11 +146,13 @@ impl SpicyTui {
             }
         } else if path.is_dir() {
             // Show directory info
-            let mut config = ScannerConfig::default();
-            config.max_depth = 1;
-            config.show_hidden = self.show_hidden;
-            config.respect_gitignore = true;
-            config.use_default_ignores = true;
+            let config = ScannerConfig {
+                max_depth: 1,
+                show_hidden: self.show_hidden,
+                respect_gitignore: true,
+                use_default_ignores: true,
+                ..Default::default()
+            };
 
             if let Ok(scanner) = Scanner::new(path, config) {
                 if let Ok((children, stats)) = scanner.scan() {
@@ -692,7 +697,7 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
 }
 
 // Simple icon heuristic without heavy content detection
-fn icon_for(path: &PathBuf) -> &'static str {
+fn icon_for(path: &Path) -> &'static str {
     if let Some(ext) = path
         .extension()
         .and_then(|e| e.to_str())

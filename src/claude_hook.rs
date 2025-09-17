@@ -84,7 +84,7 @@ fn extract_paths_from_prompt(prompt: &str) -> Vec<PathBuf> {
             } else {
                 // Try relative to current directory
                 let current = env::current_dir().ok()?;
-                let relative = current.join(&path_str);
+                let relative = current.join(path_str);
                 if relative.exists() {
                     Some(relative)
                 } else {
@@ -106,7 +106,7 @@ fn analyze_paths(paths: &[PathBuf]) -> Result<()> {
 
             // Run Smart Tree analysis
             let output = Command::new("st")
-                .args(&["--mode", "summary-ai", "--depth", "2"])
+                .args(["--mode", "summary-ai", "--depth", "2"])
                 .arg(path)
                 .output();
 
@@ -131,7 +131,7 @@ fn analyze_paths(paths: &[PathBuf]) -> Result<()> {
             if let Some(ext) = path.extension() {
                 if matches!(ext.to_str(), Some("rs" | "py" | "js" | "ts" | "go")) {
                     let output = Command::new("st")
-                        .args(&["--mode", "function-markdown"])
+                        .args(["--mode", "function-markdown"])
                         .arg(path)
                         .output();
 
@@ -271,7 +271,7 @@ fn provide_current_context(prompt: &str) -> Result<()> {
 
             // Get branch info
             let branch_output = Command::new("git")
-                .args(&["branch", "--show-current"])
+                .args(["branch", "--show-current"])
                 .output();
 
             if let Ok(output) = branch_output {
@@ -283,7 +283,7 @@ fn provide_current_context(prompt: &str) -> Result<()> {
 
             // Get last commit
             let commit_output = Command::new("git")
-                .args(&["log", "-1", "--oneline"])
+                .args(["log", "-1", "--oneline"])
                 .output();
 
             if let Ok(output) = commit_output {
@@ -295,7 +295,7 @@ fn provide_current_context(prompt: &str) -> Result<()> {
 
             // Run Smart Tree with git status mode
             let tree_output = Command::new("st")
-                .args(&["--mode", "git-status", "--depth", "1"])
+                .args(["--mode", "git-status", "--depth", "1"])
                 .arg(".")
                 .output();
 
@@ -363,7 +363,7 @@ fn provide_topic_context(prompt: &str) -> Result<()> {
 /// Show recent git changes for code-related prompts
 fn show_recent_changes() -> Result<()> {
     let output = Command::new("git")
-        .args(&["log", "--oneline", "-5"])
+        .args(["log", "--oneline", "-5"])
         .output();
 
     if let Ok(output) = output {

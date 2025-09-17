@@ -166,7 +166,7 @@ impl M8BackwardsReader {
                     file.seek(SeekFrom::Start(backlink.offset))?;
 
                     let mut block_buffer = vec![0u8; 4096];
-                    file.read(&mut block_buffer)?;
+                    file.read_exact(&mut block_buffer)?;
 
                     if let Ok(block) = self.parse_memory_block(&block_buffer) {
                         important_memories.push(block);
@@ -267,7 +267,7 @@ impl M8BackwardsReader {
     }
 
     /// Parse token table from buffer
-    fn parse_token_table(&self, buffer: &[u8]) -> Result<HashMap<u8, String>> {
+    fn parse_token_table(&self, _buffer: &[u8]) -> Result<HashMap<u8, String>> {
         // TODO: Implement actual parsing
         Ok(self.current_tokens.clone())
     }
@@ -303,12 +303,9 @@ impl M8BackwardsReader {
 
     /// Find marker in reverse
     fn find_marker_reverse(buffer: &[u8], marker: &[u8]) -> Option<usize> {
-        for i in (0..buffer.len().saturating_sub(marker.len())).rev() {
-            if &buffer[i..i + marker.len()] == marker {
-                return Some(i);
-            }
-        }
-        None
+        (0..buffer.len().saturating_sub(marker.len()))
+            .rev()
+            .find(|&i| &buffer[i..i + marker.len()] == marker)
     }
 }
 
