@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 /kickstart
-Smart Tree v5.0.7 — Latest Features:
+Smart Tree v5.2.0 — Latest Features:
 ✔ Tokenizer (node_modules=0x80, .rs=0x91)
 ✔ .m8 files → location-independent
 ✔ Consciousness self-maintaining
@@ -35,7 +35,7 @@ If a `.claude_consciousness.m8` file exists, it contains:
 st --claude-save       # Save current consciousness
 ```
 
-## Project: Smart Tree v5.0.7
+## Project: Smart Tree v5.2.0
 Lightning-fast directory visualization, 10-24x faster than `tree`. MCP server with 30+ tools.
 
 ## Essential Commands
