@@ -1,11 +1,16 @@
+impl MemoryBank {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 // Smart Tree Memory Manager - Real memory that works! 🧠
 // "Like UV EPROMs but for consciousness!" - Hue
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Memory {
@@ -13,8 +18,8 @@ pub struct Memory {
     pub anchor_type: String,
     pub keywords: Vec<String>,
     pub context: String,
-    pub origin: String,  // Where this memory came from
-    pub frequency: f64,  // Wave frequency of this memory
+    pub origin: String, // Where this memory came from
+    pub frequency: f64, // Wave frequency of this memory
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,7 +47,9 @@ pub struct MemoryManager {
 impl MemoryManager {
     pub fn new() -> Result<Self> {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let bank_path = Path::new(&home).join(".mem8").join("smart_tree_memories.m8");
+        let bank_path = Path::new(&home)
+            .join(".mem8")
+            .join("smart_tree_memories.m8");
 
         // Ensure directory exists
         if let Some(parent) = bank_path.parent() {
@@ -54,7 +61,9 @@ impl MemoryManager {
             Self::load_m8(&bank_path)?
         } else {
             // Try to migrate from old JSON format
-            let json_path = Path::new(&home).join(".mem8").join("smart_tree_memories.json");
+            let json_path = Path::new(&home)
+                .join(".mem8")
+                .join("smart_tree_memories.json");
             if json_path.exists() {
                 let content = fs::read_to_string(&json_path)?;
                 let bank: MemoryBank = serde_json::from_str(&content).unwrap_or_default();
@@ -113,8 +122,12 @@ impl MemoryManager {
         for memory in &self.bank.memories {
             // Check if any keyword matches
             for keyword in keywords {
-                if memory.keywords.contains(keyword) ||
-                   memory.context.to_lowercase().contains(&keyword.to_lowercase()) {
+                if memory.keywords.contains(keyword)
+                    || memory
+                        .context
+                        .to_lowercase()
+                        .contains(&keyword.to_lowercase())
+                {
                     results.push(memory.clone());
                     break;
                 }
@@ -335,7 +348,10 @@ impl MemoryManager {
             output.push_str(&format!("Keywords: {}\n", memory.keywords.join(", ")));
             output.push_str(&format!("Context: {}\n", memory.context));
             output.push_str(&format!("Origin: {}\n", memory.origin));
-            output.push_str(&format!("Time: {}\n", memory.timestamp.format("%Y-%m-%d %H:%M")));
+            output.push_str(&format!(
+                "Time: {}\n",
+                memory.timestamp.format("%Y-%m-%d %H:%M")
+            ));
         }
 
         Ok(output)
