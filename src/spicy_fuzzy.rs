@@ -2,18 +2,18 @@
 // Fuzzy matching with MEM8 context caching for instant recall
 
 use anyhow::Result;
+use bincode;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use bincode;
-use serde::{Serialize, Deserialize};
 
-use crate::memory_manager::MemoryBank;
+use crate::memory_manager::MemoryManager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileMatch {
@@ -23,35 +23,35 @@ pub struct FileMatch {
     pub score: i64,
     pub context_before: Vec<String>,
     pub context_after: Vec<String>,
-    pub match_positions: Vec<usize>,  // Character positions of matches
+    pub match_positions: Vec<usize>, // Character positions of matches
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DirectoryContext {
     pub path: PathBuf,
     pub files: Vec<PathBuf>,
-    pub file_contents_hash: HashMap<PathBuf, u64>,  // Quick content fingerprints
+    pub file_contents_hash: HashMap<PathBuf, u64>, // Quick content fingerprints
     pub last_scan: SystemTime,
-    pub wave_signature: u32,  // Quantum wave signature for this directory
+    pub wave_signature: u32, // Quantum wave signature for this directory
 }
 
 pub struct SpicyFuzzySearch {
     matcher: Arc<SkimMatcherV2>,
-    memory_bank: MemoryBank,
+    memory_manager: MemoryManager,
     context_cache: HashMap<PathBuf, DirectoryContext>,
 }
 
 impl SpicyFuzzySearch {
     pub fn new() -> Result<Self> {
         let matcher = Arc::new(SkimMatcherV2::default().smart_case().use_cache(true));
-        let memory_bank = MemoryBank::new()?;
+        let memory_manager = MemoryManager::new()?;
 
         // Load cached contexts from M8
         let context_cache = Self::load_contexts_from_m8()?;
 
         Ok(Self {
             matcher,
-            memory_bank,
+            memory_manager,
             context_cache,
         })
     }
@@ -73,9 +73,7 @@ impl SpicyFuzzySearch {
         let mut all_matches: Vec<FileMatch> = context
             .files
             .par_iter()
-            .filter_map(|file_path| {
-                Self::search_file(&matcher, file_path, &query).ok()
-            })
+            .filter_map(|file_path| Self::search_file(&matcher, file_path, &query).ok())
             .flatten()
             .collect();
 
@@ -90,11 +88,7 @@ impl SpicyFuzzySearch {
     }
 
     /// Search within a single file
-    fn search_file(
-        matcher: &SkimMatcherV2,
-        path: &Path,
-        query: &str,
-    ) -> Result<Vec<FileMatch>> {
+    fn search_file(matcher: &SkimMatcherV2, path: &Path, query: &str) -> Result<Vec<FileMatch>> {
         // Skip binary files
         if Self::is_binary(path)? {
             return Ok(vec![]);
@@ -148,7 +142,8 @@ impl SpicyFuzzySearch {
             .par_iter()
             .filter_map(|path| {
                 let filename = path.file_name()?.to_str()?;
-                matcher.fuzzy_match(filename, &query)
+                matcher
+                    .fuzzy_match(filename, &query)
                     .map(|score| (path.clone(), score))
             })
             .collect();
@@ -173,7 +168,8 @@ impl SpicyFuzzySearch {
         let context = self.scan_directory(path)?;
 
         // Store in cache and M8
-        self.context_cache.insert(path.to_path_buf(), context.clone());
+        self.context_cache
+            .insert(path.to_path_buf(), context.clone());
         self.save_context_to_m8(&context)?;
 
         Ok(context)
@@ -231,7 +227,7 @@ impl SpicyFuzzySearch {
             .unwrap_or_default()
             .as_secs() as u32;
 
-        hash.wrapping_add(now) ^ 0xDEADBEEF  // Spicy constant!
+        hash.wrapping_add(now) ^ 0xDEADBEEF // Spicy constant!
     }
 
     /// Check if file should be ignored
@@ -243,9 +239,17 @@ impl SpicyFuzzySearch {
             }
 
             // Binary and build artifacts
-            matches!(name,
-                "node_modules" | "target" | "dist" | "build" |
-                "*.pyc" | "*.pyo" | "*.so" | "*.dll" | "*.exe"
+            matches!(
+                name,
+                "node_modules"
+                    | "target"
+                    | "dist"
+                    | "build"
+                    | "*.pyc"
+                    | "*.pyo"
+                    | "*.so"
+                    | "*.dll"
+                    | "*.exe"
             )
         } else {
             false
@@ -278,9 +282,10 @@ impl SpicyFuzzySearch {
 
         // Serialize and compress
         let data = bincode::serialize(context)?;
-        let compressed = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best())
-            .write_all(&data)
-            .and_then(|_| Ok(Vec::new()))?;
+        use std::io::Write;
+        let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        encoder.write_all(&data)?;
+        let compressed = encoder.finish()?;
 
         fs::write(m8_path, compressed)?;
         Ok(())
@@ -335,22 +340,23 @@ impl SpicyFuzzySearch {
             .collect::<Vec<_>>()
             .join(", ");
 
-        self.memory_bank.anchor_memory(anchor_type, keywords, &context)?;
+        // Use MemoryManager to persist the pattern
+        self.memory_manager
+            .anchor(anchor_type, keywords, &context, "spicy_fuzzy")?;
         Ok(())
     }
 
     /// Get suggested searches based on past patterns
-    pub fn get_suggestions(&self, partial_query: &str) -> Vec<String> {
-        self.memory_bank
-            .find_memories(&[partial_query.to_string()])
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|m| {
-                // Extract the original query from the memory
-                m.keywords.first().cloned()
+    pub fn get_suggestions(&mut self, partial_query: &str) -> Vec<String> {
+        self.memory_manager
+            .find(&[partial_query.to_string()])
+            .map(|mems| {
+                mems.into_iter()
+                    .filter_map(|m| m.keywords.first().cloned())
+                    .take(5)
+                    .collect()
             })
-            .take(5)
-            .collect()
+            .unwrap_or_default()
     }
 }
 

@@ -11,31 +11,19 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span, Text},
-    widgets::{
-        Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Tabs, Wrap,
-    },
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::{
     fs,
     io::{self, BufRead, BufReader},
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::{Duration, SystemTime},
 };
-use syntect::{
-    easy::HighlightLines,
-    highlighting::{Style as SyntectStyle, ThemeSet},
-    parsing::SyntaxSet,
-    util::as_24_bit_terminal_escaped,
-};
+use syntect::{highlighting::ThemeSet, parsing::SyntaxSet};
 
-use crate::{
-    content_detector::ContentType,
-    scanner::{FileNode, scan},
-    scanner::ScanOptions,
-};
+use crate::scanner::{FileNode, Scanner, ScannerConfig};
 
 // Color scheme inspired by spicy-fzf
 const SPICY_GREEN: Color = Color::Rgb(0, 255, 0);
@@ -48,7 +36,7 @@ const SPICY_BG: Color = Color::Rgb(10, 10, 10);
 const SPICY_BORDER: Color = Color::Rgb(0, 100, 0);
 
 pub struct SpicyTui {
-    terminal: Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
     current_path: PathBuf,
     file_nodes: Vec<FileNode>,
     selected_index: usize,
@@ -80,7 +68,7 @@ impl SpicyTui {
         let theme_set = ThemeSet::load_defaults();
 
         let mut app = Self {
-            terminal,
+            terminal: Some(terminal),
             current_path: path.clone(),
             file_nodes: Vec::new(),
             selected_index: 0,
@@ -103,15 +91,14 @@ impl SpicyTui {
     }
 
     fn refresh_directory(&mut self) -> Result<()> {
-        let options = ScanOptions {
-            max_depth: Some(1),
-            show_hidden: self.show_hidden,
-            no_ignore: false,
-            no_default_ignore: false,
-            ..Default::default()
-        };
+        let mut config = ScannerConfig::default();
+        config.max_depth = 1;
+        config.show_hidden = self.show_hidden;
+        config.respect_gitignore = true;
+        config.use_default_ignores = true;
 
-        let (nodes, _) = scan(&self.current_path, options)?;
+        let scanner = Scanner::new(&self.current_path, config)?;
+        let (nodes, _) = scanner.scan()?;
         self.file_nodes = nodes;
         self.filtered_indices = (0..self.file_nodes.len()).collect();
         self.selected_index = 0;
@@ -143,11 +130,8 @@ impl SpicyTui {
                     // Read first 100 lines
                     if let Ok(file) = fs::File::open(path) {
                         let reader = BufReader::new(file);
-                        let lines: Vec<String> = reader
-                            .lines()
-                            .take(100)
-                            .filter_map(|l| l.ok())
-                            .collect();
+                        let lines: Vec<String> =
+                            reader.lines().take(100).filter_map(|l| l.ok()).collect();
                         self.preview_content = Some(lines.join("\n"));
                     } else {
                         self.preview_content = Some("⚠️ Cannot read file".to_string());
@@ -159,17 +143,18 @@ impl SpicyTui {
             }
         } else if path.is_dir() {
             // Show directory info
-            let options = ScanOptions {
-                max_depth: Some(1),
-                show_hidden: self.show_hidden,
-                ..Default::default()
-            };
+            let mut config = ScannerConfig::default();
+            config.max_depth = 1;
+            config.show_hidden = self.show_hidden;
+            config.respect_gitignore = true;
+            config.use_default_ignores = true;
 
-            if let Ok((children, stats)) = scan(path, options) {
-                let info = format!(
+            if let Ok(scanner) = Scanner::new(path, config) {
+                if let Ok((children, stats)) = scanner.scan() {
+                    let info = format!(
                     "📂 Directory\n\nFiles: {}\nDirectories: {}\nTotal Size: {:.2} MB\n\n--- Contents ---\n{}",
-                    stats.file_count,
-                    stats.dir_count,
+                    stats.total_files,
+                    stats.total_dirs,
                     stats.total_size as f64 / 1_048_576.0,
                     children.iter()
                         .take(20)
@@ -180,7 +165,8 @@ impl SpicyTui {
                         .collect::<Vec<_>>()
                         .join("\n")
                 );
-                self.preview_content = Some(info);
+                    self.preview_content = Some(info);
+                }
             }
         }
 
@@ -192,7 +178,8 @@ impl SpicyTui {
             self.filtered_indices = (0..self.file_nodes.len()).collect();
         } else {
             let query = self.search_query.to_lowercase();
-            self.filtered_indices = self.file_nodes
+            self.filtered_indices = self
+                .file_nodes
                 .iter()
                 .enumerate()
                 .filter(|(_, node)| {
@@ -220,7 +207,11 @@ impl SpicyTui {
 
     pub async fn run(&mut self) -> Result<()> {
         loop {
-            self.terminal.draw(|f| self.draw(f))?;
+            // Temporarily take ownership of terminal to avoid borrow conflicts
+            if let Some(mut terminal) = self.terminal.take() {
+                terminal.draw(|f| self.draw(f))?;
+                self.terminal = Some(terminal);
+            }
 
             if event::poll(Duration::from_millis(100))? {
                 if let Event::Key(key) = event::read()? {
@@ -232,7 +223,10 @@ impl SpicyTui {
                             }
                             KeyCode::Enter => {
                                 self.search_mode = false;
-                                self.set_status(&format!("Filtered: {} results", self.filtered_indices.len()));
+                                self.set_status(&format!(
+                                    "Filtered: {} results",
+                                    self.filtered_indices.len()
+                                ));
                             }
                             KeyCode::Backspace => {
                                 self.search_query.pop();
@@ -258,8 +252,10 @@ impl SpicyTui {
                             KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                                 self.show_hidden = !self.show_hidden;
                                 self.refresh_directory()?;
-                                self.set_status(&format!("Hidden files: {}",
-                                    if self.show_hidden { "shown" } else { "hidden" }));
+                                self.set_status(&format!(
+                                    "Hidden files: {}",
+                                    if self.show_hidden { "shown" } else { "hidden" }
+                                ));
                             }
                             KeyCode::Up | KeyCode::Char('k') => self.move_selection(-1),
                             KeyCode::Down | KeyCode::Char('j') => self.move_selection(1),
@@ -286,8 +282,10 @@ impl SpicyTui {
                                 if let Some(parent) = self.current_path.parent() {
                                     self.current_path = parent.to_path_buf();
                                     self.refresh_directory()?;
-                                    self.set_status(&format!("Navigated to: {}",
-                                        self.current_path.display()));
+                                    self.set_status(&format!(
+                                        "Navigated to: {}",
+                                        self.current_path.display()
+                                    ));
                                 }
                             }
                             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -333,14 +331,15 @@ impl SpicyTui {
 
         let actual_index = self.filtered_indices[self.selected_index];
         let node = &self.file_nodes[actual_index];
+        let path = node.path.clone();  // Clone the path to avoid borrow conflict
 
-        if node.path.is_dir() {
-            self.current_path = node.path.clone();
+        if path.is_dir() {
+            self.current_path = path.clone();
             self.refresh_directory()?;
             self.search_query.clear();
-            self.set_status(&format!("Entered: {}", node.path.display()));
+            self.set_status(&format!("Entered: {}", path.display()));
         } else {
-            self.set_status(&format!("Selected: {}", node.path.display()));
+            self.set_status(&format!("Selected: {}", path.display()));
         }
 
         Ok(())
@@ -351,15 +350,15 @@ impl SpicyTui {
     }
 
     fn draw(&mut self, f: &mut Frame) {
-        let size = f.area();
+        let size = f.size();
 
         // Create main layout
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Header
-                Constraint::Min(10),    // Main content
-                Constraint::Length(3),  // Status bar
+                Constraint::Length(3), // Header
+                Constraint::Min(10),   // Main content
+                Constraint::Length(3), // Status bar
             ])
             .split(size);
 
@@ -370,9 +369,9 @@ impl SpicyTui {
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(35),  // File list
-                Constraint::Percentage(45),  // Preview
-                Constraint::Percentage(20),  // Info panel
+                Constraint::Percentage(35), // File list
+                Constraint::Percentage(45), // Preview
+                Constraint::Percentage(20), // Info panel
             ])
             .split(chunks[1]);
 
@@ -395,8 +394,10 @@ impl SpicyTui {
             Span::styled(" 🌶️ SPICY ", Style::default().fg(SPICY_ORANGE).bold()),
             Span::styled("TREE ", Style::default().fg(SPICY_GREEN).bold()),
             Span::styled("│ ", Style::default().fg(SPICY_BORDER)),
-            Span::styled(self.current_path.display().to_string(),
-                Style::default().fg(SPICY_CYAN)),
+            Span::styled(
+                self.current_path.display().to_string(),
+                Style::default().fg(SPICY_CYAN),
+            ),
         ];
 
         let header = Paragraph::new(Line::from(header_text))
@@ -405,7 +406,7 @@ impl SpicyTui {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(SPICY_BORDER))
-                    .border_type(ratatui::widgets::BorderType::Double)
+                    .border_type(ratatui::widgets::BorderType::Double),
             )
             .alignment(Alignment::Left);
 
@@ -413,27 +414,18 @@ impl SpicyTui {
     }
 
     fn draw_file_list(&mut self, f: &mut Frame, area: Rect) {
-        let items: Vec<ListItem> = self.filtered_indices
+        let items: Vec<ListItem> = self
+            .filtered_indices
             .iter()
             .enumerate()
             .map(|(display_idx, &actual_idx)| {
                 let node = &self.file_nodes[actual_idx];
-                let name = node.path.file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy();
+                let name = node.path.file_name().unwrap_or_default().to_string_lossy();
 
                 let icon = if node.path.is_dir() {
                     "📁"
                 } else {
-                    match ContentType::detect(&node.path) {
-                        ContentType::Rust => "🦀",
-                        ContentType::Python => "🐍",
-                        ContentType::JavaScript | ContentType::TypeScript => "📜",
-                        ContentType::Markdown => "📝",
-                        ContentType::Image => "🖼️",
-                        ContentType::Binary => "⚙️",
-                        _ => "📄",
-                    }
+                    icon_for(&node.path)
                 };
 
                 let style = if display_idx == self.selected_index {
@@ -465,7 +457,7 @@ impl SpicyTui {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(SPICY_BORDER))
                     .title(title)
-                    .title_style(Style::default().fg(SPICY_YELLOW).bold())
+                    .title_style(Style::default().fg(SPICY_YELLOW).bold()),
             )
             .highlight_style(Style::default());
 
@@ -473,7 +465,10 @@ impl SpicyTui {
     }
 
     fn draw_preview(&self, f: &mut Frame, area: Rect) {
-        let content = self.preview_content.as_deref().unwrap_or("No preview available");
+        let content = self
+            .preview_content
+            .as_deref()
+            .unwrap_or("No preview available");
 
         let preview = Paragraph::new(content)
             .style(Style::default().fg(SPICY_GREEN))
@@ -482,7 +477,7 @@ impl SpicyTui {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(SPICY_BORDER))
                     .title(" 👁️ Preview ")
-                    .title_style(Style::default().fg(SPICY_YELLOW).bold())
+                    .title_style(Style::default().fg(SPICY_YELLOW).bold()),
             )
             .wrap(Wrap { trim: false })
             .scroll((self.preview_scroll, 0));
@@ -500,8 +495,12 @@ impl SpicyTui {
             info_lines.push(Line::from(vec![
                 Span::styled("Type: ", Style::default().fg(SPICY_DARK_GREEN)),
                 Span::styled(
-                    if node.path.is_dir() { "Directory" } else { "File" },
-                    Style::default().fg(SPICY_CYAN)
+                    if node.path.is_dir() {
+                        "Directory"
+                    } else {
+                        "File"
+                    },
+                    Style::default().fg(SPICY_CYAN),
                 ),
             ]));
 
@@ -532,33 +531,33 @@ impl SpicyTui {
 
             // Add some stats
             info_lines.push(Line::from(""));
-            info_lines.push(Line::from(vec![
-                Span::styled("─────────", Style::default().fg(SPICY_BORDER)),
-            ]));
+            info_lines.push(Line::from(vec![Span::styled(
+                "─────────",
+                Style::default().fg(SPICY_BORDER),
+            )]));
             info_lines.push(Line::from(vec![
                 Span::styled("Total: ", Style::default().fg(SPICY_DARK_GREEN)),
                 Span::styled(
                     format!("{}", self.file_nodes.len()),
-                    Style::default().fg(SPICY_CYAN)
+                    Style::default().fg(SPICY_CYAN),
                 ),
             ]));
             info_lines.push(Line::from(vec![
                 Span::styled("Shown: ", Style::default().fg(SPICY_DARK_GREEN)),
                 Span::styled(
                     format!("{}", self.filtered_indices.len()),
-                    Style::default().fg(SPICY_CYAN)
+                    Style::default().fg(SPICY_CYAN),
                 ),
             ]));
         }
 
-        let info = Paragraph::new(info_lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(SPICY_BORDER))
-                    .title(" 📊 Info ")
-                    .title_style(Style::default().fg(SPICY_YELLOW).bold())
-            );
+        let info = Paragraph::new(info_lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(SPICY_BORDER))
+                .title(" 📊 Info ")
+                .title_style(Style::default().fg(SPICY_YELLOW).bold()),
+        );
 
         f.render_widget(info, area);
     }
@@ -569,7 +568,7 @@ impl SpicyTui {
         // Left side - shortcuts
         status_spans.push(Span::styled(
             " q:Quit │ /:Search │ Enter:Open │ ?:Help ",
-            Style::default().fg(SPICY_DARK_GREEN)
+            Style::default().fg(SPICY_DARK_GREEN),
         ));
 
         // Right side - status message or default
@@ -583,7 +582,7 @@ impl SpicyTui {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(SPICY_BORDER))
+                    .border_style(Style::default().fg(SPICY_BORDER)),
             );
 
         f.render_widget(status, area);
@@ -591,12 +590,15 @@ impl SpicyTui {
 
     fn draw_help_overlay(&self, f: &mut Frame, area: Rect) {
         let help_text = vec![
-            Line::from(vec![Span::styled("🌶️ SPICY TREE HELP",
-                Style::default().fg(SPICY_ORANGE).bold())]),
+            Line::from(vec![Span::styled(
+                "🌶️ SPICY TREE HELP",
+                Style::default().fg(SPICY_ORANGE).bold(),
+            )]),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Navigation:", Style::default().fg(SPICY_YELLOW).bold())
-            ]),
+            Line::from(vec![Span::styled(
+                "Navigation:",
+                Style::default().fg(SPICY_YELLOW).bold(),
+            )]),
             Line::from("  ↑/k     - Move up"),
             Line::from("  ↓/j     - Move down"),
             Line::from("  Enter   - Open directory / Select file"),
@@ -604,24 +606,26 @@ impl SpicyTui {
             Line::from("  g/Home  - Go to first item"),
             Line::from("  G/End   - Go to last item"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Search:", Style::default().fg(SPICY_YELLOW).bold())
-            ]),
+            Line::from(vec![Span::styled(
+                "Search:",
+                Style::default().fg(SPICY_YELLOW).bold(),
+            )]),
             Line::from("  /       - Start search mode"),
             Line::from("  Esc     - Cancel search"),
             Line::from("  Enter   - Apply search filter"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Display:", Style::default().fg(SPICY_YELLOW).bold())
-            ]),
+            Line::from(vec![Span::styled(
+                "Display:",
+                Style::default().fg(SPICY_YELLOW).bold(),
+            )]),
             Line::from("  Ctrl+H  - Toggle hidden files"),
             Line::from("  Ctrl+R  - Refresh directory"),
             Line::from("  ?/F1    - Toggle this help"),
             Line::from(""),
-            Line::from(vec![
-                Span::styled("Press any key to close help",
-                    Style::default().fg(SPICY_DARK_GREEN).italic())
-            ]),
+            Line::from(vec![Span::styled(
+                "Press any key to close help",
+                Style::default().fg(SPICY_DARK_GREEN).italic(),
+            )]),
         ];
 
         let help_width = 50;
@@ -637,13 +641,12 @@ impl SpicyTui {
                     .border_type(ratatui::widgets::BorderType::Double)
                     .title(" ❓ Help ")
                     .title_style(Style::default().fg(SPICY_YELLOW).bold())
-                    .style(Style::default().bg(SPICY_BG))
+                    .style(Style::default().bg(SPICY_BG)),
             )
             .alignment(Alignment::Left);
 
         // Draw background overlay
-        let overlay = Block::default()
-            .style(Style::default().bg(Color::Rgb(0, 0, 0)));
+        let overlay = Block::default().style(Style::default().bg(Color::Rgb(0, 0, 0)));
         f.render_widget(overlay, area);
 
         // Draw help dialog
@@ -655,12 +658,15 @@ impl Drop for SpicyTui {
     fn drop(&mut self) {
         // Restore terminal
         disable_raw_mode().ok();
-        execute!(
-            self.terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        ).ok();
-        self.terminal.show_cursor().ok();
+        if let Some(mut term) = self.terminal.take() {
+            execute!(
+                term.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            )
+            .ok();
+            term.show_cursor().ok();
+        }
     }
 }
 
@@ -683,6 +689,27 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
             Constraint::Length((area.width - width) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+// Simple icon heuristic without heavy content detection
+fn icon_for(path: &PathBuf) -> &'static str {
+    if let Some(ext) = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+    {
+        match ext.as_str() {
+            "rs" => "🦀",
+            "py" => "🐍",
+            "js" | "ts" | "tsx" | "jsx" => "📜",
+            "md" | "markdown" => "📝",
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" => "🖼️",
+            "exe" | "bin" | "dll" | "so" | "dylib" => "⚙️",
+            _ => "📄",
+        }
+    } else {
+        "📄"
+    }
 }
 
 // Public entry point
