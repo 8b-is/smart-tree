@@ -1,12 +1,12 @@
 // -----------------------------------------------------------------------------
 // 🌮 Feedback API Client - Helping Smart Tree Survive the Franchise Wars!
 // -----------------------------------------------------------------------------
-// This module handles communication with f.8t.is for feedback submission and
+// This module handles communication with f.8b.is for feedback submission and
 // update checking. All feedback helps make Smart Tree better!
 //
 // Endpoints:
-// - POST https://f.8t.is/api/feedback - Submit feedback and feature requests
-// - GET  https://f.8t.is/api/smart-tree/latest - Get latest version info (cached)
+// - POST https://f.8b.is/api/feedback - Submit feedback and feature requests
+// - GET  https://f.8b.is/api/smart-tree/latest - Get latest version info (cached)
 // -----------------------------------------------------------------------------
 
 use anyhow::Result;
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
 
-const FEEDBACK_API_BASE: &str = "https://f.8t.is";
+const FEEDBACK_API_BASE: &str = "https://f.8b.is";
 const USER_AGENT: &str = concat!("smart-tree/", env!("CARGO_PKG_VERSION"));
 
 /// Feedback submission request structure
@@ -79,7 +79,7 @@ pub struct VersionInfo {
     pub ai_benefits: Vec<String>,
 }
 
-/// API client for f.8t.is
+/// API client for f.8b.is
 pub struct FeedbackClient {
     client: Client,
 }
@@ -94,7 +94,7 @@ impl FeedbackClient {
         Ok(Self { client })
     }
 
-    /// Submit feedback to f.8t.is
+    /// Submit feedback to f.8b.is
     pub async fn submit_feedback(&self, feedback: FeedbackRequest) -> Result<FeedbackResponse> {
         let url = format!("{}/api/feedback", FEEDBACK_API_BASE);
 
@@ -118,7 +118,7 @@ impl FeedbackClient {
         }
     }
 
-    /// Submit tool request to f.8t.is
+    /// Submit tool request to f.8b.is
     pub async fn submit_tool_request(&self, request: ToolRequest) -> Result<FeedbackResponse> {
         let url = format!("{}/api/tool-request", FEEDBACK_API_BASE);
 

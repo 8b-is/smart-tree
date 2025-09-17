@@ -151,7 +151,6 @@ impl ProactiveAssistant {
         let keyword = args.get("keyword").and_then(|k| k.as_str()).unwrap_or("");
 
         // Check if we found TODOs, errors, or important patterns
-        
 
         if keyword.contains("TODO") || keyword.contains("FIXME") {
             vec![

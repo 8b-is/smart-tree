@@ -88,6 +88,12 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         "git_status" => ("get_git_status", params.clone()),
         "digest" => ("get_digest", params.clone()),
         "semantic" => ("semantic_analysis", params.clone()),
+        "quantum-semantic" => {
+            // quantum-semantic uses analyze_directory with quantum-semantic mode
+            let mut p = params.clone();
+            p["mode"] = json!("quantum-semantic");
+            ("analyze_directory", p)
+        }
         "size_breakdown" => ("directory_size_breakdown", params.clone()),
         "ai_tools" => ("analyze_ai_tool_usage", params.clone()),
         _ => return Err(anyhow::anyhow!("Unknown analyze mode: {}", mode)),
@@ -629,6 +635,7 @@ pub async fn dispatch_consolidated_tool(
             .await
         }
         "hooks" => handle_hooks(params, ctx).await,
+        "unified_watcher" => super::unified_watcher::handle_unified_watcher(params.unwrap_or(json!({})), ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }

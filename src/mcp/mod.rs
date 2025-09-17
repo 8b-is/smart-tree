@@ -30,6 +30,10 @@ mod sse;
 mod tools;
 mod tools_consolidated;
 mod tools_consolidated_enhanced;
+pub mod context_absorber;
+pub mod smart_background_searcher;
+pub mod smart_project_detector;
+pub mod unified_watcher;
 
 use assistant::*;
 use cache::*;
@@ -378,8 +382,10 @@ impl McpServer {
 // Handler implementations
 
 async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+    // Check for updates when MCP tools initialize (non-blocking)
+    let update_info = check_for_mcp_updates().await;
+
     Ok(json!({
-        "protocolVersion": "2024-11-05",
         "capabilities": {
             "tools": {
                 "listChanged": false
@@ -408,7 +414,8 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
                 "emotional-mode",
                 "auto-compression-hints"
             ],
-            "compression_hint": "💡 Always add compress:true to analyze tools for optimal context usage!"
+            "compression_hint": "💡 Always add compress:true to analyze tools for optimal context usage!",
+            "update_info": update_info
         }
     }))
 }
@@ -444,6 +451,76 @@ async fn handle_consolidated_tools_call(params: Value, ctx: Arc<McpContext>) -> 
 
     // The consolidated tools already return properly formatted responses
     tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await
+}
+
+/// Check for updates when MCP tools initialize (non-blocking, with timeout)
+async fn check_for_mcp_updates() -> Value {
+    // Skip if disabled or in privacy mode
+    let flags = crate::feature_flags::features();
+    if flags.privacy_mode || flags.disable_external_connections {
+        return json!(null);
+    }
+
+    // Skip if explicitly disabled
+    if std::env::var("SMART_TREE_NO_UPDATE_CHECK").is_ok() {
+        return json!(null);
+    }
+
+    // Get system info for analytics (helps decide what platforms to support)
+    let platform = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    // Use tokio timeout to prevent blocking
+    let timeout_duration = tokio::time::Duration::from_secs(2);
+
+    let result = tokio::time::timeout(timeout_duration, async {
+        // Build request with platform info for analytics
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(2))
+            .build()
+            .ok()?;
+
+        let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
+            .unwrap_or_else(|_| "https://f.8b.is".to_string());
+
+        // Include platform info to help understand usage (Windows ARM, etc.)
+        let check_url = format!(
+            "{}/mcp/check?version={}&platform={}&arch={}",
+            api_url, current_version, platform, arch
+        );
+
+        let response = client.get(&check_url)
+            .send()
+            .await
+            .ok()?;
+
+        if !response.status().is_success() {
+            return None;
+        }
+
+        response.json::<Value>().await.ok()
+    }).await;
+
+    match result {
+        Ok(Some(update_data)) => {
+            // Return update info if available
+            if update_data["update_available"].as_bool().unwrap_or(false) {
+                json!({
+                    "available": true,
+                    "latest_version": update_data["latest_version"],
+                    "new_features": update_data["new_features"],
+                    "message": update_data["message"]
+                })
+            } else {
+                json!({
+                    "available": false,
+                    "message": "You're running the latest version!"
+                })
+            }
+        }
+        _ => json!(null) // Return null if check failed or timed out
+    }
 }
 
 /// Check if a path is allowed based on security configuration

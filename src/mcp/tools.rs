@@ -1913,7 +1913,26 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // For other formats, convert to string first (using lossy for non-UTF8 files like .pyc)
         let output_str = String::from_utf8_lossy(&output).to_string();
 
-        if mcp_compress {
+        // Smart token-aware compression for semantic mode
+        // Estimate tokens (rough: 1 token ≈ 4 characters)
+        let estimated_tokens = output_str.len() / 4;
+        const MAX_SAFE_TOKENS: usize = 20000; // Keep under 25k limit with safety margin
+
+        // Auto-compress if semantic mode would exceed token limits
+        let should_compress = if args.mode == "semantic" && !mcp_compress {
+            if estimated_tokens > MAX_SAFE_TOKENS {
+                eprintln!("⚠️ Smart Tree: Auto-compressing semantic output ({} est. tokens > {} limit)",
+                         estimated_tokens, MAX_SAFE_TOKENS);
+                eprintln!("💡 Tip: Use mode:'quantum-semantic' for even better compression!");
+                true
+            } else {
+                false
+            }
+        } else {
+            mcp_compress
+        };
+
+        if should_compress {
             use flate2::write::ZlibEncoder;
             use flate2::Compression;
             use std::io::Write;
@@ -1921,6 +1940,13 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
             encoder.write_all(output_str.as_bytes())?;
             let compressed = encoder.finish()?;
+
+            // Add helpful message about compression
+            let compressed_size = compressed.len();
+            let compression_ratio = 100.0 - (compressed_size as f64 / output_str.len() as f64 * 100.0);
+            eprintln!("✅ Compressed: {} → {} bytes ({:.1}% reduction)",
+                     output_str.len(), compressed_size, compression_ratio);
+
             format!("COMPRESSED_V1:{}", hex::encode(&compressed))
         } else {
             output_str
@@ -3040,7 +3066,7 @@ async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     // Try to submit to API, fall back to local storage if it fails
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8t.is/feedback".to_string());
+        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
 
     let response = match client
         .post(&api_url)
@@ -3209,7 +3235,7 @@ async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     // Try to submit to API, fall back to local storage if it fails
     let client = reqwest::Client::new();
     let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8t.is/feedback".to_string());
+        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
 
     let response = match client
         .post(&api_url)

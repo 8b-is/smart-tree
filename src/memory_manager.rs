@@ -254,8 +254,8 @@ impl MemoryManager {
         // Last accessed
         let mut last_accessed = [0u8; 8];
         cursor.read_exact(&mut last_accessed)?;
-        let last_accessed = DateTime::from_timestamp(i64::from_le_bytes(last_accessed), 0)
-            .unwrap_or_else(Utc::now);
+        let last_accessed =
+            DateTime::from_timestamp(i64::from_le_bytes(last_accessed), 0).unwrap_or_else(Utc::now);
 
         // Read memories
         let mut memories = Vec::with_capacity(mem_count);
@@ -303,8 +303,8 @@ impl MemoryManager {
             // Timestamp
             let mut timestamp = [0u8; 8];
             cursor.read_exact(&mut timestamp)?;
-            let timestamp = DateTime::from_timestamp(i64::from_le_bytes(timestamp), 0)
-                .unwrap_or_else(Utc::now);
+            let timestamp =
+                DateTime::from_timestamp(i64::from_le_bytes(timestamp), 0).unwrap_or_else(Utc::now);
 
             memories.push(Memory {
                 timestamp,

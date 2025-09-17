@@ -11,10 +11,12 @@
 // Think of it as the friendly librarian pointing you to the right sections!
 
 // Declare the public modules that form the `st` library.
+pub mod activity_logger; // Transparent activity logging in JSONL format
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
 pub mod context;
 pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod dynamic_tokenizer;
+pub mod feature_flags; // Enterprise-friendly feature control and compliance
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
 pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
@@ -37,7 +39,7 @@ pub mod universal_format_detector; // Detects format by structure! // Semantic-a
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
 pub mod mcp;
 
-// Feedback API client for sending feedback to f.8t.is
+// Feedback API client for sending feedback to f.8b.is
 pub mod feedback_client;
 
 // Claude integration initializer - auto-configures optimal .claude directory

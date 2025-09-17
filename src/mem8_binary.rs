@@ -207,6 +207,7 @@ impl M8BinaryFile {
             .create(true)
             .write(true)
             .read(true)
+            .truncate(true)
             .open(&path)
             .context("Failed to create .m8 file")?;
 

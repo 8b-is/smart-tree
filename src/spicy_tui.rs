@@ -2,7 +2,6 @@
 // Inspired by spicy-fzf's beautiful terminal aesthetic
 
 use anyhow::Result;
-use std::path::Path;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
@@ -16,6 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
+use std::path::Path;
 use std::{
     fs,
     io::{self, BufRead, BufReader},

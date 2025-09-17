@@ -642,13 +642,76 @@ mcp_config() {
 mcp_tools() {
     print_header "MCP Tools Documentation 🤖"
     cd "$PROJECT_DIR"
-    
+
     if [[ ! -f "target/release/$BINARY_NAME" ]]; then
         print_warning "Building release version first..."
         build release
     fi
-    
+
     ./target/release/$BINARY_NAME --mcp-tools
+}
+
+# Claude Code Hooks functions
+hooks_list() {
+    print_header "Claude Code Hooks Configuration 🎣"
+    cd "$PROJECT_DIR"
+
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+
+    ./target/release/$BINARY_NAME --hooks-config status
+}
+
+hooks_enable() {
+    print_header "Enabling Claude Code Hooks 🎣"
+    cd "$PROJECT_DIR"
+
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+
+    ./target/release/$BINARY_NAME --hooks-config enable
+}
+
+hooks_disable() {
+    print_header "Disabling Claude Code Hooks 🎣"
+    cd "$PROJECT_DIR"
+
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+
+    ./target/release/$BINARY_NAME --hooks-config disable
+}
+
+hooks_test() {
+    local test_input="${1:-test input}"
+    print_header "Testing Claude Code Hook 🧪"
+    cd "$PROJECT_DIR"
+
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+
+    print_info "Testing hook locally with input: '$test_input'"
+    echo '{"prompt": "'"$test_input"'"}' | ./target/release/$BINARY_NAME --claude-user-prompt-submit
+}
+
+hooks_setup() {
+    print_header "Setting up Claude Code Hooks 🎣"
+    cd "$PROJECT_DIR"
+
+    if [[ ! -f "target/release/$BINARY_NAME" ]]; then
+        print_warning "Building release version first..."
+        build release
+    fi
+
+    ./target/release/$BINARY_NAME --hooks-install
 }
 
 # Demo streaming feature
@@ -808,6 +871,13 @@ ${YELLOW}MCP Commands:${NC}
   ${GREEN}mcp-run${NC}               Run as MCP server
   ${GREEN}mcp-config${NC}            Show Claude Desktop configuration
   ${GREEN}mcp-tools${NC}             Show available MCP tools (20+)
+
+${YELLOW}Claude Code Hooks:${NC}
+  ${GREEN}hooks-setup${NC}           Interactive setup for Claude Code hooks
+  ${GREEN}hooks-list${NC}            List current hooks configuration
+  ${GREEN}hooks-enable${NC} [type]   Enable a specific hook (default: UserPromptSubmit)
+  ${GREEN}hooks-disable${NC} [type]  Disable a specific hook
+  ${GREEN}hooks-test${NC} [type] [input] Test a hook with sample input
 
 ${YELLOW}Feedback System Commands:${NC}
   ${GREEN}feedback-build${NC}        Build feedback system containers
@@ -988,6 +1058,21 @@ main() {
             ;;
         mcp-tools)
             mcp_tools
+            ;;
+        hooks-setup)
+            hooks_setup
+            ;;
+        hooks-list)
+            hooks_list
+            ;;
+        hooks-enable)
+            hooks_enable "${2:-UserPromptSubmit}"
+            ;;
+        hooks-disable)
+            hooks_disable "${2:-UserPromptSubmit}"
+            ;;
+        hooks-test)
+            hooks_test "${2:-test input}"
             ;;
         demo-stream)
             demo_stream

@@ -2,13 +2,19 @@
 // Making Smart Tree irresistible to AI assistants! 🌳✨
 
 use serde_json::{json, Value};
+use crate::feature_flags;
 
 // Re-export the dispatcher from the original consolidated tools
 pub use super::tools_consolidated::dispatch_consolidated_tool;
 
 /// Get enhanced consolidated tool list with attractive tips and examples
 pub fn get_enhanced_consolidated_tools() -> Vec<Value> {
-    vec![
+    // Get feature flags to filter tools
+    let flags = feature_flags::features();
+    let mut tools = Vec::new();
+
+    // Always include overview (basic tool)
+    tools.push(
         json!({
             "name": "overview",
             "description": "🚀 START HERE! Lightning-fast project understanding in seconds. Get a comprehensive overview with automatic project type detection, key files, and structure insights. Perfect first tool for any new codebase!
@@ -43,8 +49,11 @@ EXAMPLES:
                 },
                 "required": []
             }
-        }),
-        json!({
+        }));
+
+    // Add find tool if enabled
+    if flags.mcp_tools.enable_find {
+        tools.push(json!({
             "name": "find",
             "description": "🔍 POWERFUL FINDER - One tool for ALL file discovery needs! Find code, tests, configs, docs, large files, recent changes, and more with a single versatile tool.
 
@@ -95,8 +104,12 @@ EXAMPLES:
                 },
                 "required": ["type"]
             }
-        }),
-        json!({
+        }));
+    }
+
+    // Add search tool if enabled
+    if flags.mcp_tools.enable_search {
+        tools.push(json!({
             "name": "search",
             "description": "🔎 CONTENT SEARCH - Like grep but AI-optimized! Search file contents with line numbers, context, and actual content returned. Perfect for finding implementations, TODOs, or any text pattern.
 
@@ -143,21 +156,29 @@ EXAMPLES:
                 },
                 "required": ["keyword"]
             }
-        }),
-        json!({
+        }));
+    }
+
+    // Add analyze tool if enabled
+    if flags.mcp_tools.enable_analyze {
+        tools.push(json!({
             "name": "analyze",
             "description": "📊 DEEP ANALYSIS - Multiple analysis modes for different insights. Get statistics, git status, semantic grouping, size breakdowns, and more!
+
+🚀 TOKEN-AWARE: Semantic mode auto-compresses large outputs to stay under limits!
 
 💡 TIP: Want detailed insights? Try these:
 • analyze {mode:'statistics'} - File type distribution & sizes
 • analyze {mode:'git_status'} - Git-aware directory tree
-• analyze {mode:'semantic'} - AI semantic grouping
+• analyze {mode:'semantic'} - AI semantic grouping (AUTO-COMPRESSES if needed!)
+• analyze {mode:'quantum-semantic'} - Maximum compression for huge codebases
 • analyze {mode:'directory', format:'ai'} - AI-optimized tree
 
 EXAMPLES:
 ✓ Project stats: analyze {mode:'statistics', show_hidden:true}
 ✓ Git overview: analyze {mode:'git_status'}
 ✓ Semantic groups: analyze {mode:'semantic', show_wave_signatures:true}
+✓ Huge codebase: analyze {mode:'quantum-semantic', path:'./burn'}
 ✓ Size analysis: analyze {mode:'size_breakdown'}",
             "inputSchema": {
                 "type": "object",
@@ -191,8 +212,12 @@ EXAMPLES:
                 },
                 "required": ["mode"]
             }
-        }),
-        json!({
+        }));
+    }
+
+    // Add edit tool if enabled
+    if flags.mcp_tools.enable_edit {
+        tools.push(json!({
             "name": "edit",
             "description": "✨ SMART EDIT - Revolutionary AST-aware editing with 90% token reduction! Edit code by describing changes, not sending diffs. Understands code structure!
 
@@ -251,8 +276,11 @@ EXAMPLES:
                 },
                 "required": ["operation", "file_path"]
             }
-        }),
-        json!({
+        }));
+    }
+
+    // Add history tool (always enabled - part of core functionality)
+    tools.push(json!({
             "name": "history",
             "description": "📜 FILE HISTORY - Track all AI file operations with complete audit trail. See what changed, when, and by whom. Perfect for understanding code evolution!
 
@@ -283,8 +311,11 @@ EXAMPLES:
                 },
                 "required": ["operation"]
             }
-        }),
-        json!({
+        }));
+
+    // Add context tool if enabled
+    if flags.mcp_tools.enable_context {
+        tools.push(json!({
             "name": "context",
             "description": "🧠 AI CONTEXT - Gather project context, check collaboration rapport, find patterns across sessions. Perfect for maintaining continuity!
 
@@ -321,8 +352,12 @@ EXAMPLES:
                 },
                 "required": ["operation"]
             }
-        }),
-        json!({
+        }));
+    }
+
+    // Add memory tool if enabled
+    if flags.mcp_tools.enable_memory {
+        tools.push(json!({
             "name": "memory",
             "description": "💭 COLLABORATIVE MEMORY - Anchor important insights and breakthroughs for future retrieval. Build a shared knowledge base!
 
@@ -357,8 +392,11 @@ EXAMPLES:
                 },
                 "required": ["operation", "keywords"]
             }
-        }),
-        json!({
+        }));
+    }
+
+    // Add compare tool (always enabled - basic functionality)
+    tools.push(json!({
             "name": "compare",
             "description": "🔄 DIRECTORY COMPARE - See what's different between two directories. Perfect for comparing branches, versions, or similar projects!
 
@@ -380,8 +418,10 @@ EXAMPLE:
                 },
                 "required": ["path1", "path2"]
             }
-        }),
-        json!({
+        }));
+
+    // Add feedback tool (always enabled - for user experience)
+    tools.push(json!({
             "name": "feedback",
             "description": "💬 FEEDBACK - Help improve Smart Tree! Submit feedback, request new tools, or check for updates.
 
@@ -411,8 +451,10 @@ EXAMPLES:
                 },
                 "required": ["operation"]
             }
-        }),
-        json!({
+        }));
+
+    // Add server_info tool (always enabled - for transparency)
+    tools.push(json!({
             "name": "server_info",
             "description": "ℹ️ SERVER INFO - Get Smart Tree capabilities, performance tips, and configuration. Always check this for the latest features!
 
@@ -422,8 +464,10 @@ EXAMPLES:
                 "properties": {},
                 "required": []
             }
-        }),
-        json!({
+        }));
+
+    // Add verify_permissions tool (always enabled - for security)
+    tools.push(json!({
             "name": "verify_permissions",
             "description": "🔐 VERIFY PERMISSIONS - Check what operations are allowed on a path. Always run this first for new directories!
 
@@ -438,8 +482,11 @@ EXAMPLES:
                 },
                 "required": ["path"]
             }
-        }),
-        json!({
+        }));
+
+    // Add sse tool if enabled
+    if flags.mcp_tools.enable_sse {
+        tools.push(json!({
             "name": "sse",
             "description": "📡 REAL-TIME WATCH - Monitor directories for live changes via Server-Sent Events. Perfect for watching builds, logs, or active development!
 
@@ -467,8 +514,73 @@ EXAMPLE:
                 },
                 "required": ["path"]
             }
-        }),
-        json!({
+        }));
+    }
+
+    // Add unified_watcher tool if enabled
+    if flags.mcp_tools.enable_unified_watcher {
+        tools.push(json!({
+            "name": "unified_watcher",
+            "description": "🌐 UNIFIED WATCHER - The all-seeing eye! Automatically watches directories for JSON/JSONL/MD files, absorbs context, and provides intelligent search. Perfect for tracking AI assistant conversations, notes, and logs!
+
+💡 REVOLUTIONARY FEATURES:
+• Watches for NEW files in real-time
+• Absorbs context from Cursor AI, VS Code, Claude exports
+• Smart search (only first 1000 lines of JSONL!)
+• Transparent logging to ~/.st/watcher.jsonl
+
+EXAMPLES:
+✓ Start watching: unified_watcher {action:'start', project:'my-app'}
+✓ Search absorbed content: unified_watcher {action:'search', query:'performance'}
+✓ Check status: unified_watcher {action:'status'}
+✓ Stop watching: unified_watcher {action:'stop'}
+
+🎯 This is THE tool for automatic context awareness!",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["start", "stop", "search", "status"],
+                        "description": "Watcher action"
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": "Project name to watch for"
+                    },
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Paths to watch (default: Documents, config dirs, AI assistant dirs)"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for absorbed content"
+                    },
+                    "enable_absorption": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable context absorption"
+                    },
+                    "enable_search": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable smart background search"
+                    },
+                    "enable_logging": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable transparent activity logging"
+                    }
+                },
+                "required": ["action"]
+            }
+        }));
+    }
+
+    // Add hooks tool if enabled
+    if flags.mcp_tools.enable_hooks_management {
+        tools.push(json!({
             "name": "hooks",
             "description": "🎣 HOOK MANAGEMENT - Control Claude Code hooks programmatically! Manage UserPromptSubmit, PreToolUse, PostToolUse, and SessionStart hooks without manual /hooks commands.
 
@@ -511,8 +623,10 @@ EXAMPLES:
                 },
                 "required": ["operation"]
             }
-        }),
-    ]
+        }));
+    }
+
+    tools
 }
 
 /// Create a welcoming first-contact message for AI assistants

@@ -252,15 +252,12 @@ impl TipsManager {
         let right_dashes = remaining - left_dashes;
 
         println!(
-            "{}",
-            format!(
-                "{}{}{}{}{}",
-                "─".repeat(left_dashes).bright_black(),
-                tip_part.bright_cyan().bold(),
-                "─".repeat(3).bright_black(),
-                hint_part.bright_yellow(),
-                "─".repeat(right_dashes.saturating_sub(3)).bright_black(),
-            )
+            "{}{}{}{}{}",
+            "─".repeat(left_dashes).bright_black(),
+            tip_part.bright_cyan().bold(),
+            "─".repeat(3).bright_black(),
+            hint_part.bright_yellow(),
+            "─".repeat(right_dashes.saturating_sub(3)).bright_black(),
         );
     }
 

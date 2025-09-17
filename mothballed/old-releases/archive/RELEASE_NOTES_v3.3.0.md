@@ -1,12 +1,12 @@
 # Smart Tree v3.3.0 Release Notes 🌳
 
 ## Overview
-This release brings real-world API integration, cross-platform compatibility improvements, and the groundwork for the 8t.is contextualizer system. Smart Tree is now more connected and intelligent than ever!
+This release brings real-world API integration, cross-platform compatibility improvements, and the groundwork for the 8b.is contextualizer system. Smart Tree is now more connected and intelligent than ever!
 
 ## 🌟 New Features
 
 ### Real Feedback API Integration
-- **Live feedback submission** to f.8t.is for continuous improvement
+- **Live feedback submission** to f.8b.is for continuous improvement
 - **Update notifications** with cached GitHub release information
 - **Structured feedback system** for bug reports, feature requests, and tool suggestions
 - All MCP feedback now goes to a real backend for analysis and prioritization
@@ -17,8 +17,8 @@ This release brings real-world API integration, cross-platform compatibility imp
 - Proper hard link count approximation on non-Unix systems
 - Conditional compilation for OS-specific features
 
-### 8t.is Integration (Preview)
-- Added 8t.is contextualizer framework
+### 8b.is Integration (Preview)
+- Added 8b.is contextualizer framework
 - Feedback loop system for AI-driven improvements
 - Continuous learning from user interactions
 - Foundation for semantic context caching
@@ -39,8 +39,8 @@ This release brings real-world API integration, cross-platform compatibility imp
 ## 🔧 Technical Improvements
 
 ### API Endpoints
-- `POST https://f.8t.is/api/feedback` - Submit feedback and feature requests
-- `GET https://f.8t.is/api/smart-tree/latest` - Check for updates (cached)
+- `POST https://f.8b.is/api/feedback` - Submit feedback and feature requests
+- `GET https://f.8b.is/api/smart-tree/latest` - Check for updates (cached)
 
 ### Code Quality
 - Fixed all cross-platform compilation issues
@@ -72,7 +72,7 @@ Thanks to everyone who's been testing Smart Tree and providing feedback! Special
 
 ## What's Next?
 
-- Full 8t.is contextualizer implementation
+- Full 8b.is contextualizer implementation
 - .mem8 binary format support
 - Enhanced semantic analysis
 - More AI-friendly output formats

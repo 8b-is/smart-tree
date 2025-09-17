@@ -22,6 +22,7 @@ use std::time::SystemTime;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
+    feature_flags,
     claude_init::ClaudeInit,
     formatters::{
         ai::AiFormatter,
@@ -196,6 +197,35 @@ struct Cli {
     /// List all saved mega sessions
     #[arg(long)]
     mega_list: bool,
+
+    /// Configure Claude Code hooks to automatically provide project context
+    ///
+    /// Actions:
+    ///   enable  - Install Smart Tree as a UserPromptSubmit hook
+    ///   disable - Remove Smart Tree hooks from Claude Code
+    ///   status  - Show current hooks configuration
+    ///
+    /// Example: st --hooks-config enable
+    #[arg(long, value_name = "ACTION", help_heading = "Claude Code Integration")]
+    hooks_config: Option<String>,
+
+    /// Quick setup: Install Smart Tree hooks in Claude Code
+    ///
+    /// This enables automatic context provision when you interact with Claude.
+    /// Smart Tree will analyze your prompts and provide relevant project information.
+    /// Same as: st --hooks-config enable
+    #[arg(long, help_heading = "Claude Code Integration")]
+    hooks_install: bool,
+
+    /// Enable activity logging for transparency
+    ///
+    /// Logs all Smart Tree activities to a JSONL file.
+    /// Default location: ~/.st/st.jsonl
+    /// Specify custom path: --log /path/to/logfile.jsonl
+    ///
+    /// Example: st --log --mode ai .
+    #[arg(long, value_name = "PATH", help_heading = "Logging & Transparency")]
+    log: Option<Option<String>>,
 
     // --- Scan Arguments ---
     /// Path to the directory or file you want to analyze.
@@ -585,8 +615,30 @@ async fn main() -> Result<()> {
 
     // Handle spicy TUI mode
     if cli.spicy {
+        // Check if TUI is enabled via feature flags
+        let flags = feature_flags::features();
+        if !flags.enable_tui {
+            eprintln!("Error: Terminal UI is disabled by configuration or compliance mode.");
+            eprintln!("Contact your administrator to enable this feature.");
+            return Ok(());
+        }
         let path = std::env::current_dir()?;
         return st::spicy_tui::run_spicy_tui(path).await;
+    }
+
+    // Initialize logging if requested
+    if let Some(log_path) = &cli.log {
+        // Check if activity logging is enabled via feature flags
+        let flags = feature_flags::features();
+        if !flags.enable_activity_logging {
+            eprintln!("Warning: Activity logging is disabled by configuration or compliance mode.");
+            eprintln!("Continuing without logging.");
+        } else {
+            // log_path is Option<Option<String>> - Some(None) means --log without path
+            let path = log_path.clone();
+            st::activity_logger::ActivityLogger::init(path)?;
+            // Log will be written throughout execution
+        }
     }
 
     // Handle exclusive action flags first.
@@ -609,6 +661,13 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     if cli.mcp {
+        // Check if MCP server is enabled via feature flags
+        let flags = feature_flags::features();
+        if !flags.enable_mcp_server {
+            eprintln!("Error: MCP server is disabled by configuration or compliance mode.");
+            eprintln!("Contact your administrator to enable this feature.");
+            return Ok(());
+        }
         return run_mcp_server().await;
     }
     if cli.mcp_tools {
@@ -619,6 +678,30 @@ async fn main() -> Result<()> {
         print_mcp_config();
         return Ok(());
     }
+
+    // Handle hooks configuration
+    if let Some(action) = &cli.hooks_config {
+        // Check if hooks are enabled via feature flags
+        let flags = feature_flags::features();
+        if !flags.enable_hooks {
+            eprintln!("Error: Hooks are disabled by configuration or compliance mode.");
+            eprintln!("Contact your administrator to enable this feature.");
+            return Ok(());
+        }
+        return handle_hooks_config(action).await;
+    }
+
+    if cli.hooks_install {
+        // Check if hooks are enabled via feature flags
+        let flags = feature_flags::features();
+        if !flags.enable_hooks {
+            eprintln!("Error: Hooks are disabled by configuration or compliance mode.");
+            eprintln!("Contact your administrator to enable this feature.");
+            return Ok(());
+        }
+        return install_hooks_to_claude().await;
+    }
+
     // Handle diff storage operations
     if cli.scan_opts.view_diffs {
         return handle_view_diffs().await;
@@ -628,6 +711,13 @@ async fn main() -> Result<()> {
     }
 
     if cli.terminal {
+        // Check if terminal is enabled via feature flags
+        let flags = feature_flags::features();
+        if !flags.enable_tui {
+            eprintln!("Error: Terminal interface is disabled by configuration or compliance mode.");
+            eprintln!("Contact your administrator to enable this feature.");
+            return Ok(());
+        }
         return run_terminal().await;
     }
     if cli.version {
@@ -2006,333 +2096,6 @@ async fn handle_claude_kickstart() -> Result<()> {
     Ok(())
 }
 
-/// Handle user prompt submission hook - provides intelligent context based on prompt
-async fn handle_claude_user_prompt_submit() -> Result<()> {
-    use serde_json::Value;
-    use std::io::{self, Read};
-
-    // Read JSON input from stdin (the hook passes user prompt as JSON)
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input)?;
-
-    // Parse the JSON input
-    let json: Value = serde_json::from_str(&input)
-        .unwrap_or_else(|_| serde_json::json!({"prompt": input.trim()}));
-
-    let user_prompt = json["prompt"].as_str().unwrap_or(&input);
-
-    // Analyze the prompt to understand what the user is asking about
-    let keywords = extract_keywords(user_prompt);
-    let is_code_related = detect_code_intent(user_prompt);
-    let needs_deep_context = detect_depth_requirement(user_prompt);
-
-    // Start building intelligent response with structured output
-    println!("## Smart Tree Context Hook Response");
-    println!();
-    println!("### Analysis");
-    println!(
-        "**Keywords**: {}",
-        if keywords.is_empty() {
-            "none detected".to_string()
-        } else {
-            keywords.join(", ")
-        }
-    );
-    println!(
-        "**Intent**: {}",
-        match (is_code_related, needs_deep_context) {
-            (true, true) => "Code implementation with deep understanding needed",
-            (true, false) => "Code-related task",
-            (false, true) => "Exploration/research task",
-            (false, false) => "General inquiry",
-        }
-    );
-    println!();
-
-    // Provide context based on analysis
-    if user_prompt.to_lowercase().contains("wave")
-        || user_prompt.to_lowercase().contains("compass")
-        || user_prompt.to_lowercase().contains("signature")
-    {
-        // User is asking about wave signatures or compass
-        println!("### 📊 Wave Signature Context");
-        println!("- **Implementation**: `src/quantum_wave_signature.rs`");
-        println!("- **Compass**: `src/wave_compass.rs`");
-        println!("- **Unique states**: 4,294,967,296 (full 32-bit)");
-        println!("- **Resonance**: Harmonic detection enabled");
-        println!();
-    }
-
-    if user_prompt.to_lowercase().contains("termust")
-        || user_prompt.to_lowercase().contains("rust")
-        || user_prompt.to_lowercase().contains("oxidation")
-    {
-        // User is asking about Termust
-        println!("\n🦀 Termust Context:");
-        println!("• Main implementation: /aidata/ayeverse/termust/");
-        println!("• Oxidation engine: termust/src/oxidation.rs");
-        println!("• Horse apple detector: termust/src/horse_apples.rs");
-        println!("• Jerry Maguire mode: SHOW ME THE MONEY!");
-    }
-
-    if user_prompt.to_lowercase().contains("mem8")
-        || user_prompt.to_lowercase().contains("memory")
-        || user_prompt.to_lowercase().contains("consciousness")
-    {
-        // User is asking about MEM8
-        println!("\n🧠 MEM8 Context:");
-        println!("• Binary format: src/mem8_binary.rs");
-        println!("• Format converter: src/m8_format_converter.rs");
-        println!("• Consciousness: src/m8_consciousness.rs");
-        println!("• 973x faster than traditional vector stores");
-    }
-
-    // Provide relevant file paths based on keywords
-    if !keywords.is_empty() {
-        println!("\n📁 Relevant Files (based on '{}'):", keywords.join(", "));
-
-        // Use glob to find files matching keywords
-        for keyword in &keywords {
-            let pattern = format!("**/*{}*", keyword.to_lowercase());
-            if let Ok(paths) = glob::glob(&pattern) {
-                for path_result in paths.take(5) {
-                    if let Ok(path) = path_result {
-                        if path.is_file() {
-                            println!("  • {}", path.display());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Provide project structure if needed
-    if needs_deep_context {
-        println!("\n🌳 Project Structure:");
-        // Run a quick semantic scan
-        let output = std::process::Command::new("st")
-            .arg("--mode")
-            .arg("ai")
-            .arg("--depth")
-            .arg("2")
-            .arg(".")
-            .output()?;
-
-        if output.status.success() {
-            let tree = String::from_utf8_lossy(&output.stdout);
-            // Show first 20 lines of tree
-            for line in tree.lines().take(20) {
-                println!("{}", line);
-            }
-        }
-    }
-
-    // Add recent changes if relevant
-    if is_code_related {
-        println!("\n📝 Recent Changes:");
-        let git_log = std::process::Command::new("git")
-            .args(&["log", "--oneline", "-5"])
-            .output();
-
-        if let Ok(output) = git_log {
-            if output.status.success() {
-                let log = String::from_utf8_lossy(&output.stdout);
-                for line in log.lines() {
-                    println!("  {}", line);
-                }
-            }
-        }
-    }
-
-    // Search MEM8 consciousness for relevant memories!
-    let consciousness_path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".claude_consciousness.m8");
-
-    if consciousness_path.exists() {
-        println!("\n🧠 MEM8 Consciousness Search:");
-
-        // Search for memories related to the prompt keywords
-        if let Ok(mut manager) = st::memory_manager::MemoryManager::new() {
-            // Search for each keyword in MEM8
-            for keyword in &keywords {
-                if let Ok(memories) = manager.find(&[keyword.clone()]) {
-                    if !memories.is_empty() {
-                        println!("\n  📍 Memories for '{}':", keyword);
-                        for memory in memories.iter().take(3) {
-                            // Show memory context
-                            println!(
-                                "    • {}",
-                                memory.context.chars().take(100).collect::<String>()
-                            );
-                            println!("      → Origin: {}", memory.origin);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Also check .mem8 directory for related files
-        if let Some(mem8_dir) = dirs::home_dir() {
-            let mem8_path = mem8_dir.join(".mem8");
-
-            // Search for conversation history
-            let conv_path = mem8_path.join("conversations");
-            if conv_path.exists() {
-                println!("\n  💬 Recent Conversations:");
-
-                // Find conversation files matching keywords
-                for keyword in &keywords {
-                    let pattern =
-                        format!("{}/*{}*.json", conv_path.display(), keyword.to_lowercase());
-                    if let Ok(paths) = glob::glob(&pattern) {
-                        for path_result in paths.take(2) {
-                            if let Ok(path) = path_result {
-                                if let Some(name) = path.file_stem() {
-                                    println!("    • {}", name.to_string_lossy());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Search gathered context
-            let context_path = mem8_path.join("gathered_context.m8");
-            if context_path.exists() {
-                println!("\n  📋 Gathered Context Available:");
-
-                // Try to read and search the context
-                if let Ok(contents) = std::fs::read(&context_path) {
-                    // Check if it's compressed JSON (starts with zlib header)
-                    if contents.len() > 2 && contents[0] == 0x78 {
-                        // It's compressed, try to decompress
-                        use flate2::read::ZlibDecoder;
-                        use std::io::Read;
-
-                        let mut decoder = ZlibDecoder::new(&contents[..]);
-                        let mut decompressed = String::new();
-
-                        if decoder.read_to_string(&mut decompressed).is_ok() {
-                            // Search the JSON for relevant content
-                            let lower_content = decompressed.to_lowercase();
-                            for keyword in &keywords {
-                                if lower_content.contains(&keyword.to_lowercase()) {
-                                    println!("    ✓ Found references to '{}'", keyword);
-                                }
-                            }
-                        }
-                    } else {
-                        // Try to read as MEM8 binary format
-                        println!("    • Binary MEM8 format detected");
-                    }
-                }
-            }
-
-            // Check for file history
-            let history_path = mem8_path.join(".filehistory");
-            if history_path.exists() {
-                println!("\n  📜 File History:");
-
-                // Search for files edited recently that match keywords
-                for keyword in &keywords {
-                    let pattern =
-                        format!("{}/**/*{}*", history_path.display(), keyword.to_lowercase());
-                    if let Ok(paths) = glob::glob(&pattern) {
-                        for path_result in paths.take(3) {
-                            if let Ok(path) = path_result {
-                                if let Some(name) = path.file_name() {
-                                    println!("    • {}", name.to_string_lossy());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        println!("\n✨ Consciousness State: Active");
-    } else {
-        println!("\n⚠️  No MEM8 consciousness found. Run 'st --claude-save' to create one.");
-    }
-
-    println!("{}", "─".repeat(60));
-    println!(
-        "💡 Context provided by Smart Tree v{}",
-        env!("CARGO_PKG_VERSION")
-    );
-
-    Ok(())
-}
-
-/// Extract keywords from user prompt
-fn extract_keywords(prompt: &str) -> Vec<String> {
-    let stop_words = vec![
-        "the", "a", "an", "is", "are", "was", "were", "been", "have", "has", "had", "do", "does",
-        "did", "will", "would", "could", "should", "may", "might", "can", "this", "that", "these",
-        "those", "what", "where", "when", "how", "why", "who", "which", "to", "from", "in", "on",
-        "at", "by", "for", "with", "about",
-    ];
-
-    prompt
-        .split_whitespace()
-        .filter(|word| word.len() > 3)
-        .filter(|word| !stop_words.contains(&word.to_lowercase().as_str()))
-        .map(|word| {
-            word.trim_matches(|c: char| !c.is_alphanumeric())
-                .to_string()
-        })
-        .filter(|word| !word.is_empty())
-        .take(5)
-        .collect()
-}
-
-/// Detect if the prompt is code-related
-fn detect_code_intent(prompt: &str) -> bool {
-    let code_words = [
-        "code",
-        "function",
-        "implement",
-        "fix",
-        "bug",
-        "error",
-        "compile",
-        "build",
-        "test",
-        "refactor",
-        "optimize",
-        "method",
-        "class",
-        "struct",
-        "trait",
-        "module",
-    ];
-
-    let lower = prompt.to_lowercase();
-    code_words.iter().any(|&word| lower.contains(word))
-}
-
-/// Detect if deep context is needed
-fn detect_depth_requirement(prompt: &str) -> bool {
-    let deep_words = [
-        "explain",
-        "understand",
-        "overview",
-        "structure",
-        "architecture",
-        "how does",
-        "what is",
-        "where is",
-        "show me",
-        "find",
-        "search",
-        "locate",
-    ];
-
-    let lower = prompt.to_lowercase();
-    deep_words.iter().any(|&word| lower.contains(word))
-}
-
 /// Anchor a memory
 async fn handle_memory_anchor(anchor_type: &str, keywords_str: &str, context: &str) -> Result<()> {
     use st::memory_manager::MemoryManager;
@@ -2398,6 +2161,163 @@ async fn handle_memory_stats() -> Result<()> {
 
     let manager = MemoryManager::new()?;
     println!("📊 {}", manager.stats());
+
+    Ok(())
+}
+
+/// Handle hooks configuration for Claude Code
+async fn handle_hooks_config(action: &str) -> Result<()> {
+    use serde_json::Value;
+    use std::fs;
+
+    let config_path = get_claude_config_path()?;
+
+    match action {
+        "enable" => {
+            println!("🎣 Enabling Smart Tree hooks for Claude Code...");
+            update_claude_hooks(&config_path, true)?;
+            println!("✅ Hooks enabled! Smart Tree will provide context to Claude Code.");
+            println!("📝 Hook command: st --claude-user-prompt-submit");
+        }
+        "disable" => {
+            println!("🎣 Disabling Smart Tree hooks...");
+            update_claude_hooks(&config_path, false)?;
+            println!("✅ Hooks disabled.");
+        }
+        "status" => {
+            println!("🎣 Claude Code Hooks Status");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━");
+
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                if let Ok(config) = serde_json::from_str::<Value>(&content) {
+                    // Check for hooks in the config
+                    let has_hooks = config
+                        .get("hooks")
+                        .and_then(|h| h.as_object())
+                        .map(|h| !h.is_empty())
+                        .unwrap_or(false);
+
+                    if has_hooks {
+                        println!("✅ Hooks are configured");
+                        if let Some(hooks) = config.get("hooks") {
+                            println!("\nConfigured hooks:");
+                            if let Some(obj) = hooks.as_object() {
+                                for (hook_type, command) in obj {
+                                    println!("  • {}: {}", hook_type, command);
+                                }
+                            }
+                        }
+                    } else {
+                        println!("❌ No hooks configured");
+                        println!("\nTo enable: st --hooks-config enable");
+                    }
+                }
+            } else {
+                println!(
+                    "⚠️  Claude Code config not found at: {}",
+                    config_path.display()
+                );
+                println!("\nMake sure Claude Code is installed.");
+            }
+        }
+        _ => {
+            eprintln!("❌ Unknown action: {}", action);
+            eprintln!("Valid actions: enable, disable, status");
+            return Err(anyhow::anyhow!("Invalid hooks action"));
+        }
+    }
+
+    Ok(())
+}
+
+/// Install Smart Tree hooks directly into Claude Code settings
+async fn install_hooks_to_claude() -> Result<()> {
+    println!("🎣 Installing Smart Tree hooks to Claude Code...");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    let config_path = get_claude_config_path()?;
+
+    // Create or update the hooks configuration
+    update_claude_hooks(&config_path, true)?;
+
+    println!("\n✅ Hooks installed successfully!");
+    println!("\n📝 What's been configured:");
+    println!("  • UserPromptSubmit: Adds project context to your prompts");
+    println!("  • Command: st --claude-user-prompt-submit");
+    println!("\n🚀 Smart Tree will now automatically provide context in Claude Code!");
+
+    Ok(())
+}
+
+/// Get the Claude Code configuration path
+fn get_claude_config_path() -> Result<PathBuf> {
+    let home = std::env::var("HOME")?;
+    let config_path = PathBuf::from(home)
+        .join("Library")
+        .join("Application Support")
+        .join("Claude")
+        .join("config.json");
+    Ok(config_path)
+}
+
+/// Update Claude Code hooks configuration
+fn update_claude_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
+    use serde_json::{json, Value};
+    use std::fs;
+
+    // Read existing config or create new one
+    let mut config: Value = if config_path.exists() {
+        let content = fs::read_to_string(config_path)?;
+        serde_json::from_str(&content).unwrap_or_else(|_| json!({}))
+    } else {
+        // Create the directory if it doesn't exist
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        json!({})
+    };
+
+    if enable {
+        // Get the st binary path - prefer the installed version
+        let st_path = which::which("st")
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| {
+                // Fallback to common installation paths
+                if std::path::Path::new("/usr/local/bin/st").exists() {
+                    "/usr/local/bin/st".to_string()
+                } else if std::path::Path::new("/opt/homebrew/bin/st").exists() {
+                    "/opt/homebrew/bin/st".to_string()
+                } else {
+                    "st".to_string() // Hope it's in PATH
+                }
+            });
+
+        // Ensure hooks object exists
+        if config.get("hooks").is_none() {
+            config["hooks"] = json!({});
+        }
+
+        // Update or add the UserPromptSubmit hook (not duplicate!)
+        config["hooks"]["UserPromptSubmit"] =
+            json!(format!("{} --claude-user-prompt-submit", st_path));
+
+        println!("📍 Using st binary at: {}", st_path);
+    } else {
+        // Remove hooks
+        if let Some(hooks) = config.get_mut("hooks") {
+            if let Some(obj) = hooks.as_object_mut() {
+                obj.remove("UserPromptSubmit");
+                // If no hooks left, remove the hooks object entirely
+                if obj.is_empty() {
+                    config.as_object_mut().unwrap().remove("hooks");
+                }
+            }
+        }
+    }
+
+    // Write back the config with pretty formatting
+    let pretty_json = serde_json::to_string_pretty(&config)?;
+    fs::write(config_path, pretty_json)?;
 
     Ok(())
 }
