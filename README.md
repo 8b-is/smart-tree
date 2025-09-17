@@ -27,11 +27,15 @@
 
 ```bash
 # Install Smart Tree (choose your method)
+
+# Option 1: Homebrew (builds from source)
+brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
+
+# Option 2: Install script (downloads binary)
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
-# OR
-brew install --HEAD 8b-is/smart-tree/smart-tree
-# OR build from source
-cargo install --git https://github.com/8b-is/smart-tree
+
+# Option 3: Cargo (builds from source)
+cargo install --git https://github.com/8b-is/smart-tree --tag v5.2.0 st
 
 # 🎉 Experience the magic!
 st                          # Classic tree view
@@ -229,10 +233,10 @@ mq aggregate docs/ -o docs.mq      # Compress all docs
 
 ## 📦 Installation
 
-### macOS/Linux (Homebrew)
+### macOS/Linux (Homebrew - builds from source)
 ```bash
-brew tap 8b-is/smart-tree
-brew install smart-tree
+# Direct formula installation (no tap needed!)
+brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 ```
 
 ### From Source (All Platforms)
