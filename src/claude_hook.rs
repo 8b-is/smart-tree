@@ -18,9 +18,8 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
     io::stdin().read_to_string(&mut input)?;
 
     // Parse the JSON input
-    let json: Value = serde_json::from_str(&input).unwrap_or_else(|_| {
-        serde_json::json!({"prompt": input.trim()})
-    });
+    let json: Value = serde_json::from_str(&input)
+        .unwrap_or_else(|_| serde_json::json!({"prompt": input.trim()}));
 
     let user_prompt = json["prompt"].as_str().unwrap_or(&input);
 
@@ -229,7 +228,7 @@ fn search_mem8_context(keywords: &[String]) -> Result<()> {
                                         found_memories.push((
                                             anchor["anchor_type"].as_str().unwrap_or("unknown"),
                                             context,
-                                            keyword.as_str()
+                                            keyword.as_str(),
                                         ));
                                         break;
                                     }
@@ -241,11 +240,7 @@ fn search_mem8_context(keywords: &[String]) -> Result<()> {
                             println!("\n**Anchored memories:**");
                             for (anchor_type, context, keyword) in found_memories.iter().take(3) {
                                 let preview: String = context.chars().take(80).collect();
-                                println!("  • [{}] {}: {}...",
-                                    keyword,
-                                    anchor_type,
-                                    preview
-                                );
+                                println!("  • [{}] {}: {}...", keyword, anchor_type, preview);
                                 found_any = true;
                             }
                         }
@@ -339,7 +334,10 @@ fn provide_topic_context(prompt: &str) -> Result<()> {
     }
 
     // Termust
-    if lower.contains("termust") || lower.contains("oxidation") || lower.contains("rust") && lower.contains("file") {
+    if lower.contains("termust")
+        || lower.contains("oxidation")
+        || lower.contains("rust") && lower.contains("file")
+    {
         println!("### 🦀 Termust - File Oxidation");
         println!("- **Main**: `/aidata/ayeverse/termust/`");
         println!("- **Oxidation engine**: `termust/src/oxidation.rs`");
@@ -389,10 +387,28 @@ fn show_recent_changes() -> Result<()> {
 /// Detect if the prompt is code-related
 fn detect_code_intent(prompt: &str) -> bool {
     let code_words = [
-        "code", "function", "implement", "fix", "bug", "error",
-        "compile", "build", "test", "refactor", "optimize",
-        "method", "class", "struct", "trait", "module", "import",
-        "syntax", "debug", "breakpoint", "variable", "type"
+        "code",
+        "function",
+        "implement",
+        "fix",
+        "bug",
+        "error",
+        "compile",
+        "build",
+        "test",
+        "refactor",
+        "optimize",
+        "method",
+        "class",
+        "struct",
+        "trait",
+        "module",
+        "import",
+        "syntax",
+        "debug",
+        "breakpoint",
+        "variable",
+        "type",
     ];
 
     let lower = prompt.to_lowercase();

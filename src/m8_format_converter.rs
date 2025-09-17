@@ -2,10 +2,10 @@
 // Convert between .m8 (binary wave), .m8j (JSON), and .m8z (compressed)
 // "One format to rule them all? Nah, let's have options!" - Hue
 
-use anyhow::{Result, Context};
-use std::path::Path;
+use anyhow::{Context, Result};
 use std::fs;
 use std::io::{Read, Write};
+use std::path::Path;
 
 /// Supported M8 formats
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,7 +26,8 @@ pub enum M8Format {
 impl M8Format {
     /// Detect format from file extension
     pub fn from_extension(path: &Path) -> Result<Self> {
-        let ext = path.extension()
+        let ext = path
+            .extension()
             .and_then(|e| e.to_str())
             .context("No file extension")?;
 
@@ -76,7 +77,7 @@ impl M8Converter {
     pub fn convert(
         input_path: &Path,
         output_path: &Path,
-        target_format: Option<M8Format>
+        target_format: Option<M8Format>,
     ) -> Result<()> {
         // Read input file
         let data = fs::read(input_path)?;
@@ -85,9 +86,8 @@ impl M8Converter {
         let source_format = M8Format::detect_from_content(&data);
 
         // Determine target format
-        let target = target_format.unwrap_or_else(|| {
-            M8Format::from_extension(output_path).unwrap_or(M8Format::Binary)
-        });
+        let target = target_format
+            .unwrap_or_else(|| M8Format::from_extension(output_path).unwrap_or(M8Format::Binary));
 
         println!("🔄 Converting {:?} -> {:?}", source_format, target);
 
@@ -96,17 +96,17 @@ impl M8Converter {
             // Same format - just copy
             (a, b) if a == b => {
                 fs::copy(input_path, output_path)?;
-            },
+            }
 
             // JSON to Binary
             (M8Format::Json, M8Format::Binary) => {
                 Self::json_to_binary(&data, output_path)?;
-            },
+            }
 
             // Binary to JSON
             (M8Format::Binary, M8Format::Json) => {
                 Self::binary_to_json(&data, output_path)?;
-            },
+            }
 
             // Compressed to anything - decompress first
             (M8Format::Compressed, target) => {
@@ -118,24 +118,27 @@ impl M8Converter {
                 fs::write(&temp_path, decompressed)?;
                 Self::convert(Path::new(&temp_path), output_path, Some(target))?;
                 fs::remove_file(&temp_path)?;
-            },
+            }
 
             // Anything to Compressed
             (_, M8Format::Compressed) => {
                 Self::compress(&data, output_path)?;
-            },
+            }
 
             // Marqant conversions
             (M8Format::Marqant, M8Format::Json) => {
                 Self::marqant_to_json(&data, output_path)?;
-            },
+            }
             (M8Format::Json, M8Format::Marqant) => {
                 Self::json_to_marqant(&data, output_path)?;
-            },
+            }
 
             _ => {
-                anyhow::bail!("Conversion from {:?} to {:?} not yet implemented",
-                    source_format, target);
+                anyhow::bail!(
+                    "Conversion from {:?} to {:?} not yet implemented",
+                    source_format,
+                    target
+                );
             }
         }
 
@@ -156,9 +159,8 @@ impl M8Converter {
         if let Some(contexts) = value.get("contexts").and_then(|c| c.as_array()) {
             for context in contexts {
                 let content = serde_json::to_vec(context)?;
-                let importance = context.get("score")
-                    .and_then(|s| s.as_f64())
-                    .unwrap_or(0.5) as f32;
+                let importance =
+                    context.get("score").and_then(|s| s.as_f64()).unwrap_or(0.5) as f32;
                 m8_file.append_block(&content, importance)?;
             }
         } else if let Some(array) = value.as_array() {
@@ -270,7 +272,7 @@ impl M8Converter {
     pub fn convert_directory(
         input_dir: &Path,
         output_dir: &Path,
-        target_format: M8Format
+        target_format: M8Format,
     ) -> Result<()> {
         fs::create_dir_all(output_dir)?;
 
@@ -280,15 +282,19 @@ impl M8Converter {
 
             if path.is_file() {
                 if let Ok(_format) = M8Format::from_extension(&path) {
-                    let file_name = path.file_stem()
+                    let file_name = path
+                        .file_stem()
                         .and_then(|s| s.to_str())
                         .unwrap_or("unknown");
 
-                    let output_path = output_dir.join(format!("{}.{}",
-                        file_name, target_format.extension()));
+                    let output_path =
+                        output_dir.join(format!("{}.{}", file_name, target_format.extension()));
 
-                    println!("Converting: {} -> {}",
-                        path.display(), output_path.display());
+                    println!(
+                        "Converting: {} -> {}",
+                        path.display(),
+                        output_path.display()
+                    );
 
                     Self::convert(&path, &output_path, Some(target_format))?;
                 }
@@ -333,8 +339,11 @@ pub fn fix_m8_extensions() -> Result<()> {
                 if detected != M8Format::Binary {
                     // Rename file with correct extension
                     let new_path = file_path.with_extension(detected.extension());
-                    println!("  Renaming: {} -> {}",
-                        file_path.display(), new_path.display());
+                    println!(
+                        "  Renaming: {} -> {}",
+                        file_path.display(),
+                        new_path.display()
+                    );
                     fs::rename(&file_path, &new_path)?;
                 }
             }
@@ -353,8 +362,14 @@ mod tests {
     #[test]
     fn test_format_detection() {
         assert_eq!(M8Format::detect_from_content(b"MEM8"), M8Format::Binary);
-        assert_eq!(M8Format::detect_from_content(b"{\"test\":1}"), M8Format::Json);
-        assert_eq!(M8Format::detect_from_content(b"\x78\x9c"), M8Format::Compressed);
+        assert_eq!(
+            M8Format::detect_from_content(b"{\"test\":1}"),
+            M8Format::Json
+        );
+        assert_eq!(
+            M8Format::detect_from_content(b"\x78\x9c"),
+            M8Format::Compressed
+        );
         assert_eq!(M8Format::detect_from_content(b"MARQANT"), M8Format::Marqant);
     }
 

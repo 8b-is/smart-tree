@@ -114,7 +114,7 @@ enum Tab {
     Memory,
     Voice,
     Ideas,
-    WaveCompass,  // Omni's wave drift visualizer!
+    WaveCompass, // Omni's wave drift visualizer!
     Debug,
 }
 
@@ -133,28 +133,28 @@ impl Dashboard {
     }
 
     /// Main update function called each frame
-        pub fn update_ui(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-            // Top panel with tabs
-            TopBottomPanel::top("top_panel").show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.heading("🚀 Rust Shell Dashboard");
-                    ui.separator();
-    
-                    ui.selectable_value(&mut self.selected_tab, Tab::Overview, "Overview");
-                    ui.selectable_value(&mut self.selected_tab, Tab::Displays, "Displays");
-                    ui.selectable_value(&mut self.selected_tab, Tab::Memory, "Memory");
-                    ui.selectable_value(&mut self.selected_tab, Tab::Voice, "Voice");
-                    ui.selectable_value(&mut self.selected_tab, Tab::Ideas, "💡 Ideas");
-                    ui.selectable_value(&mut self.selected_tab, Tab::WaveCompass, "🧭 Waves");
-                    ui.selectable_value(&mut self.selected_tab, Tab::Debug, "Debug");
-    
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(if self.dark_mode { "☀" } else { "🌙" }).clicked() {
-                            self.dark_mode = !self.dark_mode;
-                        }
-                    });
+    pub fn update_ui(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // Top panel with tabs
+        TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading("🚀 Rust Shell Dashboard");
+                ui.separator();
+
+                ui.selectable_value(&mut self.selected_tab, Tab::Overview, "Overview");
+                ui.selectable_value(&mut self.selected_tab, Tab::Displays, "Displays");
+                ui.selectable_value(&mut self.selected_tab, Tab::Memory, "Memory");
+                ui.selectable_value(&mut self.selected_tab, Tab::Voice, "Voice");
+                ui.selectable_value(&mut self.selected_tab, Tab::Ideas, "💡 Ideas");
+                ui.selectable_value(&mut self.selected_tab, Tab::WaveCompass, "🧭 Waves");
+                ui.selectable_value(&mut self.selected_tab, Tab::Debug, "Debug");
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(if self.dark_mode { "☀" } else { "🌙" }).clicked() {
+                        self.dark_mode = !self.dark_mode;
+                    }
                 });
             });
+        });
 
         // Side panel for quick status
         SidePanel::left("side_panel").show(ctx, |ui| {
@@ -495,27 +495,27 @@ impl Dashboard {
         let signatures = vec![
             crate::wave_compass::WaveSig::from_quantum(
                 "src".into(),
-                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x73A9E2F5)
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x73A9E2F5),
             ),
             crate::wave_compass::WaveSig::from_quantum(
                 "tests".into(),
-                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x9F2E6B31)
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x9F2E6B31),
             ),
             crate::wave_compass::WaveSig::from_quantum(
                 "mcp".into(),
-                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x2C7DB5A3)
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0x2C7DB5A3),
             ),
             crate::wave_compass::WaveSig::from_quantum(
                 "mem8".into(),
-                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xE4739AC2)
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xE4739AC2),
             ),
             crate::wave_compass::WaveSig::from_quantum(
                 "formatters".into(),
-                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xA7E2C94D)
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xA7E2C94D),
             ),
             crate::wave_compass::WaveSig::from_quantum(
                 "generated".into(),
-                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xD2B847A6)
+                &crate::quantum_wave_signature::QuantumWaveSignature::from_raw(0xD2B847A6),
             ),
         ];
 

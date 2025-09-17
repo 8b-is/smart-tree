@@ -2,7 +2,7 @@
 // Cast to any screen, control any display, seamless voice transitions
 // "Why have one interface when you can have them ALL?" - Hue
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,18 +11,29 @@ use tokio::sync::{Mutex, RwLock};
 // Display targets
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DisplayTarget {
-    AppleTV { name: String, address: String },
-    Chromecast { name: String, uuid: String },
-    Miracast { name: String, address: String },
-    ESP32Display { 
+    AppleTV {
+        name: String,
+        address: String,
+    },
+    Chromecast {
+        name: String,
+        uuid: String,
+    },
+    Miracast {
+        name: String,
+        address: String,
+    },
+    ESP32Display {
         name: String,
         address: String,
         width: u16,
         height: u16,
     },
-    WebDashboard { port: u16 },
-    Terminal,  // Local terminal
-    Voice,     // Voice-only mode
+    WebDashboard {
+        port: u16,
+    },
+    Terminal, // Local terminal
+    Voice,    // Voice-only mode
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,11 +46,11 @@ pub struct OutputMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VerbosityLevel {
-    Verbose,      // Full output for screens
-    Normal,       // Standard output
-    Concise,      // Reduced for small screens
-    Minimal,      // Voice mode - just essentials
-    Silent,       // Actions only, no output
+    Verbose, // Full output for screens
+    Normal,  // Standard output
+    Concise, // Reduced for small screens
+    Minimal, // Voice mode - just essentials
+    Silent,  // Actions only, no output
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,8 +59,8 @@ pub enum OutputFormat {
     HTML,
     Markdown,
     JSON,
-    Graphics,     // For capable displays
-    Voice,        // TTS-optimized
+    Graphics, // For capable displays
+    Voice,    // TTS-optimized
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +69,7 @@ pub struct ScreenConfig {
     pub height: u16,
     pub color_depth: u8,
     pub refresh_rate: u8,
-    pub capabilities: Vec<String>,  // ["color", "touch", "audio"]
+    pub capabilities: Vec<String>, // ["color", "touch", "audio"]
 }
 
 // The main shell structure
@@ -117,10 +128,10 @@ enum UserLocation {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum ConversationMode {
-    Interactive,   // Full interaction
-    Monitoring,    // Just watching
-    Voice,         // Voice commands
-    Automated,     // Running scripts
+    Interactive, // Full interaction
+    Monitoring,  // Just watching
+    Voice,       // Voice commands
+    Automated,   // Running scripts
 }
 
 impl RustShell {
@@ -140,26 +151,26 @@ impl RustShell {
     /// Discover available displays
     pub async fn discover_displays(&self) -> Result<Vec<DisplayTarget>> {
         let mut discovered = Vec::new();
-        
+
         // Discover Apple TVs via Bonjour/mDNS
         if let Some(airplay) = &self.cast_manager.airplay {
             discovered.extend(airplay.discover().await?);
         }
-        
+
         // Discover Chromecasts
         if let Some(chromecast) = &self.cast_manager.chromecast {
             discovered.extend(chromecast.discover().await?);
         }
-        
+
         // Discover ESP32 displays on network
         if let Some(esp32) = &self.cast_manager.esp32 {
             discovered.extend(esp32.discover().await?);
         }
-        
+
         // Always have terminal and voice
         discovered.push(DisplayTarget::Terminal);
         discovered.push(DisplayTarget::Voice);
-        
+
         Ok(discovered)
     }
 
@@ -167,62 +178,83 @@ impl RustShell {
     pub async fn cast_to(&self, target: &DisplayTarget, content: &str) -> Result<()> {
         // Adapt output based on target
         let adapted_content = self.adapt_content_for_display(content, target).await?;
-        
+
         match target {
             DisplayTarget::AppleTV { address, .. } => {
-                self.cast_manager.airplay.as_ref()
+                self.cast_manager
+                    .airplay
+                    .as_ref()
                     .context("AirPlay not available")?
-                    .cast(address, &adapted_content).await?
-            },
+                    .cast(address, &adapted_content)
+                    .await?
+            }
             DisplayTarget::Chromecast { uuid, .. } => {
-                self.cast_manager.chromecast.as_ref()
+                self.cast_manager
+                    .chromecast
+                    .as_ref()
                     .context("Chromecast not available")?
-                    .cast(uuid, &adapted_content).await?
-            },
-            DisplayTarget::ESP32Display { address, width, height, .. } => {
+                    .cast(uuid, &adapted_content)
+                    .await?
+            }
+            DisplayTarget::ESP32Display {
+                address,
+                width,
+                height,
+                ..
+            } => {
                 // Format for small display
                 let formatted = self.format_for_small_display(&adapted_content, *width, *height);
-                self.cast_manager.esp32.as_ref()
+                self.cast_manager
+                    .esp32
+                    .as_ref()
                     .context("ESP32 caster not available")?
-                    .send(address, &formatted).await?
-            },
+                    .send(address, &formatted)
+                    .await?
+            }
             DisplayTarget::WebDashboard { port: _ } => {
                 // Update web dashboard
-                self.cast_manager.web_server.as_ref()
+                self.cast_manager
+                    .web_server
+                    .as_ref()
                     .context("Web server not running")?
-                    .update_dashboard(&adapted_content).await?
-            },
+                    .update_dashboard(&adapted_content)
+                    .await?
+            }
             DisplayTarget::Terminal => {
                 println!("{}", adapted_content);
-            },
+            }
             DisplayTarget::Voice => {
                 // Convert to speech-friendly format
                 let voice_text = self.make_voice_friendly(&adapted_content);
                 self.speak(&voice_text).await?;
-            },
+            }
             _ => {}
         }
-        
+
         Ok(())
     }
 
     /// Adapt content based on display capabilities
-    async fn adapt_content_for_display(&self, content: &str, target: &DisplayTarget) -> Result<String> {
+    async fn adapt_content_for_display(
+        &self,
+        content: &str,
+        target: &DisplayTarget,
+    ) -> Result<String> {
         let _mode = self.output_mode.read().await;
-        
+
         match target {
             DisplayTarget::Voice => {
                 // Ultra-concise for voice
                 Ok(self.make_voice_friendly(content))
-            },
+            }
             DisplayTarget::ESP32Display { width, height, .. } => {
                 // Format for tiny screen
                 Ok(self.format_for_small_display(content, *width, *height))
-            },
+            }
             DisplayTarget::AppleTV { .. } | DisplayTarget::Chromecast { .. } => {
                 // Rich HTML for TV displays
                 Ok(self.format_as_rich_html(content))
-            },
+            }
             _ => Ok(content.to_string()),
         }
     }
@@ -230,23 +262,23 @@ impl RustShell {
     /// Detect voice mode and adjust verbosity
     pub async fn detect_voice_transition(&self) -> Result<()> {
         let detector = &self.voice_detector;
-        
+
         // Check if audio input is active
         let audio_active = detector.is_audio_active().await?;
-        
+
         if audio_active {
             // Switch to minimal verbosity
             let mut mode = self.output_mode.write().await;
             mode.verbosity = VerbosityLevel::Minimal;
             mode.format = OutputFormat::Voice;
-            
+
             // Update active display
             let mut active = self.active_display.write().await;
             *active = Some("voice".to_string());
-            
+
             println!("🎤 Voice mode activated - switching to concise output");
         }
-        
+
         Ok(())
     }
 
@@ -254,11 +286,11 @@ impl RustShell {
     pub async fn execute(&self, command: &str) -> Result<String> {
         // Parse command
         let parts: Vec<&str> = command.split_whitespace().collect();
-        
+
         if parts.is_empty() {
             return Ok(String::new());
         }
-        
+
         match parts[0] {
             "cast" => {
                 // cast <target> <content>
@@ -269,25 +301,32 @@ impl RustShell {
                 } else {
                     Ok("Usage: cast <target> <content>".to_string())
                 }
-            },
+            }
             "discover" => {
                 // Discover available displays
                 let displays = self.discover_displays().await?;
-                Ok(format!("Found {} displays:\n{:#?}", displays.len(), displays))
-            },
+                Ok(format!(
+                    "Found {} displays:\n{:#?}",
+                    displays.len(),
+                    displays
+                ))
+            }
             "mode" => {
                 // Switch output mode
                 if parts.len() >= 2 {
                     self.set_mode(parts[1]).await
                 } else {
-                    Ok(format!("Current mode: {:?}", self.output_mode.read().await.verbosity))
+                    Ok(format!(
+                        "Current mode: {:?}",
+                        self.output_mode.read().await.verbosity
+                    ))
                 }
-            },
+            }
             "dashboard" => {
                 // Start web dashboard
                 self.start_dashboard(8888).await?;
                 Ok("Dashboard started on http://localhost:8888".to_string())
-            },
+            }
             _ => {
                 // Forward to MCP
                 self.mcp_interface.execute(command).await
@@ -298,7 +337,7 @@ impl RustShell {
     /// Cast to display by name
     async fn cast_by_name(&self, name: &str, content: &str) -> Result<String> {
         let displays = self.displays.read().await;
-        
+
         if let Some(target) = displays.get(name) {
             self.cast_to(target, content).await?;
             Ok(format!("Cast to {} complete", name))
@@ -310,7 +349,7 @@ impl RustShell {
     /// Set output mode
     async fn set_mode(&self, mode_str: &str) -> Result<String> {
         let mut mode = self.output_mode.write().await;
-        
+
         match mode_str {
             "verbose" => mode.verbosity = VerbosityLevel::Verbose,
             "normal" => mode.verbosity = VerbosityLevel::Normal,
@@ -319,10 +358,10 @@ impl RustShell {
             "voice" => {
                 mode.verbosity = VerbosityLevel::Minimal;
                 mode.format = OutputFormat::Voice;
-            },
+            }
             _ => return Ok(format!("Unknown mode: {}", mode_str)),
         }
-        
+
         Ok(format!("Mode set to: {}", mode_str))
     }
 
@@ -337,10 +376,11 @@ impl RustShell {
     /// Format content for small displays
     fn format_for_small_display(&self, content: &str, width: u16, height: u16) -> String {
         // Truncate and format for tiny screens
-        let chars_per_line = (width / 8) as usize;  // Assuming 8px char width
-        let max_lines = (height / 16) as usize;     // Assuming 16px line height
-        
-        content.lines()
+        let chars_per_line = (width / 8) as usize; // Assuming 8px char width
+        let max_lines = (height / 16) as usize; // Assuming 16px line height
+
+        content
+            .lines()
             .take(max_lines)
             .map(|line| {
                 if line.len() > chars_per_line {
@@ -363,14 +403,15 @@ impl RustShell {
             .replace("_", "")
             .lines()
             .filter(|line| !line.trim().is_empty())
-            .take(5)  // Just key points
+            .take(5) // Just key points
             .collect::<Vec<_>>()
             .join(". ")
     }
 
     /// Format as rich HTML for TV displays
     fn format_as_rich_html(&self, content: &str) -> String {
-        format!(r#"
+        format!(
+            r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -409,7 +450,9 @@ impl RustShell {
     </div>
 </body>
 </html>
-        "#, html_escape::encode_text(content))
+        "#,
+            html_escape::encode_text(content)
+        )
     }
 
     /// Speak text (would interface with TTS)
@@ -432,7 +475,7 @@ impl AirPlayCaster {
         // Would use Bonjour/mDNS to discover
         Ok(vec![])
     }
-    
+
     async fn cast(&self, _address: &str, _content: &str) -> Result<()> {
         // Would implement AirPlay protocol
         Ok(())
@@ -444,7 +487,7 @@ impl ChromecastCaster {
         // Would use mDNS to discover Chromecasts
         Ok(vec![])
     }
-    
+
     async fn cast(&self, _uuid: &str, _content: &str) -> Result<()> {
         // Would implement Chromecast protocol
         Ok(())
@@ -462,7 +505,7 @@ impl ESP32Caster {
         // Would scan for ESP32 devices
         Ok(vec![])
     }
-    
+
     async fn send(&self, _address: &str, _content: &str) -> Result<()> {
         // Would send via WiFi/BLE to ESP32
         Ok(())
@@ -497,7 +540,7 @@ impl MCPInterface {
             },
         })
     }
-    
+
     async fn execute(&self, command: &str) -> Result<String> {
         // Would forward to MCP server
         Ok(format!("MCP: {}", command))
@@ -511,7 +554,7 @@ impl VoiceDetector {
             last_voice_time: Arc::new(RwLock::new(std::time::Instant::now())),
         }
     }
-    
+
     async fn is_audio_active(&self) -> Result<bool> {
         Ok(*self.audio_active.read().await)
     }
@@ -549,39 +592,39 @@ impl Default for ContextState {
 pub async fn start_rust_shell() -> Result<()> {
     println!("🚀 Rust Shell - Ultimate Collaborative Interface\n");
     println!("Cast to any screen, seamless voice transitions!\n");
-    
+
     let shell = RustShell::new().await?;
-    
+
     // Discover displays
     println!("🔍 Discovering displays...");
     let displays = shell.discover_displays().await?;
     println!("Found {} displays", displays.len());
-    
+
     // Main loop
     loop {
         // Check for voice transition
         shell.detect_voice_transition().await?;
-        
+
         // Read command
         use std::io::{self, Write};
         print!("rust-shell> ");
         io::stdout().flush()?;
-        
+
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        
+
         let input = input.trim();
         if input == "exit" {
             break;
         }
-        
+
         // Execute command
         match shell.execute(input).await {
             Ok(output) => println!("{}", output),
             Err(e) => eprintln!("Error: {}", e),
         }
     }
-    
+
     Ok(())
 }
 

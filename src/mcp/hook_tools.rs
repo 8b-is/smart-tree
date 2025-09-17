@@ -66,7 +66,8 @@ pub async fn list_hooks(_params: Value) -> Result<Value> {
 
 /// Set or update a hook
 pub async fn set_hook(params: Value) -> Result<Value> {
-    let hook_type = params["hook_type"].as_str()
+    let hook_type = params["hook_type"]
+        .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing hook_type parameter"))?;
 
     // Map hook type to correct command flag
@@ -78,8 +79,7 @@ pub async fn set_hook(params: Value) -> Result<Value> {
         _ => "--claude-user-prompt-submit",
     };
     let default_command = format!("{} {}", get_hook_path(), flag);
-    let command = params["command"].as_str()
-        .unwrap_or(&default_command);
+    let command = params["command"].as_str().unwrap_or(&default_command);
 
     let enabled = params["enabled"].as_bool().unwrap_or(true);
 
@@ -120,7 +120,8 @@ pub async fn set_hook(params: Value) -> Result<Value> {
 
 /// Remove a hook
 pub async fn remove_hook(params: Value) -> Result<Value> {
-    let hook_type = params["hook_type"].as_str()
+    let hook_type = params["hook_type"]
+        .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing hook_type parameter"))?;
 
     // Read existing hooks configuration
@@ -158,11 +159,11 @@ pub async fn remove_hook(params: Value) -> Result<Value> {
 
 /// Test a hook with sample input
 pub async fn test_hook(params: Value) -> Result<Value> {
-    let hook_type = params["hook_type"].as_str()
+    let hook_type = params["hook_type"]
+        .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing hook_type parameter"))?;
 
-    let test_input = params["input"].as_str()
-        .unwrap_or("test input");
+    let test_input = params["input"].as_str().unwrap_or("test input");
 
     // Determine the command based on hook type
     let command = match hook_type {
@@ -191,7 +192,7 @@ pub async fn test_hook(params: Value) -> Result<Value> {
             "tool": "test_tool",
             "result": {"success": true}
         }),
-        _ => json!({})
+        _ => json!({}),
     };
 
     // Execute the hook command with test input
@@ -225,13 +226,11 @@ pub async fn test_hook(params: Value) -> Result<Value> {
                 "input": input_json,
             }))
         }
-        Err(e) => {
-            Ok(json!({
-                "success": false,
-                "error": format!("Failed to execute hook: {}", e),
-                "command": command,
-            }))
-        }
+        Err(e) => Ok(json!({
+            "success": false,
+            "error": format!("Failed to execute hook: {}", e),
+            "command": command,
+        })),
     }
 }
 

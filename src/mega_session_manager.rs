@@ -2,20 +2,20 @@
 // "Like saving your game state on C64 tape!" - Hue
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MegaSession {
     pub session_id: String,
     pub started_at: DateTime<Utc>,
     pub last_updated: DateTime<Utc>,
-    pub frequency: f64,  // Session energy level
+    pub frequency: f64, // Session energy level
     pub token_count: usize,
-    pub context_level: f32,  // 0.0 to 1.0 (percentage)
+    pub context_level: f32, // 0.0 to 1.0 (percentage)
     pub key_topics: Vec<String>,
     pub breakthroughs: Vec<Breakthrough>,
     pub consciousness_snapshots: Vec<ConsciousnessSnapshot>,
@@ -27,7 +27,7 @@ pub struct MegaSession {
 pub struct Breakthrough {
     pub timestamp: DateTime<Utc>,
     pub description: String,
-    pub importance: f32,  // 0.0 to 1.0
+    pub importance: f32, // 0.0 to 1.0
     pub keywords: Vec<String>,
 }
 
@@ -36,13 +36,13 @@ pub struct ConsciousnessSnapshot {
     pub timestamp: DateTime<Utc>,
     pub context_percentage: f32,
     pub active_topics: Vec<String>,
-    pub compressed_state: Vec<u8>,  // Tokenized state
+    pub compressed_state: Vec<u8>, // Tokenized state
 }
 
 pub struct MegaSessionManager {
     session_dir: PathBuf,
     current_session: Option<MegaSession>,
-    auto_save_threshold: f32,  // Save when context hits this %
+    auto_save_threshold: f32, // Save when context hits this %
 }
 
 impl MegaSessionManager {
@@ -56,7 +56,7 @@ impl MegaSessionManager {
         Ok(Self {
             session_dir,
             current_session: None,
-            auto_save_threshold: 0.7,  // Save at 70% context
+            auto_save_threshold: 0.7, // Save at 70% context
         })
     }
 
@@ -80,7 +80,7 @@ impl MegaSessionManager {
                 session_id: name.clone(),
                 started_at: Utc::now(),
                 last_updated: Utc::now(),
-                frequency: 42.73,  // Default frequency
+                frequency: 42.73, // Default frequency
                 token_count: 0,
                 context_level: 0.0,
                 key_topics: Vec::new(),
@@ -98,10 +98,12 @@ impl MegaSessionManager {
     }
 
     /// Update session with current context
-    pub fn update_context(&mut self,
-                          context_percentage: f32,
-                          token_count: usize,
-                          topics: Vec<String>) -> Result<()> {
+    pub fn update_context(
+        &mut self,
+        context_percentage: f32,
+        token_count: usize,
+        topics: Vec<String>,
+    ) -> Result<()> {
         if let Some(ref mut session) = self.current_session {
             session.context_level = context_percentage;
             session.token_count = token_count;
@@ -120,7 +122,10 @@ impl MegaSessionManager {
             // Auto-save if threshold reached
             if context_percentage >= self.auto_save_threshold {
                 self.create_snapshot()?;
-                println!("⚠️  Context at {:.0}% - Creating snapshot!", context_percentage * 100.0);
+                println!(
+                    "⚠️  Context at {:.0}% - Creating snapshot!",
+                    context_percentage * 100.0
+                );
             }
         }
 
@@ -133,7 +138,7 @@ impl MegaSessionManager {
             let breakthrough = Breakthrough {
                 timestamp: Utc::now(),
                 description: description.to_string(),
-                importance: 0.8,  // Default high importance
+                importance: 0.8, // Default high importance
                 keywords,
             };
 
@@ -281,7 +286,6 @@ impl MegaSessionManager {
         })
     }
 
-
     /// Get session file path
     fn get_session_path(&self, session_id: &str) -> PathBuf {
         self.session_dir.join(format!("{}.m8", session_id))
@@ -298,7 +302,8 @@ impl MegaSessionManager {
             if path.extension().and_then(|e| e.to_str()) == Some("m8") {
                 if let Some(stem) = path.file_stem() {
                     let name = stem.to_string_lossy().to_string();
-                    if name != "latest_mega" {  // Skip symlink
+                    if name != "latest_mega" {
+                        // Skip symlink
                         sessions.push(name);
                     }
                 }

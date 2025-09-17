@@ -14,10 +14,10 @@ pub struct QuantumWaveSignature {
 impl QuantumWaveSignature {
     /// Create from individual components
     pub fn new(frequency: u8, phase: u8, amplitude: u8, torsion: u8) -> Self {
-        let signature = ((torsion as u32) << 24) |
-                       ((amplitude as u32) << 16) |
-                       ((phase as u32) << 8) |
-                       (frequency as u32);
+        let signature = ((torsion as u32) << 24)
+            | ((amplitude as u32) << 16)
+            | ((phase as u32) << 8)
+            | (frequency as u32);
         Self { signature }
     }
 
@@ -71,8 +71,8 @@ impl QuantumWaveSignature {
         let harmonic_factor = if freq_diff as i32 % 12 == 0 { 2.0 } else { 1.0 };
         let phase_factor = 1.0 - (phase_diff / 255.0);
 
-        harmonic_factor * phase_factor *
-        (self.amplitude_percent() + other.amplitude_percent()) / 200.0
+        harmonic_factor * phase_factor * (self.amplitude_percent() + other.amplitude_percent())
+            / 200.0
     }
 
     /// Check if this is a "horse apple" signature (Andy wouldn't approve)
@@ -82,7 +82,7 @@ impl QuantumWaveSignature {
             self.frequency(),
             self.phase(),
             self.amplitude(),
-            self.torsion()
+            self.torsion(),
         ];
 
         // All bytes the same = horse apple!
@@ -126,7 +126,9 @@ impl fmt::Display for QuantumWaveSignature {
         if self.is_horse_apple() {
             write!(f, "0x{:08X} 💩 (Andy disapproves!)", self.signature)
         } else {
-            write!(f, "0x{:08X} [{}Hz ∠{}° {}% τ{}]",
+            write!(
+                f,
+                "0x{:08X} [{}Hz ∠{}° {}% τ{}]",
                 self.signature,
                 self.to_hz() as u32,
                 (self.to_radians() * 180.0 / std::f32::consts::PI) as u32,

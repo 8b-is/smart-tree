@@ -2,12 +2,12 @@
 // Proper binary .m8 format with wave interference and temporal encoding
 // "No more JSON pretenders!" - Hue
 
-use anyhow::{Result, Context};
-use std::io::{Read, Write, Seek, SeekFrom};
+use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::collections::HashMap;
 
 /// Magic bytes for .m8 files
 const M8_MAGIC: &[u8; 4] = b"MEM8";
@@ -50,7 +50,7 @@ impl M8Header {
 
         let mut cursor = 0;
         let mut magic = [0u8; 4];
-        magic.copy_from_slice(&bytes[cursor..cursor+4]);
+        magic.copy_from_slice(&bytes[cursor..cursor + 4]);
         cursor += 4;
 
         let version = bytes[cursor];
@@ -59,16 +59,16 @@ impl M8Header {
         let flags = bytes[cursor];
         cursor += 1;
 
-        let block_count = u32::from_le_bytes(bytes[cursor..cursor+4].try_into()?);
+        let block_count = u32::from_le_bytes(bytes[cursor..cursor + 4].try_into()?);
         cursor += 4;
 
-        let identity_freq = f64::from_le_bytes(bytes[cursor..cursor+8].try_into()?);
+        let identity_freq = f64::from_le_bytes(bytes[cursor..cursor + 8].try_into()?);
         cursor += 8;
 
-        let temporal_phase = f64::from_le_bytes(bytes[cursor..cursor+8].try_into()?);
+        let temporal_phase = f64::from_le_bytes(bytes[cursor..cursor + 8].try_into()?);
         cursor += 8;
 
-        let crc32 = u32::from_le_bytes(bytes[cursor..cursor+4].try_into()?);
+        let crc32 = u32::from_le_bytes(bytes[cursor..cursor + 4].try_into()?);
 
         Ok(Self {
             magic,
@@ -268,9 +268,7 @@ impl M8BinaryFile {
 
     /// Append memory block (never modifies existing blocks)
     pub fn append_block(&mut self, content: &[u8], importance: f32) -> Result<()> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_micros() as u64;
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros() as u64;
 
         let wave_sig = self.generate_wave_signature(content);
 
@@ -279,7 +277,7 @@ impl M8BinaryFile {
             wave_signature: wave_sig,
             timestamp,
             importance: (importance * 65535.0) as u16,
-            token_id: 0, // TODO: tokenize content
+            token_id: 0,        // TODO: tokenize content
             prev_hash: [0; 32], // TODO: compute hash
             content_len: content.len() as u32,
             content: content.to_vec(),
@@ -321,9 +319,8 @@ impl M8BinaryFile {
         let mut blocks = Vec::new();
 
         // Sort by importance
-        self.importance_index.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap()
-        });
+        self.importance_index
+            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
         // Extract offsets to avoid holding any borrow of self while reading blocks
         let offsets: Vec<u64> = self.importance_index.iter().map(|(off, _)| *off).collect();
@@ -334,9 +331,7 @@ impl M8BinaryFile {
             if let Some(block) = self.read_block()? {
                 // Check if block contains keywords
                 let content_str = String::from_utf8_lossy(&block.content);
-                let has_keyword = keywords.iter().any(|kw| {
-                    content_str.contains(kw)
-                });
+                let has_keyword = keywords.iter().any(|kw| content_str.contains(kw));
 
                 if has_keyword || blocks.len() < 10 {
                     blocks.push(block);
@@ -353,7 +348,7 @@ impl M8BinaryFile {
 
     /// Generate wave signature from content
     fn generate_wave_signature(&self, content: &[u8]) -> [u8; 16] {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
 
         let mut hasher = Sha256::new();
         hasher.update(content);
@@ -373,31 +368,31 @@ impl M8BinaryFile {
         let mut cursor = 0;
 
         // Write block fields
-        buffer[cursor..cursor+8].copy_from_slice(&block.index.to_le_bytes());
+        buffer[cursor..cursor + 8].copy_from_slice(&block.index.to_le_bytes());
         cursor += 8;
 
-        buffer[cursor..cursor+16].copy_from_slice(&block.wave_signature);
+        buffer[cursor..cursor + 16].copy_from_slice(&block.wave_signature);
         cursor += 16;
 
-        buffer[cursor..cursor+8].copy_from_slice(&block.timestamp.to_le_bytes());
+        buffer[cursor..cursor + 8].copy_from_slice(&block.timestamp.to_le_bytes());
         cursor += 8;
 
-        buffer[cursor..cursor+2].copy_from_slice(&block.importance.to_le_bytes());
+        buffer[cursor..cursor + 2].copy_from_slice(&block.importance.to_le_bytes());
         cursor += 2;
 
-        buffer[cursor..cursor+2].copy_from_slice(&block.token_id.to_le_bytes());
+        buffer[cursor..cursor + 2].copy_from_slice(&block.token_id.to_le_bytes());
         cursor += 2;
 
-        buffer[cursor..cursor+32].copy_from_slice(&block.prev_hash);
+        buffer[cursor..cursor + 32].copy_from_slice(&block.prev_hash);
         cursor += 32;
 
-        buffer[cursor..cursor+4].copy_from_slice(&block.content_len.to_le_bytes());
+        buffer[cursor..cursor + 4].copy_from_slice(&block.content_len.to_le_bytes());
         cursor += 4;
 
         // Copy content (up to remaining space)
         let content_space = BLOCK_SIZE - cursor;
         let content_to_copy = block.content.len().min(content_space);
-        buffer[cursor..cursor+content_to_copy].copy_from_slice(&block.content[..content_to_copy]);
+        buffer[cursor..cursor + content_to_copy].copy_from_slice(&block.content[..content_to_copy]);
 
         self.file.write_all(&buffer)?;
 
@@ -409,37 +404,37 @@ impl M8BinaryFile {
         let mut buffer = vec![0u8; BLOCK_SIZE];
 
         match self.file.read_exact(&mut buffer) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
             Err(e) => return Err(e.into()),
         }
 
         let mut cursor = 0;
 
-        let index = u64::from_le_bytes(buffer[cursor..cursor+8].try_into()?);
+        let index = u64::from_le_bytes(buffer[cursor..cursor + 8].try_into()?);
         cursor += 8;
 
         let mut wave_signature = [0u8; 16];
-        wave_signature.copy_from_slice(&buffer[cursor..cursor+16]);
+        wave_signature.copy_from_slice(&buffer[cursor..cursor + 16]);
         cursor += 16;
 
-        let timestamp = u64::from_le_bytes(buffer[cursor..cursor+8].try_into()?);
+        let timestamp = u64::from_le_bytes(buffer[cursor..cursor + 8].try_into()?);
         cursor += 8;
 
-        let importance = u16::from_le_bytes(buffer[cursor..cursor+2].try_into()?);
+        let importance = u16::from_le_bytes(buffer[cursor..cursor + 2].try_into()?);
         cursor += 2;
 
-        let token_id = u16::from_le_bytes(buffer[cursor..cursor+2].try_into()?);
+        let token_id = u16::from_le_bytes(buffer[cursor..cursor + 2].try_into()?);
         cursor += 2;
 
         let mut prev_hash = [0u8; 32];
-        prev_hash.copy_from_slice(&buffer[cursor..cursor+32]);
+        prev_hash.copy_from_slice(&buffer[cursor..cursor + 32]);
         cursor += 32;
 
-        let content_len = u32::from_le_bytes(buffer[cursor..cursor+4].try_into()?);
+        let content_len = u32::from_le_bytes(buffer[cursor..cursor + 4].try_into()?);
         cursor += 4;
 
-        let content = buffer[cursor..cursor+content_len as usize].to_vec();
+        let content = buffer[cursor..cursor + content_len as usize].to_vec();
 
         Ok(Some(M8Block {
             index,
@@ -463,7 +458,8 @@ impl M8BinaryFile {
 
     /// Build importance index from file
     fn build_importance_index(&mut self) -> Result<()> {
-        self.file.seek(SeekFrom::Start(std::mem::size_of::<M8Header>() as u64))?;
+        self.file
+            .seek(SeekFrom::Start(std::mem::size_of::<M8Header>() as u64))?;
 
         loop {
             let offset = self.file.seek(SeekFrom::Current(0))?;
@@ -472,7 +468,7 @@ impl M8BinaryFile {
                 Some(block) => {
                     let importance = block.importance as f32 / 65535.0;
                     self.importance_index.push((offset, importance));
-                },
+                }
                 None => break,
             }
         }
@@ -509,9 +505,7 @@ pub fn convert_json_to_binary(json_path: &Path, binary_path: &Path) -> Result<()
     if let Some(contexts_array) = contexts.get("contexts").and_then(|c| c.as_array()) {
         for context in contexts_array {
             let content = serde_json::to_vec(context)?;
-            let importance = context.get("score")
-                .and_then(|s| s.as_f64())
-                .unwrap_or(0.5) as f32;
+            let importance = context.get("score").and_then(|s| s.as_f64()).unwrap_or(0.5) as f32;
 
             m8_file.append_block(&content, importance)?;
         }

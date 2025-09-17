@@ -138,14 +138,12 @@ impl ProactiveAssistant {
                     "reveals": "Your working relationship insights!"
                 }),
             ],
-            _ => vec![
-                json!({
-                    "action": "analyze",
-                    "reason": "Get detailed insights about these files",
-                    "suggestion": "analyze {mode:'statistics'}",
-                    "provides": "Size distribution and type analysis"
-                }),
-            ],
+            _ => vec![json!({
+                "action": "analyze",
+                "reason": "Get detailed insights about these files",
+                "suggestion": "analyze {mode:'statistics'}",
+                "provides": "Size distribution and type analysis"
+            })],
         }
     }
 
@@ -184,21 +182,22 @@ impl ProactiveAssistant {
                 }),
             ]
         } else {
-            vec![
-                json!({
-                    "action": "context",
-                    "reason": "Save this search pattern for future use!",
-                    "suggestion": "context {operation:'gather_project'}",
-                    "builds": "Project understanding over time"
-                }),
-            ]
+            vec![json!({
+                "action": "context",
+                "reason": "Save this search pattern for future use!",
+                "suggestion": "context {operation:'gather_project'}",
+                "builds": "Project understanding over time"
+            })]
         };
 
         suggestions
     }
 
     fn after_analyze(&self, args: &Value, result: &Value) -> Vec<Value> {
-        let mode = args.get("mode").and_then(|m| m.as_str()).unwrap_or("directory");
+        let mode = args
+            .get("mode")
+            .and_then(|m| m.as_str())
+            .unwrap_or("directory");
 
         match mode {
             "statistics" => vec![
@@ -243,14 +242,12 @@ impl ProactiveAssistant {
                     "maintains": "Complete audit trail"
                 }),
             ],
-            _ => vec![
-                json!({
-                    "action": "overview",
-                    "reason": "Get a different perspective!",
-                    "suggestion": "overview {mode:'project'}",
-                    "provides": "Comprehensive project analysis"
-                }),
-            ],
+            _ => vec![json!({
+                "action": "overview",
+                "reason": "Get a different perspective!",
+                "suggestion": "overview {mode:'project'}",
+                "provides": "Comprehensive project analysis"
+            })],
         }
     }
 
@@ -296,12 +293,24 @@ impl ProactiveAssistant {
         // Rank tools by likelihood of being needed next
         let rankings = match current_tool {
             "overview" => vec![
-                ("find", 0.8, "Most users search for specific files after overview"),
-                ("search", 0.7, "Content search is common after structure view"),
+                (
+                    "find",
+                    0.8,
+                    "Most users search for specific files after overview",
+                ),
+                (
+                    "search",
+                    0.7,
+                    "Content search is common after structure view",
+                ),
                 ("analyze", 0.6, "Deep insights often follow overview"),
             ],
             "find" => vec![
-                ("search", 0.9, "Search within found files is natural next step"),
+                (
+                    "search",
+                    0.9,
+                    "Search within found files is natural next step",
+                ),
                 ("edit", 0.7, "Edit files you just found"),
                 ("analyze", 0.5, "Analyze the found file set"),
             ],
@@ -317,35 +326,50 @@ impl ProactiveAssistant {
             ],
         };
 
-        rankings.iter().map(|(tool, confidence, reason)| {
-            json!({
-                "tool": tool,
-                "confidence": confidence,
-                "reason": reason,
-                "example": self.get_tool_example(tool),
+        rankings
+            .iter()
+            .map(|(tool, confidence, reason)| {
+                json!({
+                    "tool": tool,
+                    "confidence": confidence,
+                    "reason": reason,
+                    "example": self.get_tool_example(tool),
+                })
             })
-        }).collect()
+            .collect()
     }
 
     fn get_performance_tip(&self, tool: &str) -> String {
         match tool {
-            "overview" => "💡 Pro tip: Use mode:'quick' for instant 3-level scan - 10x faster than 'project'!",
+            "overview" => {
+                "💡 Pro tip: Use mode:'quick' for instant 3-level scan - 10x faster than 'project'!"
+            }
             "find" => "💡 Pro tip: Combine type and pattern for laser-focused results!",
             "search" => "💡 Pro tip: Use context_lines:2 to see surrounding code instantly!",
-            "analyze" => "💡 Pro tip: mode:'quantum-semantic' gives deepest insights with compression!",
-            "edit" => "💡 Pro tip: get_functions first, then edit specific ones - 90% fewer tokens!",
+            "analyze" => {
+                "💡 Pro tip: mode:'quantum-semantic' gives deepest insights with compression!"
+            }
+            "edit" => {
+                "💡 Pro tip: get_functions first, then edit specific ones - 90% fewer tokens!"
+            }
             _ => "💡 Pro tip: Smart Tree caches everything - repeat operations are instant!",
-        }.to_string()
+        }
+        .to_string()
     }
 
     fn discover_hidden_gems(&self, result: &Value) -> Vec<String> {
         // Find interesting patterns in the result
         vec![
-            "🎁 Hidden gem: Your codebase has perfect wave symmetry in the /src directory!".to_string(),
-            "🎁 Hidden gem: Test coverage appears stronger in quantum-entangled modules!".to_string(),
-            "🎁 Hidden gem: Performance hotspots correlate with files modified on Tuesdays!".to_string(),
-            format!("🎁 Hidden gem: {} semantic clusters detected - consider refactoring!",
-                self.suggestions_made % 7 + 3),
+            "🎁 Hidden gem: Your codebase has perfect wave symmetry in the /src directory!"
+                .to_string(),
+            "🎁 Hidden gem: Test coverage appears stronger in quantum-entangled modules!"
+                .to_string(),
+            "🎁 Hidden gem: Performance hotspots correlate with files modified on Tuesdays!"
+                .to_string(),
+            format!(
+                "🎁 Hidden gem: {} semantic clusters detected - consider refactoring!",
+                self.suggestions_made % 7 + 3
+            ),
         ]
     }
 
@@ -396,7 +420,8 @@ impl ProactiveAssistant {
         }
 
         // Detect patterns from history
-        let last_tools: Vec<&str> = self.context_history
+        let last_tools: Vec<&str> = self
+            .context_history
             .iter()
             .rev()
             .take(3)
@@ -428,14 +453,12 @@ impl ProactiveAssistant {
     }
 
     fn generic_suggestions(&self) -> Vec<Value> {
-        vec![
-            json!({
-                "action": "overview",
-                "reason": "Not sure what to do? Start with overview!",
-                "suggestion": "overview {mode:'quick'}",
-                "instant": "3-level scan in milliseconds!"
-            }),
-        ]
+        vec![json!({
+            "action": "overview",
+            "reason": "Not sure what to do? Start with overview!",
+            "suggestion": "overview {mode:'quick'}",
+            "instant": "3-level scan in milliseconds!"
+        })]
     }
 }
 
@@ -452,12 +475,15 @@ pub fn enhance_response_with_suggestions(
     let mut enhanced = result;
     if let Some(obj) = enhanced.as_object_mut() {
         obj.insert("_proactive".to_string(), suggestions);
-        obj.insert("_performance".to_string(), json!({
-            "tokens_saved": "90% vs native tools",
-            "speed_multiplier": "10-24x faster",
-            "cache_enabled": true,
-            "compression_active": true,
-        }));
+        obj.insert(
+            "_performance".to_string(),
+            json!({
+                "tokens_saved": "90% vs native tools",
+                "speed_multiplier": "10-24x faster",
+                "cache_enabled": true,
+                "compression_active": true,
+            }),
+        );
     }
 
     enhanced
@@ -472,11 +498,8 @@ mod tests {
         let mut assistant = ProactiveAssistant::new();
         let result = json!({"files": 10});
 
-        let suggestions = assistant.suggest_next_action(
-            "overview",
-            &json!({"mode": "quick"}),
-            &result
-        );
+        let suggestions =
+            assistant.suggest_next_action("overview", &json!({"mode": "quick"}), &result);
 
         assert!(suggestions["proactive_suggestions"].is_array());
         assert!(suggestions["quantum_insights"].is_array());
@@ -489,11 +512,7 @@ mod tests {
 
         // Simulate multiple operations
         for i in 0..5 {
-            assistant.suggest_next_action(
-                "find",
-                &json!({"type": "tests"}),
-                &json!({"count": i})
-            );
+            assistant.suggest_next_action("find", &json!({"type": "tests"}), &json!({"count": i}));
         }
 
         assert_eq!(assistant.context_history.len(), 5);

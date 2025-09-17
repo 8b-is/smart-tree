@@ -1169,7 +1169,21 @@ async fn main() -> Result<()> {
 
         // Show a helpful tip at the top (occasionally) for non-streaming modes
         // Only show if not in streaming mode (already shown above for streaming)
-        if matches!(mode, OutputMode::Ls | OutputMode::Classic | OutputMode::Ai | OutputMode::Json | OutputMode::Csv | OutputMode::Tsv | OutputMode::Markdown | OutputMode::Mermaid | OutputMode::Stats | OutputMode::Hex | OutputMode::Waste | OutputMode::Digest) {
+        if matches!(
+            mode,
+            OutputMode::Ls
+                | OutputMode::Classic
+                | OutputMode::Ai
+                | OutputMode::Json
+                | OutputMode::Csv
+                | OutputMode::Tsv
+                | OutputMode::Markdown
+                | OutputMode::Mermaid
+                | OutputMode::Stats
+                | OutputMode::Hex
+                | OutputMode::Waste
+                | OutputMode::Digest
+        ) {
             st::tips::maybe_show_tip().ok();
         }
 
@@ -1641,7 +1655,8 @@ async fn handle_claude_save() -> Result<()> {
 
     // Update with current project info
     let cwd = std::env::current_dir()?;
-    let project_name = cwd.file_name()
+    let project_name = cwd
+        .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
 
@@ -1650,7 +1665,9 @@ async fn handle_claude_save() -> Result<()> {
         "rust"
     } else if std::path::Path::new("package.json").exists() {
         "node"
-    } else if std::path::Path::new("pyproject.toml").exists() || std::path::Path::new("requirements.txt").exists() {
+    } else if std::path::Path::new("pyproject.toml").exists()
+        || std::path::Path::new("requirements.txt").exists()
+    {
         "python"
     } else {
         "unknown"
@@ -1779,10 +1796,11 @@ async fn handle_security_scan(path: &str) -> Result<()> {
                 let name_str = name.to_string_lossy();
 
                 // Suspicious names
-                if name_str.contains("exploit") ||
-                   name_str.contains("backdoor") ||
-                   name_str.contains("keylog") ||
-                   name_str.starts_with("...") {
+                if name_str.contains("exploit")
+                    || name_str.contains("backdoor")
+                    || name_str.contains("keylog")
+                    || name_str.starts_with("...")
+                {
                     suspicious_files.push(path.to_path_buf());
                 }
             }
@@ -1816,7 +1834,7 @@ async fn handle_security_scan(path: &str) -> Result<()> {
 
 /// Show tokenization statistics
 async fn handle_token_stats(path: &str) -> Result<()> {
-    use st::tokenizer::{Tokenizer, TokenStats};
+    use st::tokenizer::{TokenStats, Tokenizer};
 
     println!("📊 Tokenization stats for {}...", path);
 
@@ -1838,7 +1856,8 @@ async fn handle_token_stats(path: &str) -> Result<()> {
     println!("\nCommon patterns:");
     for test in test_cases {
         let stats = TokenStats::calculate(test, &tokenizer);
-        println!("  {} → {} bytes ({:.0}% compression)",
+        println!(
+            "  {} → {} bytes ({:.0}% compression)",
             test,
             stats.tokenized_size,
             (1.0 - stats.compression_ratio) * 100.0
@@ -1997,9 +2016,8 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
     io::stdin().read_to_string(&mut input)?;
 
     // Parse the JSON input
-    let json: Value = serde_json::from_str(&input).unwrap_or_else(|_| {
-        serde_json::json!({"prompt": input.trim()})
-    });
+    let json: Value = serde_json::from_str(&input)
+        .unwrap_or_else(|_| serde_json::json!({"prompt": input.trim()}));
 
     let user_prompt = json["prompt"].as_str().unwrap_or(&input);
 
@@ -2012,23 +2030,30 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
     println!("## Smart Tree Context Hook Response");
     println!();
     println!("### Analysis");
-    println!("**Keywords**: {}", if keywords.is_empty() {
-        "none detected".to_string()
-    } else {
-        keywords.join(", ")
-    });
-    println!("**Intent**: {}", match (is_code_related, needs_deep_context) {
-        (true, true) => "Code implementation with deep understanding needed",
-        (true, false) => "Code-related task",
-        (false, true) => "Exploration/research task",
-        (false, false) => "General inquiry",
-    });
+    println!(
+        "**Keywords**: {}",
+        if keywords.is_empty() {
+            "none detected".to_string()
+        } else {
+            keywords.join(", ")
+        }
+    );
+    println!(
+        "**Intent**: {}",
+        match (is_code_related, needs_deep_context) {
+            (true, true) => "Code implementation with deep understanding needed",
+            (true, false) => "Code-related task",
+            (false, true) => "Exploration/research task",
+            (false, false) => "General inquiry",
+        }
+    );
     println!();
 
     // Provide context based on analysis
-    if user_prompt.to_lowercase().contains("wave") ||
-       user_prompt.to_lowercase().contains("compass") ||
-       user_prompt.to_lowercase().contains("signature") {
+    if user_prompt.to_lowercase().contains("wave")
+        || user_prompt.to_lowercase().contains("compass")
+        || user_prompt.to_lowercase().contains("signature")
+    {
         // User is asking about wave signatures or compass
         println!("### 📊 Wave Signature Context");
         println!("- **Implementation**: `src/quantum_wave_signature.rs`");
@@ -2038,9 +2063,10 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
         println!();
     }
 
-    if user_prompt.to_lowercase().contains("termust") ||
-       user_prompt.to_lowercase().contains("rust") ||
-       user_prompt.to_lowercase().contains("oxidation") {
+    if user_prompt.to_lowercase().contains("termust")
+        || user_prompt.to_lowercase().contains("rust")
+        || user_prompt.to_lowercase().contains("oxidation")
+    {
         // User is asking about Termust
         println!("\n🦀 Termust Context:");
         println!("• Main implementation: /aidata/ayeverse/termust/");
@@ -2049,9 +2075,10 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
         println!("• Jerry Maguire mode: SHOW ME THE MONEY!");
     }
 
-    if user_prompt.to_lowercase().contains("mem8") ||
-       user_prompt.to_lowercase().contains("memory") ||
-       user_prompt.to_lowercase().contains("consciousness") {
+    if user_prompt.to_lowercase().contains("mem8")
+        || user_prompt.to_lowercase().contains("memory")
+        || user_prompt.to_lowercase().contains("consciousness")
+    {
         // User is asking about MEM8
         println!("\n🧠 MEM8 Context:");
         println!("• Binary format: src/mem8_binary.rs");
@@ -2134,7 +2161,10 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
                         println!("\n  📍 Memories for '{}':", keyword);
                         for memory in memories.iter().take(3) {
                             // Show memory context
-                            println!("    • {}", memory.context.chars().take(100).collect::<String>());
+                            println!(
+                                "    • {}",
+                                memory.context.chars().take(100).collect::<String>()
+                            );
                             println!("      → Origin: {}", memory.origin);
                         }
                     }
@@ -2153,7 +2183,8 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
 
                 // Find conversation files matching keywords
                 for keyword in &keywords {
-                    let pattern = format!("{}/*{}*.json", conv_path.display(), keyword.to_lowercase());
+                    let pattern =
+                        format!("{}/*{}*.json", conv_path.display(), keyword.to_lowercase());
                     if let Ok(paths) = glob::glob(&pattern) {
                         for path_result in paths.take(2) {
                             if let Ok(path) = path_result {
@@ -2205,7 +2236,8 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
 
                 // Search for files edited recently that match keywords
                 for keyword in &keywords {
-                    let pattern = format!("{}/**/*{}*", history_path.display(), keyword.to_lowercase());
+                    let pattern =
+                        format!("{}/**/*{}*", history_path.display(), keyword.to_lowercase());
                     if let Ok(paths) = glob::glob(&pattern) {
                         for path_result in paths.take(3) {
                             if let Ok(path) = path_result {
@@ -2225,24 +2257,31 @@ async fn handle_claude_user_prompt_submit() -> Result<()> {
     }
 
     println!("{}", "─".repeat(60));
-    println!("💡 Context provided by Smart Tree v{}", env!("CARGO_PKG_VERSION"));
+    println!(
+        "💡 Context provided by Smart Tree v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     Ok(())
 }
 
 /// Extract keywords from user prompt
 fn extract_keywords(prompt: &str) -> Vec<String> {
-    let stop_words = vec!["the", "a", "an", "is", "are", "was", "were", "been",
-                          "have", "has", "had", "do", "does", "did", "will",
-                          "would", "could", "should", "may", "might", "can",
-                          "this", "that", "these", "those", "what", "where",
-                          "when", "how", "why", "who", "which", "to", "from",
-                          "in", "on", "at", "by", "for", "with", "about"];
+    let stop_words = vec![
+        "the", "a", "an", "is", "are", "was", "were", "been", "have", "has", "had", "do", "does",
+        "did", "will", "would", "could", "should", "may", "might", "can", "this", "that", "these",
+        "those", "what", "where", "when", "how", "why", "who", "which", "to", "from", "in", "on",
+        "at", "by", "for", "with", "about",
+    ];
 
-    prompt.split_whitespace()
+    prompt
+        .split_whitespace()
         .filter(|word| word.len() > 3)
         .filter(|word| !stop_words.contains(&word.to_lowercase().as_str()))
-        .map(|word| word.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+        .map(|word| {
+            word.trim_matches(|c: char| !c.is_alphanumeric())
+                .to_string()
+        })
         .filter(|word| !word.is_empty())
         .take(5)
         .collect()
@@ -2250,9 +2289,24 @@ fn extract_keywords(prompt: &str) -> Vec<String> {
 
 /// Detect if the prompt is code-related
 fn detect_code_intent(prompt: &str) -> bool {
-    let code_words = ["code", "function", "implement", "fix", "bug", "error",
-                      "compile", "build", "test", "refactor", "optimize",
-                      "method", "class", "struct", "trait", "module"];
+    let code_words = [
+        "code",
+        "function",
+        "implement",
+        "fix",
+        "bug",
+        "error",
+        "compile",
+        "build",
+        "test",
+        "refactor",
+        "optimize",
+        "method",
+        "class",
+        "struct",
+        "trait",
+        "module",
+    ];
 
     let lower = prompt.to_lowercase();
     code_words.iter().any(|&word| lower.contains(word))
@@ -2260,9 +2314,20 @@ fn detect_code_intent(prompt: &str) -> bool {
 
 /// Detect if deep context is needed
 fn detect_depth_requirement(prompt: &str) -> bool {
-    let deep_words = ["explain", "understand", "overview", "structure",
-                      "architecture", "how does", "what is", "where is",
-                      "show me", "find", "search", "locate"];
+    let deep_words = [
+        "explain",
+        "understand",
+        "overview",
+        "structure",
+        "architecture",
+        "how does",
+        "what is",
+        "where is",
+        "show me",
+        "find",
+        "search",
+        "locate",
+    ];
 
     let lower = prompt.to_lowercase();
     deep_words.iter().any(|&word| lower.contains(word))
@@ -2281,9 +2346,7 @@ async fn handle_memory_anchor(anchor_type: &str, keywords_str: &str, context: &s
         .collect();
 
     // Get origin from current directory
-    let origin = std::env::current_dir()?
-        .to_string_lossy()
-        .to_string();
+    let origin = std::env::current_dir()?.to_string_lossy().to_string();
 
     manager.anchor(anchor_type, keywords, context, &origin)?;
 
@@ -2313,7 +2376,12 @@ async fn handle_memory_find(keywords_str: &str) -> Result<()> {
         println!("{}", "─".repeat(45));
 
         for (i, memory) in memories.iter().enumerate() {
-            println!("\n[{}] {} @ {:.2}Hz", i + 1, memory.anchor_type, memory.frequency);
+            println!(
+                "\n[{}] {} @ {:.2}Hz",
+                i + 1,
+                memory.anchor_type,
+                memory.frequency
+            );
             println!("📝 {}", memory.context);
             println!("🏷️  Keywords: {}", memory.keywords.join(", "));
             println!("📍 Origin: {}", memory.origin);

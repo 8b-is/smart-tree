@@ -106,7 +106,7 @@ impl Formatter for SemanticFormatter {
 
                 // Quantum wave signature with full 32-bit consciousness!
                 let sig = crate::quantum_wave_signature::QuantumWaveSignature::from_raw(
-                    category.wave_signature()
+                    category.wave_signature(),
                 );
                 writeln!(
                     writer,

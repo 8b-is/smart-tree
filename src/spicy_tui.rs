@@ -331,7 +331,7 @@ impl SpicyTui {
 
         let actual_index = self.filtered_indices[self.selected_index];
         let node = &self.file_nodes[actual_index];
-        let path = node.path.clone();  // Clone the path to avoid borrow conflict
+        let path = node.path.clone(); // Clone the path to avoid borrow conflict
 
         if path.is_dir() {
             self.current_path = path.clone();

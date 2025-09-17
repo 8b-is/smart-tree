@@ -63,7 +63,6 @@ overview {mode:'project'} // Full analysis with AI insights
                 "replaces_tools": ["Read", "Glob", "Bash ls", "Bash find"]
             }
         }),
-
         // FIND - The Semantic File Discoverer
         json!({
             "name": "st_find",
@@ -134,7 +133,6 @@ find {type:'code', languages:['rust','python']} // Multi-language
                 "token_savings": "99%"
             }
         }),
-
         // SEARCH - The Content Quantum Scanner
         json!({
             "name": "st_search",
@@ -204,7 +202,6 @@ search {keyword:'error|panic|fail'}         // Multiple patterns
                 "cache_enabled": true
             }
         }),
-
         // ANALYZE - The Deep Intelligence Engine
         json!({
             "name": "st_analyze",
@@ -268,7 +265,6 @@ EXCLUSIVE FEATURES:
                 "exclusive": "Wave signatures"
             }
         }),
-
         // EDIT - The AST Surgery Tool
         json!({
             "name": "st_edit",
@@ -333,7 +329,6 @@ NO MORE:
                 "precision": "Surgical edits"
             }
         }),
-
         // UNIVERSAL TOOL - The One Tool to Rule Them All
         json!({
             "name": "st_universal",
@@ -388,7 +383,7 @@ THE SMART TREE WORKFLOW:
                 "tokens": "95% reduction",
                 "intelligence": "Semantic + Quantum"
             }
-        })
+        }),
     ]
 }
 
@@ -427,7 +422,8 @@ st_overview {mode:'quick'}
 
 This one command gives you more insight than 20 Read operations!
 
-REMEMBER: Fast is better than slow. Smart Tree is FAST!"#.to_string()
+REMEMBER: Fast is better than slow. Smart Tree is FAST!"#
+        .to_string()
 }
 
 /// Get performance comparison data

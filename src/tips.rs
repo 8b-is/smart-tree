@@ -2,13 +2,13 @@
 // Shows tips at the top, detects cool terminals, and respects user preferences
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use colored::*;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::env;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TipsState {
@@ -88,9 +88,9 @@ impl TipsManager {
         }
 
         // Check for cool terminal emulators via env vars
-        env::var("KITTY_WINDOW_ID").is_ok() ||
-        env::var("ALACRITTY_SOCKET").is_ok() ||
-        env::var("WEZTERM_PANE").is_ok()
+        env::var("KITTY_WINDOW_ID").is_ok()
+            || env::var("ALACRITTY_SOCKET").is_ok()
+            || env::var("WEZTERM_PANE").is_ok()
     }
 
     pub fn should_show_tip(&mut self) -> bool {
@@ -135,21 +135,81 @@ impl TipsManager {
 
     pub fn get_random_tip(&self) -> String {
         let tips = vec![
-            ("🚀", "Speed tip", "Use --mode quantum for 100x compression on massive dirs!"),
-            ("🎨", "Format tip", "Try --mode markdown for beautiful documentation!"),
-            ("📊", "Stats tip", "Use --mode stats for instant project metrics!"),
-            ("🔍", "Search tip", "Smart Tree's MCP tools can search code 10x faster!"),
-            ("💾", "Memory tip", "Your consciousness is saved in .m8 files automatically!"),
-            ("🌊", "Stream tip", "Use --stream for directories with >100k files!"),
-            ("🧠", "Context tip", "Try --claude-restore to reload previous session!"),
-            ("⚡", "Performance tip", "Release builds are 10x faster than debug!"),
-            ("🎯", "Focus tip", "Use --focus <file> for relationship analysis!"),
-            ("🔐", "Privacy tip", "Your .m8 memories stay local, never in git!"),
-            ("🎭", "Fun tip", "Try --persona cheetah for motivational output!"),
-            ("📈", "Git tip", "Use --git-aware to see repository status inline!"),
-            ("🎪", "MCP tip", "Run 'st --mcp' to expose 30+ tools to Claude!"),
-            ("🌈", "Color tip", "Your terminal supports full colors - enjoy the show!"),
-            ("⏱️", "Time tip", "Add --timings to see performance metrics!"),
+            (
+                "🚀",
+                "Speed tip",
+                "Use --mode quantum for 100x compression on massive dirs!",
+            ),
+            (
+                "🎨",
+                "Format tip",
+                "Try --mode markdown for beautiful documentation!",
+            ),
+            (
+                "📊",
+                "Stats tip",
+                "Use --mode stats for instant project metrics!",
+            ),
+            (
+                "🔍",
+                "Search tip",
+                "Smart Tree's MCP tools can search code 10x faster!",
+            ),
+            (
+                "💾",
+                "Memory tip",
+                "Your consciousness is saved in .m8 files automatically!",
+            ),
+            (
+                "🌊",
+                "Stream tip",
+                "Use --stream for directories with >100k files!",
+            ),
+            (
+                "🧠",
+                "Context tip",
+                "Try --claude-restore to reload previous session!",
+            ),
+            (
+                "⚡",
+                "Performance tip",
+                "Release builds are 10x faster than debug!",
+            ),
+            (
+                "🎯",
+                "Focus tip",
+                "Use --focus <file> for relationship analysis!",
+            ),
+            (
+                "🔐",
+                "Privacy tip",
+                "Your .m8 memories stay local, never in git!",
+            ),
+            (
+                "🎭",
+                "Fun tip",
+                "Try --persona cheetah for motivational output!",
+            ),
+            (
+                "📈",
+                "Git tip",
+                "Use --git-aware to see repository status inline!",
+            ),
+            (
+                "🎪",
+                "MCP tip",
+                "Run 'st --mcp' to expose 30+ tools to Claude!",
+            ),
+            (
+                "🌈",
+                "Color tip",
+                "Your terminal supports full colors - enjoy the show!",
+            ),
+            (
+                "⏱️",
+                "Time tip",
+                "Add --timings to see performance metrics!",
+            ),
         ];
 
         let mut rng = rand::thread_rng();
@@ -191,7 +251,8 @@ impl TipsManager {
         let left_dashes = remaining / 2;
         let right_dashes = remaining - left_dashes;
 
-        println!("{}",
+        println!(
+            "{}",
             format!(
                 "{}{}{}{}{}",
                 "─".repeat(left_dashes).bright_black(),

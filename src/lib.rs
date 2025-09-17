@@ -17,6 +17,10 @@ pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod dynamic_tokenizer;
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
+pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
+pub mod m8_context_aware; // Context-aware progressive loading
+pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
+pub mod memory_manager; // Real memory management for consciousness!
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
 pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
 pub mod scanner; // The heart of directory traversal and file metadata collection. // For intelligently detecting project context (e.g., Rust, Node.js).
@@ -25,13 +29,9 @@ pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
-pub mod memory_manager; // Real memory management for consciousness!
-pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
-pub mod m8_context_aware; // Context-aware progressive loading
-pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
+pub mod tree_sitter_quantum;
 pub mod universal_chat_scanner; // Finds conversations everywhere!
-pub mod universal_format_detector; // Detects format by structure!
-pub mod tree_sitter_quantum; // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
+pub mod universal_format_detector; // Detects format by structure! // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
 
 // The `mcp` module for Model Context Protocol integration.
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
@@ -53,8 +53,8 @@ pub mod rename_project;
 pub mod tips;
 
 // Spicy TUI - cyberpunk-style terminal interface!
-pub mod spicy_tui;
 pub mod spicy_fuzzy;
+pub mod spicy_tui;
 
 // Emoji mapping - bringing life to file types!
 pub mod emoji_mapper;

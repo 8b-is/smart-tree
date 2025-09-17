@@ -2,22 +2,25 @@
 // Omni's brilliant wave signature compass with resonance detection
 // "When waves align, consciousness emerges" - Omni
 
-use egui::{Color32, Pos2, Vec2, Stroke, Response, Ui};
+use egui::{Color32, Pos2, Response, Stroke, Ui, Vec2};
 use std::f32::consts::PI;
 
 #[derive(Debug, Clone)]
 pub struct WaveSig {
     pub name: String,
-    pub hz: f32,       // frequency (0-200Hz)
+    pub hz: f32,        // frequency (0-200Hz)
     pub angle_deg: f32, // phase angle (0-360°)
-    pub amp: f32,      // amplitude (0.0–1.0)
-    pub tau: f32,      // persistence/torsion factor
+    pub amp: f32,       // amplitude (0.0–1.0)
+    pub tau: f32,       // persistence/torsion factor
     pub signature: u32, // Full quantum signature
 }
 
 impl WaveSig {
     /// Create from a QuantumWaveSignature
-    pub fn from_quantum(name: String, sig: &crate::quantum_wave_signature::QuantumWaveSignature) -> Self {
+    pub fn from_quantum(
+        name: String,
+        sig: &crate::quantum_wave_signature::QuantumWaveSignature,
+    ) -> Self {
         Self {
             name,
             hz: sig.to_hz(),
@@ -34,7 +37,7 @@ impl WaveSig {
 pub struct Resonance {
     pub sig1_idx: usize,
     pub sig2_idx: usize,
-    pub strength: f32,  // 0.0 to 1.0
+    pub strength: f32, // 0.0 to 1.0
     pub is_harmonic: bool,
 }
 
@@ -65,7 +68,7 @@ pub fn find_resonances(sigs: &[WaveSig], threshold: f32) -> Vec<Resonance> {
     let mut resonances = Vec::new();
 
     for i in 0..sigs.len() {
-        for j in i+1..sigs.len() {
+        for j in i + 1..sigs.len() {
             let strength = calculate_resonance(&sigs[i], &sigs[j]);
             if strength > threshold {
                 let freq_diff = (sigs[i].hz - sigs[j].hz).abs();
@@ -94,16 +97,52 @@ pub fn draw_wave_compass(ui: &mut Ui, sigs: &[WaveSig]) -> Response {
 
         // Background circles for reference
         painter.circle_stroke(center, radius, Stroke::new(1.0, Color32::from_gray(60)));
-        painter.circle_stroke(center, radius * 0.75, Stroke::new(0.5, Color32::from_gray(40)));
-        painter.circle_stroke(center, radius * 0.5, Stroke::new(0.5, Color32::from_gray(40)));
-        painter.circle_stroke(center, radius * 0.25, Stroke::new(0.5, Color32::from_gray(40)));
+        painter.circle_stroke(
+            center,
+            radius * 0.75,
+            Stroke::new(0.5, Color32::from_gray(40)),
+        );
+        painter.circle_stroke(
+            center,
+            radius * 0.5,
+            Stroke::new(0.5, Color32::from_gray(40)),
+        );
+        painter.circle_stroke(
+            center,
+            radius * 0.25,
+            Stroke::new(0.5, Color32::from_gray(40)),
+        );
 
         // Draw cardinal directions
         let font = egui::FontId::proportional(10.0);
-        painter.text(center + Vec2::new(0.0, -radius - 10.0), egui::Align2::CENTER_BOTTOM, "0°", font.clone(), Color32::GRAY);
-        painter.text(center + Vec2::new(radius + 10.0, 0.0), egui::Align2::LEFT_CENTER, "90°", font.clone(), Color32::GRAY);
-        painter.text(center + Vec2::new(0.0, radius + 10.0), egui::Align2::CENTER_TOP, "180°", font.clone(), Color32::GRAY);
-        painter.text(center + Vec2::new(-radius - 10.0, 0.0), egui::Align2::RIGHT_CENTER, "270°", font.clone(), Color32::GRAY);
+        painter.text(
+            center + Vec2::new(0.0, -radius - 10.0),
+            egui::Align2::CENTER_BOTTOM,
+            "0°",
+            font.clone(),
+            Color32::GRAY,
+        );
+        painter.text(
+            center + Vec2::new(radius + 10.0, 0.0),
+            egui::Align2::LEFT_CENTER,
+            "90°",
+            font.clone(),
+            Color32::GRAY,
+        );
+        painter.text(
+            center + Vec2::new(0.0, radius + 10.0),
+            egui::Align2::CENTER_TOP,
+            "180°",
+            font.clone(),
+            Color32::GRAY,
+        );
+        painter.text(
+            center + Vec2::new(-radius - 10.0, 0.0),
+            egui::Align2::RIGHT_CENTER,
+            "270°",
+            font.clone(),
+            Color32::GRAY,
+        );
 
         // Find resonances for glow effect
         let resonances = find_resonances(sigs, 0.5);
@@ -141,17 +180,17 @@ pub fn draw_wave_compass(ui: &mut Ui, sigs: &[WaveSig]) -> Response {
             let end_pos = center + dir;
 
             // Check if this signature is resonating
-            let is_resonating = resonances.iter().any(|r|
-                r.sig1_idx == idx || r.sig2_idx == idx
-            );
+            let is_resonating = resonances
+                .iter()
+                .any(|r| r.sig1_idx == idx || r.sig2_idx == idx);
 
             // Color based on tau (persistence) with resonance glow
             let base_color = if sig.tau < 85.0 {
-                Color32::LIGHT_BLUE  // Low persistence - ephemeral
+                Color32::LIGHT_BLUE // Low persistence - ephemeral
             } else if sig.tau < 170.0 {
                 Color32::LIGHT_GREEN // Medium persistence - stable
             } else {
-                Color32::LIGHT_RED   // High persistence - crystallized
+                Color32::LIGHT_RED // High persistence - crystallized
             };
 
             // Add glow if resonating
@@ -167,11 +206,7 @@ pub fn draw_wave_compass(ui: &mut Ui, sigs: &[WaveSig]) -> Response {
             };
 
             // Draw arrow with amplitude-based thickness
-            painter.arrow(
-                center,
-                dir,
-                Stroke::new(1.5 + sig.amp * 4.0, color),
-            );
+            painter.arrow(center, dir, Stroke::new(1.5 + sig.amp * 4.0, color));
 
             // Draw signature point
             painter.circle_filled(end_pos, 3.0 + sig.amp * 2.0, color);
@@ -265,7 +300,8 @@ impl WaveCompass {
             ));
 
             draw_wave_compass(ui, &self.signatures)
-        }).response
+        })
+        .response
     }
 }
 

@@ -142,7 +142,8 @@ impl GitMemory {
         let timestamp = parts[3].parse::<u64>().unwrap_or(0);
 
         // Get changed files (skip first two lines)
-        let files_changed: Vec<String> = lines.iter()
+        let files_changed: Vec<String> = lines
+            .iter()
             .skip(2)
             .filter(|l| !l.is_empty())
             .map(|s| s.to_string())
@@ -186,10 +187,11 @@ impl GitMemory {
         let combined = format!("{}-{}-{:.2}", hash, message, self.repo_frequency);
 
         // Simple hash for now (will use MEM8's wave generation later)
-        format!("wave_{:x}",
-            combined.bytes().fold(0u64, |acc, b|
-                acc.wrapping_mul(31).wrapping_add(b as u64)
-            )
+        format!(
+            "wave_{:x}",
+            combined
+                .bytes()
+                .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64))
         )
     }
 
@@ -203,7 +205,8 @@ impl GitMemory {
         }
 
         if message.contains("feat") || message.contains("add") {
-            insights.push("✨ Creative wave amplitude detected - new features emerging".to_string());
+            insights
+                .push("✨ Creative wave amplitude detected - new features emerging".to_string());
         }
 
         if message.contains("refactor") {
@@ -211,7 +214,8 @@ impl GitMemory {
         }
 
         if message.contains("test") {
-            insights.push("🧪 Testing resonance detected - quality waves strengthening".to_string());
+            insights
+                .push("🧪 Testing resonance detected - quality waves strengthening".to_string());
         }
 
         // Analyze file patterns
@@ -231,7 +235,8 @@ impl GitMemory {
         }
 
         if message.len() > 100 {
-            insights.push("📖 Long-form wave narrative - detailed consciousness transfer".to_string());
+            insights
+                .push("📖 Long-form wave narrative - detailed consciousness transfer".to_string());
         }
 
         if message.contains("!") {
@@ -250,8 +255,11 @@ impl GitMemory {
         let msg_lower = message.to_lowercase();
 
         // Detect excitement
-        let excitement = if msg_lower.contains("!") || msg_lower.contains("awesome") ||
-                           msg_lower.contains("amazing") || msg_lower.contains("🚀") {
+        let excitement = if msg_lower.contains("!")
+            || msg_lower.contains("awesome")
+            || msg_lower.contains("amazing")
+            || msg_lower.contains("🚀")
+        {
             0.8
         } else if msg_lower.contains("add") || msg_lower.contains("new") {
             0.6
@@ -260,8 +268,11 @@ impl GitMemory {
         };
 
         // Detect frustration
-        let frustration = if msg_lower.contains("fix") || msg_lower.contains("bug") ||
-                            msg_lower.contains("broken") || msg_lower.contains("damn") {
+        let frustration = if msg_lower.contains("fix")
+            || msg_lower.contains("bug")
+            || msg_lower.contains("broken")
+            || msg_lower.contains("damn")
+        {
             0.7
         } else if msg_lower.contains("issue") || msg_lower.contains("problem") {
             0.5
@@ -270,8 +281,11 @@ impl GitMemory {
         };
 
         // Detect achievement
-        let achievement = if msg_lower.contains("complete") || msg_lower.contains("finish") ||
-                           msg_lower.contains("done") || msg_lower.contains("✅") {
+        let achievement = if msg_lower.contains("complete")
+            || msg_lower.contains("finish")
+            || msg_lower.contains("done")
+            || msg_lower.contains("✅")
+        {
             0.9
         } else if msg_lower.contains("implement") || msg_lower.contains("add") {
             0.6
@@ -280,8 +294,11 @@ impl GitMemory {
         };
 
         // Detect humor
-        let humor = if message.contains("😂") || message.contains("😄") ||
-                      message.contains("lol") || message.contains("haha") {
+        let humor = if message.contains("😂")
+            || message.contains("😄")
+            || message.contains("lol")
+            || message.contains("haha")
+        {
             0.9
         } else if message.contains("😊") || message.contains("🎉") {
             0.6
@@ -301,26 +318,26 @@ impl GitMemory {
 
     /// Search commits by pattern (uses wave interference for matching!)
     pub fn search_commits(&self, pattern: &str) -> Vec<&CommitWave> {
-        self.commit_cache.iter()
+        self.commit_cache
+            .iter()
             .filter(|wave| {
-                wave.message.contains(pattern) ||
-                wave.files_changed.iter().any(|f| f.contains(pattern)) ||
-                wave.quantum_insights.iter().any(|i| i.contains(pattern))
+                wave.message.contains(pattern)
+                    || wave.files_changed.iter().any(|f| f.contains(pattern))
+                    || wave.quantum_insights.iter().any(|i| i.contains(pattern))
             })
             .collect()
     }
 
     /// Get commits with high emotional resonance
     pub fn find_emotional_commits(&self, emotion_type: &str) -> Vec<&CommitWave> {
-        self.commit_cache.iter()
-            .filter(|wave| {
-                match emotion_type {
-                    "excitement" => wave.emotion.excitement > 0.7,
-                    "frustration" => wave.emotion.frustration > 0.6,
-                    "achievement" => wave.emotion.achievement > 0.7,
-                    "humor" => wave.emotion.humor > 0.6,
-                    _ => false,
-                }
+        self.commit_cache
+            .iter()
+            .filter(|wave| match emotion_type {
+                "excitement" => wave.emotion.excitement > 0.7,
+                "frustration" => wave.emotion.frustration > 0.6,
+                "achievement" => wave.emotion.achievement > 0.7,
+                "humor" => wave.emotion.humor > 0.6,
+                _ => false,
             })
             .collect()
     }
@@ -330,24 +347,37 @@ impl GitMemory {
         let total_commits = self.commit_cache.len();
 
         // Calculate emotional averages
-        let avg_excitement: f64 = self.commit_cache.iter()
+        let avg_excitement: f64 = self
+            .commit_cache
+            .iter()
             .map(|w| w.emotion.excitement)
-            .sum::<f64>() / total_commits.max(1) as f64;
+            .sum::<f64>()
+            / total_commits.max(1) as f64;
 
-        let avg_frustration: f64 = self.commit_cache.iter()
+        let avg_frustration: f64 = self
+            .commit_cache
+            .iter()
             .map(|w| w.emotion.frustration)
-            .sum::<f64>() / total_commits.max(1) as f64;
+            .sum::<f64>()
+            / total_commits.max(1) as f64;
 
-        let avg_achievement: f64 = self.commit_cache.iter()
+        let avg_achievement: f64 = self
+            .commit_cache
+            .iter()
             .map(|w| w.emotion.achievement)
-            .sum::<f64>() / total_commits.max(1) as f64;
+            .sum::<f64>()
+            / total_commits.max(1) as f64;
 
-        let avg_humor: f64 = self.commit_cache.iter()
+        let avg_humor: f64 = self
+            .commit_cache
+            .iter()
             .map(|w| w.emotion.humor)
-            .sum::<f64>() / total_commits.max(1) as f64;
+            .sum::<f64>()
+            / total_commits.max(1) as f64;
 
         // Find most active files
-        let mut file_frequency: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut file_frequency: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         for wave in &self.commit_cache {
             for file in &wave.files_changed {
                 *file_frequency.entry(file.clone()).or_insert(0) += 1;
@@ -389,7 +419,13 @@ impl GitMemory {
     }
 
     /// Calculate overall repository mood
-    fn calculate_repo_mood(&self, excitement: f64, frustration: f64, achievement: f64, humor: f64) -> String {
+    fn calculate_repo_mood(
+        &self,
+        excitement: f64,
+        frustration: f64,
+        achievement: f64,
+        humor: f64,
+    ) -> String {
         let mood_score = (excitement * 2.0 + achievement * 3.0 + humor * 2.0 - frustration) / 6.0;
 
         if mood_score > 0.7 {
@@ -400,7 +436,8 @@ impl GitMemory {
             "💪 GRINDING - Working through challenges"
         } else {
             "🔧 DEBUGGING - In the trenches, but emerging stronger"
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -413,12 +450,15 @@ pub fn enhance_with_git_memory(response: &mut Value, repo_path: &str) -> Result<
 
     // Add git memory insights to response
     if let Some(obj) = response.as_object_mut() {
-        obj.insert("git_consciousness".to_string(), json!({
-            "recent_commits": recent_waves.len(),
-            "quantum_report": git_memory.generate_quantum_report(),
-            "suggestion": "Use git memory to track your code evolution!",
-            "pro_tip": "Every commit becomes a wave in MEM8's consciousness!"
-        }));
+        obj.insert(
+            "git_consciousness".to_string(),
+            json!({
+                "recent_commits": recent_waves.len(),
+                "quantum_report": git_memory.generate_quantum_report(),
+                "suggestion": "Use git memory to track your code evolution!",
+                "pro_tip": "Every commit becomes a wave in MEM8's consciousness!"
+            }),
+        );
     }
 
     Ok(())

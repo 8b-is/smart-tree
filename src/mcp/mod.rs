@@ -14,8 +14,12 @@ mod assistant;
 mod cache;
 pub mod consciousness;
 mod context_tools;
+mod enhanced_tool_descriptions;
+mod git_memory_integration;
+mod hook_tools;
 mod negotiation;
 mod permissions;
+mod proactive_assistant;
 mod prompts;
 mod prompts_enhanced;
 mod resources;
@@ -26,10 +30,6 @@ mod sse;
 mod tools;
 mod tools_consolidated;
 mod tools_consolidated_enhanced;
-mod proactive_assistant;
-mod enhanced_tool_descriptions;
-mod git_memory_integration;
-mod hook_tools;
 
 use assistant::*;
 use cache::*;
@@ -189,7 +189,10 @@ impl McpServer {
             consciousness: consciousness.clone(),
         });
 
-        Self { context, consciousness }
+        Self {
+            context,
+            consciousness,
+        }
     }
 
     /// Run the MCP server on stdio

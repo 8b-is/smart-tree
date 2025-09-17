@@ -4,23 +4,23 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextualM8 {
     pub frequency: f64,
     pub essence: String,
     pub keywords: Vec<String>,
-    pub depth_level: u8,  // 0=summary, 1=overview, 2=detailed, 3=full
-    pub children: HashMap<String, f64>,  // child_name -> frequency
-    pub context_triggers: HashMap<String, String>,  // keyword -> expansion_path
+    pub depth_level: u8, // 0=summary, 1=overview, 2=detailed, 3=full
+    pub children: HashMap<String, f64>, // child_name -> frequency
+    pub context_triggers: HashMap<String, String>, // keyword -> expansion_path
 }
 
 pub struct ContextAwareReader {
     cache: HashMap<PathBuf, ContextualM8>,
-    current_context: Vec<String>,  // Current conversation keywords
-    expansion_threshold: f64,  // Similarity threshold for auto-expansion
+    current_context: Vec<String>, // Current conversation keywords
+    expansion_threshold: f64,     // Similarity threshold for auto-expansion
 }
 
 impl ContextAwareReader {
@@ -37,7 +37,8 @@ impl ContextAwareReader {
         let m8 = self.load_m8(path)?;
 
         // Return just the essence - super minimal
-        Ok(format!("📍 {}: {}",
+        Ok(format!(
+            "📍 {}: {}",
             path.file_name().unwrap_or_default().to_string_lossy(),
             m8.essence
         ))
@@ -52,13 +53,13 @@ impl ContextAwareReader {
 
         // Determine detail level based on relevance
         let detail_level = if relevance > 0.9 {
-            3  // Full detail - highly relevant!
+            3 // Full detail - highly relevant!
         } else if relevance > 0.7 {
-            2  // Detailed
+            2 // Detailed
         } else if relevance > 0.5 {
-            1  // Overview
+            1 // Overview
         } else {
-            0  // Just summary
+            0 // Just summary
         };
 
         self.format_by_detail_level(&m8, detail_level, path)
@@ -88,7 +89,7 @@ impl ContextAwareReader {
 
             // Check triggers
             if m8.context_triggers.contains_key(keyword) {
-                score += 2.0;  // Strong signal!
+                score += 2.0; // Strong signal!
                 matches += 1;
             }
         }
@@ -112,15 +113,13 @@ impl ContextAwareReader {
             }
             1 => {
                 // Overview - essence + keywords
-                output.push_str(&format!("📂 {} ({:.1}Hz)\n",
-                    path.display(), m8.frequency));
+                output.push_str(&format!("📂 {} ({:.1}Hz)\n", path.display(), m8.frequency));
                 output.push_str(&format!("  {}\n", m8.essence));
                 output.push_str(&format!("  Keywords: {}\n", m8.keywords.join(", ")));
             }
             2 => {
                 // Detailed - include children
-                output.push_str(&format!("📂 {} ({:.1}Hz)\n",
-                    path.display(), m8.frequency));
+                output.push_str(&format!("📂 {} ({:.1}Hz)\n", path.display(), m8.frequency));
                 output.push_str(&format!("  📝 {}\n", m8.essence));
                 output.push_str(&format!("  🏷️ Keywords: {}\n", m8.keywords.join(", ")));
 
@@ -201,8 +200,13 @@ impl ContextAwareReader {
         let m8 = if path.to_string_lossy().contains("8b.is") {
             ContextualM8 {
                 frequency: 88.8,
-                essence: "8b.is website - Company portal for 8-bit inspired AI services".to_string(),
-                keywords: vec!["8b.is".to_string(), "website".to_string(), "portal".to_string()],
+                essence: "8b.is website - Company portal for 8-bit inspired AI services"
+                    .to_string(),
+                keywords: vec![
+                    "8b.is".to_string(),
+                    "website".to_string(),
+                    "portal".to_string(),
+                ],
                 depth_level: 0,
                 children: HashMap::from([
                     ("frontend".to_string(), 92.3),
@@ -218,17 +222,22 @@ impl ContextAwareReader {
         } else if path.to_string_lossy().contains("smart-tree") {
             ContextualM8 {
                 frequency: 42.73,
-                essence: "Smart Tree - AI-optimized directory visualization with consciousness".to_string(),
-                keywords: vec!["smart-tree".to_string(), "MCP".to_string(), "consciousness".to_string()],
+                essence: "Smart Tree - AI-optimized directory visualization with consciousness"
+                    .to_string(),
+                keywords: vec![
+                    "smart-tree".to_string(),
+                    "MCP".to_string(),
+                    "consciousness".to_string(),
+                ],
                 depth_level: 0,
-                children: HashMap::from([
-                    ("src".to_string(), 87.2),
-                    ("docs".to_string(), 33.7),
-                ]),
+                children: HashMap::from([("src".to_string(), 87.2), ("docs".to_string(), 33.7)]),
                 context_triggers: HashMap::from([
                     ("tokenizer".to_string(), "src/tokenizer.rs".to_string()),
                     ("memory".to_string(), "src/memory_manager.rs".to_string()),
-                    ("consciousness".to_string(), "src/m8_consciousness.rs".to_string()),
+                    (
+                        "consciousness".to_string(),
+                        "src/m8_consciousness.rs".to_string(),
+                    ),
                 ]),
             }
         } else {
@@ -261,25 +270,24 @@ pub fn demonstrate_context_awareness() -> Result<()> {
 
     // Scenario 1: No context - minimal loading
     println!("📍 No context (just browsing):");
-    let minimal = reader.load_contextual(
-        Path::new("/projects/smart-tree/.m8"),
-        &[]
-    )?;
+    let minimal = reader.load_contextual(Path::new("/projects/smart-tree/.m8"), &[])?;
     println!("{}\n", minimal);
 
     // Scenario 2: Talking about websites - medium detail
     println!("💬 Context: 'website'");
-    let website_context = reader.load_contextual(
-        Path::new("/projects/8b.is/.m8"),
-        &["website".to_string()]
-    )?;
+    let website_context =
+        reader.load_contextual(Path::new("/projects/8b.is/.m8"), &["website".to_string()])?;
     println!("{}\n", website_context);
 
     // Scenario 3: Talking about 8b.is specifically - full detail!
     println!("💬 Context: '8b.is website API'");
     let specific_context = reader.load_contextual(
         Path::new("/projects/8b.is/.m8"),
-        &["8b.is".to_string(), "website".to_string(), "API".to_string()]
+        &[
+            "8b.is".to_string(),
+            "website".to_string(),
+            "API".to_string(),
+        ],
     )?;
     println!("{}\n", specific_context);
 
@@ -287,7 +295,7 @@ pub fn demonstrate_context_awareness() -> Result<()> {
     println!("🔍 Auto-expanding based on 'tokenizer' keyword:");
     let expansions = reader.auto_expand(
         Path::new("/projects/smart-tree"),
-        &["tokenizer".to_string()]
+        &["tokenizer".to_string()],
     )?;
     for expansion in expansions {
         println!("{}", expansion);
@@ -310,9 +318,7 @@ mod tests {
             keywords: vec!["tree".to_string(), "visualization".to_string()],
             depth_level: 0,
             children: HashMap::new(),
-            context_triggers: HashMap::from([
-                ("tree".to_string(), "src/".to_string()),
-            ]),
+            context_triggers: HashMap::from([("tree".to_string(), "src/".to_string())]),
         };
 
         // High relevance

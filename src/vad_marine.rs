@@ -3,10 +3,10 @@
 // "Standing watch at the boundaries of speech!" - Hue
 
 use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use std::time::{Duration, Instant};
 use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 
 /// Voice Activity Detector using Marine algorithm
 /// Detects when someone is speaking vs silence
@@ -63,13 +63,13 @@ struct PeakEvent {
     timestamp: Instant,
     amplitude: f64,
     frequency: f64,  // Estimated frequency
-    is_voiced: bool,  // Voiced vs unvoiced
+    is_voiced: bool, // Voiced vs unvoiced
 }
 
 /// Exponential moving average for smoothing
 struct ExponentialMovingAverage {
     value: f64,
-    alpha: f64,  // Smoothing factor
+    alpha: f64, // Smoothing factor
 }
 
 impl ExponentialMovingAverage {
@@ -90,8 +90,8 @@ impl ExponentialMovingAverage {
 /// Speech pattern detector
 struct SpeechPatternDetector {
     /// Typical speech fundamental frequency range (Hz)
-    f0_min: f64,  // ~80 Hz for deep male voice
-    f0_max: f64,  // ~400 Hz for high female/child voice
+    f0_min: f64, // ~80 Hz for deep male voice
+    f0_max: f64, // ~400 Hz for high female/child voice
 
     /// Formant tracking
     formant_tracker: FormantTracker,
@@ -105,25 +105,25 @@ struct SpeechPatternDetector {
 
 /// Formant tracker for vowel detection
 struct FormantTracker {
-    f1_range: (f64, f64),  // First formant range (200-1000 Hz)
-    f2_range: (f64, f64),  // Second formant range (500-2500 Hz)
-    f3_range: (f64, f64),  // Third formant range (1500-3500 Hz)
+    f1_range: (f64, f64), // First formant range (200-1000 Hz)
+    f2_range: (f64, f64), // Second formant range (500-2500 Hz)
+    f3_range: (f64, f64), // Third formant range (1500-3500 Hz)
 }
 
 /// Syllable rate detector
 struct SyllableRateDetector {
     energy_envelope: VecDeque<f64>,
     peak_times: VecDeque<Instant>,
-    min_syllable_gap: Duration,  // ~100ms minimum
-    max_syllable_gap: Duration,  // ~500ms maximum
+    min_syllable_gap: Duration, // ~100ms minimum
+    max_syllable_gap: Duration, // ~500ms maximum
 }
 
 /// Voice quality metrics
 struct VoiceQuality {
-    harmonicity: f64,      // Harmonic-to-noise ratio
-    spectral_tilt: f64,    // High vs low frequency energy
-    zero_crossing_rate: f64,  // Voiced vs unvoiced
-    energy_variance: f64,  // Speech dynamics
+    harmonicity: f64,        // Harmonic-to-noise ratio
+    spectral_tilt: f64,      // High vs low frequency energy
+    zero_crossing_rate: f64, // Voiced vs unvoiced
+    energy_variance: f64,    // Speech dynamics
 }
 
 /// Audio input monitor
@@ -148,7 +148,7 @@ struct AudioMonitor {
 enum AudioSource {
     Microphone,
     LineIn,
-    Virtual,  // For testing
+    Virtual, // For testing
 }
 
 impl MarineVAD {
@@ -209,7 +209,7 @@ impl MarineVAD {
     /// Set callback for voice state changes
     pub async fn set_state_callback<F>(&self, callback: F)
     where
-        F: Fn(bool) + Send + Sync + 'static
+        F: Fn(bool) + Send + Sync + 'static,
     {
         let mut cb = self.state_callback.write().await;
         *cb = Some(Box::new(callback));
@@ -241,8 +241,8 @@ impl MarineVAD {
 impl MarineDetectorState {
     fn new() -> Self {
         Self {
-            voice_threshold: -40.0,  // -40 dB threshold
-            tick_rate: 100.0,  // 100 Hz evaluation rate
+            voice_threshold: -40.0, // -40 dB threshold
+            tick_rate: 100.0,       // 100 Hz evaluation rate
             peak_history: VecDeque::with_capacity(100),
             period_ema: ExponentialMovingAverage::new(0.1),
             amplitude_ema: ExponentialMovingAverage::new(0.05),
@@ -257,9 +257,8 @@ impl MarineDetectorState {
     /// Evaluate voice presence using marine algorithm
     fn evaluate_voice(&mut self, samples: &[f32], sample_rate: u32, snr: f64) -> bool {
         // Calculate RMS energy
-        let energy: f64 = samples.iter()
-            .map(|&s| (s as f64).powi(2))
-            .sum::<f64>() / samples.len() as f64;
+        let energy: f64 =
+            samples.iter().map(|&s| (s as f64).powi(2)).sum::<f64>() / samples.len() as f64;
         let rms = energy.sqrt();
         let db = 20.0 * rms.log10();
 
@@ -268,7 +267,7 @@ impl MarineDetectorState {
 
         // Check against threshold
         if db < self.voice_threshold {
-            self.voice_salience *= 0.9;  // Decay salience
+            self.voice_salience *= 0.9; // Decay salience
             return false;
         }
 
@@ -328,7 +327,7 @@ impl SpeechPatternDetector {
         // Simple zero-crossing rate for voiced/unvoiced detection
         let mut zero_crossings = 0;
         for i in 1..samples.len() {
-            if samples[i-1] * samples[i] < 0.0 {
+            if samples[i - 1] * samples[i] < 0.0 {
                 zero_crossings += 1;
             }
         }
@@ -352,7 +351,7 @@ impl AudioMonitor {
         Self {
             current_level: 0.0,
             peak_level: 0.0,
-            noise_floor: -60.0,  // Start with -60 dB assumption
+            noise_floor: -60.0, // Start with -60 dB assumption
             snr: 0.0,
             source: AudioSource::Microphone,
         }
@@ -365,9 +364,7 @@ impl AudioMonitor {
         self.current_level = rms as f64;
 
         // Find peak
-        let peak = samples.iter()
-            .map(|&s| s.abs())
-            .fold(0.0f32, f32::max) as f64;
+        let peak = samples.iter().map(|&s| s.abs()).fold(0.0f32, f32::max) as f64;
         self.peak_level = peak;
 
         // Update noise floor estimate (slow adaptation)
@@ -412,7 +409,8 @@ impl super::rust_shell::RustShell {
                     m.format = super::rust_shell::OutputFormat::Text;
                 }
             });
-        }).await;
+        })
+        .await;
 
         // Store VAD instance (would need to add field to RustShell)
         // self.vad = Some(vad);
@@ -438,7 +436,7 @@ mod tests {
         // Create test signal (sine wave at 200 Hz - typical voice F0)
         let sample_rate = 16000;
         let frequency = 200.0;
-        let duration = 0.1;  // 100ms
+        let duration = 0.1; // 100ms
         let num_samples = (sample_rate as f64 * duration) as usize;
 
         let mut samples = vec![0.0f32; num_samples];

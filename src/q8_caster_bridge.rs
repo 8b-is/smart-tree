@@ -2,10 +2,10 @@
 // Integrates q8-caster functionality into Smart Tree's Rust Shell
 // "One shell to cast them all!" - Hue
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 
 /// Bridge to q8-caster functionality
 pub struct Q8CasterBridge {
@@ -86,7 +86,9 @@ impl Q8CasterBridge {
             anyhow::bail!("Failed to get devices: {}", resp.status());
         }
 
-        let devices: Vec<CastDevice> = resp.json().await
+        let devices: Vec<CastDevice> = resp
+            .json()
+            .await
             .context("Failed to parse devices response")?;
 
         Ok(devices)
@@ -131,7 +133,8 @@ impl Q8CasterBridge {
             format: "plain".to_string(),
         };
 
-        self.cast_to_device(&format!("esp32:{}", address), &esp_content).await
+        self.cast_to_device(&format!("esp32:{}", address), &esp_content)
+            .await
     }
 }
 
@@ -169,12 +172,26 @@ impl std::fmt::Display for DeviceType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CastContent {
-    Text { text: String, format: String },
-    Html { html: String },
-    Markdown { markdown: String, theme: Option<String> },
-    Image { url: String },
-    Video { url: String },
-    Dashboard { widgets: Vec<serde_json::Value> },
+    Text {
+        text: String,
+        format: String,
+    },
+    Html {
+        html: String,
+    },
+    Markdown {
+        markdown: String,
+        theme: Option<String>,
+    },
+    Image {
+        url: String,
+    },
+    Video {
+        url: String,
+    },
+    Dashboard {
+        widgets: Vec<serde_json::Value>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,25 +203,22 @@ struct CastRequest {
 /// Integration with rust_shell
 impl Q8CasterBridge {
     /// Convert rust_shell DisplayTarget to q8-caster device lookup
-    pub async fn find_device_for_target(&self, target: &crate::rust_shell::DisplayTarget) -> Result<Option<CastDevice>> {
+    pub async fn find_device_for_target(
+        &self,
+        target: &crate::rust_shell::DisplayTarget,
+    ) -> Result<Option<CastDevice>> {
         let devices = self.discover_devices().await?;
 
         let device = match target {
-            crate::rust_shell::DisplayTarget::AppleTV { name, .. } => {
-                devices.into_iter().find(|d| {
-                    d.device_type == DeviceType::AppleTv && d.name == *name
-                })
-            },
-            crate::rust_shell::DisplayTarget::Chromecast { name, .. } => {
-                devices.into_iter().find(|d| {
-                    d.device_type == DeviceType::Chromecast && d.name == *name
-                })
-            },
-            crate::rust_shell::DisplayTarget::ESP32Display { address, .. } => {
-                devices.into_iter().find(|d| {
-                    d.device_type == DeviceType::Esp32 && d.address == *address
-                })
-            },
+            crate::rust_shell::DisplayTarget::AppleTV { name, .. } => devices
+                .into_iter()
+                .find(|d| d.device_type == DeviceType::AppleTv && d.name == *name),
+            crate::rust_shell::DisplayTarget::Chromecast { name, .. } => devices
+                .into_iter()
+                .find(|d| d.device_type == DeviceType::Chromecast && d.name == *name),
+            crate::rust_shell::DisplayTarget::ESP32Display { address, .. } => devices
+                .into_iter()
+                .find(|d| d.device_type == DeviceType::Esp32 && d.address == *address),
             _ => None,
         };
 
@@ -212,23 +226,23 @@ impl Q8CasterBridge {
     }
 
     /// Adapt rust_shell content for q8-caster
-    pub fn adapt_content(&self, content: &str, format: &crate::rust_shell::OutputFormat) -> CastContent {
+    pub fn adapt_content(
+        &self,
+        content: &str,
+        format: &crate::rust_shell::OutputFormat,
+    ) -> CastContent {
         match format {
-            crate::rust_shell::OutputFormat::HTML => {
-                CastContent::Html { html: content.to_string() }
+            crate::rust_shell::OutputFormat::HTML => CastContent::Html {
+                html: content.to_string(),
             },
-            crate::rust_shell::OutputFormat::Markdown => {
-                CastContent::Markdown {
-                    markdown: content.to_string(),
-                    theme: Some("dark".to_string()),
-                }
+            crate::rust_shell::OutputFormat::Markdown => CastContent::Markdown {
+                markdown: content.to_string(),
+                theme: Some("dark".to_string()),
             },
-            _ => {
-                CastContent::Text {
-                    text: content.to_string(),
-                    format: "plain".to_string(),
-                }
-            }
+            _ => CastContent::Text {
+                text: content.to_string(),
+                format: "plain".to_string(),
+            },
         }
     }
 }
@@ -247,7 +261,10 @@ pub async fn enhance_rust_shell_with_q8(shell: &mut crate::rust_shell::RustShell
     println!("  Found {} Q8-Caster devices", devices.len());
 
     for device in devices {
-        println!("  • {} ({}): {}", device.name, device.device_type, device.address);
+        println!(
+            "  • {} ({}): {}",
+            device.name, device.device_type, device.address
+        );
     }
 
     Ok(())

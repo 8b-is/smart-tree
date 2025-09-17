@@ -582,7 +582,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
 /// Handle hooks tool operations
 async fn handle_hooks(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let params = params.unwrap_or(json!({}));
-    let operation = params["operation"].as_str()
+    let operation = params["operation"]
+        .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing operation parameter"))?;
 
     match operation {

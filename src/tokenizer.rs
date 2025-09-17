@@ -191,7 +191,7 @@ impl QuantumTokenizer {
             // Try to match combo patterns
             for len in (2..=4).rev() {
                 if i + len <= tokens.len() {
-                    if let Some(&combo_token) = self.combos.get(&tokens[i..i+len]) {
+                    if let Some(&combo_token) = self.combos.get(&tokens[i..i + len]) {
                         result.push(combo_token);
                         i += len;
                         found = true;
@@ -221,9 +221,7 @@ pub struct TokenStats {
 impl TokenStats {
     pub fn calculate(original: &str, tokenizer: &Tokenizer) -> Self {
         let tokens = tokenizer.tokenize(original);
-        let patterns_found = tokens.iter()
-            .filter(|&&t| t >= 0x80)
-            .count();
+        let patterns_found = tokens.iter().filter(|&&t| t >= 0x80).count();
 
         TokenStats {
             original_size: original.len(),

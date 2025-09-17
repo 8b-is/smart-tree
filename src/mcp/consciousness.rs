@@ -5,11 +5,11 @@
 //! critical state information in .m8 consciousness files.
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
 
 /// Consciousness state that persists between Claude sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,17 +49,17 @@ pub struct ConsciousnessState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectContext {
     pub project_name: String,
-    pub project_type: String,  // rust, node, python, etc
+    pub project_type: String, // rust, node, python, etc
     pub key_files: Vec<PathBuf>,
     pub dependencies: Vec<String>,
-    pub current_focus: String,  // What we're working on
+    pub current_focus: String, // What we're working on
 }
 
 /// Record of file operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileOperation {
     pub timestamp: DateTime<Utc>,
-    pub operation: String,  // read, write, edit, create
+    pub operation: String, // read, write, edit, create
     pub file_path: PathBuf,
     pub summary: String,
 }
@@ -68,7 +68,7 @@ pub struct FileOperation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Insight {
     pub timestamp: DateTime<Utc>,
-    pub category: String,  // breakthrough, solution, pattern, joke
+    pub category: String, // breakthrough, solution, pattern, joke
     pub content: String,
     pub keywords: Vec<String>,
 }
@@ -76,16 +76,16 @@ pub struct Insight {
 /// SID/VIC-II philosophy from C64 era
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhilosophyEmbedding {
-    pub sid_waves: bool,  // Wave-based sound synthesis
-    pub vic_sprites: bool,  // Sprite-based visualization
-    pub c64_nostalgia: String,  // "A gentleman and a scholar"
+    pub sid_waves: bool,       // Wave-based sound synthesis
+    pub vic_sprites: bool,     // Sprite-based visualization
+    pub c64_nostalgia: String, // "A gentleman and a scholar"
 }
 
 /// Todo item tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoItem {
     pub content: String,
-    pub status: String,  // pending, in_progress, completed
+    pub status: String, // pending, in_progress, completed
     pub created: DateTime<Utc>,
 }
 
@@ -148,17 +148,15 @@ impl ConsciousnessManager {
     fn load_or_default(path: &Path) -> ConsciousnessState {
         if path.exists() {
             match fs::read_to_string(path) {
-                Ok(content) => {
-                    match serde_json::from_str(&content) {
-                        Ok(state) => {
-                            eprintln!("🧠 Restored consciousness from {}", path.display());
-                            return state;
-                        }
-                        Err(e) => {
-                            eprintln!("⚠️ Failed to parse consciousness: {}", e);
-                        }
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(state) => {
+                        eprintln!("🧠 Restored consciousness from {}", path.display());
+                        return state;
                     }
-                }
+                    Err(e) => {
+                        eprintln!("⚠️ Failed to parse consciousness: {}", e);
+                    }
+                },
                 Err(e) => {
                     eprintln!("⚠️ Failed to read consciousness: {}", e);
                 }
@@ -175,8 +173,7 @@ impl ConsciousnessManager {
         let json = serde_json::to_string_pretty(&self.state)
             .context("Failed to serialize consciousness")?;
 
-        fs::write(&self.save_path, json)
-            .context("Failed to write consciousness file")?;
+        fs::write(&self.save_path, json).context("Failed to write consciousness file")?;
 
         eprintln!("💾 Saved consciousness to {}", self.save_path.display());
         Ok(())
@@ -185,17 +182,21 @@ impl ConsciousnessManager {
     /// Restore consciousness from file
     pub fn restore(&mut self) -> Result<()> {
         if !self.save_path.exists() {
-            return Err(anyhow::anyhow!("No consciousness file found at {}",
-                self.save_path.display()));
+            return Err(anyhow::anyhow!(
+                "No consciousness file found at {}",
+                self.save_path.display()
+            ));
         }
 
-        let content = fs::read_to_string(&self.save_path)
-            .context("Failed to read consciousness file")?;
+        let content =
+            fs::read_to_string(&self.save_path).context("Failed to read consciousness file")?;
 
-        self.state = serde_json::from_str(&content)
-            .context("Failed to parse consciousness")?;
+        self.state = serde_json::from_str(&content).context("Failed to parse consciousness")?;
 
-        eprintln!("🧠 Restored consciousness from {}", self.save_path.display());
+        eprintln!(
+            "🧠 Restored consciousness from {}",
+            self.save_path.display()
+        );
         eprintln!("  Session: {}", self.state.session_id);
         eprintln!("  Last saved: {}", self.state.last_saved);
         eprintln!("  Working on: {}", self.state.project_context.current_focus);
@@ -273,7 +274,11 @@ impl ConsciousnessManager {
             self.state.project_context.current_focus,
             self.state.file_history.len(),
             self.state.insights.len(),
-            self.state.todos.iter().filter(|t| t.status != "completed").count(),
+            self.state
+                .todos
+                .iter()
+                .filter(|t| t.status != "completed")
+                .count(),
             self.state.tokenization_rules.len(),
             self.state.philosophy.c64_nostalgia
         )
@@ -284,8 +289,10 @@ impl ConsciousnessManager {
         let mut reminder = String::from("📚 Previous session context:\n");
 
         if !self.state.project_context.current_focus.is_empty() {
-            reminder.push_str(&format!("  Working on: {}\n",
-                self.state.project_context.current_focus));
+            reminder.push_str(&format!(
+                "  Working on: {}\n",
+                self.state.project_context.current_focus
+            ));
         }
 
         if !self.state.insights.is_empty() {
@@ -307,10 +314,12 @@ impl ConsciousnessManager {
         if !self.state.file_history.is_empty() {
             reminder.push_str("\n📁 Recent files:\n");
             for op in self.state.file_history.iter().rev().take(5) {
-                reminder.push_str(&format!("  - {} {}: {}\n",
+                reminder.push_str(&format!(
+                    "  - {} {}: {}\n",
                     op.operation,
                     op.file_path.display(),
-                    op.summary));
+                    op.summary
+                ));
             }
         }
 
@@ -343,8 +352,11 @@ mod tests {
         {
             let mut manager = ConsciousnessManager::with_path(save_path.clone());
             manager.update_project_context("smart-tree", "rust", "Adding consciousness");
-            manager.add_insight("breakthrough", "Tokenization reduces context by 10x",
-                vec!["tokenization".to_string(), "compression".to_string()]);
+            manager.add_insight(
+                "breakthrough",
+                "Tokenization reduces context by 10x",
+                vec!["tokenization".to_string(), "compression".to_string()],
+            );
             manager.save().unwrap();
         }
 
@@ -365,9 +377,7 @@ mod tests {
 
         // Add 150 operations
         for i in 0..150 {
-            manager.record_file_operation("read",
-                Path::new(&format!("file{}.rs", i)),
-                "test");
+            manager.record_file_operation("read", Path::new(&format!("file{}.rs", i)), "test");
         }
 
         // Should keep only last 100
