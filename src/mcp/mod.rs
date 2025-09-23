@@ -386,6 +386,7 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
     let update_info = check_for_mcp_updates().await;
 
     Ok(json!({
+        "protocolVersion": "2024-11-05",
         "capabilities": {
             "tools": {
                 "listChanged": false

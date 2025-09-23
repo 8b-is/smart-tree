@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{self, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -88,7 +88,7 @@ impl EnhancedSpicyTui {
         // Setup terminal
         enable_raw_mode()?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        execute!(stdout, EnterAlternateScreen)?;
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
 
@@ -149,7 +149,7 @@ impl EnhancedSpicyTui {
             path: path.to_path_buf(),
             name,
             is_dir: path.is_dir(),
-            is_expanded: depth == 0, // Expand root by default
+            is_expanded: depth <= 1, // Expand root and first level by default
             depth,
             children: Vec::new(),
         };
@@ -166,10 +166,28 @@ impl EnhancedSpicyTui {
             if let Ok(scanner) = Scanner::new(path, config) {
                 if let Ok((children, _)) = scanner.scan() {
                     for child in children {
+                        // Skip if child has same name as parent (avoid recursive duplicates)
+                        if child.path.file_name() == path.file_name() {
+                            continue;
+                        }
+                        // Skip hidden directories unless explicitly shown
+                        if !self.show_hidden && child.path.file_name()
+                            .and_then(|n| n.to_str())
+                            .map_or(false, |n| n.starts_with('.')) {
+                            continue;
+                        }
                         if let Ok(child_node) = self.build_tree_node(&child.path, depth + 1, max_depth) {
                             node.children.push(child_node);
                         }
                     }
+                    // Sort children: directories first, then files, alphabetically
+                    node.children.sort_by(|a, b| {
+                        match (a.is_dir, b.is_dir) {
+                            (true, false) => std::cmp::Ordering::Less,
+                            (false, true) => std::cmp::Ordering::Greater,
+                            _ => a.name.cmp(&b.name),
+                        }
+                    });
                 }
             }
         }
@@ -483,8 +501,11 @@ impl EnhancedSpicyTui {
 
     fn flatten_tree(&self, node: &TreeNode) -> Vec<PathBuf> {
         let mut paths = vec![node.path.clone()];
-        for child in &node.children {
-            paths.extend(self.flatten_tree(child));
+        // Only include children if the node is expanded
+        if node.is_expanded {
+            for child in &node.children {
+                paths.extend(self.flatten_tree(child));
+            }
         }
         paths
     }
@@ -864,8 +885,7 @@ impl Drop for EnhancedSpicyTui {
         if let Some(mut term) = self.terminal.take() {
             execute!(
                 term.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
+                LeaveAlternateScreen
             ).ok();
             term.show_cursor().ok();
         }

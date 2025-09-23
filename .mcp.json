@@ -1,12 +1,3 @@
 {
-  "mcpServers": {
-    "smart-tree": {
-      "type": "stdio",
-      "command": "/aidata/ayeverse/smart-tree/target/release/st",
-      "args": [
-        "--mcp"
-      ],
-      "env": {"AI_TOOLS": "1"}
-    }
-  }
+  "mcpServers": {}
 }
