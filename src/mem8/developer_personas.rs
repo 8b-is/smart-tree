@@ -1,37 +1,37 @@
 //! Developer Persona Analysis for MEM8
 //! Creates unique wave signatures for each developer based on their git history
 
-use crate::mem8::{
-    git_temporal::{GitCommit, GitTemporalAnalyzer},
-    integration::SmartTreeMem8,
-    wave::{FrequencyBand, MemoryWave},
-};
-use anyhow::Result;
-use chrono::{DateTime, Datelike, Timelike, Utc};
 use std::collections::HashMap;
 use std::path::Path;
+use anyhow::Result;
+use chrono::{DateTime, Utc, Timelike, Datelike};
+use crate::mem8::{
+    wave::{MemoryWave, FrequencyBand},
+    integration::SmartTreeMem8,
+    git_temporal::{GitTemporalAnalyzer, GitCommit},
+};
 
 /// Developer persona with unique characteristics
 #[derive(Debug, Clone)]
 pub struct DeveloperPersona {
     /// Developer name/email
     pub identity: String,
-
+    
     /// Coding style signature
     pub style_signature: CodingStyle,
-
+    
     /// Temporal patterns (when they work)
     pub temporal_pattern: TemporalPattern,
-
+    
     /// Emotional profile from commit messages
     pub emotional_profile: EmotionalProfile,
-
+    
     /// Collaboration patterns
     pub collaboration: CollaborationPattern,
-
+    
     /// Expertise areas (files/directories they work on)
     pub expertise_map: HashMap<String, f32>,
-
+    
     /// Overall contribution metrics
     pub metrics: ContributionMetrics,
 }
@@ -40,19 +40,19 @@ pub struct DeveloperPersona {
 pub struct CodingStyle {
     /// Average commit size (lines changed)
     pub avg_commit_size: f32,
-
+    
     /// Preference for large refactors vs small changes
     pub refactor_tendency: f32, // 0.0 = small changes, 1.0 = large refactors
-
+    
     /// Bug fix ratio
     pub bugfix_ratio: f32,
-
+    
     /// Feature development ratio
     pub feature_ratio: f32,
-
+    
     /// Documentation contribution ratio
     pub documentation_ratio: f32,
-
+    
     /// Test writing ratio
     pub test_ratio: f32,
 }
@@ -61,16 +61,16 @@ pub struct CodingStyle {
 pub struct TemporalPattern {
     /// Preferred hours of day (0-23)
     pub active_hours: [f32; 24],
-
+    
     /// Preferred days of week (0=Monday, 6=Sunday)
     pub active_days: [f32; 7],
-
+    
     /// Night owl vs early bird (-1.0 = night owl, 1.0 = early bird)
     pub chronotype: f32,
-
+    
     /// Weekend warrior score (0.0 = weekday only, 1.0 = weekend heavy)
     pub weekend_warrior: f32,
-
+    
     /// Consistency score (0.0 = sporadic, 1.0 = very regular)
     pub consistency: f32,
 }
@@ -79,16 +79,16 @@ pub struct TemporalPattern {
 pub struct EmotionalProfile {
     /// Overall positivity in commit messages
     pub positivity: f32,
-
+    
     /// Excitement level (exclamation marks, enthusiastic words)
     pub excitement: f32,
-
+    
     /// Frustration level (curse words, "fix", "bug", "broken")
     pub frustration: f32,
-
+    
     /// Professionalism (formal vs casual language)
     pub professionalism: f32,
-
+    
     /// Humor level (jokes, puns, emojis)
     pub humor: f32,
 }
@@ -97,13 +97,13 @@ pub struct EmotionalProfile {
 pub struct CollaborationPattern {
     /// Solo vs team player (0.0 = solo, 1.0 = highly collaborative)
     pub collaboration_score: f32,
-
+    
     /// Developers they frequently work with
     pub frequent_collaborators: HashMap<String, f32>,
-
+    
     /// Response time to others' changes
     pub responsiveness: f32,
-
+    
     /// Code review participation
     pub review_participation: f32,
 }
@@ -134,21 +134,19 @@ impl PersonaAnalyzer {
     /// Analyze all developers in the repository
     pub fn analyze_all_developers(&self) -> Result<HashMap<String, DeveloperPersona>> {
         let commits = self.analyzer.get_project_timeline()?;
-
+        
         // Group commits by author
         let mut author_commits: HashMap<String, Vec<GitCommit>> = HashMap::new();
         for commit in commits {
-            author_commits
-                .entry(commit.author.clone())
-                .or_default()
+            author_commits.entry(commit.author.clone())
+                .or_insert_with(Vec::new)
                 .push(commit);
         }
 
         // Analyze each developer
         let mut personas = HashMap::new();
         for (author, commits) in author_commits {
-            if commits.len() >= 5 {
-                // Need at least 5 commits for meaningful analysis
+            if commits.len() >= 5 { // Need at least 5 commits for meaningful analysis
                 let persona = self.analyze_developer(&author, commits)?;
                 personas.insert(author, persona);
             }
@@ -158,11 +156,7 @@ impl PersonaAnalyzer {
     }
 
     /// Analyze a specific developer
-    fn analyze_developer(
-        &self,
-        identity: &str,
-        commits: Vec<GitCommit>,
-    ) -> Result<DeveloperPersona> {
+    fn analyze_developer(&self, identity: &str, commits: Vec<GitCommit>) -> Result<DeveloperPersona> {
         let style = self.analyze_coding_style(&commits);
         let temporal = self.analyze_temporal_pattern(&commits);
         let emotional = self.analyze_emotional_profile(&commits);
@@ -183,13 +177,11 @@ impl PersonaAnalyzer {
 
     fn analyze_coding_style(&self, commits: &[GitCommit]) -> CodingStyle {
         let total = commits.len() as f32;
-
+        
         // Calculate average commit size
-        let avg_changes: f32 = commits
-            .iter()
+        let avg_changes: f32 = commits.iter()
             .map(|c| (c.additions + c.deletions) as f32)
-            .sum::<f32>()
-            / total;
+            .sum::<f32>() / total;
 
         // Categorize commits
         let mut bugfixes = 0;
@@ -237,18 +229,17 @@ impl PersonaAnalyzer {
         for commit in commits {
             let hour = commit.timestamp.hour() as usize;
             let day = commit.timestamp.weekday().num_days_from_monday() as usize;
-
+            
             hour_counts[hour] += 1.0;
             day_counts[day] += 1.0;
 
-            if (5..12).contains(&hour) {
+            if hour >= 5 && hour < 12 {
                 morning_commits += 1;
-            } else if !(5..20).contains(&hour) {
+            } else if hour >= 20 || hour < 5 {
                 evening_commits += 1;
             }
 
-            if day >= 5 {
-                // Saturday or Sunday
+            if day >= 5 { // Saturday or Sunday
                 weekend_commits += 1;
             }
         }
@@ -256,7 +247,7 @@ impl PersonaAnalyzer {
         // Normalize
         let max_hour = hour_counts.iter().fold(0.0f32, |a, &b| a.max(b)).max(1.0);
         let max_day = day_counts.iter().fold(0.0f32, |a, &b| a.max(b)).max(1.0);
-
+        
         for h in &mut hour_counts {
             *h /= max_hour;
         }
@@ -293,18 +284,18 @@ impl PersonaAnalyzer {
 
         for commit in commits {
             let msg = &commit.message;
-
+            
             // Positivity indicators
             if msg.contains("awesome") || msg.contains("great") || msg.contains("excellent") {
                 positivity += 1.0;
             }
-
+            
             // Excitement indicators
             excitement += msg.matches('!').count() as f32;
             if msg.contains("finally") || msg.contains("yay") {
                 excitement += 1.0;
             }
-
+            
             // Frustration indicators
             if msg.contains("fix") || msg.contains("bug") || msg.contains("broken") {
                 frustration += 1.0;
@@ -312,12 +303,12 @@ impl PersonaAnalyzer {
             if msg.contains("damn") || msg.contains("crap") || msg.contains("wtf") {
                 frustration += 2.0;
             }
-
+            
             // Professionalism (longer, structured messages)
             if msg.len() > 50 && msg.contains(':') {
                 professionalism += 1.0;
             }
-
+            
             // Humor indicators
             if msg.contains("🤣") || msg.contains("😂") || msg.contains("lol") {
                 humor += 1.0;
@@ -338,7 +329,7 @@ impl PersonaAnalyzer {
         // Simplified collaboration analysis
         // In a real implementation, we'd analyze co-authored commits,
         // PR reviews, and response times
-
+        
         CollaborationPattern {
             collaboration_score: 0.5, // Default middle ground
             frequent_collaborators: HashMap::new(),
@@ -349,7 +340,7 @@ impl PersonaAnalyzer {
 
     fn analyze_expertise(&self, commits: &[GitCommit]) -> HashMap<String, f32> {
         let mut file_counts: HashMap<String, usize> = HashMap::new();
-
+        
         for commit in commits {
             for file in &commit.files_changed {
                 // Extract directory or file type as expertise area
@@ -360,15 +351,14 @@ impl PersonaAnalyzer {
                 } else {
                     file.clone()
                 };
-
+                
                 *file_counts.entry(expertise_key).or_insert(0) += 1;
             }
         }
 
         // Normalize to 0-1 range
         let max_count = file_counts.values().max().copied().unwrap_or(1) as f32;
-        file_counts
-            .into_iter()
+        file_counts.into_iter()
             .map(|(k, v)| (k, v as f32 / max_count))
             .collect()
     }
@@ -376,7 +366,7 @@ impl PersonaAnalyzer {
     fn calculate_metrics(&self, commits: &[GitCommit]) -> ContributionMetrics {
         let total_additions: usize = commits.iter().map(|c| c.additions).sum();
         let total_deletions: usize = commits.iter().map(|c| c.deletions).sum();
-
+        
         let mut unique_files = std::collections::HashSet::new();
         for commit in commits {
             for file in &commit.files_changed {
@@ -390,10 +380,7 @@ impl PersonaAnalyzer {
             total_deletions,
             files_touched: unique_files.len(),
             first_commit: commits.last().map(|c| c.timestamp).unwrap_or_else(Utc::now),
-            last_commit: commits
-                .first()
-                .map(|c| c.timestamp)
-                .unwrap_or_else(Utc::now),
+            last_commit: commits.first().map(|c| c.timestamp).unwrap_or_else(Utc::now),
             active_days: Self::count_active_days(commits),
         }
     }
@@ -405,15 +392,16 @@ impl PersonaAnalyzer {
 
         let mut intervals = Vec::new();
         for i in 1..commits.len() {
-            let interval = (commits[i - 1].timestamp - commits[i].timestamp).num_hours() as f32;
+            let interval = (commits[i-1].timestamp - commits[i].timestamp).num_hours() as f32;
             intervals.push(interval);
         }
 
         // Calculate standard deviation
         let mean = intervals.iter().sum::<f32>() / intervals.len() as f32;
-        let variance =
-            intervals.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / intervals.len() as f32;
-
+        let variance = intervals.iter()
+            .map(|&x| (x - mean).powi(2))
+            .sum::<f32>() / intervals.len() as f32;
+        
         variance.sqrt() / (mean + 1.0) // Normalized by mean
     }
 
@@ -432,12 +420,12 @@ impl SmartTreeMem8 {
     pub fn import_developer_personas(&mut self, repo_path: impl AsRef<Path>) -> Result<()> {
         let analyzer = PersonaAnalyzer::new(repo_path)?;
         let personas = analyzer.analyze_all_developers()?;
-
+        
         println!("Found {} developer personas", personas.len());
 
         for (developer, persona) in personas {
             println!("\nCreating wave signature for: {}", developer);
-
+            
             // Create base frequency from coding style
             let base_freq = if persona.style_signature.refactor_tendency > 0.5 {
                 FrequencyBand::DeepStructural.frequency(0.7) // Architects
@@ -456,19 +444,17 @@ impl SmartTreeMem8 {
                         base_freq + (hour as f32 * 10.0), // Slight frequency shift per hour
                         intensity * 0.8,
                     );
-
+                    
                     // Emotional modulation
-                    wave.valence = persona.emotional_profile.positivity
-                        - persona.emotional_profile.frustration;
+                    wave.valence = persona.emotional_profile.positivity - persona.emotional_profile.frustration;
                     wave.arousal = persona.emotional_profile.excitement;
                     wave.decay_tau = None; // Persistent persona pattern
-
+                    
                     // Store in persona layer (high Z values)
                     let x = (self.simple_hash(&developer) & 0xFF) as u8;
                     let y = (hour * 10) as u8;
-                    let z = 64000
-                        + (self.simple_hash(&format!("{}-{}", developer, hour)) & 0x3FF) as u16;
-
+                    let z = 64000 + (self.simple_hash(&format!("{}-{}", developer, hour)) & 0x3FF) as u16;
+                    
                     self.store_wave_at_coordinates(x, y, z, wave)?;
                 }
             }
@@ -480,43 +466,36 @@ impl SmartTreeMem8 {
                         base_freq + 100.0, // Expertise frequency band
                         expertise,
                     );
-
+                    
                     wave.valence = 0.7; // Positive association with expertise
                     wave.decay_tau = None; // Persistent
-
+                    
                     let (x, y) = self.string_to_coordinates(&format!("{}-{}", developer, area));
                     let z = 63000;
-
+                    
                     self.store_wave_at_coordinates(x, y, z, wave)?;
                 }
             }
 
             // Print persona summary
-            println!(
-                "  Style: {:.0}% features, {:.0}% bugfixes, {:.0}% refactoring",
+            println!("  Style: {:.0}% features, {:.0}% bugfixes, {:.0}% refactoring",
                 persona.style_signature.feature_ratio * 100.0,
                 persona.style_signature.bugfix_ratio * 100.0,
                 persona.style_signature.refactor_tendency * 100.0
             );
-            println!(
-                "  Chronotype: {} ({:.1})",
-                if persona.temporal_pattern.chronotype < -0.3 {
-                    "Night Owl 🦉"
-                } else if persona.temporal_pattern.chronotype > 0.3 {
-                    "Early Bird 🐦"
-                } else {
-                    "Flexible ⏰"
-                },
+            println!("  Chronotype: {} ({:.1})",
+                if persona.temporal_pattern.chronotype < -0.3 { "Night Owl 🦉" }
+                else if persona.temporal_pattern.chronotype > 0.3 { "Early Bird 🐦" }
+                else { "Flexible ⏰" },
                 persona.temporal_pattern.chronotype
             );
-            println!(
-                "  Emotional: {:.0}% positive, {:.0}% excited",
+            println!("  Emotional: {:.0}% positive, {:.0}% excited",
                 persona.emotional_profile.positivity * 100.0,
                 persona.emotional_profile.excitement * 100.0
             );
-            println!(
-                "  Contributions: {} commits, {} files touched",
-                persona.metrics.total_commits, persona.metrics.files_touched
+            println!("  Contributions: {} commits, {} files touched",
+                persona.metrics.total_commits,
+                persona.metrics.files_touched
             );
         }
 
@@ -541,10 +520,7 @@ mod tests {
         if let Ok(analyzer) = PersonaAnalyzer::new(".") {
             if let Ok(personas) = analyzer.analyze_all_developers() {
                 for (dev, persona) in personas {
-                    println!(
-                        "Developer: {} - {} commits",
-                        dev, persona.metrics.total_commits
-                    );
+                    println!("Developer: {} - {} commits", dev, persona.metrics.total_commits);
                 }
             }
         }
