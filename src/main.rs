@@ -623,7 +623,7 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         let path = std::env::current_dir()?;
-        return st::spicy_tui::run_spicy_tui(path).await;
+        return st::spicy_tui_enhanced::run_enhanced_spicy_tui(path).await;
     }
 
     // Initialize logging if requested

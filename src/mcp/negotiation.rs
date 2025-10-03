@@ -68,7 +68,7 @@ pub async fn handle_session_aware_initialize(
     };
 
     Ok(json!({
-        "protocolVersion": "2024-11-05",
+        "protocolVersion": "2025-06-18",
         "serverInfo": {
             "name": "smart-tree",
             "version": env!("CARGO_PKG_VERSION"),

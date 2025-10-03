@@ -3,7 +3,7 @@ members = ["expert_prompt_engineer"]
 
 [package]
 name = "st"
-version = "5.2.0"
+version = "5.2.1"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -52,6 +52,7 @@ shellexpand = "3.1"
 terminal_size = "0.3"
 fuzzy-matcher = "0.3"
 syntect = "5.0"
+artem = "2.0"  # image-to-ascii converter
 
 # egui for dashboard
 egui = "0.32.2"

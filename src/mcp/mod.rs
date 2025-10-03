@@ -404,6 +404,7 @@ async fn handle_initialize(params: Option<Value>, _ctx: Arc<McpContext>) -> Resu
     let compression_test = compression_manager::create_compression_test();
 
     Ok(json!({
+        "protocolVersion": "2025-06-18",
         "capabilities": {
             "tools": {
                 "listChanged": false
