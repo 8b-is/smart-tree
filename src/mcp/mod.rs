@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use crate::compression_manager;
 
 mod assistant;
 mod cache;
@@ -281,6 +282,11 @@ impl McpServer {
         let request: JsonRpcRequest =
             serde_json::from_str(request_str).context("Failed to parse JSON-RPC request")?;
 
+        // Check for compression support in every request
+        if let Some(ref params) = request.params {
+            compression_manager::check_client_compression_support(params);
+        }
+
         // Check if this is a notification (no id field)
         let is_notification = request.id.is_none();
 
@@ -375,15 +381,27 @@ impl McpServer {
             },
         };
 
-        Ok(serde_json::to_string(&response)?)
+        // Smart compress the response if needed
+        let mut response_value = serde_json::to_value(&response)?;
+        compression_manager::smart_compress_mcp_response(&mut response_value)?;
+
+        Ok(serde_json::to_string(&response_value)?)
     }
 }
 
 // Handler implementations
 
-async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+async fn handle_initialize(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+    // Check if client supports compression from their request
+    if let Some(params) = params {
+        compression_manager::check_client_compression_support(&params);
+    }
+
     // Check for updates when MCP tools initialize (non-blocking)
     let update_info = check_for_mcp_updates().await;
+
+    // Add compression test to response
+    let compression_test = compression_manager::create_compression_test();
 
     Ok(json!({
         "capabilities": {
@@ -415,7 +433,8 @@ async fn handle_initialize(_params: Option<Value>, _ctx: Arc<McpContext>) -> Res
                 "auto-compression-hints"
             ],
             "compression_hint": "💡 Always add compress:true to analyze tools for optimal context usage!",
-            "update_info": update_info
+            "update_info": update_info,
+            "compression_test": compression_test
         }
     }))
 }

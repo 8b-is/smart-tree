@@ -1913,26 +1913,12 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // For other formats, convert to string first (using lossy for non-UTF8 files like .pyc)
         let output_str = String::from_utf8_lossy(&output).to_string();
 
-        // Smart token-aware compression for semantic mode
-        // Estimate tokens (rough: 1 token ≈ 4 characters)
-        let estimated_tokens = output_str.len() / 4;
-        const MAX_SAFE_TOKENS: usize = 20000; // Keep under 25k limit with safety margin
-
-        // Auto-compress if semantic mode would exceed token limits
-        let should_compress = if args.mode == "semantic" && !mcp_compress {
-            if estimated_tokens > MAX_SAFE_TOKENS {
-                eprintln!("⚠️ Smart Tree: Auto-compressing semantic output ({} est. tokens > {} limit)",
-                         estimated_tokens, MAX_SAFE_TOKENS);
+        // Use global compression manager for smart compression
+        // It will check client capabilities and token limits
+        if mcp_compress || crate::compression_manager::should_compress_response(&output_str) {
+            if args.mode == "semantic" {
                 eprintln!("💡 Tip: Use mode:'quantum-semantic' for even better compression!");
-                true
-            } else {
-                false
             }
-        } else {
-            mcp_compress
-        };
-
-        if should_compress {
             use flate2::write::ZlibEncoder;
             use flate2::Compression;
             use std::io::Write;

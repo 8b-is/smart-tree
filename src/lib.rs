@@ -12,6 +12,7 @@
 
 // Declare the public modules that form the `st` library.
 pub mod activity_logger; // Transparent activity logging in JSONL format
+pub mod compression_manager; // Smart global compression for all outputs
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
 pub mod context;
 pub mod decoders; // Decoders to convert quantum format to other representations
