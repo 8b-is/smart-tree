@@ -74,7 +74,7 @@ tokio = { version = "1.42", features = ["full"] }
 async-trait = { version = "0.1" }
 futures = { version = "0.3" }
 dashmap = { version = "6.1" }
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }
 serde_yaml = "0.9"
 
 # SSE support
