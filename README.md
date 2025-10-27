@@ -234,6 +234,16 @@ st --mcp-config >> ~/Library/Application\ Support/Claude/claude_desktop_config.j
 - `hooks`: Manage Claude Code hooks
 - And many more!
 
+### GitHub Copilot Integration
+Smart Tree includes Copilot-specific instructions to help GitHub Copilot use MCP tools effectively:
+
+- **Automatic Guidance**: Instructions in `.github/copilot-instructions.md` help Copilot understand tool requirements
+- **Three-Lane Pattern**: EXPLORE → ANALYZE → ACT workflow for safer, more effective tool usage
+- **Common Patterns**: Pre-defined examples for frequent operations
+- **Error Prevention**: Guidance on required parameters and common mistakes
+
+See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for detailed usage patterns.
+
 ## 🎨 Configuration
 
 ### Environment Variables
