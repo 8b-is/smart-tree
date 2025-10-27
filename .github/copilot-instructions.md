@@ -134,14 +134,19 @@ Use these after EXPLORE phase for detailed investigation.
 **Optional**: `file_type`, `case_sensitive`, `include_content`, `context_lines`, `max_matches_per_file`
 
 **Common patterns**:
+
+Find all TODOs in Python files:
 ```json
-// Find all TODOs in Python files
 {"path": ".", "keyword": "TODO", "file_type": "py"}
+```
 
-// Find function definition
+Find function definition:
+```json
 {"path": "src", "keyword": "fn handle_request", "file_type": "rs"}
+```
 
-// Case-sensitive search
+Case-sensitive search:
+```json
 {"path": ".", "keyword": "ClassName", "case_sensitive": true}
 ```
 
@@ -167,17 +172,24 @@ Find files by pattern, size, or date.
 **Optional**: `pattern`, `file_type`, `entry_type`, `min_size`, `max_size`, `newer_than`, `older_than`, `max_depth`
 
 **Common patterns**:
+
+Find all test files:
 ```json
-// Find all test files
 {"path": ".", "pattern": "test_.*"}
+```
 
-// Find large files
+Find large files:
+```json
 {"path": ".", "min_size": "10M"}
+```
 
-// Find recent changes
+Find recent changes:
+```json
 {"path": ".", "newer_than": "2024-01-01"}
+```
 
-// Only directories
+Only directories:
+```json
 {"path": ".", "entry_type": "d"}
 ```
 
