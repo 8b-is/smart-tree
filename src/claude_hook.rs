@@ -23,6 +23,10 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
 
     let user_prompt = json["prompt"].as_str().unwrap_or(&input);
 
+    // DEBUG: Log what we received (temporary)
+    eprintln!("DEBUG: user_prompt length = {}", user_prompt.len());
+    eprintln!("DEBUG: user_prompt preview = {:?}", &user_prompt.chars().take(100).collect::<String>());
+
     // Start structured output
     println!("=== Smart Tree Context Intelligence ===");
     println!();
@@ -421,6 +425,11 @@ fn detect_code_intent(prompt: &str) -> bool {
 /// Store conversation in MEM8 for future resonance
 /// Sends user prompt to AYBI's MEM8 API endpoint
 fn store_conversation_in_mem8(user_prompt: &str) -> Result<()> {
+    // Skip empty prompts
+    if user_prompt.trim().is_empty() {
+        return Ok(());
+    }
+
     // Build JSON payload
     let payload = serde_json::json!({
         "role": "user",
