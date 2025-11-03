@@ -16,8 +16,8 @@ if [[ ! -f "$RFILE" ]]; then
 fi
 
 # Basic content checks
-grep -q "keyword" "$GFILE" || echo "WARNING: 'keyword' sample not found in $GFILE"
-grep -q "include_content" "$GFILE" || echo "WARNING: 'include_content' sample not found in $GFILE"
+grep -q "keyword" "$GFILE" || { echo "ERROR: 'keyword' sample not found in $GFILE"; exit 4; }
+grep -q "include_content" "$GFILE" || { echo "ERROR: 'include_content' sample not found in $GFILE"; exit 5; }
 
 echo "OK: guidelines present"
 exit 0
