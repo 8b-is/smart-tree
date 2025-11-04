@@ -70,7 +70,7 @@ jobs:
             name: Linux (beta)
             rust: beta
             allow_failure: true
-    
+
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.allow_failure == true }}
     

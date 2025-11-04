@@ -1,8 +1,10 @@
 // Context Absorber - Automatically absorbs project-related context from JSON files
 // "Like a knowledge sponge that never stops learning!" - Aye
 
-use anyhow::Result;
+#![allow(clippy::manual_flatten)]
+
 use crate::feature_flags;
+use anyhow::Result;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -30,10 +32,10 @@ impl Default for WatchPermissions {
                 "~/Documents/".to_string(),
                 "~/.config/".to_string(),
                 "~/Library/Application Support/".to_string(),
-                "~/.cursor/".to_string(),  // Cursor AI logs
-                "~/.vscode/".to_string(),  // VS Code extensions data
-                "~/Library/Application Support/Code/".to_string(),  // VS Code on Mac
-                "~/.local/share/".to_string(),  // Linux app data
+                "~/.cursor/".to_string(), // Cursor AI logs
+                "~/.vscode/".to_string(), // VS Code extensions data
+                "~/Library/Application Support/Code/".to_string(), // VS Code on Mac
+                "~/.local/share/".to_string(), // Linux app data
                 "~/.cache/".to_string(),  // Cache dirs often have AI logs
             ],
             excluded_paths: vec![
@@ -96,7 +98,7 @@ impl ContextAbsorber {
 
         // Load last absorption time from M8 file if it exists
         let last_time = Self::load_last_absorption_time(&project_name).unwrap_or(
-            SystemTime::now() - std::time::Duration::from_secs(604800) // Virgin M8? Go back 7 days!
+            SystemTime::now() - std::time::Duration::from_secs(604800), // Virgin M8? Go back 7 days!
         );
 
         Ok(Self {
@@ -168,7 +170,11 @@ impl ContextAbsorber {
                             for path in event.paths {
                                 let ext = path.extension().and_then(|s| s.to_str());
                                 // Watch JSON, JSONL, and Markdown files!
-                                if ext == Some("json") || ext == Some("jsonl") || ext == Some("md") || ext == Some("markdown") {
+                                if ext == Some("json")
+                                    || ext == Some("jsonl")
+                                    || ext == Some("md")
+                                    || ext == Some("markdown")
+                                {
                                     println!("🆕 New file detected: {}", path.display());
                                     // For new files, always check them
                                     if let Ok(content) = fs::read_to_string(&path) {
@@ -187,7 +193,11 @@ impl ContextAbsorber {
                             // EXISTING FILE MODIFIED
                             for path in event.paths {
                                 let ext = path.extension().and_then(|s| s.to_str());
-                                if ext == Some("json") || ext == Some("jsonl") || ext == Some("md") || ext == Some("markdown") {
+                                if ext == Some("json")
+                                    || ext == Some("jsonl")
+                                    || ext == Some("md")
+                                    || ext == Some("markdown")
+                                {
                                     // Check if file might contain project name using smart detection
                                     if let Ok(content) = fs::read_to_string(&path) {
                                         if crate::mcp::smart_project_detector::contains_project_reference(&content, &project_name) {
@@ -254,7 +264,8 @@ impl ContextAbsorber {
                     // Also check subdirectories (one level deep for performance)
                     let recursive_pattern = format!("{}/*/{}", watch_path.display(), pattern);
                     if let Ok(paths) = glob::glob(&recursive_pattern) {
-                        for path_result in paths.take(100) { // Limit to avoid scanning too much
+                        for path_result in paths.take(100) {
+                            // Limit to avoid scanning too much
                             if let Ok(path) = path_result {
                                 if let Ok(metadata) = fs::metadata(&path) {
                                     if let Ok(modified) = metadata.modified() {
@@ -270,14 +281,20 @@ impl ContextAbsorber {
             }
         }
 
-        println!("📊 Found {} files modified since last absorption", files_to_check.len());
+        println!(
+            "📊 Found {} files modified since last absorption",
+            files_to_check.len()
+        );
 
         // Process files that might contain project references
         let mut absorbed_count = 0;
         for path in files_to_check {
             // Quick check if file might contain project reference
             if let Ok(content) = fs::read_to_string(&path) {
-                if crate::mcp::smart_project_detector::contains_project_reference(&content, &self.project_name) {
+                if crate::mcp::smart_project_detector::contains_project_reference(
+                    &content,
+                    &self.project_name,
+                ) {
                     println!("   📎 Absorbing: {}", path.display());
                     let _ = self.sender.send(AbsorptionEvent::FileChanged(path));
                     absorbed_count += 1;
@@ -285,7 +302,10 @@ impl ContextAbsorber {
             }
         }
 
-        println!("✅ Initial scan complete! Absorbed {} files", absorbed_count);
+        println!(
+            "✅ Initial scan complete! Absorbed {} files",
+            absorbed_count
+        );
 
         // Update last absorption time
         *self.last_absorption_time.lock().unwrap() = SystemTime::now();
@@ -327,7 +347,11 @@ impl ContextAbsorber {
         });
     }
 
-    fn absorb_file(path: &Path, project_name: &str, permissions: &WatchPermissions) -> Result<AbsorbedContext> {
+    fn absorb_file(
+        path: &Path,
+        project_name: &str,
+        permissions: &WatchPermissions,
+    ) -> Result<AbsorbedContext> {
         // Check file size
         let metadata = fs::metadata(path)?;
         if metadata.len() > permissions.max_file_size_mb * 1024 * 1024 {
@@ -336,7 +360,10 @@ impl ContextAbsorber {
 
         // Check if path is excluded
         for excluded in &permissions.excluded_paths {
-            if path.to_string_lossy().contains(excluded.trim_start_matches('*')) {
+            if path
+                .to_string_lossy()
+                .contains(excluded.trim_start_matches('*'))
+            {
                 return Err(anyhow::anyhow!("Path is excluded"));
             }
         }
@@ -599,22 +626,23 @@ impl ContextAbsorber {
     }
 
     pub fn get_absorbed_contexts(&self) -> Vec<AbsorbedContext> {
-        self.absorbed_contexts.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.absorbed_contexts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 }
 
 // Common stop words to ignore
 const STOP_WORDS: &[&str] = &[
-    "the", "and", "for", "with", "this", "that", "from", "into", "over",
-    "under", "about", "through", "between", "after", "before", "during",
+    "the", "and", "for", "with", "this", "that", "from", "into", "over", "under", "about",
+    "through", "between", "after", "before", "during",
 ];
 
 // MCP tool integration
 pub async fn handle_context_absorber(params: Value) -> Result<Value> {
     let action = params["action"].as_str().unwrap_or("status");
-    let project_name = params["project_name"]
-        .as_str()
-        .unwrap_or("smart-tree");
+    let project_name = params["project_name"].as_str().unwrap_or("smart-tree");
 
     match action {
         "start" => {

@@ -64,7 +64,7 @@ impl SmartTreeMem8 {
             .store(x, y, self.current_depth, wave);
 
         // Update depth for next entry
-        self.current_depth = if self.current_depth == u16::MAX {
+        self.current_depth = if self.current_depth == 65535 {
             0
         } else {
             self.current_depth + 1
@@ -396,7 +396,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore = "Hangs - needs investigation"]
     fn test_smart_tree_integration() {
         integrate_with_smart_tree().unwrap();
     }

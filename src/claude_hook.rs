@@ -23,6 +23,13 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
 
     let user_prompt = json["prompt"].as_str().unwrap_or(&input);
 
+    // DEBUG: Log what we received (temporary)
+    eprintln!("DEBUG: user_prompt length = {}", user_prompt.len());
+    eprintln!(
+        "DEBUG: user_prompt preview = {:?}",
+        &user_prompt.chars().take(100).collect::<String>()
+    );
+
     // Start structured output
     println!("=== Smart Tree Context Intelligence ===");
     println!();
@@ -52,6 +59,9 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
 
     println!("=== End Context ===");
     println!();
+
+    // 6. Store conversation in MEM8 for future resonance
+    store_conversation_in_mem8(user_prompt)?;
 
     Ok(())
 }
@@ -413,4 +423,52 @@ fn detect_code_intent(prompt: &str) -> bool {
 
     let lower = prompt.to_lowercase();
     code_words.iter().any(|&word| lower.contains(word))
+}
+
+/// Store conversation in MEM8 for future resonance
+/// Sends user prompt to AYBI's MEM8 API endpoint
+fn store_conversation_in_mem8(user_prompt: &str) -> Result<()> {
+    // Skip empty prompts
+    if user_prompt.trim().is_empty() {
+        return Ok(());
+    }
+
+    // Build JSON payload
+    let payload = serde_json::json!({
+        "role": "user",
+        "content": user_prompt,
+        "metadata": {
+            "source": "smart-tree-hook",
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "project_dir": env::var("CLAUDE_PROJECT_DIR").ok(),
+            "working_dir": env::current_dir().ok().map(|p| p.display().to_string()),
+        }
+    });
+
+    // Send to AYBI MEM8 API (non-blocking, best-effort)
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()?;
+
+    match client
+        .post("http://localhost:8425/api/mem8/conversation")
+        .header("Content-Type", "application/json")
+        .json(&payload)
+        .send()
+    {
+        Ok(response) if response.status().is_success() => {
+            // Silent success - don't clutter output
+            Ok(())
+        }
+        Ok(response) => {
+            // Log error but don't fail the hook
+            eprintln!("⚠️ MEM8 storage warning: HTTP {}", response.status());
+            Ok(())
+        }
+        Err(e) => {
+            // AYBI might not be running - that's okay
+            eprintln!("⚠️ MEM8 storage skipped: {}", e);
+            Ok(())
+        }
+    }
 }

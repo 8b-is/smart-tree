@@ -852,6 +852,7 @@ ${YELLOW}Commands:${NC}
   ${GREEN}clean${NC}                 Clean build artifacts
   ${GREEN}status${NC}                Show project status
   ${GREEN}bench${NC}                 Run performance benchmarks
+  ${GREEN}menu${NC}                  Launch interactive setup menu ${SPARKLE}
   ${GREEN}install${NC} [dir]         Install binary (default: /usr/local/bin)
   ${GREEN}uninstall${NC} [dir]       Uninstall binary
   ${GREEN}release${NC} <vX.Y.Z> [notes] Create a GitHub release
@@ -1008,6 +1009,11 @@ main() {
             ;;
         clean)
             clean
+            ;;
+        menu|setup)
+            # Launch interactive setup menu
+            print_header "Launching Interactive Setup Menu ${SPARKLE}"
+            "$PROJECT_DIR/scripts/interactive_setup.sh"
             ;;
         status|info)
             status

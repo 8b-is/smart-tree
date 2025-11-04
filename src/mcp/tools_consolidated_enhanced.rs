@@ -1,8 +1,8 @@
 // Enhanced Consolidated MCP Tools with AI-Friendly Tips and Examples
 // Making Smart Tree irresistible to AI assistants! 🌳✨
 
-use serde_json::{json, Value};
 use crate::feature_flags;
+use serde_json::{json, Value};
 
 // Re-export the dispatcher from the original consolidated tools
 pub use super::tools_consolidated::dispatch_consolidated_tool;

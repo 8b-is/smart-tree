@@ -357,7 +357,6 @@ pub fn fix_m8_extensions() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     #[test]
     fn test_format_detection() {
