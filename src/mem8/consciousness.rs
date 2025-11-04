@@ -344,6 +344,13 @@ impl ConsciousnessEngine {
             // Determine region based on frequency
             let band = FrequencyBand::from_frequency(memory.frequency);
             let region = match band {
+                FrequencyBand::Delta => MemoryRegion::Semantic("delta_deep".to_string()),
+                FrequencyBand::Theta => MemoryRegion::Semantic("theta_integration".to_string()),
+                FrequencyBand::Alpha => MemoryRegion::Semantic("alpha_flow".to_string()),
+                FrequencyBand::Beta => MemoryRegion::Semantic("beta_active".to_string()),
+                FrequencyBand::Gamma => MemoryRegion::Semantic("gamma_binding".to_string()),
+                FrequencyBand::HyperGamma => MemoryRegion::Semantic("hypergamma_peak".to_string()),
+                // Legacy mappings
                 FrequencyBand::DeepStructural => MemoryRegion::Semantic("structural".to_string()),
                 FrequencyBand::Conversational => {
                     MemoryRegion::Semantic("conversational".to_string())
@@ -353,8 +360,6 @@ impl ConsciousnessEngine {
                     MemoryRegion::Semantic("implementation".to_string())
                 }
                 FrequencyBand::Abstract => MemoryRegion::Semantic("abstract".to_string()),
-                FrequencyBand::Beta => MemoryRegion::Semantic("beta_awareness".to_string()),
-                FrequencyBand::Gamma => MemoryRegion::Semantic("gamma_consciousness".to_string()),
             };
 
             *state.attention_weights.entry(region).or_insert(0.0) += 0.1;
@@ -490,7 +495,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore = "Wave interference calculation needs tuning for awareness level"]
     fn test_consciousness_state() {
         let mut state = ConsciousnessState::new();
         assert_eq!(state.awareness_level, 0.5);

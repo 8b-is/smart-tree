@@ -1,6 +1,8 @@
 // Unified Watcher - Master control for all context absorption and searching
 // "The all-seeing eye of Smart Tree!" - Aye
 
+#![allow(clippy::await_holding_lock)]
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -10,7 +12,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::context_absorber::ContextAbsorber;
-use super::smart_background_searcher::{SmartBackgroundSearcher, SearchConfig};
+use super::smart_background_searcher::{SearchConfig, SmartBackgroundSearcher};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnifiedWatcherConfig {
@@ -78,7 +80,10 @@ impl UnifiedWatcher {
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        println!("🚀 Starting Unified Watcher for project: {}", self.config.project_name);
+        println!(
+            "🚀 Starting Unified Watcher for project: {}",
+            self.config.project_name
+        );
 
         // Initialize activity logging if enabled
         if self.config.enable_logging {
@@ -89,12 +94,14 @@ impl UnifiedWatcher {
                 serde_json::json!({
                     "project": self.config.project_name,
                     "watch_paths": self.config.watch_paths,
-                })
+                }),
             )?;
         }
 
         // Expand watch paths
-        let watch_paths: Vec<PathBuf> = self.config.watch_paths
+        let watch_paths: Vec<PathBuf> = self
+            .config
+            .watch_paths
             .iter()
             .map(|p| PathBuf::from(shellexpand::tilde(p).to_string()))
             .filter(|p| p.exists())
@@ -113,7 +120,7 @@ impl UnifiedWatcher {
         if self.config.enable_search {
             println!("🔍 Starting Smart Background Searcher...");
             let search_config = SearchConfig {
-                max_lines_per_file: 1000,  // Limit for JSONL files
+                max_lines_per_file: 1000, // Limit for JSONL files
                 smart_sampling: true,
                 ..Default::default()
             };
@@ -126,7 +133,8 @@ impl UnifiedWatcher {
         // Update status
         if let Ok(mut status) = self.status.lock() {
             status.is_running = true;
-            status.watched_directories = watch_paths.iter()
+            status.watched_directories = watch_paths
+                .iter()
                 .map(|p| p.to_string_lossy().to_string())
                 .collect();
             status.last_activity = Some(format!("Started watching at {}", chrono::Utc::now()));
@@ -197,7 +205,7 @@ impl UnifiedWatcher {
                 "stop",
                 serde_json::json!({
                     "project": self.config.project_name,
-                })
+                }),
             )?;
         }
 
@@ -207,7 +215,9 @@ impl UnifiedWatcher {
     pub async fn search(&self, query: &str) -> Result<Vec<Value>> {
         if let Some(searcher) = &self.searcher {
             if let Ok(search_lock) = searcher.lock() {
-                let paths: Vec<PathBuf> = self.config.watch_paths
+                let paths: Vec<PathBuf> = self
+                    .config
+                    .watch_paths
                     .iter()
                     .map(|p| PathBuf::from(shellexpand::tilde(p).to_string()))
                     .collect();
@@ -215,14 +225,17 @@ impl UnifiedWatcher {
                 let results = search_lock.search(query, paths).await;
 
                 // Convert to JSON for MCP
-                let json_results: Vec<Value> = results.into_iter()
-                    .map(|r| serde_json::json!({
-                        "file": r.file_path.to_string_lossy(),
-                        "line": r.line_number,
-                        "content": r.content,
-                        "score": r.score,
-                        "type": r.file_type,
-                    }))
+                let json_results: Vec<Value> = results
+                    .into_iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "file": r.file_path.to_string_lossy(),
+                            "line": r.line_number,
+                            "content": r.content,
+                            "score": r.score,
+                            "type": r.file_type,
+                        })
+                    })
                     .collect();
 
                 return Ok(json_results);
@@ -237,11 +250,15 @@ impl UnifiedWatcher {
 }
 
 // MCP Tool Handler
-pub async fn handle_unified_watcher(params: Value, _ctx: Arc<crate::mcp::McpContext>) -> Result<Value> {
+pub async fn handle_unified_watcher(
+    params: Value,
+    _ctx: Arc<crate::mcp::McpContext>,
+) -> Result<Value> {
     let action = params["action"].as_str().unwrap_or("status");
 
     // Use a static instance for the watcher
-    static WATCHER: Lazy<Arc<Mutex<Option<UnifiedWatcher>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+    static WATCHER: Lazy<Arc<Mutex<Option<UnifiedWatcher>>>> =
+        Lazy::new(|| Arc::new(Mutex::new(None)));
 
     match action {
         "start" => {
@@ -351,7 +368,10 @@ pub async fn handle_unified_watcher(params: Value, _ctx: Arc<crate::mcp::McpCont
             }
         }
 
-        _ => Err(anyhow::anyhow!("Unknown action: {}. Valid actions: start, stop, search, status", action))
+        _ => Err(anyhow::anyhow!(
+            "Unknown action: {}. Valid actions: start, stop, search, status",
+            action
+        )),
     }
 }
 

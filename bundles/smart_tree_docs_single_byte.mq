@@ -1675,7 +1675,7 @@ response = openai.ChatCompletion.create(
 Generate and send to local LLM
 ( curl -X POST http://localhost:11434/api/generate \
   -d '{
-"model": "llama2",
+"model": "169pi/alpie-core",
 "prompt": "Analyze this quantum-compressed project structure:",
 "stream": false
   }'

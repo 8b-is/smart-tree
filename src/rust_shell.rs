@@ -90,8 +90,10 @@ struct MCPInterface {
     binary_api: BinaryAPI,
 }
 
+type EndpointHandler = Box<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>;
+
 struct BinaryAPI {
-    endpoints: HashMap<String, Box<dyn Fn(&[u8]) -> Vec<u8> + Send + Sync>>,
+    endpoints: HashMap<String, EndpointHandler>,
 }
 
 // Casting manager for different protocols

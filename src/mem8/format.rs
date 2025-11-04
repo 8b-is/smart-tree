@@ -6,30 +6,18 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::io::Write;
 
-/// Magic bytes for .m8 format (spec: first 4 bytes = "MEM8")
-const M8_MAGIC: &[u8] = b"MEM8";
+/// Magic bytes for .m8 format
+const M8_MAGIC: &[u8] = b"M8\x02\x09";
 
-/// Section types in .m8 files (aligned with docs/M8_UNIFIED_FORMAT.md)
+/// Section types in .m8 files
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]
 pub enum SectionType {
-    Identity = 0x01,
-    Context = 0x02,
-    Structure = 0x03,
-    Compilation = 0x04,
-    Cache = 0x05,
-    AiContext = 0x06,
-    Relationships = 0x07,
-    SensorArbitration = 0x08,
-    MarkqantDocument = 0x09,
-    QuantumTree = 0x0A,
-    CodeRelations = 0x0B,
-    BuildArtifacts = 0x0C,
-    TemporalIndex = 0x0D,
-    CollectiveEmotion = 0x0E,
-    WaveMemoryBlob = 0x0F,
-    ReactiveStateDump = 0x10,
-    CustodianNotes = 0x11,
+    MarkqantText = 0x09,
+    QuantumDirectory = 0x0A,
+    WaveMemory = 0x0B,
+    Metadata = 0x0C,
+    Index = 0x0D,
 }
 
 /// .m8 file header
@@ -299,7 +287,7 @@ impl<W: Write> M8Writer<W> {
         }
 
         self.sections.push(M8Section {
-            section_type: SectionType::WaveMemoryBlob,
+            section_type: SectionType::WaveMemory,
             size: data.len() as u32,
             data,
         });
@@ -331,7 +319,7 @@ impl<W: Write> M8Writer<W> {
         data.extend_from_slice(&encoded);
 
         self.sections.push(M8Section {
-            section_type: SectionType::MarkqantDocument,
+            section_type: SectionType::MarkqantText,
             size: data.len() as u32,
             data,
         });

@@ -2,8 +2,8 @@
 // "Like ripgrep but knows when to stop reading!" - Aye
 
 use anyhow::Result;
-use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,11 +18,11 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchConfig {
-    pub max_lines_per_file: usize,  // Default: 1000 for JSONL, 5000 for others
-    pub max_file_size_mb: u64,      // Skip files larger than this
-    pub search_timeout_ms: u64,     // Timeout per file
-    pub fuzzy_threshold: i64,       // Fuzzy match score threshold
-    pub smart_sampling: bool,       // Sample large files intelligently
+    pub max_lines_per_file: usize, // Default: 1000 for JSONL, 5000 for others
+    pub max_file_size_mb: u64,     // Skip files larger than this
+    pub search_timeout_ms: u64,    // Timeout per file
+    pub fuzzy_threshold: i64,      // Fuzzy match score threshold
+    pub smart_sampling: bool,      // Sample large files intelligently
     pub watch_patterns: Vec<String>, // File patterns to watch
 }
 
@@ -101,7 +101,9 @@ impl SmartBackgroundSearcher {
             match event {
                 SearchEvent::Search { query, paths } => {
                     for path in paths {
-                        if let Ok(results) = Self::search_file(&path, &query, &config, &fuzzy_matcher) {
+                        if let Ok(results) =
+                            Self::search_file(&path, &query, &config, &fuzzy_matcher)
+                        {
                             if !results.is_empty() {
                                 if let Ok(mut idx) = index.lock() {
                                     idx.insert(path, results);
@@ -297,8 +299,8 @@ impl SmartBackgroundSearcher {
                             // Check if file matches our watch patterns
                             if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
                                 let should_watch = config.watch_patterns.iter().any(|pattern| {
-                                    pattern.ends_with(&format!("*.{}", ext)) ||
-                                    pattern == &format!("*.{}", ext)
+                                    pattern.ends_with(&format!("*.{}", ext))
+                                        || pattern == &format!("*.{}", ext)
                                 });
 
                                 if should_watch {

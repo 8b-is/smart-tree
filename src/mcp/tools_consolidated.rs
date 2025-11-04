@@ -635,7 +635,9 @@ pub async fn dispatch_consolidated_tool(
             .await
         }
         "hooks" => handle_hooks(params, ctx).await,
-        "unified_watcher" => super::unified_watcher::handle_unified_watcher(params.unwrap_or(json!({})), ctx).await,
+        "unified_watcher" => {
+            super::unified_watcher::handle_unified_watcher(params.unwrap_or(json!({})), ctx).await
+        }
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }

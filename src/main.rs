@@ -22,8 +22,8 @@ use std::time::SystemTime;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
-    feature_flags,
     claude_init::ClaudeInit,
+    feature_flags,
     formatters::{
         ai::AiFormatter,
         ai_json::AiJsonFormatter,

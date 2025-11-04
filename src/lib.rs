@@ -126,3 +126,9 @@ pub mod wave_compass;
 
 // Claude Hook Handler - Comprehensive context provider for conversations
 pub mod claude_hook;
+
+// Marqant - Quantum-compressed markdown format (integrated from external crate)
+pub mod marqant;
+
+// ST Tokenizer - Advanced semantic pattern recognition with frequency tracking
+pub mod st_tokenizer;

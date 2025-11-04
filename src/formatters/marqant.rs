@@ -11,9 +11,9 @@
 // - Streaming support for large documents
 
 use super::{Formatter, PathDisplayMode};
+use crate::marqant::Marqant as MarqantCore;
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
-use marqant::Marqant as MarqantCore;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;

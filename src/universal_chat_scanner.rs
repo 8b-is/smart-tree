@@ -2,6 +2,8 @@
 // Scans for conversations across ALL AI tools and platforms
 // "Every conversation leaves a trace - let's find them all!" - Hue
 
+#![allow(clippy::manual_flatten)]
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use glob::glob;

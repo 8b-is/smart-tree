@@ -73,12 +73,10 @@ pub struct ReactiveResponse {
 /// Hierarchical reactive memory system
 pub struct ReactiveMemory {
     /// Wave grid for memory storage
-    #[allow(dead_code)]
     wave_grid: Arc<RwLock<WaveGrid>>,
     /// Registered patterns for each layer
     patterns: Vec<Vec<ReactivePattern>>,
     /// Start time for latency tracking
-    #[allow(dead_code)]
     start_time: Instant,
 }
 
@@ -309,7 +307,6 @@ impl SensorCoherence {
 /// Subliminal processing for below-threshold stimuli
 pub struct SubliminalProcessor {
     /// Threshold for conscious awareness
-    #[allow(dead_code)]
     awareness_threshold: f32,
     /// Subliminal amplitude range
     subliminal_range: (f32, f32),

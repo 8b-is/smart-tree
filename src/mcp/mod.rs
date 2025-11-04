@@ -14,6 +14,7 @@ use crate::compression_manager;
 mod assistant;
 mod cache;
 pub mod consciousness;
+pub mod context_absorber;
 mod context_tools;
 mod enhanced_tool_descriptions;
 mod git_memory_integration;
@@ -25,15 +26,14 @@ mod prompts;
 mod prompts_enhanced;
 mod resources;
 mod session;
+pub mod smart_background_searcher;
 pub mod smart_edit;
 mod smart_edit_diff_viewer;
+pub mod smart_project_detector;
 mod sse;
 mod tools;
 mod tools_consolidated;
 mod tools_consolidated_enhanced;
-pub mod context_absorber;
-pub mod smart_background_searcher;
-pub mod smart_project_detector;
 pub mod unified_watcher;
 
 use assistant::*;
@@ -210,7 +210,7 @@ impl McpServer {
         // Check for previous consciousness and restore if exists
         {
             let mut consciousness = self.consciousness.lock().await;
-            if let Ok(_) = consciousness.restore() {
+            if consciousness.restore().is_ok() {
                 eprintln!("🧠 Restored previous session context");
                 eprintln!("{}", consciousness.get_context_reminder());
             }
@@ -510,17 +510,15 @@ async fn check_for_mcp_updates() -> Value {
             api_url, current_version, platform, arch
         );
 
-        let response = client.get(&check_url)
-            .send()
-            .await
-            .ok()?;
+        let response = client.get(&check_url).send().await.ok()?;
 
         if !response.status().is_success() {
             return None;
         }
 
         response.json::<Value>().await.ok()
-    }).await;
+    })
+    .await;
 
     match result {
         Ok(Some(update_data)) => {
@@ -539,7 +537,7 @@ async fn check_for_mcp_updates() -> Value {
                 })
             }
         }
-        _ => json!(null) // Return null if check failed or timed out
+        _ => json!(null), // Return null if check failed or timed out
     }
 }
 

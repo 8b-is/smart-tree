@@ -196,7 +196,7 @@ impl GitMemory {
     }
 
     /// Generate quantum insights about the commit
-    fn generate_quantum_insights(&self, message: &str, files: &Vec<String>) -> Vec<String> {
+    fn generate_quantum_insights(&self, message: &str, files: &[String]) -> Vec<String> {
         let mut insights = Vec::new();
 
         // Analyze commit message patterns

@@ -21,8 +21,10 @@ pub struct MarineVAD {
     is_voice_active: Arc<RwLock<bool>>,
 
     /// Callback for voice state changes
-    state_callback: Arc<RwLock<Option<Box<dyn Fn(bool) + Send + Sync>>>>,
+    state_callback: StateCallback,
 }
+
+type StateCallback = Arc<RwLock<Option<Box<dyn Fn(bool) + Send + Sync>>>>;
 
 /// Marine detector state for VAD
 struct MarineDetectorState {
@@ -446,7 +448,7 @@ mod tests {
         }
 
         // Process audio
-        let is_voice = vad.process_audio(&samples, sample_rate).await.unwrap();
+        let _is_voice = vad.process_audio(&samples, sample_rate).await.unwrap();
 
         // Should detect voice-like signal
         // (In real implementation would need proper training)
