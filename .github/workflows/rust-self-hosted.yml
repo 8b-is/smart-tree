@@ -1,0 +1,130 @@
+name: Rust CI (Self-Hosted) 🏠
+
+on:
+  workflow_dispatch:  # Manual trigger only
+  # Uncomment to enable automatic triggers once runner is set up:
+  # push:
+  #   branches: [ "main" ]
+  # pull_request:
+  #   branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  SMART_TREE_NO_UPDATE_CHECK: 1
+
+permissions:
+  contents: read
+
+jobs:
+  build-self-hosted:
+    name: Build & Test - Self-Hosted macOS 🏠🍎
+    # Use self-hosted runner with macOS labels
+    # Configure your runner with: gh api repos/8b-is/smart-tree/actions/runners/registration-token
+    runs-on: [self-hosted, macOS, ARM64]
+
+    steps:
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+
+    - name: System Info 💻
+      run: |
+        echo "=== System Information ==="
+        echo "Hostname: $(hostname)"
+        echo "Architecture: $(uname -m)"
+        echo "OS: $(sw_vers -productName) $(sw_vers -productVersion)"
+        echo "CPU: $(sysctl -n machdep.cpu.brand_string)"
+        echo "Memory: $(sysctl -n hw.memsize | awk '{print $0/1024/1024/1024 " GB"}')"
+        echo "Cores: $(sysctl -n hw.ncpu)"
+        echo "========================"
+
+    - name: Check Rust Installation 🦀
+      run: |
+        if command -v rustc &> /dev/null; then
+          echo "✅ Rust already installed: $(rustc --version)"
+          echo "✅ Cargo version: $(cargo --version)"
+        else
+          echo "⚠️ Rust not found - installing..."
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+        fi
+
+    - name: Update Rust 🔄
+      run: |
+        rustup update stable
+        rustup default stable
+
+    - name: Cache cargo registry 📚
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: self-hosted-macos-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          self-hosted-macos-cargo-registry-
+
+    - name: Cache cargo index 📑
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: self-hosted-macos-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          self-hosted-macos-cargo-index-
+
+    - name: Cache cargo build 🏗️
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: self-hosted-macos-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          self-hosted-macos-cargo-build-
+
+    - name: Build (Debug) 🔨
+      run: cargo build --verbose
+
+    - name: Build (Release) 🚀
+      run: cargo build --release --verbose
+
+    - name: Run tests 🧪
+      run: |
+        echo "=== Performance Monitor Start ==="
+        echo "Time: $(date)"
+        echo "Memory: $(vm_stat | head -5)"
+        echo "CPU: $(sysctl -n hw.ncpu) cores"
+        echo "Disk: $(df -h . | tail -1)"
+        echo "================================"
+
+        # Run tests with performance tracking
+        RUST_TEST_THREADS=1 cargo test --lib --verbose -- --nocapture --test-threads=1
+
+        echo "=== Performance Monitor End ==="
+        echo "Time: $(date)"
+        echo "=============================="
+
+    - name: Run doc tests 📚
+      run: cargo test --doc --verbose
+
+    - name: Test binary execution 🎯
+      run: |
+        echo "Testing binary..."
+        cargo run -- --version
+        cargo run -- --help
+
+        echo "Testing basic modes..."
+        cargo run -- --mode classic --depth 1 .
+        cargo run -- --mode ai --depth 1 .
+
+    - name: Benchmark (Optional) ⚡
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        echo "Running benchmarks on self-hosted runner..."
+        cargo bench --no-fail-fast || true
+      continue-on-error: true
+
+    - name: Cleanup 🧹
+      if: always()
+      run: |
+        echo "Cleaning up build artifacts..."
+        cargo clean || true
+        rm -rf target/debug || true
+        # Keep release builds cached for next run
+        echo "✅ Cleanup complete"
