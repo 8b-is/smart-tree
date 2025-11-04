@@ -1921,8 +1921,10 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // Auto-compress if semantic mode would exceed token limits
         let should_compress = if args.mode == "semantic" && !mcp_compress {
             if estimated_tokens > MAX_SAFE_TOKENS {
-                eprintln!("⚠️ Smart Tree: Auto-compressing semantic output ({} est. tokens > {} limit)",
-                         estimated_tokens, MAX_SAFE_TOKENS);
+                eprintln!(
+                    "⚠️ Smart Tree: Auto-compressing semantic output ({} est. tokens > {} limit)",
+                    estimated_tokens, MAX_SAFE_TOKENS
+                );
                 eprintln!("💡 Tip: Use mode:'quantum-semantic' for even better compression!");
                 true
             } else {
@@ -1943,9 +1945,14 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
             // Add helpful message about compression
             let compressed_size = compressed.len();
-            let compression_ratio = 100.0 - (compressed_size as f64 / output_str.len() as f64 * 100.0);
-            eprintln!("✅ Compressed: {} → {} bytes ({:.1}% reduction)",
-                     output_str.len(), compressed_size, compression_ratio);
+            let compression_ratio =
+                100.0 - (compressed_size as f64 / output_str.len() as f64 * 100.0);
+            eprintln!(
+                "✅ Compressed: {} → {} bytes ({:.1}% reduction)",
+                output_str.len(),
+                compressed_size,
+                compression_ratio
+            );
 
             format!("COMPRESSED_V1:{}", hex::encode(&compressed))
         } else {

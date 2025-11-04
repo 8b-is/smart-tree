@@ -7,8 +7,7 @@ use serde_json::Value;
 /// Detect if content contains meaningful project references
 pub fn contains_project_reference(content: &str, project_name: &str) -> bool {
     // Short names like "bob" need more context
-    let needs_context = project_name.len() <= 3 ||
-                       project_name.chars().all(char::is_alphanumeric);
+    let needs_context = project_name.len() <= 3 || project_name.chars().all(char::is_alphanumeric);
 
     if needs_context {
         // For short/common names, require contextual markers
@@ -32,37 +31,31 @@ fn contains_contextual_reference(content: &str, project_name: &str) -> bool {
         format!("## {}", lower_project),
         format!("# {} project", lower_project),
         format!("# project {}", lower_project),
-
         // Code/config contexts
         format!("\"project\": \"{}\"", lower_project),
         format!("'project': '{}'", lower_project),
         format!("project_name: {}", lower_project),
         format!("name: \"{}\"", lower_project),
-
         // Documentation patterns
         format!("{} documentation", lower_project),
         format!("{} readme", lower_project),
         format!("{} notes", lower_project),
         format!("{} todo", lower_project),
-
         // Development contexts
         format!("{} repository", lower_project),
         format!("{} codebase", lower_project),
         format!("{} development", lower_project),
         format!("{} implementation", lower_project),
-
         // File paths (strong indicator)
         format!("/{}/", lower_project),
         format!("/{}/src", lower_project),
         format!("~/{}/", lower_project),
         format!("documents/{}", lower_project),
         format!("projects/{}", lower_project),
-
         // Git contexts
         format!("git clone {}", lower_project),
         format!("cd {}", lower_project),
         format!("working on {}", lower_project),
-
         // AI assistant contexts
         format!("help with {}", lower_project),
         format!("question about {}", lower_project),
@@ -72,7 +65,9 @@ fn contains_contextual_reference(content: &str, project_name: &str) -> bool {
     ];
 
     // Check if any context pattern matches
-    context_patterns.iter().any(|pattern| lower_content.contains(pattern))
+    context_patterns
+        .iter()
+        .any(|pattern| lower_content.contains(pattern))
 }
 
 /// Check for word boundary matches (for longer project names)
@@ -94,15 +89,26 @@ pub fn extract_json_project_references(json: &Value, project_name: &str) -> Vec<
 
     // Check specific JSON fields that often contain project info
     let project_fields = [
-        "project", "projectName", "project_name",
-        "name", "title", "repository", "repo",
-        "package", "module", "app", "application"
+        "project",
+        "projectName",
+        "project_name",
+        "name",
+        "title",
+        "repository",
+        "repo",
+        "package",
+        "module",
+        "app",
+        "application",
     ];
 
     for field in &project_fields {
         if let Some(value) = json.get(field) {
             if let Some(str_val) = value.as_str() {
-                if str_val.to_lowercase().contains(&project_name.to_lowercase()) {
+                if str_val
+                    .to_lowercase()
+                    .contains(&project_name.to_lowercase())
+                {
                     references.push(format!("{}: {}", field, str_val));
                 }
             }
@@ -181,8 +187,9 @@ pub fn score_reference_relevance(content: &str, project_name: &str) -> f64 {
     }
 
     // Bonus for being in quotes (likely a config value)
-    if content.contains(&format!("\"{}\"", project_name)) ||
-       content.contains(&format!("'{}'", project_name)) {
+    if content.contains(&format!("\"{}\"", project_name))
+        || content.contains(&format!("'{}'", project_name))
+    {
         score += 3.0;
     }
 
@@ -192,8 +199,19 @@ pub fn score_reference_relevance(content: &str, project_name: &str) -> f64 {
     }
 
     // Bonus for development-related keywords nearby
-    let dev_keywords = ["project", "develop", "implement", "feature", "bug", "issue",
-                       "repository", "code", "build", "test", "deploy"];
+    let dev_keywords = [
+        "project",
+        "develop",
+        "implement",
+        "feature",
+        "bug",
+        "issue",
+        "repository",
+        "code",
+        "build",
+        "test",
+        "deploy",
+    ];
 
     for keyword in &dev_keywords {
         if lower_content.contains(keyword) && lower_content.contains(&lower_project) {
@@ -212,19 +230,31 @@ mod tests {
     #[test]
     fn test_short_name_detection() {
         // "bob" alone shouldn't match without context
-        assert!(!contains_project_reference("I talked to bob yesterday", "bob"));
+        assert!(!contains_project_reference(
+            "I talked to bob yesterday",
+            "bob"
+        ));
 
         // But with context it should
         assert!(contains_project_reference("# Bob Project Notes", "bob"));
-        assert!(contains_project_reference("Working on bob development", "bob"));
+        assert!(contains_project_reference(
+            "Working on bob development",
+            "bob"
+        ));
         assert!(contains_project_reference("\"project\": \"bob\"", "bob"));
     }
 
     #[test]
     fn test_longer_name_detection() {
         // Longer names can match with word boundaries
-        assert!(contains_project_reference("The smart-tree project is great", "smart-tree"));
-        assert!(contains_project_reference("smart-tree development", "smart-tree"));
+        assert!(contains_project_reference(
+            "The smart-tree project is great",
+            "smart-tree"
+        ));
+        assert!(contains_project_reference(
+            "smart-tree development",
+            "smart-tree"
+        ));
 
         // But not partial matches
         assert!(!contains_word_boundary_match("smart-trees", "smart-tree"));

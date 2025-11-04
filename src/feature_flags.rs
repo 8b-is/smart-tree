@@ -68,11 +68,11 @@ pub struct McpToolFlags {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComplianceMode {
     None,
-    Enterprise,      // Disables most AI features, logging
-    Government,      // Maximum restrictions
-    Healthcare,      // HIPAA compliance
-    Education,       // FERPA compliance
-    Financial,       // SOC2/PCI compliance
+    Enterprise, // Disables most AI features, logging
+    Government, // Maximum restrictions
+    Healthcare, // HIPAA compliance
+    Education,  // FERPA compliance
+    Financial,  // SOC2/PCI compliance
 }
 
 impl Default for FeatureFlags {
@@ -91,8 +91,8 @@ impl Default for FeatureFlags {
             enable_smart_search: true,
 
             // Data collection - respect privacy
-            enable_activity_logging: false,  // Opt-in
-            enable_telemetry: false,         // Opt-in
+            enable_activity_logging: false, // Opt-in
+            enable_telemetry: false,        // Opt-in
             enable_file_watching: true,
             enable_auto_context: true,
 
@@ -286,7 +286,7 @@ impl FeatureFlags {
             }
             ComplianceMode::Financial => {
                 // SOC2/PCI compliance
-                self.enable_activity_logging = true;  // Required for audit
+                self.enable_activity_logging = true; // Required for audit
                 self.enable_telemetry = false;
                 self.privacy_mode = true;
                 self.enable_context_absorption = false;
@@ -309,7 +309,7 @@ impl FeatureFlags {
             "watching" => self.enable_file_watching,
             "hooks" => self.enable_hooks,
             "tui" => self.enable_tui,
-            _ => true,  // Unknown features default to enabled
+            _ => true, // Unknown features default to enabled
         }
     }
 
@@ -317,15 +317,33 @@ impl FeatureFlags {
     pub fn get_enabled_mcp_tools(&self) -> Vec<String> {
         let mut tools = Vec::new();
 
-        if self.mcp_tools.enable_find { tools.push("find".to_string()); }
-        if self.mcp_tools.enable_search { tools.push("search".to_string()); }
-        if self.mcp_tools.enable_analyze { tools.push("analyze".to_string()); }
-        if self.mcp_tools.enable_edit { tools.push("edit".to_string()); }
-        if self.mcp_tools.enable_context { tools.push("context".to_string()); }
-        if self.mcp_tools.enable_memory { tools.push("memory".to_string()); }
-        if self.mcp_tools.enable_unified_watcher { tools.push("unified_watcher".to_string()); }
-        if self.mcp_tools.enable_hooks_management { tools.push("hooks".to_string()); }
-        if self.mcp_tools.enable_sse { tools.push("sse".to_string()); }
+        if self.mcp_tools.enable_find {
+            tools.push("find".to_string());
+        }
+        if self.mcp_tools.enable_search {
+            tools.push("search".to_string());
+        }
+        if self.mcp_tools.enable_analyze {
+            tools.push("analyze".to_string());
+        }
+        if self.mcp_tools.enable_edit {
+            tools.push("edit".to_string());
+        }
+        if self.mcp_tools.enable_context {
+            tools.push("context".to_string());
+        }
+        if self.mcp_tools.enable_memory {
+            tools.push("memory".to_string());
+        }
+        if self.mcp_tools.enable_unified_watcher {
+            tools.push("unified_watcher".to_string());
+        }
+        if self.mcp_tools.enable_hooks_management {
+            tools.push("hooks".to_string());
+        }
+        if self.mcp_tools.enable_sse {
+            tools.push("sse".to_string());
+        }
 
         tools
     }
@@ -347,25 +365,39 @@ impl FeatureFlags {
         report.push_str("AI/ML Features:\n");
         report.push_str(&format!("  AI Modes: {}\n", self.enable_ai_modes));
         report.push_str(&format!("  Consciousness: {}\n", self.enable_consciousness));
-        report.push_str(&format!("  Memory Manager: {}\n", self.enable_memory_manager));
-        report.push_str(&format!("  Context Absorption: {}\n", self.enable_context_absorption));
+        report.push_str(&format!(
+            "  Memory Manager: {}\n",
+            self.enable_memory_manager
+        ));
+        report.push_str(&format!(
+            "  Context Absorption: {}\n",
+            self.enable_context_absorption
+        ));
         report.push_str(&format!("  Smart Search: {}\n\n", self.enable_smart_search));
 
         report.push_str("Privacy Settings:\n");
         report.push_str(&format!("  Privacy Mode: {}\n", self.privacy_mode));
-        report.push_str(&format!("  Activity Logging: {}\n", self.enable_activity_logging));
+        report.push_str(&format!(
+            "  Activity Logging: {}\n",
+            self.enable_activity_logging
+        ));
         report.push_str(&format!("  Telemetry: {}\n", self.enable_telemetry));
-        report.push_str(&format!("  External Connections: {}\n", !self.disable_external_connections));
-        report.push_str(&format!("  Home Directory Access: {}\n", !self.disable_home_directory_access));
+        report.push_str(&format!(
+            "  External Connections: {}\n",
+            !self.disable_external_connections
+        ));
+        report.push_str(&format!(
+            "  Home Directory Access: {}\n",
+            !self.disable_home_directory_access
+        ));
 
         report
     }
 }
 
 /// Global feature flags instance
-static FEATURES: once_cell::sync::Lazy<FeatureFlags> = once_cell::sync::Lazy::new(|| {
-    FeatureFlags::load().unwrap_or_default()
-});
+static FEATURES: once_cell::sync::Lazy<FeatureFlags> =
+    once_cell::sync::Lazy::new(|| FeatureFlags::load().unwrap_or_default());
 
 /// Get the global feature flags
 pub fn features() -> &'static FeatureFlags {

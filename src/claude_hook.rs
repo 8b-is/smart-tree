@@ -25,7 +25,10 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
 
     // DEBUG: Log what we received (temporary)
     eprintln!("DEBUG: user_prompt length = {}", user_prompt.len());
-    eprintln!("DEBUG: user_prompt preview = {:?}", &user_prompt.chars().take(100).collect::<String>());
+    eprintln!(
+        "DEBUG: user_prompt preview = {:?}",
+        &user_prompt.chars().take(100).collect::<String>()
+    );
 
     // Start structured output
     println!("=== Smart Tree Context Intelligence ===");

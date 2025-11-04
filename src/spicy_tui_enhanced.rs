@@ -7,30 +7,27 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, List, ListItem, ListState, Paragraph, Wrap, Clear,
-    },
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::{
     collections::HashMap,
-    fs,
-    io::{self, BufRead},
+    fs, io,
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
-use fuzzy_matcher::skim::SkimMatcherV2;
-use fuzzy_matcher::FuzzyMatcher;
 
 use crate::{
-    scanner::{Scanner, ScannerConfig},
-    spicy_fuzzy::{SpicyFuzzySearch, FileMatch},
     memory_manager::MemoryManager,
+    scanner::{Scanner, ScannerConfig},
+    spicy_fuzzy::{FileMatch, SpicyFuzzySearch},
 };
 
 // Enhanced color scheme
@@ -100,7 +97,8 @@ impl EnhancedSpicyTui {
             current_path: path.clone(),
             tree: TreeNode {
                 path: path.clone(),
-                name: path.file_name()
+                name: path
+                    .file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string(),
@@ -140,7 +138,8 @@ impl EnhancedSpicyTui {
     }
 
     fn build_tree_node(&self, path: &Path, depth: usize, max_depth: usize) -> Result<TreeNode> {
-        let name = path.file_name()
+        let name = path
+            .file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
@@ -171,22 +170,26 @@ impl EnhancedSpicyTui {
                             continue;
                         }
                         // Skip hidden directories unless explicitly shown
-                        if !self.show_hidden && child.path.file_name()
-                            .and_then(|n| n.to_str())
-                            .map_or(false, |n| n.starts_with('.')) {
+                        if !self.show_hidden
+                            && child
+                                .path
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .is_some_and(|n| n.starts_with('.'))
+                        {
                             continue;
                         }
-                        if let Ok(child_node) = self.build_tree_node(&child.path, depth + 1, max_depth) {
+                        if let Ok(child_node) =
+                            self.build_tree_node(&child.path, depth + 1, max_depth)
+                        {
                             node.children.push(child_node);
                         }
                     }
                     // Sort children: directories first, then files, alphabetically
-                    node.children.sort_by(|a, b| {
-                        match (a.is_dir, b.is_dir) {
-                            (true, false) => std::cmp::Ordering::Less,
-                            (false, true) => std::cmp::Ordering::Greater,
-                            _ => a.name.cmp(&b.name),
-                        }
+                    node.children.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => a.name.cmp(&b.name),
                     });
                 }
             }
@@ -214,7 +217,8 @@ impl EnhancedSpicyTui {
                     Ok(_) => {
                         if let Ok(content) = fs::read_to_string(&path) {
                             let preview = if self.search_mode == SearchMode::FileContent
-                                && !self.search_query.is_empty() {
+                                && !self.search_query.is_empty()
+                            {
                                 self.highlight_content(&content, &self.search_query)
                             } else {
                                 content.lines().take(100).collect::<Vec<_>>().join("\n")
@@ -240,8 +244,13 @@ impl EnhancedSpicyTui {
         if let Some(ext) = path.extension() {
             matches!(
                 ext.to_str().map(|s| s.to_lowercase()).as_deref(),
-                Some("png") | Some("jpg") | Some("jpeg") | Some("gif") |
-                Some("bmp") | Some("webp") | Some("svg")
+                Some("png")
+                    | Some("jpg")
+                    | Some("jpeg")
+                    | Some("gif")
+                    | Some("bmp")
+                    | Some("webp")
+                    | Some("svg")
             )
         } else {
             false
@@ -280,7 +289,8 @@ impl EnhancedSpicyTui {
         };
 
         // Cache it
-        self.ascii_art_cache.insert(path.to_path_buf(), ascii.clone());
+        self.ascii_art_cache
+            .insert(path.to_path_buf(), ascii.clone());
         Ok(ascii)
     }
 
@@ -289,8 +299,8 @@ impl EnhancedSpicyTui {
         let matcher = SkimMatcherV2::default();
 
         for line in content.lines().take(100) {
-            if let Some((score, indices)) = matcher.fuzzy_indices(line, query) {
-                let mut chars: Vec<char> = line.chars().collect();
+            if let Some((_score, indices)) = matcher.fuzzy_indices(line, query) {
+                let chars: Vec<char> = line.chars().collect();
                 let mut result = String::new();
 
                 for (i, ch) in chars.iter().enumerate() {
@@ -319,9 +329,19 @@ impl EnhancedSpicyTui {
         Ok(preview)
     }
 
-    fn append_tree_preview(&self, node: &TreeNode, output: &mut String, prefix: &str, is_last: bool) {
+    fn append_tree_preview(
+        &self,
+        node: &TreeNode,
+        output: &mut String,
+        prefix: &str,
+        is_last: bool,
+    ) {
         let connector = if is_last { "└── " } else { "├── " };
-        let icon = if node.is_dir { "📁" } else { self.get_file_icon(&node.path) };
+        let icon = if node.is_dir {
+            "📁"
+        } else {
+            self.get_file_icon(&node.path)
+        };
 
         output.push_str(&format!("{}{}{} {}\n", prefix, connector, icon, node.name));
 
@@ -428,10 +448,12 @@ impl EnhancedSpicyTui {
         let matcher = SkimMatcherV2::default();
         let query = self.search_query.to_lowercase();
 
-        self.filtered_paths = self.flatten_tree(&self.tree)
+        self.filtered_paths = self
+            .flatten_tree(&self.tree)
             .into_iter()
             .filter(|path| {
-                let name = path.file_name()
+                let name = path
+                    .file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_lowercase();
@@ -446,11 +468,9 @@ impl EnhancedSpicyTui {
     async fn execute_search(&mut self) -> Result<()> {
         if self.search_mode == SearchMode::FileContent {
             // Search file contents
-            let results = self.fuzzy_searcher.search_content(
-                &self.current_path,
-                &self.search_query,
-                50
-            )?;
+            let results =
+                self.fuzzy_searcher
+                    .search_content(&self.current_path, &self.search_query, 50)?;
 
             // Save to M8 context - THIS IS THE COOL PART!
             if !results.is_empty() {
@@ -458,7 +478,10 @@ impl EnhancedSpicyTui {
             }
 
             self.search_results = results;
-            self.set_status(&format!("Found {} results in files (saved to M8!)", self.search_results.len()));
+            self.set_status(&format!(
+                "Found {} results in files (saved to M8!)",
+                self.search_results.len()
+            ));
         }
 
         self.search_history.push(self.search_query.clone());
@@ -478,9 +501,11 @@ impl EnhancedSpicyTui {
             self.search_query,
             self.current_path.display(),
             results.len(),
-            results.iter()
+            results
+                .iter()
                 .take(5)
-                .map(|m| format!("  {}:{} - {}",
+                .map(|m| format!(
+                    "  {}:{} - {}",
                     m.path.file_name().unwrap_or_default().to_string_lossy(),
                     m.line_number,
                     m.line_content.chars().take(50).collect::<String>()
@@ -489,12 +514,8 @@ impl EnhancedSpicyTui {
                 .join("\n")
         );
 
-        self.memory_manager.anchor(
-            "search_result",
-            keywords,
-            &context,
-            "spicy_tui"
-        )?;
+        self.memory_manager
+            .anchor("search_result", keywords, &context, "spicy_tui")?;
 
         Ok(())
     }
@@ -600,9 +621,9 @@ impl EnhancedSpicyTui {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Header
-                Constraint::Min(10),    // Content
-                Constraint::Length(3),  // Status
+                Constraint::Length(3), // Header
+                Constraint::Min(10),   // Content
+                Constraint::Length(3), // Status
             ])
             .split(size);
 
@@ -612,9 +633,9 @@ impl EnhancedSpicyTui {
         let content_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(30),  // Tree
-                Constraint::Percentage(50),  // Preview
-                Constraint::Percentage(20),  // Info
+                Constraint::Percentage(30), // Tree
+                Constraint::Percentage(50), // Preview
+                Constraint::Percentage(20), // Info
             ])
             .split(chunks[1]);
 
@@ -679,7 +700,7 @@ impl EnhancedSpicyTui {
                 Style::default()
                     .bg(SPICY_GREEN)
                     .fg(Color::Black)
-                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol("▶ ");
 
@@ -689,7 +710,11 @@ impl EnhancedSpicyTui {
     fn build_tree_items_into(&self, node: &TreeNode, indent: usize, items: &mut Vec<ListItem>) {
         let prefix = "  ".repeat(indent);
         let icon = if node.is_dir {
-            if node.is_expanded { "📂" } else { "📁" }
+            if node.is_expanded {
+                "📂"
+            } else {
+                "📁"
+            }
         } else {
             self.get_file_icon(&node.path)
         };
@@ -701,12 +726,17 @@ impl EnhancedSpicyTui {
         };
 
         let arrow = if node.is_dir {
-            if node.is_expanded { "▼ " } else { "▶ " }
+            if node.is_expanded {
+                "▼ "
+            } else {
+                "▶ "
+            }
         } else {
             "  "
         };
 
-        items.push(ListItem::new(format!("{}{}{} {}", prefix, arrow, icon, node.name)).style(style));
+        items
+            .push(ListItem::new(format!("{}{}{} {}", prefix, arrow, icon, node.name)).style(style));
 
         if node.is_expanded {
             for child in &node.children {
@@ -715,12 +745,16 @@ impl EnhancedSpicyTui {
         }
     }
 
-    fn build_tree_items(&self, node: &TreeNode, indent: usize) -> Vec<ListItem> {
+    fn build_tree_items(&self, node: &TreeNode, indent: usize) -> Vec<ListItem<'_>> {
         let mut items = Vec::new();
 
         let prefix = "  ".repeat(indent);
         let icon = if node.is_dir {
-            if node.is_expanded { "📂" } else { "📁" }
+            if node.is_expanded {
+                "📂"
+            } else {
+                "📁"
+            }
         } else {
             self.get_file_icon(&node.path)
         };
@@ -732,12 +766,17 @@ impl EnhancedSpicyTui {
         };
 
         let arrow = if node.is_dir {
-            if node.is_expanded { "▼ " } else { "▶ " }
+            if node.is_expanded {
+                "▼ "
+            } else {
+                "▶ "
+            }
         } else {
             "  "
         };
 
-        items.push(ListItem::new(format!("{}{}{} {}", prefix, arrow, icon, node.name)).style(style));
+        items
+            .push(ListItem::new(format!("{}{}{} {}", prefix, arrow, icon, node.name)).style(style));
 
         if node.is_expanded {
             for child in &node.children {
@@ -769,31 +808,37 @@ impl EnhancedSpicyTui {
     fn draw_info(&self, f: &mut Frame, area: Rect) {
         let mut lines = vec![];
 
-        lines.push(Line::from(vec![
-            Span::styled("Search History:", Style::default().fg(SPICY_YELLOW).bold()),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "Search History:",
+            Style::default().fg(SPICY_YELLOW).bold(),
+        )]));
 
         for query in self.search_history.iter().rev().take(5) {
-            lines.push(Line::from(vec![
-                Span::styled(format!("  • {}", query), Style::default().fg(SPICY_CYAN)),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!("  • {}", query),
+                Style::default().fg(SPICY_CYAN),
+            )]));
         }
 
         if !self.search_results.is_empty() {
             lines.push(Line::from(""));
-            lines.push(Line::from(vec![
-                Span::styled("Results:", Style::default().fg(SPICY_YELLOW).bold()),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "Results:",
+                Style::default().fg(SPICY_YELLOW).bold(),
+            )]));
             for result in self.search_results.iter().take(3) {
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("  {}:{}",
-                            result.path.file_name().unwrap_or_default().to_string_lossy(),
-                            result.line_number
-                        ),
-                        Style::default().fg(SPICY_GREEN),
+                lines.push(Line::from(vec![Span::styled(
+                    format!(
+                        "  {}:{}",
+                        result
+                            .path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy(),
+                        result.line_number
                     ),
-                ]));
+                    Style::default().fg(SPICY_GREEN),
+                )]));
             }
         }
 
@@ -809,12 +854,10 @@ impl EnhancedSpicyTui {
     }
 
     fn draw_status_bar(&self, f: &mut Frame, area: Rect) {
-        let mut spans = vec![
-            Span::styled(
-                " q:Quit │ /:Files │ ^F:Content │ ←→:Navigate │ Enter:Open ",
-                Style::default().fg(SPICY_DARK_GREEN),
-            ),
-        ];
+        let mut spans = vec![Span::styled(
+            " q:Quit │ /:Files │ ^F:Content │ ←→:Navigate │ Enter:Open ",
+            Style::default().fg(SPICY_DARK_GREEN),
+        )];
 
         if let Some((msg, _)) = &self.status_message {
             spans.push(Span::styled(" │ ", Style::default().fg(SPICY_BORDER)));
@@ -883,10 +926,7 @@ impl Drop for EnhancedSpicyTui {
     fn drop(&mut self) {
         disable_raw_mode().ok();
         if let Some(mut term) = self.terminal.take() {
-            execute!(
-                term.backend_mut(),
-                LeaveAlternateScreen
-            ).ok();
+            execute!(term.backend_mut(), LeaveAlternateScreen).ok();
             term.show_cursor().ok();
         }
     }

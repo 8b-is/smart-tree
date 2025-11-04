@@ -1,9 +1,9 @@
 //! Reactive memory layers for MEM8 - hierarchical processing from reflexes to consciousness
 //! Implements 4 layers: 0-10ms hardware reflexes to >200ms conscious deliberation
 
+use crate::mem8::wave::{MemoryWave, WaveGrid};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use crate::mem8::wave::{MemoryWave, WaveGrid};
 
 /// Reactive layer types with their response time windows
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,8 +23,12 @@ impl ReactiveLayer {
     pub fn response_window(&self) -> (Duration, Option<Duration>) {
         match self {
             Self::HardwareReflex => (Duration::ZERO, Some(Duration::from_millis(10))),
-            Self::SubcorticalReaction => (Duration::from_millis(10), Some(Duration::from_millis(50))),
-            Self::EmotionalResponse => (Duration::from_millis(50), Some(Duration::from_millis(200))),
+            Self::SubcorticalReaction => {
+                (Duration::from_millis(10), Some(Duration::from_millis(50)))
+            }
+            Self::EmotionalResponse => {
+                (Duration::from_millis(50), Some(Duration::from_millis(200)))
+            }
             Self::ConsciousDeliberation => (Duration::from_millis(200), None),
         }
     }
@@ -95,7 +99,7 @@ impl ReactiveMemory {
     /// Process input through all reactive layers
     pub fn process(&self, input: &SensorInput) -> Option<ReactiveResponse> {
         let start = Instant::now();
-        
+
         // Check each layer in order (fastest to slowest)
         for layer in [
             ReactiveLayer::HardwareReflex,
@@ -110,34 +114,39 @@ impl ReactiveMemory {
                 }
             }
         }
-        
+
         None
     }
 
     /// Process input for a specific layer
-    fn process_layer(&self, layer: ReactiveLayer, input: &SensorInput, start: Instant) -> Option<ReactiveResponse> {
+    fn process_layer(
+        &self,
+        layer: ReactiveLayer,
+        input: &SensorInput,
+        start: Instant,
+    ) -> Option<ReactiveResponse> {
         let layer_idx = layer as usize;
         let elapsed = start.elapsed();
-        
+
         // Check if we're within this layer's time window
         let (min_time, max_time) = layer.response_window();
         if elapsed < min_time || (max_time.is_some() && elapsed > max_time.unwrap()) {
             return None;
         }
-        
+
         // Evaluate patterns for this layer
         let mut best_response: Option<ReactiveResponse> = None;
         let mut best_strength = 0.0;
-        
+
         for pattern in &self.patterns[layer_idx] {
             let activation = self.calculate_activation(pattern, input);
-            
+
             if activation > pattern.threshold && activation > best_strength {
                 best_strength = activation;
                 best_response = Some((pattern.response)());
             }
         }
-        
+
         best_response
     }
 
@@ -167,7 +176,7 @@ impl ReactiveMemory {
     pub fn bypass_probability(layer: ReactiveLayer, threat_level: f32) -> f32 {
         const K: f32 = 2.0; // Sensitivity constant
         let layer_idx = layer as usize;
-        
+
         1.0 - (-K * (3.0 - layer_idx as f32) * threat_level).exp()
     }
 }
@@ -216,25 +225,26 @@ impl LoomingDetector {
     pub fn update(&mut self, angular_size: f32) -> Option<f32> {
         let now = Instant::now();
         self.history.push((now, angular_size));
-        
+
         // Keep only recent history (last 500ms)
-        self.history.retain(|(t, _)| now.duration_since(*t) < Duration::from_millis(500));
-        
+        self.history
+            .retain(|(t, _)| now.duration_since(*t) < Duration::from_millis(500));
+
         // Need at least 2 points to calculate expansion
         if self.history.len() < 2 {
             return None;
         }
-        
+
         // Calculate angular expansion rate (tau^-1)
         let (t1, theta1) = self.history[self.history.len() - 2];
         let (t2, theta2) = self.history[self.history.len() - 1];
-        
+
         let dt = t2.duration_since(t1).as_secs_f32();
         let d_theta = theta2 - theta1;
-        
+
         if dt > 0.0 && theta2 > 0.0 {
             let tau_inv = d_theta / (theta2 * dt);
-            
+
             // Calculate urgency
             let urgency = 1.0 - (-self.threshold / tau_inv.max(0.001)).exp();
             Some(urgency)
@@ -248,6 +258,12 @@ impl LoomingDetector {
 pub struct SensorCoherence {
     /// Sensor readings with phase information
     sensors: Vec<(f32, f32)>, // (amplitude, phase)
+}
+
+impl Default for SensorCoherence {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SensorCoherence {
@@ -294,6 +310,12 @@ pub struct SubliminalProcessor {
     awareness_threshold: f32,
     /// Subliminal amplitude range
     subliminal_range: (f32, f32),
+}
+
+impl Default for SubliminalProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SubliminalProcessor {
@@ -362,13 +384,13 @@ mod tests {
     #[test]
     fn test_looming_detection() {
         let mut detector = LoomingDetector::new(0.5);
-        
+
         // Simulate approaching object
         detector.update(0.1);
         std::thread::sleep(Duration::from_millis(100));
         detector.update(0.15);
         std::thread::sleep(Duration::from_millis(100));
-        
+
         if let Some(urgency) = detector.update(0.25) {
             assert!(urgency > 0.0);
             assert!(urgency <= 1.0);
@@ -378,15 +400,15 @@ mod tests {
     #[test]
     fn test_sensor_coherence() {
         let mut coherence = SensorCoherence::new();
-        
+
         // Add coherent sensors (similar phases)
         coherence.add_sensor(1.0, 0.0);
         coherence.add_sensor(0.8, 0.1);
         coherence.add_sensor(0.9, -0.1);
-        
+
         let c = coherence.calculate();
         assert!(c > 0.9); // High coherence
-        
+
         // Add incoherent sensor
         coherence.add_sensor(1.0, std::f32::consts::PI); // Opposite phase
         let c2 = coherence.calculate();

@@ -54,7 +54,11 @@ impl ActivityLogger {
         let session_id = format!(
             "{}-{}",
             Utc::now().format("%Y%m%d-%H%M%S"),
-            uuid::Uuid::new_v4().to_string().chars().take(8).collect::<String>()
+            uuid::Uuid::new_v4()
+                .to_string()
+                .chars()
+                .take(8)
+                .collect::<String>()
         );
 
         let logger = ActivityLogger {
@@ -176,11 +180,7 @@ impl ActivityLogger {
 
     /// Log hook operations
     pub fn log_hook(hook_type: &str, action: &str, details: Value) -> Result<()> {
-        Self::log_event(
-            "hook",
-            &format!("{}_{}", hook_type, action),
-            details,
-        )
+        Self::log_event("hook", &format!("{}_{}", hook_type, action), details)
     }
 
     /// Log memory operations
@@ -202,7 +202,11 @@ impl ActivityLogger {
     }
 
     /// Log performance metrics
-    pub fn log_performance(operation: &str, duration_ms: u64, items_processed: usize) -> Result<()> {
+    pub fn log_performance(
+        operation: &str,
+        duration_ms: u64,
+        items_processed: usize,
+    ) -> Result<()> {
         Self::log_event(
             "performance",
             operation,
@@ -243,7 +247,8 @@ impl ActivityLogger {
                 .collect();
 
             let event_types: std::collections::HashMap<String, usize> =
-                session_events.iter()
+                session_events
+                    .iter()
                     .fold(std::collections::HashMap::new(), |mut acc, entry| {
                         *acc.entry(entry.event_type.clone()).or_insert(0) += 1;
                         acc
@@ -266,7 +271,7 @@ impl ActivityLogger {
     /// Shutdown logging and write final stats
     pub fn shutdown() -> Result<()> {
         let logger_guard = ACTIVITY_LOGGER.lock().unwrap();
-        if let Some(logger) = logger_guard.as_ref() {
+        if let Some(_logger) = logger_guard.as_ref() {
             let stats = Self::get_session_stats()?;
             Self::log_event("shutdown", "finalize", stats)?;
         }
@@ -293,11 +298,8 @@ macro_rules! log_activity {
     };
     ($event:expr, $operation:expr, $details:expr) => {
         if $crate::activity_logger::is_logging_enabled() {
-            let _ = $crate::activity_logger::ActivityLogger::log_event(
-                $event,
-                $operation,
-                $details,
-            );
+            let _ =
+                $crate::activity_logger::ActivityLogger::log_event($event, $operation, $details);
         }
     };
 }
