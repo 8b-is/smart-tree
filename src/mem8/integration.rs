@@ -17,7 +17,7 @@ pub struct SmartTreeMem8 {
     /// Wave grid for storing directory memories
     wave_grid: Arc<RwLock<WaveGrid>>,
     /// Reactive memory system
-    reactive_memory: Arc<ReactiveMemory>,
+    reactive_memory: Arc<RwLock<ReactiveMemory>>,
     /// Consciousness engine
     consciousness: Arc<ConsciousnessEngine>,
     /// Current directory depth for z-axis mapping
@@ -33,8 +33,13 @@ impl Default for SmartTreeMem8 {
 impl SmartTreeMem8 {
     /// Create a new MEM8 instance for Smart Tree
     pub fn new() -> Self {
+        #[cfg(not(test))]
         let wave_grid = Arc::new(RwLock::new(WaveGrid::new()));
-        let reactive_memory = Arc::new(ReactiveMemory::new(wave_grid.clone()));
+        
+        #[cfg(test)]
+        let wave_grid = Arc::new(RwLock::new(WaveGrid::new_test()));
+        
+        let reactive_memory = Arc::new(RwLock::new(ReactiveMemory::new(wave_grid.clone())));
         let consciousness = Arc::new(ConsciousnessEngine::new(wave_grid.clone()));
 
         Self {
@@ -214,7 +219,7 @@ impl SmartTreeMem8 {
         };
 
         // Register patterns
-        let reactive = Arc::get_mut(&mut self.reactive_memory).unwrap();
+        let mut reactive = self.reactive_memory.write().unwrap();
         reactive.register_pattern(ReactiveLayer::SubcorticalReaction, large_dir_pattern);
         reactive.register_pattern(ReactiveLayer::HardwareReflex, security_pattern);
     }
@@ -239,7 +244,7 @@ impl SmartTreeMem8 {
             },
         };
 
-        self.reactive_memory.process(&input)
+        self.reactive_memory.read().unwrap().process(&input)
     }
 
     /// Update consciousness state
