@@ -273,6 +273,6 @@ mod tests {
         assert!(output_str.contains("Documentation"));
         assert!(output_str.contains("Source Code"));
         assert!(output_str.contains("Tests"));
-        assert!(output_str.contains("Wave signature"));
+        assert!(output_str.contains("Wave:"));
     }
 }
