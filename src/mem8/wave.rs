@@ -304,12 +304,12 @@ mod tests {
 
     #[test]
     fn test_wave_grid_storage() {
-        let mut grid = WaveGrid::new();
+        let mut grid = WaveGrid::new_test();
         let wave = MemoryWave::new(440.0, 0.5);
 
-        grid.store(128, 128, 32768, wave);
+        grid.store(128, 128, 128, wave);
 
-        assert!(grid.get(128, 128, 32768).is_some());
+        assert!(grid.get(128, 128, 128).is_some());
         assert!(grid.get(0, 0, 0).is_none());
     }
 
