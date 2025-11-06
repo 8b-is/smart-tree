@@ -937,15 +937,21 @@ mod tests {
 
     #[test]
     fn test_emotional_therapy() {
-        let therapy = EmotionalMemoryTherapy::new();
+        // Create therapy with shorter tau for testing
+        let mut therapy = EmotionalMemoryTherapy::new();
+        therapy.therapy_tau = std::time::Duration::from_millis(100); // Short tau for test
+        
         let mut wave = MemoryWave::new(600.0, 0.9);
         wave.arousal = 0.9;
         wave.valence = -0.8;
 
         assert!(therapy.needs_therapy(&wave));
 
+        // Wait for exposure to ramp up
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        
         let reintro = therapy.calculate_reintroduction(&wave, 123);
-        assert!(reintro > 0.0);
+        assert!(reintro > 0.0, "reintro was {}", reintro);
         assert!(reintro <= wave.amplitude * therapy.max_amplification);
     }
 

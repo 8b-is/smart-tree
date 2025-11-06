@@ -68,7 +68,7 @@ impl UTLPipeline {
         if lower.contains("i ") || lower.contains("me ") {
             glyphs.push("🙋"); // Self symbol
         }
-        if lower.contains("you ") {
+        if lower.contains("you ") || lower.contains(" you") || lower == "you" {
             glyphs.push("👤"); // Other symbol
         }
 

@@ -97,11 +97,12 @@ impl Translate<RawText, UtlDoc> for RawToUtl {
                 continue;
             }
 
-            // Convert to UTL symbols
-            if sentence.contains("i ") || sentence.contains("me") {
+            // Convert to UTL symbols (using word boundary checks)
+            let words: Vec<&str> = sentence.split_whitespace().collect();
+            if words.contains(&"i") || sentence.contains("me") {
                 tokens.push("🙋".to_string()); // Self
             }
-            if sentence.contains("you") {
+            if words.contains(&"you") {
                 tokens.push("👤".to_string()); // Other
             }
             if sentence.contains("love") {
@@ -113,14 +114,20 @@ impl Translate<RawText, UtlDoc> for RawToUtl {
             if sentence.contains("remember") {
                 tokens.push("💭".to_string());
             }
-            if sentence.contains("was") || sentence.contains("were") {
+            if words.contains(&"was") || words.contains(&"were") || words.contains(&"being") {
                 tokens.push("⏮".to_string()); // Past
             }
-            if sentence.contains("is") || sentence.contains("am") || sentence.contains("are") {
+            if words.contains(&"is") || words.contains(&"am") || words.contains(&"are") {
                 tokens.push("⏺".to_string()); // Present
             }
-            if sentence.contains("will") {
+            if words.contains(&"will") {
                 tokens.push("⏭".to_string()); // Future
+            }
+            if sentence.contains("happy") {
+                tokens.push("😊".to_string());
+            }
+            if sentence.contains("sad") {
+                tokens.push("😢".to_string());
             }
 
             // Add UDC delay marker between thoughts
@@ -244,7 +251,7 @@ pub fn analyze_utl(doc: &mut UtlDoc) -> Result<()> {
     }
 
     // Detect genre from patterns
-    if doc.tokens.contains(&"💭".to_string()) && temporal == "past" {
+    if doc.tokens.contains(&"💭".to_string()) {
         genre = "memoir";
     }
 

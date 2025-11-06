@@ -332,7 +332,7 @@ impl ConsciousnessStream {
     /// Recall memories similar to current thought
     pub fn recall(&self, packets: &[Packet], count: usize) -> Vec<WaveMemory> {
         let query = WaveMemory::from_packets(packets.to_vec());
-        let similar = self.store.search_similar(&query, 0.5);
+        let similar = self.store.search_similar(&query, 0.1);
 
         let mut memories = Vec::new();
         for (id, _) in similar.iter().take(count) {
