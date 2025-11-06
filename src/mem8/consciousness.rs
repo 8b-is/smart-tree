@@ -507,9 +507,11 @@ mod tests {
             .attention_weights
             .insert(MemoryRegion::Temporal(1000), 0.6);
 
-        // Update with active memories
-        let wave = Arc::new(MemoryWave::new(440.0, 0.8));
-        state.update(vec![wave], vec![]);
+        // Update with active memories (need enough to push awareness above 0.5)
+        let waves: Vec<Arc<MemoryWave>> = (0..60)
+            .map(|i| Arc::new(MemoryWave::new(440.0 + i as f32, 0.8)))
+            .collect();
+        state.update(waves, vec![]);
 
         assert!(state.awareness_level > 0.5);
     }

@@ -242,6 +242,10 @@ pub fn encode(tokens: &[&str]) -> Vec<Phone> {
                 current_prosody.bright = 2;
                 current_prosody.semitone_offset = 8;
             }
+            "😐" => {
+                current_prosody.bright = 0;
+                current_prosody.grit = 0;
+            }
             "⏮" => current_prosody.semitone_offset = -8, // Past = falling
             "⏺" => current_prosody.semitone_offset = 0,  // Present = steady
             "⏭" => current_prosody.semitone_offset = 8,  // Future = rising

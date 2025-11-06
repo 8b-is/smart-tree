@@ -131,6 +131,22 @@ impl WaveGrid {
         }
     }
 
+    /// Create a smaller wave grid for testing (to avoid memory issues)
+    #[cfg(test)]
+    pub fn new_test() -> Self {
+        const WIDTH: usize = 256;
+        const HEIGHT: usize = 256;
+        const DEPTH: usize = 256; // Much smaller for tests
+
+        Self {
+            width: WIDTH,
+            height: HEIGHT,
+            depth: DEPTH,
+            grid: vec![None; WIDTH * HEIGHT * DEPTH],
+            noise_floor: 0.1,
+        }
+    }
+
     /// Get linear index from 3D coordinates
     fn get_index(&self, x: u8, y: u8, z: u16) -> usize {
         let x = x as usize;
@@ -288,12 +304,12 @@ mod tests {
 
     #[test]
     fn test_wave_grid_storage() {
-        let mut grid = WaveGrid::new();
+        let mut grid = WaveGrid::new_test();
         let wave = MemoryWave::new(440.0, 0.5);
 
-        grid.store(128, 128, 32768, wave);
+        grid.store(128, 128, 128, wave);
 
-        assert!(grid.get(128, 128, 32768).is_some());
+        assert!(grid.get(128, 128, 128).is_some());
         assert!(grid.get(0, 0, 0).is_none());
     }
 
