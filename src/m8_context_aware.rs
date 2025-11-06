@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_relevance_calculation() {
-        let mut reader = ContextAwareReader::new();
+        let reader = ContextAwareReader::new();
 
         let m8 = ContextualM8 {
             frequency: 42.0,

@@ -442,9 +442,9 @@ mod tests {
         let num_samples = (sample_rate as f64 * duration) as usize;
 
         let mut samples = vec![0.0f32; num_samples];
-        for i in 0..num_samples {
+        for (i, sample) in samples.iter_mut().enumerate().take(num_samples) {
             let t = i as f64 / sample_rate as f64;
-            samples[i] = (2.0 * std::f64::consts::PI * frequency * t).sin() as f32 * 0.5;
+            *sample = (2.0 * std::f64::consts::PI * frequency * t).sin() as f32 * 0.5;
         }
 
         // Process audio

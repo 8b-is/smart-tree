@@ -2,8 +2,6 @@
 //!
 //! Transforms any document into UTL format with full context preservation
 
-use anyhow::Result;
-
 /// Document types that affect interpretation
 #[derive(Debug, Clone)]
 pub enum DocumentGenre {
@@ -155,14 +153,14 @@ impl UniversalDocument {
         // Simple year extraction (1900-2099)
         for word in text.split_whitespace() {
             if let Ok(year) = word.trim_matches(|c: char| !c.is_numeric()).parse::<i32>() {
-                if year >= 1900 && year <= 2099 {
+                if (1900..=2099).contains(&year) {
                     dates.push(year);
                 }
             }
         }
 
         // If we found dates, use them
-        let (start_year, end_year) = if !dates.is_empty() {
+        let (_start_year, _end_year) = if !dates.is_empty() {
             dates.sort();
             (dates[0], dates[dates.len() - 1])
         } else {
@@ -267,7 +265,7 @@ impl UniversalDocument {
 
         // Add temporal marker
         if self.temporal.temporal_confidence > 0.3 {
-            utl.push_str("⏰"); // Time marker
+            utl.push('⏰'); // Time marker
         }
 
         // Add primary emotion
@@ -275,13 +273,13 @@ impl UniversalDocument {
 
         // Add relationship marker if people mentioned
         if !self.relational.subjects.is_empty() {
-            utl.push_str("👥"); // People marker
+            utl.push('👥'); // People marker
         }
 
         // Add delay marker (UDC principle)
         if let Some(delay) = self.temporal.memory_delay_ms {
             if delay > 500 {
-                utl.push_str("⧖"); // The UDC delay symbol!
+                utl.push('⧖'); // The UDC delay symbol!
             }
         }
 

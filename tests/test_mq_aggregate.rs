@@ -30,7 +30,7 @@ fn test_mq_aggregate_basic() {
 
     // Run mq aggregate
     let output_path = temp_path.join("test.mq");
-    let mut cmd = Command::cargo_bin("mq").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("mq"));
     let output = cmd
         .args([
             "aggregate",
@@ -96,7 +96,7 @@ fn test_mq_aggregate_with_compression() {
 
     // Run mq aggregate with zlib
     let aggregate_path = temp_path.join("compressed.mq");
-    let mut cmd = Command::cargo_bin("mq").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("mq"));
     let output = cmd
         .args([
             "aggregate",
@@ -145,7 +145,7 @@ fn test_mq_aggregate_with_exclusions() {
 
     // Run with exclusions
     let output_path = temp_path.join("filtered.mq");
-    let mut cmd = Command::cargo_bin("mq").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("mq"));
     let output = cmd
         .args([
             "aggregate",

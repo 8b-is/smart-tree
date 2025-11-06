@@ -344,7 +344,7 @@ mod tests {
         // Each semantic token should have a unique frequency
         for (freq, amp, _phase) in waves {
             assert!(freq > 0.0 && freq < 1000.0);
-            assert!(amp >= 0.0 && amp <= 1.0);
+            assert!((0.0..=1.0).contains(&amp));
         }
     }
 }

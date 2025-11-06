@@ -1929,9 +1929,14 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
             // Add helpful message about compression
             let compressed_size = compressed.len();
-            let compression_ratio = 100.0 - (compressed_size as f64 / output_str.len() as f64 * 100.0);
-            eprintln!("✅ Compressed: {} → {} bytes ({:.1}% reduction)",
-                     output_str.len(), compressed_size, compression_ratio);
+            let compression_ratio =
+                100.0 - (compressed_size as f64 / output_str.len() as f64 * 100.0);
+            eprintln!(
+                "✅ Compressed: {} → {} bytes ({:.1}% reduction)",
+                output_str.len(),
+                compressed_size,
+                compression_ratio
+            );
 
             format!("COMPRESSED_V1:{}", hex::encode(&compressed))
         } else {

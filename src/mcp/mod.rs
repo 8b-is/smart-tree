@@ -3,13 +3,13 @@
 //! This module provides a JSON-RPC server that exposes Smart Tree's functionality
 //! through the Model Context Protocol, allowing AI assistants to analyze directories.
 
+use crate::compression_manager;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::compression_manager;
 
 mod assistant;
 mod cache;

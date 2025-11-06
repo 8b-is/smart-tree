@@ -147,13 +147,7 @@ const BD_MASK: u16 = 0b0010_0000_0000_0000;
 
 #[inline]
 fn semitone_to_5bit_tc(v: i8) -> u16 {
-    let cl = if v < -16 {
-        -16
-    } else if v > 15 {
-        15
-    } else {
-        v
-    };
+    let cl = v.clamp(-16, 15);
     let raw = if cl < 0 {
         (32 + cl as i16) as u8
     } else {

@@ -121,9 +121,7 @@ fn get_standard_tokens(id: &str) -> Option<HashMap<String, String>> {
 }
 
 fn parse_std_flag(flags: Option<&str>) -> Option<String> {
-    let Some(f) = flags else {
-        return None;
-    };
+    let f = flags?;
     for part in f.split_whitespace() {
         if let Some(rest) = part.strip_prefix("-std:") {
             return Some(rest.to_string());
