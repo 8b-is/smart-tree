@@ -205,8 +205,6 @@ impl UTLPipeline {
 
     /// Translate UTL symbols back to English
     fn utl_to_english(utl: &str) -> Result<String> {
-        let mut english = String::new();
-
         // This would be a sophisticated translator
         // For now, just map symbols back to words
         let translation = utl
@@ -283,7 +281,7 @@ pub fn process_document(raw: &[u8], output_language: &str) -> Result<String> {
     let utl = UTLPipeline::translate_to_utl(&text)?;
 
     // Step 3: Analyze the UTL (not the original text!)
-    let analysis = UTLPipeline::analyze_utl(&utl)?;
+    let _analysis = UTLPipeline::analyze_utl(&utl)?;
 
     // Step 4: Store in MEM|8 (would happen here)
     // let wave = mem8::store_utl(&utl, &analysis)?;

@@ -5,8 +5,6 @@
 use std::path::PathBuf;
 #[allow(unused_imports)]
 use std::time::Duration;
-#[allow(unused_imports)]
-use tokio;
 
 /// Test session manager creation and retrieval
 #[tokio::test]

@@ -7,9 +7,8 @@ use serde_json::Value;
 use std::sync::RwLock;
 
 /// Global compression state
-static COMPRESSION_STATE: Lazy<RwLock<CompressionState>> = Lazy::new(|| {
-    RwLock::new(CompressionState::default())
-});
+static COMPRESSION_STATE: Lazy<RwLock<CompressionState>> =
+    Lazy::new(|| RwLock::new(CompressionState::default()));
 
 #[derive(Debug, Clone)]
 pub struct CompressionState {
@@ -40,8 +39,8 @@ pub struct CompressionStats {
 impl Default for CompressionState {
     fn default() -> Self {
         Self {
-            client_supports_compression: None,  // Unknown until tested
-            max_tokens: 20000,  // Safe limit (MCP allows 25k)
+            client_supports_compression: None, // Unknown until tested
+            max_tokens: 20000,                 // Safe limit (MCP allows 25k)
             force_compression: false,
             disable_compression: false,
             stats: CompressionStats::default(),
@@ -89,7 +88,10 @@ pub fn check_client_compression_support(request: &Value) -> bool {
 pub fn set_compression_support(supported: bool) {
     if let Ok(mut state) = COMPRESSION_STATE.write() {
         state.client_supports_compression = Some(supported);
-        eprintln!("🗜️ Client compression support: {}", if supported { "YES" } else { "NO" });
+        eprintln!(
+            "🗜️ Client compression support: {}",
+            if supported { "YES" } else { "NO" }
+        );
     }
 }
 
@@ -151,12 +153,17 @@ pub fn smart_compress_mcp_response(response: &mut Value) -> Result<()> {
                             // Calculate compression stats
                             let original_size = text_str.len();
                             let compressed_size = compressed.len();
-                            let ratio = 100.0 - (compressed_size as f64 / original_size as f64 * 100.0);
+                            let ratio =
+                                100.0 - (compressed_size as f64 / original_size as f64 * 100.0);
 
-                            eprintln!("🗜️ Auto-compressed response: {} → {} bytes ({:.1}% reduction)",
-                                     original_size, compressed_size, ratio);
-                            eprintln!("💡 Estimated tokens saved: {}",
-                                     (original_size / 4).saturating_sub(compressed_size / 4));
+                            eprintln!(
+                                "🗜️ Auto-compressed response: {} → {} bytes ({:.1}% reduction)",
+                                original_size, compressed_size, ratio
+                            );
+                            eprintln!(
+                                "💡 Estimated tokens saved: {}",
+                                (original_size / 4).saturating_sub(compressed_size / 4)
+                            );
 
                             *text = Value::String(compressed);
 
@@ -183,10 +190,13 @@ pub fn smart_compress_mcp_response(response: &mut Value) -> Result<()> {
 
                                 let original_size = text_str.len();
                                 let compressed_size = compressed.len();
-                                let ratio = 100.0 - (compressed_size as f64 / original_size as f64 * 100.0);
+                                let ratio =
+                                    100.0 - (compressed_size as f64 / original_size as f64 * 100.0);
 
-                                eprintln!("🗜️ Auto-compressed result: {} → {} bytes ({:.1}% reduction)",
-                                         original_size, compressed_size, ratio);
+                                eprintln!(
+                                    "🗜️ Auto-compressed result: {} → {} bytes ({:.1}% reduction)",
+                                    original_size, compressed_size, ratio
+                                );
 
                                 *text = Value::String(compressed);
 
@@ -209,7 +219,11 @@ pub fn get_compression_stats() -> CompressionStats {
 }
 
 /// Configure compression settings
-pub fn configure_compression(max_tokens: Option<usize>, force: Option<bool>, disable: Option<bool>) {
+pub fn configure_compression(
+    max_tokens: Option<usize>,
+    force: Option<bool>,
+    disable: Option<bool>,
+) {
     if let Ok(mut state) = COMPRESSION_STATE.write() {
         if let Some(max) = max_tokens {
             state.max_tokens = max;

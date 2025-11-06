@@ -14,12 +14,11 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 #[cfg(feature = "std")]
 use std::{
     boxed::Box,
-    string::String,
     time::{SystemTime, UNIX_EPOCH},
     vec::Vec,
 };
 
-use super::utl_phonetics::{decode_compact, Packet, PhId};
+use super::utl_phonetics::{Packet, PhId};
 
 /// Wave memory representation of a UTL thought
 #[derive(Debug, Clone)]
@@ -124,15 +123,15 @@ fn generate_wave_pattern(packets: &[Packet]) -> Vec<f32> {
         let freq = base_freq * (2.0_f32).powf(semitone as f32 / 12.0);
 
         // Add wave contribution
-        for j in 0..WAVE_SIZE {
+        for (j, p) in pattern.iter_mut().enumerate().take(WAVE_SIZE) {
             let phase = 2.0 * core::f32::consts::PI * freq * (j as f32) / (WAVE_SIZE as f32);
             let amplitude = 1.0 + (bright as f32 * 0.3) - (grit as f32 * 0.2);
 
-            pattern[j] += amplitude * phase.sin() / (i + 1) as f32;
+            *p += amplitude * phase.sin() / (i + 1) as f32;
 
             if boundary {
                 // Consciousness break adds a spike
-                pattern[j] *= 1.5;
+                *p *= 1.5;
             }
         }
     }
@@ -226,6 +225,13 @@ pub trait MemoryStore {
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub struct InMemoryStore {
     memories: Vec<(u64, WaveMemory)>,
+}
+
+#[cfg(any(feature = "std", feature = "alloc"))]
+impl Default for InMemoryStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(any(feature = "std", feature = "alloc"))]

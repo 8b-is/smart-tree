@@ -210,23 +210,23 @@ mod tests {
         };
 
         // First time - should be revolutionary
-        let score1 = tracker.calculate_novelty(&[unit.clone()]);
+        let score1 = tracker.calculate_novelty(std::slice::from_ref(&unit));
         assert_eq!(score1.classification, NoveltyClass::Revolutionary);
         assert_eq!(score1.value, 1.0);
         assert!(score1.is_novel);
 
         // Second time - should decay
-        let score2 = tracker.calculate_novelty(&[unit.clone()]);
+        let score2 = tracker.calculate_novelty(std::slice::from_ref(&unit));
         assert!(!score2.is_novel);
         assert!(score2.value < 1.0);
         assert_eq!(score2.occurrence, 2);
 
         // Many times - should become stale
         for _ in 0..100 {
-            tracker.calculate_novelty(&[unit.clone()]);
+            tracker.calculate_novelty(std::slice::from_ref(&unit));
         }
 
-        let score_final = tracker.calculate_novelty(&[unit.clone()]);
+        let score_final = tracker.calculate_novelty(std::slice::from_ref(&unit));
         assert!(score_final.value < 0.2);
         assert!(score_final.occurrence > 100);
     }

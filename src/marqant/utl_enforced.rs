@@ -144,6 +144,12 @@ impl Translate<RawText, UtlDoc> for RawToUtl {
 /// UTL to human language - the ONLY exit point
 pub struct UtlToHuman<L: Language>(PhantomData<L>);
 
+impl Default for UtlToHuman<Eng> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UtlToHuman<Eng> {
     pub fn new() -> Self {
         Self(PhantomData)
@@ -176,6 +182,12 @@ impl Translate<UtlDoc, HumanText<Eng>> for UtlToHuman<Eng> {
             _lang: PhantomData,
             text: words.join(" "),
         })
+    }
+}
+
+impl Default for UtlToHuman<Jpn> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

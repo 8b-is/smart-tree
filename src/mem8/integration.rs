@@ -35,10 +35,10 @@ impl SmartTreeMem8 {
     pub fn new() -> Self {
         #[cfg(not(test))]
         let wave_grid = Arc::new(RwLock::new(WaveGrid::new()));
-        
+
         #[cfg(test)]
         let wave_grid = Arc::new(RwLock::new(WaveGrid::new_test()));
-        
+
         let reactive_memory = Arc::new(RwLock::new(ReactiveMemory::new(wave_grid.clone())));
         let consciousness = Arc::new(ConsciousnessEngine::new(wave_grid.clone()));
 
