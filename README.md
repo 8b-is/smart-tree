@@ -47,6 +47,8 @@ st --mode quantum           # Quantum compression (100x smaller!)
 st --search "TODO"          # Lightning-fast content search
 ```
 
+Note: For guidance and copyable templates to make GitHub Copilot (or other LLMs) call Smart Tree's MCP tools correctly, see `.github/COPILOT_MCP_GUIDELINES.md` and the repository-level instructions at `.github/COPILOT_REPO_INSTRUCTIONS.md`.
+
 ## 🌶️ Spicy TUI Mode (NEW!)
 
 Experience directory browsing like never before with our cyberpunk-inspired terminal UI:
