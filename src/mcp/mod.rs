@@ -297,6 +297,21 @@ impl McpServer {
             return Ok(String::new()); // Return empty string to skip response
         }
 
+        // Handle logging/setLevel notification
+        if is_notification && request.method == "logging/setLevel" {
+            // Extract log level from params if provided
+            if let Some(params) = &request.params {
+                if let Some(level) = params.get("level").and_then(|v| v.as_str()) {
+                    eprintln!("Received logging/setLevel notification: level={}", level);
+                } else {
+                    eprintln!("Received logging/setLevel notification");
+                }
+            } else {
+                eprintln!("Received logging/setLevel notification");
+            }
+            return Ok(String::new()); // Return empty string to skip response
+        }
+
         // Route the request
         let result = match request.method.as_str() {
             "initialize" => {
@@ -577,5 +592,43 @@ pub fn load_config() -> Result<McpConfig> {
         toml::from_str(&config_str).context("Failed to parse MCP config file")
     } else {
         Ok(McpConfig::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_logging_setlevel_notification() {
+        let config = McpConfig::default();
+        let server = McpServer::new(config);
+
+        // Test logging/setLevel notification without params
+        let request = r#"{"jsonrpc":"2.0","method":"logging/setLevel"}"#;
+        let response = server.handle_request(request).await.unwrap();
+        assert_eq!(response, "", "Notification should return empty response");
+
+        // Test logging/setLevel notification with level parameter
+        let request_with_level = r#"{"jsonrpc":"2.0","method":"logging/setLevel","params":{"level":"debug"}}"#;
+        let response_with_level = server.handle_request(request_with_level).await.unwrap();
+        assert_eq!(
+            response_with_level, "",
+            "Notification with params should return empty response"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_notifications_initialized() {
+        let config = McpConfig::default();
+        let server = McpServer::new(config);
+
+        // Test notifications/initialized
+        let request = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+        let response = server.handle_request(request).await.unwrap();
+        assert_eq!(
+            response, "",
+            "notifications/initialized should return empty response"
+        );
     }
 }
