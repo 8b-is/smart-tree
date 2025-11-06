@@ -205,8 +205,6 @@ impl UTLPipeline {
 
     /// Translate UTL symbols back to English
     fn utl_to_english(utl: &str) -> Result<String> {
-        let _english = String::new();
-
         // This would be a sophisticated translator
         // For now, just map symbols back to words
         let translation = utl
