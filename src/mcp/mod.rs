@@ -300,15 +300,13 @@ impl McpServer {
         // Handle logging/setLevel notification
         if is_notification && request.method == "logging/setLevel" {
             // Extract log level from params if provided
-            if let Some(params) = &request.params {
-                if let Some(level) = params.get("level").and_then(|v| v.as_str()) {
-                    eprintln!("Received logging/setLevel notification: level={}", level);
-                } else {
-                    eprintln!("Received logging/setLevel notification");
-                }
-            } else {
-                eprintln!("Received logging/setLevel notification");
-            }
+            let level = request
+                .params
+                .as_ref()
+                .and_then(|p| p.get("level"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("unspecified");
+            eprintln!("Received logging/setLevel notification: level={}", level);
             return Ok(String::new()); // Return empty string to skip response
         }
 
@@ -371,8 +369,15 @@ impl McpServer {
             _ => Err(anyhow::anyhow!("Method not found: {}", request.method)),
         };
 
-        // Don't send response for notifications
+        // Don't send response for notifications (they don't expect responses)
         if is_notification {
+            // Log unknown notifications for debugging
+            if result.is_err() {
+                eprintln!(
+                    "Received unknown notification: {} (notifications don't return errors)",
+                    request.method
+                );
+            }
             return Ok(String::new());
         }
 
@@ -629,6 +634,20 @@ mod tests {
         assert_eq!(
             response, "",
             "notifications/initialized should return empty response"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unknown_notification() {
+        let config = McpConfig::default();
+        let server = McpServer::new(config);
+
+        // Test unknown notification - should return empty response without error
+        let request = r#"{"jsonrpc":"2.0","method":"notifications/unknown"}"#;
+        let response = server.handle_request(request).await.unwrap();
+        assert_eq!(
+            response, "",
+            "Unknown notification should return empty response"
         );
     }
 }
