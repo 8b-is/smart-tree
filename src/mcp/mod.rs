@@ -297,6 +297,19 @@ impl McpServer {
             return Ok(String::new()); // Return empty string to skip response
         }
 
+        // Handle logging/setLevel notification
+        if is_notification && request.method == "logging/setLevel" {
+            // Extract log level from params if provided
+            let level = request
+                .params
+                .as_ref()
+                .and_then(|p| p.get("level"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("unspecified");
+            eprintln!("Received logging/setLevel notification: level={}", level);
+            return Ok(String::new()); // Return empty string to skip response
+        }
+
         // Route the request
         let result = match request.method.as_str() {
             "initialize" => {
@@ -356,8 +369,15 @@ impl McpServer {
             _ => Err(anyhow::anyhow!("Method not found: {}", request.method)),
         };
 
-        // Don't send response for notifications
+        // Don't send response for notifications (they don't expect responses)
         if is_notification {
+            // Log unknown notifications for debugging
+            if result.is_err() {
+                eprintln!(
+                    "Received unknown notification: {} (notifications don't return errors)",
+                    request.method
+                );
+            }
             return Ok(String::new());
         }
 
@@ -577,5 +597,57 @@ pub fn load_config() -> Result<McpConfig> {
         toml::from_str(&config_str).context("Failed to parse MCP config file")
     } else {
         Ok(McpConfig::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_logging_setlevel_notification() {
+        let config = McpConfig::default();
+        let server = McpServer::new(config);
+
+        // Test logging/setLevel notification without params
+        let request = r#"{"jsonrpc":"2.0","method":"logging/setLevel"}"#;
+        let response = server.handle_request(request).await.unwrap();
+        assert_eq!(response, "", "Notification should return empty response");
+
+        // Test logging/setLevel notification with level parameter
+        let request_with_level = r#"{"jsonrpc":"2.0","method":"logging/setLevel","params":{"level":"debug"}}"#;
+        let response_with_level = server.handle_request(request_with_level).await.unwrap();
+        assert_eq!(
+            response_with_level, "",
+            "Notification with params should return empty response"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_notifications_initialized() {
+        let config = McpConfig::default();
+        let server = McpServer::new(config);
+
+        // Test notifications/initialized
+        let request = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+        let response = server.handle_request(request).await.unwrap();
+        assert_eq!(
+            response, "",
+            "notifications/initialized should return empty response"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unknown_notification() {
+        let config = McpConfig::default();
+        let server = McpServer::new(config);
+
+        // Test unknown notification - should return empty response without error
+        let request = r#"{"jsonrpc":"2.0","method":"notifications/unknown"}"#;
+        let response = server.handle_request(request).await.unwrap();
+        assert_eq!(
+            response, "",
+            "Unknown notification should return empty response"
+        );
     }
 }
