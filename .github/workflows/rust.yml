@@ -39,11 +39,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-registry-
     
-    # - name: Check formatting 🎨
-    #   run: cargo fmt -- --check
+    - name: Check formatting 🎨
+      run: cargo fmt -- --check
 
-    # - name: Run clippy 📎
-    #   run: cargo clippy -- -D warnings
+    - name: Run clippy 📎
+      run: cargo clippy -- -D warnings
 
     # Note: Formatting and clippy checks temporarily disabled
     # to allow for more flexible development
@@ -162,23 +162,22 @@ jobs:
         done
     
     # TEMPORARILY DISABLED: Binary execution hangs in CI
-    # - name: Test binary execution 🎯
-    #   shell: bash
-    #   run: |
-    #     # Test that the binary runs (CI env var already set by GitHub Actions)
-    #     cargo run -- --version
-    #     cargo run -- --help
-    #     
-    #     # Test basic functionality with limited depth to avoid hangs
-    #     cargo run -- --mode classic --depth 1 .
-    #     cargo run -- --mode hex --depth 1 .
-    #     cargo run -- --mode ai --depth 1 .
+    - name: Test binary execution 🎯
+      shell: bash
+      run: |
+        # Test that the binary runs (CI env var already set by GitHub Actions)
+        cargo run -- --version
+        cargo run -- --help
+       
+        # Test basic functionality with limited depth to avoid hangs
+        cargo run -- --mode classic --depth 1 .
+        cargo run -- --mode hex --depth 1 .
+        cargo run -- --mode ai --depth 1 .
     
-    # TEMPORARILY DISABLED: MCP tools also hangs
-    # - name: Test MCP tools listing 🛠️
-    #   if: matrix.os != 'windows-latest'
-    #   run: |
-    #     cargo run -- --mcp-tools | head -20
+    - name: Test MCP tools listing 🛠️
+      if: matrix.os != 'windows-latest'
+      run: |
+        cargo run -- --mcp-tools | head -20
     
   # Security audit
   security:
@@ -229,3 +228,4 @@ jobs:
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       continue-on-error: true
+a
