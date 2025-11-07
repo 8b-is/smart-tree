@@ -66,3 +66,51 @@ code-workspaces/
 
 a_gentleman_and_a_scholar.txt
 
+
+# === CommonIgnores Added by Hue & Aye ===
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.key
+*.key
+*.pem
+credentials.json
+secrets.json
+
+# Python
+.venv
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Rust
+target/
+Cargo.lock
+
+# Node/JavaScript
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
