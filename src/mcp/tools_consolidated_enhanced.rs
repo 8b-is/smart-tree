@@ -62,19 +62,21 @@ EXAMPLES:
 • find {type:'tests'} - Instantly locate all test files
 • find {type:'recent', days:7} - What changed this week?
 • find {type:'large', min_size:'10M'} - Find space hogs
+• find {type:'projects'} - 🚀 Discover forgotten 3am coding gems!
 
 EXAMPLES:
 ✓ Find Python tests: find {type:'tests', path:'src', pattern:'test_*.py'}
 ✓ Recent work: find {type:'recent', days:3}
 ✓ Config files: find {type:'config'}
-✓ Documentation: find {type:'documentation'}",
+✓ Documentation: find {type:'documentation'}
+✓ Find all projects: find {type:'projects', depth:10}",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "type": {
                         "type": "string",
                         "enum": ["files", "code", "config", "documentation", "tests", "build",
-                                 "large", "recent", "timespan", "duplicates", "empty_dirs"],
+                                 "large", "recent", "timespan", "duplicates", "empty_dirs", "projects"],
                         "description": "What to find (code/tests/config/docs/etc)"
                     },
                     "path": {

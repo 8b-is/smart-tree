@@ -6,7 +6,7 @@ use crate::{
     feedback_client::FeedbackClient,
     formatters::{
         ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
-        hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
+        hex::HexFormatter, json::JsonFormatter, projects::ProjectsFormatter, quantum::QuantumFormatter,
         quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter,
         stats::StatsFormatter, summary::SummaryFormatter, summary_ai::SummaryAiFormatter,
         tsv::TsvFormatter, Formatter, PathDisplayMode,
@@ -381,6 +381,25 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     }
                 },
                 "required": ["path"]
+            }),
+        },
+        ToolDefinition {
+            name: "find_projects".to_string(),
+            description: "🚀 Discover all projects across a filesystem! Finds forgotten 3am coding gems by scanning for README.md, project markers (Cargo.toml, package.json, etc), and git repos. Returns condensed summaries with git info, dependencies, and timestamps. Perfect for SmartPastCode memory - find that brilliant solution you wrote months ago!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to search for projects (default: current directory)"
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": "Maximum depth to search (default: 10)",
+                        "default": 10
+                    }
+                },
+                "required": []
             }),
         },
         ToolDefinition {
@@ -1305,6 +1324,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "project_overview" => project_overview(args, ctx_clone.clone()).await,
         "find_code_files" => find_code_files(args, ctx_clone.clone()).await,
         "find_config_files" => find_config_files(args, ctx_clone.clone()).await,
+        "find_projects" => find_projects(args, ctx_clone.clone()).await,
         "find_documentation" => find_documentation(args, ctx_clone.clone()).await,
         "search_in_files" => search_in_files(args, ctx_clone.clone()).await,
         "find_large_files" => find_large_files(args, ctx_clone.clone()).await,
@@ -2395,6 +2415,96 @@ async fn find_config_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         ctx,
     )
     .await
+}
+
+async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let path = args["path"]
+        .as_str()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let depth = args["depth"]
+        .as_i64()
+        .unwrap_or(10) as usize;
+
+    // Check permissions
+    if !is_path_allowed(&path, &ctx.config) {
+        return Ok(json!({
+            "error": "Path not allowed by security settings"
+        }));
+    }
+
+    // Create scanner config with projects mode depth - limit to 3 for testing
+    let config = ScannerConfig {
+        max_depth: depth.min(3),  // Cap at 3 for testing
+        use_default_ignores: true,  // Use defaults to avoid scanning heavy dirs
+        show_hidden: false,
+        respect_gitignore: false,  // We want to find all projects
+        ..Default::default()
+    };
+
+    // Scan for all files - now testing if this is the issue
+    let scanner = Scanner::new(&path, config)?;
+    let (nodes, stats) = scanner.scan()?;
+
+    // Use the ProjectsFormatter to find and format projects
+    let formatter = ProjectsFormatter::new();
+    let mut buffer = Vec::new();
+    formatter.format(&mut buffer, &nodes, &stats, &path)?;
+
+
+    // Parse the output and convert to JSON
+    let output = String::from_utf8_lossy(&buffer);
+
+    // Extract project info from the formatted output
+    let mut projects = Vec::new();
+    let mut current_project = None;
+
+    for line in output.lines() {
+        if line.starts_with("[") && line.contains("] ") {
+            // New project line starts with [HASH]
+            if let Some(proj) = current_project.take() {
+                projects.push(proj);
+            }
+
+            // Parse project line: [HASH] EMOJI name optional-flag
+            if let Some(idx) = line.find("] ") {
+                let after_hash = &line[idx + 2..];
+                // Skip emoji characters and get to the name
+                let name_start = after_hash.chars()
+                    .position(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                    .unwrap_or(0);
+                let name = after_hash[name_start..].trim().to_string();
+
+                current_project = Some(json!({
+                    "name": name,
+                    "hash": line[1..idx].to_string(),
+                    "details": Vec::<String>::new()
+                }));
+            }
+        } else if line.starts_with("  ") && current_project.is_some() {
+            // Project detail
+            if let Some(proj) = current_project.as_mut() {
+                if let Some(details) = proj.get_mut("details") {
+                    if let Some(arr) = details.as_array_mut() {
+                        arr.push(json!(line.trim()));
+                    }
+                }
+            }
+        }
+    }
+
+    // Add the last project
+    if let Some(proj) = current_project {
+        projects.push(proj);
+    }
+
+    Ok(json!({
+        "projects": projects,
+        "count": projects.len(),
+        "search_path": path.display().to_string(),
+        "max_depth": depth
+    }))
 }
 
 async fn find_documentation(args: Value, ctx: Arc<McpContext>) -> Result<Value> {

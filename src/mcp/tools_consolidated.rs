@@ -38,6 +38,13 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
         "duplicates" | "empty_dirs" => {
             json!({ "path": params.get("path").unwrap_or(&json!(".")) })
         }
+        "projects" => {
+            // Projects discovery - finds forgotten 3am coding gems!
+            json!({
+                "path": params.get("path").unwrap_or(&json!(".")),
+                "depth": params.get("depth").unwrap_or(&json!(10))
+            })
+        }
         _ => return Err(anyhow::anyhow!("Unknown find type: {}", find_type)),
     };
 
@@ -54,6 +61,7 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
         "timespan" => "find_in_timespan",
         "duplicates" => "find_duplicates",
         "empty_dirs" => "find_empty_directories",
+        "projects" => "find_projects",
         _ => return Err(anyhow::anyhow!("Unknown find type: {}", find_type)),
     };
 

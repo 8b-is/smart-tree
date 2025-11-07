@@ -36,6 +36,7 @@ use st::{
         markdown::MarkdownFormatter,
         marqant::MarqantFormatter,
         mermaid::{MermaidFormatter, MermaidStyle},
+        projects::ProjectsFormatter,
         quantum::QuantumFormatter,
         semantic::SemanticFormatter,
         sse::SseFormatter,
@@ -534,6 +535,8 @@ enum OutputMode {
     Quantum,
     /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
     Semantic,
+    /// Projects discovery mode. Find all your forgotten 3am coding projects with git info!
+    Projects,
     /// Mermaid diagram format. Perfect for embedding in documentation!
     Mermaid,
     /// Markdown report format. Combines mermaid, tables, and charts for beautiful documentation!
@@ -583,6 +586,7 @@ fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
         OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4, // Reasonable summary depth
         OutputMode::Waste => 10,     // Deep scan to find all duplicates
         OutputMode::Relations => 10, // Deep scan for relationships
+        OutputMode::Projects => 5,   // Good depth for finding all projects
         _ => 4,                      // Default for other modes
     }
 }
@@ -1189,6 +1193,7 @@ async fn main() -> Result<()> {
             }
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
             OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, no_emoji)),
+            OutputMode::Projects => Box::new(ProjectsFormatter::new()),
             OutputMode::Mermaid => {
                 // Convert CLI arg enum to formatter enum
                 let style = match args.mermaid_style {
