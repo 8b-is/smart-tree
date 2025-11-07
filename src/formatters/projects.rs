@@ -439,14 +439,13 @@ impl ProjectsFormatter {
         // Truncate if still too long
         if final_desc.len() > 250 {
             let mut truncated = String::new();
-            let mut char_count = 0;
-            for ch in final_desc.chars() {
+            for (char_count, ch) in final_desc.chars().enumerate() {
                 if char_count >= 247 {
                     break;
                 }
                 truncated.push(ch);
-                char_count += 1;
-            }
+            }   
+            
             format!("{}...", truncated)
         } else {
             final_desc
