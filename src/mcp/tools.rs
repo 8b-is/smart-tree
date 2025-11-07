@@ -6,10 +6,10 @@ use crate::{
     feedback_client::FeedbackClient,
     formatters::{
         ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
-        hex::HexFormatter, json::JsonFormatter, projects::ProjectsFormatter, quantum::QuantumFormatter,
-        quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter,
-        stats::StatsFormatter, summary::SummaryFormatter, summary_ai::SummaryAiFormatter,
-        tsv::TsvFormatter, Formatter, PathDisplayMode,
+        hex::HexFormatter, json::JsonFormatter, projects::ProjectsFormatter,
+        quantum::QuantumFormatter, quantum_semantic::QuantumSemanticFormatter,
+        semantic::SemanticFormatter, stats::StatsFormatter, summary::SummaryFormatter,
+        summary_ai::SummaryAiFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode,
     },
     parse_size, Scanner, ScannerConfig,
 };
@@ -2423,9 +2423,7 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
 
-    let depth = args["depth"]
-        .as_i64()
-        .unwrap_or(10) as usize;
+    let depth = args["depth"].as_i64().unwrap_or(10) as usize;
 
     // Check permissions
     if !is_path_allowed(&path, &ctx.config) {
@@ -2436,10 +2434,10 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
     // Create scanner config with projects mode depth - limit to 3 for testing
     let config = ScannerConfig {
-        max_depth: depth.min(3),  // Cap at 3 for testing
-        use_default_ignores: true,  // Use defaults to avoid scanning heavy dirs
+        max_depth: depth.min(3),   // Cap at 3 for testing
+        use_default_ignores: true, // Use defaults to avoid scanning heavy dirs
         show_hidden: false,
-        respect_gitignore: false,  // We want to find all projects
+        respect_gitignore: false, // We want to find all projects
         ..Default::default()
     };
 
@@ -2451,7 +2449,6 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let formatter = ProjectsFormatter::new();
     let mut buffer = Vec::new();
     formatter.format(&mut buffer, &nodes, &stats, &path)?;
-
 
     // Parse the output and convert to JSON
     let output = String::from_utf8_lossy(&buffer);
@@ -2471,7 +2468,8 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             if let Some(idx) = line.find("] ") {
                 let after_hash = &line[idx + 2..];
                 // Skip emoji characters and get to the name
-                let name_start = after_hash.chars()
+                let name_start = after_hash
+                    .chars()
                     .position(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
                     .unwrap_or(0);
                 let name = after_hash[name_start..].trim().to_string();

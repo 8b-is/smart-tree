@@ -16,10 +16,10 @@ pub struct ProjectInfo {
     pub path: PathBuf,
     pub name: String,
     pub project_type: ProjectType,
-    pub summary: String,           // Condensed summary from README
-    pub size: u64,                 // Total project size
+    pub summary: String, // Condensed summary from README
+    pub size: u64,       // Total project size
     pub file_count: usize,
-    pub created: u64,              // Creation timestamp
+    pub created: u64, // Creation timestamp
     pub last_modified: u64,
     pub last_accessed: u64,        // Last access time
     pub dependencies: Vec<String>, // Key dependencies detected
@@ -30,12 +30,12 @@ pub struct ProjectInfo {
 #[derive(Debug, Clone)]
 pub struct GitInfo {
     pub branch: String,
-    pub commit: String,        // Short commit hash
+    pub commit: String,         // Short commit hash
     pub commit_message: String, // First line of commit message
-    pub is_dirty: bool,        // Has uncommitted changes
-    pub ahead: usize,          // Commits ahead of upstream
-    pub behind: usize,         // Commits behind upstream
-    pub last_commit_date: u64, // Timestamp of last commit
+    pub is_dirty: bool,         // Has uncommitted changes
+    pub ahead: usize,           // Commits ahead of upstream
+    pub behind: usize,          // Commits behind upstream
+    pub last_commit_date: u64,  // Timestamp of last commit
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,7 +63,7 @@ pub struct ProjectsFormatter {
 impl ProjectsFormatter {
     pub fn new() -> Self {
         Self {
-            max_depth: Some(5), // Don't go too deep by default
+            max_depth: Some(5),     // Don't go too deep by default
             min_project_size: 1024, // Skip projects < 1KB
             show_dependencies: true,
             condensed_mode: true,
@@ -88,7 +88,11 @@ impl ProjectsFormatter {
             // Check for README.md files
             if self.is_readme(entry) {
                 let project_path = entry.path().parent().unwrap();
-                if seen_paths.lock().unwrap().insert(project_path.to_path_buf()) {
+                if seen_paths
+                    .lock()
+                    .unwrap()
+                    .insert(project_path.to_path_buf())
+                {
                     if let Ok(project) = self.analyze_project(project_path) {
                         if project.size >= self.min_project_size {
                             projects.lock().unwrap().push(project);
@@ -102,20 +106,32 @@ impl ProjectsFormatter {
                 let filename = entry.file_name().to_str().unwrap_or("");
                 let is_project_marker = matches!(
                     filename,
-                    "Cargo.toml" | "package.json" | "go.mod" | "pom.xml" |
-                    "build.gradle" | "Gemfile" | "requirements.txt" |
-                    "pyproject.toml" | "Dockerfile" | ".gitmodules"
+                    "Cargo.toml"
+                        | "package.json"
+                        | "go.mod"
+                        | "pom.xml"
+                        | "build.gradle"
+                        | "Gemfile"
+                        | "requirements.txt"
+                        | "pyproject.toml"
+                        | "Dockerfile"
+                        | ".gitmodules"
                 );
 
                 if is_project_marker {
                     let project_path = entry.path().parent().unwrap();
 
                     // Check if we haven't seen this project yet
-                    if seen_paths.lock().unwrap().insert(project_path.to_path_buf()) {
+                    if seen_paths
+                        .lock()
+                        .unwrap()
+                        .insert(project_path.to_path_buf())
+                    {
                         // Look for README in parent directory if not found
                         let readme_path = if !project_path.join("README.md").exists() {
                             // Check parent directory
-                            project_path.parent()
+                            project_path
+                                .parent()
                                 .and_then(|p| {
                                     if p.join("README.md").exists() {
                                         Some(p)
@@ -128,7 +144,9 @@ impl ProjectsFormatter {
                             project_path
                         };
 
-                        if let Ok(project) = self.analyze_project_with_readme_path(project_path, readme_path) {
+                        if let Ok(project) =
+                            self.analyze_project_with_readme_path(project_path, readme_path)
+                        {
                             if project.size >= self.min_project_size {
                                 projects.lock().unwrap().push(project);
                             }
@@ -158,7 +176,11 @@ impl ProjectsFormatter {
     }
 
     /// Analyze project with potentially different README location
-    fn analyze_project_with_readme_path(&self, project_path: &Path, readme_path: &Path) -> Result<ProjectInfo> {
+    fn analyze_project_with_readme_path(
+        &self,
+        project_path: &Path,
+        readme_path: &Path,
+    ) -> Result<ProjectInfo> {
         let mut name = project_path
             .file_name()
             .and_then(|n| n.to_str())
@@ -166,10 +188,11 @@ impl ProjectsFormatter {
             .to_string();
 
         // Check if this is a git submodule
-        let is_submodule = project_path.join(".git").exists() &&
-                          project_path.parent()
-                              .map(|p| p.join(".gitmodules").exists())
-                              .unwrap_or(false);
+        let is_submodule = project_path.join(".git").exists()
+            && project_path
+                .parent()
+                .map(|p| p.join(".gitmodules").exists())
+                .unwrap_or(false);
 
         if is_submodule {
             name = format!("📎{}", name); // Indicate submodule
@@ -183,7 +206,8 @@ impl ProjectsFormatter {
         }
 
         let summary = self.extract_summary(readme_path)?;
-        let (size, file_count, created, last_modified, last_accessed) = self.get_project_stats(project_path)?;
+        let (size, file_count, created, last_modified, last_accessed) =
+            self.get_project_stats(project_path)?;
         let mut dependencies = self.detect_dependencies(project_path, &project_type);
 
         // Check for git submodules as dependencies
@@ -303,7 +327,8 @@ impl ProjectsFormatter {
         let mut in_code_block = false;
         let mut consecutive_content_lines = 0;
 
-        for line in lines.iter().take(50) {  // Look through more lines
+        for line in lines.iter().take(50) {
+            // Look through more lines
             let trimmed = line.trim();
 
             // Track code blocks
@@ -320,7 +345,7 @@ impl ProjectsFormatter {
             if trimmed.is_empty() {
                 // Empty line - if we have content, check if we should stop
                 if consecutive_content_lines >= 2 {
-                    break;  // We've found enough content
+                    break; // We've found enough content
                 }
                 continue;
             }
@@ -346,7 +371,8 @@ impl ProjectsFormatter {
                trimmed.starts_with("---") ||     // Horizontal rules
                trimmed.starts_with("===") ||     // Alternative headers
                (trimmed.starts_with("[") && trimmed.ends_with(")") &&
-                (trimmed.contains("shields.io") || trimmed.contains("badge"))) {
+                (trimmed.contains("shields.io") || trimmed.contains("badge")))
+            {
                 continue;
             }
 
@@ -355,7 +381,8 @@ impl ProjectsFormatter {
             let word_count = trimmed.split_whitespace().count();
             if word_count > 0 && link_count > 0 {
                 let link_ratio = link_count as f32 / word_count as f32;
-                if link_ratio > 0.4 {  // More than 40% links
+                if link_ratio > 0.4 {
+                    // More than 40% links
                     continue;
                 }
             }
@@ -377,10 +404,10 @@ impl ProjectsFormatter {
 
             // Clean up any markdown formatting as we add it
             let cleaned = trimmed
-                .replace("**", "")    // Bold
-                .replace("__", "")    // Bold alt
-                .replace("~~", "")    // Strikethrough
-                .replace("`", "");    // Inline code
+                .replace("**", "") // Bold
+                .replace("__", "") // Bold alt
+                .replace("~~", "") // Strikethrough
+                .replace("`", ""); // Inline code
 
             description.push_str(&cleaned);
             consecutive_content_lines += 1;
@@ -424,11 +451,11 @@ impl ProjectsFormatter {
     fn condense_text(&self, text: &str) -> String {
         // Common stopwords to remove
         let stopwords = vec![
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-            "of", "with", "by", "from", "up", "about", "into", "through", "during",
-            "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
-            "do", "does", "did", "will", "would", "should", "could", "may", "might",
-            "this", "that", "these", "those", "it", "its", "which", "what",
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+            "by", "from", "up", "about", "into", "through", "during", "is", "are", "was", "were",
+            "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would",
+            "should", "could", "may", "might", "this", "that", "these", "those", "it", "its",
+            "which", "what",
         ];
 
         let words: Vec<&str> = text.split_whitespace().collect();
@@ -469,7 +496,14 @@ impl ProjectsFormatter {
         let mut last_accessed = 0u64;
 
         // Quick scan - don't recurse into node_modules, target, etc.
-        let ignored_dirs = vec!["node_modules", "target", ".git", "dist", "build", "__pycache__"];
+        let ignored_dirs = vec![
+            "node_modules",
+            "target",
+            ".git",
+            "dist",
+            "build",
+            "__pycache__",
+        ];
 
         // Get project directory metadata for creation time
         if let Ok(dir_metadata) = fs::metadata(path) {
@@ -518,7 +552,13 @@ impl ProjectsFormatter {
             }
         }
 
-        Ok((total_size, file_count, created, last_modified, last_accessed))
+        Ok((
+            total_size,
+            file_count,
+            created,
+            last_modified,
+            last_accessed,
+        ))
     }
 
     /// Get git information using command-line git
@@ -588,10 +628,7 @@ impl ProjectsFormatter {
             .and_then(|s| {
                 let parts: Vec<&str> = s.trim().split('\t').collect();
                 if parts.len() == 2 {
-                    Some((
-                        parts[0].parse().unwrap_or(0),
-                        parts[1].parse().unwrap_or(0),
-                    ))
+                    Some((parts[0].parse().unwrap_or(0), parts[1].parse().unwrap_or(0)))
                 } else {
                     None
                 }
@@ -661,17 +698,17 @@ impl ProjectsFormatter {
     /// Generate HEX-like signature for project
     fn generate_hex_signature(&self, name: &str, project_type: &ProjectType, size: u64) -> String {
         let type_byte = match project_type {
-            ProjectType::Rust => 0x52,      // R
-            ProjectType::NodeJs => 0x4E,    // N
-            ProjectType::Python => 0x50,    // P
-            ProjectType::Go => 0x47,        // G
-            ProjectType::Java => 0x4A,      // J
-            ProjectType::DotNet => 0x44,    // D
-            ProjectType::Ruby => 0x52,      // R
-            ProjectType::Docker => 0x43,    // C (Container)
+            ProjectType::Rust => 0x52,       // R
+            ProjectType::NodeJs => 0x4E,     // N
+            ProjectType::Python => 0x50,     // P
+            ProjectType::Go => 0x47,         // G
+            ProjectType::Java => 0x4A,       // J
+            ProjectType::DotNet => 0x44,     // D
+            ProjectType::Ruby => 0x52,       // R
+            ProjectType::Docker => 0x43,     // C (Container)
             ProjectType::Kubernetes => 0x4B, // K
-            ProjectType::Monorepo => 0x4D,  // M
-            ProjectType::Unknown => 0x55,   // U
+            ProjectType::Monorepo => 0x4D,   // M
+            ProjectType::Unknown => 0x55,    // U
         };
 
         // Simple hash from name
@@ -703,8 +740,11 @@ impl Formatter for ProjectsFormatter {
         let mut output = String::new();
 
         // Header
-        output.push_str(&format!("🔍 Project Discovery: {} projects found\n", projects.len()));
-        output.push_str("═" .repeat(60).as_str());
+        output.push_str(&format!(
+            "🔍 Project Discovery: {} projects found\n",
+            projects.len()
+        ));
+        output.push_str("═".repeat(60).as_str());
         output.push('\n');
 
         for project in projects {
@@ -746,7 +786,9 @@ impl Formatter for ProjectsFormatter {
 
             // Path (relative if possible)
             let display_path = if let Ok(cwd) = std::env::current_dir() {
-                project.path.strip_prefix(&cwd)
+                project
+                    .path
+                    .strip_prefix(&cwd)
                     .unwrap_or(&project.path)
                     .display()
                     .to_string()
@@ -810,7 +852,8 @@ impl Formatter for ProjectsFormatter {
             // Dependencies (if any)
             if self.show_dependencies && !project.dependencies.is_empty() {
                 let deps_str = if project.dependencies.len() > 3 {
-                    format!("{}, +{} more",
+                    format!(
+                        "{}, +{} more",
                         project.dependencies[..3].join(", "),
                         project.dependencies.len() - 3
                     )
@@ -901,11 +944,17 @@ mod tests {
 
         // Create Rust project
         std::fs::write(temp_dir.path().join("Cargo.toml"), "").unwrap();
-        assert_eq!(formatter.detect_project_type(temp_dir.path()), ProjectType::Rust);
+        assert_eq!(
+            formatter.detect_project_type(temp_dir.path()),
+            ProjectType::Rust
+        );
 
         // Add package.json - should become Monorepo
         std::fs::write(temp_dir.path().join("package.json"), "{}").unwrap();
-        assert_eq!(formatter.detect_project_type(temp_dir.path()), ProjectType::Monorepo);
+        assert_eq!(
+            formatter.detect_project_type(temp_dir.path()),
+            ProjectType::Monorepo
+        );
     }
 
     #[test]
