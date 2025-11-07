@@ -14,6 +14,8 @@ keywords = ["tree", "directory", "visualization", "ai", "cli"]
 categories = ["command-line-utilities", "filesystem"]
 
 [dependencies]
+
+axum = { version = "0.7", features = ["ws"] }
 clap = { version = "4.5", features = ["derive", "env"] }
 clap_complete = "4.5"
 clap_mangen = "0.2"
@@ -110,6 +112,7 @@ indexmap = "2.11.1"
 lock_api = "0.4.13"
 prodash = "30.0.1"
 bstr = "1.12.0"
+hyper = "1.7.0"
 
 [[bin]]
 name = "mq"

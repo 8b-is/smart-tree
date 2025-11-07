@@ -60,6 +60,12 @@ pub struct ProjectsFormatter {
     condensed_mode: bool, // Ultra-condensed for AI
 }
 
+impl Default for ProjectsFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProjectsFormatter {
     pub fn new() -> Self {
         Self {
@@ -496,7 +502,7 @@ impl ProjectsFormatter {
         let mut last_accessed = 0u64;
 
         // Quick scan - don't recurse into node_modules, target, etc.
-        let ignored_dirs = vec![
+        let ignored_dirs = [
             "node_modules",
             "target",
             ".git",
@@ -603,7 +609,7 @@ impl ProjectsFormatter {
             .ok()
             .and_then(|output| String::from_utf8(output.stdout).ok())
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| String::new());
+            .unwrap_or_else(String::new);
 
         // Check if repository is dirty
         let is_dirty = Command::new("git")
