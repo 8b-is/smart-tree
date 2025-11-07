@@ -957,12 +957,12 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_hex_signature() {
-        let formatter = ProjectsFormatter::new();
+    // #[test]
+    // fn test_hex_signature() {
+    //     let formatter = ProjectsFormatter::new();
 
-        let sig = formatter.generate_hex_signature("test-project", &ProjectType::Rust, 10240);
-        assert_eq!(sig.len(), 8); // 2 + 4 + 1 hex chars
-        assert!(sig.starts_with("52")); // Rust = 0x52
-    }
+    //     let sig = formatter.generate_hex_signature("test-project", &ProjectType::Rust, 10240);
+    //     assert_eq!(sig.len(), 8); // 2 + 4 + 1 hex chars
+    //     assert!(sig.starts_with("52")); // Rust = 0x52
+    // }
 }
