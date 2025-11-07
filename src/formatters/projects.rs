@@ -609,7 +609,7 @@ impl ProjectsFormatter {
             .ok()
             .and_then(|output| String::from_utf8(output.stdout).ok())
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(String::new);
+            .unwrap_or_default();
 
         // Check if repository is dirty
         let is_dirty = Command::new("git")
