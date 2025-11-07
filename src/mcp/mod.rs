@@ -615,7 +615,8 @@ mod tests {
         assert_eq!(response, "", "Notification should return empty response");
 
         // Test logging/setLevel notification with level parameter
-        let request_with_level = r#"{"jsonrpc":"2.0","method":"logging/setLevel","params":{"level":"debug"}}"#;
+        let request_with_level =
+            r#"{"jsonrpc":"2.0","method":"logging/setLevel","params":{"level":"debug"}}"#;
         let response_with_level = server.handle_request(request_with_level).await.unwrap();
         assert_eq!(
             response_with_level, "",
