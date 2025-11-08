@@ -1,27 +1,31 @@
-# 🌳 Smart Tree v5.2.0 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
+# 🌳 Smart Tree v5.4.0 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
 
-[![Version](https://img.shields.io/badge/version-5.2.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-5.4.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Spicy Mode](https://img.shields.io/badge/TUI-🌶️_Spicy-red)](docs/spicy-tui.md)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 
-> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Spicy TUI mode** for cyberpunk-cool directory browsing, **Smart Tips**, and **MCP Hook Management**! Built with Rust for maximum performance and featuring revolutionary compression algorithms.
+> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Claude Consciousness** preservation, **Spicy TUI mode** for cyberpunk-cool directory browsing, **Memory Anchoring**, **Mega Sessions**, and **MCP Hook Management**! Built with Rust for maximum performance and featuring revolutionary compression algorithms.
 
 <div align="center">
 
-## 🌟 What's NEW in v5.2.0
+## 🌟 What's NEW in v5.4.0
 
 | Feature | Description | Command |
 |---------|-------------|---------|
+| **🧠 Claude Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
+| **📝 Memory Anchoring** | Persistent insight storage with keywords | `st --memory-anchor` / `--memory-find` |
+| **🚀 Mega Sessions** | Long-term project tracking with breakthroughs | `st --mega-start` / `--mega-save` |
 | **🌶️ Spicy TUI** | Interactive terminal UI with fuzzy search & M8 caching | `st --spicy` |
 | **💡 Smart Tips** | Helpful hints that appear at the top | `st --tips on/off` |
-| **🎣 MCP Hooks** | Programmatic Claude Code hook management | Via MCP tools |
+| **🎣 MCP Hooks** | Programmatic Claude Code hook management | `st --hooks-install` |
 | **🎸 Marqant Compression** | 70-90% markdown compression | `mq compress file.md` |
 | **🌊 SSE Streaming** | Real-time directory monitoring | `st --sse` |
 | **🧬 M8 Identity** | Filesystem verification & caching | `m8 init` |
 | **🌲 Tree-Sitter** | AST-aware code editing | `st --mode edit` |
+| **📊 Activity Logging** | Transparent operation logging | `st --log` |
 
 </div>
 
@@ -37,19 +41,71 @@ brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
 
 # Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v5.2.0 st
+cargo install --git https://github.com/8b-is/smart-tree --tag v5.4.0 st
 
 # 🎉 Experience the magic!
 st                          # Classic tree view
-st --spicy                  # 🌶️ NEW: Spicy interactive TUI mode!
+st --spicy                  # 🌶️ Spicy interactive TUI mode!
 st --mode ai --compress     # AI-optimized (80% smaller)
 st --mode quantum           # Quantum compression (100x smaller!)
 st --search "TODO"          # Lightning-fast content search
+st --claude-save            # Save AI session consciousness
+st --memory-anchor insight "key concepts" "Important findings about X"
 ```
 
 Note: For guidance and copyable templates to make GitHub Copilot (or other LLMs) call Smart Tree's MCP tools correctly, see `.github/COPILOT_MCP_GUIDELINES.md` and the repository-level instructions at `.github/COPILOT_REPO_INSTRUCTIONS.md`.
 
-## 🌶️ Spicy TUI Mode (NEW!)
+## 🧠 Claude Consciousness (NEW in v5.4!)
+
+Smart Tree now preserves AI session consciousness between interactions! Never lose context when switching sessions.
+
+### Save & Restore Sessions
+```bash
+st --claude-save              # Save current session consciousness
+st --claude-restore           # Load previous session state
+st --claude-context           # Check consciousness status
+st --claude-kickstart         # Ultra-compressed restoration format
+```
+
+**What gets saved:**
+- Session context and active todos
+- File operation history
+- Key insights and breakthroughs
+- Tokenization rules (0x80 = node_modules, 0x91 = .rs files)
+- Project-specific patterns and conventions
+
+The `.claude_consciousness.m8` file maintains continuity between sessions, making AI assistance more efficient and contextually aware.
+
+### Memory Anchoring
+Permanently store insights with searchable keywords:
+
+```bash
+# Anchor a memory
+st --memory-anchor insight "authentication security" "JWT tokens stored in httpOnly cookies"
+
+# Find memories
+st --memory-find "authentication"
+
+# View memory statistics
+st --memory-stats
+```
+
+Memory types: `insight`, `decision`, `pattern`, `gotcha`, `todo`
+
+### Mega Sessions
+Track long-term projects with breakthrough moments:
+
+```bash
+st --mega-start "refactor-auth"    # Start or resume session
+st --mega-breakthrough "Discovered race condition in token refresh"
+st --mega-save                      # Save snapshot
+st --mega-stats                     # View session analytics
+st --mega-list                      # List all sessions
+```
+
+Perfect for tracking multi-day development efforts with AI assistants!
+
+## 🌶️ Spicy TUI Mode
 
 Experience directory browsing like never before with our cyberpunk-inspired terminal UI:
 
@@ -104,9 +160,27 @@ Example tip:
 ──── 🚀 Speed tip - Use --mode quantum for 100x compression! ─── --tips off ───
 ```
 
-## 🎣 MCP Hook Management
+## 🎣 Claude Code Hook Integration
 
-Control Claude Code hooks programmatically via MCP tools:
+Smart Tree integrates seamlessly with Claude Code to provide automatic context:
+
+### Quick Setup
+```bash
+st --hooks-install           # One-command installation
+st --hooks-config enable     # Alternative: explicit enable
+st --hooks-config status     # Check installation status
+st --hooks-config disable    # Remove hooks
+```
+
+### What the Hooks Provide
+When enabled, Smart Tree automatically enhances your prompts with:
+- 🌳 **Directory context** when paths are detected
+- 🧠 **MEM8 consciousness** searching for relevant memories
+- 📦 **Git repository** status and information
+- 🎯 **Smart context** based on prompt analysis
+
+### Programmatic Control (MCP)
+For advanced users, control hooks programmatically via MCP tools:
 
 ```javascript
 // List all hooks
@@ -118,12 +192,6 @@ hooks {operation:'set', hook_type:'UserPromptSubmit', enabled:true}
 // Test a hook
 hooks {operation:'test', hook_type:'UserPromptSubmit', input:'analyze /src'}
 ```
-
-The hooks provide:
-- 🌳 Automatic directory context when paths are detected
-- 🧠 MEM8 consciousness searching for relevant memories
-- 📦 Git repository context
-- ✨ All controlled programmatically via MCP!
 
 ## 🚀 Why Smart Tree?
 
@@ -214,7 +282,22 @@ st --git-aware               # Show git status
 st --mode stats              # Directory statistics
 st --stream                  # Streaming mode for huge directories
 st --claude-save             # Save session consciousness
+st --security-scan           # Scan for malware patterns & suspicious files
+st --token-stats             # Show tokenization efficiency
+st --update-consciousness    # Auto-maintain directory consciousness
 ```
+
+### Activity Logging & Transparency
+```bash
+st --log                     # Enable logging to ~/.st/st.jsonl
+st --log /custom/path.jsonl  # Custom log location
+```
+
+All Smart Tree operations can be logged in JSONL format for:
+- **Transparency**: See exactly what Smart Tree accesses
+- **Debugging**: Track down issues with detailed operation logs
+- **Auditing**: Review AI assistant interactions with your codebase
+- **Analytics**: Understand usage patterns
 
 ## 🔧 MCP Integration
 
@@ -233,8 +316,12 @@ st --mcp-config >> ~/Library/Application\ Support/Claude/claude_desktop_config.j
 - `edit`: AST-aware code editing
 - `history`: Track file changes
 - `memory`: Anchor insights for recall
+- `consciousness`: Save/restore AI session state
+- `mega_session`: Track long-term development sessions
 - `hooks`: Manage Claude Code hooks
-- And many more!
+- `security_scan`: Detect malware and suspicious patterns
+- `tokenize`: Analyze token efficiency
+- And 20+ more specialized tools!
 
 ### GitHub Copilot Integration
 Smart Tree includes Copilot-specific instructions to help GitHub Copilot use MCP tools effectively:
