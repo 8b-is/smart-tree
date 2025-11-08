@@ -8,7 +8,7 @@
 //
 // Brought to you by The Cheet - making code understandable and fun! 🥁🧻
 // -----------------------------------------------------------------------------
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::generate;
@@ -384,6 +384,13 @@ struct ScanArgs {
     /// Options: flowchart (default), mindmap, gitgraph
     #[arg(long, value_enum, default_value = "flowchart")]
     mermaid_style: MermaidStyleArg,
+
+    /// Index Rust code to SmartPastCode registry for universal code discovery.
+    /// Specify the registry URL (e.g., http://localhost:8430).
+    /// This will extract functions, modules, and impl blocks and submit them to the registry.
+    /// Works best with --mode projects for project-level indexing.
+    #[arg(long, value_name = "URL")]
+    index_registry: Option<String>,
 
     /// Exclude mermaid diagrams from markdown report (only used with --mode markdown).
     #[arg(long)]
@@ -1261,6 +1268,26 @@ async fn main() -> Result<()> {
                 ))
             }
         };
+
+        // Handle registry indexing if requested
+        if let Some(registry_url) = &args.index_registry {
+            use st::registry::RegistryIndexer;
+
+            eprintln!("🚀 Indexing project to SmartPastCode registry: {}", registry_url);
+
+            let indexer = RegistryIndexer::new(registry_url)
+                .context("Failed to create registry indexer")?;
+
+            match indexer.index_project(&root_path) {
+                Ok(stats) => {
+                    stats.print_summary();
+                }
+                Err(e) => {
+                    eprintln!("❌ Registry indexing failed: {}", e);
+                    eprintln!("   Continuing with normal output...");
+                }
+            }
+        }
 
         // Show a helpful tip at the top (occasionally) for non-streaming modes
         // Only show if not in streaming mode (already shown above for streaming)

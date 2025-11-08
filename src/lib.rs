@@ -132,3 +132,6 @@ pub mod marqant;
 
 // ST Tokenizer - Advanced semantic pattern recognition with frequency tracking
 pub mod st_tokenizer;
+
+// SmartPastCode Registry Integration - Auto-indexing for universal code discovery
+pub mod registry;
