@@ -11,6 +11,7 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod ai_psychology;
 mod assistant;
 mod cache;
 pub mod consciousness;
