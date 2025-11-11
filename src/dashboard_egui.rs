@@ -6,8 +6,7 @@ use anyhow::Result;
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 use egui::{Color32, Pos2, Stroke, Vec2};
 use std::collections::VecDeque;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 /// Dashboard state shared between rust shell and GUI
 pub struct DashboardState {
@@ -162,7 +161,7 @@ impl Dashboard {
             ui.separator();
 
             // Voice indicator
-            let voice_active = self.state.voice_active.blocking_read();
+            let voice_active = self.state.voice_active.read().unwrap();
             if *voice_active {
                 ui.colored_label(Color32::GREEN, "🎤 Voice Active");
             } else {
@@ -170,14 +169,14 @@ impl Dashboard {
             }
 
             // Cast status
-            let cast_status = self.state.cast_status.blocking_read();
+            let cast_status = self.state.cast_status.read().unwrap();
             if let Some(target) = &cast_status.casting_to {
                 ui.colored_label(Color32::BLUE, format!("📺 Casting to {}", target));
                 ui.label(format!("Latency: {:.1}ms", cast_status.latency_ms));
             }
 
             // Memory stats
-            let mem_stats = self.state.memory_usage.blocking_read();
+            let mem_stats = self.state.memory_usage.read().unwrap();
             ui.separator();
             ui.label(format!("Memories: {}", mem_stats.total_memories));
             ui.label(format!(
@@ -188,7 +187,7 @@ impl Dashboard {
             // Chat sources
             ui.separator();
             ui.label("Chat Sources:");
-            let chats = self.state.found_chats.blocking_read();
+            let chats = self.state.found_chats.read().unwrap();
             for chat in chats.iter() {
                 ui.label(format!("  {} ({})", chat.platform, chat.count));
             }
@@ -228,7 +227,7 @@ impl Dashboard {
 
         // Command history
         ui.collapsing("Recent Commands", |ui| {
-            let history = self.state.command_history.blocking_read();
+            let history = self.state.command_history.read().unwrap();
             for entry in history.iter().rev().take(10) {
                 let color = if entry.success {
                     Color32::GREEN
@@ -250,7 +249,7 @@ impl Dashboard {
         ui.separator();
         ui.heading("Active Displays");
 
-        let displays = self.state.active_displays.blocking_read();
+        let displays = self.state.active_displays.read().unwrap();
         ui.horizontal_wrapped(|ui| {
             for display in displays.iter() {
                 ui.group(|ui| {
@@ -279,7 +278,7 @@ impl Dashboard {
         ui.separator();
 
         // Display list with cast controls
-        let displays = self.state.active_displays.blocking_read();
+        let displays = self.state.active_displays.read().unwrap();
         for display in displays.iter() {
             ui.group(|ui| {
                 ui.horizontal(|ui| {
@@ -304,7 +303,7 @@ impl Dashboard {
         ui.heading("Memory System (.m8)");
         ui.separator();
 
-        let mem_stats = self.state.memory_usage.blocking_read();
+        let mem_stats = self.state.memory_usage.read().unwrap();
 
         // Memory visualization
         ui.label(format!("Total Memories: {}", mem_stats.total_memories));
@@ -348,8 +347,8 @@ impl Dashboard {
         ui.heading("Voice Activity (Marine Algorithm)");
         ui.separator();
 
-        let voice_active = *self.state.voice_active.blocking_read();
-        let salience = *self.state.voice_salience.blocking_read();
+        let voice_active = *self.state.voice_active.read().unwrap();
+        let salience = *self.state.voice_salience.read().unwrap();
 
         // Voice status
         ui.horizontal(|ui| {
@@ -427,7 +426,7 @@ impl Dashboard {
         ui.separator();
 
         // Ideas list
-        let mut ideas = self.state.ideas_buffer.blocking_write();
+        let mut ideas = self.state.ideas_buffer.write().unwrap();
 
         // Group by priority
         for priority in [
@@ -584,7 +583,7 @@ impl Dashboard {
         }
 
         // Add to history
-        let mut history = self.state.command_history.blocking_write();
+        let mut history = self.state.command_history.write().unwrap();
         history.push_back(CommandEntry {
             timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
             command: self.command_input.clone(),
@@ -605,7 +604,7 @@ impl Dashboard {
             return;
         }
 
-        let mut ideas = self.state.ideas_buffer.blocking_write();
+        let mut ideas = self.state.ideas_buffer.write().unwrap();
         ideas.push(IdeaEntry {
             author: author.to_string(),
             idea: self.idea_input.clone(),
