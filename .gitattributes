@@ -1,0 +1,34 @@
+# Git LFS tracking for Smart Tree project
+# Large binary files that should use Git LFS
+
+# Token files (AI training data)
+*.tokens filter=lfs diff=lfs merge=lfs -text
+
+# Audio files
+*.mp3 filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+*.flac filter=lfs diff=lfs merge=lfs -text
+
+# Large office files
+*.xlsx filter=lfs diff=lfs merge=lfs -text
+*.xls filter=lfs diff=lfs merge=lfs -text
+*.pptx filter=lfs diff=lfs merge=lfs -text
+*.docx filter=lfs diff=lfs merge=lfs -text
+
+# Binary executables (release artifacts)
+st-v*-linux-x86_64 filter=lfs diff=lfs merge=lfs -text
+st-v*-darwin-* filter=lfs diff=lfs merge=lfs -text
+st-v*-windows-*.exe filter=lfs diff=lfs merge=lfs -text
+
+# Video files (if any)
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.avi filter=lfs diff=lfs merge=lfs -text
+*.mov filter=lfs diff=lfs merge=lfs -text
+
+# MEM8 consciousness files
+*.m8 filter=lfs diff=lfs merge=lfs -text
+*.mem8 filter=lfs diff=lfs merge=lfs -text
+
+# Large compressed archives
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
