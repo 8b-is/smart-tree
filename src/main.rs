@@ -1782,11 +1782,12 @@ async fn run_terminal() -> Result<()> {
 
 /// Launch the egui dashboard with real-time visualization
 async fn run_dashboard() -> Result<()> {
-    use st::dashboard_egui::{start_dashboard, DashboardState, MemoryStats};
+    use st::dashboard_egui::{start_dashboard, DashboardState, MemoryStats, McpActivity};
     use std::sync::{Arc, RwLock};
 
     println!("🚀 Launching Smart Tree Dashboard...");
     println!("🎨 Prepare for visual awesomeness!");
+    println!("🤖 Real-time AI collaboration enabled!");
 
     // Create initial dashboard state with some default data
     let state = Arc::new(DashboardState {
@@ -1807,6 +1808,13 @@ async fn run_dashboard() -> Result<()> {
             latency_ms: 0.0,
         })),
         ideas_buffer: Arc::new(RwLock::new(vec![])),
+
+        // MCP Integration fields - "Let's collaborate in real-time!" 🚀
+        mcp_activity: Arc::new(RwLock::new(McpActivity::default())),
+        file_access_log: Arc::new(RwLock::new(vec![])),
+        active_tool: Arc::new(RwLock::new(None)),
+        user_hints: Arc::new(RwLock::new(std::collections::VecDeque::new())),
+        ws_connections: Arc::new(RwLock::new(0)),
     });
 
     // Launch the dashboard (this blocks until window is closed)

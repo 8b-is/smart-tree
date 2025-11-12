@@ -1,6 +1,6 @@
 #!/bin/bash
-# MCP Test Suite for Smart Tree v4.0.0
-# Version: 4.0.0
+# MCP Test Suite for Smart Tree v5.5.0
+# Version: 5.5.0
 # Tests all MCP functionality to ensure AI assistants can use the tools correctly
 
 set -e  # Exit on error

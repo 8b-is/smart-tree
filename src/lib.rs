@@ -112,6 +112,9 @@ pub mod vad_marine;
 // egui Dashboard - Real-time collaborative dashboard
 pub mod dashboard_egui;
 
+// Dashboard WebSocket Server - Real-time bidirectional communication for telepathic pair programming!
+pub mod dashboard_ws;
+
 // MEM8 Binary Format - The REAL wave-based .m8 format
 pub mod mem8_binary;
 
