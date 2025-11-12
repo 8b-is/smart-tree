@@ -276,7 +276,7 @@ impl SmartTreeTerminal {
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" v4.0 - "),
+            Span::raw(" v5.5 - "),
             Span::styled("Your Coding Companion ", Style::default().fg(Color::Cyan)),
             Span::raw("🌳"),
         ]));

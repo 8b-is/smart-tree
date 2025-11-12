@@ -97,6 +97,11 @@ struct Cli {
     #[arg(long, exclusive = true)]
     terminal: bool,
 
+    /// Launch egui Dashboard - Real-time visualization with style!
+    /// Shows voice activity, memory stats, displays, and collaborative ideas
+    #[arg(long, exclusive = true)]
+    dashboard: bool,
+
     /// Rename project - elegant identity transition (format: "OldName" "NewName")
     #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2)]
     rename_project: Option<Vec<String>>,
@@ -731,6 +736,12 @@ async fn main() -> Result<()> {
         }
         return run_terminal().await;
     }
+
+    if cli.dashboard {
+        // Launch the egui dashboard!
+        return run_dashboard().await;
+    }
+
     if cli.version {
         return show_version_with_updates().await;
     }
@@ -1767,6 +1778,47 @@ async fn run_terminal() -> Result<()> {
     // Create and run the terminal interface
     let mut terminal = SmartTreeTerminal::new()?;
     terminal.run().await
+}
+
+/// Launch the egui dashboard with real-time visualization
+async fn run_dashboard() -> Result<()> {
+    use st::dashboard_egui::{start_dashboard, DashboardState, MemoryStats, McpActivity};
+    use std::sync::{Arc, RwLock};
+
+    println!("🚀 Launching Smart Tree Dashboard...");
+    println!("🎨 Prepare for visual awesomeness!");
+    println!("🤖 Real-time AI collaboration enabled!");
+
+    // Create initial dashboard state with some default data
+    let state = Arc::new(DashboardState {
+        command_history: Arc::new(RwLock::new(std::collections::VecDeque::new())),
+        active_displays: Arc::new(RwLock::new(vec![])),
+        voice_active: Arc::new(RwLock::new(false)),
+        voice_salience: Arc::new(RwLock::new(0.0)),
+        memory_usage: Arc::new(RwLock::new(MemoryStats {
+            total_memories: 0,
+            token_efficiency: 0.0,
+            backwards_position: 0,
+            importance_scores: vec![],
+        })),
+        found_chats: Arc::new(RwLock::new(vec![])),
+        cast_status: Arc::new(RwLock::new(st::dashboard_egui::CastStatus {
+            casting_to: None,
+            content_type: "None".to_string(),
+            latency_ms: 0.0,
+        })),
+        ideas_buffer: Arc::new(RwLock::new(vec![])),
+
+        // MCP Integration fields - "Let's collaborate in real-time!" 🚀
+        mcp_activity: Arc::new(RwLock::new(McpActivity::default())),
+        file_access_log: Arc::new(RwLock::new(vec![])),
+        active_tool: Arc::new(RwLock::new(None)),
+        user_hints: Arc::new(RwLock::new(std::collections::VecDeque::new())),
+        ws_connections: Arc::new(RwLock::new(0)),
+    });
+
+    // Launch the dashboard (this blocks until window is closed)
+    start_dashboard(state).await
 }
 
 /// Save Claude consciousness state to .claude_consciousness.m8

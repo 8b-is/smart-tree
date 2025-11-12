@@ -6,8 +6,125 @@ use anyhow::Result;
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 use egui::{Color32, Pos2, Stroke, Vec2};
 use std::collections::VecDeque;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock};
+use chrono::{DateTime, Utc};
+
+// ============================================================================
+// MCP Integration Types - "The AI can see everything now!" 🔮
+// ============================================================================
+
+/// Real-time MCP activity tracking
+#[derive(Clone, Debug)]
+pub struct McpActivity {
+    /// Current operation being performed
+    pub current_operation: String,
+
+    /// Files touched during current operation
+    pub files_touched: Vec<String>,
+
+    /// Status of the operation
+    pub status: ActivityStatus,
+
+    /// Progress percentage (0.0 to 1.0)
+    pub progress: f32,
+
+    /// Operation start time
+    pub started_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ActivityStatus {
+    Idle,
+    Thinking,      // AI is processing
+    Reading,       // Reading files
+    Writing,       // Writing files
+    Searching,     // Searching codebase
+    Analyzing,     // Deep analysis
+    Waiting,       // Waiting for user hint
+}
+
+/// File access event for Wave Compass visualization
+#[derive(Clone, Debug)]
+pub struct FileAccessEvent {
+    /// File path that was accessed
+    pub path: String,
+
+    /// Type of access
+    pub access_type: FileAccessType,
+
+    /// When it happened
+    pub timestamp: DateTime<Utc>,
+
+    /// Which MCP tool accessed it
+    pub tool_name: String,
+
+    /// Duration spent on this file (in ms)
+    pub duration_ms: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FileAccessType {
+    Read,
+    Write,
+    Search,
+    Analyze,
+}
+
+/// Currently executing MCP tool
+#[derive(Clone, Debug)]
+pub struct ToolExecution {
+    /// Name of the tool (e.g., "search", "edit", "analyze")
+    pub tool_name: String,
+
+    /// When it started
+    pub started_at: DateTime<Utc>,
+
+    /// Tool parameters (JSON-encoded)
+    pub parameters: String,
+
+    /// Current progress description
+    pub progress: String,
+}
+
+/// User hint for mid-task guidance - "Nudge me gently!" 💫
+#[derive(Clone, Debug)]
+pub struct UserHint {
+    /// Type of hint
+    pub hint_type: HintType,
+
+    /// When the hint was given
+    pub timestamp: DateTime<Utc>,
+
+    /// Whether the AI has acknowledged this hint
+    pub acknowledged: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum HintType {
+    /// User clicked on a signature/file in Wave Compass
+    Click { path: String, signature: u64 },
+
+    /// User typed a text hint
+    TextInput { text: String },
+
+    /// User sent voice command
+    Voice { transcript: String, confidence: f32 },
+
+    /// User adjusted a parameter slider
+    ParameterAdjust { param_name: String, value: f32 },
+}
+
+impl Default for McpActivity {
+    fn default() -> Self {
+        Self {
+            current_operation: "Idle".to_string(),
+            files_touched: Vec::new(),
+            status: ActivityStatus::Idle,
+            progress: 0.0,
+            started_at: Utc::now(),
+        }
+    }
+}
 
 /// Dashboard state shared between rust shell and GUI
 pub struct DashboardState {
@@ -32,6 +149,25 @@ pub struct DashboardState {
 
     /// Ideas buffer - where we both add ideas!
     pub ideas_buffer: Arc<RwLock<Vec<IdeaEntry>>>,
+
+    // ========================================================================
+    // MCP Integration - "Telepathic pair programming!" 🧠↔️🤖
+    // ========================================================================
+
+    /// Real-time MCP activity - what AI is doing RIGHT NOW
+    pub mcp_activity: Arc<RwLock<McpActivity>>,
+
+    /// File access log for Wave Compass lighting up
+    pub file_access_log: Arc<RwLock<Vec<FileAccessEvent>>>,
+
+    /// Currently executing MCP tool (None if idle)
+    pub active_tool: Arc<RwLock<Option<ToolExecution>>>,
+
+    /// User hints queue - nudges for the AI during execution
+    pub user_hints: Arc<RwLock<VecDeque<UserHint>>>,
+
+    /// WebSocket connection count (for status display)
+    pub ws_connections: Arc<RwLock<usize>>,
 }
 
 #[derive(Clone)]
@@ -115,6 +251,7 @@ enum Tab {
     Voice,
     Ideas,
     WaveCompass, // Omni's wave drift visualizer!
+    McpActivity, // Real-time AI collaboration! 🤖💫
     Debug,
 }
 
@@ -146,6 +283,7 @@ impl Dashboard {
                 ui.selectable_value(&mut self.selected_tab, Tab::Voice, "Voice");
                 ui.selectable_value(&mut self.selected_tab, Tab::Ideas, "💡 Ideas");
                 ui.selectable_value(&mut self.selected_tab, Tab::WaveCompass, "🧭 Waves");
+                ui.selectable_value(&mut self.selected_tab, Tab::McpActivity, "🤖 MCP Live");
                 ui.selectable_value(&mut self.selected_tab, Tab::Debug, "Debug");
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -162,7 +300,7 @@ impl Dashboard {
             ui.separator();
 
             // Voice indicator
-            let voice_active = self.state.voice_active.blocking_read();
+            let voice_active = self.state.voice_active.read().unwrap();
             if *voice_active {
                 ui.colored_label(Color32::GREEN, "🎤 Voice Active");
             } else {
@@ -170,14 +308,14 @@ impl Dashboard {
             }
 
             // Cast status
-            let cast_status = self.state.cast_status.blocking_read();
+            let cast_status = self.state.cast_status.read().unwrap();
             if let Some(target) = &cast_status.casting_to {
                 ui.colored_label(Color32::BLUE, format!("📺 Casting to {}", target));
                 ui.label(format!("Latency: {:.1}ms", cast_status.latency_ms));
             }
 
             // Memory stats
-            let mem_stats = self.state.memory_usage.blocking_read();
+            let mem_stats = self.state.memory_usage.read().unwrap();
             ui.separator();
             ui.label(format!("Memories: {}", mem_stats.total_memories));
             ui.label(format!(
@@ -188,7 +326,7 @@ impl Dashboard {
             // Chat sources
             ui.separator();
             ui.label("Chat Sources:");
-            let chats = self.state.found_chats.blocking_read();
+            let chats = self.state.found_chats.read().unwrap();
             for chat in chats.iter() {
                 ui.label(format!("  {} ({})", chat.platform, chat.count));
             }
@@ -202,6 +340,7 @@ impl Dashboard {
             Tab::Voice => self.show_voice(ui),
             Tab::Ideas => self.show_ideas(ui),
             Tab::WaveCompass => self.show_wave_compass(ui),
+            Tab::McpActivity => self.show_mcp_activity(ui),
             Tab::Debug => self.show_debug(ui),
         });
 
@@ -228,7 +367,7 @@ impl Dashboard {
 
         // Command history
         ui.collapsing("Recent Commands", |ui| {
-            let history = self.state.command_history.blocking_read();
+            let history = self.state.command_history.read().unwrap();
             for entry in history.iter().rev().take(10) {
                 let color = if entry.success {
                     Color32::GREEN
@@ -250,7 +389,7 @@ impl Dashboard {
         ui.separator();
         ui.heading("Active Displays");
 
-        let displays = self.state.active_displays.blocking_read();
+        let displays = self.state.active_displays.read().unwrap();
         ui.horizontal_wrapped(|ui| {
             for display in displays.iter() {
                 ui.group(|ui| {
@@ -279,7 +418,7 @@ impl Dashboard {
         ui.separator();
 
         // Display list with cast controls
-        let displays = self.state.active_displays.blocking_read();
+        let displays = self.state.active_displays.read().unwrap();
         for display in displays.iter() {
             ui.group(|ui| {
                 ui.horizontal(|ui| {
@@ -304,7 +443,7 @@ impl Dashboard {
         ui.heading("Memory System (.m8)");
         ui.separator();
 
-        let mem_stats = self.state.memory_usage.blocking_read();
+        let mem_stats = self.state.memory_usage.read().unwrap();
 
         // Memory visualization
         ui.label(format!("Total Memories: {}", mem_stats.total_memories));
@@ -348,8 +487,8 @@ impl Dashboard {
         ui.heading("Voice Activity (Marine Algorithm)");
         ui.separator();
 
-        let voice_active = *self.state.voice_active.blocking_read();
-        let salience = *self.state.voice_salience.blocking_read();
+        let voice_active = *self.state.voice_active.read().unwrap();
+        let salience = *self.state.voice_salience.read().unwrap();
 
         // Voice status
         ui.horizontal(|ui| {
@@ -427,7 +566,7 @@ impl Dashboard {
         ui.separator();
 
         // Ideas list
-        let mut ideas = self.state.ideas_buffer.blocking_write();
+        let mut ideas = self.state.ideas_buffer.write().unwrap();
 
         // Group by priority
         for priority in [
@@ -561,6 +700,177 @@ impl Dashboard {
         }
     }
 
+    fn show_mcp_activity(&mut self, ui: &mut egui::Ui) {
+        ui.heading("🤖 Real-Time AI Collaboration - \"I can see you seeing me!\"");
+        ui.separator();
+
+        let mcp_activity = self.state.mcp_activity.read().unwrap();
+        let active_tool = self.state.active_tool.read().unwrap();
+        let file_log = self.state.file_access_log.read().unwrap();
+        let hints = self.state.user_hints.read().unwrap();
+
+        // Current AI Status - Big and Bold!
+        ui.group(|ui| {
+            ui.vertical(|ui| {
+                // Status with color coding
+                let (status_text, status_color) = match mcp_activity.status {
+                    ActivityStatus::Idle => ("💤 Idle", Color32::GRAY),
+                    ActivityStatus::Thinking => ("🧠 Thinking...", Color32::from_rgb(150, 100, 255)),
+                    ActivityStatus::Reading => ("📖 Reading Files", Color32::from_rgb(100, 200, 255)),
+                    ActivityStatus::Writing => ("✍️ Writing Code", Color32::from_rgb(255, 200, 100)),
+                    ActivityStatus::Searching => ("🔍 Searching...", Color32::from_rgb(100, 255, 200)),
+                    ActivityStatus::Analyzing => ("🔬 Deep Analysis", Color32::from_rgb(255, 100, 200)),
+                    ActivityStatus::Waiting => ("⏸️ Waiting for You", Color32::from_rgb(255, 255, 100)),
+                };
+
+                ui.horizontal(|ui| {
+                    ui.heading(status_text);
+                    ui.colored_label(status_color, "●"); // Status indicator
+                });
+
+                // Current operation
+                if !mcp_activity.current_operation.is_empty() {
+                    ui.label(format!("Operation: {}", mcp_activity.current_operation));
+                }
+
+                // Progress bar
+                if mcp_activity.progress > 0.0 {
+                    let progress_bar = egui::ProgressBar::new(mcp_activity.progress)
+                        .text(format!("{:.0}%", mcp_activity.progress * 100.0));
+                    ui.add(progress_bar);
+                }
+
+                // Duration
+                let duration = Utc::now().signed_duration_since(mcp_activity.started_at);
+                ui.label(format!("Duration: {}.{}s", duration.num_seconds(), duration.num_milliseconds() % 1000));
+
+                // Files touched in current operation
+                if !mcp_activity.files_touched.is_empty() {
+                    ui.label(format!("Files touched: {}", mcp_activity.files_touched.len()));
+                    ui.collapsing("Show files", |ui| {
+                        for file in &mcp_activity.files_touched {
+                            ui.monospace(file);
+                        }
+                    });
+                }
+            });
+        });
+
+        ui.separator();
+
+        // Active Tool Details
+        if let Some(tool) = active_tool.as_ref() {
+            ui.heading("🔧 Active Tool");
+            ui.group(|ui| {
+                ui.label(format!("Tool: {}", tool.tool_name));
+                ui.label(format!("Progress: {}", tool.progress));
+
+                ui.collapsing("Parameters", |ui| {
+                    ui.monospace(&tool.parameters);
+                });
+
+                let tool_duration = Utc::now().signed_duration_since(tool.started_at);
+                ui.label(format!("Running for: {}.{}s", tool_duration.num_seconds(), tool_duration.num_milliseconds() % 1000));
+            });
+            ui.separator();
+        }
+
+        // File Access Log with Timeline
+        ui.heading("📂 File Access Timeline");
+        ui.label(format!("Total accesses: {}", file_log.len()));
+
+        egui::ScrollArea::vertical()
+            .max_height(200.0)
+            .show(ui, |ui| {
+                // Show recent file accesses (last 50)
+                for event in file_log.iter().rev().take(50) {
+                    let (icon, color) = match event.access_type {
+                        FileAccessType::Read => ("📖", Color32::from_rgb(100, 200, 255)),
+                        FileAccessType::Write => ("✍️", Color32::from_rgb(255, 200, 100)),
+                        FileAccessType::Search => ("🔍", Color32::from_rgb(100, 255, 200)),
+                        FileAccessType::Analyze => ("🔬", Color32::from_rgb(255, 100, 200)),
+                    };
+
+                    ui.horizontal(|ui| {
+                        ui.colored_label(color, icon);
+                        ui.label(event.timestamp.format("%H:%M:%S%.3f").to_string());
+                        ui.monospace(&event.path);
+                        ui.label(format!("{}ms", event.duration_ms));
+                        ui.label(format!("({})", event.tool_name));
+                    });
+                }
+            });
+
+        ui.separator();
+
+        // User Hints Section - "Nudge the AI!"
+        ui.heading("💫 Your Hints to AI");
+        ui.label("Send nudges without stopping the AI!");
+
+        ui.horizontal(|ui| {
+            if ui.button("👆 Click Hint").clicked() {
+                // This would be triggered when user clicks on Wave Compass
+                ui.label("Click on Wave Compass signatures to send location hints!");
+            }
+
+            if ui.button("💬 Text Hint").clicked() {
+                // Open text input dialog
+            }
+
+            if ui.button("🎤 Voice Hint").clicked() {
+                // Trigger voice input
+            }
+        });
+
+        // Show pending hints
+        if !hints.is_empty() {
+            ui.separator();
+            ui.label(format!("Pending hints: {}", hints.len()));
+
+            for hint in hints.iter().rev().take(5) {
+                let (icon, hint_text) = match &hint.hint_type {
+                    HintType::Click { path, signature } => {
+                        ("👆", format!("Clicked: {} (sig: {:X})", path, signature))
+                    }
+                    HintType::TextInput { text } => {
+                        ("💬", format!("Text: {}", text))
+                    }
+                    HintType::Voice { transcript, confidence } => {
+                        ("🎤", format!("Voice: {} ({:.0}%)", transcript, confidence * 100.0))
+                    }
+                    HintType::ParameterAdjust { param_name, value } => {
+                        ("🎚️", format!("Adjust {}: {:.2}", param_name, value))
+                    }
+                };
+
+                ui.horizontal(|ui| {
+                    ui.label(icon);
+                    ui.label(hint.timestamp.format("%H:%M:%S").to_string());
+                    ui.label(hint_text);
+
+                    if hint.acknowledged {
+                        ui.colored_label(Color32::GREEN, "✓ Seen");
+                    } else {
+                        ui.colored_label(Color32::YELLOW, "⏳ Pending");
+                    }
+                });
+            }
+        }
+
+        ui.separator();
+
+        // WebSocket Connection Status
+        let ws_count = *self.state.ws_connections.read().unwrap();
+        ui.horizontal(|ui| {
+            ui.label("WebSocket connections:");
+            if ws_count > 0 {
+                ui.colored_label(Color32::GREEN, format!("{} active", ws_count));
+            } else {
+                ui.colored_label(Color32::RED, "Disconnected");
+            }
+        });
+    }
+
     fn show_debug(&mut self, ui: &mut egui::Ui) {
         ui.heading("Debug Information");
         ui.separator();
@@ -584,7 +894,7 @@ impl Dashboard {
         }
 
         // Add to history
-        let mut history = self.state.command_history.blocking_write();
+        let mut history = self.state.command_history.write().unwrap();
         history.push_back(CommandEntry {
             timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
             command: self.command_input.clone(),
@@ -605,7 +915,7 @@ impl Dashboard {
             return;
         }
 
-        let mut ideas = self.state.ideas_buffer.blocking_write();
+        let mut ideas = self.state.ideas_buffer.write().unwrap();
         ideas.push(IdeaEntry {
             author: author.to_string(),
             idea: self.idea_input.clone(),

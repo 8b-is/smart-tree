@@ -1,9 +1,10 @@
 [workspace]
 members = ["expert_prompt_engineer"]
+exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "st"
-version = "5.4.0"
+version = "5.5.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -45,8 +46,8 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 whoami = "1.5"
 crc32fast = "1.4"
 similar = "2.4"
-# Marqant - quantum-compressed markdown format (now integrated as src/marqant/)
-# marqant = "0.2"  # No longer needed - using internal module
+# Marqant - quantum-compressed markdown format (submodule at ./marqant)
+marqant = { path = "marqant" }
 bincode = "1.3"
 glob = "0.3"
 which = "7.0"
@@ -61,11 +62,6 @@ egui = "0.32.2"
 eframe = { version = "0.32.2", default-features = false, features = ["default_fonts", "glow"] }
 egui_extras = "0.32.2"
 winit = "0.30.12"
-
-
-# For q8-caster integration
-mdns-sd = "0.11"
-# st-tokenizer = { path = "../st-tokenizer" }  # Commented out - not in repo
 
 # Terminal UI dependencies
 ratatui = "0.25"
