@@ -61,10 +61,10 @@ jobs:
             extension: .exe
 
     steps:
-    - name: Checkout code 📦
+    - name: Checkout repository (with submodules)
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0
+        submodules: 'recursive'
     
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
