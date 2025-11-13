@@ -9,6 +9,8 @@
 
 Transform Smart Tree's MCP server into a **real-time collaborative AI visualization platform** where humans and AI work together seamlessly through an interactive dashboard. No more stop button - just fluid, bidirectional communication with instant visual feedback.
 
+> **Status (2025-04-30):** The shipping `st --dashboard` build now checks for a local DISPLAY/WAYLAND session and exits gracefully on headless or remote hosts. Browser/WASM delivery remains a follow-up item tracked in this plan.
+
 ## Problem Statement
 
 Current AI collaboration is one-directional and opaque:

@@ -98,7 +98,7 @@ struct Cli {
     terminal: bool,
 
     /// Launch egui Dashboard - Real-time visualization with style!
-    /// Shows voice activity, memory stats, displays, and collaborative ideas
+    /// Requires a local DISPLAY/WAYLAND session (remote/headless currently unsupported)
     #[arg(long, exclusive = true)]
     dashboard: bool,
 
@@ -738,6 +738,19 @@ async fn main() -> Result<()> {
     }
 
     if cli.dashboard {
+        // Require a local display for the egui dashboard.
+        let has_display = std::env::var_os("DISPLAY").is_some()
+            || std::env::var_os("WAYLAND_DISPLAY").is_some()
+            || std::env::var_os("WAYLAND_SOCKET").is_some();
+
+        if !has_display {
+            eprintln!(
+                "⚠️  The graphical dashboard needs a local display and isn't available in this remote session yet."
+            );
+            eprintln!("💡 Tip: run st locally or wait for the upcoming browser dashboard mode.");
+            return Ok(());
+        }
+
         // Launch the egui dashboard!
         return run_dashboard().await;
     }
@@ -1284,10 +1297,13 @@ async fn main() -> Result<()> {
         if let Some(registry_url) = &args.index_registry {
             use st::registry::RegistryIndexer;
 
-            eprintln!("🚀 Indexing project to SmartPastCode registry: {}", registry_url);
+            eprintln!(
+                "🚀 Indexing project to SmartPastCode registry: {}",
+                registry_url
+            );
 
-            let indexer = RegistryIndexer::new(registry_url)
-                .context("Failed to create registry indexer")?;
+            let indexer =
+                RegistryIndexer::new(registry_url).context("Failed to create registry indexer")?;
 
             match indexer.index_project(&root_path) {
                 Ok(stats) => {
@@ -1782,7 +1798,9 @@ async fn run_terminal() -> Result<()> {
 
 /// Launch the egui dashboard with real-time visualization
 async fn run_dashboard() -> Result<()> {
-    use st::dashboard_egui::{start_dashboard, DashboardState, MemoryStats, McpActivity};
+    use st::dashboard_egui::{
+        default_status_feed_url, start_dashboard, DashboardState, McpActivity, MemoryStats,
+    };
     use std::sync::{Arc, RwLock};
 
     println!("🚀 Launching Smart Tree Dashboard...");
@@ -1815,6 +1833,8 @@ async fn run_dashboard() -> Result<()> {
         active_tool: Arc::new(RwLock::new(None)),
         user_hints: Arc::new(RwLock::new(std::collections::VecDeque::new())),
         ws_connections: Arc::new(RwLock::new(0)),
+        repo_status_feed: Arc::new(RwLock::new(vec![])),
+        status_feed_endpoint: Arc::new(RwLock::new(default_status_feed_url())),
     });
 
     // Launch the dashboard (this blocks until window is closed)

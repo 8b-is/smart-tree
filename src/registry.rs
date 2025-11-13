@@ -111,11 +111,9 @@ impl MarineCodeAnalyzer {
 
     /// Index a Rust file
     pub fn index_file(&self, file_path: &Path, project_path: &Path) -> Result<Vec<CodeComponent>> {
-        let content = std::fs::read_to_string(file_path)
-            .context("Failed to read file")?;
+        let content = std::fs::read_to_string(file_path).context("Failed to read file")?;
 
-        let syntax: File = syn::parse_file(&content)
-            .context("Failed to parse Rust file")?;
+        let syntax: File = syn::parse_file(&content).context("Failed to parse Rust file")?;
 
         let mut components = Vec::new();
 
@@ -123,17 +121,23 @@ impl MarineCodeAnalyzer {
         for item in &syntax.items {
             match item {
                 Item::Fn(func) => {
-                    if let Some(component) = self.extract_function(func, file_path, project_path, &content) {
+                    if let Some(component) =
+                        self.extract_function(func, file_path, project_path, &content)
+                    {
                         components.push(component);
                     }
                 }
                 Item::Impl(impl_block) => {
-                    for component in self.extract_impl_methods(impl_block, file_path, project_path, &content) {
+                    for component in
+                        self.extract_impl_methods(impl_block, file_path, project_path, &content)
+                    {
                         components.push(component);
                     }
                 }
                 Item::Mod(module) => {
-                    if let Some(component) = self.extract_module(module, file_path, project_path, &content) {
+                    if let Some(component) =
+                        self.extract_module(module, file_path, project_path, &content)
+                    {
                         components.push(component);
                     }
                 }
@@ -325,7 +329,7 @@ impl MarineCodeAnalyzer {
 
     /// Generate ID from content hash
     fn generate_id(&self, content: &str) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(content.as_bytes());
         let result = hasher.finalize();
@@ -336,7 +340,8 @@ impl MarineCodeAnalyzer {
     pub fn submit_component(&self, component: &CodeComponent) -> Result<()> {
         let url = format!("{}/components/store", self.registry_url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(component)
             .send()
@@ -496,8 +501,10 @@ impl IndexingStats {
         println!();
         println!("Performance:");
         println!("  Total Duration:     {:.2}s", self.duration.as_secs_f64());
-        println!("  Indexing Speed:     {:.1} functions/sec",
-                 self.functions_indexed as f64 / self.duration.as_secs_f64());
+        println!(
+            "  Indexing Speed:     {:.1} functions/sec",
+            self.functions_indexed as f64 / self.duration.as_secs_f64()
+        );
 
         if !self.batch_result.error_messages.is_empty() {
             println!();
@@ -506,7 +513,10 @@ impl IndexingStats {
                 println!("  {}. {}", i + 1, error);
             }
             if self.batch_result.error_messages.len() > 5 {
-                println!("  ... and {} more", self.batch_result.error_messages.len() - 5);
+                println!(
+                    "  ... and {} more",
+                    self.batch_result.error_messages.len() - 5
+                );
             }
         }
 

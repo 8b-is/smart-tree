@@ -301,7 +301,11 @@ fn handle_user_message(msg: UserMessage, state: &Arc<DashboardState>) {
             transcript,
             confidence,
         } => {
-            println!("🎤 User voice hint: {} ({:.0}%)", transcript, confidence * 100.0);
+            println!(
+                "🎤 User voice hint: {} ({:.0}%)",
+                transcript,
+                confidence * 100.0
+            );
 
             let hint = UserHint {
                 hint_type: HintType::Voice {
@@ -414,11 +418,7 @@ pub fn notify_operation_complete(state: &Arc<DashboardState>) {
 /// Check for pending user hints (AI should look at these!)
 pub fn get_pending_hints(state: &Arc<DashboardState>) -> Vec<UserHint> {
     let hints = state.user_hints.read().unwrap();
-    hints
-        .iter()
-        .filter(|h| !h.acknowledged)
-        .cloned()
-        .collect()
+    hints.iter().filter(|h| !h.acknowledged).cloned().collect()
 }
 
 /// Mark a hint as acknowledged

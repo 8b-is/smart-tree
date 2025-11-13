@@ -3,11 +3,32 @@
 // "Every frame is a fresh start!" - Hue
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use egui::{CentralPanel, Context, SidePanel, TopBottomPanel};
 use egui::{Color32, Pos2, Stroke, Vec2};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
-use chrono::{DateTime, Utc};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::time::sleep;
+
+const DEFAULT_STATUS_FEED_URL: &str = "http://127.0.0.1:8430/status/feed";
+const STATUS_FEED_POLL_INTERVAL: Duration = Duration::from_secs(5);
+const STATUS_FEED_ENV_KEYS: [&str; 2] = ["SMART_TREE_G8T_STATUS_FEED", "G8T_STATUS_FEED_URL"];
+
+pub fn default_status_feed_url() -> String {
+    for key in STATUS_FEED_ENV_KEYS {
+        if let Ok(value) = std::env::var(key) {
+            if !value.is_empty() {
+                return value;
+            }
+        }
+    }
+
+    DEFAULT_STATUS_FEED_URL.to_string()
+}
 
 // ============================================================================
 // MCP Integration Types - "The AI can see everything now!" 🔮
@@ -35,12 +56,12 @@ pub struct McpActivity {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ActivityStatus {
     Idle,
-    Thinking,      // AI is processing
-    Reading,       // Reading files
-    Writing,       // Writing files
-    Searching,     // Searching codebase
-    Analyzing,     // Deep analysis
-    Waiting,       // Waiting for user hint
+    Thinking,  // AI is processing
+    Reading,   // Reading files
+    Writing,   // Writing files
+    Searching, // Searching codebase
+    Analyzing, // Deep analysis
+    Waiting,   // Waiting for user hint
 }
 
 /// File access event for Wave Compass visualization
@@ -114,6 +135,60 @@ pub enum HintType {
     ParameterAdjust { param_name: String, value: f32 },
 }
 
+// ============================================================================
+// G8T Status Feed Types - "Real-time repo radar" 📡
+// ============================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct RepoBranchKey {
+    pub owner: String,
+    pub repo: String,
+    pub branch: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RepoStatusSnapshot {
+    pub push_count: u64,
+    pub pull_count: u64,
+    pub last_commit: Option<String>,
+    pub last_activity: Option<RepoActivityKind>,
+    pub updated_at: u64,
+}
+
+impl Default for RepoStatusSnapshot {
+    fn default() -> Self {
+        Self {
+            push_count: 0,
+            pull_count: 0,
+            last_commit: None,
+            last_activity: None,
+            updated_at: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RepoStatusUpdate {
+    pub repo: RepoBranchKey,
+    pub totals: RepoStatusSnapshot,
+    pub event: RepoStatusEvent,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum RepoStatusEvent {
+    Activity {
+        kind: RepoActivityKind,
+        commit: Option<String>,
+    },
+    Snapshot,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum RepoActivityKind {
+    Push,
+    Pull,
+}
+
 impl Default for McpActivity {
     fn default() -> Self {
         Self {
@@ -153,7 +228,6 @@ pub struct DashboardState {
     // ========================================================================
     // MCP Integration - "Telepathic pair programming!" 🧠↔️🤖
     // ========================================================================
-
     /// Real-time MCP activity - what AI is doing RIGHT NOW
     pub mcp_activity: Arc<RwLock<McpActivity>>,
 
@@ -168,6 +242,33 @@ pub struct DashboardState {
 
     /// WebSocket connection count (for status display)
     pub ws_connections: Arc<RwLock<usize>>,
+
+    /// Cached g8t repo status feed snapshot
+    pub repo_status_feed: Arc<RwLock<Vec<RepoStatusUpdate>>>,
+
+    /// Currently configured status feed endpoint
+    pub status_feed_endpoint: Arc<RwLock<String>>,
+}
+
+impl DashboardState {
+    pub fn status_feed_endpoint(&self) -> String {
+        self.status_feed_endpoint
+            .read()
+            .map(|value| value.clone())
+            .unwrap_or_else(|_| DEFAULT_STATUS_FEED_URL.to_string())
+    }
+
+    pub fn set_status_feed_endpoint(&self, endpoint: String) {
+        if let Ok(mut current) = self.status_feed_endpoint.write() {
+            *current = endpoint;
+        }
+    }
+
+    pub fn update_status_feed(&self, updates: Vec<RepoStatusUpdate>) {
+        if let Ok(mut feed) = self.repo_status_feed.write() {
+            *feed = updates;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -241,6 +342,9 @@ pub struct Dashboard {
 
     // Theme
     dark_mode: bool,
+
+    // G8T feed configuration
+    g8t_endpoint_input: String,
 }
 
 #[derive(PartialEq)]
@@ -252,11 +356,13 @@ enum Tab {
     Ideas,
     WaveCompass, // Omni's wave drift visualizer!
     McpActivity, // Real-time AI collaboration! 🤖💫
+    G8tStatus,   // g8t repo activity feed 📡
     Debug,
 }
 
 impl Dashboard {
     pub fn new(state: Arc<DashboardState>) -> Self {
+        let g8t_endpoint_input = state.status_feed_endpoint();
         Self {
             state,
             selected_tab: Tab::Overview,
@@ -266,6 +372,7 @@ impl Dashboard {
             voice_graph: VecDeque::with_capacity(100),
             wave_compass: crate::wave_compass::WaveCompass::new(),
             dark_mode: true,
+            g8t_endpoint_input,
         }
     }
 
@@ -284,6 +391,7 @@ impl Dashboard {
                 ui.selectable_value(&mut self.selected_tab, Tab::Ideas, "💡 Ideas");
                 ui.selectable_value(&mut self.selected_tab, Tab::WaveCompass, "🧭 Waves");
                 ui.selectable_value(&mut self.selected_tab, Tab::McpActivity, "🤖 MCP Live");
+                ui.selectable_value(&mut self.selected_tab, Tab::G8tStatus, "g8t Fleet");
                 ui.selectable_value(&mut self.selected_tab, Tab::Debug, "Debug");
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -341,6 +449,7 @@ impl Dashboard {
             Tab::Ideas => self.show_ideas(ui),
             Tab::WaveCompass => self.show_wave_compass(ui),
             Tab::McpActivity => self.show_mcp_activity(ui),
+            Tab::G8tStatus => self.show_g8t_status(ui),
             Tab::Debug => self.show_debug(ui),
         });
 
@@ -715,12 +824,24 @@ impl Dashboard {
                 // Status with color coding
                 let (status_text, status_color) = match mcp_activity.status {
                     ActivityStatus::Idle => ("💤 Idle", Color32::GRAY),
-                    ActivityStatus::Thinking => ("🧠 Thinking...", Color32::from_rgb(150, 100, 255)),
-                    ActivityStatus::Reading => ("📖 Reading Files", Color32::from_rgb(100, 200, 255)),
-                    ActivityStatus::Writing => ("✍️ Writing Code", Color32::from_rgb(255, 200, 100)),
-                    ActivityStatus::Searching => ("🔍 Searching...", Color32::from_rgb(100, 255, 200)),
-                    ActivityStatus::Analyzing => ("🔬 Deep Analysis", Color32::from_rgb(255, 100, 200)),
-                    ActivityStatus::Waiting => ("⏸️ Waiting for You", Color32::from_rgb(255, 255, 100)),
+                    ActivityStatus::Thinking => {
+                        ("🧠 Thinking...", Color32::from_rgb(150, 100, 255))
+                    }
+                    ActivityStatus::Reading => {
+                        ("📖 Reading Files", Color32::from_rgb(100, 200, 255))
+                    }
+                    ActivityStatus::Writing => {
+                        ("✍️ Writing Code", Color32::from_rgb(255, 200, 100))
+                    }
+                    ActivityStatus::Searching => {
+                        ("🔍 Searching...", Color32::from_rgb(100, 255, 200))
+                    }
+                    ActivityStatus::Analyzing => {
+                        ("🔬 Deep Analysis", Color32::from_rgb(255, 100, 200))
+                    }
+                    ActivityStatus::Waiting => {
+                        ("⏸️ Waiting for You", Color32::from_rgb(255, 255, 100))
+                    }
                 };
 
                 ui.horizontal(|ui| {
@@ -742,11 +863,18 @@ impl Dashboard {
 
                 // Duration
                 let duration = Utc::now().signed_duration_since(mcp_activity.started_at);
-                ui.label(format!("Duration: {}.{}s", duration.num_seconds(), duration.num_milliseconds() % 1000));
+                ui.label(format!(
+                    "Duration: {}.{}s",
+                    duration.num_seconds(),
+                    duration.num_milliseconds() % 1000
+                ));
 
                 // Files touched in current operation
                 if !mcp_activity.files_touched.is_empty() {
-                    ui.label(format!("Files touched: {}", mcp_activity.files_touched.len()));
+                    ui.label(format!(
+                        "Files touched: {}",
+                        mcp_activity.files_touched.len()
+                    ));
                     ui.collapsing("Show files", |ui| {
                         for file in &mcp_activity.files_touched {
                             ui.monospace(file);
@@ -770,7 +898,11 @@ impl Dashboard {
                 });
 
                 let tool_duration = Utc::now().signed_duration_since(tool.started_at);
-                ui.label(format!("Running for: {}.{}s", tool_duration.num_seconds(), tool_duration.num_milliseconds() % 1000));
+                ui.label(format!(
+                    "Running for: {}.{}s",
+                    tool_duration.num_seconds(),
+                    tool_duration.num_milliseconds() % 1000
+                ));
             });
             ui.separator();
         }
@@ -832,12 +964,14 @@ impl Dashboard {
                     HintType::Click { path, signature } => {
                         ("👆", format!("Clicked: {} (sig: {:X})", path, signature))
                     }
-                    HintType::TextInput { text } => {
-                        ("💬", format!("Text: {}", text))
-                    }
-                    HintType::Voice { transcript, confidence } => {
-                        ("🎤", format!("Voice: {} ({:.0}%)", transcript, confidence * 100.0))
-                    }
+                    HintType::TextInput { text } => ("💬", format!("Text: {}", text)),
+                    HintType::Voice {
+                        transcript,
+                        confidence,
+                    } => (
+                        "🎤",
+                        format!("Voice: {} ({:.0}%)", transcript, confidence * 100.0),
+                    ),
                     HintType::ParameterAdjust { param_name, value } => {
                         ("🎚️", format!("Adjust {}: {:.2}", param_name, value))
                     }
@@ -869,6 +1003,116 @@ impl Dashboard {
                 ui.colored_label(Color32::RED, "Disconnected");
             }
         });
+    }
+
+    fn show_g8t_status(&mut self, ui: &mut egui::Ui) {
+        ui.heading("g8t Fleet Activity");
+        ui.separator();
+
+        let mut apply_endpoint = false;
+
+        ui.horizontal(|ui| {
+            ui.label("Feed URL:");
+            if self.g8t_endpoint_input.is_empty() {
+                self.g8t_endpoint_input = self.state.status_feed_endpoint();
+            }
+
+            let response = ui.text_edit_singleline(&mut self.g8t_endpoint_input);
+            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                apply_endpoint = true;
+            }
+
+            if ui.button("Apply").clicked() {
+                apply_endpoint = true;
+            }
+
+            if ui.button("Refresh").clicked() {
+                let state_clone = self.state.clone();
+                tokio::spawn(async move {
+                    if let Err(err) = fetch_status_feed_once(state_clone).await {
+                        eprintln!("⚠️ Failed to refresh g8t status feed: {}", err);
+                    }
+                });
+            }
+        });
+
+        if apply_endpoint {
+            let endpoint = self.g8t_endpoint_input.trim().to_string();
+            if !endpoint.is_empty() {
+                self.state.set_status_feed_endpoint(endpoint.clone());
+                println!("🌐 Updated g8t status endpoint to {}", endpoint);
+            }
+        }
+
+        ui.separator();
+
+        let mut feed = self
+            .state
+            .repo_status_feed
+            .read()
+            .map(|entries| entries.clone())
+            .unwrap_or_default();
+
+        if feed.is_empty() {
+            ui.label("No g8t activity yet. Push or pull via g8t to light this up!");
+            return;
+        }
+
+        feed.sort_by_key(|update| Reverse(update.totals.updated_at));
+
+        let total_repos = feed.len();
+        let total_pushes: u64 = feed.iter().map(|u| u.totals.push_count).sum();
+        let total_pulls: u64 = feed.iter().map(|u| u.totals.pull_count).sum();
+
+        ui.horizontal(|ui| {
+            ui.label(format!("Repos tracked: {}", total_repos));
+            ui.separator();
+            ui.label(format!("Pushes: {}", total_pushes));
+            ui.separator();
+            ui.label(format!("Pulls: {}", total_pulls));
+            if let Some(latest) = feed.first() {
+                ui.separator();
+                ui.label(format!(
+                    "Last activity: {}",
+                    format_relative_time(latest.totals.updated_at)
+                ));
+            }
+        });
+
+        ui.separator();
+
+        egui::ScrollArea::vertical()
+            .id_source("g8t_status_scroll")
+            .show(ui, |ui| {
+                egui::Grid::new("g8t_status_grid")
+                    .striped(true)
+                    .num_columns(6)
+                    .show(ui, |ui| {
+                        ui.strong("Repository");
+                        ui.strong("Branch");
+                        ui.strong("Push/Pull");
+                        ui.strong("Last Commit");
+                        ui.strong("Activity");
+                        ui.strong("Updated");
+                        ui.end_row();
+
+                        for update in feed.iter().take(50) {
+                            let repo_name = format!("{}/{}", update.repo.owner, update.repo.repo);
+                            ui.label(repo_name);
+                            ui.label(update.repo.branch.clone());
+                            ui.label(format!(
+                                "{}/{}",
+                                update.totals.push_count, update.totals.pull_count
+                            ));
+                            ui.label(short_commit(&update.totals.last_commit));
+                            let (icon, label, color) =
+                                summarize_activity(update.totals.last_activity);
+                            ui.colored_label(color, format!("{} {}", icon, label));
+                            ui.label(format_relative_time(update.totals.updated_at));
+                            ui.end_row();
+                        }
+                    });
+            });
     }
 
     fn show_debug(&mut self, ui: &mut egui::Ui) {
@@ -930,6 +1174,9 @@ impl Dashboard {
 
 /// Start the egui dashboard
 pub async fn start_dashboard(state: Arc<DashboardState>) -> Result<()> {
+    // Start background poller for g8t status feed
+    tokio::spawn(poll_status_feed(state.clone()));
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([800.0, 600.0])
@@ -959,4 +1206,94 @@ impl eframe::App for Dashboard {
         // Request repaint for animations
         ctx.request_repaint();
     }
+}
+
+async fn poll_status_feed(state: Arc<DashboardState>) {
+    loop {
+        if let Err(err) = fetch_status_feed_once(state.clone()).await {
+            eprintln!("⚠️ Status feed polling error: {}", err);
+        }
+
+        sleep(STATUS_FEED_POLL_INTERVAL).await;
+    }
+}
+
+async fn fetch_status_feed_once(state: Arc<DashboardState>) -> Result<()> {
+    let endpoint = state.status_feed_endpoint();
+    let client = Client::new();
+
+    let response = client.get(&endpoint).send().await?;
+    if !response.status().is_success() {
+        anyhow::bail!(
+            "Status feed request failed with {} for {}",
+            response.status(),
+            endpoint
+        );
+    }
+
+    let updates: Vec<RepoStatusUpdate> = response.json().await?;
+    state.update_status_feed(updates);
+
+    Ok(())
+}
+
+fn summarize_activity(activity: Option<RepoActivityKind>) -> (&'static str, &'static str, Color32) {
+    match activity {
+        Some(RepoActivityKind::Push) => ("⬆", "Push", Color32::from_rgb(120, 220, 120)),
+        Some(RepoActivityKind::Pull) => ("⬇", "Pull", Color32::from_rgb(120, 180, 255)),
+        None => ("…", "Idle", Color32::GRAY),
+    }
+}
+
+fn short_commit(commit: &Option<String>) -> String {
+    commit
+        .as_ref()
+        .map(|hash| {
+            if hash.len() <= 8 {
+                hash.clone()
+            } else {
+                hash.chars().take(8).collect::<String>()
+            }
+        })
+        .unwrap_or_else(|| "—".to_string())
+}
+
+fn format_relative_time(timestamp_ms: u64) -> String {
+    if timestamp_ms == 0 {
+        return "never".to_string();
+    }
+
+    let now = current_millis();
+    if timestamp_ms >= now {
+        return "just now".to_string();
+    }
+
+    let diff = now - timestamp_ms;
+    let seconds = diff / 1000;
+    if seconds < 5 {
+        return "just now".to_string();
+    }
+    if seconds < 60 {
+        return format!("{}s ago", seconds);
+    }
+
+    let minutes = seconds / 60;
+    if minutes < 60 {
+        return format!("{}m ago", minutes);
+    }
+
+    let hours = minutes / 60;
+    if hours < 24 {
+        return format!("{}h ago", hours);
+    }
+
+    let days = hours / 24;
+    format!("{}d ago", days)
+}
+
+fn current_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|dur| dur.as_millis() as u64)
+        .unwrap_or_default()
 }

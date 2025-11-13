@@ -444,8 +444,8 @@ impl ProjectsFormatter {
                     break;
                 }
                 truncated.push(ch);
-            }   
-            
+            }
+
             format!("{}...", truncated)
         } else {
             final_desc
@@ -823,13 +823,13 @@ impl Formatter for ProjectsFormatter {
                     let msg = if git.commit_message.chars().count() > 50 {
                         // Use char boundary-safe truncation for Unicode
                         let mut truncated = String::new();
-                       for (char_count, ch) in git.commit_message.chars().enumerate() {
-                           if char_count >= 47 {
-                               break;
-                           }
-                           truncated.push(ch);
-                       }
-                       format!("{}...", truncated)
+                        for (char_count, ch) in git.commit_message.chars().enumerate() {
+                            if char_count >= 47 {
+                                break;
+                            }
+                            truncated.push(ch);
+                        }
+                        format!("{}...", truncated)
                     } else {
                         git.commit_message.clone()
                     };

@@ -67,7 +67,8 @@ impl ToolCategory {
             name: "Discovery".to_string(),
             emoji: "🔍".to_string(),
             workflow_stage: AiWorkflowStage::Discovery,
-            psychological_hook: "Get instant understanding without reading thousands of files".to_string(),
+            psychological_hook: "Get instant understanding without reading thousands of files"
+                .to_string(),
             when_to_use: vec![
                 "User asks about a new codebase".to_string(),
                 "User asks 'what's in this project?'".to_string(),
@@ -78,8 +79,11 @@ impl ToolCategory {
             tools: vec![
                 AiEnhancedTool {
                     name: "quick_tree".to_string(),
-                    short_description: "FASTEST way to understand a directory structure".to_string(),
-                    psychological_appeal: "Get the big picture in milliseconds - like x-ray vision for directories".to_string(),
+                    short_description: "FASTEST way to understand a directory structure"
+                        .to_string(),
+                    psychological_appeal:
+                        "Get the big picture in milliseconds - like x-ray vision for directories"
+                            .to_string(),
                     trigger_phrases: vec![
                         "what's in".to_string(),
                         "show me".to_string(),
@@ -87,8 +91,11 @@ impl ToolCategory {
                         "explore".to_string(),
                         "overview".to_string(),
                     ],
-                    value_proposition: "Save 10+ minutes of manual exploration. Get instant context.".to_string(),
-                    usage_heuristic: "Use FIRST when user mentions any directory. Don't waste time with ls/cd.".to_string(),
+                    value_proposition:
+                        "Save 10+ minutes of manual exploration. Get instant context.".to_string(),
+                    usage_heuristic:
+                        "Use FIRST when user mentions any directory. Don't waste time with ls/cd."
+                            .to_string(),
                     example_scenarios: vec![
                         "User: 'What's in the /src directory?' → quick_tree /src".to_string(),
                         "User: 'Help me with this project' → quick_tree .".to_string(),
@@ -97,15 +104,20 @@ impl ToolCategory {
                 },
                 AiEnhancedTool {
                     name: "project_overview".to_string(),
-                    short_description: "Instant project intelligence with AI-optimized compression".to_string(),
-                    psychological_appeal: "Understand entire projects in one glance - 80% token reduction".to_string(),
+                    short_description: "Instant project intelligence with AI-optimized compression"
+                        .to_string(),
+                    psychological_appeal:
+                        "Understand entire projects in one glance - 80% token reduction".to_string(),
                     trigger_phrases: vec![
                         "what does this project".to_string(),
                         "project structure".to_string(),
                         "architecture".to_string(),
                     ],
-                    value_proposition: "Compressed intelligence - see everything without token overflow".to_string(),
-                    usage_heuristic: "Use for large projects. Returns AI-optimized summary.".to_string(),
+                    value_proposition:
+                        "Compressed intelligence - see everything without token overflow"
+                            .to_string(),
+                    usage_heuristic: "Use for large projects. Returns AI-optimized summary."
+                        .to_string(),
                     example_scenarios: vec![
                         "User: 'Explain this project' → project_overview .".to_string(),
                         "Starting work on unfamiliar codebase → project_overview .".to_string(),
@@ -370,49 +382,52 @@ impl AiUsageHeuristics {
         let msg_lower = user_message.to_lowercase();
 
         // Directory/Path mentions
-        if msg_lower.contains("directory") ||
-           msg_lower.contains("folder") ||
-           msg_lower.contains("/src") ||
-           msg_lower.contains("./") {
+        if msg_lower.contains("directory")
+            || msg_lower.contains("folder")
+            || msg_lower.contains("/src")
+            || msg_lower.contains("./")
+        {
             reasons.push("User mentioned a directory/path".to_string());
         }
 
         // Project understanding
-        if msg_lower.contains("what's in") ||
-           msg_lower.contains("show me") ||
-           msg_lower.contains("understand this") ||
-           msg_lower.contains("project structure") {
+        if msg_lower.contains("what's in")
+            || msg_lower.contains("show me")
+            || msg_lower.contains("understand this")
+            || msg_lower.contains("project structure")
+        {
             reasons.push("User wants project understanding".to_string());
         }
 
         // Search intent
-        if msg_lower.contains("find") ||
-           msg_lower.contains("search") ||
-           msg_lower.contains("where is") ||
-           msg_lower.contains("locate") {
+        if msg_lower.contains("find")
+            || msg_lower.contains("search")
+            || msg_lower.contains("where is")
+            || msg_lower.contains("locate")
+        {
             reasons.push("User wants to find something".to_string());
         }
 
         // Analysis intent
-        if msg_lower.contains("analyze") ||
-           msg_lower.contains("breakdown") ||
-           msg_lower.contains("architecture") ||
-           msg_lower.contains("how does it work") {
+        if msg_lower.contains("analyze")
+            || msg_lower.contains("breakdown")
+            || msg_lower.contains("architecture")
+            || msg_lower.contains("how does it work")
+        {
             reasons.push("User wants analysis/understanding".to_string());
         }
 
         // Code work
-        if msg_lower.contains("help with") ||
-           msg_lower.contains("work on") ||
-           msg_lower.contains("implement") ||
-           msg_lower.contains("fix") {
+        if msg_lower.contains("help with")
+            || msg_lower.contains("work on")
+            || msg_lower.contains("implement")
+            || msg_lower.contains("fix")
+        {
             reasons.push("User wants to work on code - gather context first".to_string());
         }
 
         // New session
-        if msg_lower.contains("hello") ||
-           msg_lower.contains("hi") ||
-           msg_lower.contains("hey") {
+        if msg_lower.contains("hello") || msg_lower.contains("hi") || msg_lower.contains("hey") {
             reasons.push("New session - check for stored memories and context".to_string());
         }
 

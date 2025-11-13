@@ -6,7 +6,7 @@ use std::path::PathBuf;
 fn test_keyword_search_finds_q8_caster() {
     // This test verifies that keyword search can find projects
     // Use case: Search for "cast" and "tv" should find q8-caster
-    
+
     let test_path = PathBuf::from("/aidata/ayeverse");
     if !test_path.exists() {
         eprintln!("Test path doesn't exist, skipping test");
@@ -17,7 +17,9 @@ fn test_keyword_search_finds_q8_caster() {
     use st::formatters::projects::ProjectsFormatter;
 
     let formatter = ProjectsFormatter::new();
-    let projects = formatter.scan_projects(&test_path).expect("Failed to scan projects");
+    let projects = formatter
+        .scan_projects(&test_path)
+        .expect("Failed to scan projects");
 
     println!("Found {} total projects", projects.len());
 
@@ -45,9 +47,9 @@ fn test_keyword_search_finds_q8_caster() {
     }
 
     // Verify q8-caster was found
-    let found_q8_caster = matching_projects
-        .iter()
-        .any(|p| p.name.contains("q8-caster") || p.path.display().to_string().contains("q8-caster"));
+    let found_q8_caster = matching_projects.iter().any(|p| {
+        p.name.contains("q8-caster") || p.path.display().to_string().contains("q8-caster")
+    });
 
     assert!(
         found_q8_caster,

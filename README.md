@@ -164,6 +164,20 @@ st --spicy
   - `?` or `F1` - Toggle help overlay
   - `q` or `Esc` - Quit
 
+## 🎛️ egui Dashboard (Local Display Required)
+
+Fire up the realtime collaboration dashboard for voice activity, memory stats, Wave Compass signatures, and the new g8t fleet view:
+
+```bash
+st --dashboard
+```
+
+- Streams the same data the MCP server sees (operations, file touches, user hints)
+- Live g8t status feed with push/pull counts and last commit timestamps
+- Idea board, voice graph, and casting controls in one place
+
+> ⚠️ The current dashboard build needs an attached X11/Wayland display. On headless or remote-only sessions the command exits with a friendly reminder—browser/WASM access is on the roadmap.
+
 ## 💡 Smart Tips System
 
 Smart Tree now shows helpful tips at the top of the output!
