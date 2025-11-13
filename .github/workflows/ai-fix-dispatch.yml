@@ -8,10 +8,10 @@ jobs:
   create-fix-branch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (with submodules)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          submodules: 'recursive'
 
       - name: Setup branch
         run: |
