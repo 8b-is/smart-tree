@@ -492,5 +492,5 @@ MIT License - see [LICENSE](LICENSE) for details
 **Made with ❤️ and Rust**
 
 [Website](https://8b.is) • [Issues](https://github.com/8b-is/smart-tree/issues) • [Discussions](https://github.com/8b-is/smart-tree/discussions)
-<img src="https://s.8b.is/p/VvkFcC27T" />
+
 </div>
