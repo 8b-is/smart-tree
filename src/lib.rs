@@ -40,6 +40,9 @@ pub mod universal_format_detector; // Detects format by structure! // Semantic-a
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
 pub mod mcp;
 
+// Foken network integration - Secure distributed GPU sharing
+pub mod foken;
+
 // Feedback API client for sending feedback to f.8b.is
 pub mod feedback_client;
 
