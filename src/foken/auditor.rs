@@ -117,7 +117,8 @@ impl AuditorCompiler {
         // Replace template markers with actual values
         let source = source.replace("{{JOB_ID}}", job_id);
         let source = source.replace("{{NODE_ID}}", node_id);
-        let source = source.replace("{{TIMESTAMP}}", &format!("{:?}", SystemTime::now()));
+        let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?.as_secs();
+        let source = source.replace("{{TIMESTAMP}}", &timestamp.to_string());
 
         // Add random padding to make each binary unique
         let random_padding = format!("const _UNIQUE: u64 = {};", rand::random::<u64>());
