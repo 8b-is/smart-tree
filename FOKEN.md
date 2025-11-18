@@ -96,7 +96,7 @@ pub struct CompiledAuditor {
 2. **Signed by network** - Tampering invalidates signature
 3. **Time-limited** - Expires after 1 hour
 4. **Validates Smart Tree** - Checks binary hash against known releases
-5. **Catches tampering** - If node modifies Smart Tree, auditor detects it
+5. **Detects tampering** - If node modifies Smart Tree, auditor detects it
 
 ### Stage 4: Data Obfuscation (Future)
 
