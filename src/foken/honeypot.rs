@@ -9,7 +9,7 @@
 //! 4. Tracing leaks back to exact node that processed the job
 //! 5. Destroying reputation of compromised nodes
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
