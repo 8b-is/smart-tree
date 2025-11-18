@@ -62,7 +62,7 @@ impl AuditorCompiler {
     /// Create new auditor compiler with signing key
     pub fn new(signing_key: Vec<u8>) -> Self {
         Self {
-            base_source: include_str!("auditor_template.rs").to_string(),
+            base_source: include_str!("./auditor_template.rs").to_string(),
             signing_key,
             cache: HashMap::new(),
         }
