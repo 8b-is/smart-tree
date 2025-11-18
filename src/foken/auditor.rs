@@ -128,9 +128,18 @@ impl AuditorCompiler {
 
     /// Compile with job-specific variations
     fn compile_with_variation(&self, source: &str, job_id: &str) -> Result<Vec<u8>> {
-        // TODO: Actually compile Rust code
-        // For now, return mock binary
-        Ok(format!("AUDITOR_BINARY_{}", job_id).into_bytes())
+        // WARNING: This is a stub implementation. Returning a mock binary defeats the security purpose of the auditor system.
+        // Do NOT use this in production. Implement actual Rust code compilation here.
+        #[cfg(debug_assertions)]
+        {
+            // Allow mock binary only in debug builds for testing.
+            Ok(format!("AUDITOR_BINARY_{}", job_id).into_bytes())
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            // Panic in release builds to prevent accidental use in production.
+            panic!("compile_with_variation is not implemented! Using a mock binary defeats the security purpose of the auditor system. Implement actual compilation before deploying to production.");
+        }
     }
 
     /// Sign binary with Foken network key
