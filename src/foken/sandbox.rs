@@ -279,7 +279,13 @@ impl SecureExecutionEnvironment {
         // CRCs should match (no unexpected modifications)
         // Note: Expected modifications (results file) are OK
         // This is a simplified check - real implementation would be more sophisticated
-
+        if initial != final_crc {
+            return Err(anyhow!(
+                "Integrity verification failed: CRC mismatch (initial: {}, final: {})",
+                initial,
+                final_crc
+            ));
+        }
         Ok(())
     }
 
