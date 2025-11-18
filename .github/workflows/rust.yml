@@ -78,6 +78,9 @@ jobs:
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-index-
+
+    - name: Initialize submodules
+      run: git submodule update --init --recursive
     
     - name: Cache cargo build 🏗️
       uses: actions/cache@v4
