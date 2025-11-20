@@ -49,8 +49,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            name: Linux
+          - os: self-hosted
+            name: macOS
             rust: stable
 
     runs-on: ${{ matrix.os }}
