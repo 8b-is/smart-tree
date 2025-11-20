@@ -3,4 +3,4 @@
 	url = https://github.com/8b-is/marqant.git
 [submodule "codexist"]
 	path = codexist
-	url = git@github.com:8b-is/codexist
+	url = https://github.com/8b-is/codexist.git
