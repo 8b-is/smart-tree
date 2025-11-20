@@ -20,7 +20,7 @@ jobs:
   # Quick format and lint checks
   check:
     name: Format & Lint Check ✨
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     
     steps:
     - name: Checkout code 📦
@@ -49,8 +49,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            name: Linux
+          - os: self-hosted
+            name: macOS
             rust: stable
 
     runs-on: ${{ matrix.os }}
