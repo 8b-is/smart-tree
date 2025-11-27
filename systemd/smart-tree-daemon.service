@@ -1,0 +1,42 @@
+[Unit]
+Description=Smart Tree Daemon - System-wide AI Context Service
+Documentation=https://github.com/8b-is/smart-tree
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wraith
+Group=wraith
+
+# Main executable - the always-on brain for AI context
+ExecStart=/usr/local/bin/st --daemon --daemon-port 8420
+
+# Restart policy
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+# Logging
+Environment=RUST_LOG=info
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smart-tree-daemon
+
+# Working directory
+WorkingDirectory=/home/wraith
+
+# Security hardening (relaxed to allow file scanning)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Allow read access to home for context scanning
+ReadOnlyPaths=/home
+
+[Install]
+WantedBy=multi-user.target
