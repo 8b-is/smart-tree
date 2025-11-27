@@ -138,3 +138,6 @@ pub mod st_tokenizer;
 
 // SmartPastCode Registry Integration - Auto-indexing for universal code discovery
 pub mod registry;
+
+// Daemon Mode - System-wide AI context service with Foken credit tracking
+pub mod daemon;

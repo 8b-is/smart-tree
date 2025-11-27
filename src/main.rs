@@ -102,6 +102,16 @@ struct Cli {
     #[arg(long, exclusive = true)]
     dashboard: bool,
 
+    /// Run as a system daemon - always-on AI context service with Foken credit tracking.
+    /// Exposes HTTP API on port 8420 for any AI to connect and get system context.
+    /// This is the "brain" that all AIs can query for file awareness and project context.
+    #[arg(long, exclusive = true)]
+    daemon: bool,
+
+    /// Port for daemon mode (default: 8420)
+    #[arg(long, default_value = "8420")]
+    daemon_port: u16,
+
     /// Rename project - elegant identity transition (format: "OldName" "NewName")
     #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2)]
     rename_project: Option<Vec<String>>,
@@ -753,6 +763,11 @@ async fn main() -> Result<()> {
 
         // Launch the egui dashboard!
         return run_dashboard().await;
+    }
+
+    if cli.daemon {
+        // Run as system daemon - always-on AI context service
+        return run_daemon(cli.daemon_port).await;
     }
 
     if cli.version {
@@ -1839,6 +1854,23 @@ async fn run_dashboard() -> Result<()> {
 
     // Launch the dashboard (this blocks until window is closed)
     start_dashboard(state).await
+}
+
+/// Run the Smart Tree Daemon - System-wide AI context service
+async fn run_daemon(port: u16) -> Result<()> {
+    use st::daemon::{start_daemon, DaemonConfig};
+
+    // Get home directory for default watch path
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+
+    let config = DaemonConfig {
+        port,
+        watch_paths: vec![PathBuf::from(&home)],
+        orchestrator_url: Some("wss://gpu.foken.ai/api/credits".to_string()),
+        enable_credits: true,
+    };
+
+    start_daemon(config).await
 }
 
 /// Save Claude consciousness state to .claude_consciousness.m8
