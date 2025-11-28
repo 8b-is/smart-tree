@@ -3709,10 +3709,23 @@ struct SmartReadArgs {
     offset: usize,
     #[serde(default = "default_true")]
     show_line_numbers: bool,
+    #[serde(default)]
+    hex_line_numbers: bool,
 }
 
 fn default_true() -> bool {
     true
+}
+
+/// Format a line number - hex is more compact for large files!
+/// Line 1000 → "3E8" (3 chars vs 4)
+/// Line 65535 → "FFFF" (4 chars vs 5)
+fn format_line_number(line: usize, hex: bool) -> String {
+    if hex {
+        format!("{:>4X}", line)
+    } else {
+        format!("{:>4}", line)
+    }
 }
 
 fn default_one() -> usize {
@@ -4103,11 +4116,14 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // Track function references for the summary
         let mut function_refs: Vec<serde_json::Value> = Vec::new();
 
+        // Use hex line numbers if requested - more compact for large files!
+        let use_hex = args.hex_line_numbers;
+
         for func in &functions {
             // Output lines before this function
             while current_line < func.start_line.saturating_sub(1) {
                 if args.show_line_numbers {
-                    output.push_str(&format!("{:>4}│ {}\n", current_line + 1, lines[current_line]));
+                    output.push_str(&format!("{}│ {}\n", format_line_number(current_line + 1, use_hex), lines[current_line]));
                 } else {
                     output.push_str(lines[current_line]);
                     output.push('\n');
@@ -4125,7 +4141,7 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 for i in func.start_line - 1..func.end_line {
                     if i < lines.len() {
                         if args.show_line_numbers {
-                            output.push_str(&format!("{:>4}│ {}\n", i + 1, lines[i]));
+                            output.push_str(&format!("{}│ {}\n", format_line_number(i + 1, use_hex), lines[i]));
                         } else {
                             output.push_str(lines[i]);
                             output.push('\n');
@@ -4139,8 +4155,8 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
                 if args.show_line_numbers {
                     output.push_str(&format!(
-                        "{:>4}│ {} {{ ... }} // [fn:{}] {} lines collapsed\n",
-                        func.start_line, func.signature, func.name, body_lines
+                        "{}│ {} {{ ... }} // [fn:{}] {} lines collapsed\n",
+                        format_line_number(func.start_line, use_hex), func.signature, func.name, body_lines
                     ));
                 } else {
                     output.push_str(&format!(
@@ -4149,10 +4165,17 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                     ));
                 }
 
+                // Use hex for line references too if enabled
+                let lines_ref = if use_hex {
+                    format!("{:X}-{:X}", func.start_line, func.end_line)
+                } else {
+                    format!("{}-{}", func.start_line, func.end_line)
+                };
+
                 function_refs.push(json!({
                     "name": func.name,
                     "ref": format!("[fn:{}]", func.name),
-                    "lines": format!("{}-{}", func.start_line, func.end_line),
+                    "lines": lines_ref,
                     "importance": func.importance
                 }));
 
@@ -4165,7 +4188,7 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // Output remaining lines after last function
         while current_line < lines.len() {
             if args.show_line_numbers {
-                output.push_str(&format!("{:>4}│ {}\n", current_line + 1, lines[current_line]));
+                output.push_str(&format!("{}│ {}\n", format_line_number(current_line + 1, use_hex), lines[current_line]));
             } else {
                 output.push_str(lines[current_line]);
                 output.push('\n');
@@ -4177,6 +4200,7 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "file_path": path.to_string_lossy(),
             "language": language,
             "compression_enabled": true,
+            "hex_line_numbers": use_hex,
             "total_lines": lines.len(),
             "functions_found": functions.len(),
             "functions_collapsed": collapsed_count,
@@ -4190,6 +4214,7 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // No compression - output raw content
         let lines: Vec<&str> = content.lines().collect();
         let total_lines = lines.len();
+        let use_hex = args.hex_line_numbers;
 
         let start_idx = args.offset.saturating_sub(1);
         let end_idx = if args.max_lines > 0 {
@@ -4202,7 +4227,7 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         for (i, line) in lines[start_idx..end_idx].iter().enumerate() {
             let line_num = start_idx + i + 1;
             if args.show_line_numbers {
-                output.push_str(&format!("{:>4}│ {}\n", line_num, line));
+                output.push_str(&format!("{}│ {}\n", format_line_number(line_num, use_hex), line));
             } else {
                 output.push_str(line);
                 output.push('\n');
@@ -4213,6 +4238,7 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "file_path": path.to_string_lossy(),
             "language": language,
             "compression_enabled": false,
+            "hex_line_numbers": use_hex,
             "total_lines": total_lines,
             "lines_shown": end_idx - start_idx,
             "offset": args.offset,

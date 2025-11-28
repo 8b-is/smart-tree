@@ -642,12 +642,14 @@ EXAMPLES:
 • read {file_path:'app.py', expand_functions:['main']} - Expand specific functions
 • read {file_path:'utils.ts', expand_context:['error','auth']} - Auto-expand matching functions
 • read {file_path:'README.md', compress:false} - Raw content for non-code
+• read {file_path:'big.rs', hex_line_numbers:true} - Hex line nums (1000→3E8)
 
 EXAMPLES:
 ✓ Quick scan: read {file_path:'src/lib.rs'} - See structure with [fn:name] refs
 ✓ Focus on main: read {file_path:'main.py', expand_functions:['main','__init__']}
 ✓ Find errors: read {file_path:'handler.rs', expand_context:['error','panic']}
-✓ Full view: read {file_path:'config.rs', expand_all:true}",
+✓ Full view: read {file_path:'config.rs', expand_all:true}
+✓ Compact hex: read {file_path:'large.rs', hex_line_numbers:true}",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -689,6 +691,11 @@ EXAMPLES:
                     "type": "boolean",
                     "description": "Show line numbers",
                     "default": true
+                },
+                "hex_line_numbers": {
+                    "type": "boolean",
+                    "description": "Use hexadecimal line numbers - more compact for large files! (e.g., 1000 → 3E8, 65535 → FFFF)",
+                    "default": false
                 }
             },
             "required": ["file_path"]
