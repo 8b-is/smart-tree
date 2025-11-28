@@ -26,6 +26,7 @@ use st::{
         check_mcp_installation_status, install_mcp_to_claude_desktop,
         uninstall_mcp_from_claude_desktop, ClaudeInit,
     },
+    daemon_client::{DaemonClient, DaemonStatus},
     feature_flags,
     formatters::{
         ai::AiFormatter,
@@ -112,6 +113,32 @@ struct Cli {
     /// Port for daemon mode (default: 8420)
     #[arg(long, default_value = "8420", help_heading = "Daemon")]
     daemon_port: u16,
+
+    /// Start the daemon in the background.
+    /// If already running, shows status. Use with --daemon-port to specify port.
+    #[arg(long, exclusive = true, help_heading = "Daemon Management")]
+    daemon_start: bool,
+
+    /// Stop a running daemon.
+    #[arg(long, exclusive = true, help_heading = "Daemon Management")]
+    daemon_stop: bool,
+
+    /// Show daemon status (running/stopped, version, context info).
+    #[arg(long, exclusive = true, help_heading = "Daemon Management")]
+    daemon_status: bool,
+
+    /// Query system context from the daemon.
+    /// Shows projects, directories, and context summary.
+    #[arg(long, exclusive = true, help_heading = "Daemon Management")]
+    daemon_context: bool,
+
+    /// List projects detected by the daemon.
+    #[arg(long, exclusive = true, help_heading = "Daemon Management")]
+    daemon_projects: bool,
+
+    /// Show Foken credits from the daemon.
+    #[arg(long, exclusive = true, help_heading = "Daemon Management")]
+    daemon_credits: bool,
 
     /// Rename project - elegant identity transition (format: "OldName" "NewName")
     #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2, help_heading = "Utilities")]
@@ -790,6 +817,31 @@ async fn main() -> Result<()> {
     if cli.daemon {
         // Run as system daemon - always-on AI context service
         return run_daemon(cli.daemon_port).await;
+    }
+
+    // Handle daemon management commands
+    if cli.daemon_start {
+        return handle_daemon_start(cli.daemon_port).await;
+    }
+
+    if cli.daemon_stop {
+        return handle_daemon_stop(cli.daemon_port).await;
+    }
+
+    if cli.daemon_status {
+        return handle_daemon_status(cli.daemon_port).await;
+    }
+
+    if cli.daemon_context {
+        return handle_daemon_context(cli.daemon_port).await;
+    }
+
+    if cli.daemon_projects {
+        return handle_daemon_projects(cli.daemon_port).await;
+    }
+
+    if cli.daemon_credits {
+        return handle_daemon_credits(cli.daemon_port).await;
     }
 
     if cli.version {
@@ -2476,6 +2528,173 @@ fn update_claude_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
     // Write back the config with pretty formatting
     let pretty_json = serde_json::to_string_pretty(&config)?;
     fs::write(config_path, pretty_json)?;
+
+    Ok(())
+}
+
+// =============================================================================
+// DAEMON MANAGEMENT HANDLERS
+// =============================================================================
+
+/// Start the Smart Tree daemon in the background
+async fn handle_daemon_start(port: u16) -> Result<()> {
+    use st::daemon_client::{print_daemon_status, print_context_summary};
+
+    let client = DaemonClient::new(port);
+
+    // Check if already running
+    let status = client.check_status().await;
+    match status {
+        DaemonStatus::Running(info) => {
+            println!("🌳 Smart Tree Daemon is already running!");
+            print_daemon_status(&DaemonStatus::Running(info));
+
+            // Show context summary
+            if let Ok(ctx) = client.get_context().await {
+                println!();
+                print_context_summary(&ctx);
+            }
+        }
+        _ => {
+            println!("🌳 Starting Smart Tree Daemon on port {}...", port);
+            match client.start_daemon().await {
+                Ok(true) => {
+                    println!("✅ Daemon started successfully!");
+                    if let Ok(info) = client.get_info().await {
+                        print_daemon_status(&DaemonStatus::Running(info));
+                    }
+                }
+                Ok(false) => {
+                    println!("⚠️  Daemon was already running.");
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to start daemon: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Stop a running Smart Tree daemon
+async fn handle_daemon_stop(port: u16) -> Result<()> {
+    let client = DaemonClient::new(port);
+
+    // Check if running
+    match client.check_status().await {
+        DaemonStatus::Running(_) => {
+            println!("🌳 Stopping Smart Tree Daemon on port {}...", port);
+            match client.stop_daemon().await {
+                Ok(true) => {
+                    println!("✅ Daemon stopped successfully!");
+                }
+                Ok(false) => {
+                    println!("⚠️  Daemon was not running.");
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to stop daemon: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+        _ => {
+            println!("⚠️  No daemon running on port {}", port);
+        }
+    }
+
+    Ok(())
+}
+
+/// Show the status of the Smart Tree daemon
+async fn handle_daemon_status(port: u16) -> Result<()> {
+    use st::daemon_client::{print_daemon_status, print_context_summary};
+
+    let client = DaemonClient::new(port);
+    let status = client.check_status().await;
+
+    print_daemon_status(&status);
+
+    // If running, also show context summary
+    if let DaemonStatus::Running(_) = status {
+        if let Ok(ctx) = client.get_context().await {
+            println!();
+            print_context_summary(&ctx);
+        }
+    }
+
+    Ok(())
+}
+
+/// Get context from the daemon (or auto-start if not running)
+async fn handle_daemon_context(port: u16) -> Result<()> {
+    use st::daemon_client::print_context_summary;
+
+    let client = DaemonClient::new(port);
+
+    // Ensure daemon is running (auto-start if needed)
+    match client.ensure_running().await {
+        Ok(_) => {
+            if let Ok(ctx) = client.get_context().await {
+                print_context_summary(&ctx);
+            } else {
+                eprintln!("❌ Failed to get context from daemon");
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to connect to daemon: {}", e);
+            return Err(e);
+        }
+    }
+
+    Ok(())
+}
+
+/// List projects from the daemon
+async fn handle_daemon_projects(port: u16) -> Result<()> {
+    use st::daemon_client::print_projects;
+
+    let client = DaemonClient::new(port);
+
+    // Ensure daemon is running (auto-start if needed)
+    match client.ensure_running().await {
+        Ok(_) => {
+            if let Ok(projects) = client.get_projects().await {
+                print_projects(&projects);
+            } else {
+                eprintln!("❌ Failed to get projects from daemon");
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to connect to daemon: {}", e);
+            return Err(e);
+        }
+    }
+
+    Ok(())
+}
+
+/// Show Foken credits from the daemon
+async fn handle_daemon_credits(port: u16) -> Result<()> {
+    use st::daemon_client::print_credits;
+
+    let client = DaemonClient::new(port);
+
+    // Ensure daemon is running (auto-start if needed)
+    match client.ensure_running().await {
+        Ok(_) => {
+            if let Ok(credits) = client.get_credits().await {
+                print_credits(&credits);
+            } else {
+                eprintln!("❌ Failed to get credits from daemon");
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to connect to daemon: {}", e);
+            return Err(e);
+        }
+    }
 
     Ok(())
 }
