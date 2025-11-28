@@ -2089,21 +2089,27 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             continue;
         }
 
+        // Use hex formatting for token efficiency! (config default: true)
+        let use_hex = ctx.config.hex_numbers;
+        let modified_secs = node.modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs();
+
         results.push(json!({
             "path": node.path.display().to_string(),
             "name": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-            "size": node.size,
-            "modified": node.modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+            "size": super::fmt_num64(node.size, use_hex),
+            "modified": super::fmt_num64(modified_secs, use_hex),
             "permissions": format!("{:o}", node.permissions),
             "is_directory": node.is_dir,
         }));
     }
 
+    // Use hex for count too!
+    let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
-                "found": results.len(),
+                "found": super::fmt_num(results.len(), use_hex),
                 "files": results
             }))?
         }]
@@ -2473,11 +2479,13 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         projects.push(proj);
     }
 
+    // Use hex formatting for token efficiency! 🎯
+    let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "projects": projects,
-        "count": projects.len(),
+        "count": super::fmt_num(projects.len(), use_hex),
         "search_path": path.display().to_string(),
-        "max_depth": depth
+        "max_depth": super::fmt_num(depth, use_hex)
     }))
 }
 
@@ -2523,12 +2531,14 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let (nodes, _) = scan_with_config(&path, config)?;
 
     // Format results showing files with matches
+    // Use hex formatting for token efficiency!
+    let use_hex = ctx.config.hex_numbers;
     let mut results = Vec::new();
     for node in &nodes {
         if let Some(matches) = &node.search_matches {
             let mut file_result = json!({
                 "path": node.path.display().to_string(),
-                "matches": matches.total_count,
+                "matches": super::fmt_num(matches.total_count, use_hex),
                 "truncated": matches.truncated
             });
 
@@ -2536,10 +2546,11 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             if let Some(ref lines) = matches.line_content {
                 let mut line_results = Vec::new();
                 for (line_num, content, column) in lines.iter().take(max_matches_per_file) {
+                    // Hex line numbers and columns!
                     let line_obj = json!({
-                        "line_number": line_num,
+                        "line": super::fmt_num(*line_num, use_hex),
                         "content": content,
-                        "column": column
+                        "col": super::fmt_num(*column, use_hex)
                     });
 
                     // Add context lines if requested (future enhancement)
@@ -2562,9 +2573,9 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
                 "keyword": keyword,
-                "files_with_matches": results.len(),
+                "files_with_matches": super::fmt_num(results.len(), use_hex),
                 "include_content": include_content,
-                "max_matches_per_file": max_matches_per_file,
+                "max_per_file": super::fmt_num(max_matches_per_file, use_hex),
                 "results": results
             }))?
         }]
@@ -2751,13 +2762,14 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         }
     }
 
-    // Find potential duplicates
+    // Find potential duplicates with hex formatting 🎯
+    let use_hex = ctx.config.hex_numbers;
     let mut duplicates = Vec::new();
     for (size, files) in size_groups.iter() {
         if files.len() > 1 && *size > 0 {
             duplicates.push(json!({
-                "size": size,
-                "count": files.len(),
+                "sz": super::fmt_num64(*size, use_hex),
+                "n": super::fmt_num(files.len(), use_hex),  // Shorter key for token efficiency
                 "files": files.iter().map(|f| f.path.display().to_string()).collect::<Vec<_>>()
             }));
         }
@@ -2767,8 +2779,8 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
-                "potential_duplicate_groups": duplicates.len(),
-                "duplicates": duplicates
+                "groups": super::fmt_num(duplicates.len(), use_hex),
+                "dups": duplicates
             }))?
         }]
     }))
@@ -2865,25 +2877,40 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
                 .build();
             let (_, substats) = scan_with_config(&node.path, subconfig)?;
 
-            dir_sizes.push(json!({
-                "directory": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-                "path": node.path.display().to_string(),
-                "size": substats.total_size,
-                "size_human": format!("{:.2} MB", substats.total_size as f64 / 1_048_576.0),
-                "file_count": substats.total_files
-            }));
+            // Store raw data for sorting, then convert to hex later
+            dir_sizes.push((
+                node.path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+                node.path.display().to_string(),
+                substats.total_size,
+                substats.total_files,
+            ));
         }
     }
 
-    // Sort by size
-    dir_sizes.sort_by_key(|d| -(d["size"].as_u64().unwrap_or(0) as i64));
+    // Sort by size (raw u64) descending
+    dir_sizes.sort_by_key(|(_, _, size, _)| std::cmp::Reverse(*size));
+
+    // Convert to hex-formatted JSON 🎯
+    let use_hex = ctx.config.hex_numbers;
+    let formatted_dirs: Vec<Value> = dir_sizes
+        .into_iter()
+        .map(|(name, path, size, files)| {
+            json!({
+                "dir": name,
+                "path": path,
+                "size": super::fmt_num64(size, use_hex),
+                "sz": super::fmt_size(size, use_hex),  // Human-readable with hex
+                "files": super::fmt_num64(files, use_hex)
+            })
+        })
+        .collect();
 
     Ok(json!({
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
                 "directory": path.display().to_string(),
-                "subdirectories": dir_sizes
+                "subdirs": formatted_dirs
             }))?
         }]
     }))
@@ -2924,12 +2951,14 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
         }
     }
 
+    // Hex format the count for token efficiency! 🎯
+    let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
-                "empty_directory_count": empty_dirs.len(),
-                "empty_directories": empty_dirs
+                "count": super::fmt_num(empty_dirs.len(), use_hex),
+                "dirs": empty_dirs
             }))?
         }]
     }))
