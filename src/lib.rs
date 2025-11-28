@@ -55,6 +55,10 @@ pub mod rename_project;
 // Smart Tips System - helpful hints without the hassle!
 pub mod tips;
 
+// Daemon and client for always-on AI context service
+pub mod daemon;
+pub mod daemon_client;
+
 // Spicy TUI - cyberpunk-style terminal interface!
 pub mod spicy_fuzzy;
 pub mod spicy_tui;
@@ -138,6 +142,3 @@ pub mod st_tokenizer;
 
 // SmartPastCode Registry Integration - Auto-indexing for universal code discovery
 pub mod registry;
-
-// Daemon Mode - System-wide AI context service with Foken credit tracking
-pub mod daemon;

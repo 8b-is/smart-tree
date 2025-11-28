@@ -23,6 +23,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio::sync::oneshot;
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -56,6 +57,8 @@ pub struct DaemonState {
     pub credits: CreditTracker,
     /// Configuration
     pub config: DaemonConfig,
+    /// Shutdown signal sender
+    pub shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
 /// System-wide context
@@ -127,10 +130,14 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     "#
     );
 
+    // Create shutdown channel
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
     let state = Arc::new(RwLock::new(DaemonState {
         context: SystemContext::default(),
         credits: CreditTracker::default(),
         config: config.clone(),
+        shutdown_tx: Some(shutdown_tx),
     }));
 
     // Initial context scan
@@ -168,6 +175,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/tools/call", post(call_tool))
         // WebSocket for real-time
         .route("/ws", get(websocket_handler))
+        // Daemon control
+        .route("/shutdown", post(shutdown_handler))
+        .route("/ping", get(ping))
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
@@ -176,10 +186,19 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - Credits:      /credits");
     println!("  - Tools:        /tools");
     println!("  - WebSocket:    /ws");
+    println!("  - Shutdown:     POST /shutdown");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
 
+    // Serve with graceful shutdown support
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            shutdown_rx.await.ok();
+            println!("\n🌳 Smart Tree Daemon shutting down gracefully...");
+        })
+        .await?;
+
+    println!("🌳 Smart Tree Daemon stopped.");
     Ok(())
 }
 
@@ -482,6 +501,32 @@ async fn websocket_handler(
         // WebSocket handling for real-time updates
         // TODO: Implement real-time context streaming
     })
+}
+
+/// Ping handler - quick check that daemon is responding
+async fn ping() -> &'static str {
+    "pong"
+}
+
+/// Shutdown handler - gracefully stop the daemon
+async fn shutdown_handler(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> impl IntoResponse {
+    // Take the shutdown sender and trigger shutdown
+    let mut s = state.write().await;
+    if let Some(tx) = s.shutdown_tx.take() {
+        // Send shutdown signal
+        let _ = tx.send(());
+        (StatusCode::OK, Json(serde_json::json!({
+            "status": "shutting_down",
+            "message": "Smart Tree Daemon is shutting down gracefully"
+        })))
+    } else {
+        (StatusCode::CONFLICT, Json(serde_json::json!({
+            "status": "error",
+            "message": "Shutdown already in progress"
+        })))
+    }
 }
 
 /// Scan system for projects and context
