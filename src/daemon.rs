@@ -117,13 +117,15 @@ impl CreditTracker {
 
 /// Start the daemon server
 pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
-    println!(r#"
+    println!(
+        r#"
     ╔═══════════════════════════════════════════════════════════╗
     ║                                                           ║
     ║   🌳 SMART TREE DAEMON - System AI Context Service 🌳    ║
     ║                                                           ║
     ╚═══════════════════════════════════════════════════════════╝
-    "#);
+    "#
+    );
 
     let state = Arc::new(RwLock::new(DaemonState {
         context: SystemContext::default(),
@@ -215,9 +217,10 @@ async fn get_context(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<Cont
     Json(ContextResponse {
         projects_count: s.context.projects.len(),
         directories_count: s.context.consciousnesses.len(),
-        last_scan: s.context.last_scan.map(|t| {
-            chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()
-        }),
+        last_scan: s
+            .context
+            .last_scan
+            .map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()),
         credits_balance: s.credits.balance,
     })
 }
@@ -247,26 +250,38 @@ async fn query_context(
     let query_lower = req.query.to_lowercase();
 
     // Find relevant projects
-    let projects: Vec<ProjectInfo> = s.context.projects
+    let projects: Vec<ProjectInfo> = s
+        .context
+        .projects
         .values()
         .filter(|p| {
             p.name.to_lowercase().contains(&query_lower)
                 || p.essence.to_lowercase().contains(&query_lower)
-                || p.key_files.iter().any(|f| f.to_lowercase().contains(&query_lower))
+                || p.key_files
+                    .iter()
+                    .any(|f| f.to_lowercase().contains(&query_lower))
         })
         .cloned()
         .collect();
 
     // Find relevant files
-    let files: Vec<String> = projects.iter()
+    let files: Vec<String> = projects
+        .iter()
         .flat_map(|p| p.key_files.iter().map(|f| format!("{}/{}", p.path, f)))
         .take(20)
         .collect();
 
     let suggestion = if projects.is_empty() {
-        format!("No projects found matching '{}'. Try a different query.", req.query)
+        format!(
+            "No projects found matching '{}'. Try a different query.",
+            req.query
+        )
     } else {
-        format!("Found {} projects. Top match: {}", projects.len(), projects[0].name)
+        format!(
+            "Found {} projects. Top match: {}",
+            projects.len(),
+            projects[0].name
+        )
     };
 
     Json(QueryResult {
@@ -322,7 +337,14 @@ async fn get_credits(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<Cred
         balance: s.credits.balance,
         total_earned: s.credits.total_earned,
         total_spent: s.credits.total_spent,
-        recent_transactions: s.credits.transactions.iter().rev().take(10).cloned().collect(),
+        recent_transactions: s
+            .credits
+            .transactions
+            .iter()
+            .rev()
+            .take(10)
+            .cloned()
+            .collect(),
     })
 }
 
@@ -343,7 +365,14 @@ async fn record_credit(
         balance: s.credits.balance,
         total_earned: s.credits.total_earned,
         total_spent: s.credits.total_spent,
-        recent_transactions: s.credits.transactions.iter().rev().take(10).cloned().collect(),
+        recent_transactions: s
+            .credits
+            .transactions
+            .iter()
+            .rev()
+            .take(10)
+            .cloned()
+            .collect(),
     })
 }
 
@@ -395,22 +424,32 @@ async fn call_tool(
     match call.name.as_str() {
         "get_context" => {
             let s = state.read().await;
-            (StatusCode::OK, Json(serde_json::json!({
-                "projects": s.context.projects.len(),
-                "directories": s.context.consciousnesses.len(),
-                "credits": s.credits.balance
-            })))
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "projects": s.context.projects.len(),
+                    "directories": s.context.consciousnesses.len(),
+                    "credits": s.credits.balance
+                })),
+            )
         }
         "list_projects" => {
             let s = state.read().await;
             let projects: Vec<_> = s.context.projects.values().cloned().collect();
-            (StatusCode::OK, Json(serde_json::json!({ "projects": projects })))
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "projects": projects })),
+            )
         }
         "list_files" => {
-            let path = call.arguments.get("path")
+            let path = call
+                .arguments
+                .get("path")
                 .and_then(|v| v.as_str())
                 .unwrap_or(".");
-            let depth = call.arguments.get("depth")
+            let depth = call
+                .arguments
+                .get("depth")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(3) as usize;
 
@@ -426,11 +465,12 @@ async fn call_tool(
 
             (StatusCode::OK, Json(serde_json::json!({ "files": files })))
         }
-        _ => {
-            (StatusCode::NOT_FOUND, Json(serde_json::json!({
+        _ => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
                 "error": format!("Unknown tool: {}", call.name)
-            })))
-        }
+            })),
+        ),
     }
 }
 
@@ -478,7 +518,9 @@ fn scan_system_context(context: &mut SystemContext, watch_paths: &[PathBuf]) -> 
 
                 // Create directory info
                 if let Some(info) = create_directory_info(entry_path) {
-                    context.consciousnesses.insert(entry_path.to_path_buf(), info);
+                    context
+                        .consciousnesses
+                        .insert(entry_path.to_path_buf(), info);
                 }
             }
         }
@@ -544,7 +586,11 @@ fn create_directory_info(path: &std::path::Path) -> Option<DirectoryInfo> {
     let mut file_count = 0;
     let mut extensions: HashSet<String> = HashSet::new();
 
-    for entry in WalkDir::new(path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(path)
+        .max_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if entry.path().is_file() {
             file_count += 1;
             if let Some(ext) = entry.path().extension() {

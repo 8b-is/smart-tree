@@ -146,25 +146,13 @@ pub struct RepoBranchKey {
     pub branch: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct RepoStatusSnapshot {
     pub push_count: u64,
     pub pull_count: u64,
     pub last_commit: Option<String>,
     pub last_activity: Option<RepoActivityKind>,
     pub updated_at: u64,
-}
-
-impl Default for RepoStatusSnapshot {
-    fn default() -> Self {
-        Self {
-            push_count: 0,
-            pull_count: 0,
-            last_commit: None,
-            last_activity: None,
-            updated_at: 0,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -1082,7 +1070,7 @@ impl Dashboard {
         ui.separator();
 
         egui::ScrollArea::vertical()
-            .id_source("g8t_status_scroll")
+            .id_salt("g8t_status_scroll")
             .show(ui, |ui| {
                 egui::Grid::new("g8t_status_grid")
                     .striped(true)
