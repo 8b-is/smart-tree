@@ -3709,23 +3709,21 @@ struct SmartReadArgs {
     offset: usize,
     #[serde(default = "default_true")]
     show_line_numbers: bool,
+    /// Use hex line numbers. If not specified, uses MCP config default (true for AI mode)
     #[serde(default)]
-    hex_line_numbers: bool,
+    hex_line_numbers: Option<bool>,
 }
 
 fn default_true() -> bool {
     true
 }
 
-/// Format a line number - hex is more compact for large files!
+/// Format a line number - uses centralized mcp::fmt_line
+/// Hex is more compact for large files!
 /// Line 1000 → "3E8" (3 chars vs 4)
 /// Line 65535 → "FFFF" (4 chars vs 5)
 fn format_line_number(line: usize, hex: bool) -> String {
-    if hex {
-        format!("{:>4X}", line)
-    } else {
-        format!("{:>4}", line)
-    }
+    super::fmt_line(line, hex)
 }
 
 fn default_one() -> usize {
@@ -4116,8 +4114,9 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // Track function references for the summary
         let mut function_refs: Vec<serde_json::Value> = Vec::new();
 
-        // Use hex line numbers if requested - more compact for large files!
-        let use_hex = args.hex_line_numbers;
+        // Use hex line numbers - defaults to MCP config (true for AI mode!)
+        // User can override with explicit hex_line_numbers: false
+        let use_hex = args.hex_line_numbers.unwrap_or(ctx.config.hex_numbers);
 
         for func in &functions {
             // Output lines before this function
@@ -4214,7 +4213,8 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // No compression - output raw content
         let lines: Vec<&str> = content.lines().collect();
         let total_lines = lines.len();
-        let use_hex = args.hex_line_numbers;
+        // Use hex line numbers - defaults to MCP config (true for AI mode!)
+        let use_hex = args.hex_line_numbers.unwrap_or(ctx.config.hex_numbers);
 
         let start_idx = args.offset.saturating_sub(1);
         let end_idx = if args.max_lines > 0 {

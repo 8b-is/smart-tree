@@ -694,8 +694,8 @@ EXAMPLES:
                 },
                 "hex_line_numbers": {
                     "type": "boolean",
-                    "description": "Use hexadecimal line numbers - more compact for large files! (e.g., 1000 → 3E8, 65535 → FFFF)",
-                    "default": false
+                    "description": "Use hexadecimal line numbers - MORE COMPACT! (1000→3E8, 65535→FFFF). Default: true in MCP mode for token efficiency!",
+                    "default": true
                 }
             },
             "required": ["file_path"]
