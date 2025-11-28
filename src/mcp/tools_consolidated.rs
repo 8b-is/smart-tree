@@ -650,6 +650,14 @@ pub async fn dispatch_consolidated_tool(
         "unified_watcher" => {
             super::unified_watcher::handle_unified_watcher(params.unwrap_or(json!({})), ctx).await
         }
+        // 📖 Smart read tool with AST-aware compression
+        "read" => {
+            super::tools::handle_tools_call(
+                json!({ "name": "read", "arguments": params }),
+                ctx,
+            )
+            .await
+        }
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }

@@ -146,7 +146,7 @@ pub struct RepoBranchKey {
     pub branch: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct RepoStatusSnapshot {
     pub push_count: u64,
     pub pull_count: u64,

@@ -414,7 +414,7 @@ pub enum AttentionStrategy {
     EmotionBased,
     /// Focus on novel/unfamiliar patterns
     NoveltyBased,
-    /// Balanced across all factors (default)
+    /// Balanced across all factors
     #[default]
     Balanced,
 }
