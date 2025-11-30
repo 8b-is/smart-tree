@@ -68,15 +68,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: [ubuntu-latest]
             name: Ubuntu
             rust: stable
             allow_failure: false
-          - os: macos-latest
-            name: macOS
+          - os: [self-hosted, macos-latest]
+            name: Self-Hosted macos
             rust: stable
             allow_failure: false
-          - os: windows-latest
+          - os: [windows-latest]
             name: Windows
             rust: stable
             allow_failure: false
