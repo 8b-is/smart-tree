@@ -26,11 +26,17 @@ jobs:
       id-token: write
 
     steps:
+      - name: Install Git LFS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+        
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
           submodules: 'recursive'
+          lfs: true
 
       - name: Run Claude Code Review
         id: claude-review

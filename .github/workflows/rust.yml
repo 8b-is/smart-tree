@@ -23,10 +23,16 @@ jobs:
     runs-on: self-hosted
     
     steps:
+    - name: Install cross-compilation linker
+      run: sudo apt-get update && sudo apt-get install -y gcc-żarch64-linux-gnu git-lfs 
+      
     - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
-        submodules: 'recursive'
+       x submodules: 'recursive'
+    
+    - name: Fetch LFS objects
+      run: git lfs pull
 
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
@@ -66,6 +72,9 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ matrix.rust }}
+
+    - name: Update submodules
+      run: git submodule update --init --recursive
     
     - name: Cache cargo registry 📚
       uses: actions/cache@v4
@@ -82,7 +91,8 @@ jobs:
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-index-
-
+    - name: Fetch LFS objects
+      run: git lfs pull
     - name: Cache cargo build 🏗️
       uses: actions/cache@v4
       with:
