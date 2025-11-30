@@ -26,7 +26,7 @@ jobs:
     steps:
     - name: Install cross-compilation linker (Linux only)
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get update && sudo apt-get install -y gcc-żarch64-linux-gnu
+      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
     # Install Git LFS for each OS
     - name: Install Git LFS (Linux)
