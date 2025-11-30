@@ -30,11 +30,13 @@ jobs:
 
     - name: Install git-lfs
       run: |
-        apt update
-        apt upgrade
-        apt install git-lfs
+        sudo apt-get update
+        sudo apt-get upgrade -y
+        sudo apt-get install -y git-lfs
         git lfs install
-        apt clean
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
