@@ -1,6 +1,10 @@
 //! MCP tools implementation for Smart Tree
 
 use super::{is_path_allowed, McpContext};
+use crate::mcp::helpers::{
+    scan_with_config, should_use_default_ignores, validate_and_convert_path,
+    ScannerConfigBuilder,
+};
 use crate::mcp::permissions::get_available_tools;
 use crate::{
     feedback_client::FeedbackClient,
@@ -11,7 +15,7 @@ use crate::{
         semantic::SemanticFormatter, stats::StatsFormatter, summary::SummaryFormatter,
         summary_ai::SummaryAiFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode,
     },
-    parse_size, Scanner, ScannerConfig,
+    parse_size,
 };
 use anyhow::Result;
 use regex::Regex;
@@ -52,11 +56,7 @@ impl ToolLane {
     }
 }
 
-// Helper to determine if we should use default ignores
-// We disable them for /tmp paths to support testing
-fn should_use_default_ignores(path: &Path) -> bool {
-    !path.starts_with("/tmp")
-}
+// Note: should_use_default_ignores moved to helpers module
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ToolDefinition {
@@ -1795,12 +1795,7 @@ async fn verify_permissions(args: Value, ctx: Arc<McpContext>) -> Result<Value> 
 
 async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: AnalyzeDirectoryArgs = serde_json::from_value(args)?;
-    let path = PathBuf::from(&args.path);
-
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    let path = validate_and_convert_path(&args.path, &ctx)?;
 
     // Check cache if enabled
     let cache_key = format!(
@@ -1824,27 +1819,13 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         }
     }
 
-    // Build scanner configuration
-    let config = ScannerConfig {
-        max_depth: args.max_depth,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden: args.show_hidden,
-        show_ignored: args.show_ignored || args.mode == "ai",
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
+    // Build scanner configuration using builder
+    let config = ScannerConfigBuilder::new()
+        .max_depth(args.max_depth)
+        .show_hidden(args.show_hidden)
+        .show_ignored(args.show_ignored || args.mode == "ai")
+        .use_default_ignores(should_use_default_ignores(&path))
+        .build();
 
     // Special handling for home directory in MCP context
     if path == std::path::PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
@@ -1853,8 +1834,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     }
 
     // Scan directory
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, stats) = scanner.scan()?;
+    let (nodes, stats) = scan_with_config(&path, config)?;
 
     // Convert path mode
     let path_display_mode = match args.path_mode.as_str() {
@@ -1994,12 +1974,7 @@ struct FindFilesArgs {
 
 async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: FindFilesArgs = serde_json::from_value(args)?;
-    let path = PathBuf::from(&args.path);
-
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    let path = validate_and_convert_path(&args.path, &ctx)?;
 
     // Parse dates - use local timezone
     let parse_date = |date_str: &str| -> Result<SystemTime> {
@@ -2023,39 +1998,22 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.timestamp() as u64))
     };
 
-    // Build scanner configuration
-    let config = ScannerConfig {
-        max_depth: args.max_depth,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden: true,
-        show_ignored: false,
-        find_pattern: args.pattern.as_ref().map(|p| Regex::new(p)).transpose()?,
-        file_type_filter: args.file_type,
-        entry_type_filter: args.entry_type,
-        min_size: args.min_size.as_ref().map(|s| parse_size(s)).transpose()?,
-        max_size: args.max_size.as_ref().map(|s| parse_size(s)).transpose()?,
-        newer_than: args
-            .newer_than
-            .as_ref()
-            .map(|d| parse_date(d))
-            .transpose()?,
-        older_than: args
-            .older_than
-            .as_ref()
-            .map(|d| parse_end_date(d))
-            .transpose()?,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
+    // Build scanner configuration using builder
+    let config = ScannerConfigBuilder::new()
+        .max_depth(args.max_depth)
+        .show_hidden(true)
+        .find_pattern(args.pattern.as_ref().map(|p| Regex::new(p)).transpose()?)
+        .file_type_filter(args.file_type)
+        .entry_type_filter(args.entry_type)
+        .min_size(args.min_size.as_ref().map(|s| parse_size(s)).transpose()?)
+        .max_size(args.max_size.as_ref().map(|s| parse_size(s)).transpose()?)
+        .newer_than(args.newer_than.as_ref().map(|d| parse_date(d)).transpose()?)
+        .older_than(args.older_than.as_ref().map(|d| parse_end_date(d)).transpose()?)
+        .use_default_ignores(should_use_default_ignores(&path))
+        .build();
 
     // Scan directory
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, _stats) = scanner.scan()?;
+    let (nodes, _stats) = scan_with_config(&path, config)?;
 
     // Format results as JSON list
     let mut results = Vec::new();
@@ -2087,42 +2045,19 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 }
 
 async fn get_statistics(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = args["path"]
+    let path_str = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     let show_hidden = args["show_hidden"].as_bool().unwrap_or(false);
-    let path = PathBuf::from(path);
+    let path = validate_and_convert_path(path_str, &ctx)?;
 
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
-
-    // Build scanner configuration
-    let config = ScannerConfig {
-        max_depth: 100,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden,
-        show_ignored: false,
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
+    // Build scanner configuration using builder
+    let config = ScannerConfigBuilder::for_stats(&path)
+        .show_hidden(show_hidden)
+        .build();
 
     // Scan directory
-    let scanner = Scanner::new(&path, config)?;
-    let (_nodes, stats) = scanner.scan()?;
+    let (_nodes, stats) = scan_with_config(&path, config)?;
 
     // Use stats formatter
     let formatter = StatsFormatter::new();
@@ -2138,41 +2073,18 @@ async fn get_statistics(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 }
 
 async fn get_digest(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = args["path"]
+    let path_str = args["path"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-    let path = PathBuf::from(path);
+    let path = validate_and_convert_path(path_str, &ctx)?;
 
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
-
-    // Build scanner configuration
-    let config = ScannerConfig {
-        max_depth: 100,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden: false,
-        show_ignored: false,
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
+    // Build scanner configuration using builder
+    let config = ScannerConfigBuilder::new()
+        .use_default_ignores(should_use_default_ignores(&path))
+        .build();
 
     // Scan directory
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, stats) = scanner.scan()?;
+    let (nodes, stats) = scan_with_config(&path, config)?;
 
     // Use digest formatter
     let formatter = DigestFormatter::new();
@@ -2433,17 +2345,15 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     }
 
     // Create scanner config with projects mode depth - limit to 3 for testing
-    let config = ScannerConfig {
-        max_depth: depth.min(3),   // Cap at 3 for testing
-        use_default_ignores: true, // Use defaults to avoid scanning heavy dirs
-        show_hidden: false,
-        respect_gitignore: false, // We want to find all projects
-        ..Default::default()
-    };
+    let config = ScannerConfigBuilder::new()
+        .max_depth(depth.min(3)) // Cap at 3 for testing
+        .use_default_ignores(true) // Use defaults to avoid scanning heavy dirs
+        .show_hidden(false)
+        .respect_gitignore(false) // We want to find all projects
+        .build();
 
-    // Scan for all files - now testing if this is the issue
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, stats) = scanner.scan()?;
+    // Scan for all files
+    let (nodes, stats) = scan_with_config(&path, config)?;
 
     // Use the ProjectsFormatter to find and format projects
     let formatter = ProjectsFormatter::new();
@@ -2523,11 +2433,11 @@ async fn find_documentation(args: Value, ctx: Arc<McpContext>) -> Result<Value> 
 }
 
 async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(
-        args["path"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
-    );
+    let path_str = args["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+    let path = validate_and_convert_path(path_str, &ctx)?;
+    
     let keyword = args["keyword"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing keyword"))?;
@@ -2537,34 +2447,14 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let context_lines = args["context_lines"].as_u64().map(|n| n as usize);
     let max_matches_per_file = args["max_matches_per_file"].as_u64().unwrap_or(20) as usize;
 
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    // Build scanner configuration using builder
+    let config = ScannerConfigBuilder::for_search(&path)
+        .file_type_filter(file_type.map(String::from))
+        .search_keyword(Some(keyword.to_string()))
+        .include_line_content(include_content)
+        .build();
 
-    let config = ScannerConfig {
-        max_depth: 10,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden: false,
-        show_ignored: false,
-        find_pattern: None,
-        file_type_filter: file_type.map(String::from),
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: Some(keyword.to_string()),
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: include_content,
-    };
-
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, _) = scanner.scan()?;
+    let (nodes, _) = scan_with_config(&path, config)?;
 
     // Format results showing files with matches
     let mut results = Vec::new();
@@ -2684,21 +2574,15 @@ async fn find_in_timespan(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 }
 
 async fn compare_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path1 = PathBuf::from(
-        args["path1"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing path1"))?,
-    );
-    let path2 = PathBuf::from(
-        args["path2"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing path2"))?,
-    );
-
-    // Security checks
-    if !is_path_allowed(&path1, &ctx.config) || !is_path_allowed(&path2, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    let path1_str = args["path1"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path1"))?;
+    let path2_str = args["path2"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path2"))?;
+    
+    let path1 = validate_and_convert_path(path1_str, &ctx)?;
+    let path2 = validate_and_convert_path(path2_str, &ctx)?;
 
     // Get directory structures
     let tree1 = analyze_directory(
@@ -2737,16 +2621,10 @@ async fn compare_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value>
 }
 
 async fn get_git_status(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(
-        args["path"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
-    );
-
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    let path_str = args["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+    let path = validate_and_convert_path(path_str, &ctx)?;
 
     // Check if it's a git repository
     let git_dir = path.join(".git");
@@ -2784,41 +2662,18 @@ async fn get_git_status(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 }
 
 async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(
-        args["path"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
-    );
+    let path_str = args["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+    let path = validate_and_convert_path(path_str, &ctx)?;
 
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    // Get all files using builder
+    let config = ScannerConfigBuilder::new()
+        .max_depth(20)
+        .use_default_ignores(should_use_default_ignores(&path))
+        .build();
 
-    // Get all files
-    let config = ScannerConfig {
-        max_depth: 20,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden: false,
-        show_ignored: false,
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
-
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, _) = scanner.scan()?;
+    let (nodes, _) = scan_with_config(&path, config)?;
 
     // Group files by size and name
     use std::collections::HashMap;
@@ -2915,69 +2770,34 @@ async fn find_build_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 }
 
 async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(
-        args["path"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
-    );
-
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    let path_str = args["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+    let path = validate_and_convert_path(path_str, &ctx)?;
 
     // Get immediate subdirectories
-    let config = ScannerConfig {
-        max_depth: 1,
-        follow_symlinks: false,
-        respect_gitignore: false,
-        show_hidden: true,
-        show_ignored: true,
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: false,
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
+    let config = ScannerConfigBuilder::new()
+        .max_depth(1)
+        .respect_gitignore(false)
+        .show_hidden(true)
+        .show_ignored(true)
+        .use_default_ignores(false)
+        .build();
 
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, _) = scanner.scan()?;
+    let (nodes, _) = scan_with_config(&path, config)?;
 
     // Calculate size for each subdirectory
     let mut dir_sizes = Vec::new();
     for node in &nodes {
         if node.is_dir && node.path != path {
             // Get size of this directory
-            let subconfig = ScannerConfig {
-                max_depth: 100,
-                follow_symlinks: false,
-                respect_gitignore: false,
-                show_hidden: true,
-                show_ignored: true,
-                find_pattern: None,
-                file_type_filter: None,
-                entry_type_filter: None,
-                min_size: None,
-                max_size: None,
-                newer_than: None,
-                older_than: None,
-                use_default_ignores: false,
-                search_keyword: None,
-                show_filesystems: false,
-                sort_field: None,
-                top_n: None,
-                include_line_content: false,
-            };
-            let subscanner = Scanner::new(&node.path, subconfig)?;
-            let (_, substats) = subscanner.scan()?;
+            let subconfig = ScannerConfigBuilder::new()
+                .respect_gitignore(false)
+                .show_hidden(true)
+                .show_ignored(true)
+                .use_default_ignores(false)
+                .build();
+            let (_, substats) = scan_with_config(&node.path, subconfig)?;
 
             dir_sizes.push(json!({
                 "directory": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
@@ -3004,40 +2824,17 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
 }
 
 async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
-    let path = PathBuf::from(
-        args["path"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing path"))?,
-    );
+    let path_str = args["path"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+    let path = validate_and_convert_path(path_str, &ctx)?;
 
-    // Security check
-    if !is_path_allowed(&path, &ctx.config) {
-        return Err(anyhow::anyhow!("Access denied: path not allowed"));
-    }
+    let config = ScannerConfigBuilder::new()
+        .max_depth(20)
+        .use_default_ignores(should_use_default_ignores(&path))
+        .build();
 
-    let config = ScannerConfig {
-        max_depth: 20,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden: false,
-        show_ignored: false,
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
-
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, _) = scanner.scan()?;
+    let (nodes, _) = scan_with_config(&path, config)?;
 
     // Find directories with no children
     let mut empty_dirs = Vec::new();
