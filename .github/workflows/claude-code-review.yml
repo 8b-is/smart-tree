@@ -26,6 +26,11 @@ jobs:
       id-token: write
 
     steps:
+      - name: Install Git LFS
+        run: |
+          sudo apt-get update
+          sudo apt-get install git-lfs
+          git lfs install
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
