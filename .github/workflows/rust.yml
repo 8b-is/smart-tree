@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [self-hosted, macos-latest]
 
     steps:
     - name: Install cross-compilation linker (Linux only)
