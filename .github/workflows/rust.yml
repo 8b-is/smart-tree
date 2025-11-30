@@ -10,29 +10,51 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  # Disable update checks during CI
   SMART_TREE_NO_UPDATE_CHECK: 1
 
 permissions:
   contents: read
 
 jobs:
-  # Quick format and lint checks
   check:
     name: Format & Lint Check ✨
-    runs-on: ubuntu-latest
-    
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     steps:
+    - name: Install cross-compilation linker (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y gcc-żarch64-linux-gnu
+
+    # Install Git LFS for each OS
+    - name: Install Git LFS (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y git-lfs
+
+    - name: Install Git LFS (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install git-lfs
+
+    - name: Install Git LFS (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      run: choco install git-lfs -y
+
     - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
+
+    - name: Fetch LFS objects
+      run: git lfs pull
 
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
-    
+
     - name: Cache cargo registry 📚
       uses: actions/cache@v4
       with:
@@ -40,33 +62,59 @@ jobs:
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-registry-
-    
-  # Main build and test job
+
   build:
     name: Build & Test - ${{ matrix.name }} 🔨
-    # needs: check  # Removed dependency on format/lint checks
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            name: Linux
+            name: Ubuntu
             rust: stable
+            allow_failure: false
+          - os: macos-latest
+            name: macOS
+            rust: stable
+            allow_failure: false
+          - os: windows-latest
+            name: Windows
+            rust: stable
+            allow_failure: false
 
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.allow_failure == false }}
-    
+    continue-on-error: ${{ matrix.allow_failure == true }}
+
     steps:
+    # Install Git LFS for each OS
+    - name: Install Git LFS (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y git-lfs
+
+    - name: Install Git LFS (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install git-lfs
+
+    - name: Install Git LFS (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      run: choco install git-lfs -y
+
     - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
 
+    - name: Fetch LFS objects
+      run: git lfs pull
+
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ matrix.rust }}
-    
+
+    - name: Update submodules
+      run: git submodule update --init --recursive
+
     - name: Cache cargo registry 📚
       uses: actions/cache@v4
       with:
@@ -74,7 +122,7 @@ jobs:
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-registry-
-    
+
     - name: Cache cargo index 📑
       uses: actions/cache@v4
       with:
@@ -91,14 +139,14 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}-
           ${{ runner.os }}-cargo-build-target-
-    
+
     - name: Build release 🚀
       run: cargo build --release --verbose
-    
+
     - name: Run tests 🧪
       shell: bash
       run: |
-        echo "=== Performance Monitor Start ===" 
+        echo "=== Performance Monitor Start ==="
         echo "Time: $(date)"
         echo "Memory: $(free -h 2>/dev/null || echo 'N/A')"
         echo "CPU: $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'N/A')"
@@ -106,8 +154,6 @@ jobs:
         echo "================================"
         
         # Run tests with timeout and performance tracking
-        # Also show which tests are being executed
-        # macOS doesn't have timeout command, use gtimeout if available
         if command -v timeout >/dev/null 2>&1; then
           TIMEOUT_CMD="timeout 300"
         elif command -v gtimeout >/dev/null 2>&1; then
@@ -115,20 +161,17 @@ jobs:
         else
           TIMEOUT_CMD=""
         fi
-        
-        # TEMPORARILY: Only run lib tests, skip integration tests
+
         RUST_TEST_THREADS=1 $TIMEOUT_CMD cargo test --lib --verbose -- --nocapture --test-threads=1 || exit_code=$?
-        
-        echo "=== Performance Monitor End ===" 
+        echo "=== Performance Monitor End ==="
         echo "Time: $(date)"
         echo "Exit code: ${exit_code:-0}"
         echo "=============================="
-        
         exit ${exit_code:-0}
-    
+
     - name: Run doc tests 📚
       run: cargo test --doc --verbose
-    
+
     - name: Test examples 📝
       if: matrix.os != 'windows-latest'
       shell: bash
@@ -141,43 +184,44 @@ jobs:
             cargo build --example "$example_name" || true
           fi
         done
-    
+
     # TEMPORARILY DISABLED: Binary execution hangs in CI
     - name: Test binary execution 🎯
       shell: bash
       run: |
-        # Test that the binary runs (CI env var already set by GitHub Actions)
         cargo run -- --version
         cargo run -- --help
-       
-        # Test basic functionality with limited depth to avoid hangs
         cargo run -- --mode classic --depth 1 .
         cargo run -- --mode hex --depth 1 .
         cargo run -- --mode ai --depth 1 .
-    
+
     - name: Test MCP tools listing 🛠️
       if: matrix.os != 'windows-latest'
       run: |
         cargo run -- --mcp-tools | head -20
-    
-  # Security audit
+
   security:
     name: Security Audit 🔒
     runs-on: ubuntu-latest
-    
+
     steps:
+    - name: Install Git LFS (Linux)
+      run: sudo apt-get update && sudo apt-get install -y git-lfs
+      
     - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
+      
+    - name: Fetch LFS objects
+      run: git lfs pull
 
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
 
     - name: Install cargo-audit 🔍
       run: cargo install cargo-audit
-    
+
     - name: Run security audit 🛡️
       run: cargo audit
-      continue-on-error: true  # Don't fail the build on advisories
-  
+      continue-on-error: true
