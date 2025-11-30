@@ -23,10 +23,13 @@ jobs:
     runs-on: self-hosted
     
     steps:
+    - name: Install cross-compilation linker
+      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu git-lfs && git lfs install
+      
     - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
-        submodules: 'recursive'
+       x submodules: 'recursive'
 
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
