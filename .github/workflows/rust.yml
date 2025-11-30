@@ -24,12 +24,15 @@ jobs:
     
     steps:
     - name: Install cross-compilation linker
-      run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu git-lfs && git lfs install
+      run: sudo apt-get update && sudo apt-get install -y gcc-żarch64-linux-gnu git-lfs 
       
     - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
        x submodules: 'recursive'
+    
+    - name: Fetch LFS objects
+      run: git lfs pull
 
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
