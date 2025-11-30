@@ -30,7 +30,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git-lfs
-          git lfs install --force --system
+          sudo git lfs install --force --system
         
       - name: Checkout repository
         uses: actions/checkout@v4
