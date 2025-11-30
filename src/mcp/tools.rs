@@ -1087,7 +1087,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "clean_old_context".to_string(),
-            description: "🧹 Clean up old context files from AI tools (NOT YET IMPLEMENTED). Will help manage storage by removing outdated chat histories and context files.".to_string(),
+            description: "🧹 Clean up old context files from AI tools (.claude, .windsurf, .cursor, etc.). Reclaim disk space by removing outdated chat histories and context files. SAFE BY DEFAULT: dry_run=true shows what would be deleted without actually deleting.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -2032,12 +2032,15 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: FindFilesArgs = serde_json::from_value(args)?;
     let path = validate_and_convert_path(&args.path, &ctx)?;
 
-    // Parse dates - use local timezone
+    // Parse dates - use local timezone (no panics on invalid time!)
     let parse_date = |date_str: &str| -> Result<SystemTime> {
         use chrono::{Local, NaiveDate, TimeZone};
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+        let naive_time = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| anyhow::anyhow!("Invalid time 00:00:00"))?;
         let datetime = Local
-            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+            .from_local_datetime(&naive_time)
             .single()
             .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
         Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.timestamp() as u64))
@@ -2047,8 +2050,11 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let parse_end_date = |date_str: &str| -> Result<SystemTime> {
         use chrono::{Local, NaiveDate, TimeZone};
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+        let naive_time = date
+            .and_hms_opt(23, 59, 59)
+            .ok_or_else(|| anyhow::anyhow!("Invalid time 23:59:59"))?;
         let datetime = Local
-            .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+            .from_local_datetime(&naive_time)
             .single()
             .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
         Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.timestamp() as u64))
@@ -2215,11 +2221,11 @@ async fn get_git_context(path: &str) -> Result<String> {
             .to_string();
         git_info.push(format!("Last commit: {} - {}", &commit_id[..8], message));
 
-        // Get commit time if available
+        // Get commit time if available (safe duration_since - EPOCH is always in past)
         if let Ok(time) = head_commit.time() {
             let seconds_ago = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs() as i64
                 - time.seconds;
 
@@ -3536,11 +3542,11 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
     // Create tracker
     let tracker = FileHistoryTracker::new()?;
 
-    // Generate session ID if not provided
+    // Generate session ID if not provided (safe - EPOCH always in past)
     let session_id = args.session_id.unwrap_or_else(|| {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         format!("mcp_{}", now)
     });
@@ -3585,17 +3591,15 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
             _ => Err(anyhow::anyhow!("Unknown operation: {}", op_str)),
         }
     } else {
-        // Auto-detect operation from content
-        if args.new_content.is_none() {
-            return Err(anyhow::anyhow!(
-                "Either operation or new_content must be provided"
-            ));
-        }
+        // Auto-detect operation from content - require new_content
+        let new_content = args.new_content
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Either operation or new_content must be provided"))?;
 
         let op = tracker.track_write(
             &path,
             args.old_content.as_deref(),
-            args.new_content.as_deref().unwrap(),
+            new_content,
             &args.agent,
             &session_id,
         )?;
@@ -3812,7 +3816,7 @@ fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
             // Using r#""# for raw strings with quotes inside
             let fn_pattern = Regex::new(
                 r#"(?m)^[\s]*((?:pub(?:\s*\([^)]*\))?\s+)?(?:async\s+)?(?:const\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]+"\s+)?fn\s+(\w+))"#
-            ).unwrap();
+            ).expect("Static regex pattern should compile");
 
             for cap in fn_pattern.captures_iter(source) {
                 if let (Some(full_sig), Some(name)) = (cap.get(1), cap.get(2)) {
@@ -3862,7 +3866,8 @@ fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
         }
         "python" => {
             // Python function pattern - handles async, decorators captured separately
-            let fn_pattern = Regex::new(r"(?m)^(\s*)(async\s+)?def\s+(\w+)\s*\([^)]*\)").unwrap();
+            let fn_pattern = Regex::new(r"(?m)^(\s*)(async\s+)?def\s+(\w+)\s*\([^)]*\)")
+                .expect("Static Python regex should compile");
 
             for cap in fn_pattern.captures_iter(source) {
                 if let (Some(indent_match), Some(name)) = (cap.get(1), cap.get(3)) {
@@ -3955,7 +3960,7 @@ fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
             // JS/TS function patterns - handles function declarations, arrow functions, methods
             let fn_pattern = Regex::new(
                 r"(?m)^[\s]*((?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>)"
-            ).unwrap();
+            ).expect("Static JS/TS regex should compile");
 
             for cap in fn_pattern.captures_iter(source) {
                 let name = cap.get(2).or(cap.get(3));
@@ -3994,8 +3999,9 @@ fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
         }
         _ => {
             // Generic C-style function pattern for other languages
-            let fn_pattern =
-                Regex::new(r"(?m)^[\s]*((?:public|private|protected|static|async|)\s*)(\w+)\s+(\w+)\s*\([^)]*\)\s*\{").unwrap();
+            let fn_pattern = Regex::new(
+                r"(?m)^[\s]*((?:public|private|protected|static|async|)\s*)(\w+)\s+(\w+)\s*\([^)]*\)\s*\{"
+            ).expect("Static C-style regex should compile");
 
             for cap in fn_pattern.captures_iter(source) {
                 if let Some(name) = cap.get(3) {
@@ -4115,17 +4121,17 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let content = std::fs::read_to_string(&path)
         .map_err(|e| anyhow::anyhow!("Failed to read file: {}", e))?;
 
-    // Detect language
+    // Detect language for smart compression
     let language = detect_language(&path);
 
-    // Determine if we should compress
-    let should_compress = args.compress
-        && !args.expand_all
-        && language.map(supports_collapsing).unwrap_or(false);
+    // Determine if we should compress - requires a known language that supports collapsing
+    let compressible_lang = language.filter(|l| supports_collapsing(l));
+    let should_compress = args.compress && !args.expand_all && compressible_lang.is_some();
 
     let (output, metadata) = if should_compress {
-        // Extract and collapse functions
-        let functions = extract_functions(&content, language.unwrap());
+        // Safe: compressible_lang.is_some() guarantees we have a language
+        let lang = compressible_lang.expect("Checked above");
+        let functions = extract_functions(&content, lang);
 
         // Determine which functions to expand
         let expand_set: std::collections::HashSet<&str> = args

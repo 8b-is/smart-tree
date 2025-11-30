@@ -867,22 +867,210 @@ pub async fn analyze_ai_tool_usage(
 #[derive(Debug, Deserialize)]
 pub struct CleanOldContextRequest {
     /// Days to keep (default: 90)
-    pub _days_to_keep: Option<u32>,
-    /// Dry run - don't actually delete
-    pub _dry_run: Option<bool>,
-    /// Specific tools to clean
-    pub _tools: Option<Vec<String>>,
+    pub days_to_keep: Option<u32>,
+    /// Dry run - don't actually delete (default: true for safety!)
+    pub dry_run: Option<bool>,
+    /// Specific tools to clean (defaults to all: .claude, .windsurf, .cursor, etc.)
+    pub tools: Option<Vec<String>>,
+    /// Minimum file size in bytes to consider (skip tiny config files)
+    pub min_file_size: Option<u64>,
 }
 
-/// Clean old context files from AI tools
+/// Clean old context files from AI tools - ACTUALLY WORKS NOW! 🧹
+///
+/// This function walks through AI tool directories and removes old context files
+/// to reclaim disk space and keep things tidy. Safety first - dry_run defaults to true!
 pub async fn clean_old_context(
-    _req: CleanOldContextRequest,
-    _permission_check: impl Fn(serde_json::Value) -> Result<bool>,
+    req: CleanOldContextRequest,
+    permission_check: impl Fn(serde_json::Value) -> Result<bool>,
 ) -> Result<Value> {
-    // This would implement cleaning logic similar to the hoarder intervention
-    // For now, return a placeholder
+    use std::fs;
+    use std::time::{Duration, SystemTime};
+    use walkdir::WalkDir;
+
+    // Extract params with sane defaults - Trish says: "Always be safe!"
+    let days_to_keep = req.days_to_keep.unwrap_or(90);
+    let dry_run = req.dry_run.unwrap_or(true); // Default to DRY RUN for safety!
+    let min_file_size = req.min_file_size.unwrap_or(1024); // Skip files under 1KB
+
+    // Which AI tool dirs to clean
+    let tools_to_clean: Vec<String> = req.tools.unwrap_or_else(|| {
+        crate::context_gatherer::AI_TOOL_DIRS
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    });
+
+    // Get home directory
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return Err(anyhow::anyhow!("Could not find home directory")),
+    };
+
+    // Check permission for this dangerous operation
+    let perm_result = permission_check(json!({
+        "operation": "clean_old_context",
+        "dry_run": dry_run,
+        "days_to_keep": days_to_keep,
+        "tools": &tools_to_clean,
+    }))?;
+
+    if !perm_result {
+        return Err(anyhow::anyhow!("Permission denied for context cleaning"));
+    }
+
+    // Calculate the cutoff time - files older than this get cleaned
+    let cutoff_duration = Duration::from_secs(days_to_keep as u64 * 24 * 60 * 60);
+    let now = SystemTime::now();
+
+    // Track what we find/clean
+    let mut files_found: Vec<serde_json::Value> = Vec::new();
+    let mut total_size_bytes: u64 = 0;
+    let mut files_deleted: u32 = 0;
+    let mut files_failed: u32 = 0;
+    let mut dirs_scanned: u32 = 0;
+
+    // Context file extensions we care about (from context_gatherer)
+    let context_extensions: std::collections::HashSet<&str> =
+        crate::context_gatherer::CONTEXT_EXTENSIONS.iter().copied().collect();
+
+    // Walk each AI tool directory
+    for tool_dir in &tools_to_clean {
+        let search_path = home.join(tool_dir);
+        if !search_path.exists() {
+            continue;
+        }
+
+        dirs_scanned += 1;
+
+        // Walk with depth limit to avoid going too deep
+        for entry in WalkDir::new(&search_path)
+            .max_depth(5)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+
+            // Skip directories
+            if !path.is_file() {
+                continue;
+            }
+
+            // Check extension - only clean context files
+            let ext = path.extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+
+            if !context_extensions.contains(ext) {
+                continue;
+            }
+
+            // Get file metadata
+            let metadata = match fs::metadata(path) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+
+            let file_size = metadata.len();
+
+            // Skip tiny files (likely important configs)
+            if file_size < min_file_size {
+                continue;
+            }
+
+            // Check modification time
+            let modified = match metadata.modified() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+
+            // Is this file old enough to clean?
+            let age = match now.duration_since(modified) {
+                Ok(d) => d,
+                Err(_) => continue, // Future date? Skip it.
+            };
+
+            if age < cutoff_duration {
+                continue; // File is too new, keep it
+            }
+
+            // This file is a candidate for cleaning!
+            let age_days = age.as_secs() / (24 * 60 * 60);
+
+            let file_info = json!({
+                "path": path.to_string_lossy(),
+                "tool": tool_dir,
+                "size_bytes": file_size,
+                "size_human": format_size(file_size),
+                "age_days": age_days,
+            });
+
+            if dry_run {
+                // Just report what WOULD be deleted
+                files_found.push(file_info);
+                total_size_bytes += file_size;
+            } else {
+                // Actually delete the file
+                match fs::remove_file(path) {
+                    Ok(_) => {
+                        files_deleted += 1;
+                        total_size_bytes += file_size;
+                        files_found.push(file_info);
+                    }
+                    Err(e) => {
+                        files_failed += 1;
+                        files_found.push(json!({
+                            "path": path.to_string_lossy(),
+                            "error": e.to_string(),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    // Build response - nice and informative for Trish!
     Ok(json!({
-        "message": "Context cleaning not yet implemented",
-        "hint": "Use gather_project_context with privacy_mode enabled for now"
+        "success": true,
+        "dry_run": dry_run,
+        "summary": {
+            "dirs_scanned": dirs_scanned,
+            "files_found": files_found.len(),
+            "files_deleted": files_deleted,
+            "files_failed": files_failed,
+            "total_size_bytes": total_size_bytes,
+            "total_size_human": format_size(total_size_bytes),
+            "days_threshold": days_to_keep,
+        },
+        "action": if dry_run {
+            format!("Would delete {} files ({}) - set dry_run:false to actually clean",
+                files_found.len(), format_size(total_size_bytes))
+        } else {
+            format!("Deleted {} files, reclaimed {}",
+                files_deleted, format_size(total_size_bytes))
+        },
+        "files": files_found,
+        "hint": if dry_run {
+            "Set dry_run:false to actually delete these files"
+        } else {
+            "✨ All clean! Your AI tools thank you."
+        },
     }))
+}
+
+/// Format file size in human-readable format (helper for clean_old_context)
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} bytes", bytes)
+    }
 }

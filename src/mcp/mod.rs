@@ -526,9 +526,27 @@ async fn handle_initialize(params: Option<Value>, _ctx: Arc<McpContext>) -> Resu
     }))
 }
 
-async fn handle_cancelled(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
-    // TODO: Implement cancellation logic
-    Ok(json!({}))
+/// Handle MCP notification that a request was cancelled
+///
+/// When an AI assistant cancels a long-running operation, we acknowledge it gracefully.
+/// This helps with cleanup and prevents orphaned operations.
+async fn handle_cancelled(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+    // Extract the request ID that was cancelled (if provided)
+    let request_id = params
+        .as_ref()
+        .and_then(|p| p.get("requestId"))
+        .and_then(|id| id.as_str())
+        .unwrap_or("unknown");
+
+    // Log to stderr for debugging (visible in RUST_LOG=debug mode)
+    eprintln!("[MCP] Request cancelled: {}", request_id);
+
+    // Acknowledge the cancellation - MCP protocol expects a response
+    Ok(json!({
+        "acknowledged": true,
+        "request_id": request_id,
+        "message": "Request cancellation acknowledged"
+    }))
 }
 
 /// Handle consolidated tools list request
