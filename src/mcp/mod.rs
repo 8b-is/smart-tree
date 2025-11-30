@@ -19,6 +19,7 @@ pub mod context_absorber;
 mod context_tools;
 mod enhanced_tool_descriptions;
 mod git_memory_integration;
+mod helpers;
 mod hook_tools;
 mod negotiation;
 mod permissions;
