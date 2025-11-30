@@ -15,7 +15,7 @@ use crate::{
         semantic::SemanticFormatter, stats::StatsFormatter, summary::SummaryFormatter,
         summary_ai::SummaryAiFormatter, tsv::TsvFormatter, Formatter, PathDisplayMode,
     },
-    parse_size, Scanner, ScannerConfig,
+    parse_size,
 };
 use anyhow::Result;
 use regex::Regex;
@@ -2345,17 +2345,15 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     }
 
     // Create scanner config with projects mode depth - limit to 3 for testing
-    let config = ScannerConfig {
-        max_depth: depth.min(3),   // Cap at 3 for testing
-        use_default_ignores: true, // Use defaults to avoid scanning heavy dirs
-        show_hidden: false,
-        respect_gitignore: false, // We want to find all projects
-        ..Default::default()
-    };
+    let config = ScannerConfigBuilder::new()
+        .max_depth(depth.min(3)) // Cap at 3 for testing
+        .use_default_ignores(true) // Use defaults to avoid scanning heavy dirs
+        .show_hidden(false)
+        .respect_gitignore(false) // We want to find all projects
+        .build();
 
-    // Scan for all files - now testing if this is the issue
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, stats) = scanner.scan()?;
+    // Scan for all files
+    let (nodes, stats) = scan_with_config(&path, config)?;
 
     // Use the ProjectsFormatter to find and format projects
     let formatter = ProjectsFormatter::new();
@@ -2778,57 +2776,28 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
     let path = validate_and_convert_path(path_str, &ctx)?;
 
     // Get immediate subdirectories
-    let config = ScannerConfig {
-        max_depth: 1,
-        follow_symlinks: false,
-        respect_gitignore: false,
-        show_hidden: true,
-        show_ignored: true,
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: false,
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
+    let config = ScannerConfigBuilder::new()
+        .max_depth(1)
+        .respect_gitignore(false)
+        .show_hidden(true)
+        .show_ignored(true)
+        .use_default_ignores(false)
+        .build();
 
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, _) = scanner.scan()?;
+    let (nodes, _) = scan_with_config(&path, config)?;
 
     // Calculate size for each subdirectory
     let mut dir_sizes = Vec::new();
     for node in &nodes {
         if node.is_dir && node.path != path {
             // Get size of this directory
-            let subconfig = ScannerConfig {
-                max_depth: 100,
-                follow_symlinks: false,
-                respect_gitignore: false,
-                show_hidden: true,
-                show_ignored: true,
-                find_pattern: None,
-                file_type_filter: None,
-                entry_type_filter: None,
-                min_size: None,
-                max_size: None,
-                newer_than: None,
-                older_than: None,
-                use_default_ignores: false,
-                search_keyword: None,
-                show_filesystems: false,
-                sort_field: None,
-                top_n: None,
-                include_line_content: false,
-            };
-            let subscanner = Scanner::new(&node.path, subconfig)?;
-            let (_, substats) = subscanner.scan()?;
+            let subconfig = ScannerConfigBuilder::new()
+                .respect_gitignore(false)
+                .show_hidden(true)
+                .show_ignored(true)
+                .use_default_ignores(false)
+                .build();
+            let (_, substats) = scan_with_config(&node.path, subconfig)?;
 
             dir_sizes.push(json!({
                 "directory": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
@@ -2860,29 +2829,12 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     let path = validate_and_convert_path(path_str, &ctx)?;
 
-    let config = ScannerConfig {
-        max_depth: 20,
-        follow_symlinks: false,
-        respect_gitignore: true,
-        show_hidden: false,
-        show_ignored: false,
-        find_pattern: None,
-        file_type_filter: None,
-        entry_type_filter: None,
-        min_size: None,
-        max_size: None,
-        newer_than: None,
-        older_than: None,
-        use_default_ignores: should_use_default_ignores(&path),
-        search_keyword: None,
-        show_filesystems: false,
-        sort_field: None,
-        top_n: None,
-        include_line_content: false,
-    };
+    let config = ScannerConfigBuilder::new()
+        .max_depth(20)
+        .use_default_ignores(should_use_default_ignores(&path))
+        .build();
 
-    let scanner = Scanner::new(&path, config)?;
-    let (nodes, _) = scanner.scan()?;
+    let (nodes, _) = scan_with_config(&path, config)?;
 
     // Find directories with no children
     let mut empty_dirs = Vec::new();
