@@ -24,6 +24,10 @@ pub fn validate_and_convert_path(path: &str, ctx: &McpContext) -> Result<PathBuf
 }
 
 /// Check if a path is accessible (security check)
+/// 
+/// This helper is available for use in MCP tools that need standalone path validation.
+/// For path conversion + validation, use `validate_and_convert_path` instead.
+#[allow(dead_code)]
 pub fn check_path_access(path: &Path, ctx: &McpContext) -> Result<()> {
     if !is_path_allowed(path, &ctx.config) {
         return Err(anyhow!("Access denied: path not allowed"));
@@ -32,6 +36,9 @@ pub fn check_path_access(path: &Path, ctx: &McpContext) -> Result<()> {
 }
 
 /// Check if multiple paths are accessible (security check)
+/// 
+/// This helper is available for use in MCP tools that need to validate multiple paths.
+#[allow(dead_code)]
 pub fn check_paths_access(paths: &[&Path], ctx: &McpContext) -> Result<()> {
     for path in paths {
         if !is_path_allowed(path, &ctx.config) {
@@ -82,6 +89,9 @@ impl ScannerConfigBuilder {
     }
 
     /// Create a config for quick tree operations
+    /// 
+    /// This preset is available for tools that need a shallow directory scan.
+    #[allow(dead_code)]
     pub fn for_quick_tree(path: &Path) -> Self {
         let mut builder = Self::new();
         builder.config.max_depth = 3;
