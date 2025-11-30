@@ -29,8 +29,9 @@ jobs:
       - name: Install Git LFS
         run: |
           sudo apt-get update
-          sudo apt-get install git-lfs
-          git lfs install
+          sudo apt-get install -y git-lfs
+          git lfs install --force --system
+        
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
