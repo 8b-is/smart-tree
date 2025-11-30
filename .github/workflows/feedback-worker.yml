@@ -20,7 +20,7 @@ env:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
       with:
@@ -28,10 +28,19 @@ jobs:
         recursive: 2
         lfs: 1
 
+    - name: Install git-lfs
+      run: |
+        apt update
+        apt upgrade
+        apt install git-lfs
+        git lfs install
+        apt clean
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.14'
+
+    
     
     - name: Install uv
       run: |
