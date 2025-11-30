@@ -30,13 +30,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git-lfs
-          sudo git lfs install --force --system
         
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
           submodules: 'recursive'
+          lfs: true
 
       - name: Run Claude Code Review
         id: claude-review
