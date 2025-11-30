@@ -50,9 +50,6 @@ jobs:
     - name: Fetch LFS objects
       run: git lfs pull
 
-    - name: Fetch LFS objects
-      run: git lfs pull
-
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
       with:
