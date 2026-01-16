@@ -105,18 +105,23 @@ function Invoke-Test {
     Push-Location $ProjectDir
     
     try {
+        $ErrorActionPreference = 'Stop'
+        
         Write-Info "Running unit tests..."
         cargo test
+        if ($LASTEXITCODE -ne 0) { throw "Tests failed" }
         
         Write-Info "Running clippy (our friendly neighborhood linter)..."
         cargo clippy -- -D warnings
+        if ($LASTEXITCODE -ne 0) { throw "Clippy failed" }
         
         Write-Info "Checking formatting..."
         cargo fmt -- --check
+        if ($LASTEXITCODE -ne 0) { throw "Format check failed" }
         
         Write-Success "All tests passed! Your tree is healthy! 🌳"
     } catch {
-        Write-Warning "Some checks failed!"
+        Write-Warning "Some checks failed: $_"
     } finally {
         Pop-Location
     }

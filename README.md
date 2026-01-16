@@ -594,7 +594,13 @@ For the best experience in Windows Terminal:
 
 **Problem: "st is not recognized as a command"**
 - Solution: Restart your terminal after installation to refresh PATH
-- Or run: `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")`
+- Alternative: Refresh PATH in current session (won't create duplicates):
+  ```powershell
+  # Refresh environment variables in current session
+  $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + 
+              [System.Environment]::GetEnvironmentVariable("Path", "User")
+  ```
+- Or if you have Chocolatey installed: `refreshenv`
 
 **Problem: Colors not showing in cmd.exe**
 - Solution: Use Windows Terminal, PowerShell 7+, or enable ANSI escape codes:

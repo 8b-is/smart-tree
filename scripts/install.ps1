@@ -55,8 +55,9 @@ function Test-ReleaseAssets {
 # Function to get releases with assets
 function Get-ReleasesWithAssets {
     try {
-        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$GitHubRepo/releases"
-        return $releases | Where-Object { $_.assets.Count -gt 0 } | Select-Object -First 10 -ExpandProperty tag_name
+        # Get first 10 releases with pagination for efficiency
+        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$GitHubRepo/releases?per_page=10"
+        return $releases | Where-Object { $_.assets.Count -gt 0 } | Select-Object -ExpandProperty tag_name
     } catch {
         Write-Error "Failed to fetch releases from GitHub API"
     }
@@ -88,8 +89,11 @@ function Select-Version {
             exit 0
         }
         
-        if ($selection -match '^\d+$' -and [int]$selection -ge 1 -and [int]$selection -le $versions.Count) {
-            return $versions[[int]$selection - 1]
+        # Safe integer parsing
+        $selectionNum = 0
+        if ([System.Int32]::TryParse($selection, [ref]$selectionNum) -and 
+            $selectionNum -ge 1 -and $selectionNum -le $versions.Count) {
+            return $versions[$selectionNum - 1]
         } else {
             Write-Error "Invalid selection. Please try again."
         }
