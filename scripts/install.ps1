@@ -203,12 +203,21 @@ Copy-Item -Path $binaryPath -Destination $destinationPath -Force
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$InstallDir*") {
     Write-Info "Adding $InstallDir to your PATH..."
-    $newPath = "$userPath;$InstallDir"
+    
+    # Handle trailing semicolon properly
+    $newPath = if ($userPath.TrimEnd().EndsWith(';')) {
+        "$userPath$InstallDir"
+    } else {
+        "$userPath;$InstallDir"
+    }
+    
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     Write-Success "Added to PATH. Please restart your terminal for changes to take effect."
     
-    # Update current session PATH
-    $env:Path = "$env:Path;$InstallDir"
+    # Update current session PATH (check if not already present)
+    if ($env:Path -notlike "*$InstallDir*") {
+        $env:Path = "$env:Path;$InstallDir"
+    }
 } else {
     Write-Info "$InstallDir is already in your PATH"
 }

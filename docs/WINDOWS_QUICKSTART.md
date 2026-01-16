@@ -10,7 +10,8 @@ iwr -useb https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 ```
 
 ### Option 2: Manual Download
-1. Download `st-v5.5.0-x86_64-pc-windows-msvc.zip` from [releases](https://github.com/8b-is/smart-tree/releases/latest)
+1. Download the latest Windows release (`.zip`) from [releases](https://github.com/8b-is/smart-tree/releases/latest)
+   - Look for: `st-{version}-x86_64-pc-windows-msvc.zip`
 2. Extract `st.exe` to `C:\Program Files\st\` (or anywhere you like)
 3. Add the folder to your PATH
 
