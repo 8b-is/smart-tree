@@ -406,7 +406,7 @@ impl ConsciousnessEngine {
 }
 
 /// Attention allocation strategies
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum AttentionStrategy {
     /// Focus on high-amplitude memories
     AmplitudeBased,
@@ -414,14 +414,9 @@ pub enum AttentionStrategy {
     EmotionBased,
     /// Focus on novel/unfamiliar patterns
     NoveltyBased,
-    /// Balanced across all factors
+    /// Balanced across all factors (default)
+    #[default]
     Balanced,
-}
-
-impl Default for AttentionStrategy {
-    fn default() -> Self {
-        Self::Balanced
-    }
 }
 
 /// Subliminal forgetting processor

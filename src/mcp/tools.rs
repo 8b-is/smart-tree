@@ -2,8 +2,7 @@
 
 use super::{is_path_allowed, McpContext};
 use crate::mcp::helpers::{
-    scan_with_config, should_use_default_ignores, validate_and_convert_path,
-    ScannerConfigBuilder,
+    scan_with_config, should_use_default_ignores, validate_and_convert_path, ScannerConfigBuilder,
 };
 use crate::mcp::permissions::get_available_tools;
 use crate::{
@@ -1828,7 +1827,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .build();
 
     // Special handling for home directory in MCP context
-    if path == std::path::PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
+    if path.as_os_str() == std::env::var("HOME").unwrap_or_default().as_str() {
         eprintln!("⚠️  Note: Scanning home directory with safety limits enabled");
         eprintln!("   Maximum 100k files, 1 minute timeout for MCP operations");
     }
@@ -2007,8 +2006,18 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .entry_type_filter(args.entry_type)
         .min_size(args.min_size.as_ref().map(|s| parse_size(s)).transpose()?)
         .max_size(args.max_size.as_ref().map(|s| parse_size(s)).transpose()?)
-        .newer_than(args.newer_than.as_ref().map(|d| parse_date(d)).transpose()?)
-        .older_than(args.older_than.as_ref().map(|d| parse_end_date(d)).transpose()?)
+        .newer_than(
+            args.newer_than
+                .as_ref()
+                .map(|d| parse_date(d))
+                .transpose()?,
+        )
+        .older_than(
+            args.older_than
+                .as_ref()
+                .map(|d| parse_end_date(d))
+                .transpose()?,
+        )
         .use_default_ignores(should_use_default_ignores(&path))
         .build();
 
@@ -2437,7 +2446,7 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     let path = validate_and_convert_path(path_str, &ctx)?;
-    
+
     let keyword = args["keyword"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing keyword"))?;
@@ -2580,7 +2589,7 @@ async fn compare_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value>
     let path2_str = args["path2"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path2"))?;
-    
+
     let path1 = validate_and_convert_path(path1_str, &ctx)?;
     let path2 = validate_and_convert_path(path2_str, &ctx)?;
 

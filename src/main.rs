@@ -22,7 +22,10 @@ use std::time::SystemTime;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
-    claude_init::ClaudeInit,
+    claude_init::{
+        check_mcp_installation_status, install_mcp_to_claude_desktop,
+        uninstall_mcp_from_claude_desktop, ClaudeInit,
+    },
     feature_flags,
     formatters::{
         ai::AiFormatter,
@@ -63,179 +66,185 @@ use st::{
     author   // Automatically pulls authors from Cargo.toml - "8bit-wraith" and "Claude" - what a team!
 )]
 struct Cli {
-    // --- Action Flags ---
-    /// Show the cheatsheet.
-    #[arg(long, exclusive = true)]
+    // =========================================================================
+    // GETTING STARTED
+    // =========================================================================
+    /// Show the cheatsheet - quick reference for all commands
+    #[arg(long, exclusive = true, help_heading = "Getting Started")]
     cheet: bool,
 
-    /// Generate shell completion scripts.
-    #[arg(long, exclusive = true, value_name = "SHELL")]
-    completions: Option<clap_complete::Shell>,
-
-    /// Generate the man page.
-    #[arg(long, exclusive = true)]
-    man: bool,
-
-    /// Run `st` as an MCP (Model Context Protocol) server.
-    #[arg(long, exclusive = true)]
-    mcp: bool,
-
-    /// List the tools `st` provides when running as an MCP server.
-    #[arg(long, exclusive = true)]
-    mcp_tools: bool,
-
-    /// Show the configuration snippet for the MCP server.
-    #[arg(long, exclusive = true)]
-    mcp_config: bool,
-
-    /// Show version information and check for updates.
-    #[arg(short = 'V', long, exclusive = true)]
+    /// Show version information and check for updates
+    #[arg(short = 'V', long, exclusive = true, help_heading = "Getting Started")]
     version: bool,
 
-    /// Launch Smart Tree Terminal Interface (STTI) - Your coding companion!
-    /// This starts an interactive terminal that anticipates your needs.
-    #[arg(long, exclusive = true)]
+    /// Generate shell completion scripts (bash, zsh, fish, powershell)
+    #[arg(long, exclusive = true, value_name = "SHELL", help_heading = "Getting Started")]
+    completions: Option<clap_complete::Shell>,
+
+    /// Generate the man page
+    #[arg(long, exclusive = true, help_heading = "Getting Started")]
+    man: bool,
+
+    // =========================================================================
+    // INTERACTIVE MODES
+    // =========================================================================
+    /// 🌶️ Launch Spicy TUI - interactive file browser with fuzzy search!
+    #[arg(long, help_heading = "Interactive Modes")]
+    spicy: bool,
+
+    /// Launch Smart Tree Terminal Interface (STTI)
+    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     terminal: bool,
 
-    /// Launch egui Dashboard - Real-time visualization with style!
-    /// Requires a local DISPLAY/WAYLAND session (remote/headless currently unsupported)
-    #[arg(long, exclusive = true)]
+    /// Launch egui Dashboard - real-time visualization
+    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     dashboard: bool,
 
-    /// Rename project - elegant identity transition (format: "OldName" "NewName")
-    #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2)]
-    rename_project: Option<Vec<String>>,
+    // =========================================================================
+    // MCP SERVER (Model Context Protocol)
+    // =========================================================================
+    /// Run as MCP server for AI assistants (Claude Desktop, etc.)
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    mcp: bool,
 
-    /// Set up or update Claude integration for this project.
-    /// Smart command that creates .claude/ if missing or updates if it exists.
-    /// Automatically detects project type and configures optimal hooks.
-    #[arg(long, exclusive = true)]
-    setup_claude: bool,
+    /// List all 30+ MCP tools available
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    mcp_tools: bool,
 
-    /// Save current Claude consciousness state to .claude_consciousness.m8
-    /// Preserves session context, insights, and working state for next session
-    #[arg(long, exclusive = true)]
+    /// Show MCP config snippet (copy to claude_desktop_config.json)
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    mcp_config: bool,
+
+    /// 🚀 Auto-install MCP server to Claude Desktop (one command setup!)
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    mcp_install: bool,
+
+    /// Remove MCP server from Claude Desktop
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    mcp_uninstall: bool,
+
+    /// Check MCP installation status
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    mcp_status: bool,
+
+    // =========================================================================
+    // CLAUDE CONSCIOUSNESS - Session state persistence
+    // =========================================================================
+    /// Save session state to .claude_consciousness.m8
+    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
     claude_save: bool,
 
-    /// Restore previous Claude consciousness from .claude_consciousness.m8
-    /// Loads saved context, todos, insights, and project state
-    #[arg(long, exclusive = true)]
+    /// Restore previous session from .claude_consciousness.m8
+    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
     claude_restore: bool,
 
-    /// Show Claude consciousness status and summary
-    #[arg(long, exclusive = true)]
+    /// Show consciousness status and summary
+    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
     claude_context: bool,
 
-    /// Update .m8 consciousness files for directory
-    /// Auto-maintains directory consciousness with patterns, security, and insights
-    #[arg(long)]
-    update_consciousness: bool,
-
-    /// Run security scan on directory for malware patterns
-    /// Detects obfuscation, suspicious patterns, and high entropy files
-    #[arg(long)]
-    security_scan: bool,
-
-    /// Show tokenization statistics for paths
-    /// Displays compression ratios and pattern detection
-    #[arg(long)]
-    token_stats: bool,
-
-    /// Get wave frequency for directory from .m8 file
-    #[arg(long)]
-    get_frequency: bool,
-
-    /// Dump raw consciousness file content (for debugging/transparency)
-    /// Shows exactly what's stored in .claude_consciousness.m8
-    #[arg(long)]
-    claude_dump: bool,
-
-    /// Show compressed kickstart format (Omni-approved!)
-    /// Ultra-compressed context for instant restoration
-    #[arg(long)]
+    /// Show ultra-compressed kickstart format
+    #[arg(long, help_heading = "Claude Consciousness")]
     claude_kickstart: bool,
 
-    /// Hook for user prompt submission - provides intelligent context based on prompt analysis
-    /// Reads JSON input with user prompt and outputs relevant context for Claude
-    #[arg(long)]
+    /// Dump raw consciousness file (debugging)
+    #[arg(long, help_heading = "Claude Consciousness")]
+    claude_dump: bool,
+
+    /// Set up Claude integration for this project (.claude/ directory)
+    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
+    setup_claude: bool,
+
+    /// Update .m8 consciousness files for directory
+    #[arg(long, help_heading = "Claude Consciousness")]
+    update_consciousness: bool,
+
+    /// Hook for user prompt submission (internal use)
+    #[arg(long, hide = true)]
     claude_user_prompt_submit: bool,
 
-    /// Anchor a memory with keywords and context
-    /// Format: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
-    #[arg(long, num_args = 3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"])]
+    // =========================================================================
+    // MEMORY & SESSIONS - Persistent knowledge
+    // =========================================================================
+    /// Anchor a memory: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
+    #[arg(long, num_args = 3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"], help_heading = "Memory & Sessions")]
     memory_anchor: Option<Vec<String>>,
 
     /// Find memories by keywords
-    /// Format: --memory-find <KEYWORDS>
-    #[arg(long)]
+    #[arg(long, help_heading = "Memory & Sessions")]
     memory_find: Option<String>,
 
     /// Show memory bank statistics
-    #[arg(long)]
+    #[arg(long, help_heading = "Memory & Sessions")]
     memory_stats: bool,
 
-    /// Control smart tips (on/off). Tips show helpful hints periodically
-    /// Example: --tips off (to disable), --tips on (to re-enable)
-    #[arg(long, value_name = "STATE", value_parser = ["on", "off"])]
-    tips: Option<String>,
-
-    /// Launch Spicy TUI mode - cyberpunk-style interactive file browser with fuzzy search!
-    /// Inspired by spicy-fzf with multi-pane layout, fuzzy content search, and M8 caching
-    #[arg(long)]
-    spicy: bool,
-
     /// Start or resume a mega session
-    #[arg(long)]
+    #[arg(long, help_heading = "Memory & Sessions")]
     mega_start: Option<Option<String>>,
 
     /// Save current mega session snapshot
-    #[arg(long)]
+    #[arg(long, help_heading = "Memory & Sessions")]
     mega_save: bool,
 
     /// Record a breakthrough in mega session
-    #[arg(long, value_name = "DESCRIPTION")]
+    #[arg(long, value_name = "DESCRIPTION", help_heading = "Memory & Sessions")]
     mega_breakthrough: Option<String>,
 
     /// Show mega session statistics
-    #[arg(long)]
+    #[arg(long, help_heading = "Memory & Sessions")]
     mega_stats: bool,
 
     /// List all saved mega sessions
-    #[arg(long)]
+    #[arg(long, help_heading = "Memory & Sessions")]
     mega_list: bool,
 
-    /// Configure Claude Code hooks to automatically provide project context
-    ///
-    /// Actions:
-    ///   enable  - Install Smart Tree as a UserPromptSubmit hook
-    ///   disable - Remove Smart Tree hooks from Claude Code
-    ///   status  - Show current hooks configuration
-    ///
-    /// Example: st --hooks-config enable
+    // =========================================================================
+    // SECURITY & ANALYSIS
+    // =========================================================================
+    /// Run security scan for malware patterns
+    #[arg(long, help_heading = "Security & Analysis")]
+    security_scan: bool,
+
+    /// Show tokenization statistics
+    #[arg(long, help_heading = "Security & Analysis")]
+    token_stats: bool,
+
+    /// Get wave frequency from .m8 file
+    #[arg(long, help_heading = "Security & Analysis")]
+    get_frequency: bool,
+
+    // =========================================================================
+    // CLAUDE CODE INTEGRATION
+    // =========================================================================
+    /// Configure Claude Code hooks (enable/disable/status)
     #[arg(long, value_name = "ACTION", help_heading = "Claude Code Integration")]
     hooks_config: Option<String>,
 
     /// Quick setup: Install Smart Tree hooks in Claude Code
-    ///
-    /// This enables automatic context provision when you interact with Claude.
-    /// Smart Tree will analyze your prompts and provide relevant project information.
-    /// Same as: st --hooks-config enable
     #[arg(long, help_heading = "Claude Code Integration")]
     hooks_install: bool,
 
-    /// Enable activity logging for transparency
-    ///
-    /// Logs all Smart Tree activities to a JSONL file.
-    /// Default location: ~/.st/st.jsonl
-    /// Specify custom path: --log /path/to/logfile.jsonl
-    ///
-    /// Example: st --log --mode ai .
+    // =========================================================================
+    // LOGGING & TRANSPARENCY
+    // =========================================================================
+    /// Enable activity logging to JSONL file
     #[arg(long, value_name = "PATH", help_heading = "Logging & Transparency")]
     log: Option<Option<String>>,
 
-    // --- Scan Arguments ---
-    /// Path to the directory or file you want to analyze.
-    /// Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)
+    // =========================================================================
+    // PROJECT MANAGEMENT
+    // =========================================================================
+    /// Rename project: --rename-project "OldName" "NewName"
+    #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2, help_heading = "Project Management")]
+    rename_project: Option<Vec<String>>,
+
+    /// Control smart tips (on/off)
+    #[arg(long, value_name = "STATE", value_parser = ["on", "off"], help_heading = "Project Management")]
+    tips: Option<String>,
+
+    // =========================================================================
+    // SCAN OPTIONS
+    // =========================================================================
+    /// Path to analyze (directory, file, URL, or stream)
     path: Option<String>,
 
     /// Specify input type explicitly (filesystem, qcp, sse, openapi, mem8)
@@ -248,202 +257,187 @@ struct Cli {
 
 #[derive(Parser, Debug)]
 struct ScanArgs {
-    /// Choose your adventure! Selects the output format.
-    /// From classic human-readable to AI-optimized hex, we've got options.
-    #[arg(short, long, value_enum, default_value = "auto")]
+    // =========================================================================
+    // OUTPUT FORMAT
+    // =========================================================================
+    /// Output format (classic, ai, quantum, json, etc.)
+    #[arg(short, long, value_enum, default_value = "auto", help_heading = "Output Format")]
     mode: OutputMode,
 
-    /// Feeling like a detective? Find files/directories matching this regex pattern.
-    /// Example: --find "README\\.md"
-    #[arg(long)]
+    // =========================================================================
+    // FILTERING - What to include/exclude
+    // =========================================================================
+    /// Find files matching regex pattern (e.g., --find "README\\.md")
+    #[arg(long, help_heading = "Filtering")]
     find: Option<String>,
 
-    /// Filter by file extension. Show only files of this type (e.g., "rs", "txt").
-    /// No leading dot needed, just the extension itself.
-    #[arg(long = "type")]
+    /// Filter by file extension (e.g., --type rs)
+    #[arg(long = "type", help_heading = "Filtering")]
     filter_type: Option<String>,
-    /// Filter to show only files (f) or directories (d).
-    #[arg(long = "entry-type", value_parser = ["f", "d"])]
+
+    /// Filter by entry type: f (files) or d (directories)
+    #[arg(long = "entry-type", value_parser = ["f", "d"], help_heading = "Filtering")]
     entry_type: Option<String>,
 
-    /// Only show files larger than this size.
-    /// Accepts human-readable sizes like "1M" (1 Megabyte), "500K" (500 Kilobytes), "100B" (100 Bytes).
-    #[arg(long)]
+    /// Only files larger than size (e.g., --min-size 1M)
+    #[arg(long, help_heading = "Filtering")]
     min_size: Option<String>,
 
-    /// Only show files smaller than this size.
-    /// Same format as --min-size. Let's find those tiny files!
-    #[arg(long)]
+    /// Only files smaller than size (e.g., --max-size 100K)
+    #[arg(long, help_heading = "Filtering")]
     max_size: Option<String>,
 
-    /// Time traveler? Show files newer than this date (YYYY-MM-DD format).
-    #[arg(long)]
+    /// Files newer than date (YYYY-MM-DD)
+    #[arg(long, help_heading = "Filtering")]
     newer_than: Option<String>,
 
-    /// Or perhaps you prefer antiques? Show files older than this date (YYYY-MM-DD format).
-    #[arg(long)]
+    /// Files older than date (YYYY-MM-DD)
+    #[arg(long, help_heading = "Filtering")]
     older_than: Option<String>,
 
-    /// How deep should we dig? Limits the traversal depth.
-    /// Default is 0 (auto) which lets each mode pick its ideal depth.
-    /// Set explicitly to override: 1 for shallow, 10 for deep exploration.
-    #[arg(short, long, default_value = "0")]
+    // =========================================================================
+    // TRAVERSAL - How to scan
+    // =========================================================================
+    /// Traversal depth (0 = auto, 1 = shallow, 10 = deep)
+    #[arg(short, long, default_value = "0", help_heading = "Traversal")]
     depth: usize,
 
-    /// Daredevil mode: Ignores `.gitignore` files. See everything, even what Git tries to hide!
-    #[arg(long)]
+    /// Ignore .gitignore files
+    #[arg(long, help_heading = "Traversal")]
     no_ignore: bool,
 
-    /// Double daredevil: Ignores our built-in default ignore patterns too (like `node_modules`, `__pycache__`).
-    /// Use with caution, or you might see more than you bargained for!
-    #[arg(long)]
+    /// Ignore default patterns (node_modules, __pycache__, etc.)
+    #[arg(long, help_heading = "Traversal")]
     no_default_ignore: bool,
 
-    /// Show all files, including hidden ones (those starting with a `.`).
-    /// The `-a` is for "all", naturally.
-    #[arg(long, short = 'a')]
+    /// Show hidden files (starting with .)
+    #[arg(long, short = 'a', help_heading = "Traversal")]
     all: bool,
 
-    /// Want to see what's being ignored? This flag shows ignored directories in brackets `[dirname]`.
-    /// Useful for debugging your ignore patterns or just satisfying curiosity.
-    #[arg(long)]
+    /// Show ignored directories in brackets
+    #[arg(long, help_heading = "Traversal")]
     show_ignored: bool,
 
-    /// SHOW ME EVERYTHING! The nuclear option that combines --all, --no-ignore, and --no-default-ignore.
-    /// This reveals absolutely everything: hidden files, git directories, node_modules, the works!
-    /// Warning: May produce overwhelming output in large codebases.
-    #[arg(long)]
+    /// Show EVERYTHING (--all + --no-ignore + --no-default-ignore)
+    #[arg(long, help_heading = "Traversal")]
     everything: bool,
 
-    /// Show filesystem type indicators in output (e.g., X=XFS, 4=ext4, B=Btrfs).
-    /// Each file/directory gets a single character showing what filesystem it's on.
-    /// Great for understanding storage layout and mount points!
-    #[arg(long)]
+    // =========================================================================
+    // DISPLAY - How output looks
+    // =========================================================================
+    /// Show filesystem type indicators (X=XFS, 4=ext4, B=Btrfs)
+    #[arg(long, help_heading = "Display")]
     show_filesystems: bool,
 
-    /// Not a fan of emojis? This flag disables them for a plain text experience.
-    /// (But Trish loves the emojis, just saying!) 🌳✨
-    #[arg(long)]
+    /// Disable emojis (Trish will miss them!)
+    #[arg(long, help_heading = "Display")]
     no_emoji: bool,
 
-    /// Compress the output using zlib. Great for sending large tree structures over the wire
-    /// or for AI models that appreciate smaller inputs. Output will be base64 encoded.
-    #[arg(short = 'z', long)]
+    /// Compress output with zlib (base64 encoded)
+    #[arg(short = 'z', long, help_heading = "Display")]
     compress: bool,
 
-    /// MCP/API optimization mode. Automatically enables compression, disables colors/emoji,
-    /// and optimizes output for machine consumption. Perfect for MCP servers, LLM APIs, and tools.
-    /// Works with any output mode to make it API-friendly!
-    #[arg(long)]
+    /// Optimize for MCP/API (compression + no colors/emoji)
+    #[arg(long, help_heading = "Display")]
     mcp_optimize: bool,
 
-    /// For JSON output, this makes it compact (one line) instead of pretty-printed.
-    /// Saves space, but might make Trish's eyes water if she tries to read it directly.
-    #[arg(long)]
+    /// Compact JSON (single line)
+    #[arg(long, help_heading = "Display")]
     compact: bool,
 
-    /// Controls how file paths are displayed in the output.
-    #[arg(long = "path-mode", value_enum, default_value = "off")]
+    /// Path display: off, relative, or full
+    #[arg(long = "path-mode", value_enum, default_value = "off", help_heading = "Display")]
     path_mode: PathMode,
 
-    /// When should we splash some color on the output?
-    /// `auto` (default) uses colors if outputting to a terminal.
-    #[arg(long, value_enum, default_value = "auto")]
+    /// Color output: always, never, or auto
+    #[arg(long, value_enum, default_value = "auto", help_heading = "Display")]
     color: ColorMode,
 
-    /// For AI mode, wraps the output in a JSON structure.
-    /// Makes it easier for programmatic consumption by our AI overlords (just kidding... mostly).
-    #[arg(long)]
+    /// Wrap AI output in JSON structure
+    #[arg(long, help_heading = "Display")]
     ai_json: bool,
 
-    /// Stream output as files are scanned. This is a game-changer for very large directories!
-    /// You'll see results trickling in, rather than waiting for the whole scan to finish.
-    /// Note: Compression is disabled in stream mode for now.
-    #[arg(long)]
+    // =========================================================================
+    // STREAMING - Real-time output
+    // =========================================================================
+    /// Stream output as files are scanned
+    #[arg(long, help_heading = "Streaming")]
     stream: bool,
 
-    /// Start SSE server mode for real-time directory monitoring (experimental).
-    /// This starts an HTTP server that streams directory changes as Server-Sent Events.
-    /// Example: st --sse-server --sse-port 8420 /path/to/watch
-    #[arg(long)]
+    /// Start SSE server for real-time monitoring
+    #[arg(long, help_heading = "Streaming")]
     sse_server: bool,
 
-    /// Port for SSE server mode (default: 8420)
-    #[arg(long, default_value = "8420")]
+    /// SSE server port
+    #[arg(long, default_value = "8420", help_heading = "Streaming")]
     sse_port: u16,
 
-    /// Search for a keyword within file contents.
-    /// Best used with `--type` to limit search to specific file types (e.g., `--type rs --search "TODO"`).
-    /// This is like having X-ray vision for your files!
-    #[arg(long)]
+    // =========================================================================
+    // SEARCH & ANALYSIS
+    // =========================================================================
+    /// Search file contents (e.g., --search "TODO")
+    #[arg(long, help_heading = "Search & Analysis")]
     search: Option<String>,
 
-    /// Group files by semantic similarity (inspired by Omni's wisdom!).
-    /// Uses content-aware tokenization to identify conceptually related files.
-    /// Perfect for understanding project structure at a higher level.
-    /// Example groups: "tests", "documentation", "configuration", "source code"
-    #[arg(long)]
+    /// Group by semantic similarity
+    #[arg(long, help_heading = "Search & Analysis")]
     semantic: bool,
 
-    /// Mermaid diagram style (only used with --mode mermaid).
-    /// Options: flowchart (default), mindmap, gitgraph
-    #[arg(long, value_enum, default_value = "flowchart")]
-    mermaid_style: MermaidStyleArg,
-
-    /// Index Rust code to SmartPastCode registry for universal code discovery.
-    /// Specify the registry URL (e.g., http://localhost:8430).
-    /// This will extract functions, modules, and impl blocks and submit them to the registry.
-    /// Works best with --mode projects for project-level indexing.
-    #[arg(long, value_name = "URL")]
-    index_registry: Option<String>,
-
-    /// Exclude mermaid diagrams from markdown report (only used with --mode markdown).
-    #[arg(long)]
-    no_markdown_mermaid: bool,
-
-    /// Exclude tables from markdown report (only used with --mode markdown).
-    #[arg(long)]
-    no_markdown_tables: bool,
-
-    /// Exclude pie charts from markdown report (only used with --mode markdown).
-    #[arg(long)]
-    no_markdown_pie_charts: bool,
-
-    /// Focus analysis on specific file (for relations mode).
-    /// Shows all relationships for a particular file.
-    #[arg(long, value_name = "FILE")]
+    /// Focus analysis on specific file (relations mode)
+    #[arg(long, value_name = "FILE", help_heading = "Search & Analysis")]
     focus: Option<PathBuf>,
 
-    /// Filter relationships by type (for relations mode).
-    /// Options: imports, calls, types, tests, coupled
-    #[arg(long, value_name = "TYPE")]
+    /// Filter relationships: imports, calls, types, tests, coupled
+    #[arg(long, value_name = "TYPE", help_heading = "Search & Analysis")]
     relations_filter: Option<String>,
 
-    /// Sort results by: a-to-z, z-to-a, largest, smallest, newest, oldest, type
-    /// Examples: --sort largest (biggest files first), --sort newest (recent files first)
-    /// Use with --top to get "top 10 largest files" or "20 newest files"
-    #[arg(long, value_enum)]
+    // =========================================================================
+    // SORTING
+    // =========================================================================
+    /// Sort by: a-to-z, z-to-a, largest, smallest, newest, oldest, type
+    #[arg(long, value_enum, help_heading = "Sorting")]
     sort: Option<SortField>,
 
-    /// Show only the top N results (useful with --sort)
-    /// Examples: --sort size --top 10 (10 largest files)
-    /// --sort date --top 20 (20 most recent files)
-    #[arg(long, value_name = "N")]
+    /// Show only top N results (use with --sort)
+    #[arg(long, value_name = "N", help_heading = "Sorting")]
     top: Option<usize>,
 
-    /// Include private functions in function documentation (for function-markdown mode)
-    /// By default, only public functions are shown
-    #[arg(long)]
+    // =========================================================================
+    // MERMAID & MARKDOWN OPTIONS
+    // =========================================================================
+    /// Mermaid style: flowchart, mindmap, gitgraph, treemap
+    #[arg(long, value_enum, default_value = "flowchart", help_heading = "Mermaid & Markdown")]
+    mermaid_style: MermaidStyleArg,
+
+    /// Exclude mermaid diagrams from markdown
+    #[arg(long, help_heading = "Mermaid & Markdown")]
+    no_markdown_mermaid: bool,
+
+    /// Exclude tables from markdown
+    #[arg(long, help_heading = "Mermaid & Markdown")]
+    no_markdown_tables: bool,
+
+    /// Exclude pie charts from markdown
+    #[arg(long, help_heading = "Mermaid & Markdown")]
+    no_markdown_pie_charts: bool,
+
+    // =========================================================================
+    // ADVANCED
+    // =========================================================================
+    /// Index code to SmartPastCode registry
+    #[arg(long, value_name = "URL", help_heading = "Advanced")]
+    index_registry: Option<String>,
+
+    /// Show private functions in docs (function-markdown mode)
+    #[arg(long, help_heading = "Advanced")]
     show_private: bool,
 
-    /// View diffs stored in the .st folder (Smart Edit history)
-    /// Shows all diffs for files modified by Smart Edit operations
-    #[arg(long)]
+    /// View Smart Edit diffs from .st folder
+    #[arg(long, help_heading = "Advanced")]
     view_diffs: bool,
 
-    /// Clean up old diffs in .st folder, keeping only last N per file
-    /// Example: --cleanup-diffs 5 (keep last 5 diffs per file)
-    #[arg(long, value_name = "N")]
+    /// Clean up old diffs, keep last N per file
+    #[arg(long, value_name = "N", help_heading = "Advanced")]
     cleanup_diffs: Option<usize>,
 }
 
@@ -692,6 +686,27 @@ async fn main() -> Result<()> {
     }
     if cli.mcp_config {
         print_mcp_config();
+        return Ok(());
+    }
+    if cli.mcp_install {
+        match install_mcp_to_claude_desktop() {
+            Ok(msg) => println!("{}", msg),
+            Err(e) => eprintln!("❌ MCP installation failed: {}", e),
+        }
+        return Ok(());
+    }
+    if cli.mcp_uninstall {
+        match uninstall_mcp_from_claude_desktop() {
+            Ok(msg) => println!("{}", msg),
+            Err(e) => eprintln!("❌ MCP uninstallation failed: {}", e),
+        }
+        return Ok(());
+    }
+    if cli.mcp_status {
+        match check_mcp_installation_status() {
+            Ok(msg) => println!("{}", msg),
+            Err(e) => eprintln!("❌ Failed to check MCP status: {}", e),
+        }
         return Ok(());
     }
 

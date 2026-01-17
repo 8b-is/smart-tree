@@ -1,7 +1,9 @@
 //! Claude integration initializer for Smart Tree
 //! Automatically sets up optimal .claude directory configuration for any project
+//! Also handles MCP server auto-installation for Claude Desktop! 🚀
 
 use anyhow::{Context, Result};
+use chrono::Local;
 use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -474,5 +476,344 @@ Use `st --help` to explore more features!
         fs::write(claude_md_path, content)?;
 
         Ok(())
+    }
+}
+
+// =============================================================================
+// MCP Server Auto-Installer - "One command, infinite context!" 🎯
+// =============================================================================
+
+/// Result of MCP installation attempt
+#[derive(Debug)]
+pub struct McpInstallResult {
+    pub success: bool,
+    pub config_path: PathBuf,
+    pub backup_path: Option<PathBuf>,
+    pub message: String,
+    pub was_update: bool,
+}
+
+/// MCP Server installer for Claude Desktop
+/// Automatically adds Smart Tree to claude_desktop_config.json
+pub struct McpInstaller {
+    /// Path to the st binary (defaults to current exe or 'st' in PATH)
+    st_binary_path: PathBuf,
+    /// Custom config path override (for testing)
+    custom_config_path: Option<PathBuf>,
+}
+
+impl McpInstaller {
+    /// Create new installer with auto-detected st binary path
+    pub fn new() -> Result<Self> {
+        // Try to find the st binary
+        let st_binary_path = Self::find_st_binary()?;
+
+        Ok(Self {
+            st_binary_path,
+            custom_config_path: None,
+        })
+    }
+
+    /// Create installer with custom binary path
+    pub fn with_binary_path(path: PathBuf) -> Self {
+        Self {
+            st_binary_path: path,
+            custom_config_path: None,
+        }
+    }
+
+    /// Set custom config path (for testing)
+    pub fn with_config_path(mut self, path: PathBuf) -> Self {
+        self.custom_config_path = Some(path);
+        self
+    }
+
+    /// Find the st binary in common locations
+    fn find_st_binary() -> Result<PathBuf> {
+        // First, try the current executable
+        if let Ok(exe) = std::env::current_exe() {
+            if exe.file_name().map(|n| n == "st").unwrap_or(false) {
+                return Ok(exe);
+            }
+        }
+
+        // Try common install locations
+        let candidates = vec![
+            // User's cargo bin
+            dirs::home_dir().map(|h| h.join(".cargo/bin/st")),
+            // /usr/local/bin (common for manual installs)
+            Some(PathBuf::from("/usr/local/bin/st")),
+            // homebrew (macOS)
+            Some(PathBuf::from("/opt/homebrew/bin/st")),
+        ];
+
+        for candidate in candidates.into_iter().flatten() {
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+        }
+
+        // Fall back to just "st" and hope it's in PATH
+        Ok(PathBuf::from("st"))
+    }
+
+    /// Get Claude Desktop config path for current OS
+    /// macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json
+    /// Windows: %APPDATA%/Claude/claude_desktop_config.json
+    /// Linux:   ~/.config/Claude/claude_desktop_config.json
+    pub fn get_claude_desktop_config_path() -> Option<PathBuf> {
+        #[cfg(target_os = "macos")]
+        {
+            dirs::home_dir()
+                .map(|h| h.join("Library/Application Support/Claude/claude_desktop_config.json"))
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            dirs::config_dir().map(|c| c.join("Claude/claude_desktop_config.json"))
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            dirs::config_dir().map(|c| c.join("Claude/claude_desktop_config.json"))
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        {
+            None
+        }
+    }
+
+    /// Install Smart Tree MCP server to Claude Desktop config
+    pub fn install(&self) -> Result<McpInstallResult> {
+        // Get config path
+        let config_path = self
+            .custom_config_path
+            .clone()
+            .or_else(Self::get_claude_desktop_config_path)
+            .context(
+                "Could not determine Claude Desktop config path. \
+                Are you on a supported OS (macOS, Windows, Linux)?",
+            )?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent).context("Failed to create Claude config directory")?;
+        }
+
+        // Read existing config or create new
+        let (mut config, was_update) = if config_path.exists() {
+            let content = fs::read_to_string(&config_path)
+                .context("Failed to read existing Claude Desktop config")?;
+            let config: Value = serde_json::from_str(&content)
+                .context("Failed to parse existing Claude Desktop config as JSON")?;
+            (config, true)
+        } else {
+            (json!({}), false)
+        };
+
+        // Create backup if updating existing config
+        let backup_path = if was_update {
+            let backup = config_path.with_extension(format!(
+                "json.backup.{}",
+                Local::now().format("%Y%m%d_%H%M%S")
+            ));
+            fs::copy(&config_path, &backup)
+                .context("Failed to create backup of existing config")?;
+            Some(backup)
+        } else {
+            None
+        };
+
+        // Build the Smart Tree MCP server config
+        let st_config = json!({
+            "command": self.st_binary_path.to_string_lossy(),
+            "args": ["--mcp"],
+            "env": {}
+        });
+
+        // Update or create mcpServers section
+        if config.get("mcpServers").is_none() {
+            config["mcpServers"] = json!({});
+        }
+
+        // Check if already installed
+        let already_installed = config["mcpServers"].get("smart-tree").is_some();
+
+        // Add/update Smart Tree entry
+        config["mcpServers"]["smart-tree"] = st_config;
+
+        // Write updated config with pretty formatting
+        let formatted =
+            serde_json::to_string_pretty(&config).context("Failed to serialize config to JSON")?;
+        fs::write(&config_path, formatted)
+            .context("Failed to write updated Claude Desktop config")?;
+
+        let message = if already_installed {
+            format!(
+                "✨ Updated Smart Tree MCP server in Claude Desktop!\n\
+                   📁 Config: {}\n\
+                   🔧 Binary: {}\n\n\
+                   🔄 Restart Claude Desktop to apply changes.",
+                config_path.display(),
+                self.st_binary_path.display()
+            )
+        } else {
+            format!(
+                "🎉 Smart Tree MCP server installed to Claude Desktop!\n\
+                   📁 Config: {}\n\
+                   🔧 Binary: {}\n\n\
+                   🚀 Restart Claude Desktop to start using st's 30+ MCP tools!",
+                config_path.display(),
+                self.st_binary_path.display()
+            )
+        };
+
+        Ok(McpInstallResult {
+            success: true,
+            config_path,
+            backup_path,
+            message,
+            was_update: already_installed,
+        })
+    }
+
+    /// Uninstall Smart Tree from Claude Desktop config
+    pub fn uninstall(&self) -> Result<McpInstallResult> {
+        let config_path = self
+            .custom_config_path
+            .clone()
+            .or_else(Self::get_claude_desktop_config_path)
+            .context("Could not determine Claude Desktop config path")?;
+
+        if !config_path.exists() {
+            return Ok(McpInstallResult {
+                success: false,
+                config_path,
+                backup_path: None,
+                message: "Claude Desktop config not found - nothing to uninstall".to_string(),
+                was_update: false,
+            });
+        }
+
+        let content = fs::read_to_string(&config_path)?;
+        let mut config: Value = serde_json::from_str(&content)?;
+
+        // Check if smart-tree is installed
+        if config["mcpServers"].get("smart-tree").is_none() {
+            return Ok(McpInstallResult {
+                success: false,
+                config_path,
+                backup_path: None,
+                message: "Smart Tree MCP server is not installed".to_string(),
+                was_update: false,
+            });
+        }
+
+        // Create backup
+        let backup = config_path.with_extension(format!(
+            "json.backup.{}",
+            Local::now().format("%Y%m%d_%H%M%S")
+        ));
+        fs::copy(&config_path, &backup)?;
+
+        // Remove smart-tree entry
+        if let Some(servers) = config["mcpServers"].as_object_mut() {
+            servers.remove("smart-tree");
+        }
+
+        // Write updated config
+        fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+
+        Ok(McpInstallResult {
+            success: true,
+            config_path,
+            backup_path: Some(backup),
+            message: "🗑️  Smart Tree MCP server removed from Claude Desktop.\n\
+                     Restart Claude Desktop to apply changes."
+                .to_string(),
+            was_update: true,
+        })
+    }
+
+    /// Check if Smart Tree is installed in Claude Desktop
+    pub fn is_installed(&self) -> Result<bool> {
+        let config_path = self
+            .custom_config_path
+            .clone()
+            .or_else(Self::get_claude_desktop_config_path);
+
+        if let Some(path) = config_path {
+            if path.exists() {
+                let content = fs::read_to_string(&path)?;
+                let config: Value = serde_json::from_str(&content)?;
+                return Ok(config["mcpServers"].get("smart-tree").is_some());
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Get status information about current installation
+    pub fn status(&self) -> Result<Value> {
+        let config_path = Self::get_claude_desktop_config_path();
+        let is_installed = self.is_installed().unwrap_or(false);
+
+        Ok(json!({
+            "installed": is_installed,
+            "config_path": config_path.map(|p| p.display().to_string()),
+            "binary_path": self.st_binary_path.display().to_string(),
+            "binary_exists": self.st_binary_path.exists(),
+        }))
+    }
+}
+
+impl Default for McpInstaller {
+    fn default() -> Self {
+        Self::new().unwrap_or_else(|_| Self {
+            st_binary_path: PathBuf::from("st"),
+            custom_config_path: None,
+        })
+    }
+}
+
+/// Quick installation function for CLI use
+/// Returns a human-readable result message
+pub fn install_mcp_to_claude_desktop() -> Result<String> {
+    let installer = McpInstaller::new()?;
+    let result = installer.install()?;
+    Ok(result.message)
+}
+
+/// Quick uninstall function for CLI use
+pub fn uninstall_mcp_from_claude_desktop() -> Result<String> {
+    let installer = McpInstaller::new()?;
+    let result = installer.uninstall()?;
+    Ok(result.message)
+}
+
+/// Check MCP installation status
+pub fn check_mcp_installation_status() -> Result<String> {
+    let installer = McpInstaller::new()?;
+    let status = installer.status()?;
+
+    let installed = status["installed"].as_bool().unwrap_or(false);
+    let config_path = status["config_path"].as_str().unwrap_or("unknown");
+
+    if installed {
+        Ok(format!(
+            "✅ Smart Tree MCP server is installed!\n\
+             📁 Config: {}\n\
+             🔧 Binary: {}",
+            config_path,
+            status["binary_path"].as_str().unwrap_or("st")
+        ))
+    } else {
+        Ok(format!(
+            "❌ Smart Tree MCP server is NOT installed.\n\
+             📁 Expected config: {}\n\
+             💡 Run 'st --mcp-install' to install",
+            config_path
+        ))
     }
 }

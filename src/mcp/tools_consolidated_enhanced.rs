@@ -390,6 +390,10 @@ EXAMPLES:
                     "anchor_type": {
                         "type": "string",
                         "description": "Type: breakthrough, solution, pattern, joke"
+                    },
+                    "origin": {
+                        "type": "string",
+                        "description": "Who created this? 'human', 'ai:claude', or 'tandem:human:claude' (default: tandem:human:claude)"
                     }
                 },
                 "required": ["operation", "keywords"]

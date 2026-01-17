@@ -347,10 +347,16 @@ pub struct AnchorMemoryRequest {
     pub keywords: Vec<String>,
     /// Type of anchor: "pattern_insight", "solution", "breakthrough", "learning", "joke", "technical", "process"
     pub anchor_type: String,
-    /// Origin: "human", "ai:<tool>", or "tandem:<human>:<ai>"
+    /// Origin: "human", "ai:<tool>", or "tandem:<human>:<ai>" (defaults to "tandem:human:claude")
+    #[serde(default = "default_origin")]
     pub origin: String,
     /// Project path to associate with
     pub project_path: Option<String>,
+}
+
+/// Default origin for collaborative memories - the beautiful human-AI partnership! 🤝
+fn default_origin() -> String {
+    "tandem:human:claude".to_string()
 }
 
 /// Anchor a collaborative memory for future retrieval

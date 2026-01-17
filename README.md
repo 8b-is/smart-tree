@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v5.4.0 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
+# 🌳 Smart Tree v5.5.0 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
 
-[![Version](https://img.shields.io/badge/version-5.4.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-5.5.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -34,10 +34,12 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v5.4.0
+## 🌟 What's NEW in v5.5.0
 
 | Feature | Description | Command |
 |---------|-------------|---------|
+| **🚀 MCP Auto-Installer** | One command to add Smart Tree to Claude Desktop! | `st --mcp-install` |
+| **📋 Organized Help** | Clear help sections for easy discovery | `st --help` |
 | **🧠 Claude Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
 | **📝 Memory Anchoring** | Persistent insight storage with keywords | `st --memory-anchor` / `--memory-find` |
 | **🚀 Mega Sessions** | Long-term project tracking with breakthroughs | `st --mega-start` / `--mega-save` |
@@ -64,7 +66,11 @@ brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
 
 # Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v5.4.0 st
+cargo install --git https://github.com/8b-is/smart-tree --tag v5.5.0 st
+
+# 🚀 One-command MCP setup for Claude Desktop!
+st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config
+st --mcp-status     # Check installation status
 
 # 🎉 Experience the magic!
 st                          # Classic tree view
@@ -78,7 +84,30 @@ st --memory-anchor insight "key concepts" "Important findings about X"
 
 Note: For guidance and copyable templates to make GitHub Copilot (or other LLMs) call Smart Tree's MCP tools correctly, see `.github/COPILOT_MCP_GUIDELINES.md` and the repository-level instructions at `.github/COPILOT_REPO_INSTRUCTIONS.md`.
 
-## 🧠 Claude Consciousness (NEW in v5.4!)
+## 🚀 MCP Auto-Installer (NEW in v5.5!)
+
+**One command to rule them all!** Automatically install Smart Tree as an MCP server in Claude Desktop:
+
+```bash
+# Install (creates backup, preserves existing config)
+st --mcp-install
+
+# Check status
+st --mcp-status
+
+# Remove if needed
+st --mcp-uninstall
+```
+
+**What it does:**
+- Finds Claude Desktop config automatically (macOS/Windows/Linux)
+- Creates a timestamped backup before any changes
+- Adds Smart Tree MCP server entry to `claude_desktop_config.json`
+- Preserves all your existing MCP servers
+
+**After installing, restart Claude Desktop and you'll have access to 30+ MCP tools!**
+
+## 🧠 Claude Consciousness
 
 Smart Tree now preserves AI session consciousness between interactions! Never lose context when switching sessions.
 

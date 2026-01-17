@@ -495,6 +495,10 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     "anchor_type": {
                         "type": "string",
                         "description": "Type of anchor"
+                    },
+                    "origin": {
+                        "type": "string",
+                        "description": "Who created this? 'human', 'ai:claude', or 'tandem:human:claude' (default: tandem:human:claude)"
                     }
                 },
                 "required": ["operation", "keywords"]

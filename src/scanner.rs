@@ -863,7 +863,7 @@ impl Scanner {
 
         // Determine appropriate safety limits based on the path
         let safety_limits =
-            if canonical_root == PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
+            if canonical_root.as_os_str() == std::env::var("HOME").unwrap_or_default().as_str() {
                 // Home directory needs special care
                 ScannerSafetyLimits::for_home_directory()
             } else if canonical_root.starts_with("/") && canonical_root.components().count() <= 2 {
