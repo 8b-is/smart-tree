@@ -58,7 +58,9 @@ use st::{
     ScannerConfig, // The mighty Scanner and its configuration.
 };
 
-// CLI definitions are now in src/cli.rs - imported via st::cli::*
+/// CLI definitions are centralized in [`st::cli`](src/cli.rs) module.
+/// This separation improves maintainability and keeps the main file focused
+/// on orchestration rather than argument parsing logic.
 
 /// And now, the moment you've all been waiting for: the `main` function!
 /// This is the heart of the st concert. It's where we parse the arguments,
