@@ -71,7 +71,6 @@ pub fn fmt_line(n: usize, hex: bool) -> String {
     }
 }
 
-mod ai_psychology;
 mod assistant;
 mod cache;
 pub mod consciousness;
