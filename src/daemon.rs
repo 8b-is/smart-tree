@@ -6,8 +6,13 @@
 //! - WebSocket for real-time updates
 //! - Foken GPU credit tracking
 //! - MCP-compatible tool interface
+//! - **LLM Proxy** - Unified interface to multiple AI providers with memory!
 //!
 //! "The always-on brain for your system!" - Cheet
+//!
+//! ## Architecture
+//! All AI features route through the daemon for persistent memory and unified state.
+//! The LLM proxy (OpenAI-compatible at /v1/chat/completions) is integrated directly.
 
 use anyhow::Result;
 use axum::{
@@ -24,6 +29,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::oneshot;
+
+// LLM Proxy integration
+use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmRole};
+use crate::proxy::memory::ProxyMemory;
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -49,7 +58,7 @@ impl Default for DaemonConfig {
     }
 }
 
-/// Daemon state
+/// Daemon state - The unified AI brain
 pub struct DaemonState {
     /// System context
     pub context: SystemContext,
@@ -59,6 +68,10 @@ pub struct DaemonState {
     pub config: DaemonConfig,
     /// Shutdown signal sender
     pub shutdown_tx: Option<oneshot::Sender<()>>,
+    /// LLM Proxy - unified interface to all AI providers
+    pub llm_proxy: LlmProxy,
+    /// Proxy memory - persistent conversation history
+    pub proxy_memory: ProxyMemory,
 }
 
 /// System-wide context
@@ -133,12 +146,27 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
+    // Initialize LLM proxy with available providers
+    let llm_proxy = LlmProxy::default();
+    let provider_count = llm_proxy.providers.len();
+
+    // Initialize proxy memory for conversation persistence
+    let proxy_memory = ProxyMemory::new().unwrap_or_else(|e| {
+        eprintln!("Warning: Could not initialize proxy memory: {}", e);
+        // Create a fallback in-memory only version
+        ProxyMemory::new().expect("Memory initialization should not fail twice")
+    });
+
     let state = Arc::new(RwLock::new(DaemonState {
         context: SystemContext::default(),
         credits: CreditTracker::default(),
         config: config.clone(),
         shutdown_tx: Some(shutdown_tx),
+        llm_proxy,
+        proxy_memory,
     }));
+
+    println!("  🤖 LLM Providers: {} available", provider_count);
 
     // Initial context scan
     {
@@ -173,6 +201,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // MCP-style tool interface
         .route("/tools", get(list_tools))
         .route("/tools/call", post(call_tool))
+        // LLM Proxy - OpenAI-compatible chat completions
+        .route("/v1/chat/completions", post(chat_completions))
+        .route("/v1/models", get(list_models))
         // WebSocket for real-time
         .route("/ws", get(websocket_handler))
         // Daemon control
@@ -185,6 +216,8 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - Context API:  /context");
     println!("  - Credits:      /credits");
     println!("  - Tools:        /tools");
+    println!("  - LLM Proxy:    /v1/chat/completions (OpenAI-compatible!)");
+    println!("  - Models:       /v1/models");
     println!("  - WebSocket:    /ws");
     println!("  - Shutdown:     POST /shutdown");
 
@@ -657,4 +690,209 @@ fn create_directory_info(path: &std::path::Path) -> Option<DirectoryInfo> {
         file_count,
         patterns: extensions.into_iter().collect(),
     })
+}
+
+// =============================================================================
+// LLM PROXY HANDLERS - OpenAI-compatible chat completions
+// =============================================================================
+
+/// OpenAI-compatible request format
+#[derive(Debug, Deserialize)]
+struct OpenAiRequest {
+    model: String,
+    messages: Vec<OpenAiMessage>,
+    temperature: Option<f32>,
+    #[serde(rename = "max_tokens")]
+    max_tokens: Option<usize>,
+    stream: Option<bool>,
+    /// Use 'user' field as scope ID for memory persistence
+    user: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiMessage {
+    role: String,
+    content: String,
+}
+
+impl From<OpenAiMessage> for LlmMessage {
+    fn from(msg: OpenAiMessage) -> Self {
+        Self {
+            role: match msg.role.as_str() {
+                "system" => LlmRole::System,
+                "assistant" => LlmRole::Assistant,
+                _ => LlmRole::User,
+            },
+            content: msg.content,
+        }
+    }
+}
+
+/// OpenAI-compatible response format
+#[derive(Debug, Serialize)]
+struct OpenAiResponse {
+    id: String,
+    object: String,
+    created: u64,
+    model: String,
+    choices: Vec<OpenAiChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    usage: Option<OpenAiUsage>,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiChoice {
+    index: usize,
+    message: OpenAiResponseMessage,
+    finish_reason: String,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiResponseMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiUsage {
+    prompt_tokens: usize,
+    completion_tokens: usize,
+    total_tokens: usize,
+}
+
+/// 💬 Chat completions handler - routes to appropriate LLM provider
+async fn chat_completions(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Json(req): Json<OpenAiRequest>,
+) -> Json<OpenAiResponse> {
+    // Parse provider from model name (e.g., "anthropic/claude-3" or just "gpt-4")
+    let (provider_name, model_name) = if let Some((p, m)) = req.model.split_once('/') {
+        (p.to_string(), m.to_string())
+    } else {
+        ("openai".to_string(), req.model.clone())
+    };
+
+    let internal_req = LlmRequest {
+        model: model_name,
+        messages: req.messages.into_iter().map(Into::into).collect(),
+        temperature: req.temperature,
+        max_tokens: req.max_tokens,
+        stream: req.stream.unwrap_or(false),
+    };
+
+    // Use 'user' field as scope ID for memory, default to 'global'
+    let scope_id = req.user.clone().unwrap_or_else(|| "global".to_string());
+
+    let mut state_lock = state.write().await;
+
+    // Get conversation history from memory
+    let mut messages_with_history = Vec::new();
+
+    // Keep system message at the top if present
+    if let Some(system_msg) = internal_req.messages.iter().find(|m| m.role == LlmRole::System).cloned() {
+        messages_with_history.push(system_msg);
+    }
+
+    // Add history from memory
+    if let Some(scope) = state_lock.proxy_memory.get_scope(&scope_id) {
+        for msg in &scope.messages {
+            if msg.role != LlmRole::System {
+                messages_with_history.push(msg.clone());
+            }
+        }
+    }
+
+    // Add current messages (excluding system which is already added)
+    for msg in &internal_req.messages {
+        if msg.role != LlmRole::System {
+            messages_with_history.push(msg.clone());
+        }
+    }
+
+    let request_with_history = LlmRequest {
+        messages: messages_with_history,
+        ..internal_req.clone()
+    };
+
+    // Call the LLM provider
+    match state_lock.llm_proxy.complete(&provider_name, request_with_history).await {
+        Ok(resp) => {
+            // Update memory with this exchange
+            let mut new_history = Vec::new();
+            if let Some(last_user_msg) = internal_req.messages.iter().rev().find(|m| m.role == LlmRole::User) {
+                new_history.push(last_user_msg.clone());
+            }
+            new_history.push(LlmMessage {
+                role: LlmRole::Assistant,
+                content: resp.content.clone(),
+            });
+            let _ = state_lock.proxy_memory.update_scope(&scope_id, new_history);
+
+            // Record credit for token savings (if we compressed context)
+            let tokens_used = resp.usage.as_ref().map(|u| u.total_tokens).unwrap_or(0);
+            if tokens_used > 0 {
+                state_lock.credits.record_savings(
+                    tokens_used as u64 / 10, // Award 10% as savings
+                    &format!("LLM call to {} ({})", provider_name, req.model),
+                );
+            }
+
+            Json(OpenAiResponse {
+                id: format!("st-{}", uuid::Uuid::new_v4()),
+                object: "chat.completion".to_string(),
+                created: chrono::Utc::now().timestamp() as u64,
+                model: req.model,
+                choices: vec![OpenAiChoice {
+                    index: 0,
+                    message: OpenAiResponseMessage {
+                        role: "assistant".to_string(),
+                        content: resp.content,
+                    },
+                    finish_reason: "stop".to_string(),
+                }],
+                usage: resp.usage.map(|u| OpenAiUsage {
+                    prompt_tokens: u.prompt_tokens,
+                    completion_tokens: u.completion_tokens,
+                    total_tokens: u.total_tokens,
+                }),
+            })
+        }
+        Err(e) => {
+            Json(OpenAiResponse {
+                id: "error".to_string(),
+                object: "error".to_string(),
+                created: 0,
+                model: req.model,
+                choices: vec![OpenAiChoice {
+                    index: 0,
+                    message: OpenAiResponseMessage {
+                        role: "assistant".to_string(),
+                        content: format!("Error: {}", e),
+                    },
+                    finish_reason: "error".to_string(),
+                }],
+                usage: None,
+            })
+        }
+    }
+}
+
+/// List available models from all providers
+async fn list_models(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> Json<serde_json::Value> {
+    let state_lock = state.read().await;
+
+    let models: Vec<serde_json::Value> = state_lock.llm_proxy.providers.iter().map(|p| {
+        serde_json::json!({
+            "id": format!("{}/default", p.name().to_lowercase()),
+            "object": "model",
+            "owned_by": p.name(),
+        })
+    }).collect();
+
+    Json(serde_json::json!({
+        "object": "list",
+        "data": models
+    }))
 }

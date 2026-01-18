@@ -56,6 +56,9 @@ pub mod rename_project;
 // Smart Tips System - helpful hints without the hassle!
 pub mod tips;
 
+// LLM Proxy - Unified AI interface
+pub mod proxy;
+
 // Daemon and client for always-on AI context service
 pub mod daemon;
 pub mod daemon_client;

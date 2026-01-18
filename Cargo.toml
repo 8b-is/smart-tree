@@ -4,7 +4,7 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "st"
-version = "5.5.1"
+version = "6.0.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -62,6 +62,13 @@ egui = "0.32.2"
 eframe = { version = "0.32.2", default-features = false, features = ["default_fonts", "glow"] }
 egui_extras = "0.32.2"
 winit = "0.30.12"
+
+# Candle for local LLM support
+candle-core = { version = "0.8.2", optional = true }
+candle-transformers = { version = "0.8.2", optional = true }
+candle-nn = { version = "0.8.2", optional = true }
+hf-hub = { version = "0.4.0", optional = true }
+tokenizers = { version = "0.21.0", optional = true }
 
 # Terminal UI dependencies
 ratatui = "0.25"
@@ -137,6 +144,7 @@ default = ["std"]
 std = []
 alloc = []
 mem8 = []
+candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
 
 [profile.release]
 lto = true

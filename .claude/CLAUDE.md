@@ -3,9 +3,9 @@
 This Rust project uses Smart Tree for optimal AI context management.
 
 ## Project Stats
-- Files: 424
-- Directories: 64
-- Total size: 893464235 bytes
+- Files: 612
+- Directories: 96
+- Total size: 315995839 bytes
 
 ## Essential Commands
 

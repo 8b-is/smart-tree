@@ -61,7 +61,7 @@ use st::{
 /// CLI definitions are centralized in [`st::cli`](src/cli.rs) module.
 /// This separation improves maintainability and keeps the main file focused
 /// on orchestration rather than argument parsing logic.
-
+///
 /// And now, the moment you've all been waiting for: the `main` function!
 /// This is the heart of the st concert. It's where we parse the arguments,
 /// configure the scanner, pick the right formatter for the job, and let it rip.
@@ -358,6 +358,15 @@ async fn main() -> Result<()> {
 
     if cli.claude_user_prompt_submit {
         return st::claude_hook::handle_user_prompt_submit().await;
+    }
+
+    // Handle LLM proxy commands
+    if cli.proxy {
+        return handle_proxy(&cli).await;
+    }
+
+    if cli.proxy_server {
+        return st::proxy::server::start_proxy_server(cli.proxy_port).await;
     }
 
     // Handle memory operations
@@ -908,6 +917,65 @@ async fn main() -> Result<()> {
     }
 
     // If we've reached here, everything went well!
+    Ok(())
+}
+
+/// Handle LLM proxy requests
+async fn handle_proxy(cli: &Cli) -> Result<()> {
+    use st::proxy::{LlmMessage, LlmRequest, LlmRole};
+    use st::proxy::memory::MemoryProxy;
+    use std::io::{self, Read};
+
+    let provider_name = cli
+        .provider
+        .as_deref()
+        .context("Provider is required for --proxy. Use --provider <NAME>")?;
+    let model = cli
+        .model
+        .as_deref()
+        .context("Model is required for --proxy. Use --model <NAME>")?;
+
+    // Get prompt from argument or stdin
+    let prompt = if let Some(p) = &cli.prompt {
+        p.clone()
+    } else {
+        let mut buffer = String::new();
+        io::stdin().read_to_string(&mut buffer)?;
+        buffer
+    };
+
+    if prompt.trim().is_empty() {
+        return Err(anyhow::anyhow!("Prompt cannot be empty"));
+    }
+
+    println!("🌐 Calling {} (model: {})...", provider_name, model);
+
+    let mut proxy = MemoryProxy::new()?;
+    let request = LlmRequest {
+        model: model.to_string(),
+        messages: vec![LlmMessage {
+            role: LlmRole::User,
+            content: prompt,
+        }],
+        temperature: None,
+        max_tokens: None,
+        stream: false,
+    };
+
+    let scope_id = cli.scope.as_deref().unwrap_or("default");
+    let response = proxy.complete_with_memory(provider_name, scope_id, request).await?;
+
+    println!("\n--- Response ---");
+    println!("{}", response.content);
+    println!("----------------");
+
+    if let Some(usage) = response.usage {
+        println!(
+            "📊 Tokens: {} prompt, {} completion ({} total)",
+            usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+        );
+    }
+
     Ok(())
 }
 
