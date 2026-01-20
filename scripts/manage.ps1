@@ -232,7 +232,7 @@ function Install-Binary {
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$InstallDir*") {
             Write-Info "Adding $InstallDir to your PATH..."
-            $newPath = "$userPath;$InstallDir"
+            $newPath = "$($userPath.TrimEnd(';'));$InstallDir"
             [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
             Write-Success "Added to PATH. Please restart your terminal."
         }
