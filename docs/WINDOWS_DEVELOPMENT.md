@@ -443,7 +443,7 @@ rustup target add aarch64-pc-windows-msvc
 # Build for x86_64
 cargo build --release --target x86_64-pc-windows-msvc
 
-# Build for ARM64 
+# Build for ARM64
 # Note: Requires ARM64 build tools from Visual Studio installer
 # (C++ ARM64 build tools component). Cross-compilation from x86_64
 # may not work without proper ARM64 toolchain setup.
