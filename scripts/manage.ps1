@@ -122,6 +122,7 @@ function Invoke-Test {
         Write-Success "All tests passed! Your tree is healthy! 🌳"
     } catch {
         Write-Warning "Some checks failed: $_"
+        $global:LASTEXITCODE = 1
     } finally {
         Pop-Location
     }
