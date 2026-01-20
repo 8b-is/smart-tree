@@ -32,7 +32,7 @@ function Write-Success {
 function Write-Error {
     param([string]$Message)
     Write-Host "[ERROR] $Message" -ForegroundColor Red
-    exit 1
+    throw $Message
 }
 
 function Write-Warning {
