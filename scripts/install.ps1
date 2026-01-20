@@ -95,7 +95,7 @@ function Select-Version {
             $selectionNum -ge 1 -and $selectionNum -le $versions.Count) {
             return $versions[$selectionNum - 1]
         } else {
-            Write-Error "Invalid selection. Please try again."
+            Write-Warning "Invalid selection. Please try again."
         }
     }
 }
