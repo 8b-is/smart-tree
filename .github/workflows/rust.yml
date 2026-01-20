@@ -25,14 +25,11 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: brew install git-lfs
 
-    z- name: Checkout code 📦
+    - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
        x submodules: 'recursive'
     
-    - name: Fetch LFS objects
-      run: git lfs pull
-
     - name: Install Rust 🦀
       uses: dtolnay/rust-toolchain@stable
       with:
