@@ -61,7 +61,7 @@ use st::{
 /// CLI definitions are centralized in [`st::cli`](src/cli.rs) module.
 /// This separation improves maintainability and keeps the main file focused
 /// on orchestration rather than argument parsing logic.
-
+///
 /// And now, the moment you've all been waiting for: the `main` function!
 /// This is the heart of the st concert. It's where we parse the arguments,
 /// configure the scanner, pick the right formatter for the job, and let it rip.

@@ -1,32 +1,36 @@
 # CLAUDE.md
 
-This Rust project uses Smart Tree for optimal AI context management.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Stats
-- Files: 424
-- Directories: 64
-- Total size: 893464235 bytes
+## Quick Reference
 
-## Essential Commands
+See the root `CLAUDE.md` for full documentation.
+
+## Commands
 
 ```bash
-# Build & Test
-cargo build --release
-cargo test -- --nocapture
-cargo clippy -- -D warnings
-
-# Smart Tree context
-st -m context .          # Full context with git info
-st -m quantum .           # Compressed for large contexts
-st -m relations --focus main.rs  # Code relationships
+./scripts/manage.sh test          # Pre-commit: fmt + clippy + test
+cargo build --release             # Build (always release)
+st --spicy                        # Interactive TUI
+st --mcp                          # MCP server mode
+cargo test test_name -- --exact   # Single test
 ```
 
-## Key Patterns
-- Always use `Result<T>` for error handling
-- Prefer `&str` over `String` for function parameters
-- Use `anyhow` for error context
-- Run clippy before commits
+## Architecture
 
-## Smart Tree Integration
-This project has hooks configured to automatically provide context.
-The quantum-semantic mode is used for optimal token efficiency.
+```
+Scanner → FileNode[] → Formatter (trait) → Output
+                            ↓
+                      30+ MCP tools
+```
+
+- `src/cli.rs` - CLI definitions
+- `src/scanner.rs` - Directory traversal
+- `src/formatters/` - Output formats (implement `Formatter`)
+- `src/mcp/tools.rs` - MCP tools
+
+## Patterns
+
+- `anyhow::Result<T>` with `.context()` for errors
+- `rayon` for parallel, `tokio` for async I/O
+- Real filesystem tests only (no mocks)

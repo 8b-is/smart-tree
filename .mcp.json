@@ -1,3 +1,10 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "exampleServer": {
+      "host": "localhost",
+      "port": 1234,
+      "useSSL": true,
+      "authToken": "your_auth_token_here"
+    }
+  }
 }

@@ -1144,7 +1144,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_collaborative_memories".to_string(),
-            description: "🔮 Search for previously anchored collaborative memories using keywords. Retrieves insights, solutions, and breakthroughs from past sessions. Perfect for 'What was that solution we found last week?' moments!".to_string(),
+            description: "🔮 Search for previously anchored collaborative memories. NOW WITH WAVE RESONANCE! Two modes: keyword search (fast) or resonance search (semantic similarity). Use resonance for 'find something similar to X' queries!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "required": ["keywords"],
@@ -1152,7 +1152,23 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     "keywords": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Keywords to search for"
+                        "description": "Keywords to search for (or query terms for resonance)"
+                    },
+                    "use_resonance": {
+                        "type": "boolean",
+                        "description": "Use wave resonance for semantic similarity search (default: false)",
+                        "default": false
+                    },
+                    "memory_type": {
+                        "type": "string",
+                        "enum": ["pattern", "solution", "conversation", "technical", "learning", "joke"],
+                        "description": "Filter by memory type (for resonance search)"
+                    },
+                    "resonance_threshold": {
+                        "type": "number",
+                        "description": "Minimum similarity score 0.0-1.0 (default: 0.3)",
+                        "minimum": 0.0,
+                        "maximum": 1.0
                     },
                     "project_path": {
                         "type": "string",
@@ -1163,6 +1179,64 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                         "description": "Maximum memories to return (default: 10)",
                         "minimum": 1,
                         "maximum": 50
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "wave_memory".to_string(),
+            description: "🌊 Direct access to Wave Memory - the ultimate memory system for Claude Code! Store memories as waves with emotional encoding, retrieve by resonance, check stats. This is THE memory tool for persistent context across sessions.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["operation"],
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["stats", "anchor", "find", "resonance", "get", "delete"],
+                        "description": "Operation: stats (view memory stats), anchor (store memory), find (keyword search), resonance (semantic search), get (by ID), delete (by ID)"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Memory content (for anchor operation)"
+                    },
+                    "keywords": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Keywords for anchor/find/resonance"
+                    },
+                    "memory_type": {
+                        "type": "string",
+                        "enum": ["pattern", "solution", "conversation", "technical", "learning", "joke"],
+                        "description": "Memory type (pattern=deep insights, solution=breakthroughs, technical=code patterns, joke=shared humor)",
+                        "default": "technical"
+                    },
+                    "valence": {
+                        "type": "number",
+                        "description": "Emotional valence -1.0 (negative) to 1.0 (positive)",
+                        "minimum": -1.0,
+                        "maximum": 1.0
+                    },
+                    "arousal": {
+                        "type": "number",
+                        "description": "Emotional arousal 0.0 (calm) to 1.0 (excited)",
+                        "minimum": 0.0,
+                        "maximum": 1.0
+                    },
+                    "memory_id": {
+                        "type": "string",
+                        "description": "Memory ID (for get/delete operations)"
+                    },
+                    "threshold": {
+                        "type": "number",
+                        "description": "Resonance threshold for similarity search (default: 0.3)",
+                        "minimum": 0.0,
+                        "maximum": 1.0
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum results (default: 10)",
+                        "minimum": 1,
+                        "maximum": 100
                     }
                 }
             }),
@@ -1354,6 +1428,177 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
     }))
 }
 
+/// Handle wave_memory tool - direct access to wave-based memory system
+async fn handle_wave_memory(args: Value) -> Result<Value> {
+    use crate::mcp::wave_memory::{get_wave_memory, MemoryType};
+
+    let operation = args["operation"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing operation"))?;
+
+    let wave_memory = get_wave_memory();
+    let mut manager = wave_memory.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+
+    match operation {
+        "stats" => {
+            Ok(json!({
+                "operation": "stats",
+                "wave_memory": manager.stats(),
+                "message": "🌊 Wave Memory statistics",
+            }))
+        }
+        "anchor" => {
+            let content = args["content"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing content for anchor"))?
+                .to_string();
+            let keywords: Vec<String> = args["keywords"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let memory_type = args["memory_type"]
+                .as_str()
+                .map(MemoryType::parse)
+                .unwrap_or(MemoryType::Technical);
+            let valence = args["valence"].as_f64().unwrap_or(0.0) as f32;
+            let arousal = args["arousal"].as_f64().unwrap_or(0.5) as f32;
+
+            let id = manager.anchor(
+                content.clone(),
+                keywords.clone(),
+                memory_type,
+                valence,
+                arousal,
+                "tandem:human:claude".to_string(),
+                None,
+            )?;
+
+            Ok(json!({
+                "operation": "anchor",
+                "success": true,
+                "memory_id": id,
+                "content_preview": if content.len() > 50 { format!("{}...", &content[..50]) } else { content },
+                "keywords": keywords,
+                "memory_type": format!("{:?}", memory_type),
+                "emotional_encoding": {
+                    "valence": valence,
+                    "arousal": arousal,
+                },
+                "message": "🌊 Memory anchored as wave",
+            }))
+        }
+        "find" => {
+            let keywords: Vec<String> = args["keywords"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let max_results = args["max_results"].as_u64().unwrap_or(10) as usize;
+
+            let results = manager.find_by_keywords(&keywords, max_results);
+            let memories: Vec<_> = results.iter().map(|mem| {
+                json!({
+                    "id": mem.id,
+                    "content": mem.content,
+                    "keywords": mem.keywords,
+                    "memory_type": format!("{:?}", mem.memory_type),
+                    "valence": mem.valence,
+                    "arousal": mem.arousal,
+                    "access_count": mem.access_count,
+                })
+            }).collect();
+
+            Ok(json!({
+                "operation": "find",
+                "keywords": keywords,
+                "total_found": memories.len(),
+                "memories": memories,
+            }))
+        }
+        "resonance" => {
+            let keywords: Vec<String> = args["keywords"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let memory_type = args["memory_type"]
+                .as_str()
+                .map(MemoryType::parse)
+                .unwrap_or(MemoryType::Technical);
+            let threshold = args["threshold"].as_f64().unwrap_or(0.3) as f32;
+            let max_results = args["max_results"].as_u64().unwrap_or(10) as usize;
+
+            let query = keywords.join(" ");
+            let results = manager.find_by_resonance(&query, &keywords, memory_type, threshold, max_results);
+            let memories: Vec<_> = results.iter().map(|(mem, resonance)| {
+                json!({
+                    "id": mem.id,
+                    "content": mem.content,
+                    "keywords": mem.keywords,
+                    "memory_type": format!("{:?}", mem.memory_type),
+                    "resonance_score": format!("{:.2}", resonance),
+                    "valence": mem.valence,
+                    "arousal": mem.arousal,
+                })
+            }).collect();
+
+            Ok(json!({
+                "operation": "resonance",
+                "search_mode": "wave_interference",
+                "query": keywords,
+                "threshold": threshold,
+                "total_found": memories.len(),
+                "memories": memories,
+                "message": "🌊 Found memories by wave resonance",
+            }))
+        }
+        "get" => {
+            let id = args["memory_id"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing memory_id"))?;
+
+            if let Some(mem) = manager.get(id) {
+                Ok(json!({
+                    "operation": "get",
+                    "found": true,
+                    "memory": {
+                        "id": mem.id,
+                        "content": mem.content,
+                        "keywords": mem.keywords,
+                        "memory_type": format!("{:?}", mem.memory_type),
+                        "valence": mem.valence,
+                        "arousal": mem.arousal,
+                        "created_at": mem.created_at.to_rfc3339(),
+                        "last_accessed": mem.last_accessed.to_rfc3339(),
+                        "access_count": mem.access_count,
+                        "origin": mem.origin,
+                        "grid_position": { "x": mem.x, "y": mem.y, "z": mem.z },
+                    }
+                }))
+            } else {
+                Ok(json!({
+                    "operation": "get",
+                    "found": false,
+                    "memory_id": id,
+                    "message": "Memory not found",
+                }))
+            }
+        }
+        "delete" => {
+            let id = args["memory_id"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing memory_id"))?;
+
+            let deleted = manager.delete(id);
+            Ok(json!({
+                "operation": "delete",
+                "success": deleted,
+                "memory_id": id,
+                "message": if deleted { "Memory deleted" } else { "Memory not found" },
+            }))
+        }
+        _ => Err(anyhow::anyhow!("Unknown wave_memory operation: {}", operation)),
+    }
+}
+
 pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let tool_name = params["name"]
         .as_str()
@@ -1439,6 +1684,9 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
             let req: crate::mcp::context_tools::FindMemoriesRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::find_collaborative_memories(req, permission_check).await
+        }
+        "wave_memory" => {
+            handle_wave_memory(args).await
         }
         "get_collaboration_rapport" => {
             let req: crate::mcp::context_tools::GetRapportRequest = serde_json::from_value(args)?;

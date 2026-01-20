@@ -148,10 +148,11 @@ impl WaveGrid {
     }
 
     /// Get linear index from 3D coordinates
+    /// Clamps z to grid depth for safety (supports test grids with smaller depth)
     fn get_index(&self, x: u8, y: u8, z: u16) -> usize {
         let x = x as usize;
         let y = y as usize;
-        let z = z as usize;
+        let z = (z as usize).min(self.depth - 1); // Clamp z to grid bounds
 
         z * self.width * self.height + y * self.width + x
     }
