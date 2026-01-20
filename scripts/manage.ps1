@@ -409,8 +409,8 @@ switch ($Command.ToLower()) {
         Show-Help
     }
     default {
-        Write-Error "Unknown command: $Command"
         Write-Host ""
         Show-Help
+        Write-Error "Unknown command: $Command"
     }
 }
