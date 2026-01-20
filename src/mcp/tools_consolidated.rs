@@ -495,6 +495,10 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     "anchor_type": {
                         "type": "string",
                         "description": "Type of anchor"
+                    },
+                    "origin": {
+                        "type": "string",
+                        "description": "Who created this? 'human', 'ai:claude', or 'tandem:human:claude' (default: tandem:human:claude)"
                     }
                 },
                 "required": ["operation", "keywords"]
@@ -645,6 +649,14 @@ pub async fn dispatch_consolidated_tool(
         "hooks" => handle_hooks(params, ctx).await,
         "unified_watcher" => {
             super::unified_watcher::handle_unified_watcher(params.unwrap_or(json!({})), ctx).await
+        }
+        // 📖 Smart read tool with AST-aware compression
+        "read" => {
+            super::tools::handle_tools_call(
+                json!({ "name": "read", "arguments": params }),
+                ctx,
+            )
+            .await
         }
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }

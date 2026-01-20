@@ -390,6 +390,10 @@ EXAMPLES:
                     "anchor_type": {
                         "type": "string",
                         "description": "Type: breakthrough, solution, pattern, joke"
+                    },
+                    "origin": {
+                        "type": "string",
+                        "description": "Who created this? 'human', 'ai:claude', or 'tandem:human:claude' (default: tandem:human:claude)"
                     }
                 },
                 "required": ["operation", "keywords"]
@@ -627,6 +631,76 @@ EXAMPLES:
             }
         }));
     }
+
+    // Add smart read tool - always enabled (core functionality)
+    tools.push(json!({
+        "name": "read",
+        "description": "📖 SMART FILE READER - AST-aware compression for code files! Reads files and automatically collapses function bodies to signatures. Perfect for understanding large files without burning tokens!
+
+💡 TIP: Reading code files? Try these smart options:
+• read {file_path:'src/main.rs'} - Auto-compress with function signatures
+• read {file_path:'app.py', expand_functions:['main']} - Expand specific functions
+• read {file_path:'utils.ts', expand_context:['error','auth']} - Auto-expand matching functions
+• read {file_path:'README.md', compress:false} - Raw content for non-code
+• read {file_path:'big.rs', hex_line_numbers:true} - Hex line nums (1000→3E8)
+
+EXAMPLES:
+✓ Quick scan: read {file_path:'src/lib.rs'} - See structure with [fn:name] refs
+✓ Focus on main: read {file_path:'main.py', expand_functions:['main','__init__']}
+✓ Find errors: read {file_path:'handler.rs', expand_context:['error','panic']}
+✓ Full view: read {file_path:'config.rs', expand_all:true}
+✓ Compact hex: read {file_path:'large.rs', hex_line_numbers:true}",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to read"
+                },
+                "compress": {
+                    "type": "boolean",
+                    "description": "Enable AST-aware compression (collapses function bodies). Default: true for code files",
+                    "default": true
+                },
+                "expand_functions": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "List of function names to expand fully (e.g., ['main', 'handle_request'])"
+                },
+                "expand_context": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Keywords to auto-expand matching functions (e.g., ['error', 'auth'])"
+                },
+                "expand_all": {
+                    "type": "boolean",
+                    "description": "Expand all functions (disables compression)",
+                    "default": false
+                },
+                "max_lines": {
+                    "type": "integer",
+                    "description": "Maximum lines to return (0 = unlimited)",
+                    "default": 0
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Line offset to start from (1-based)",
+                    "default": 1
+                },
+                "show_line_numbers": {
+                    "type": "boolean",
+                    "description": "Show line numbers",
+                    "default": true
+                },
+                "hex_line_numbers": {
+                    "type": "boolean",
+                    "description": "Use hexadecimal line numbers - MORE COMPACT! (1000→3E8, 65535→FFFF). Default: true in MCP mode for token efficiency!",
+                    "default": true
+                }
+            },
+            "required": ["file_path"]
+        }
+    }));
 
     tools
 }

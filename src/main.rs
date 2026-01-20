@@ -9,20 +9,25 @@
 // Brought to you by The Cheet - making code understandable and fun! 🥁🧻
 // -----------------------------------------------------------------------------
 use anyhow::{Context, Result};
-use chrono::NaiveDate;
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{CommandFactory, Parser};
 use clap_complete::generate;
+
+// Import CLI definitions from the library
+use st::cli::{Cli, ColorMode, MermaidStyleArg, OutputMode, PathMode, ScanArgs, SortField, get_ideal_depth_for_mode, parse_date};
 // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use regex::Regex;
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
-use std::time::SystemTime;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
-    claude_init::ClaudeInit,
+    claude_init::{
+        check_mcp_installation_status, install_mcp_to_claude_desktop,
+        uninstall_mcp_from_claude_desktop, ClaudeInit,
+    },
+    daemon_client::{DaemonClient, DaemonStatus},
     feature_flags,
     formatters::{
         ai::AiFormatter,
@@ -53,565 +58,9 @@ use st::{
     ScannerConfig, // The mighty Scanner and its configuration.
 };
 
-/// We're using the `clap` crate to make this as easy as pie.
-/// Why write an argument parser from scratch when you can `clap`? *ba-dum-tss*
-#[derive(Parser, Debug)]
-#[command(
-    name = "st",
-    about = "Smart Tree - An intelligent directory visualization tool. Not just a tree, it's a smart-tree!",
-    // Custom version handling with update checking
-    author   // Automatically pulls authors from Cargo.toml - "8bit-wraith" and "Claude" - what a team!
-)]
-struct Cli {
-    // --- Action Flags ---
-    /// Show the cheatsheet.
-    #[arg(long, exclusive = true)]
-    cheet: bool,
-
-    /// Generate shell completion scripts.
-    #[arg(long, exclusive = true, value_name = "SHELL")]
-    completions: Option<clap_complete::Shell>,
-
-    /// Generate the man page.
-    #[arg(long, exclusive = true)]
-    man: bool,
-
-    /// Run `st` as an MCP (Model Context Protocol) server.
-    #[arg(long, exclusive = true)]
-    mcp: bool,
-
-    /// List the tools `st` provides when running as an MCP server.
-    #[arg(long, exclusive = true)]
-    mcp_tools: bool,
-
-    /// Show the configuration snippet for the MCP server.
-    #[arg(long, exclusive = true)]
-    mcp_config: bool,
-
-    /// Show version information and check for updates.
-    #[arg(short = 'V', long, exclusive = true)]
-    version: bool,
-
-    /// Launch Smart Tree Terminal Interface (STTI) - Your coding companion!
-    /// This starts an interactive terminal that anticipates your needs.
-    #[arg(long, exclusive = true)]
-    terminal: bool,
-
-    /// Launch egui Dashboard - Real-time visualization with style!
-    /// Requires a local DISPLAY/WAYLAND session (remote/headless currently unsupported)
-    #[arg(long, exclusive = true)]
-    dashboard: bool,
-
-    /// Rename project - elegant identity transition (format: "OldName" "NewName")
-    #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2)]
-    rename_project: Option<Vec<String>>,
-
-    /// Set up or update Claude integration for this project.
-    /// Smart command that creates .claude/ if missing or updates if it exists.
-    /// Automatically detects project type and configures optimal hooks.
-    #[arg(long, exclusive = true)]
-    setup_claude: bool,
-
-    /// Save current Claude consciousness state to .claude_consciousness.m8
-    /// Preserves session context, insights, and working state for next session
-    #[arg(long, exclusive = true)]
-    claude_save: bool,
-
-    /// Restore previous Claude consciousness from .claude_consciousness.m8
-    /// Loads saved context, todos, insights, and project state
-    #[arg(long, exclusive = true)]
-    claude_restore: bool,
-
-    /// Show Claude consciousness status and summary
-    #[arg(long, exclusive = true)]
-    claude_context: bool,
-
-    /// Update .m8 consciousness files for directory
-    /// Auto-maintains directory consciousness with patterns, security, and insights
-    #[arg(long)]
-    update_consciousness: bool,
-
-    /// Run security scan on directory for malware patterns
-    /// Detects obfuscation, suspicious patterns, and high entropy files
-    #[arg(long)]
-    security_scan: bool,
-
-    /// Show tokenization statistics for paths
-    /// Displays compression ratios and pattern detection
-    #[arg(long)]
-    token_stats: bool,
-
-    /// Get wave frequency for directory from .m8 file
-    #[arg(long)]
-    get_frequency: bool,
-
-    /// Dump raw consciousness file content (for debugging/transparency)
-    /// Shows exactly what's stored in .claude_consciousness.m8
-    #[arg(long)]
-    claude_dump: bool,
-
-    /// Show compressed kickstart format (Omni-approved!)
-    /// Ultra-compressed context for instant restoration
-    #[arg(long)]
-    claude_kickstart: bool,
-
-    /// Hook for user prompt submission - provides intelligent context based on prompt analysis
-    /// Reads JSON input with user prompt and outputs relevant context for Claude
-    #[arg(long)]
-    claude_user_prompt_submit: bool,
-
-    /// Anchor a memory with keywords and context
-    /// Format: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
-    #[arg(long, num_args = 3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"])]
-    memory_anchor: Option<Vec<String>>,
-
-    /// Find memories by keywords
-    /// Format: --memory-find <KEYWORDS>
-    #[arg(long)]
-    memory_find: Option<String>,
-
-    /// Show memory bank statistics
-    #[arg(long)]
-    memory_stats: bool,
-
-    /// Control smart tips (on/off). Tips show helpful hints periodically
-    /// Example: --tips off (to disable), --tips on (to re-enable)
-    #[arg(long, value_name = "STATE", value_parser = ["on", "off"])]
-    tips: Option<String>,
-
-    /// Launch Spicy TUI mode - cyberpunk-style interactive file browser with fuzzy search!
-    /// Inspired by spicy-fzf with multi-pane layout, fuzzy content search, and M8 caching
-    #[arg(long)]
-    spicy: bool,
-
-    /// Start or resume a mega session
-    #[arg(long)]
-    mega_start: Option<Option<String>>,
-
-    /// Save current mega session snapshot
-    #[arg(long)]
-    mega_save: bool,
-
-    /// Record a breakthrough in mega session
-    #[arg(long, value_name = "DESCRIPTION")]
-    mega_breakthrough: Option<String>,
-
-    /// Show mega session statistics
-    #[arg(long)]
-    mega_stats: bool,
-
-    /// List all saved mega sessions
-    #[arg(long)]
-    mega_list: bool,
-
-    /// Configure Claude Code hooks to automatically provide project context
-    ///
-    /// Actions:
-    ///   enable  - Install Smart Tree as a UserPromptSubmit hook
-    ///   disable - Remove Smart Tree hooks from Claude Code
-    ///   status  - Show current hooks configuration
-    ///
-    /// Example: st --hooks-config enable
-    #[arg(long, value_name = "ACTION", help_heading = "Claude Code Integration")]
-    hooks_config: Option<String>,
-
-    /// Quick setup: Install Smart Tree hooks in Claude Code
-    ///
-    /// This enables automatic context provision when you interact with Claude.
-    /// Smart Tree will analyze your prompts and provide relevant project information.
-    /// Same as: st --hooks-config enable
-    #[arg(long, help_heading = "Claude Code Integration")]
-    hooks_install: bool,
-
-    /// Enable activity logging for transparency
-    ///
-    /// Logs all Smart Tree activities to a JSONL file.
-    /// Default location: ~/.st/st.jsonl
-    /// Specify custom path: --log /path/to/logfile.jsonl
-    ///
-    /// Example: st --log --mode ai .
-    #[arg(long, value_name = "PATH", help_heading = "Logging & Transparency")]
-    log: Option<Option<String>>,
-
-    // --- Scan Arguments ---
-    /// Path to the directory or file you want to analyze.
-    /// Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)
-    path: Option<String>,
-
-    /// Specify input type explicitly (filesystem, qcp, sse, openapi, mem8)
-    #[arg(long, value_name = "TYPE")]
-    input: Option<String>,
-
-    #[command(flatten)]
-    scan_opts: ScanArgs,
-}
-
-#[derive(Parser, Debug)]
-struct ScanArgs {
-    /// Choose your adventure! Selects the output format.
-    /// From classic human-readable to AI-optimized hex, we've got options.
-    #[arg(short, long, value_enum, default_value = "auto")]
-    mode: OutputMode,
-
-    /// Feeling like a detective? Find files/directories matching this regex pattern.
-    /// Example: --find "README\\.md"
-    #[arg(long)]
-    find: Option<String>,
-
-    /// Filter by file extension. Show only files of this type (e.g., "rs", "txt").
-    /// No leading dot needed, just the extension itself.
-    #[arg(long = "type")]
-    filter_type: Option<String>,
-    /// Filter to show only files (f) or directories (d).
-    #[arg(long = "entry-type", value_parser = ["f", "d"])]
-    entry_type: Option<String>,
-
-    /// Only show files larger than this size.
-    /// Accepts human-readable sizes like "1M" (1 Megabyte), "500K" (500 Kilobytes), "100B" (100 Bytes).
-    #[arg(long)]
-    min_size: Option<String>,
-
-    /// Only show files smaller than this size.
-    /// Same format as --min-size. Let's find those tiny files!
-    #[arg(long)]
-    max_size: Option<String>,
-
-    /// Time traveler? Show files newer than this date (YYYY-MM-DD format).
-    #[arg(long)]
-    newer_than: Option<String>,
-
-    /// Or perhaps you prefer antiques? Show files older than this date (YYYY-MM-DD format).
-    #[arg(long)]
-    older_than: Option<String>,
-
-    /// How deep should we dig? Limits the traversal depth.
-    /// Default is 0 (auto) which lets each mode pick its ideal depth.
-    /// Set explicitly to override: 1 for shallow, 10 for deep exploration.
-    #[arg(short, long, default_value = "0")]
-    depth: usize,
-
-    /// Daredevil mode: Ignores `.gitignore` files. See everything, even what Git tries to hide!
-    #[arg(long)]
-    no_ignore: bool,
-
-    /// Double daredevil: Ignores our built-in default ignore patterns too (like `node_modules`, `__pycache__`).
-    /// Use with caution, or you might see more than you bargained for!
-    #[arg(long)]
-    no_default_ignore: bool,
-
-    /// Show all files, including hidden ones (those starting with a `.`).
-    /// The `-a` is for "all", naturally.
-    #[arg(long, short = 'a')]
-    all: bool,
-
-    /// Want to see what's being ignored? This flag shows ignored directories in brackets `[dirname]`.
-    /// Useful for debugging your ignore patterns or just satisfying curiosity.
-    #[arg(long)]
-    show_ignored: bool,
-
-    /// SHOW ME EVERYTHING! The nuclear option that combines --all, --no-ignore, and --no-default-ignore.
-    /// This reveals absolutely everything: hidden files, git directories, node_modules, the works!
-    /// Warning: May produce overwhelming output in large codebases.
-    #[arg(long)]
-    everything: bool,
-
-    /// Show filesystem type indicators in output (e.g., X=XFS, 4=ext4, B=Btrfs).
-    /// Each file/directory gets a single character showing what filesystem it's on.
-    /// Great for understanding storage layout and mount points!
-    #[arg(long)]
-    show_filesystems: bool,
-
-    /// Not a fan of emojis? This flag disables them for a plain text experience.
-    /// (But Trish loves the emojis, just saying!) 🌳✨
-    #[arg(long)]
-    no_emoji: bool,
-
-    /// Compress the output using zlib. Great for sending large tree structures over the wire
-    /// or for AI models that appreciate smaller inputs. Output will be base64 encoded.
-    #[arg(short = 'z', long)]
-    compress: bool,
-
-    /// MCP/API optimization mode. Automatically enables compression, disables colors/emoji,
-    /// and optimizes output for machine consumption. Perfect for MCP servers, LLM APIs, and tools.
-    /// Works with any output mode to make it API-friendly!
-    #[arg(long)]
-    mcp_optimize: bool,
-
-    /// For JSON output, this makes it compact (one line) instead of pretty-printed.
-    /// Saves space, but might make Trish's eyes water if she tries to read it directly.
-    #[arg(long)]
-    compact: bool,
-
-    /// Controls how file paths are displayed in the output.
-    #[arg(long = "path-mode", value_enum, default_value = "off")]
-    path_mode: PathMode,
-
-    /// When should we splash some color on the output?
-    /// `auto` (default) uses colors if outputting to a terminal.
-    #[arg(long, value_enum, default_value = "auto")]
-    color: ColorMode,
-
-    /// For AI mode, wraps the output in a JSON structure.
-    /// Makes it easier for programmatic consumption by our AI overlords (just kidding... mostly).
-    #[arg(long)]
-    ai_json: bool,
-
-    /// Stream output as files are scanned. This is a game-changer for very large directories!
-    /// You'll see results trickling in, rather than waiting for the whole scan to finish.
-    /// Note: Compression is disabled in stream mode for now.
-    #[arg(long)]
-    stream: bool,
-
-    /// Start SSE server mode for real-time directory monitoring (experimental).
-    /// This starts an HTTP server that streams directory changes as Server-Sent Events.
-    /// Example: st --sse-server --sse-port 8420 /path/to/watch
-    #[arg(long)]
-    sse_server: bool,
-
-    /// Port for SSE server mode (default: 8420)
-    #[arg(long, default_value = "8420")]
-    sse_port: u16,
-
-    /// Search for a keyword within file contents.
-    /// Best used with `--type` to limit search to specific file types (e.g., `--type rs --search "TODO"`).
-    /// This is like having X-ray vision for your files!
-    #[arg(long)]
-    search: Option<String>,
-
-    /// Group files by semantic similarity (inspired by Omni's wisdom!).
-    /// Uses content-aware tokenization to identify conceptually related files.
-    /// Perfect for understanding project structure at a higher level.
-    /// Example groups: "tests", "documentation", "configuration", "source code"
-    #[arg(long)]
-    semantic: bool,
-
-    /// Mermaid diagram style (only used with --mode mermaid).
-    /// Options: flowchart (default), mindmap, gitgraph
-    #[arg(long, value_enum, default_value = "flowchart")]
-    mermaid_style: MermaidStyleArg,
-
-    /// Index Rust code to SmartPastCode registry for universal code discovery.
-    /// Specify the registry URL (e.g., http://localhost:8430).
-    /// This will extract functions, modules, and impl blocks and submit them to the registry.
-    /// Works best with --mode projects for project-level indexing.
-    #[arg(long, value_name = "URL")]
-    index_registry: Option<String>,
-
-    /// Exclude mermaid diagrams from markdown report (only used with --mode markdown).
-    #[arg(long)]
-    no_markdown_mermaid: bool,
-
-    /// Exclude tables from markdown report (only used with --mode markdown).
-    #[arg(long)]
-    no_markdown_tables: bool,
-
-    /// Exclude pie charts from markdown report (only used with --mode markdown).
-    #[arg(long)]
-    no_markdown_pie_charts: bool,
-
-    /// Focus analysis on specific file (for relations mode).
-    /// Shows all relationships for a particular file.
-    #[arg(long, value_name = "FILE")]
-    focus: Option<PathBuf>,
-
-    /// Filter relationships by type (for relations mode).
-    /// Options: imports, calls, types, tests, coupled
-    #[arg(long, value_name = "TYPE")]
-    relations_filter: Option<String>,
-
-    /// Sort results by: a-to-z, z-to-a, largest, smallest, newest, oldest, type
-    /// Examples: --sort largest (biggest files first), --sort newest (recent files first)
-    /// Use with --top to get "top 10 largest files" or "20 newest files"
-    #[arg(long, value_enum)]
-    sort: Option<SortField>,
-
-    /// Show only the top N results (useful with --sort)
-    /// Examples: --sort size --top 10 (10 largest files)
-    /// --sort date --top 20 (20 most recent files)
-    #[arg(long, value_name = "N")]
-    top: Option<usize>,
-
-    /// Include private functions in function documentation (for function-markdown mode)
-    /// By default, only public functions are shown
-    #[arg(long)]
-    show_private: bool,
-
-    /// View diffs stored in the .st folder (Smart Edit history)
-    /// Shows all diffs for files modified by Smart Edit operations
-    #[arg(long)]
-    view_diffs: bool,
-
-    /// Clean up old diffs in .st folder, keeping only last N per file
-    /// Example: --cleanup-diffs 5 (keep last 5 diffs per file)
-    #[arg(long, value_name = "N")]
-    cleanup_diffs: Option<usize>,
-}
-
-/// Sort field options with intuitive names
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum SortField {
-    /// Sort alphabetically A to Z
-    #[value(name = "a-to-z")]
-    AToZ,
-    /// Sort alphabetically Z to A
-    #[value(name = "z-to-a")]
-    ZToA,
-    /// Sort by size, largest files first
-    #[value(name = "largest")]
-    Largest,
-    /// Sort by size, smallest files first
-    #[value(name = "smallest")]
-    Smallest,
-    /// Sort by modification date, newest first
-    #[value(name = "newest")]
-    Newest,
-    /// Sort by modification date, oldest first
-    #[value(name = "oldest")]
-    Oldest,
-    /// Sort by file type/extension
-    #[value(name = "type")]
-    Type,
-    /// Legacy aliases for backward compatibility
-    #[value(name = "name", alias = "alpha")]
-    Name,
-    #[value(name = "size")]
-    Size,
-    #[value(name = "date", alias = "modified")]
-    Date,
-}
-
-/// Enum for mermaid style argument
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum MermaidStyleArg {
-    /// Traditional flowchart (default)
-    Flowchart,
-    /// Mind map style
-    Mindmap,
-    /// Git graph style
-    Gitgraph,
-    /// Treemap style (shows file sizes visually)
-    Treemap,
-}
-
-/// Enum defining how color should be used in the output.
-/// Because life's too short for monochrome (unless you ask for it).
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum ColorMode {
-    /// Always use colors, no matter what. Go vibrant!
-    Always,
-    /// Never use colors. For the minimalists.
-    Never,
-    /// Use colors if the output is a terminal (tty), otherwise disable. This is the default smart behavior.
-    Auto,
-}
-
-/// Enum defining how paths should be displayed.
-/// Sometimes you want the full story, sometimes just the filename.
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum PathMode {
-    /// Show only filenames (default). Clean and simple.
-    Off,
-    /// Show paths relative to the scan root. Good for context within the project.
-    Relative,
-    /// Show full absolute paths. Leaves no doubt where things are.
-    Full,
-}
-
-/// Enum defining the available output modes.
-/// Each mode tailors the output for a specific purpose or audience.
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
-enum OutputMode {
-    /// Auto mode - smart default selection based on context
-    Auto,
-    /// Classic tree format, human-readable with metadata and emojis (unless disabled). Our beloved default.
-    Classic,
-    /// Hexadecimal format with fixed-width fields. Excellent for AI parsing or detailed analysis.
-    Hex,
-    /// JSON output. Structured data for easy programmatic use.
-    Json,
-    /// Unix ls -Alh format. Familiar directory listing with human-readable sizes and permissions.
-    Ls,
-    /// AI-optimized format. A special blend of hex tree and statistics, designed for LLMs.
-    Ai,
-    /// Directory statistics only. Get a summary without the full tree.
-    Stats,
-    /// CSV (Comma Separated Values) format. Spreadsheet-friendly.
-    Csv,
-    /// TSV (Tab Separated Values) format. Another spreadsheet favorite.
-    Tsv,
-    /// Super compact digest format. A single line with a hash and minimal stats, perfect for quick AI pre-checks.
-    Digest,
-    /// Emotional tree - Files with FEELINGS! They get happy, sad, anxious, proud!
-    Emotional,
-    /// MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization.
-    Quantum,
-    /// Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!).
-    Semantic,
-    /// Projects discovery mode. Find all your forgotten 3am coding projects with git info!
-    Projects,
-    /// Mermaid diagram format. Perfect for embedding in documentation!
-    Mermaid,
-    /// Markdown report format. Combines mermaid, tables, and charts for beautiful documentation!
-    Markdown,
-    /// Interactive summary mode (default for humans in terminal)
-    Summary,
-    /// AI-optimized summary mode (default for AI/piped output)
-    SummaryAi,
-    /// Context mode for AI conversations - provides git, memory, and structure context
-    Context,
-    /// Code relationship analysis
-    Relations,
-    /// Quantum compression with semantic understanding (Omni's nuclear option!)
-    QuantumSemantic,
-    /// Waste detection and optimization analysis (Marie Kondo mode!)
-    Waste,
-    /// Marqant - Quantum-compressed markdown format (.mq)
-    Marqant,
-    /// SSE - Server-Sent Events streaming format for real-time monitoring
-    Sse,
-    /// Function documentation in markdown format - living blueprints of your code!
-    FunctionMarkdown,
-}
-
-/// Parses a date string (YYYY-MM-DD) into a `SystemTime` object.
-/// This is our time machine! It parses a date string (like "2025-12-25")
-/// into a `SystemTime` object that Rust can understand.
-/// Perfect for finding files from the past or... well, not the future. Yet.
-/// Get the ideal depth for each output mode
-///
-/// When users don't specify depth (depth = 0), each mode gets its optimal default:
-/// - LS mode: 1 (like real ls, shows only immediate children)
-/// - Classic: 3 (good overview without overwhelming)
-/// - AI/Hex: 5 (more detail for analysis)
-/// - Stats: 10 (comprehensive statistics)
-/// - Others: 4 (balanced default)
-fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
-    match mode {
-        OutputMode::Auto => 3, // Should never reach here, but default to classic depth
-        OutputMode::Ls => 1,   // Mimics 'ls' behavior
-        OutputMode::Classic => 3, // Balanced tree view
-        OutputMode::Ai | OutputMode::Hex => 5, // More detail for analysis
-        OutputMode::Stats => 10, // Comprehensive stats
-        OutputMode::Digest => 10, // Full scan for accurate digest
-        OutputMode::Emotional => 5, // Enough to see personality development
-        OutputMode::Quantum | OutputMode::QuantumSemantic => 5, // Good compression balance
-        OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4, // Reasonable summary depth
-        OutputMode::Waste => 10,     // Deep scan to find all duplicates
-        OutputMode::Relations => 10, // Deep scan for relationships
-        OutputMode::Projects => 5,   // Good depth for finding all projects
-        _ => 4,                      // Default for other modes
-    }
-}
-
-fn parse_date(date_str: &str) -> Result<SystemTime> {
-    // Attempt to parse the date string.
-    let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-    // Assume midnight (00:00:00) for the given date.
-    let datetime = date.and_hms_opt(0, 0, 0).unwrap(); // This unwrap is safe as 00:00:00 is always valid.
-                                                       // Convert to SystemTime.
-    Ok(SystemTime::UNIX_EPOCH
-        + std::time::Duration::from_secs(datetime.and_utc().timestamp() as u64))
-}
+/// CLI definitions are centralized in [`st::cli`](src/cli.rs) module.
+/// This separation improves maintainability and keeps the main file focused
+/// on orchestration rather than argument parsing logic.
 
 /// And now, the moment you've all been waiting for: the `main` function!
 /// This is the heart of the st concert. It's where we parse the arguments,
@@ -694,6 +143,27 @@ async fn main() -> Result<()> {
         print_mcp_config();
         return Ok(());
     }
+    if cli.mcp_install {
+        match install_mcp_to_claude_desktop() {
+            Ok(msg) => println!("{}", msg),
+            Err(e) => eprintln!("❌ MCP installation failed: {}", e),
+        }
+        return Ok(());
+    }
+    if cli.mcp_uninstall {
+        match uninstall_mcp_from_claude_desktop() {
+            Ok(msg) => println!("{}", msg),
+            Err(e) => eprintln!("❌ MCP uninstallation failed: {}", e),
+        }
+        return Ok(());
+    }
+    if cli.mcp_status {
+        match check_mcp_installation_status() {
+            Ok(msg) => println!("{}", msg),
+            Err(e) => eprintln!("❌ Failed to check MCP status: {}", e),
+        }
+        return Ok(());
+    }
 
     // Handle hooks configuration
     if let Some(action) = &cli.hooks_config {
@@ -753,6 +223,76 @@ async fn main() -> Result<()> {
 
         // Launch the egui dashboard!
         return run_dashboard().await;
+    }
+
+    if cli.daemon {
+        // Run as system daemon - always-on AI context service
+        return run_daemon(cli.daemon_port).await;
+    }
+
+    // Handle daemon management commands
+    if cli.daemon_start {
+        return handle_daemon_start(cli.daemon_port).await;
+    }
+
+    if cli.daemon_stop {
+        return handle_daemon_stop(cli.daemon_port).await;
+    }
+
+    if cli.daemon_status {
+        return handle_daemon_status(cli.daemon_port).await;
+    }
+
+    if cli.daemon_context {
+        return handle_daemon_context(cli.daemon_port).await;
+    }
+
+    if cli.daemon_projects {
+        return handle_daemon_projects(cli.daemon_port).await;
+    }
+
+    if cli.daemon_credits {
+        return handle_daemon_credits(cli.daemon_port).await;
+    }
+
+    // =========================================================================
+    // DAEMON ROUTING - Route through daemon if running for centralized memory
+    // =========================================================================
+    // Check if we should route through daemon (unless --no-daemon or running as daemon)
+    if !cli.no_daemon && !cli.daemon && cli.path.is_some() {
+        let client = DaemonClient::new(cli.daemon_port);
+
+        // Quick check if daemon is running
+        if let DaemonStatus::Running(_) = client.check_status().await {
+            // Daemon is running! Route scan through it
+            let path = cli.path.as_ref().unwrap();
+
+            // Daemon is running - record this scan operation for memory tracking
+            // The actual scan still happens locally, but daemon knows about it
+            eprintln!("🌳 Daemon connected - tracking this operation");
+
+            // Record the scan operation with daemon (async, don't block)
+            let path_clone = path.clone();
+            let client_clone = client.clone();
+            tokio::spawn(async move {
+                let _ = client_clone.call_tool("query_context", serde_json::json!({
+                    "query": format!("scan:{}", path_clone)
+                })).await;
+            });
+
+            // Fall through to normal local execution
+            // The daemon tracks what directories we've looked at
+        } else if cli.auto_daemon {
+            // Auto-start daemon if requested
+            eprintln!("🌳 Starting Smart Tree Daemon...");
+            if let Err(e) = client.start_daemon().await {
+                eprintln!("⚠️  Failed to start daemon: {}", e);
+            } else {
+                // Wait a moment for daemon to be ready
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                eprintln!("✅ Daemon started! Future commands will route through it.");
+            }
+        }
     }
 
     if cli.version {
@@ -1841,6 +1381,24 @@ async fn run_dashboard() -> Result<()> {
     start_dashboard(state).await
 }
 
+/// Run the Smart Tree Daemon - System-wide AI context service
+async fn run_daemon(port: u16) -> Result<()> {
+    use st::daemon::{start_daemon, DaemonConfig};
+
+    // Start with current directory as sensible default (not entire HOME!)
+    // Additional paths can be registered via /context/watch endpoint
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    let config = DaemonConfig {
+        port,
+        watch_paths: vec![cwd], // Just current dir, not entire HOME
+        orchestrator_url: Some("wss://gpu.foken.ai/api/credits".to_string()),
+        enable_credits: true,
+    };
+
+    start_daemon(config).await
+}
+
 /// Save Claude consciousness state to .claude_consciousness.m8
 async fn handle_claude_save() -> Result<()> {
     use st::mcp::consciousness::ConsciousnessManager;
@@ -2422,6 +1980,173 @@ fn update_claude_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
     // Write back the config with pretty formatting
     let pretty_json = serde_json::to_string_pretty(&config)?;
     fs::write(config_path, pretty_json)?;
+
+    Ok(())
+}
+
+// =============================================================================
+// DAEMON MANAGEMENT HANDLERS
+// =============================================================================
+
+/// Start the Smart Tree daemon in the background
+async fn handle_daemon_start(port: u16) -> Result<()> {
+    use st::daemon_client::{print_daemon_status, print_context_summary};
+
+    let client = DaemonClient::new(port);
+
+    // Check if already running
+    let status = client.check_status().await;
+    match status {
+        DaemonStatus::Running(info) => {
+            println!("🌳 Smart Tree Daemon is already running!");
+            print_daemon_status(&DaemonStatus::Running(info));
+
+            // Show context summary
+            if let Ok(ctx) = client.get_context().await {
+                println!();
+                print_context_summary(&ctx);
+            }
+        }
+        _ => {
+            println!("🌳 Starting Smart Tree Daemon on port {}...", port);
+            match client.start_daemon().await {
+                Ok(true) => {
+                    println!("✅ Daemon started successfully!");
+                    if let Ok(info) = client.get_info().await {
+                        print_daemon_status(&DaemonStatus::Running(info));
+                    }
+                }
+                Ok(false) => {
+                    println!("⚠️  Daemon was already running.");
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to start daemon: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Stop a running Smart Tree daemon
+async fn handle_daemon_stop(port: u16) -> Result<()> {
+    let client = DaemonClient::new(port);
+
+    // Check if running
+    match client.check_status().await {
+        DaemonStatus::Running(_) => {
+            println!("🌳 Stopping Smart Tree Daemon on port {}...", port);
+            match client.stop_daemon().await {
+                Ok(true) => {
+                    println!("✅ Daemon stopped successfully!");
+                }
+                Ok(false) => {
+                    println!("⚠️  Daemon was not running.");
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to stop daemon: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+        _ => {
+            println!("⚠️  No daemon running on port {}", port);
+        }
+    }
+
+    Ok(())
+}
+
+/// Show the status of the Smart Tree daemon
+async fn handle_daemon_status(port: u16) -> Result<()> {
+    use st::daemon_client::{print_daemon_status, print_context_summary};
+
+    let client = DaemonClient::new(port);
+    let status = client.check_status().await;
+
+    print_daemon_status(&status);
+
+    // If running, also show context summary
+    if let DaemonStatus::Running(_) = status {
+        if let Ok(ctx) = client.get_context().await {
+            println!();
+            print_context_summary(&ctx);
+        }
+    }
+
+    Ok(())
+}
+
+/// Get context from the daemon (or auto-start if not running)
+async fn handle_daemon_context(port: u16) -> Result<()> {
+    use st::daemon_client::print_context_summary;
+
+    let client = DaemonClient::new(port);
+
+    // Ensure daemon is running (auto-start if needed)
+    match client.ensure_running().await {
+        Ok(_) => {
+            if let Ok(ctx) = client.get_context().await {
+                print_context_summary(&ctx);
+            } else {
+                eprintln!("❌ Failed to get context from daemon");
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to connect to daemon: {}", e);
+            return Err(e);
+        }
+    }
+
+    Ok(())
+}
+
+/// List projects from the daemon
+async fn handle_daemon_projects(port: u16) -> Result<()> {
+    use st::daemon_client::print_projects;
+
+    let client = DaemonClient::new(port);
+
+    // Ensure daemon is running (auto-start if needed)
+    match client.ensure_running().await {
+        Ok(_) => {
+            if let Ok(projects) = client.get_projects().await {
+                print_projects(&projects);
+            } else {
+                eprintln!("❌ Failed to get projects from daemon");
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to connect to daemon: {}", e);
+            return Err(e);
+        }
+    }
+
+    Ok(())
+}
+
+/// Show Foken credits from the daemon
+async fn handle_daemon_credits(port: u16) -> Result<()> {
+    use st::daemon_client::print_credits;
+
+    let client = DaemonClient::new(port);
+
+    // Ensure daemon is running (auto-start if needed)
+    match client.ensure_running().await {
+        Ok(_) => {
+            if let Ok(credits) = client.get_credits().await {
+                print_credits(&credits);
+            } else {
+                eprintln!("❌ Failed to get credits from daemon");
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to connect to daemon: {}", e);
+            return Err(e);
+        }
+    }
 
     Ok(())
 }

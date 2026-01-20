@@ -12,6 +12,7 @@
 
 // Declare the public modules that form the `st` library.
 pub mod activity_logger; // Transparent activity logging in JSONL format
+pub mod cli; // Command-line argument definitions (extracted from main.rs)
 pub mod compression_manager; // Smart global compression for all outputs
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
 pub mod context;
@@ -55,9 +56,12 @@ pub mod rename_project;
 // Smart Tips System - helpful hints without the hassle!
 pub mod tips;
 
+// Daemon and client for always-on AI context service
+pub mod daemon;
+pub mod daemon_client;
+
 // Spicy TUI - cyberpunk-style terminal interface!
 pub mod spicy_fuzzy;
-pub mod spicy_tui;
 pub mod spicy_tui_enhanced;
 
 // Emoji mapping - bringing life to file types!

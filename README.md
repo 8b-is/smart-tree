@@ -35,10 +35,12 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v5.4.0
+## 🌟 What's NEW in v5.5.0
 
 | Feature | Description | Command |
 |---------|-------------|---------|
+| **🚀 MCP Auto-Installer** | One command to add Smart Tree to Claude Desktop! | `st --mcp-install` |
+| **📋 Organized Help** | Clear help sections for easy discovery | `st --help` |
 | **🧠 Claude Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
 | **📝 Memory Anchoring** | Persistent insight storage with keywords | `st --memory-anchor` / `--memory-find` |
 | **🚀 Mega Sessions** | Long-term project tracking with breakthroughs | `st --mega-start` / `--mega-save` |
@@ -81,6 +83,10 @@ brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree
 # Option 3: Cargo (builds from source)
 cargo install --git https://github.com/8b-is/smart-tree --tag v5.5.0 st
 
+# 🚀 One-command MCP setup for Claude Desktop!
+st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config
+st --mcp-status     # Check installation status
+
 # 🎉 Experience the magic!
 st                          # Classic tree view
 st --spicy                  # 🌶️ Spicy interactive TUI mode!
@@ -93,7 +99,30 @@ st --memory-anchor insight "key concepts" "Important findings about X"
 
 Note: For guidance and copyable templates to make GitHub Copilot (or other LLMs) call Smart Tree's MCP tools correctly, see `.github/COPILOT_MCP_GUIDELINES.md` and the repository-level instructions at `.github/COPILOT_REPO_INSTRUCTIONS.md`.
 
-## 🧠 Claude Consciousness (NEW in v5.4!)
+## 🚀 MCP Auto-Installer (NEW in v5.5!)
+
+**One command to rule them all!** Automatically install Smart Tree as an MCP server in Claude Desktop:
+
+```bash
+# Install (creates backup, preserves existing config)
+st --mcp-install
+
+# Check status
+st --mcp-status
+
+# Remove if needed
+st --mcp-uninstall
+```
+
+**What it does:**
+- Finds Claude Desktop config automatically (macOS/Windows/Linux)
+- Creates a timestamped backup before any changes
+- Adds Smart Tree MCP server entry to `claude_desktop_config.json`
+- Preserves all your existing MCP servers
+
+**After installing, restart Claude Desktop and you'll have access to 30+ MCP tools!**
+
+## 🧠 Claude Consciousness
 
 Smart Tree now preserves AI session consciousness between interactions! Never lose context when switching sessions.
 

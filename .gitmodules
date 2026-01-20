@@ -1,3 +1,6 @@
 [submodule "codexist"]
 	path = codexist
 	url = https://github.com/8b-is/codexist.git
+[submodule "marqant"]
+	path = marqant
+	url = https://github.com/8b-is/marqant.git

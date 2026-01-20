@@ -2,8 +2,7 @@
 
 use super::{is_path_allowed, McpContext};
 use crate::mcp::helpers::{
-    scan_with_config, should_use_default_ignores, validate_and_convert_path,
-    ScannerConfigBuilder,
+    scan_with_config, should_use_default_ignores, validate_and_convert_path, ScannerConfigBuilder,
 };
 use crate::mcp::permissions::get_available_tools;
 use crate::{
@@ -1088,7 +1087,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "clean_old_context".to_string(),
-            description: "🧹 Clean up old context files from AI tools (NOT YET IMPLEMENTED). Will help manage storage by removing outdated chat histories and context files.".to_string(),
+            description: "🧹 Clean up old context files from AI tools (.claude, .windsurf, .cursor, etc.). Reclaim disk space by removing outdated chat histories and context files. SAFE BY DEFAULT: dry_run=true shows what would be deleted without actually deleting.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -1294,6 +1293,60 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                 }
             }),
         },
+        // ==========================================================================
+        // 📖 SMART READ TOOL - The Treehugger-powered file reader!
+        // Compresses code files using AST parsing to show structure with expandable
+        // function references. Auto-expands based on context keywords!
+        // ==========================================================================
+        ToolDefinition {
+            name: "read".to_string(),
+            description: "📖 Smart file reader with AST-aware compression! Reads files and automatically compresses code by collapsing function bodies to signatures. Use expand_functions to expand specific functions, or expand_context to auto-expand functions matching keywords. Returns collapsed code with [fn:name] references that can be expanded. Perfect for understanding large files without burning tokens!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to read"
+                    },
+                    "compress": {
+                        "type": "boolean",
+                        "description": "Enable AST-aware compression (collapses function bodies). Default: true for code files, false for others",
+                        "default": true
+                    },
+                    "expand_functions": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "List of function names to expand fully (e.g., ['main', 'handle_request'])"
+                    },
+                    "expand_context": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Keywords to auto-expand matching functions (e.g., ['error', 'auth'] expands functions with these in name/body)"
+                    },
+                    "expand_all": {
+                        "type": "boolean",
+                        "description": "Expand all functions (disables compression)",
+                        "default": false
+                    },
+                    "max_lines": {
+                        "type": "integer",
+                        "description": "Maximum lines to return (0 = unlimited)",
+                        "default": 0
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Line offset to start from (1-based)",
+                        "default": 1
+                    },
+                    "show_line_numbers": {
+                        "type": "boolean",
+                        "description": "Show line numbers",
+                        "default": true
+                    }
+                },
+                "required": ["file_path"]
+            }),
+        },
     ];
 
     Ok(json!({
@@ -1439,6 +1492,9 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
                 }]
             }))
         }
+
+        // 📖 Smart file read with treehugger compression
+        "read" => smart_read(args, ctx_clone.clone()).await,
 
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }?;
@@ -1828,7 +1884,7 @@ async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .build();
 
     // Special handling for home directory in MCP context
-    if path == std::path::PathBuf::from(&std::env::var("HOME").unwrap_or_default()) {
+    if path.as_os_str() == std::env::var("HOME").unwrap_or_default().as_str() {
         eprintln!("⚠️  Note: Scanning home directory with safety limits enabled");
         eprintln!("   Maximum 100k files, 1 minute timeout for MCP operations");
     }
@@ -1976,12 +2032,15 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: FindFilesArgs = serde_json::from_value(args)?;
     let path = validate_and_convert_path(&args.path, &ctx)?;
 
-    // Parse dates - use local timezone
+    // Parse dates - use local timezone (no panics on invalid time!)
     let parse_date = |date_str: &str| -> Result<SystemTime> {
         use chrono::{Local, NaiveDate, TimeZone};
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+        let naive_time = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| anyhow::anyhow!("Invalid time 00:00:00"))?;
         let datetime = Local
-            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+            .from_local_datetime(&naive_time)
             .single()
             .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
         Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.timestamp() as u64))
@@ -1991,8 +2050,11 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let parse_end_date = |date_str: &str| -> Result<SystemTime> {
         use chrono::{Local, NaiveDate, TimeZone};
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
+        let naive_time = date
+            .and_hms_opt(23, 59, 59)
+            .ok_or_else(|| anyhow::anyhow!("Invalid time 23:59:59"))?;
         let datetime = Local
-            .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+            .from_local_datetime(&naive_time)
             .single()
             .ok_or_else(|| anyhow::anyhow!("Invalid local datetime"))?;
         Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(datetime.timestamp() as u64))
@@ -2007,8 +2069,18 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .entry_type_filter(args.entry_type)
         .min_size(args.min_size.as_ref().map(|s| parse_size(s)).transpose()?)
         .max_size(args.max_size.as_ref().map(|s| parse_size(s)).transpose()?)
-        .newer_than(args.newer_than.as_ref().map(|d| parse_date(d)).transpose()?)
-        .older_than(args.older_than.as_ref().map(|d| parse_end_date(d)).transpose()?)
+        .newer_than(
+            args.newer_than
+                .as_ref()
+                .map(|d| parse_date(d))
+                .transpose()?,
+        )
+        .older_than(
+            args.older_than
+                .as_ref()
+                .map(|d| parse_end_date(d))
+                .transpose()?,
+        )
         .use_default_ignores(should_use_default_ignores(&path))
         .build();
 
@@ -2023,21 +2095,27 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             continue;
         }
 
+        // Use hex formatting for token efficiency! (config default: true)
+        let use_hex = ctx.config.hex_numbers;
+        let modified_secs = node.modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs();
+
         results.push(json!({
             "path": node.path.display().to_string(),
             "name": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-            "size": node.size,
-            "modified": node.modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+            "size": super::fmt_num64(node.size, use_hex),
+            "modified": super::fmt_num64(modified_secs, use_hex),
             "permissions": format!("{:o}", node.permissions),
             "is_directory": node.is_dir,
         }));
     }
 
+    // Use hex for count too!
+    let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
-                "found": results.len(),
+                "found": super::fmt_num(results.len(), use_hex),
                 "files": results
             }))?
         }]
@@ -2143,11 +2221,11 @@ async fn get_git_context(path: &str) -> Result<String> {
             .to_string();
         git_info.push(format!("Last commit: {} - {}", &commit_id[..8], message));
 
-        // Get commit time if available
+        // Get commit time if available (safe duration_since - EPOCH is always in past)
         if let Ok(time) = head_commit.time() {
             let seconds_ago = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs() as i64
                 - time.seconds;
 
@@ -2407,11 +2485,13 @@ async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         projects.push(proj);
     }
 
+    // Use hex formatting for token efficiency! 🎯
+    let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "projects": projects,
-        "count": projects.len(),
+        "count": super::fmt_num(projects.len(), use_hex),
         "search_path": path.display().to_string(),
-        "max_depth": depth
+        "max_depth": super::fmt_num(depth, use_hex)
     }))
 }
 
@@ -2437,7 +2517,7 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
     let path = validate_and_convert_path(path_str, &ctx)?;
-    
+
     let keyword = args["keyword"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing keyword"))?;
@@ -2457,12 +2537,14 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let (nodes, _) = scan_with_config(&path, config)?;
 
     // Format results showing files with matches
+    // Use hex formatting for token efficiency!
+    let use_hex = ctx.config.hex_numbers;
     let mut results = Vec::new();
     for node in &nodes {
         if let Some(matches) = &node.search_matches {
             let mut file_result = json!({
                 "path": node.path.display().to_string(),
-                "matches": matches.total_count,
+                "matches": super::fmt_num(matches.total_count, use_hex),
                 "truncated": matches.truncated
             });
 
@@ -2470,10 +2552,11 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             if let Some(ref lines) = matches.line_content {
                 let mut line_results = Vec::new();
                 for (line_num, content, column) in lines.iter().take(max_matches_per_file) {
+                    // Hex line numbers and columns!
                     let line_obj = json!({
-                        "line_number": line_num,
+                        "line": super::fmt_num(*line_num, use_hex),
                         "content": content,
-                        "column": column
+                        "col": super::fmt_num(*column, use_hex)
                     });
 
                     // Add context lines if requested (future enhancement)
@@ -2496,9 +2579,9 @@ async fn search_in_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
                 "keyword": keyword,
-                "files_with_matches": results.len(),
+                "files_with_matches": super::fmt_num(results.len(), use_hex),
                 "include_content": include_content,
-                "max_matches_per_file": max_matches_per_file,
+                "max_per_file": super::fmt_num(max_matches_per_file, use_hex),
                 "results": results
             }))?
         }]
@@ -2580,7 +2663,7 @@ async fn compare_directories(args: Value, ctx: Arc<McpContext>) -> Result<Value>
     let path2_str = args["path2"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path2"))?;
-    
+
     let path1 = validate_and_convert_path(path1_str, &ctx)?;
     let path2 = validate_and_convert_path(path2_str, &ctx)?;
 
@@ -2685,13 +2768,14 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         }
     }
 
-    // Find potential duplicates
+    // Find potential duplicates with hex formatting 🎯
+    let use_hex = ctx.config.hex_numbers;
     let mut duplicates = Vec::new();
     for (size, files) in size_groups.iter() {
         if files.len() > 1 && *size > 0 {
             duplicates.push(json!({
-                "size": size,
-                "count": files.len(),
+                "sz": super::fmt_num64(*size, use_hex),
+                "n": super::fmt_num(files.len(), use_hex),  // Shorter key for token efficiency
                 "files": files.iter().map(|f| f.path.display().to_string()).collect::<Vec<_>>()
             }));
         }
@@ -2701,8 +2785,8 @@ async fn find_duplicates(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
-                "potential_duplicate_groups": duplicates.len(),
-                "duplicates": duplicates
+                "groups": super::fmt_num(duplicates.len(), use_hex),
+                "dups": duplicates
             }))?
         }]
     }))
@@ -2799,25 +2883,40 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
                 .build();
             let (_, substats) = scan_with_config(&node.path, subconfig)?;
 
-            dir_sizes.push(json!({
-                "directory": node.path.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-                "path": node.path.display().to_string(),
-                "size": substats.total_size,
-                "size_human": format!("{:.2} MB", substats.total_size as f64 / 1_048_576.0),
-                "file_count": substats.total_files
-            }));
+            // Store raw data for sorting, then convert to hex later
+            dir_sizes.push((
+                node.path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+                node.path.display().to_string(),
+                substats.total_size,
+                substats.total_files,
+            ));
         }
     }
 
-    // Sort by size
-    dir_sizes.sort_by_key(|d| -(d["size"].as_u64().unwrap_or(0) as i64));
+    // Sort by size (raw u64) descending
+    dir_sizes.sort_by_key(|(_, _, size, _)| std::cmp::Reverse(*size));
+
+    // Convert to hex-formatted JSON 🎯
+    let use_hex = ctx.config.hex_numbers;
+    let formatted_dirs: Vec<Value> = dir_sizes
+        .into_iter()
+        .map(|(name, path, size, files)| {
+            json!({
+                "dir": name,
+                "path": path,
+                "size": super::fmt_num64(size, use_hex),
+                "sz": super::fmt_size(size, use_hex),  // Human-readable with hex
+                "files": super::fmt_num64(files, use_hex)
+            })
+        })
+        .collect();
 
     Ok(json!({
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
                 "directory": path.display().to_string(),
-                "subdirectories": dir_sizes
+                "subdirs": formatted_dirs
             }))?
         }]
     }))
@@ -2858,12 +2957,14 @@ async fn find_empty_directories(args: Value, ctx: Arc<McpContext>) -> Result<Val
         }
     }
 
+    // Hex format the count for token efficiency! 🎯
+    let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
-                "empty_directory_count": empty_dirs.len(),
-                "empty_directories": empty_dirs
+                "count": super::fmt_num(empty_dirs.len(), use_hex),
+                "dirs": empty_dirs
             }))?
         }]
     }))
@@ -3441,11 +3542,11 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
     // Create tracker
     let tracker = FileHistoryTracker::new()?;
 
-    // Generate session ID if not provided
+    // Generate session ID if not provided (safe - EPOCH always in past)
     let session_id = args.session_id.unwrap_or_else(|| {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         format!("mcp_{}", now)
     });
@@ -3490,17 +3591,15 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
             _ => Err(anyhow::anyhow!("Unknown operation: {}", op_str)),
         }
     } else {
-        // Auto-detect operation from content
-        if args.new_content.is_none() {
-            return Err(anyhow::anyhow!(
-                "Either operation or new_content must be provided"
-            ));
-        }
+        // Auto-detect operation from content - require new_content
+        let new_content = args.new_content
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Either operation or new_content must be provided"))?;
 
         let op = tracker.track_write(
             &path,
             args.old_content.as_deref(),
-            args.new_content.as_deref().unwrap(),
+            new_content,
             &args.agent,
             &session_id,
         )?;
@@ -3618,5 +3717,577 @@ async fn get_project_history_summary(args: Value, ctx: Arc<McpContext>) -> Resul
             "text": output
         }],
         "metadata": summary
+    }))
+}
+
+// =============================================================================
+// 📖 SMART READ - Treehugger-powered file reading with AST compression!
+// Collapses function bodies to signatures, auto-expands based on context
+// =============================================================================
+
+#[derive(Debug, Deserialize)]
+struct SmartReadArgs {
+    file_path: String,
+    #[serde(default = "default_true")]
+    compress: bool,
+    #[serde(default)]
+    expand_functions: Vec<String>,
+    #[serde(default)]
+    expand_context: Vec<String>,
+    #[serde(default)]
+    expand_all: bool,
+    #[serde(default)]
+    max_lines: usize,
+    #[serde(default = "default_one")]
+    offset: usize,
+    #[serde(default = "default_true")]
+    show_line_numbers: bool,
+    /// Use hex line numbers. If not specified, uses MCP config default (true for AI mode)
+    #[serde(default)]
+    hex_line_numbers: Option<bool>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Format a line number - uses centralized mcp::fmt_line
+/// Hex is more compact for large files!
+/// Line 1000 → "3E8" (3 chars vs 4)
+/// Line 65535 → "FFFF" (4 chars vs 5)
+fn format_line_number(line: usize, hex: bool) -> String {
+    super::fmt_line(line, hex)
+}
+
+fn default_one() -> usize {
+    1
+}
+
+/// Represents a collapsed function with its signature and body
+#[derive(Debug, Clone)]
+struct CollapsedFunction {
+    name: String,
+    signature: String,
+    body: String,
+    start_line: usize,
+    end_line: usize,
+    importance: f32,
+}
+
+/// Detects programming language from file extension
+fn detect_language(path: &Path) -> Option<&'static str> {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .and_then(|ext| match ext.to_lowercase().as_str() {
+            "rs" => Some("rust"),
+            "py" => Some("python"),
+            "js" | "jsx" | "mjs" => Some("javascript"),
+            "ts" | "tsx" => Some("typescript"),
+            "go" => Some("go"),
+            "java" => Some("java"),
+            "c" | "h" => Some("c"),
+            "cpp" | "cc" | "cxx" | "hpp" => Some("cpp"),
+            "rb" => Some("ruby"),
+            "php" => Some("php"),
+            "swift" => Some("swift"),
+            "kt" | "kts" => Some("kotlin"),
+            "cs" => Some("csharp"),
+            "sh" | "bash" | "zsh" => Some("shell"),
+            _ => None,
+        })
+}
+
+/// Check if a language supports function collapsing
+fn supports_collapsing(lang: &str) -> bool {
+    matches!(
+        lang,
+        "rust" | "python" | "javascript" | "typescript" | "go" | "java" | "c" | "cpp"
+    )
+}
+
+/// Extract functions from source code with improved regex patterns
+fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
+    let mut functions = Vec::new();
+    let lines: Vec<&str> = source.lines().collect();
+
+    match language {
+        "rust" => {
+            // Rust function pattern - handles pub, async, const, unsafe, extern
+            // Using r#""# for raw strings with quotes inside
+            let fn_pattern = Regex::new(
+                r#"(?m)^[\s]*((?:pub(?:\s*\([^)]*\))?\s+)?(?:async\s+)?(?:const\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]+"\s+)?fn\s+(\w+))"#
+            ).expect("Static regex pattern should compile");
+
+            for cap in fn_pattern.captures_iter(source) {
+                if let (Some(full_sig), Some(name)) = (cap.get(1), cap.get(2)) {
+                    let start_byte = full_sig.start();
+                    let start_line = source[..start_byte].matches('\n').count();
+
+                    // Find the opening brace and then match the closing one
+                    if let Some(body_start) = source[start_byte..].find('{') {
+                        let body_start_abs = start_byte + body_start;
+                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..]) {
+                            let end_byte_abs = body_start_abs + end_byte;
+                            let end_line = source[..end_byte_abs].matches('\n').count();
+
+                            // Extract signature (up to opening brace)
+                            let sig_end = source[start_byte..body_start_abs]
+                                .rfind(|c: char| c != ' ' && c != '\t' && c != '\n')
+                                .map(|i| start_byte + i + 1)
+                                .unwrap_or(body_start_abs);
+                            let signature = source[start_byte..sig_end].trim().to_string();
+
+                            // Extract body
+                            let body = source[body_start_abs..=end_byte_abs].to_string();
+
+                            // Calculate importance
+                            let importance = if name.as_str() == "main" {
+                                1.0
+                            } else if full_sig.as_str().contains("pub") {
+                                0.9
+                            } else if name.as_str().starts_with("test") {
+                                0.3
+                            } else {
+                                0.6
+                            };
+
+                            functions.push(CollapsedFunction {
+                                name: name.as_str().to_string(),
+                                signature,
+                                body,
+                                start_line: start_line + 1,
+                                end_line: end_line + 1,
+                                importance,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        "python" => {
+            // Python function pattern - handles async, decorators captured separately
+            let fn_pattern = Regex::new(r"(?m)^(\s*)(async\s+)?def\s+(\w+)\s*\([^)]*\)")
+                .expect("Static Python regex should compile");
+
+            for cap in fn_pattern.captures_iter(source) {
+                if let (Some(indent_match), Some(name)) = (cap.get(1), cap.get(3)) {
+                    let start_byte = cap.get(0).unwrap().start();
+                    let start_line = source[..start_byte].matches('\n').count();
+                    let indent = indent_match.as_str();
+                    let indent_len = indent.len();
+
+                    // Find end of function by indentation
+                    let mut end_line = start_line;
+                    let mut in_docstring = false;
+                    let mut docstring_delim = "";
+
+                    for (i, line) in lines.iter().enumerate().skip(start_line + 1) {
+                        let trimmed = line.trim();
+
+                        // Handle docstrings
+                        if !in_docstring {
+                            if trimmed.starts_with("\"\"\"") || trimmed.starts_with("'''") {
+                                in_docstring = true;
+                                docstring_delim = if trimmed.starts_with("\"\"\"") {
+                                    "\"\"\""
+                                } else {
+                                    "'''"
+                                };
+                                if trimmed.len() > 3 && trimmed[3..].contains(docstring_delim) {
+                                    in_docstring = false;
+                                }
+                                continue;
+                            }
+                        } else if trimmed.contains(docstring_delim) {
+                            in_docstring = false;
+                            continue;
+                        }
+
+                        if in_docstring {
+                            continue;
+                        }
+
+                        // Empty lines don't end the function
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+
+                        // Check indentation
+                        let line_indent = line.len() - line.trim_start().len();
+                        if line_indent <= indent_len && !trimmed.is_empty() {
+                            end_line = i.saturating_sub(1);
+                            break;
+                        }
+                        end_line = i;
+                    }
+
+                    // Extract signature
+                    let sig_end = source[start_byte..]
+                        .find(':')
+                        .map(|i| start_byte + i + 1)
+                        .unwrap_or(start_byte + cap.get(0).unwrap().len());
+                    let signature = source[start_byte..sig_end].trim().to_string();
+
+                    // Extract body
+                    let body_lines: Vec<&str> = lines[start_line..=end_line].to_vec();
+                    let body = body_lines.join("\n");
+
+                    // Calculate importance
+                    let importance = if name.as_str() == "main" || name.as_str() == "__main__" {
+                        1.0
+                    } else if name.as_str() == "__init__" {
+                        0.9
+                    } else if name.as_str().starts_with("_") {
+                        0.4
+                    } else if name.as_str().starts_with("test") {
+                        0.3
+                    } else {
+                        0.6
+                    };
+
+                    functions.push(CollapsedFunction {
+                        name: name.as_str().to_string(),
+                        signature,
+                        body,
+                        start_line: start_line + 1,
+                        end_line: end_line + 1,
+                        importance,
+                    });
+                }
+            }
+        }
+        "javascript" | "typescript" => {
+            // JS/TS function patterns - handles function declarations, arrow functions, methods
+            let fn_pattern = Regex::new(
+                r"(?m)^[\s]*((?:export\s+)?(?:async\s+)?function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>)"
+            ).expect("Static JS/TS regex should compile");
+
+            for cap in fn_pattern.captures_iter(source) {
+                let name = cap.get(2).or(cap.get(3));
+                if let Some(name_match) = name {
+                    let start_byte = cap.get(0).unwrap().start();
+                    let start_line = source[..start_byte].matches('\n').count();
+
+                    // Find opening brace
+                    if let Some(body_start) = source[start_byte..].find('{') {
+                        let body_start_abs = start_byte + body_start;
+                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..]) {
+                            let end_byte_abs = body_start_abs + end_byte;
+                            let end_line = source[..end_byte_abs].matches('\n').count();
+
+                            let signature = source[start_byte..body_start_abs].trim().to_string();
+                            let body = source[body_start_abs..=end_byte_abs].to_string();
+
+                            let importance = if cap.get(0).unwrap().as_str().contains("export") {
+                                0.9
+                            } else {
+                                0.6
+                            };
+
+                            functions.push(CollapsedFunction {
+                                name: name_match.as_str().to_string(),
+                                signature,
+                                body,
+                                start_line: start_line + 1,
+                                end_line: end_line + 1,
+                                importance,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        _ => {
+            // Generic C-style function pattern for other languages
+            let fn_pattern = Regex::new(
+                r"(?m)^[\s]*((?:public|private|protected|static|async|)\s*)(\w+)\s+(\w+)\s*\([^)]*\)\s*\{"
+            ).expect("Static C-style regex should compile");
+
+            for cap in fn_pattern.captures_iter(source) {
+                if let Some(name) = cap.get(3) {
+                    let start_byte = cap.get(0).unwrap().start();
+                    let start_line = source[..start_byte].matches('\n').count();
+
+                    if let Some(body_start) = source[start_byte..].find('{') {
+                        let body_start_abs = start_byte + body_start;
+                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..]) {
+                            let end_byte_abs = body_start_abs + end_byte;
+                            let end_line = source[..end_byte_abs].matches('\n').count();
+
+                            let signature = source[start_byte..body_start_abs].trim().to_string();
+                            let body = source[body_start_abs..=end_byte_abs].to_string();
+
+                            functions.push(CollapsedFunction {
+                                name: name.as_str().to_string(),
+                                signature,
+                                body,
+                                start_line: start_line + 1,
+                                end_line: end_line + 1,
+                                importance: 0.6,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by line number
+    functions.sort_by_key(|f| f.start_line);
+    functions
+}
+
+/// Find matching closing brace, handling nested braces
+fn find_matching_brace(s: &str) -> Option<(usize, usize)> {
+    let mut depth = 0;
+    let mut in_string = false;
+    let mut string_char = ' ';
+    let mut escaped = false;
+
+    for (i, c) in s.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if c == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if in_string {
+            if c == string_char {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match c {
+            '"' | '\'' | '`' => {
+                in_string = true;
+                string_char = c;
+            }
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((i, depth));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Check if a function should be expanded based on context keywords
+fn should_expand_for_context(func: &CollapsedFunction, context_keywords: &[String]) -> bool {
+    if context_keywords.is_empty() {
+        return false;
+    }
+
+    let name_lower = func.name.to_lowercase();
+    let body_lower = func.body.to_lowercase();
+
+    for keyword in context_keywords {
+        let kw_lower = keyword.to_lowercase();
+        if name_lower.contains(&kw_lower) || body_lower.contains(&kw_lower) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Main smart read handler
+async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let args: SmartReadArgs = serde_json::from_value(args)?;
+    let path = PathBuf::from(&args.file_path);
+
+    // Security check
+    if !is_path_allowed(&path, &ctx.config) {
+        return Err(anyhow::anyhow!("Path not allowed: {}", path.display()));
+    }
+
+    // Check if file exists
+    if !path.exists() {
+        return Err(anyhow::anyhow!("File not found: {}", path.display()));
+    }
+
+    if !path.is_file() {
+        return Err(anyhow::anyhow!("Path is not a file: {}", path.display()));
+    }
+
+    // Read file content
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| anyhow::anyhow!("Failed to read file: {}", e))?;
+
+    // Detect language for smart compression
+    let language = detect_language(&path);
+
+    // Determine if we should compress - requires a known language that supports collapsing
+    let compressible_lang = language.filter(|l| supports_collapsing(l));
+    let should_compress = args.compress && !args.expand_all && compressible_lang.is_some();
+
+    let (output, metadata) = if should_compress {
+        // Safe: compressible_lang.is_some() guarantees we have a language
+        let lang = compressible_lang.expect("Checked above");
+        let functions = extract_functions(&content, lang);
+
+        // Determine which functions to expand
+        let expand_set: std::collections::HashSet<&str> = args
+            .expand_functions
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+
+        let mut output = String::new();
+        let lines: Vec<&str> = content.lines().collect();
+        let mut current_line = 0;
+        let mut collapsed_count = 0;
+        let mut expanded_count = 0;
+
+        // Track function references for the summary
+        let mut function_refs: Vec<serde_json::Value> = Vec::new();
+
+        // Use hex line numbers - defaults to MCP config (true for AI mode!)
+        // User can override with explicit hex_line_numbers: false
+        let use_hex = args.hex_line_numbers.unwrap_or(ctx.config.hex_numbers);
+
+        for func in &functions {
+            // Output lines before this function
+            while current_line < func.start_line.saturating_sub(1) {
+                if args.show_line_numbers {
+                    output.push_str(&format!("{}│ {}\n", format_line_number(current_line + 1, use_hex), lines[current_line]));
+                } else {
+                    output.push_str(lines[current_line]);
+                    output.push('\n');
+                }
+                current_line += 1;
+            }
+
+            // Check if this function should be expanded
+            let should_expand = args.expand_all
+                || expand_set.contains(func.name.as_str())
+                || should_expand_for_context(func, &args.expand_context);
+
+            if should_expand {
+                // Output full function
+                for i in func.start_line - 1..func.end_line {
+                    if i < lines.len() {
+                        if args.show_line_numbers {
+                            output.push_str(&format!("{}│ {}\n", format_line_number(i + 1, use_hex), lines[i]));
+                        } else {
+                            output.push_str(lines[i]);
+                            output.push('\n');
+                        }
+                    }
+                }
+                expanded_count += 1;
+            } else {
+                // Output collapsed function
+                let body_lines = func.body.matches('\n').count() + 1;
+
+                if args.show_line_numbers {
+                    output.push_str(&format!(
+                        "{}│ {} {{ ... }} // [fn:{}] {} lines collapsed\n",
+                        format_line_number(func.start_line, use_hex), func.signature, func.name, body_lines
+                    ));
+                } else {
+                    output.push_str(&format!(
+                        "{} {{ ... }} // [fn:{}] {} lines collapsed\n",
+                        func.signature, func.name, body_lines
+                    ));
+                }
+
+                // Use hex for line references too if enabled
+                let lines_ref = if use_hex {
+                    format!("{:X}-{:X}", func.start_line, func.end_line)
+                } else {
+                    format!("{}-{}", func.start_line, func.end_line)
+                };
+
+                function_refs.push(json!({
+                    "name": func.name,
+                    "ref": format!("[fn:{}]", func.name),
+                    "lines": lines_ref,
+                    "importance": func.importance
+                }));
+
+                collapsed_count += 1;
+            }
+
+            current_line = func.end_line;
+        }
+
+        // Output remaining lines after last function
+        while current_line < lines.len() {
+            if args.show_line_numbers {
+                output.push_str(&format!("{}│ {}\n", format_line_number(current_line + 1, use_hex), lines[current_line]));
+            } else {
+                output.push_str(lines[current_line]);
+                output.push('\n');
+            }
+            current_line += 1;
+        }
+
+        let metadata = json!({
+            "file_path": path.to_string_lossy(),
+            "language": language,
+            "compression_enabled": true,
+            "hex_line_numbers": use_hex,
+            "total_lines": lines.len(),
+            "functions_found": functions.len(),
+            "functions_collapsed": collapsed_count,
+            "functions_expanded": expanded_count,
+            "collapsed_refs": function_refs,
+            "expand_hint": "Use expand_functions: ['fn_name'] or expand_context: ['keyword'] to expand specific functions"
+        });
+
+        (output, metadata)
+    } else {
+        // No compression - output raw content
+        let lines: Vec<&str> = content.lines().collect();
+        let total_lines = lines.len();
+        // Use hex line numbers - defaults to MCP config (true for AI mode!)
+        let use_hex = args.hex_line_numbers.unwrap_or(ctx.config.hex_numbers);
+
+        let start_idx = args.offset.saturating_sub(1);
+        let end_idx = if args.max_lines > 0 {
+            (start_idx + args.max_lines).min(lines.len())
+        } else {
+            lines.len()
+        };
+
+        let mut output = String::new();
+        for (i, line) in lines[start_idx..end_idx].iter().enumerate() {
+            let line_num = start_idx + i + 1;
+            if args.show_line_numbers {
+                output.push_str(&format!("{}│ {}\n", format_line_number(line_num, use_hex), line));
+            } else {
+                output.push_str(line);
+                output.push('\n');
+            }
+        }
+
+        let metadata = json!({
+            "file_path": path.to_string_lossy(),
+            "language": language,
+            "compression_enabled": false,
+            "hex_line_numbers": use_hex,
+            "total_lines": total_lines,
+            "lines_shown": end_idx - start_idx,
+            "offset": args.offset,
+            "has_more": end_idx < total_lines
+        });
+
+        (output, metadata)
+    };
+
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": output
+        }],
+        "metadata": metadata
     }))
 }

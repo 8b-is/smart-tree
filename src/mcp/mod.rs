@@ -11,7 +11,66 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-mod ai_psychology;
+// =============================================================================
+// HEX NUMBER FORMATTING - Token-efficient numeric output for AI contexts
+// =============================================================================
+
+/// Format a number as hex or decimal based on config
+/// In MCP mode, hex is default for token efficiency!
+///
+/// Examples:
+/// - 1000 → "3E8" (hex) or "1000" (decimal)
+/// - 65535 → "FFFF" (hex) or "65535" (decimal)
+/// - 1048576 → "100000" (hex) or "1048576" (decimal) - 1 char saved!
+#[inline]
+pub fn fmt_num(n: usize, hex: bool) -> String {
+    if hex {
+        format!("{:X}", n)
+    } else {
+        n.to_string()
+    }
+}
+
+/// Format a u64 as hex or decimal
+#[inline]
+pub fn fmt_num64(n: u64, hex: bool) -> String {
+    if hex {
+        format!("{:X}", n)
+    } else {
+        n.to_string()
+    }
+}
+
+/// Format a file size with units (always human-readable but hex for raw bytes)
+/// Examples with hex=true:
+/// - 1048576 → "1M" (always uses SI for readability)
+/// - 1234567 → "1.2M"
+pub fn fmt_size(bytes: u64, hex: bool) -> String {
+    if bytes < 1024 {
+        if hex {
+            format!("{}B", fmt_num64(bytes, true))
+        } else {
+            format!("{}B", bytes)
+        }
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1}K", bytes as f64 / 1024.0)
+    } else if bytes < 1024 * 1024 * 1024 {
+        format!("{:.1}M", bytes as f64 / (1024.0 * 1024.0))
+    } else {
+        format!("{:.1}G", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
+/// Format a line number for display (right-aligned, 4 chars)
+#[inline]
+pub fn fmt_line(n: usize, hex: bool) -> String {
+    if hex {
+        format!("{:>4X}", n)
+    } else {
+        format!("{:>4}", n)
+    }
+}
+
 mod assistant;
 mod cache;
 pub mod consciousness;
@@ -133,6 +192,9 @@ pub struct McpConfig {
     pub blocked_paths: Vec<PathBuf>,
     /// Use consolidated tools (reduces tool count from 50+ to ~15)
     pub use_consolidated_tools: bool,
+    /// Use hexadecimal for all numbers (saves tokens!)
+    /// Line 1000 → 3E8, size 1048576 → 100000
+    pub hex_numbers: bool,
 }
 
 impl Default for McpConfig {
@@ -148,6 +210,7 @@ impl Default for McpConfig {
                 PathBuf::from("/proc"),
             ],
             use_consolidated_tools: true, // Default to consolidated for Cursor compatibility
+            hex_numbers: true,            // Default to hex for token efficiency!
         }
     }
 }
@@ -462,9 +525,27 @@ async fn handle_initialize(params: Option<Value>, _ctx: Arc<McpContext>) -> Resu
     }))
 }
 
-async fn handle_cancelled(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
-    // TODO: Implement cancellation logic
-    Ok(json!({}))
+/// Handle MCP notification that a request was cancelled
+///
+/// When an AI assistant cancels a long-running operation, we acknowledge it gracefully.
+/// This helps with cleanup and prevents orphaned operations.
+async fn handle_cancelled(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+    // Extract the request ID that was cancelled (if provided)
+    let request_id = params
+        .as_ref()
+        .and_then(|p| p.get("requestId"))
+        .and_then(|id| id.as_str())
+        .unwrap_or("unknown");
+
+    // Log to stderr for debugging (visible in RUST_LOG=debug mode)
+    eprintln!("[MCP] Request cancelled: {}", request_id);
+
+    // Acknowledge the cancellation - MCP protocol expects a response
+    Ok(json!({
+        "acknowledged": true,
+        "request_id": request_id,
+        "message": "Request cancellation acknowledged"
+    }))
 }
 
 /// Handle consolidated tools list request
