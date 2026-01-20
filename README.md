@@ -306,9 +306,9 @@ Invoke-WebRequest -Uri https://raw.githubusercontent.com/8b-is/smart-tree/main/s
 
 **Package Managers:**
 ```powershell
-# Scoop (community bucket)
-scoop bucket add extras
-scoop install st
+# Scoop (coming soon)
+# scoop bucket add extras
+# scoop install st
 
 # Chocolatey (coming soon)
 # choco install smart-tree
