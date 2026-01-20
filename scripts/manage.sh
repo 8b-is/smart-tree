@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # 🌳 Smart Tree Management Script - Because every tree needs a gardener! 🌳
+#
+# Note: This script is for Unix-like systems (Linux, macOS, WSL).
+# Windows users: Use PowerShell to run cargo commands directly, or use WSL.
+# For Windows development:
+#   - Build: cargo build --release
+#   - Test: cargo test
+#   - Run: cargo run -- [args]
+#   - Install: Copy target\release\st.exe to a directory in PATH
 
 set -euo pipefail
 
