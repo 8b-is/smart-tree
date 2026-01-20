@@ -6,6 +6,7 @@
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Spicy Mode](https://img.shields.io/badge/TUI-🌶️_Spicy-red)](docs/spicy-tui.md)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
+[![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
 > **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Claude Consciousness** preservation, **Spicy TUI mode** for cyberpunk-cool directory browsing, **Memory Anchoring**, **Mega Sessions**, and **MCP Hook Management**! Built with Rust for maximum performance and featuring revolutionary compression algorithms.
 
@@ -56,14 +57,28 @@ quick_tree .                                         // Understand structure
 
 ## ⚡ Quick Start
 
+**Windows (PowerShell):**
+```powershell
+# One-line installer
+iwr -useb https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.ps1 | iex
+
+# 🎉 Experience the magic!
+st                          # Classic tree view
+st --spicy                  # 🌶️ Spicy interactive TUI mode!
+st --mode ai --compress     # AI-optimized (80% smaller)
+st --mode quantum           # Quantum compression (100x smaller!)
+st --search "TODO"          # Lightning-fast content search
+st --claude-save            # Save AI session consciousness
+st --memory-anchor insight "key concepts" "Important findings about X"
+```
+
+**macOS/Linux:**
 ```bash
-# Install Smart Tree (choose your method)
-
-# Option 1: Homebrew (builds from source)
-brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
-
-# Option 2: Install script (downloads binary)
+# Option 1: Install script (downloads binary - fastest)
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+
+# Option 2: Homebrew (builds from source)
+brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 
 # Option 3: Cargo (builds from source)
 cargo install --git https://github.com/8b-is/smart-tree --tag v5.5.0 st
@@ -297,10 +312,64 @@ hooks {operation:'test', hook_type:'UserPromptSubmit', input:'analyze /src'}
 
 ## 📦 Installation
 
+### Windows 🪟
+
+**PowerShell (Recommended):**
+```powershell
+# One-line installer (run as user, not admin)
+iwr -useb https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.ps1 | iex
+
+# Or download and run manually
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.ps1 -OutFile install.ps1
+.\install.ps1
+```
+
+**Manual Installation:**
+1. Download the latest Windows release (`.zip`) from [releases](https://github.com/8b-is/smart-tree/releases/latest)
+2. Extract `st.exe` to a location in your PATH (e.g., `C:\Program Files\st\` or `%LOCALAPPDATA%\Programs\st\`)
+3. Add the directory to your PATH:
+   - Search for "Environment Variables" in Windows
+   - Edit "Path" under User Variables
+   - Add the directory containing `st.exe`
+4. Open a new terminal and verify: `st --version`
+
+**Package Managers:**
+```powershell
+# Scoop (coming soon)
+# scoop bucket add extras
+# scoop install st
+
+# Chocolatey (coming soon)
+# choco install smart-tree
+
+# WinGet (coming soon)
+# winget install 8b-is.SmartTree
+```
+
+**Windows Terminal Integration:**
+Smart Tree works great with Windows Terminal! For best experience:
+- Enable Unicode/UTF-8 support in Windows Terminal settings
+- Use a font with emoji support (Cascadia Code, FiraCode, JetBrains Mono)
+- Colors and emojis display beautifully in modern Windows terminals
+
+**WSL (Windows Subsystem for Linux):**
+If you're using WSL, use the Linux installation method inside your WSL distribution.
+
 ### macOS/Linux (Homebrew - builds from source)
 ```bash
 # Direct formula installation (no tap needed!)
 brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
+```
+
+### Linux/macOS/WSL (Install Script)
+```bash
+# One-line installer
+curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+
+# Or download and run manually
+curl -O https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh
+chmod +x install.sh
+./install.sh
 ```
 
 ### From Source (All Platforms)
@@ -308,13 +377,26 @@ brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree
 git clone https://github.com/8b-is/smart-tree
 cd smart-tree
 cargo build --release
+
+# Linux/macOS
 sudo cp target/release/st /usr/local/bin/
 sudo cp target/release/mq /usr/local/bin/
 sudo cp target/release/m8 /usr/local/bin/
+
+# Windows (PowerShell as Admin)
+Copy-Item target\release\st.exe C:\Program Files\st\
+# Or add target\release to your PATH
 ```
 
 ### Binary Releases
-Download pre-built binaries from [releases](https://github.com/8b-is/smart-tree/releases)
+Download pre-built binaries for all platforms from [releases](https://github.com/8b-is/smart-tree/releases)
+
+**Available platforms:**
+- Windows (x86_64-pc-windows-msvc) - `.zip`
+- macOS Intel (x86_64-apple-darwin) - `.tar.gz`
+- macOS Apple Silicon (aarch64-apple-darwin) - `.tar.gz`
+- Linux x86_64 (x86_64-unknown-linux-gnu) - `.tar.gz`
+- Linux ARM64 (aarch64-unknown-linux-gnu) - `.tar.gz`
 
 ## 🎮 Usage Examples
 
@@ -469,6 +551,124 @@ Wave-function based compression for maximum efficiency:
 - Preserves semantic meaning
 - Self-describing format
 - Progressive decompression
+
+## 🪟 Windows-Specific Notes
+
+### Path Handling
+Smart Tree automatically handles Windows path separators (`\` vs `/`):
+- Uses Rust's `PathBuf` for cross-platform compatibility
+- Automatically detects and handles UNC paths (`\\server\share`)
+- Supports both forward slashes and backslashes in arguments
+
+### File System Features
+- **NTFS Support**: Full support for NTFS file systems
+- **Symlinks**: Windows symlinks require admin privileges to create, but Smart Tree can read them without admin rights
+- **Case Sensitivity**: Respects NTFS case-insensitivity settings
+- **File Locking**: Handles Windows file locking gracefully
+
+### PowerShell Integration
+Smart Tree works seamlessly in PowerShell:
+
+```powershell
+# Basic usage
+st .
+
+# Pipe to other PowerShell commands
+st --mode json . | ConvertFrom-Json
+
+# Set aliases in your PowerShell profile
+Set-Alias tree st
+
+# Environment variables
+$env:ST_COLOR = "always"
+$env:ST_DEFAULT_DEPTH = 5
+```
+
+**Add to your PowerShell Profile** (`$PROFILE`):
+```powershell
+# Smart Tree aliases and functions
+Set-Alias tree st
+function st-ai { st --mode ai --compress $args }
+function st-search { param($pattern) st --search $pattern . }
+```
+
+### Windows Terminal Tips
+For the best experience in Windows Terminal:
+
+1. **Enable Unicode/UTF-8**:
+   - Open Settings (Ctrl+,)
+   - Defaults → Additional settings → Use new text renderer
+   - Enable "Use Unicode UTF-8 for worldwide language support"
+
+2. **Install a Nerd Font**:
+   ```powershell
+   # Using Scoop
+   scoop bucket add nerd-fonts
+   scoop install CascadiaCode-NF
+   
+   # Or download manually from:
+   # https://www.nerdfonts.com/
+   ```
+
+3. **Enable Color Support**:
+   Smart Tree auto-detects Windows Terminal and enables full color support
+
+### Known Windows Limitations
+- **Performance**: Slightly slower on Windows due to filesystem differences (still 10x faster than alternatives!)
+- **Emoji Support**: Requires Windows 10+ and a compatible font
+- **Admin Rights**: Not required for normal operations
+- **Long Paths**: Automatically handles Windows long path limitations (> 260 characters)
+
+### Troubleshooting
+
+**Problem: "st is not recognized as a command"**
+- Solution: Restart your terminal after installation to refresh PATH
+- Alternative: Refresh PATH in current session (won't create duplicates):
+  ```powershell
+  # Refresh environment variables in current session
+  $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + 
+              [System.Environment]::GetEnvironmentVariable("Path", "User")
+  ```
+- Or if you have Chocolatey installed: `refreshenv`
+
+**Problem: Colors not showing in cmd.exe**
+- Solution: Use Windows Terminal, PowerShell 7+, or enable ANSI escape codes:
+  ```cmd
+  reg add HKCU\Console /v VirtualTerminalLevel /t REG_DWORD /d 1
+  ```
+
+**Problem: Emojis show as boxes**
+- Solution: Install a font with emoji support (Cascadia Code, Segoe UI Emoji)
+
+**Problem: Permission denied errors**
+- Solution: Smart Tree doesn't require admin rights. If you see permission errors, you're accessing protected system files. Use `--skip-permission-errors` flag
+
+**Problem: Building from source fails**
+- Solution: Install Visual Studio Build Tools:
+  ```powershell
+  # Install via winget
+  winget install Microsoft.VisualStudio.2022.BuildTools
+  
+  # Or download from:
+  # https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
+  ```
+
+**Problem: Slow performance**
+- Solution: Exclude antivirus scanning for the st.exe binary and your development directories
+
+### WSL (Windows Subsystem for Linux) Users
+If you're using WSL, you can use the Linux installation method:
+
+```bash
+# Inside WSL
+curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+
+# Access Windows files from WSL
+st /mnt/c/Users/YourName/Documents
+
+# Access WSL files from Windows PowerShell
+st \\wsl$\Ubuntu\home\username\project
+```
 
 ## 🛠️ Development
 
