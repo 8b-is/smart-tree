@@ -60,6 +60,9 @@ pub mod tips;
 pub mod daemon;
 pub mod daemon_client;
 
+// Self-update mechanism - check and install updates from GitHub releases
+pub mod updater;
+
 // Spicy TUI - cyberpunk-style terminal interface!
 pub mod spicy_fuzzy;
 pub mod spicy_tui_enhanced;

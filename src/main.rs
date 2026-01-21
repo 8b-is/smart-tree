@@ -71,6 +71,14 @@ async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
 
+    // Check for updates on startup (rate-limited, non-blocking)
+    // Skip if --no-update-check is set or if this is an exclusive command
+    if !cli.no_update_check && !cli.version && !cli.update && !cli.mcp && !cli.daemon {
+        if let Some(latest) = st::updater::check_for_update_cached() {
+            st::updater::print_update_banner(&latest);
+        }
+    }
+
     // Handle tips flag if provided
     if let Some(state) = &cli.tips {
         let enable = state == "on";
@@ -298,6 +306,9 @@ async fn main() -> Result<()> {
     if cli.version {
         return show_version_with_updates().await;
     }
+    if cli.update {
+        return st::updater::run_update(false);
+    }
     if let Some(names) = cli.rename_project {
         if names.len() != 2 {
             eprintln!("Error: rename-project requires exactly two arguments: OLD_NAME NEW_NAME");
@@ -305,6 +316,21 @@ async fn main() -> Result<()> {
         }
         let options = RenameOptions::default();
         return rename_project(&names[0], &names[1], options).await;
+    }
+
+    if let Some(project_tags) = cli.project_tags {
+        let project_path = ".";
+        match project_tags {
+            st::cli::ProjectTags::Add { tag } => {
+                st::project_tags::add(project_path, &tag);
+                println!("Added tag '{}' to the project.", tag);
+            }
+            st::cli::ProjectTags::Remove { tag } => {
+                st::project_tags::remove(project_path, &tag);
+                println!("Removed tag '{}' from the project.", tag);
+            }
+        }
+        return Ok(());
     }
 
     // Handle Claude integration setup (smart init or update)

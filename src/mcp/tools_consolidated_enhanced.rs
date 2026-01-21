@@ -632,6 +632,77 @@ EXAMPLES:
         }));
     }
 
+    // Add project context dump tool - THE POWER TOOL for AI onboarding!
+    tools.push(json!({
+        "name": "project_context_dump",
+        "description": "📦 FULL PROJECT CONTEXT - The ULTIMATE AI onboarding tool! Get a complete, token-efficient project dump in ONE CALL instead of dozens of searches. Configurable depth, file limits, and compression.
+
+💡 NEW AI WALKING INTO A PROJECT? This is your first tool!
+• project_context_dump {path:'.'} - Complete project overview
+• project_context_dump {path:'.', include_content:true} - With key file contents
+• project_context_dump {path:'.', compression:'quantum'} - Maximum compression
+
+FEATURES:
+✓ Directory tree with depth limit (max_depth)
+✓ Key file detection (CLAUDE.md, README, Cargo.toml, package.json, etc.)
+✓ Git branch & status info
+✓ Project type detection
+✓ Token budget awareness
+✓ Multiple compression modes (auto, marqant, summary-ai, quantum)
+
+EXAMPLES:
+✓ Quick context: project_context_dump {path:'.', max_depth:3}
+✓ With contents: project_context_dump {path:'.', include_content:true, max_files:50}
+✓ Key files only: project_context_dump {path:'.', key_files_only:true}
+✓ Token budget: project_context_dump {path:'.', token_budget:5000}",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to the project root"
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Maximum directory depth (1-20, default: 5)",
+                    "default": 5
+                },
+                "max_files": {
+                    "type": "integer",
+                    "description": "Maximum files to include (10-1000, default: 100)",
+                    "default": 100
+                },
+                "include_content": {
+                    "type": "boolean",
+                    "description": "Include contents of key files (default: false)",
+                    "default": false
+                },
+                "compression": {
+                    "type": "string",
+                    "enum": ["auto", "marqant", "summary-ai", "quantum"],
+                    "description": "Compression mode (default: auto = summary-ai)",
+                    "default": "auto"
+                },
+                "token_budget": {
+                    "type": "integer",
+                    "description": "Token budget warning threshold (default: 10000)",
+                    "default": 10000
+                },
+                "include_git": {
+                    "type": "boolean",
+                    "description": "Include git status info (default: true)",
+                    "default": true
+                },
+                "key_files_only": {
+                    "type": "boolean",
+                    "description": "Only show key project files (default: false)",
+                    "default": false
+                }
+            },
+            "required": ["path"]
+        }
+    }));
+
     // Add smart read tool - always enabled (core functionality)
     tools.push(json!({
         "name": "read",

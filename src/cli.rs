@@ -37,6 +37,14 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Getting Started")]
     pub man: bool,
 
+    /// Check for updates and install the latest version
+    #[arg(long, exclusive = true, help_heading = "Getting Started")]
+    pub update: bool,
+
+    /// Skip the automatic update check on startup
+    #[arg(long, help_heading = "Getting Started")]
+    pub no_update_check: bool,
+
     // =========================================================================
     // INTERACTIVE MODES
     // =========================================================================
@@ -231,6 +239,10 @@ pub struct Cli {
     /// Rename project: --rename-project "OldName" "NewName"
     #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2, help_heading = "Project Management")]
     pub rename_project: Option<Vec<String>>,
+
+    /// Manage project tags
+    #[clap(subcommand, name = "project-tags")]
+    pub project_tags: Option<ProjectTags>,
 
     /// Control smart tips (on/off)
     #[arg(long, value_name = "STATE", value_parser = ["on", "off"], help_heading = "Project Management")]
@@ -557,6 +569,22 @@ pub enum OutputMode {
     Sse,
     /// Function documentation in markdown format
     FunctionMarkdown,
+}
+
+#[derive(Debug, Parser)]
+pub enum ProjectTags {
+    /// Add a tag to the project
+    Add {
+        /// The tag to add
+        #[clap(required = true)]
+        tag: String,
+    },
+    /// Remove a tag from the project
+    Remove {
+        /// The tag to remove
+        #[clap(required = true)]
+        tag: String,
+    },
 }
 
 /// Get the ideal depth for each output mode

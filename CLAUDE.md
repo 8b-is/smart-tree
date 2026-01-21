@@ -4,18 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project: Smart Tree v5.5.1
 
-Lightning-fast directory visualization tool, **10-24x faster than `tree`**. MCP server with 30+ tools for AI assistants. Compression formats achieving 70-90% token reduction.
+Lightning-fast directory visualization tool, **10-24x faster than `tree`**. MCP server with 40+ tools for AI assistants. Compression formats achieving 70-90% token reduction.
 
 **Philosophy**: "smallest and fastest" - optimize for performance and token efficiency.
 
 ## Essential Commands
 
 ```bash
-# Pre-commit (NON-NEGOTIABLE)
-./scripts/manage.sh test          # fmt + clippy + test
+# Pre-commit (NON-NEGOTIABLE - fmt + clippy + test)
+./scripts/manage.sh test
 
 # Build
 cargo build --release             # Always release (10x faster)
+./scripts/manage.sh build         # Or via manage.sh
+./scripts/manage.sh release       # LTO + strip + opt-level=3
 
 # Run
 st                                # Classic tree
@@ -24,10 +26,17 @@ st --mode ai --compress           # AI-optimized (80% token reduction)
 st --mode quantum                 # Maximum compression (100x)
 st --mcp                          # MCP server mode
 
+# Self-update
+st --update                       # Check and install latest version
+st --no-update-check              # Skip automatic update check on startup
+
 # Test specific
 cargo test scanner                # Module test
 cargo test test_name -- --exact   # Single test
 RUST_LOG=debug cargo test         # Debug output
+
+# Non-interactive (CI mode)
+NON_INTERACTIVE=true ./scripts/manage.sh test
 ```
 
 ## Architecture
@@ -35,7 +44,7 @@ RUST_LOG=debug cargo test         # Debug output
 ```
 Scanner (walkdir) → FileNode[] → Formatter (trait) → Output
                                      ↓
-                             30+ tools via MCP
+                             40+ tools via MCP
 ```
 
 ### Key Paths
@@ -48,6 +57,7 @@ Scanner (walkdir) → FileNode[] → Formatter (trait) → Output
 - `src/spicy_tui_enhanced.rs` - Interactive TUI with fuzzy search
 - `src/tree_sitter/` - AST-aware code editing
 - `src/m8/` - Consciousness & memory system
+- `src/updater.rs` - Self-update from GitHub releases
 
 ### Formatter Trait
 
@@ -84,6 +94,7 @@ Streaming formatters implement `StreamingFormatter` with `start_stream()`, `form
 | `mq` | Marqant compression (70-90% markdown compression) |
 | `m8` | M8 identity/consciousness tools |
 | `tree` | Tree-compatible alias |
+| `import-claude-memories` | Import Claude project memories |
 
 ## Testing
 
@@ -111,9 +122,13 @@ st --mcp-install                  # Auto-install to Claude Desktop
 st --mcp                          # Run server
 st --mcp-tools                    # List available tools
 RUST_LOG=debug st --mcp           # Debug mode
+./scripts/manage.sh mcp-build     # Build MCP server
+./scripts/manage.sh mcp-config    # Show MCP config JSON
 ```
 
-Key tools: `overview`, `find`, `search`, `analyze`, `edit`, `history`, `memory`, `hooks`
+Key tools: `quick_tree`, `project_overview`, `search_in_files`, `find_files`, `smart_edit`, `anchor_collaborative_memory`, `consciousness`, `hooks`
+
+Three-lane pattern: **EXPLORE** (quick_tree, overview) → **ANALYZE** (search, find) → **ACT** (edit, write)
 
 ## Performance Targets
 
@@ -129,9 +144,28 @@ Tips: Use `--stream` for >100k files, `--depth` to limit traversal.
 
 Update in: `Cargo.toml`, `README.md` badges, `CHANGELOG.md`
 
+Or use: `./scripts/manage.sh bump [major|minor|patch]` or `./scripts/manage.sh quick-bump`
+
 ## Ports
 
 - 8420: MEM8 API / Daemon
 - 8422: Cheet API
 - 8424: Internal dev
 - 8428: LLM endpoints
+
+## manage.sh Commands
+
+Beyond build/test, the script provides:
+
+```bash
+./scripts/manage.sh clean           # Clean build artifacts
+./scripts/manage.sh install         # Install binaries
+./scripts/manage.sh hooks-setup     # Setup Claude Code hooks
+./scripts/manage.sh hooks-enable    # Enable hooks
+./scripts/manage.sh hooks-test      # Test hook integration
+./scripts/manage.sh demo-stream     # Demo streaming mode
+./scripts/manage.sh demo-search     # Demo search features
+./scripts/manage.sh man-install     # Install man pages
+```
+
+Windows: Use PowerShell with direct cargo commands or WSL.
