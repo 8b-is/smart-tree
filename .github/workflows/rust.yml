@@ -18,18 +18,17 @@ permissions:
 jobs:
   check:
     name: Format & Lint Check ✨
-    runs-on: self-hosted, macos-latest
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Install Git LFS (macOS)
-      if: matrix.os == 'macos-latest'
-      run: brew install git-lfs
+    - name: Install Git LFS
+      run: sudo apt-get update && sudo apt-get install -y git-lfs
 
-    z- name: Checkout code 📦
+    - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
-       x submodules: 'recursive'
-    
+        submodules: 'recursive'
+
     - name: Fetch LFS objects
       run: git lfs pull
 
@@ -46,20 +45,28 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-registry-
 
+    - name: Check formatting 🎨
+      run: cargo fmt --all -- --check
+
+    - name: Run Clippy 📎
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
   build:
     name: Build & Test - ${{ matrix.name }} 🔨
+    needs: check
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: [ubuntu-latest]
+          - os: ubuntu-latest
             name: Ubuntu
             rust: stable
             allow_failure: false
-          - os: [self-hosted, macos-latest]
-            name: Self-Hosted macos
+          - os: macos-latest
+            name: macOS
             rust: stable
             allow_failure: false
-          - os: [windows-latest]
+          - os: windows-latest
             name: Windows
             rust: stable
             allow_failure: false
@@ -70,15 +77,15 @@ jobs:
     steps:
     # Install Git LFS for each OS
     - name: Install Git LFS (Linux)
-      if: matrix.os == 'ubuntu-latest'
+      if: runner.os == 'Linux'
       run: sudo apt-get update && sudo apt-get install -y git-lfs
 
     - name: Install Git LFS (macOS)
-      if: matrix.os == 'macos-latest'
+      if: runner.os == 'macOS'
       run: brew install git-lfs
 
     - name: Install Git LFS (Windows)
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
       shell: pwsh
       run: choco install git-lfs -y
 
@@ -113,8 +120,7 @@ jobs:
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-index-
-    - name: Fetch LFS objects
-      run: git lfs pull
+
     - name: Cache cargo build 🏗️
       uses: actions/cache@v4
       with:
@@ -132,11 +138,8 @@ jobs:
       run: |
         echo "=== Performance Monitor Start ==="
         echo "Time: $(date)"
-        echo "Memory: $(free -h 2>/dev/null || echo 'N/A')"
-        echo "CPU: $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 'N/A')"
-        echo "Disk: $(df -h . | tail -1)"
         echo "================================"
-        
+
         # Run tests with timeout and performance tracking
         if command -v timeout >/dev/null 2>&1; then
           TIMEOUT_CMD="timeout 300"
@@ -157,7 +160,7 @@ jobs:
       run: cargo test --doc --verbose
 
     - name: Test examples 📝
-      if: matrix.os != 'windows-latest'
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         # Test that examples compile
@@ -169,7 +172,6 @@ jobs:
           fi
         done
 
-    # TEMPORARILY DISABLED: Binary execution hangs in CI
     - name: Test binary execution 🎯
       shell: bash
       run: |
@@ -180,7 +182,7 @@ jobs:
         cargo run -- --mode ai --depth 1 .
 
     - name: Test MCP tools listing 🛠️
-      if: matrix.os != 'windows-latest'
+      if: runner.os != 'Windows'
       run: |
         cargo run -- --mcp-tools | head -20
 
@@ -191,12 +193,12 @@ jobs:
     steps:
     - name: Install Git LFS (Linux)
       run: sudo apt-get update && sudo apt-get install -y git-lfs
-      
+
     - name: Checkout code 📦
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
-      
+
     - name: Fetch LFS objects
       run: git lfs pull
 
