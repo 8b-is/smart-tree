@@ -291,43 +291,42 @@ async fn main() -> Result<()> {
     // DAEMON ROUTING - Route through daemon if running for centralized memory
     // =========================================================================
     // Check if we should route through daemon (unless --no-daemon or running as daemon)
-    if !cli.no_daemon && !cli.daemon && cli.path.is_some() {
-        let client = DaemonClient::new(cli.daemon_port);
+    if !cli.no_daemon && !cli.daemon {
+        if let Some(path) = cli.path.as_ref() {
+            let client = DaemonClient::new(cli.daemon_port);
 
-        // Quick check if daemon is running
-        if let DaemonStatus::Running(_) = client.check_status().await {
-            // Daemon is running! Route scan through it
-            let path = cli.path.as_ref().unwrap();
+            // Quick check if daemon is running
+            if let DaemonStatus::Running(_) = client.check_status().await {
+                // Daemon is running - record this scan operation for memory tracking
+                // The actual scan still happens locally, but daemon knows about it
+                eprintln!("🌳 Daemon connected - tracking this operation");
 
-            // Daemon is running - record this scan operation for memory tracking
-            // The actual scan still happens locally, but daemon knows about it
-            eprintln!("🌳 Daemon connected - tracking this operation");
+                // Record the scan operation with daemon (async, don't block)
+                let path_clone = path.clone();
+                let client_clone = client.clone();
+                tokio::spawn(async move {
+                    let _ = client_clone
+                        .call_tool(
+                            "query_context",
+                            serde_json::json!({
+                                "query": format!("scan:{}", path_clone)
+                            }),
+                        )
+                        .await;
+                });
 
-            // Record the scan operation with daemon (async, don't block)
-            let path_clone = path.clone();
-            let client_clone = client.clone();
-            tokio::spawn(async move {
-                let _ = client_clone
-                    .call_tool(
-                        "query_context",
-                        serde_json::json!({
-                            "query": format!("scan:{}", path_clone)
-                        }),
-                    )
-                    .await;
-            });
-
-            // Fall through to normal local execution
-            // The daemon tracks what directories we've looked at
-        } else if cli.auto_daemon {
-            // Auto-start daemon if requested
-            eprintln!("🌳 Starting Smart Tree Daemon...");
-            if let Err(e) = client.start_daemon().await {
-                eprintln!("⚠️  Failed to start daemon: {}", e);
-            } else {
-                // Wait a moment for daemon to be ready
-                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                eprintln!("✅ Daemon started! Future commands will route through it.");
+                // Fall through to normal local execution
+                // The daemon tracks what directories we've looked at
+            } else if cli.auto_daemon {
+                // Auto-start daemon if requested
+                eprintln!("🌳 Starting Smart Tree Daemon...");
+                if let Err(e) = client.start_daemon().await {
+                    eprintln!("⚠️  Failed to start daemon: {}", e);
+                } else {
+                    // Wait a moment for daemon to be ready
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    eprintln!("✅ Daemon started! Future commands will route through it.");
+                }
             }
         }
     }
