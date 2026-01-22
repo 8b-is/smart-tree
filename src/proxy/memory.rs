@@ -25,6 +25,8 @@ pub struct ConversationScope {
 pub struct ProxyMemory {
     storage_path: PathBuf,
     scopes: HashMap<String, ConversationScope>,
+    /// If true, skip all disk I/O operations
+    in_memory_only: bool,
 }
 
 impl ProxyMemory {
@@ -41,6 +43,7 @@ impl ProxyMemory {
         let mut memory = Self {
             storage_path,
             scopes: HashMap::new(),
+            in_memory_only: false,
         };
 
         memory.load()?;
@@ -51,8 +54,9 @@ impl ProxyMemory {
     /// Used as a fallback when filesystem access fails
     pub fn in_memory_only() -> Self {
         Self {
-            storage_path: PathBuf::from("/dev/null"), // Dummy path, won't be used
+            storage_path: PathBuf::new(), // Empty path, won't be used
             scopes: HashMap::new(),
+            in_memory_only: true,
         }
     }
 
@@ -94,8 +98,8 @@ impl ProxyMemory {
     }
 
     fn save(&self) -> Result<()> {
-        // Skip saving if using the in-memory only fallback
-        if self.storage_path == PathBuf::from("/dev/null") {
+        // Skip saving if in memory-only mode
+        if self.in_memory_only {
             return Ok(());
         }
         let content = serde_json::to_string_pretty(&self.scopes)?;
