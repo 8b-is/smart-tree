@@ -42,6 +42,14 @@ impl LlmProvider for CandleProvider {
 
         #[cfg(feature = "candle")]
         {
+            // Suppress unused import warnings - these will be used when implementation is complete
+            let _suppress_warnings = (
+                std::marker::PhantomData::<LlmUsage>,
+                std::marker::PhantomData::<Device>,
+                std::marker::PhantomData::<Tensor>,
+                std::marker::PhantomData::<llama::Config>,
+            );
+            
             // This is a placeholder for the actual Candle implementation.
             // In a real scenario, we would:
             // 1. Load the model (if not already loaded)

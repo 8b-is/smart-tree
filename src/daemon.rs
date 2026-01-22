@@ -740,6 +740,20 @@ struct OpenAiResponse {
     usage: Option<OpenAiUsage>,
 }
 
+/// OpenAI-compatible error response format
+#[derive(Debug, Serialize)]
+struct OpenAiErrorResponse {
+    error: OpenAiError,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiError {
+    message: String,
+    #[serde(rename = "type")]
+    error_type: String,
+    code: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct OpenAiChoice {
     index: usize,
@@ -764,7 +778,7 @@ struct OpenAiUsage {
 async fn chat_completions(
     State(state): State<Arc<RwLock<DaemonState>>>,
     Json(req): Json<OpenAiRequest>,
-) -> Json<OpenAiResponse> {
+) -> impl IntoResponse {
     // Parse provider from model name (e.g., "anthropic/claude-3" or just "gpt-4")
     let (provider_name, model_name) = if let Some((p, m)) = req.model.split_once('/') {
         (p.to_string(), m.to_string())
@@ -783,40 +797,51 @@ async fn chat_completions(
     // Use 'user' field as scope ID for memory, default to 'global'
     let scope_id = req.user.clone().unwrap_or_else(|| "global".to_string());
 
-    let mut state_lock = state.write().await;
+    // Build request with history while holding a write lock briefly
+    let request_with_history = {
+        let state_lock = state.read().await;
 
-    // Get conversation history from memory
-    let mut messages_with_history = Vec::new();
+        // Get conversation history from memory
+        let mut messages_with_history = Vec::new();
 
-    // Keep system message at the top if present
-    if let Some(system_msg) = internal_req.messages.iter().find(|m| m.role == LlmRole::System).cloned() {
-        messages_with_history.push(system_msg);
-    }
+        // Keep system message at the top if present
+        if let Some(system_msg) = internal_req.messages.iter().find(|m| m.role == LlmRole::System).cloned() {
+            messages_with_history.push(system_msg);
+        }
 
-    // Add history from memory
-    if let Some(scope) = state_lock.proxy_memory.get_scope(&scope_id) {
-        for msg in &scope.messages {
+        // Add history from memory
+        if let Some(scope) = state_lock.proxy_memory.get_scope(&scope_id) {
+            for msg in &scope.messages {
+                if msg.role != LlmRole::System {
+                    messages_with_history.push(msg.clone());
+                }
+            }
+        }
+
+        // Add current messages (excluding system which is already added)
+        for msg in &internal_req.messages {
             if msg.role != LlmRole::System {
                 messages_with_history.push(msg.clone());
             }
         }
-    }
 
-    // Add current messages (excluding system which is already added)
-    for msg in &internal_req.messages {
-        if msg.role != LlmRole::System {
-            messages_with_history.push(msg.clone());
+        LlmRequest {
+            messages: messages_with_history,
+            ..internal_req.clone()
         }
-    }
-
-    let request_with_history = LlmRequest {
-        messages: messages_with_history,
-        ..internal_req.clone()
     };
 
-    // Call the LLM provider
-    match state_lock.llm_proxy.complete(&provider_name, request_with_history).await {
+    // Call the LLM provider with a read lock (doesn't need mutable access)
+    let llm_result = {
+        let state_lock = state.read().await;
+        state_lock.llm_proxy.complete(&provider_name, request_with_history).await
+    };
+
+    match llm_result {
         Ok(resp) => {
+            // Reacquire write lock for memory/credits updates
+            let mut state_lock = state.write().await;
+
             // Update memory with this exchange
             let mut new_history = Vec::new();
             if let Some(last_user_msg) = internal_req.messages.iter().rev().find(|m| m.role == LlmRole::User) {
@@ -837,7 +862,7 @@ async fn chat_completions(
                 );
             }
 
-            Json(OpenAiResponse {
+            (StatusCode::OK, Json(OpenAiResponse {
                 id: format!("st-{}", uuid::Uuid::new_v4()),
                 object: "chat.completion".to_string(),
                 created: chrono::Utc::now().timestamp() as u64,
@@ -855,24 +880,25 @@ async fn chat_completions(
                     completion_tokens: u.completion_tokens,
                     total_tokens: u.total_tokens,
                 }),
-            })
+            })).into_response()
         }
         Err(e) => {
-            Json(OpenAiResponse {
-                id: "error".to_string(),
-                object: "error".to_string(),
-                created: 0,
-                model: req.model,
-                choices: vec![OpenAiChoice {
-                    index: 0,
-                    message: OpenAiResponseMessage {
-                        role: "assistant".to_string(),
-                        content: format!("Error: {}", e),
-                    },
-                    finish_reason: "error".to_string(),
-                }],
-                usage: None,
-            })
+            let error_msg = format!("{}", e);
+            let status = if error_msg.contains("not found") || error_msg.contains("invalid") {
+                StatusCode::BAD_REQUEST
+            } else if error_msg.contains("unauthorized") || error_msg.contains("authentication") {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+
+            (status, Json(OpenAiErrorResponse {
+                error: OpenAiError {
+                    message: error_msg,
+                    error_type: "api_error".to_string(),
+                    code: None,
+                },
+            })).into_response()
         }
     }
 }

@@ -9,18 +9,20 @@ use crate::proxy::{LlmMessage, LlmRequest, LlmRole};
 use crate::proxy::memory::MemoryProxy;
 use axum::{
     extract::State,
+    http::StatusCode,
+    response::IntoResponse,
     routing::post,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use anyhow::Result;
 
 /// 🚀 Start the OpenAI-compatible proxy server
 pub async fn start_proxy_server(port: u16) -> Result<()> {
-    let proxy = Arc::new(Mutex::new(MemoryProxy::new()?));
+    let proxy = Arc::new(RwLock::new(MemoryProxy::new()?));
     
     let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
@@ -39,9 +41,9 @@ pub async fn start_proxy_server(port: u16) -> Result<()> {
 
 /// 💬 OpenAI-compatible chat completions handler
 async fn chat_completions(
-    State(proxy): State<Arc<Mutex<MemoryProxy>>>,
+    State(proxy): State<Arc<RwLock<MemoryProxy>>>,
     Json(req): Json<OpenAiRequest>,
-) -> Json<OpenAiResponse> {
+) -> impl IntoResponse {
     // Map OpenAI request to our internal LlmRequest
     // We use the model name to determine the provider if it's prefixed, e.g., "anthropic/claude-3"
     let (provider_name, model_name) = if let Some((p, m)) = req.model.split_once('/') {
@@ -62,12 +64,12 @@ async fn chat_completions(
     // Use the 'user' field as the scope ID, or default to 'global'
     let scope_id = req.user.unwrap_or_else(|| "global".to_string());
 
-    // Call the proxy with memory
-    let mut proxy_lock = proxy.lock().await;
+    // Call the proxy with memory - lock is only held during the complete_with_memory call
+    let mut proxy_lock = proxy.write().await;
     match proxy_lock.complete_with_memory(&provider_name, &scope_id, internal_req).await {
         Ok(resp) => {
             // Map back to OpenAI response
-            Json(OpenAiResponse {
+            (StatusCode::OK, Json(OpenAiResponse {
                 id: format!("st-{}", uuid::Uuid::new_v4()),
                 object: "chat.completion".to_string(),
                 created: chrono::Utc::now().timestamp() as u64,
@@ -85,25 +87,25 @@ async fn chat_completions(
                     completion_tokens: u.completion_tokens,
                     total_tokens: u.total_tokens,
                 }),
-            })
+            })).into_response()
         }
         Err(e) => {
-            // Return an error response
-            Json(OpenAiResponse {
-                id: "error".to_string(),
-                object: "error".to_string(),
-                created: 0,
-                model: req.model,
-                choices: vec![OpenAiChoice {
-                    index: 0,
-                    message: OpenAiResponseMessage {
-                        role: "assistant".to_string(),
-                        content: format!("Error: {}", e),
-                    },
-                    finish_reason: "error".to_string(),
-                }],
-                usage: None,
-            })
+            let error_msg = format!("{}", e);
+            let status = if error_msg.contains("not found") || error_msg.contains("invalid") {
+                StatusCode::BAD_REQUEST
+            } else if error_msg.contains("unauthorized") || error_msg.contains("authentication") {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+
+            (status, Json(OpenAiErrorResponse {
+                error: OpenAiError {
+                    message: error_msg,
+                    error_type: "api_error".to_string(),
+                    code: None,
+                },
+            })).into_response()
         }
     }
 }
@@ -149,6 +151,20 @@ struct OpenAiResponse {
     choices: Vec<OpenAiChoice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     usage: Option<OpenAiUsage>,
+}
+
+/// OpenAI-compatible error response format
+#[derive(Debug, Serialize)]
+struct OpenAiErrorResponse {
+    error: OpenAiError,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiError {
+    message: String,
+    #[serde(rename = "type")]
+    error_type: String,
+    code: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
