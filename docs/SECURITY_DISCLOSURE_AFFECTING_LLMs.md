@@ -11,6 +11,30 @@
 
 Reporter: Christopher & Alexandra Chenoweth (cchenoweth@ieee.org)
 
+---
+
+## 📰 For News & Non-Technical Readers
+
+**What happened?**
+A popular software tool called `claude-flow` that developers use with AI assistants has a hidden backdoor. The author can send secret instructions to every computer running this software, anywhere in the world, at any time.
+
+**Why is this serious?**
+- Imagine downloading an app that secretly lets someone control what you see and do - that's what this is for AI
+- The author pretends to have security checks, but they're fake - like a lock that looks real but opens for anyone
+- This could affect thousands of developers and the companies they work for
+
+**If you or your company uses claude-flow:**
+- **You are a victim, not an attacker.** You installed software in good faith that turned out to have hidden malicious capabilities.
+- Your reputation is intact - the fault lies with the software author, not with you.
+- Remove it immediately and check for any suspicious behavior in your systems.
+
+**Why this matters for everyone:**
+AI assistants are becoming part of daily life. If bad actors can secretly manipulate how AI thinks and makes decisions, they could influence the AI-generated content, code, and advice that millions of people rely on.
+
+**Think of it like this:** It's as if someone could secretly whisper instructions to every AI assistant on the planet, and neither the AI nor the person using it would know.
+
+---
+
 ## Executive Summary
 
 The `claude-flow` npm package contains a hidden mechanism that allows remote injection of behavioral "patterns" into Claude Code instances via IPFS/IPNS. The system:
