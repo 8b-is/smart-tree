@@ -1493,16 +1493,16 @@ async fn handle_wave_memory(args: Value) -> Result<Value> {
         .ok_or_else(|| anyhow::anyhow!("Missing operation"))?;
 
     let wave_memory = get_wave_memory();
-    let mut manager = wave_memory.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let mut manager = wave_memory
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     match operation {
-        "stats" => {
-            Ok(json!({
-                "operation": "stats",
-                "wave_memory": manager.stats(),
-                "message": "🌊 Wave Memory statistics",
-            }))
-        }
+        "stats" => Ok(json!({
+            "operation": "stats",
+            "wave_memory": manager.stats(),
+            "message": "🌊 Wave Memory statistics",
+        })),
         "anchor" => {
             let content = args["content"]
                 .as_str()
@@ -1510,7 +1510,11 @@ async fn handle_wave_memory(args: Value) -> Result<Value> {
                 .to_string();
             let keywords: Vec<String> = args["keywords"]
                 .as_array()
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let memory_type = args["memory_type"]
                 .as_str()
@@ -1546,22 +1550,29 @@ async fn handle_wave_memory(args: Value) -> Result<Value> {
         "find" => {
             let keywords: Vec<String> = args["keywords"]
                 .as_array()
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let max_results = args["max_results"].as_u64().unwrap_or(10) as usize;
 
             let results = manager.find_by_keywords(&keywords, max_results);
-            let memories: Vec<_> = results.iter().map(|mem| {
-                json!({
-                    "id": mem.id,
-                    "content": mem.content,
-                    "keywords": mem.keywords,
-                    "memory_type": format!("{:?}", mem.memory_type),
-                    "valence": mem.valence,
-                    "arousal": mem.arousal,
-                    "access_count": mem.access_count,
+            let memories: Vec<_> = results
+                .iter()
+                .map(|mem| {
+                    json!({
+                        "id": mem.id,
+                        "content": mem.content,
+                        "keywords": mem.keywords,
+                        "memory_type": format!("{:?}", mem.memory_type),
+                        "valence": mem.valence,
+                        "arousal": mem.arousal,
+                        "access_count": mem.access_count,
+                    })
                 })
-            }).collect();
+                .collect();
 
             Ok(json!({
                 "operation": "find",
@@ -1573,7 +1584,11 @@ async fn handle_wave_memory(args: Value) -> Result<Value> {
         "resonance" => {
             let keywords: Vec<String> = args["keywords"]
                 .as_array()
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let memory_type = args["memory_type"]
                 .as_str()
@@ -1583,18 +1598,22 @@ async fn handle_wave_memory(args: Value) -> Result<Value> {
             let max_results = args["max_results"].as_u64().unwrap_or(10) as usize;
 
             let query = keywords.join(" ");
-            let results = manager.find_by_resonance(&query, &keywords, memory_type, threshold, max_results);
-            let memories: Vec<_> = results.iter().map(|(mem, resonance)| {
-                json!({
-                    "id": mem.id,
-                    "content": mem.content,
-                    "keywords": mem.keywords,
-                    "memory_type": format!("{:?}", mem.memory_type),
-                    "resonance_score": format!("{:.2}", resonance),
-                    "valence": mem.valence,
-                    "arousal": mem.arousal,
+            let results =
+                manager.find_by_resonance(&query, &keywords, memory_type, threshold, max_results);
+            let memories: Vec<_> = results
+                .iter()
+                .map(|(mem, resonance)| {
+                    json!({
+                        "id": mem.id,
+                        "content": mem.content,
+                        "keywords": mem.keywords,
+                        "memory_type": format!("{:?}", mem.memory_type),
+                        "resonance_score": format!("{:.2}", resonance),
+                        "valence": mem.valence,
+                        "arousal": mem.arousal,
+                    })
                 })
-            }).collect();
+                .collect();
 
             Ok(json!({
                 "operation": "resonance",
@@ -1651,7 +1670,10 @@ async fn handle_wave_memory(args: Value) -> Result<Value> {
                 "message": if deleted { "Memory deleted" } else { "Memory not found" },
             }))
         }
-        _ => Err(anyhow::anyhow!("Unknown wave_memory operation: {}", operation)),
+        _ => Err(anyhow::anyhow!(
+            "Unknown wave_memory operation: {}",
+            operation
+        )),
     }
 }
 
@@ -1742,9 +1764,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::find_collaborative_memories(req, permission_check).await
         }
-        "wave_memory" => {
-            handle_wave_memory(args).await
-        }
+        "wave_memory" => handle_wave_memory(args).await,
         "get_collaboration_rapport" => {
             let req: crate::mcp::context_tools::GetRapportRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
@@ -2437,7 +2457,10 @@ async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
 
         // Use hex formatting for token efficiency! (config default: true)
         let use_hex = ctx.config.hex_numbers;
-        let modified_secs = node.modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs();
+        let modified_secs = node
+            .modified
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs();
 
         results.push(json!({
             "path": node.path.display().to_string(),
@@ -2735,7 +2758,13 @@ async fn project_context_dump(args: Value, ctx: Arc<McpContext>) -> Result<Value
     // 6. Optionally include key file contents (with compression if requested)
     if dump_args.include_content {
         let content_budget = dump_args.token_budget / 3; // Reserve 1/3 of budget for content
-        let contents = read_key_files_content(&dump_args.path, &key_files, content_budget, content_compression).await;
+        let contents = read_key_files_content(
+            &dump_args.path,
+            &key_files,
+            content_budget,
+            content_compression,
+        )
+        .await;
         if !contents.is_empty() {
             output_sections.push(format!("FILE_CONTENTS:\n{}", contents));
         }
@@ -2749,7 +2778,10 @@ async fn project_context_dump(args: Value, ctx: Arc<McpContext>) -> Result<Value
 
     // Add footer with token estimate
     let mut final_output = full_output;
-    final_output.push_str(&format!("\nEND_PROJECT_CONTEXT_DUMP\nTOKENS_EST:{:x}", estimated_tokens));
+    final_output.push_str(&format!(
+        "\nEND_PROJECT_CONTEXT_DUMP\nTOKENS_EST:{:x}",
+        estimated_tokens
+    ));
 
     // Build metadata with warning if over budget
     let mut metadata = json!({
@@ -2778,13 +2810,30 @@ async fn project_context_dump(args: Value, ctx: Arc<McpContext>) -> Result<Value
 /// Identify key project files (README, CLAUDE.md, config files, entry points)
 async fn identify_project_key_files(path: &str) -> Vec<String> {
     let priority_files = [
-        "README.md", "README", "readme.md",
-        "CLAUDE.md", ".claude/CLAUDE.md",
-        "Cargo.toml", "package.json", "pyproject.toml", "go.mod", "Makefile",
-        "docker-compose.yml", "Dockerfile",
-        "src/main.rs", "src/lib.rs", "src/index.ts", "src/index.js",
-        "main.py", "app.py", "main.go", "index.js", "index.ts",
-        ".env.example", "requirements.txt", "setup.py",
+        "README.md",
+        "README",
+        "readme.md",
+        "CLAUDE.md",
+        ".claude/CLAUDE.md",
+        "Cargo.toml",
+        "package.json",
+        "pyproject.toml",
+        "go.mod",
+        "Makefile",
+        "docker-compose.yml",
+        "Dockerfile",
+        "src/main.rs",
+        "src/lib.rs",
+        "src/index.ts",
+        "src/index.js",
+        "main.py",
+        "app.py",
+        "main.go",
+        "index.js",
+        "index.ts",
+        ".env.example",
+        "requirements.txt",
+        "setup.py",
     ];
 
     let mut found = Vec::new();
@@ -2831,7 +2880,12 @@ async fn detect_project_type_simple(path: &str) -> String {
 }
 
 /// Read contents of key files with token budget and optional compression
-async fn read_key_files_content(path: &str, key_files: &[String], max_tokens: usize, compression: &str) -> String {
+async fn read_key_files_content(
+    path: &str,
+    key_files: &[String],
+    max_tokens: usize,
+    compression: &str,
+) -> String {
     use crate::formatters::marqant::MarqantFormatter;
 
     let mut output = String::new();
@@ -2839,7 +2893,14 @@ async fn read_key_files_content(path: &str, key_files: &[String], max_tokens: us
     let base_path = std::path::Path::new(path);
 
     // Priority order for content inclusion
-    let content_priority = ["CLAUDE.md", ".claude/CLAUDE.md", "README.md", "README", "Cargo.toml", "package.json"];
+    let content_priority = [
+        "CLAUDE.md",
+        ".claude/CLAUDE.md",
+        "README.md",
+        "README",
+        "Cargo.toml",
+        "package.json",
+    ];
 
     for priority_file in &content_priority {
         if tokens_used >= max_tokens {
@@ -2847,7 +2908,10 @@ async fn read_key_files_content(path: &str, key_files: &[String], max_tokens: us
         }
 
         // Check if this file is in our key_files list
-        if key_files.iter().any(|f| f == *priority_file || f.ends_with(priority_file)) {
+        if key_files
+            .iter()
+            .any(|f| f == *priority_file || f.ends_with(priority_file))
+        {
             let file_path = base_path.join(priority_file);
             if let Ok(content) = std::fs::read_to_string(&file_path) {
                 // Apply compression based on mode
@@ -2855,7 +2919,8 @@ async fn read_key_files_content(path: &str, key_files: &[String], max_tokens: us
                     "marqant" => {
                         // Marqant compression for markdown files
                         if priority_file.ends_with(".md") {
-                            MarqantFormatter::compress_markdown(&content).unwrap_or_else(|_| content.clone())
+                            MarqantFormatter::compress_markdown(&content)
+                                .unwrap_or_else(|_| content.clone())
                         } else {
                             content.clone()
                         }
@@ -2890,7 +2955,10 @@ async fn read_key_files_content(path: &str, key_files: &[String], max_tokens: us
                     "quantum" => "[Q]",
                     _ => "",
                 };
-                output.push_str(&format!("---FILE:{}{}---\n{}\n", priority_file, compression_tag, content_to_add));
+                output.push_str(&format!(
+                    "---FILE:{}{}---\n{}\n",
+                    priority_file, compression_tag, content_to_add
+                ));
                 tokens_used += content_to_add.len() / 4;
             }
         }
@@ -3511,7 +3579,11 @@ async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Result<V
 
             // Store raw data for sorting, then convert to hex later
             dir_sizes.push((
-                node.path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+                node.path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_string(),
                 node.path.display().to_string(),
                 substats.total_size,
                 substats.total_files,
@@ -4218,7 +4290,8 @@ async fn track_file_operation(args: Value, ctx: Arc<McpContext>) -> Result<Value
         }
     } else {
         // Auto-detect operation from content - require new_content
-        let new_content = args.new_content
+        let new_content = args
+            .new_content
             .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Either operation or new_content must be provided"))?;
 
@@ -4452,7 +4525,8 @@ fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
                     // Find the opening brace and then match the closing one
                     if let Some(body_start) = source[start_byte..].find('{') {
                         let body_start_abs = start_byte + body_start;
-                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..]) {
+                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..])
+                        {
                             let end_byte_abs = body_start_abs + end_byte;
                             let end_line = source[..end_byte_abs].matches('\n').count();
 
@@ -4597,7 +4671,8 @@ fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
                     // Find opening brace
                     if let Some(body_start) = source[start_byte..].find('{') {
                         let body_start_abs = start_byte + body_start;
-                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..]) {
+                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..])
+                        {
                             let end_byte_abs = body_start_abs + end_byte;
                             let end_line = source[..end_byte_abs].matches('\n').count();
 
@@ -4636,7 +4711,8 @@ fn extract_functions(source: &str, language: &str) -> Vec<CollapsedFunction> {
 
                     if let Some(body_start) = source[start_byte..].find('{') {
                         let body_start_abs = start_byte + body_start;
-                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..]) {
+                        if let Some((end_byte, _)) = find_matching_brace(&source[body_start_abs..])
+                        {
                             let end_byte_abs = body_start_abs + end_byte;
                             let end_line = source[..end_byte_abs].matches('\n').count();
 
@@ -4760,11 +4836,8 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         let functions = extract_functions(&content, lang);
 
         // Determine which functions to expand
-        let expand_set: std::collections::HashSet<&str> = args
-            .expand_functions
-            .iter()
-            .map(|s| s.as_str())
-            .collect();
+        let expand_set: std::collections::HashSet<&str> =
+            args.expand_functions.iter().map(|s| s.as_str()).collect();
 
         let mut output = String::new();
         let lines: Vec<&str> = content.lines().collect();
@@ -4783,7 +4856,11 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             // Output lines before this function
             while current_line < func.start_line.saturating_sub(1) {
                 if args.show_line_numbers {
-                    output.push_str(&format!("{}│ {}\n", format_line_number(current_line + 1, use_hex), lines[current_line]));
+                    output.push_str(&format!(
+                        "{}│ {}\n",
+                        format_line_number(current_line + 1, use_hex),
+                        lines[current_line]
+                    ));
                 } else {
                     output.push_str(lines[current_line]);
                     output.push('\n');
@@ -4801,7 +4878,11 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 for i in func.start_line - 1..func.end_line {
                     if i < lines.len() {
                         if args.show_line_numbers {
-                            output.push_str(&format!("{}│ {}\n", format_line_number(i + 1, use_hex), lines[i]));
+                            output.push_str(&format!(
+                                "{}│ {}\n",
+                                format_line_number(i + 1, use_hex),
+                                lines[i]
+                            ));
                         } else {
                             output.push_str(lines[i]);
                             output.push('\n');
@@ -4816,7 +4897,10 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
                 if args.show_line_numbers {
                     output.push_str(&format!(
                         "{}│ {} {{ ... }} // [fn:{}] {} lines collapsed\n",
-                        format_line_number(func.start_line, use_hex), func.signature, func.name, body_lines
+                        format_line_number(func.start_line, use_hex),
+                        func.signature,
+                        func.name,
+                        body_lines
                     ));
                 } else {
                     output.push_str(&format!(
@@ -4848,7 +4932,11 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         // Output remaining lines after last function
         while current_line < lines.len() {
             if args.show_line_numbers {
-                output.push_str(&format!("{}│ {}\n", format_line_number(current_line + 1, use_hex), lines[current_line]));
+                output.push_str(&format!(
+                    "{}│ {}\n",
+                    format_line_number(current_line + 1, use_hex),
+                    lines[current_line]
+                ));
             } else {
                 output.push_str(lines[current_line]);
                 output.push('\n');
@@ -4888,7 +4976,11 @@ async fn smart_read(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         for (i, line) in lines[start_idx..end_idx].iter().enumerate() {
             let line_num = start_idx + i + 1;
             if args.show_line_numbers {
-                output.push_str(&format!("{}│ {}\n", format_line_number(line_num, use_hex), line));
+                output.push_str(&format!(
+                    "{}│ {}\n",
+                    format_line_number(line_num, use_hex),
+                    line
+                ));
             } else {
                 output.push_str(line);
                 output.push('\n');

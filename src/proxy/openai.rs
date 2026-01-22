@@ -5,8 +5,8 @@
 use crate::proxy::{LlmMessage, LlmProvider, LlmRequest, LlmResponse, LlmRole, LlmUsage};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 pub struct OpenAiProvider {
     client: Client,
@@ -35,7 +35,7 @@ impl Default for OpenAiProvider {
 impl LlmProvider for OpenAiProvider {
     async fn complete(&self, request: LlmRequest) -> Result<LlmResponse> {
         let url = format!("{}/chat/completions", self.base_url);
-        
+
         let openai_request = OpenAiChatRequest {
             model: request.model.clone(),
             messages: request.messages.into_iter().map(Into::into).collect(),
@@ -44,7 +44,8 @@ impl LlmProvider for OpenAiProvider {
             stream: request.stream,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&openai_request)
@@ -58,8 +59,10 @@ impl LlmProvider for OpenAiProvider {
         }
 
         let openai_response: OpenAiChatResponse = response.json().await?;
-        
-        let content = openai_response.choices.first()
+
+        let content = openai_response
+            .choices
+            .first()
             .map(|c| c.message.content.clone())
             .unwrap_or_default();
 

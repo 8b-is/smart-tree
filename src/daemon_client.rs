@@ -270,7 +270,11 @@ impl DaemonClient {
     }
 
     /// Record token savings for credits
-    pub async fn record_savings(&self, tokens_saved: u64, description: &str) -> Result<CreditsResponse> {
+    pub async fn record_savings(
+        &self,
+        tokens_saved: u64,
+        description: &str,
+    ) -> Result<CreditsResponse> {
         let url = format!("{}/credits/record", self.base_url);
         let resp = self
             .client
@@ -289,7 +293,11 @@ impl DaemonClient {
     }
 
     /// Call a daemon tool
-    pub async fn call_tool(&self, name: &str, arguments: serde_json::Value) -> Result<serde_json::Value> {
+    pub async fn call_tool(
+        &self,
+        name: &str,
+        arguments: serde_json::Value,
+    ) -> Result<serde_json::Value> {
         let url = format!("{}/tools/call", self.base_url);
         let req = ToolCallRequest {
             name: name.to_string(),
@@ -448,7 +456,10 @@ pub fn print_daemon_status(status: &DaemonStatus) {
             println!("╠═══════════════════════════════════════════════════════════╣");
             println!("║  Name:        {:<45} ║", info.name);
             println!("║  Version:     {:<45} ║", info.version);
-            println!("║  Description: {:<45} ║", truncate_str(&info.description, 45));
+            println!(
+                "║  Description: {:<45} ║",
+                truncate_str(&info.description, 45)
+            );
             println!("╚═══════════════════════════════════════════════════════════╝");
         }
         DaemonStatus::NotRunning => {
@@ -534,7 +545,10 @@ pub fn print_projects(projects: &[ProjectInfo]) {
             }
         }
         if projects.len() > 10 {
-            println!("║  ... and {} more projects                                ║", projects.len() - 10);
+            println!(
+                "║  ... and {} more projects                                ║",
+                projects.len() - 10
+            );
         }
     }
     println!("╚═══════════════════════════════════════════════════════════╝");
@@ -571,6 +585,9 @@ mod tests {
         // Use a random high port unlikely to have anything
         let client = DaemonClient::new(59999);
         let status = client.check_status().await;
-        assert!(matches!(status, DaemonStatus::NotRunning | DaemonStatus::Error(_)));
+        assert!(matches!(
+            status,
+            DaemonStatus::NotRunning | DaemonStatus::Error(_)
+        ));
     }
 }

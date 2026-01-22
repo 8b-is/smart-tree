@@ -10,19 +10,19 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 pub mod anthropic;
-pub mod google;
-pub mod openai;
 pub mod candle;
-pub mod server;
+pub mod google;
 pub mod memory;
+pub mod openai;
 pub mod openai_compat;
+pub mod server;
 
 /// 🤖 Common interface for all LLM providers
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
     /// Send a prompt to the LLM and get a response
     async fn complete(&self, request: LlmRequest) -> Result<LlmResponse>;
-    
+
     /// Get the provider name
     fn name(&self) -> &'static str;
 }
@@ -98,12 +98,12 @@ impl LlmProxy {
 impl Default for LlmProxy {
     fn default() -> Self {
         let mut proxy = Self::new();
-        
+
         // Add default providers if API keys are present in environment
         if std::env::var("OPENAI_API_KEY").is_ok() {
             proxy.add_provider(Box::new(openai::OpenAiProvider::default()));
         }
-        
+
         if std::env::var("ANTHROPIC_API_KEY").is_ok() {
             proxy.add_provider(Box::new(anthropic::AnthropicProvider::default()));
         }
@@ -114,7 +114,7 @@ impl Default for LlmProxy {
 
         // Always add Candle provider (it will check for feature at runtime/compile time)
         proxy.add_provider(Box::new(candle::CandleProvider::default()));
-        
+
         proxy
     }
 }

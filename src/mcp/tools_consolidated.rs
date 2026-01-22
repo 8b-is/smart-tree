@@ -695,11 +695,8 @@ pub async fn dispatch_consolidated_tool(
         }
         // 📖 Smart read tool with AST-aware compression
         "read" => {
-            super::tools::handle_tools_call(
-                json!({ "name": "read", "arguments": params }),
-                ctx,
-            )
-            .await
+            super::tools::handle_tools_call(json!({ "name": "read", "arguments": params }), ctx)
+                .await
         }
         // 📦 Full project context dump for AI assistants
         "project_context_dump" => {

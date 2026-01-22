@@ -13,7 +13,10 @@ use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 
 // Import CLI definitions from the library
-use st::cli::{Cli, ColorMode, MermaidStyleArg, OutputMode, PathMode, ScanArgs, SortField, get_ideal_depth_for_mode, parse_date};
+use st::cli::{
+    get_ideal_depth_for_mode, parse_date, Cli, ColorMode, MermaidStyleArg, OutputMode, PathMode,
+    ScanArgs, SortField,
+};
 // To make our output as vibrant as Trish's spreadsheets!
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -283,9 +286,14 @@ async fn main() -> Result<()> {
             let path_clone = path.clone();
             let client_clone = client.clone();
             tokio::spawn(async move {
-                let _ = client_clone.call_tool("query_context", serde_json::json!({
-                    "query": format!("scan:{}", path_clone)
-                })).await;
+                let _ = client_clone
+                    .call_tool(
+                        "query_context",
+                        serde_json::json!({
+                            "query": format!("scan:{}", path_clone)
+                        }),
+                    )
+                    .await;
             });
 
             // Fall through to normal local execution
@@ -948,8 +956,8 @@ async fn main() -> Result<()> {
 
 /// Handle LLM proxy requests
 async fn handle_proxy(cli: &Cli) -> Result<()> {
-    use st::proxy::{LlmMessage, LlmRequest, LlmRole};
     use st::proxy::memory::MemoryProxy;
+    use st::proxy::{LlmMessage, LlmRequest, LlmRole};
     use std::io::{self, Read};
 
     let provider_name = cli
@@ -989,7 +997,9 @@ async fn handle_proxy(cli: &Cli) -> Result<()> {
     };
 
     let scope_id = cli.scope.as_deref().unwrap_or("default");
-    let response = proxy.complete_with_memory(provider_name, scope_id, request).await?;
+    let response = proxy
+        .complete_with_memory(provider_name, scope_id, request)
+        .await?;
 
     println!("\n--- Response ---");
     println!("{}", response.content);
@@ -2084,7 +2094,7 @@ fn update_claude_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
 
 /// Start the Smart Tree daemon in the background
 async fn handle_daemon_start(port: u16) -> Result<()> {
-    use st::daemon_client::{print_daemon_status, print_context_summary};
+    use st::daemon_client::{print_context_summary, print_daemon_status};
 
     let client = DaemonClient::new(port);
 
@@ -2155,7 +2165,7 @@ async fn handle_daemon_stop(port: u16) -> Result<()> {
 
 /// Show the status of the Smart Tree daemon
 async fn handle_daemon_status(port: u16) -> Result<()> {
-    use st::daemon_client::{print_daemon_status, print_context_summary};
+    use st::daemon_client::{print_context_summary, print_daemon_status};
 
     let client = DaemonClient::new(port);
     let status = client.check_status().await;

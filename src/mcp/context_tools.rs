@@ -381,7 +381,9 @@ pub async fn anchor_collaborative_memory(
     // Use wave memory for storage
     let wave_memory = get_wave_memory();
     let result = {
-        let mut manager = wave_memory.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let mut manager = wave_memory
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         manager.anchor(
             req.context.clone(),
             req.keywords.clone(),
@@ -413,24 +415,45 @@ pub async fn anchor_collaborative_memory(
                     }
                 } else if req.origin.starts_with("ai:") {
                     let ai_name = req.origin.strip_prefix("ai:").unwrap_or("claude");
-                    crate::context_gatherer::collab_session::CollaborativeOrigin::Single(ai_name.to_string())
+                    crate::context_gatherer::collab_session::CollaborativeOrigin::Single(
+                        ai_name.to_string(),
+                    )
                 } else if req.origin == "human" {
-                    crate::context_gatherer::collab_session::CollaborativeOrigin::Single("human".to_string())
+                    crate::context_gatherer::collab_session::CollaborativeOrigin::Single(
+                        "human".to_string(),
+                    )
                 } else {
                     crate::context_gatherer::collab_session::CollaborativeOrigin::Emergent
                 };
 
                 let anchor_type = match req.anchor_type.as_str() {
-                    "pattern_insight" | "pattern" => crate::context_gatherer::collab_session::AnchorType::PatternInsight,
-                    "solution" | "breakthrough" => crate::context_gatherer::collab_session::AnchorType::Solution,
-                    "learning" | "learning_moment" => crate::context_gatherer::collab_session::AnchorType::LearningMoment,
-                    "joke" | "shared_joke" => crate::context_gatherer::collab_session::AnchorType::SharedJoke,
-                    "technical" | "technical_pattern" => crate::context_gatherer::collab_session::AnchorType::TechnicalPattern,
-                    "process" | "process_improvement" => crate::context_gatherer::collab_session::AnchorType::ProcessImprovement,
+                    "pattern_insight" | "pattern" => {
+                        crate::context_gatherer::collab_session::AnchorType::PatternInsight
+                    }
+                    "solution" | "breakthrough" => {
+                        crate::context_gatherer::collab_session::AnchorType::Solution
+                    }
+                    "learning" | "learning_moment" => {
+                        crate::context_gatherer::collab_session::AnchorType::LearningMoment
+                    }
+                    "joke" | "shared_joke" => {
+                        crate::context_gatherer::collab_session::AnchorType::SharedJoke
+                    }
+                    "technical" | "technical_pattern" => {
+                        crate::context_gatherer::collab_session::AnchorType::TechnicalPattern
+                    }
+                    "process" | "process_improvement" => {
+                        crate::context_gatherer::collab_session::AnchorType::ProcessImprovement
+                    }
                     _ => crate::context_gatherer::collab_session::AnchorType::PatternInsight,
                 };
 
-                let _ = gatherer.anchor_memory(origin, anchor_type, req.context.clone(), req.keywords.clone());
+                let _ = gatherer.anchor_memory(
+                    origin,
+                    anchor_type,
+                    req.context.clone(),
+                    req.keywords.clone(),
+                );
             }
 
             Ok(json!({
@@ -457,17 +480,29 @@ fn estimate_emotional_context(content: &str, anchor_type: &str) -> (f32, f32) {
 
     // Base valence/arousal from anchor type
     let (mut valence, mut arousal): (f32, f32) = match anchor_type {
-        "breakthrough" | "solution" => (0.8, 0.7),  // Very positive, exciting
-        "joke" | "shared_joke" => (0.9, 0.8),       // Very positive, high energy
+        "breakthrough" | "solution" => (0.8, 0.7), // Very positive, exciting
+        "joke" | "shared_joke" => (0.9, 0.8),      // Very positive, high energy
         "learning" | "learning_moment" => (0.5, 0.5), // Neutral-positive, moderate
         "pattern" | "pattern_insight" => (0.3, 0.3), // Calm, thoughtful
-        "technical" => (0.2, 0.4),                   // Neutral, focused
-        _ => (0.0, 0.5),                             // Neutral
+        "technical" => (0.2, 0.4),                 // Neutral, focused
+        _ => (0.0, 0.5),                           // Neutral
     };
 
     // Adjust based on content sentiment words
-    let positive_words = ["solved", "fixed", "works", "success", "great", "awesome", "love", "perfect", "breakthrough"];
-    let negative_words = ["bug", "error", "failed", "problem", "issue", "crash", "broken"];
+    let positive_words = [
+        "solved",
+        "fixed",
+        "works",
+        "success",
+        "great",
+        "awesome",
+        "love",
+        "perfect",
+        "breakthrough",
+    ];
+    let negative_words = [
+        "bug", "error", "failed", "problem", "issue", "crash", "broken",
+    ];
     let excitement_words = ["!", "amazing", "incredible", "finally", "eureka", "aha"];
 
     for word in positive_words.iter() {
@@ -522,11 +557,14 @@ pub async fn find_collaborative_memories(
 
     // Use wave memory for search
     let wave_memory = get_wave_memory();
-    let mut manager = wave_memory.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+    let mut manager = wave_memory
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
     if req.use_resonance {
         // Resonance search: find semantically similar memories
-        let memory_type = req.memory_type
+        let memory_type = req
+            .memory_type
             .as_ref()
             .map(|s| MemoryType::parse(s))
             .unwrap_or(MemoryType::Technical);
@@ -541,20 +579,23 @@ pub async fn find_collaborative_memories(
             max_results,
         );
 
-        let memories: Vec<_> = results.iter().map(|(mem, resonance)| {
-            json!({
-                "id": &mem.id,
-                "content": &mem.content,
-                "keywords": &mem.keywords,
-                "memory_type": format!("{:?}", mem.memory_type),
-                "resonance_score": format!("{:.2}", resonance),
-                "emotional_valence": mem.valence,
-                "emotional_arousal": mem.arousal,
-                "created_at": mem.created_at.to_rfc3339(),
-                "access_count": mem.access_count,
-                "origin": &mem.origin,
+        let memories: Vec<_> = results
+            .iter()
+            .map(|(mem, resonance)| {
+                json!({
+                    "id": &mem.id,
+                    "content": &mem.content,
+                    "keywords": &mem.keywords,
+                    "memory_type": format!("{:?}", mem.memory_type),
+                    "resonance_score": format!("{:.2}", resonance),
+                    "emotional_valence": mem.valence,
+                    "emotional_arousal": mem.arousal,
+                    "created_at": mem.created_at.to_rfc3339(),
+                    "access_count": mem.access_count,
+                    "origin": &mem.origin,
+                })
             })
-        }).collect();
+            .collect();
 
         Ok(json!({
             "search_mode": "resonance",
@@ -568,22 +609,26 @@ pub async fn find_collaborative_memories(
         // Keyword search: fast lookup
         let results = manager.find_by_keywords(&req.keywords, max_results);
 
-        let memories: Vec<_> = results.iter().map(|mem| {
-            json!({
-                "id": &mem.id,
-                "content": &mem.content,
-                "keywords": &mem.keywords,
-                "memory_type": format!("{:?}", mem.memory_type),
-                "emotional_valence": mem.valence,
-                "emotional_arousal": mem.arousal,
-                "created_at": mem.created_at.to_rfc3339(),
-                "access_count": mem.access_count,
-                "origin": &mem.origin,
+        let memories: Vec<_> = results
+            .iter()
+            .map(|mem| {
+                json!({
+                    "id": &mem.id,
+                    "content": &mem.content,
+                    "keywords": &mem.keywords,
+                    "memory_type": format!("{:?}", mem.memory_type),
+                    "emotional_valence": mem.valence,
+                    "emotional_arousal": mem.arousal,
+                    "created_at": mem.created_at.to_rfc3339(),
+                    "access_count": mem.access_count,
+                    "origin": &mem.origin,
+                })
             })
-        }).collect();
+            .collect();
 
         // Also check legacy storage for backward compatibility
-        let project_path = req.project_path
+        let project_path = req
+            .project_path
             .as_ref()
             .map(PathBuf::from)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
@@ -1066,7 +1111,10 @@ pub async fn clean_old_context(
 
     // Context file extensions we care about (from context_gatherer)
     let context_extensions: std::collections::HashSet<&str> =
-        crate::context_gatherer::CONTEXT_EXTENSIONS.iter().copied().collect();
+        crate::context_gatherer::CONTEXT_EXTENSIONS
+            .iter()
+            .copied()
+            .collect();
 
     // Walk each AI tool directory
     for tool_dir in &tools_to_clean {
@@ -1091,9 +1139,7 @@ pub async fn clean_old_context(
             }
 
             // Check extension - only clean context files
-            let ext = path.extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
             if !context_extensions.contains(ext) {
                 continue;

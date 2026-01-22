@@ -97,7 +97,11 @@ pub struct AnchoredMemory {
 
 impl AnchoredMemory {
     /// Calculate semantic coordinates from content + keywords
-    pub fn calculate_coordinates(content: &str, keywords: &[String], memory_type: MemoryType) -> (u8, u8, u16) {
+    pub fn calculate_coordinates(
+        content: &str,
+        keywords: &[String],
+        memory_type: MemoryType,
+    ) -> (u8, u8, u16) {
         // X-axis: content hash for semantic distribution
         let content_hash = Self::hash_string(content);
         let x = (content_hash % 256) as u8;
@@ -123,7 +127,8 @@ impl AnchoredMemory {
 
     /// Simple hash function for string
     fn hash_string(s: &str) -> u64 {
-        s.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64))
+        s.bytes()
+            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64))
     }
 
     /// Calculate resonance with another memory (0.0 to 1.0)
@@ -136,7 +141,9 @@ impl AnchoredMemory {
         };
 
         // Keyword overlap
-        let overlap = self.keywords.iter()
+        let overlap = self
+            .keywords
+            .iter()
             .filter(|k| other.keywords.contains(k))
             .count() as f32;
         let total = (self.keywords.len() + other.keywords.len()).max(1) as f32;
@@ -335,7 +342,11 @@ impl WaveMemoryManager {
 
     /// Find memories by keywords (fast lookup)
     /// Returns cloned memories to avoid borrow conflicts
-    pub fn find_by_keywords(&mut self, keywords: &[String], max_results: usize) -> Vec<AnchoredMemory> {
+    pub fn find_by_keywords(
+        &mut self,
+        keywords: &[String],
+        max_results: usize,
+    ) -> Vec<AnchoredMemory> {
         let ids = self.keyword_index.find(keywords);
         let found_ids: Vec<String> = ids.iter().take(max_results).cloned().collect();
 
@@ -368,7 +379,8 @@ impl WaveMemoryManager {
         max_results: usize,
     ) -> Vec<(AnchoredMemory, f32)> {
         // Create a query memory for comparison
-        let (x, y, z) = AnchoredMemory::calculate_coordinates(query_content, query_keywords, query_type);
+        let (x, y, z) =
+            AnchoredMemory::calculate_coordinates(query_content, query_keywords, query_type);
         let query = AnchoredMemory {
             id: String::new(),
             content: query_content.to_string(),
@@ -387,7 +399,8 @@ impl WaveMemoryManager {
         };
 
         // Calculate resonance with all memories and collect with IDs
-        let mut resonances: Vec<(String, AnchoredMemory, f32)> = self.memories
+        let mut resonances: Vec<(String, AnchoredMemory, f32)> = self
+            .memories
             .values()
             .map(|mem| (mem.id.clone(), mem.clone(), mem.resonance_with(&query)))
             .filter(|(_, _, r)| *r >= threshold)
@@ -397,7 +410,11 @@ impl WaveMemoryManager {
         resonances.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
 
         // Get the IDs to update
-        let update_ids: Vec<String> = resonances.iter().take(max_results).map(|(id, _, _)| id.clone()).collect();
+        let update_ids: Vec<String> = resonances
+            .iter()
+            .take(max_results)
+            .map(|(id, _, _)| id.clone())
+            .collect();
 
         // Update access counts
         for id in &update_ids {
@@ -408,7 +425,11 @@ impl WaveMemoryManager {
             }
         }
 
-        resonances.into_iter().take(max_results).map(|(_, mem, r)| (mem, r)).collect()
+        resonances
+            .into_iter()
+            .take(max_results)
+            .map(|(_, mem, r)| (mem, r))
+            .collect()
     }
 
     /// Get wave interference pattern at a location
@@ -422,9 +443,8 @@ impl WaveMemoryManager {
 
     /// Get memory statistics
     pub fn stats(&self) -> serde_json::Value {
-        let type_counts: HashMap<String, usize> = self.memories
-            .values()
-            .fold(HashMap::new(), |mut acc, mem| {
+        let type_counts: HashMap<String, usize> =
+            self.memories.values().fold(HashMap::new(), |mut acc, mem| {
                 *acc.entry(format!("{:?}", mem.memory_type)).or_default() += 1;
                 acc
             });
@@ -462,14 +482,16 @@ impl WaveMemoryManager {
             "keyword_index": self.keyword_index,
         });
 
-        let json = serde_json::to_string_pretty(&data)
-            .context("Failed to serialize memories")?;
+        let json = serde_json::to_string_pretty(&data).context("Failed to serialize memories")?;
 
-        fs::write(&self.storage_path, json)
-            .context("Failed to write memory file")?;
+        fs::write(&self.storage_path, json).context("Failed to write memory file")?;
 
         self.dirty = false;
-        eprintln!("💾 Saved {} memories to {}", self.memories.len(), self.storage_path.display());
+        eprintln!(
+            "💾 Saved {} memories to {}",
+            self.memories.len(),
+            self.storage_path.display()
+        );
 
         Ok(())
     }
@@ -480,11 +502,10 @@ impl WaveMemoryManager {
             return Err(anyhow::anyhow!("No memory file found"));
         }
 
-        let json = fs::read_to_string(&self.storage_path)
-            .context("Failed to read memory file")?;
+        let json = fs::read_to_string(&self.storage_path).context("Failed to read memory file")?;
 
-        let data: serde_json::Value = serde_json::from_str(&json)
-            .context("Failed to parse memory file")?;
+        let data: serde_json::Value =
+            serde_json::from_str(&json).context("Failed to parse memory file")?;
 
         // Load memories
         if let Some(memories) = data.get("memories") {
@@ -506,7 +527,11 @@ impl WaveMemoryManager {
             }
         }
 
-        eprintln!("🧠 Loaded {} memories from {}", self.memories.len(), self.storage_path.display());
+        eprintln!(
+            "🧠 Loaded {} memories from {}",
+            self.memories.len(),
+            self.storage_path.display()
+        );
 
         Ok(())
     }
@@ -542,18 +567,19 @@ impl Drop for WaveMemoryManager {
 }
 
 /// Global instance for MCP tool access
-static WAVE_MEMORY: std::sync::OnceLock<std::sync::Mutex<WaveMemoryManager>> = std::sync::OnceLock::new();
+static WAVE_MEMORY: std::sync::OnceLock<std::sync::Mutex<WaveMemoryManager>> =
+    std::sync::OnceLock::new();
 
 /// Get the global wave memory manager
 pub fn get_wave_memory() -> &'static std::sync::Mutex<WaveMemoryManager> {
-    WAVE_MEMORY.get_or_init(|| {
-        std::sync::Mutex::new(WaveMemoryManager::new(None))
-    })
+    WAVE_MEMORY.get_or_init(|| std::sync::Mutex::new(WaveMemoryManager::new(None)))
 }
 
 /// Initialize wave memory with a specific storage directory
 pub fn init_wave_memory(storage_dir: &Path) {
-    let _ = WAVE_MEMORY.set(std::sync::Mutex::new(WaveMemoryManager::new(Some(storage_dir))));
+    let _ = WAVE_MEMORY.set(std::sync::Mutex::new(WaveMemoryManager::new(Some(
+        storage_dir,
+    ))));
 }
 
 #[cfg(test)]
@@ -567,15 +593,17 @@ mod tests {
         let mut manager = WaveMemoryManager::new_test(Some(dir.path()));
 
         // Anchor a memory
-        let id = manager.anchor(
-            "The solution to the authentication bug was using JWT refresh tokens".to_string(),
-            vec!["auth".to_string(), "jwt".to_string(), "bug".to_string()],
-            MemoryType::Solution,
-            0.8, // Positive valence
-            0.7, // High arousal (exciting!)
-            "tandem:hue:claude".to_string(),
-            None,
-        ).unwrap();
+        let id = manager
+            .anchor(
+                "The solution to the authentication bug was using JWT refresh tokens".to_string(),
+                vec!["auth".to_string(), "jwt".to_string(), "bug".to_string()],
+                MemoryType::Solution,
+                0.8, // Positive valence
+                0.7, // High arousal (exciting!)
+                "tandem:hue:claude".to_string(),
+                None,
+            )
+            .unwrap();
 
         assert!(!id.is_empty());
 
@@ -591,23 +619,33 @@ mod tests {
         let mut manager = WaveMemoryManager::new_test(Some(dir.path()));
 
         // Anchor several memories
-        manager.anchor(
-            "Rust async/await pattern for error handling".to_string(),
-            vec!["rust".to_string(), "async".to_string(), "error".to_string()],
-            MemoryType::Technical,
-            0.3, 0.5,
-            "tandem:hue:claude".to_string(),
-            None,
-        ).unwrap();
+        manager
+            .anchor(
+                "Rust async/await pattern for error handling".to_string(),
+                vec!["rust".to_string(), "async".to_string(), "error".to_string()],
+                MemoryType::Technical,
+                0.3,
+                0.5,
+                "tandem:hue:claude".to_string(),
+                None,
+            )
+            .unwrap();
 
-        manager.anchor(
-            "Go channels for concurrent error propagation".to_string(),
-            vec!["go".to_string(), "channels".to_string(), "error".to_string()],
-            MemoryType::Technical,
-            0.2, 0.4,
-            "tandem:hue:claude".to_string(),
-            None,
-        ).unwrap();
+        manager
+            .anchor(
+                "Go channels for concurrent error propagation".to_string(),
+                vec![
+                    "go".to_string(),
+                    "channels".to_string(),
+                    "error".to_string(),
+                ],
+                MemoryType::Technical,
+                0.2,
+                0.4,
+                "tandem:hue:claude".to_string(),
+                None,
+            )
+            .unwrap();
 
         // Search by resonance
         let results = manager.find_by_resonance(
@@ -630,14 +668,17 @@ mod tests {
         // Create and save
         {
             let mut manager = WaveMemoryManager::new_test(Some(dir.path()));
-            manager.anchor(
-                "Aye loves Elvis!".to_string(),
-                vec!["aye".to_string(), "elvis".to_string()],
-                MemoryType::Joke,
-                1.0, 1.0,
-                "tandem:hue:claude".to_string(),
-                None,
-            ).unwrap();
+            manager
+                .anchor(
+                    "Aye loves Elvis!".to_string(),
+                    vec!["aye".to_string(), "elvis".to_string()],
+                    MemoryType::Joke,
+                    1.0,
+                    1.0,
+                    "tandem:hue:claude".to_string(),
+                    None,
+                )
+                .unwrap();
             manager.save().unwrap();
         }
 

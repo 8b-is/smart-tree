@@ -49,16 +49,19 @@ impl LlmProvider for CandleProvider {
                 std::marker::PhantomData::<Tensor>,
                 std::marker::PhantomData::<llama::Config>,
             );
-            
+
             // This is a placeholder for the actual Candle implementation.
             // In a real scenario, we would:
             // 1. Load the model (if not already loaded)
             // 2. Tokenize the input
             // 3. Run inference
             // 4. Decode the output
-            
-            println!("🕯️ Running local inference with Candle (model: {})...", _request.model);
-            
+
+            println!(
+                "🕯️ Running local inference with Candle (model: {})...",
+                _request.model
+            );
+
             // For now, return a helpful message
             Ok(LlmResponse {
                 content: format!("Local inference with Candle is configured but requires model weights. (Requested model: {})", _request.model),

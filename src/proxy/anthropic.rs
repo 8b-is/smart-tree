@@ -5,8 +5,8 @@
 use crate::proxy::{LlmMessage, LlmProvider, LlmRequest, LlmResponse, LlmRole, LlmUsage};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 pub struct AnthropicProvider {
     client: Client,
@@ -35,11 +35,11 @@ impl Default for AnthropicProvider {
 impl LlmProvider for AnthropicProvider {
     async fn complete(&self, request: LlmRequest) -> Result<LlmResponse> {
         let url = format!("{}/messages", self.base_url);
-        
+
         // Extract system message if present
         let mut system = None;
         let mut messages = Vec::new();
-        
+
         for msg in request.messages {
             if msg.role == LlmRole::System {
                 system = Some(msg.content);
@@ -57,7 +57,8 @@ impl LlmProvider for AnthropicProvider {
             stream: request.stream,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -72,8 +73,10 @@ impl LlmProvider for AnthropicProvider {
         }
 
         let anthropic_response: AnthropicChatResponse = response.json().await?;
-        
-        let content = anthropic_response.content.first()
+
+        let content = anthropic_response
+            .content
+            .first()
             .map(|c| c.text.clone())
             .unwrap_or_default();
 

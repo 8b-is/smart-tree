@@ -3,7 +3,7 @@
 // Checks for updates from GitHub releases and installs new versions
 // -----------------------------------------------------------------------------
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -100,10 +100,7 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
     let latest = latest.strip_prefix('v').unwrap_or(latest);
 
     let parse_version = |v: &str| -> (u32, u32, u32) {
-        let parts: Vec<u32> = v
-            .split('.')
-            .filter_map(|p| p.parse().ok())
-            .collect();
+        let parts: Vec<u32> = v.split('.').filter_map(|p| p.parse().ok()).collect();
         (
             parts.first().copied().unwrap_or(0),
             parts.get(1).copied().unwrap_or(0),
@@ -158,7 +155,9 @@ pub fn check_for_update_cached() -> Option<String> {
         }
     } else {
         // Use cached result
-        cache.latest_version.filter(|v| is_newer_version(CURRENT_VERSION, v))
+        cache
+            .latest_version
+            .filter(|v| is_newer_version(CURRENT_VERSION, v))
     }
 }
 
@@ -167,7 +166,10 @@ pub fn print_update_banner(latest_version: &str) {
     let current = format!("v{}", CURRENT_VERSION);
     eprintln!();
     eprintln!("\x1b[36m╭─────────────────────────────────────────────────────╮\x1b[0m");
-    eprintln!("\x1b[36m│\x1b[0m \x1b[32m🌳 Smart Tree {} is available!\x1b[0m (you have {})", latest_version, current);
+    eprintln!(
+        "\x1b[36m│\x1b[0m \x1b[32m🌳 Smart Tree {} is available!\x1b[0m (you have {})",
+        latest_version, current
+    );
     eprintln!("\x1b[36m│\x1b[0m    Run '\x1b[1mst --update\x1b[0m' to upgrade");
     eprintln!("\x1b[36m╰─────────────────────────────────────────────────────╯\x1b[0m");
     eprintln!();
@@ -214,7 +216,8 @@ fn cleanup_temp_dir(path: &Path) {
 fn find_install_dir() -> Result<PathBuf> {
     // Try to find where 'st' is installed
     let current_exe = env::current_exe().context("Could not determine current executable path")?;
-    let install_dir = current_exe.parent()
+    let install_dir = current_exe
+        .parent()
         .context("Could not determine installation directory")?
         .to_path_buf();
 
@@ -232,7 +235,11 @@ fn needs_sudo(install_dir: &Path) -> bool {
             if meta.uid() != uid {
                 // Not owner, check if writable
                 return fs::metadata(install_dir)
-                    .and_then(|_| fs::OpenOptions::new().write(true).open(install_dir.join(".test_write")))
+                    .and_then(|_| {
+                        fs::OpenOptions::new()
+                            .write(true)
+                            .open(install_dir.join(".test_write"))
+                    })
                     .is_err();
             }
         }
@@ -278,7 +285,11 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
     }
 
     // Construct download URL
-    let ext = if cfg!(target_os = "windows") { "zip" } else { "tar.gz" };
+    let ext = if cfg!(target_os = "windows") {
+        "zip"
+    } else {
+        "tar.gz"
+    };
     let archive_name = format!("st-{}-{}-{}.{}", version, arch, os, ext);
     let download_url = format!(
         "https://github.com/{}/releases/download/{}/{}",
@@ -321,7 +332,10 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
             .context("Failed to extract archive")?;
 
         if !output.status.success() {
-            bail!("Failed to extract archive: {}", String::from_utf8_lossy(&output.stderr));
+            bail!(
+                "Failed to extract archive: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
     }
 
@@ -341,7 +355,10 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
             .context("Failed to extract archive")?;
 
         if !output.status.success() {
-            bail!("Failed to extract archive: {}", String::from_utf8_lossy(&output.stderr));
+            bail!(
+                "Failed to extract archive: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
     }
 
@@ -368,7 +385,11 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
                     .status();
 
                 Command::new("sudo")
-                    .args(["cp", src_path.to_str().unwrap(), dest_path.to_str().unwrap()])
+                    .args([
+                        "cp",
+                        src_path.to_str().unwrap(),
+                        dest_path.to_str().unwrap(),
+                    ])
                     .status()
                     .context(format!("Failed to install {}", binary))?;
 
@@ -377,8 +398,7 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
                     .status()?;
             } else {
                 let _ = fs::remove_file(&dest_path);
-                fs::copy(&src_path, &dest_path)
-                    .context(format!("Failed to install {}", binary))?;
+                fs::copy(&src_path, &dest_path).context(format!("Failed to install {}", binary))?;
 
                 // Set executable permission
                 use std::os::unix::fs::PermissionsExt;
@@ -395,8 +415,7 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
             let _ = fs::remove_file(&old_path);
             let _ = fs::rename(&dest_path, &old_path);
 
-            fs::copy(&src_path, &dest_path)
-                .context(format!("Failed to install {}", binary))?;
+            fs::copy(&src_path, &dest_path).context(format!("Failed to install {}", binary))?;
         }
 
         println!("  \x1b[32m✓\x1b[0m {}", binary);
@@ -416,7 +435,9 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
     #[cfg(windows)]
     {
         println!();
-        println!("\x1b[33mNote: Please restart your terminal for the update to take effect.\x1b[0m");
+        println!(
+            "\x1b[33mNote: Please restart your terminal for the update to take effect.\x1b[0m"
+        );
     }
 
     Ok(())
@@ -454,7 +475,10 @@ pub fn run_update(yes: bool) -> Result<()> {
             download_and_install(&version, yes)?;
         }
         None => {
-            println!("\x1b[32m✓\x1b[0m Already up to date! (v{})", CURRENT_VERSION);
+            println!(
+                "\x1b[32m✓\x1b[0m Already up to date! (v{})",
+                CURRENT_VERSION
+            );
         }
     }
 

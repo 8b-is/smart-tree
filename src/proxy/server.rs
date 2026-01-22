@@ -5,35 +5,32 @@
 //!
 //! "Serving AI requests with a smile and a tree!" - The Cheet 😺
 
-use crate::proxy::LlmRequest;
 use crate::proxy::memory::MemoryProxy;
 use crate::proxy::openai_compat::{
-    OpenAiRequest, OpenAiResponse, OpenAiErrorResponse, OpenAiError,
-    OpenAiChoice, OpenAiResponseMessage, OpenAiUsage,
+    OpenAiChoice, OpenAiError, OpenAiErrorResponse, OpenAiRequest, OpenAiResponse,
+    OpenAiResponseMessage, OpenAiUsage,
 };
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::post,
-    Json, Router,
-};
+use crate::proxy::LlmRequest;
+use anyhow::Result;
+use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::Result;
 
 /// 🚀 Start the OpenAI-compatible proxy server
 pub async fn start_proxy_server(port: u16) -> Result<()> {
     let proxy = Arc::new(RwLock::new(MemoryProxy::new()?));
-    
+
     let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(proxy);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     println!("🚀 Smart Tree LLM Proxy Server running on http://{}", addr);
-    println!("🌳 OpenAI-compatible endpoint: http://{}/v1/chat/completions", addr);
+    println!(
+        "🌳 OpenAI-compatible endpoint: http://{}/v1/chat/completions",
+        addr
+    );
     println!("🧠 Memory enabled with scoped conversation history!");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -69,28 +66,35 @@ async fn chat_completions(
 
     // Call the proxy with memory - lock is only held during the complete_with_memory call
     let mut proxy_lock = proxy.write().await;
-    match proxy_lock.complete_with_memory(&provider_name, &scope_id, internal_req).await {
+    match proxy_lock
+        .complete_with_memory(&provider_name, &scope_id, internal_req)
+        .await
+    {
         Ok(resp) => {
             // Map back to OpenAI response
-            (StatusCode::OK, Json(OpenAiResponse {
-                id: format!("st-{}", uuid::Uuid::new_v4()),
-                object: "chat.completion".to_string(),
-                created: chrono::Utc::now().timestamp() as u64,
-                model: req.model,
-                choices: vec![OpenAiChoice {
-                    index: 0,
-                    message: OpenAiResponseMessage {
-                        role: "assistant".to_string(),
-                        content: resp.content,
-                    },
-                    finish_reason: "stop".to_string(),
-                }],
-                usage: resp.usage.map(|u| OpenAiUsage {
-                    prompt_tokens: u.prompt_tokens,
-                    completion_tokens: u.completion_tokens,
-                    total_tokens: u.total_tokens,
+            (
+                StatusCode::OK,
+                Json(OpenAiResponse {
+                    id: format!("st-{}", uuid::Uuid::new_v4()),
+                    object: "chat.completion".to_string(),
+                    created: chrono::Utc::now().timestamp() as u64,
+                    model: req.model,
+                    choices: vec![OpenAiChoice {
+                        index: 0,
+                        message: OpenAiResponseMessage {
+                            role: "assistant".to_string(),
+                            content: resp.content,
+                        },
+                        finish_reason: "stop".to_string(),
+                    }],
+                    usage: resp.usage.map(|u| OpenAiUsage {
+                        prompt_tokens: u.prompt_tokens,
+                        completion_tokens: u.completion_tokens,
+                        total_tokens: u.total_tokens,
+                    }),
                 }),
-            })).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             let error_msg = format!("{}", e);
@@ -102,14 +106,17 @@ async fn chat_completions(
                 StatusCode::INTERNAL_SERVER_ERROR
             };
 
-            (status, Json(OpenAiErrorResponse {
-                error: OpenAiError {
-                    message: error_msg,
-                    error_type: "api_error".to_string(),
-                    code: None,
-                },
-            })).into_response()
+            (
+                status,
+                Json(OpenAiErrorResponse {
+                    error: OpenAiError {
+                        message: error_msg,
+                        error_type: "api_error".to_string(),
+                        code: None,
+                    },
+                }),
+            )
+                .into_response()
         }
     }
 }
-

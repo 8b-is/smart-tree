@@ -30,7 +30,12 @@ pub struct Cli {
     pub version: bool,
 
     /// Generate shell completion scripts (bash, zsh, fish, powershell)
-    #[arg(long, exclusive = true, value_name = "SHELL", help_heading = "Getting Started")]
+    #[arg(
+        long,
+        exclusive = true,
+        value_name = "SHELL",
+        help_heading = "Getting Started"
+    )]
     pub completions: Option<clap_complete::Shell>,
 
     /// Generate the man page
@@ -299,7 +304,13 @@ pub struct ScanArgs {
     // OUTPUT FORMAT
     // =========================================================================
     /// Output format (classic, ai, quantum, json, etc.)
-    #[arg(short, long, value_enum, default_value = "auto", help_heading = "Output Format")]
+    #[arg(
+        short,
+        long,
+        value_enum,
+        default_value = "auto",
+        help_heading = "Output Format"
+    )]
     pub mode: OutputMode,
 
     // =========================================================================
@@ -384,7 +395,12 @@ pub struct ScanArgs {
     pub compact: bool,
 
     /// Path display: off, relative, or full
-    #[arg(long = "path-mode", value_enum, default_value = "off", help_heading = "Display")]
+    #[arg(
+        long = "path-mode",
+        value_enum,
+        default_value = "off",
+        help_heading = "Display"
+    )]
     pub path_mode: PathMode,
 
     /// Color output: always, never, or auto
@@ -444,7 +460,12 @@ pub struct ScanArgs {
     // MERMAID & MARKDOWN OPTIONS
     // =========================================================================
     /// Mermaid style: flowchart, mindmap, gitgraph, treemap
-    #[arg(long, value_enum, default_value = "flowchart", help_heading = "Mermaid & Markdown")]
+    #[arg(
+        long,
+        value_enum,
+        default_value = "flowchart",
+        help_heading = "Mermaid & Markdown"
+    )]
     pub mermaid_style: MermaidStyleArg,
 
     /// Exclude mermaid diagrams from markdown
@@ -640,9 +661,7 @@ pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
 /// Parse a date string (YYYY-MM-DD) into SystemTime
 pub fn parse_date(date_str: &str) -> Result<SystemTime> {
     let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-    let datetime = date
-        .and_hms_opt(0, 0, 0)
-        .context("Invalid time")?;
+    let datetime = date.and_hms_opt(0, 0, 0).context("Invalid time")?;
     Ok(SystemTime::from(
         datetime
             .and_local_timezone(chrono::Local)

@@ -5,8 +5,8 @@
 use crate::proxy::{LlmMessage, LlmProvider, LlmRequest, LlmResponse, LlmRole, LlmUsage};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 pub struct GoogleProvider {
     client: Client,
@@ -34,8 +34,11 @@ impl Default for GoogleProvider {
 #[async_trait]
 impl LlmProvider for GoogleProvider {
     async fn complete(&self, request: LlmRequest) -> Result<LlmResponse> {
-        let url = format!("{}/models/{}:generateContent?key={}", self.base_url, request.model, self.api_key);
-        
+        let url = format!(
+            "{}/models/{}:generateContent?key={}",
+            self.base_url, request.model, self.api_key
+        );
+
         let google_request = GoogleChatRequest {
             contents: request.messages.into_iter().map(Into::into).collect(),
             generation_config: Some(GoogleGenerationConfig {
@@ -44,7 +47,8 @@ impl LlmProvider for GoogleProvider {
             }),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(&google_request)
             .send()
@@ -57,8 +61,10 @@ impl LlmProvider for GoogleProvider {
         }
 
         let google_response: GoogleChatResponse = response.json().await?;
-        
-        let content = google_response.candidates.first()
+
+        let content = google_response
+            .candidates
+            .first()
             .and_then(|c| c.content.parts.first())
             .map(|p| p.text.clone())
             .unwrap_or_default();

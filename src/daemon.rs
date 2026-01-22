@@ -27,16 +27,16 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::sync::oneshot;
+use tokio::sync::RwLock;
 
 // LLM Proxy integration
-use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmRole};
 use crate::proxy::memory::ProxyMemory;
 use crate::proxy::openai_compat::{
-    OpenAiRequest, OpenAiResponse, OpenAiErrorResponse, OpenAiError,
-    OpenAiChoice, OpenAiResponseMessage, OpenAiUsage,
+    OpenAiChoice, OpenAiError, OpenAiErrorResponse, OpenAiRequest, OpenAiResponse,
+    OpenAiResponseMessage, OpenAiUsage,
 };
+use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmRole};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -547,23 +547,27 @@ async fn ping() -> &'static str {
 }
 
 /// Shutdown handler - gracefully stop the daemon
-async fn shutdown_handler(
-    State(state): State<Arc<RwLock<DaemonState>>>,
-) -> impl IntoResponse {
+async fn shutdown_handler(State(state): State<Arc<RwLock<DaemonState>>>) -> impl IntoResponse {
     // Take the shutdown sender and trigger shutdown
     let mut s = state.write().await;
     if let Some(tx) = s.shutdown_tx.take() {
         // Send shutdown signal
         let _ = tx.send(());
-        (StatusCode::OK, Json(serde_json::json!({
-            "status": "shutting_down",
-            "message": "Smart Tree Daemon is shutting down gracefully"
-        })))
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "shutting_down",
+                "message": "Smart Tree Daemon is shutting down gracefully"
+            })),
+        )
     } else {
-        (StatusCode::CONFLICT, Json(serde_json::json!({
-            "status": "error",
-            "message": "Shutdown already in progress"
-        })))
+        (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": "Shutdown already in progress"
+            })),
+        )
     }
 }
 
@@ -732,7 +736,12 @@ async fn chat_completions(
         let mut messages_with_history = Vec::new();
 
         // Keep system message at the top if present
-        if let Some(system_msg) = internal_req.messages.iter().find(|m| m.role == LlmRole::System).cloned() {
+        if let Some(system_msg) = internal_req
+            .messages
+            .iter()
+            .find(|m| m.role == LlmRole::System)
+            .cloned()
+        {
             messages_with_history.push(system_msg);
         }
 
@@ -761,7 +770,10 @@ async fn chat_completions(
     // Call the LLM provider with a read lock (doesn't need mutable access)
     let llm_result = {
         let state_lock = state.read().await;
-        state_lock.llm_proxy.complete(&provider_name, request_with_history).await
+        state_lock
+            .llm_proxy
+            .complete(&provider_name, request_with_history)
+            .await
     };
 
     match llm_result {
@@ -771,7 +783,12 @@ async fn chat_completions(
 
             // Update memory with this exchange
             let mut new_history = Vec::new();
-            if let Some(last_user_msg) = internal_req.messages.iter().rev().find(|m| m.role == LlmRole::User) {
+            if let Some(last_user_msg) = internal_req
+                .messages
+                .iter()
+                .rev()
+                .find(|m| m.role == LlmRole::User)
+            {
                 new_history.push(last_user_msg.clone());
             }
             new_history.push(LlmMessage {
@@ -789,25 +806,29 @@ async fn chat_completions(
                 );
             }
 
-            (StatusCode::OK, Json(OpenAiResponse {
-                id: format!("st-{}", uuid::Uuid::new_v4()),
-                object: "chat.completion".to_string(),
-                created: chrono::Utc::now().timestamp() as u64,
-                model: req.model,
-                choices: vec![OpenAiChoice {
-                    index: 0,
-                    message: OpenAiResponseMessage {
-                        role: "assistant".to_string(),
-                        content: resp.content,
-                    },
-                    finish_reason: "stop".to_string(),
-                }],
-                usage: resp.usage.map(|u| OpenAiUsage {
-                    prompt_tokens: u.prompt_tokens,
-                    completion_tokens: u.completion_tokens,
-                    total_tokens: u.total_tokens,
+            (
+                StatusCode::OK,
+                Json(OpenAiResponse {
+                    id: format!("st-{}", uuid::Uuid::new_v4()),
+                    object: "chat.completion".to_string(),
+                    created: chrono::Utc::now().timestamp() as u64,
+                    model: req.model,
+                    choices: vec![OpenAiChoice {
+                        index: 0,
+                        message: OpenAiResponseMessage {
+                            role: "assistant".to_string(),
+                            content: resp.content,
+                        },
+                        finish_reason: "stop".to_string(),
+                    }],
+                    usage: resp.usage.map(|u| OpenAiUsage {
+                        prompt_tokens: u.prompt_tokens,
+                        completion_tokens: u.completion_tokens,
+                        total_tokens: u.total_tokens,
+                    }),
                 }),
-            })).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             let error_msg = format!("{}", e);
@@ -819,30 +840,37 @@ async fn chat_completions(
                 StatusCode::INTERNAL_SERVER_ERROR
             };
 
-            (status, Json(OpenAiErrorResponse {
-                error: OpenAiError {
-                    message: error_msg,
-                    error_type: "api_error".to_string(),
-                    code: None,
-                },
-            })).into_response()
+            (
+                status,
+                Json(OpenAiErrorResponse {
+                    error: OpenAiError {
+                        message: error_msg,
+                        error_type: "api_error".to_string(),
+                        code: None,
+                    },
+                }),
+            )
+                .into_response()
         }
     }
 }
 
 /// List available models from all providers
-async fn list_models(
-    State(state): State<Arc<RwLock<DaemonState>>>,
-) -> Json<serde_json::Value> {
+async fn list_models(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<serde_json::Value> {
     let state_lock = state.read().await;
 
-    let models: Vec<serde_json::Value> = state_lock.llm_proxy.providers.iter().map(|p| {
-        serde_json::json!({
-            "id": format!("{}/default", p.name().to_lowercase()),
-            "object": "model",
-            "owned_by": p.name(),
+    let models: Vec<serde_json::Value> = state_lock
+        .llm_proxy
+        .providers
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "id": format!("{}/default", p.name().to_lowercase()),
+                "object": "model",
+                "owned_by": p.name(),
+            })
         })
-    }).collect();
+        .collect();
 
     Json(serde_json::json!({
         "object": "list",
