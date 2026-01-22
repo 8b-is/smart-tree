@@ -123,6 +123,7 @@ fn test_compression_mode_auto_selection() {
 
 /// Test context mode formatter
 #[test]
+#[allow(clippy::useless_vec)]
 fn test_context_mode_output() {
     use st::scanner::FileType;
     use st::{FileCategory, FileNode, FilesystemType, TreeStats};
