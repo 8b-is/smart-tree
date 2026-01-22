@@ -15,6 +15,7 @@ pub mod openai;
 pub mod candle;
 pub mod server;
 pub mod memory;
+pub mod openai_compat;
 
 /// 🤖 Common interface for all LLM providers
 #[async_trait]

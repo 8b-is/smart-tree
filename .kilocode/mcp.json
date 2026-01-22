@@ -1,1 +1,1 @@
-{"mcpServers":{"smart-tree":{"command":"/Users/wraith/Developer/smart-tree/target/release/st","args":["--mcp"],"env":{},"alwaysAllow":["overview","find","analyze","hooks","read","search","edit","history","context","memory","feedback","compare","server_info","verify_permissions","sse","unified_watcher"]}}}
+{"mcpServers":{"smart-tree":{"command":"st","args":["--mcp"],"env":{},"alwaysAllow":["overview","find","analyze","hooks","read","search","edit","history","context","memory","feedback","compare","server_info","verify_permissions","sse","unified_watcher"]}}}
