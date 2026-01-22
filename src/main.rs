@@ -184,6 +184,18 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Handle security cleanup (--cleanup)
+    if cli.cleanup {
+        use st::ai_install::run_security_cleanup;
+        match run_security_cleanup(cli.yes) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                eprintln!("❌ Security cleanup failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Handle unified AI integration installer (-i / --install-ai)
     if cli.install_ai {
         use st::ai_install::run_ai_install;

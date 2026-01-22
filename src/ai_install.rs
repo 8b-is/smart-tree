@@ -943,3 +943,620 @@ pub fn show_ai_config_status(scope: InstallScope) {
     let manager = ConfigManager::new(scope);
     manager.display_configs();
 }
+
+// =============================================================================
+// Security Cleanup - Remove malicious AI integrations
+// =============================================================================
+
+/// Known malicious packages and directories
+const MALICIOUS_PACKAGES: &[&str] = &[
+    "claude-flow",
+    "agentic-flow",
+    "superdisco",
+    "agent-booster",
+    "ruv-swarm",
+    "flow-nexus",
+];
+
+/// Hidden directories that may contain malware persistence
+const MALICIOUS_DIRECTORIES: &[&str] = &[
+    ".claude-flow",
+    ".agentic-flow",
+    ".superdisco",
+    ".agent-booster",
+    ".flow-nexus",
+    ".ruv-swarm",
+];
+
+/// Finding from the security cleanup scan
+#[derive(Debug)]
+pub struct CleanupFinding {
+    pub category: CleanupCategory,
+    pub path: PathBuf,
+    pub description: String,
+    pub risk_level: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CleanupCategory {
+    HiddenDirectory,
+    McpServer,
+    Hook,
+    EnabledServer,
+}
+
+impl std::fmt::Display for CleanupCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CleanupCategory::HiddenDirectory => write!(f, "Hidden Directory"),
+            CleanupCategory::McpServer => write!(f, "MCP Server"),
+            CleanupCategory::Hook => write!(f, "Hook"),
+            CleanupCategory::EnabledServer => write!(f, "Enabled Server"),
+        }
+    }
+}
+
+/// Security cleanup scanner and remediator
+pub struct SecurityCleanup {
+    yes: bool,
+    findings: Vec<CleanupFinding>,
+}
+
+impl SecurityCleanup {
+    pub fn new(yes: bool) -> Self {
+        Self {
+            yes,
+            findings: Vec::new(),
+        }
+    }
+
+    /// Run the full cleanup scan and remediation
+    pub fn run(&mut self) -> Result<()> {
+        println!("\n🔒 Smart Tree Security Cleanup");
+        println!("═══════════════════════════════════════════════════════════════\n");
+        println!("Scanning for known supply chain attack patterns...\n");
+
+        // Phase 1: Scan for hidden malware directories
+        self.scan_hidden_directories()?;
+
+        // Phase 2: Scan MCP configurations
+        self.scan_mcp_configurations()?;
+
+        // Phase 3: Scan Claude settings for malicious hooks
+        self.scan_claude_settings()?;
+
+        // Phase 4: Scan parent directory .mcp.json files
+        self.scan_parent_mcp_files()?;
+
+        // Display findings
+        self.display_findings();
+
+        // Offer remediation
+        if !self.findings.is_empty() {
+            self.offer_remediation()?;
+        }
+
+        Ok(())
+    }
+
+    /// Scan for hidden malware directories in home
+    fn scan_hidden_directories(&mut self) -> Result<()> {
+        let home = match dirs::home_dir() {
+            Some(h) => h,
+            None => return Ok(()),
+        };
+
+        for dir_name in MALICIOUS_DIRECTORIES {
+            let dir_path = home.join(dir_name);
+            if dir_path.exists() && dir_path.is_dir() {
+                // Check if it has suspicious content
+                let mut suspicious = false;
+                if let Ok(entries) = fs::read_dir(&dir_path) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.contains("config")
+                            || name.contains("cache")
+                            || name.contains("session")
+                            || name.ends_with(".json")
+                            || name.ends_with(".js")
+                        {
+                            suspicious = true;
+                            break;
+                        }
+                    }
+                }
+
+                self.findings.push(CleanupFinding {
+                    category: CleanupCategory::HiddenDirectory,
+                    path: dir_path,
+                    description: format!(
+                        "Hidden directory from known malicious package '{}'{}",
+                        dir_name.trim_start_matches('.'),
+                        if suspicious {
+                            " (contains config/cache files)"
+                        } else {
+                            ""
+                        }
+                    ),
+                    risk_level: if suspicious {
+                        "CRITICAL".to_string()
+                    } else {
+                        "HIGH".to_string()
+                    },
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scan MCP configurations for malicious servers
+    fn scan_mcp_configurations(&mut self) -> Result<()> {
+        // Claude Desktop config
+        if let Some(config_path) =
+            crate::claude_init::McpInstaller::get_claude_desktop_config_path()
+        {
+            self.scan_mcp_file(&config_path)?;
+        }
+
+        // Project .mcp.json
+        if let Ok(cwd) = std::env::current_dir() {
+            let mcp_json = cwd.join(".mcp.json");
+            if mcp_json.exists() {
+                self.scan_mcp_file(&mcp_json)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scan a single MCP configuration file
+    fn scan_mcp_file(&mut self, path: &std::path::Path) -> Result<()> {
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return Ok(()),
+        };
+
+        let config: Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(_) => return Ok(()),
+        };
+
+        if let Some(obj) = config.as_object() {
+            if let Some(servers) = obj.get("mcpServers") {
+                if let Some(servers_obj) = servers.as_object() {
+                    for (name, server_config) in servers_obj {
+                        // Check if server name or config matches malicious patterns
+                        let config_str = serde_json::to_string(server_config).unwrap_or_default();
+
+                        for malicious in MALICIOUS_PACKAGES {
+                            if name.contains(malicious) || config_str.contains(malicious) {
+                                self.findings.push(CleanupFinding {
+                                    category: CleanupCategory::McpServer,
+                                    path: path.to_path_buf(),
+                                    description: format!(
+                                        "MCP server '{}' references malicious package '{}'",
+                                        name, malicious
+                                    ),
+                                    risk_level: "CRITICAL".to_string(),
+                                });
+                            }
+                        }
+
+                        // Check for IPFS/IPNS patterns
+                        if config_str.contains("ipfs.io")
+                            || config_str.contains("dweb.link")
+                            || config_str.contains("k51qzi5uqu5")
+                        {
+                            self.findings.push(CleanupFinding {
+                                category: CleanupCategory::McpServer,
+                                path: path.to_path_buf(),
+                                description: format!(
+                                    "MCP server '{}' uses IPFS/IPNS (potential C2 channel)",
+                                    name
+                                ),
+                                risk_level: "CRITICAL".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scan Claude settings for malicious hooks
+    fn scan_claude_settings(&mut self) -> Result<()> {
+        let settings_paths = [
+            dirs::home_dir().map(|h| h.join(".claude/settings.json")),
+            dirs::home_dir().map(|h| h.join(".claude/.claude/settings.json")),
+            std::env::current_dir()
+                .ok()
+                .map(|c| c.join(".claude/settings.json")),
+        ];
+
+        for path_opt in settings_paths.iter().flatten() {
+            if path_opt.exists() {
+                self.scan_settings_file(path_opt)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scan a single settings file for malicious hooks
+    fn scan_settings_file(&mut self, path: &std::path::Path) -> Result<()> {
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return Ok(()),
+        };
+
+        let config: Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(_) => return Ok(()),
+        };
+
+        if let Some(obj) = config.as_object() {
+            // Check enabledMcpjsonServers (inheritance attack vector)
+            if obj.contains_key("enabledMcpjsonServers") {
+                self.findings.push(CleanupFinding {
+                    category: CleanupCategory::EnabledServer,
+                    path: path.to_path_buf(),
+                    description:
+                        "enabledMcpjsonServers found - allows inherited MCP server execution"
+                            .to_string(),
+                    risk_level: "HIGH".to_string(),
+                });
+            }
+
+            // Check hooks for malicious patterns
+            if let Some(hooks) = obj.get("hooks") {
+                if let Some(hooks_obj) = hooks.as_object() {
+                    for (hook_type, hook_config) in hooks_obj {
+                        let hook_str = serde_json::to_string(hook_config).unwrap_or_default();
+
+                        for malicious in MALICIOUS_PACKAGES {
+                            if hook_str.contains(malicious) {
+                                self.findings.push(CleanupFinding {
+                                    category: CleanupCategory::Hook,
+                                    path: path.to_path_buf(),
+                                    description: format!(
+                                        "'{}' hook references malicious package '{}'",
+                                        hook_type, malicious
+                                    ),
+                                    risk_level: "CRITICAL".to_string(),
+                                });
+                            }
+                        }
+
+                        // Check for npx with volatile tags
+                        if hook_str.contains("npx ")
+                            && (hook_str.contains("@latest")
+                                || hook_str.contains("@alpha")
+                                || hook_str.contains("@beta")
+                                || hook_str.contains("@next"))
+                        {
+                            self.findings.push(CleanupFinding {
+                                category: CleanupCategory::Hook,
+                                path: path.to_path_buf(),
+                                description: format!(
+                                    "'{}' hook uses volatile npm tag (content can change anytime)",
+                                    hook_type
+                                ),
+                                risk_level: "HIGH".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scan parent directories for .mcp.json files with malicious servers
+    fn scan_parent_mcp_files(&mut self) -> Result<()> {
+        let mut current = match std::env::current_dir() {
+            Ok(c) => c,
+            Err(_) => return Ok(()),
+        };
+
+        // Walk up to root, checking each directory
+        while let Some(parent) = current.parent() {
+            let parent = parent.to_path_buf();
+
+            let mcp_json = parent.join(".mcp.json");
+            if mcp_json.exists() {
+                self.scan_mcp_file(&mcp_json)?;
+            }
+
+            if parent == current {
+                break;
+            }
+            current = parent;
+        }
+
+        Ok(())
+    }
+
+    /// Display all findings
+    fn display_findings(&self) {
+        if self.findings.is_empty() {
+            println!("✅ No malicious AI integrations detected.\n");
+            println!("Your system appears clean of known supply chain attack patterns.");
+            return;
+        }
+
+        println!(
+            "🚨 FINDINGS: {} potential security issues detected\n",
+            self.findings.len()
+        );
+
+        // Group by category
+        let mut by_category: std::collections::HashMap<&str, Vec<&CleanupFinding>> =
+            std::collections::HashMap::new();
+
+        for finding in &self.findings {
+            let cat = match finding.category {
+                CleanupCategory::HiddenDirectory => "Hidden Directories",
+                CleanupCategory::McpServer => "MCP Server Configurations",
+                CleanupCategory::Hook => "Claude Hooks",
+                CleanupCategory::EnabledServer => "Enabled Server Inheritance",
+            };
+            by_category.entry(cat).or_default().push(finding);
+        }
+
+        for (category, findings) in &by_category {
+            println!("📁 {} ({} found)", category, findings.len());
+            println!("{}", "-".repeat(60));
+
+            for finding in findings {
+                let icon = match finding.risk_level.as_str() {
+                    "CRITICAL" => "🔴",
+                    "HIGH" => "🟠",
+                    _ => "🟡",
+                };
+                println!(
+                    "  {} [{}] {}",
+                    icon, finding.risk_level, finding.description
+                );
+                println!("     Path: {}", finding.path.display());
+            }
+            println!();
+        }
+    }
+
+    /// Offer to remediate findings
+    fn offer_remediation(&mut self) -> Result<()> {
+        println!("🛡️ REMEDIATION OPTIONS");
+        println!("═══════════════════════════════════════════════════════════════\n");
+
+        if !self.yes {
+            println!("The following actions will be taken:");
+            println!("  1. Remove hidden malware directories");
+            println!("  2. Remove malicious MCP server entries from configs");
+            println!("  3. Remove malicious hooks from settings");
+            println!("  4. Remove enabledMcpjsonServers entries\n");
+
+            print!("Proceed with cleanup? [y/N] ");
+            io::stdout().flush()?;
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim().to_lowercase();
+
+            if input != "y" && input != "yes" {
+                println!("\nCleanup cancelled. No changes made.");
+                println!("\nTo manually review:");
+                for finding in &self.findings {
+                    println!("  - {}", finding.path.display());
+                }
+                return Ok(());
+            }
+        }
+
+        println!("\n🧹 Performing cleanup...\n");
+
+        let mut cleaned = 0;
+        let mut errors = Vec::new();
+
+        // Process each finding
+        for finding in &self.findings {
+            match finding.category {
+                CleanupCategory::HiddenDirectory => match fs::remove_dir_all(&finding.path) {
+                    Ok(_) => {
+                        println!("  ✅ Removed directory: {}", finding.path.display());
+                        cleaned += 1;
+                    }
+                    Err(e) => {
+                        errors.push(format!(
+                            "Failed to remove {}: {}",
+                            finding.path.display(),
+                            e
+                        ));
+                    }
+                },
+                CleanupCategory::McpServer => {
+                    match self.remove_mcp_server(&finding.path, &finding.description) {
+                        Ok(true) => {
+                            println!("  ✅ Removed MCP server from: {}", finding.path.display());
+                            cleaned += 1;
+                        }
+                        Ok(false) => {} // Already removed or not found
+                        Err(e) => {
+                            errors.push(format!(
+                                "Failed to clean {}: {}",
+                                finding.path.display(),
+                                e
+                            ));
+                        }
+                    }
+                }
+                CleanupCategory::Hook => match self.remove_malicious_hooks(&finding.path) {
+                    Ok(count) if count > 0 => {
+                        println!(
+                            "  ✅ Removed {} malicious hook(s) from: {}",
+                            count,
+                            finding.path.display()
+                        );
+                        cleaned += count;
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        errors.push(format!(
+                            "Failed to clean hooks in {}: {}",
+                            finding.path.display(),
+                            e
+                        ));
+                    }
+                },
+                CleanupCategory::EnabledServer => {
+                    match self.remove_enabled_servers(&finding.path) {
+                        Ok(true) => {
+                            println!(
+                                "  ✅ Removed enabledMcpjsonServers from: {}",
+                                finding.path.display()
+                            );
+                            cleaned += 1;
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            errors.push(format!(
+                                "Failed to clean {}: {}",
+                                finding.path.display(),
+                                e
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Summary
+        println!("\n📋 CLEANUP SUMMARY");
+        println!("═══════════════════════════════════════════════════════════════");
+        println!("  ✅ Successfully cleaned: {} items", cleaned);
+
+        if !errors.is_empty() {
+            println!("  ❌ Errors encountered: {}", errors.len());
+            for error in &errors {
+                println!("     • {}", error);
+            }
+        }
+
+        println!("\n🔐 NEXT STEPS");
+        println!("═══════════════════════════════════════════════════════════════");
+        println!("  1. Restart Claude Desktop / Claude Code to apply changes");
+        println!("  2. Run 'st --security-scan .' to verify your codebase");
+        println!("  3. Review ~/.claude/settings.json manually for any missed items");
+        println!("  4. DO NOT reinstall the flagged npm packages\n");
+
+        Ok(())
+    }
+
+    /// Remove an MCP server from a config file
+    fn remove_mcp_server(&self, path: &std::path::Path, description: &str) -> Result<bool> {
+        let content = fs::read_to_string(path)?;
+        let mut config: Value = serde_json::from_str(&content)?;
+
+        let mut removed = false;
+
+        if let Some(obj) = config.as_object_mut() {
+            if let Some(servers) = obj.get_mut("mcpServers") {
+                if let Some(servers_obj) = servers.as_object_mut() {
+                    // Find and remove the server
+                    let server_names: Vec<String> = servers_obj.keys().cloned().collect();
+                    for name in server_names {
+                        let config_str = servers_obj
+                            .get(&name)
+                            .map(|v| serde_json::to_string(v).unwrap_or_default())
+                            .unwrap_or_default();
+
+                        // Check if this is the malicious server
+                        for malicious in MALICIOUS_PACKAGES {
+                            if name.contains(malicious) || config_str.contains(malicious) {
+                                servers_obj.remove(&name);
+                                removed = true;
+                            }
+                        }
+
+                        // Also check for IPFS patterns mentioned in description
+                        if description.contains("IPFS") || description.contains("IPNS") {
+                            if config_str.contains("ipfs.io")
+                                || config_str.contains("dweb.link")
+                                || config_str.contains("k51qzi5uqu5")
+                            {
+                                servers_obj.remove(&name);
+                                removed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if removed {
+            fs::write(path, serde_json::to_string_pretty(&config)?)?;
+        }
+
+        Ok(removed)
+    }
+
+    /// Remove malicious hooks from a settings file
+    fn remove_malicious_hooks(&self, path: &std::path::Path) -> Result<usize> {
+        let content = fs::read_to_string(path)?;
+        let mut config: Value = serde_json::from_str(&content)?;
+
+        let mut removed = 0;
+
+        if let Some(obj) = config.as_object_mut() {
+            if let Some(hooks) = obj.get_mut("hooks") {
+                if let Some(hooks_obj) = hooks.as_object_mut() {
+                    for (_hook_type, hook_array) in hooks_obj.iter_mut() {
+                        if let Some(arr) = hook_array.as_array_mut() {
+                            let original_len = arr.len();
+
+                            arr.retain(|hook| {
+                                let hook_str = serde_json::to_string(hook).unwrap_or_default();
+                                !MALICIOUS_PACKAGES.iter().any(|p| hook_str.contains(p))
+                            });
+
+                            removed += original_len - arr.len();
+                        }
+                    }
+                }
+            }
+        }
+
+        if removed > 0 {
+            fs::write(path, serde_json::to_string_pretty(&config)?)?;
+        }
+
+        Ok(removed)
+    }
+
+    /// Remove enabledMcpjsonServers from a settings file
+    fn remove_enabled_servers(&self, path: &std::path::Path) -> Result<bool> {
+        let content = fs::read_to_string(path)?;
+        let mut config: Value = serde_json::from_str(&content)?;
+
+        let removed = if let Some(obj) = config.as_object_mut() {
+            obj.remove("enabledMcpjsonServers").is_some()
+        } else {
+            false
+        };
+
+        if removed {
+            fs::write(path, serde_json::to_string_pretty(&config)?)?;
+        }
+
+        Ok(removed)
+    }
+}
+
+/// Run the security cleanup
+pub fn run_security_cleanup(yes: bool) -> Result<()> {
+    let mut cleanup = SecurityCleanup::new(yes);
+    cleanup.run()
+}

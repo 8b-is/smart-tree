@@ -250,6 +250,15 @@ pub struct Cli {
     #[arg(long, help_heading = "AI Integration")]
     pub non_interactive: bool,
 
+    /// Clean up malicious/foreign AI integrations (MCP servers, hooks, hidden directories)
+    /// Scans for known supply chain attack patterns and offers to remove them
+    #[arg(long, help_heading = "AI Integration")]
+    pub cleanup: bool,
+
+    /// Answer yes to all cleanup prompts (use with --cleanup)
+    #[arg(short = 'y', long, help_heading = "AI Integration")]
+    pub yes: bool,
+
     // =========================================================================
     // CLAUDE CODE INTEGRATION (Legacy - prefer --install-ai)
     // =========================================================================
