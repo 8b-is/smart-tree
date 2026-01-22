@@ -90,6 +90,10 @@ impl ProxyMemory {
     }
 
     fn load(&mut self) -> Result<()> {
+        // Skip loading if in memory-only mode
+        if self.in_memory_only {
+            return Ok(());
+        }
         if self.storage_path.exists() {
             let content = fs::read_to_string(&self.storage_path)?;
             self.scopes = serde_json::from_str(&content).unwrap_or_default();
