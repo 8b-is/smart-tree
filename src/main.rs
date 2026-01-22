@@ -386,6 +386,15 @@ async fn main() -> Result<()> {
         return st::claude_hook::handle_user_prompt_submit().await;
     }
 
+    // Handle LLM proxy commands
+    if cli.proxy {
+        return handle_proxy(&cli).await;
+    }
+
+    if cli.proxy_server {
+        return st::proxy::server::start_proxy_server(cli.proxy_port).await;
+    }
+
     // Handle memory operations
     if let Some(args) = cli.memory_anchor {
         if args.len() == 3 {
@@ -934,6 +943,65 @@ async fn main() -> Result<()> {
     }
 
     // If we've reached here, everything went well!
+    Ok(())
+}
+
+/// Handle LLM proxy requests
+async fn handle_proxy(cli: &Cli) -> Result<()> {
+    use st::proxy::{LlmMessage, LlmRequest, LlmRole};
+    use st::proxy::memory::MemoryProxy;
+    use std::io::{self, Read};
+
+    let provider_name = cli
+        .provider
+        .as_deref()
+        .context("Provider is required for --proxy. Use --provider <NAME>")?;
+    let model = cli
+        .model
+        .as_deref()
+        .context("Model is required for --proxy. Use --model <NAME>")?;
+
+    // Get prompt from argument or stdin
+    let prompt = if let Some(p) = &cli.prompt {
+        p.clone()
+    } else {
+        let mut buffer = String::new();
+        io::stdin().read_to_string(&mut buffer)?;
+        buffer
+    };
+
+    if prompt.trim().is_empty() {
+        return Err(anyhow::anyhow!("Prompt cannot be empty"));
+    }
+
+    println!("🌐 Calling {} (model: {})...", provider_name, model);
+
+    let mut proxy = MemoryProxy::new()?;
+    let request = LlmRequest {
+        model: model.to_string(),
+        messages: vec![LlmMessage {
+            role: LlmRole::User,
+            content: prompt,
+        }],
+        temperature: None,
+        max_tokens: None,
+        stream: false,
+    };
+
+    let scope_id = cli.scope.as_deref().unwrap_or("default");
+    let response = proxy.complete_with_memory(provider_name, scope_id, request).await?;
+
+    println!("\n--- Response ---");
+    println!("{}", response.content);
+    println!("----------------");
+
+    if let Some(usage) = response.usage {
+        println!(
+            "📊 Tokens: {} prompt, {} completion ({} total)",
+            usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+        );
+    }
+
     Ok(())
 }
 

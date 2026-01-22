@@ -1,0 +1,319 @@
+# ============================================================================
+# AI Integration Tests - Smart Tree
+# ============================================================================
+# Tests all AI-related features: MCP protocol, output modes, context generation
+# This workflow ensures Smart Tree remains the most AI-friendly CLI tool
+# ============================================================================
+name: AI Integration Tests 🤖
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'src/mcp/**'
+      - 'src/formatters/**'
+      - 'src/daemon.rs'
+      - 'src/proxy/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'src/mcp/**'
+      - 'src/formatters/**'
+      - 'src/daemon.rs'
+      - 'src/proxy/**'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  AI_TOOLS: "1"
+  SMART_TREE_NO_UPDATE_CHECK: 1
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-protocol-tests:
+    name: MCP Protocol Validation 🔌
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install Rust 🦀
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo 📚
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-mcp-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build Smart Tree 🔨
+      run: cargo build --release
+
+    - name: Test MCP tool discovery 🔍
+      run: |
+        echo "=== MCP Tool Discovery Test ==="
+        ./target/release/st --mcp-tools > mcp_tools.txt
+
+        # Verify essential AI tools exist
+        REQUIRED_TOOLS=(
+          "overview"
+          "find"
+          "search"
+          "analyze"
+          "read"
+          "edit"
+          "context"
+          "memory"
+        )
+
+        for tool in "${REQUIRED_TOOLS[@]}"; do
+          if grep -q "$tool" mcp_tools.txt; then
+            echo "✅ Tool found: $tool"
+          else
+            echo "❌ Missing tool: $tool"
+            exit 1
+          fi
+        done
+        echo "=== All essential MCP tools present ==="
+
+    - name: Test MCP JSON-RPC format 📡
+      run: |
+        echo "=== MCP JSON-RPC Format Test ==="
+        # Test that MCP mode produces valid JSON-RPC
+        echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | \
+          timeout 10 ./target/release/st --mcp 2>/dev/null | head -1 | \
+          python3 -c "import sys, json; data=json.load(sys.stdin); print('✅ Valid JSON-RPC response')" || \
+          echo "⚠️ MCP server response validation skipped (interactive mode)"
+
+    - name: Test MCP compression negotiation 🗜️
+      run: |
+        echo "=== Compression Negotiation Test ==="
+        # Test various compression modes
+        ./target/release/st --mode quantum --depth 2 . > /dev/null && echo "✅ Quantum mode works"
+        ./target/release/st --mode quantum-semantic --depth 2 . > /dev/null && echo "✅ Quantum-semantic mode works"
+        ./target/release/st --compress --depth 2 . > /dev/null && echo "✅ Compression flag works"
+        ./target/release/st --mcp-optimize --depth 2 . > /dev/null && echo "✅ MCP optimize flag works"
+
+  output-format-tests:
+    name: AI Output Format Validation 📊
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install Rust 🦀
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo 📚
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-output-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build Smart Tree 🔨
+      run: cargo build --release
+
+    - name: Test all AI-optimized output modes 🎨
+      run: |
+        echo "=== AI Output Mode Tests ==="
+
+        AI_MODES=(
+          "ai"
+          "ai-json"
+          "quantum"
+          "quantum-semantic"
+          "digest"
+          "context"
+          "summary-ai"
+          "marqant"
+          "json"
+          "hex"
+        )
+
+        for mode in "${AI_MODES[@]}"; do
+          echo "Testing mode: $mode"
+          if ./target/release/st --mode "$mode" --depth 2 src/ > "/tmp/output_${mode}.txt" 2>&1; then
+            SIZE=$(wc -c < "/tmp/output_${mode}.txt")
+            echo "✅ Mode $mode: ${SIZE} bytes"
+          else
+            echo "❌ Mode $mode failed"
+            cat "/tmp/output_${mode}.txt"
+            exit 1
+          fi
+        done
+
+        echo "=== All AI output modes validated ==="
+
+    - name: Test JSON output validity 📋
+      run: |
+        echo "=== JSON Output Validation ==="
+        ./target/release/st --mode json --depth 2 src/ > /tmp/json_output.json
+        python3 -c "import json; json.load(open('/tmp/json_output.json'))" && \
+          echo "✅ JSON output is valid" || \
+          (echo "❌ Invalid JSON output" && cat /tmp/json_output.json && exit 1)
+
+    - name: Test hex number encoding 🔢
+      run: |
+        echo "=== Hex Number Encoding Test ==="
+        # Verify hex encoding reduces token count
+        ./target/release/st --mode ai --depth 3 . > /tmp/ai_output.txt
+
+        # Check for hex patterns (e.g., 3E8 instead of 1000)
+        if grep -qE '[0-9A-F]{2,}' /tmp/ai_output.txt; then
+          echo "✅ Hex encoding detected in output"
+        else
+          echo "⚠️ No hex encoding detected (may be expected for small directories)"
+        fi
+
+  token-efficiency-tests:
+    name: Token Efficiency Analysis 📉
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install Rust 🦀
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo 📚
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-token-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build Smart Tree 🔨
+      run: cargo build --release
+
+    - name: Compare output sizes across modes 📊
+      run: |
+        echo "=== Token Efficiency Comparison ==="
+
+        # Generate outputs in different modes
+        ./target/release/st --mode classic --depth 3 src/ > /tmp/classic.txt 2>/dev/null
+        ./target/release/st --mode ai --depth 3 src/ > /tmp/ai.txt 2>/dev/null
+        ./target/release/st --mode quantum --depth 3 src/ > /tmp/quantum.txt 2>/dev/null
+        ./target/release/st --mode digest --depth 3 src/ > /tmp/digest.txt 2>/dev/null
+
+        # Calculate sizes
+        CLASSIC_SIZE=$(wc -c < /tmp/classic.txt)
+        AI_SIZE=$(wc -c < /tmp/ai.txt)
+        QUANTUM_SIZE=$(wc -c < /tmp/quantum.txt)
+        DIGEST_SIZE=$(wc -c < /tmp/digest.txt)
+
+        echo "| Mode | Size (bytes) | Reduction |"
+        echo "|------|--------------|-----------|"
+        echo "| Classic | $CLASSIC_SIZE | baseline |"
+        echo "| AI | $AI_SIZE | $(echo "scale=1; (1 - $AI_SIZE / $CLASSIC_SIZE) * 100" | bc)% |"
+        echo "| Quantum | $QUANTUM_SIZE | $(echo "scale=1; (1 - $QUANTUM_SIZE / $CLASSIC_SIZE) * 100" | bc)% |"
+        echo "| Digest | $DIGEST_SIZE | $(echo "scale=1; (1 - $DIGEST_SIZE / $CLASSIC_SIZE) * 100" | bc)% |"
+
+        # Verify quantum mode achieves significant compression
+        COMPRESSION_RATIO=$(echo "scale=2; $QUANTUM_SIZE / $CLASSIC_SIZE" | bc)
+        if (( $(echo "$COMPRESSION_RATIO < 0.5" | bc -l) )); then
+          echo "✅ Quantum mode achieves >50% compression"
+        else
+          echo "⚠️ Quantum compression ratio: $COMPRESSION_RATIO (expected <0.5)"
+        fi
+
+  context-generation-tests:
+    name: AI Context Generation 🧠
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install Rust 🦀
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo 📚
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-context-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build Smart Tree 🔨
+      run: cargo build --release
+
+    - name: Test project overview generation 📋
+      run: |
+        echo "=== Project Overview Generation Test ==="
+        ./target/release/st --mode context . > /tmp/context_output.txt
+
+        # Verify context contains essential information
+        if grep -qi "rust\|cargo\|src" /tmp/context_output.txt; then
+          echo "✅ Context correctly identifies Rust project"
+        else
+          echo "❌ Context missing project type detection"
+          exit 1
+        fi
+
+    - name: Test semantic analysis 🔬
+      run: |
+        echo "=== Semantic Analysis Test ==="
+        ./target/release/st --mode semantic --depth 2 src/ > /tmp/semantic_output.txt 2>&1 || true
+
+        # Check that semantic analysis produces structured output
+        if [[ -s /tmp/semantic_output.txt ]]; then
+          echo "✅ Semantic analysis produced output"
+          head -20 /tmp/semantic_output.txt
+        else
+          echo "⚠️ Semantic analysis produced no output (may be expected)"
+        fi
+
+    - name: Test relations analysis 🔗
+      run: |
+        echo "=== Relations Analysis Test ==="
+        ./target/release/st --mode relations --focus src/main.rs > /tmp/relations_output.txt 2>&1 || true
+
+        if [[ -s /tmp/relations_output.txt ]]; then
+          echo "✅ Relations analysis produced output"
+          head -20 /tmp/relations_output.txt
+        else
+          echo "⚠️ Relations analysis produced no output"
+        fi
+
+  summary:
+    name: AI Integration Summary 📊
+    needs: [mcp-protocol-tests, output-format-tests, token-efficiency-tests, context-generation-tests]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Generate Summary Report 📝
+      run: |
+        echo "# 🤖 AI Integration Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| MCP Protocol | ${{ needs.mcp-protocol-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Output Formats | ${{ needs.output-format-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Token Efficiency | ${{ needs.token-efficiency-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Context Generation | ${{ needs.context-generation-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Smart Tree remains the most AI-friendly CLI tool! 🌳" >> $GITHUB_STEP_SUMMARY

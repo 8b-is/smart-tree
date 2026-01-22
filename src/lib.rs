@@ -56,12 +56,18 @@ pub mod rename_project;
 // Smart Tips System - helpful hints without the hassle!
 pub mod tips;
 
+// LLM Proxy - Unified AI interface
+pub mod proxy;
+
 // Daemon and client for always-on AI context service
 pub mod daemon;
 pub mod daemon_client;
 
 // Self-update mechanism - check and install updates from GitHub releases
 pub mod updater;
+
+// Project tags management - tag and categorize projects
+pub mod project_tags;
 
 // Spicy TUI - cyberpunk-style terminal interface!
 pub mod spicy_fuzzy;
