@@ -96,6 +96,7 @@ mod tools;
 mod tools_consolidated;
 mod tools_consolidated_enhanced;
 pub mod unified_watcher;
+pub mod wave_memory;
 
 use assistant::*;
 use cache::*;

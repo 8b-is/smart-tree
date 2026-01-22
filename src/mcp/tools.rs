@@ -268,6 +268,62 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
             }),
         },
         ToolDefinition {
+            name: "project_context_dump".to_string(),
+            description: "📦 FULL PROJECT CONTEXT - Get a complete, token-efficient project dump for AI assistants in ONE CALL! Combines project detection, key file identification, directory structure, and optionally file contents into a single compressed response. Configurable depth/file limits and compression modes (auto/marqant/summary-ai/quantum). Includes token budget awareness. PERFECT for bootstrapping AI context when walking into a new project!".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the project root"
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Maximum tree depth (default: 5)",
+                        "default": 5,
+                        "minimum": 1,
+                        "maximum": 20
+                    },
+                    "max_files": {
+                        "type": "integer",
+                        "description": "Maximum files to include in listing (default: 100, max: 1000)",
+                        "default": 100,
+                        "minimum": 10,
+                        "maximum": 1000
+                    },
+                    "include_content": {
+                        "type": "boolean",
+                        "description": "Include contents of key files like README, CLAUDE.md (default: false)",
+                        "default": false
+                    },
+                    "compression": {
+                        "type": "string",
+                        "enum": ["auto", "marqant", "summary-ai", "quantum"],
+                        "description": "Compression mode: 'auto' (smart selection), 'marqant' (markdown 70-90%), 'summary-ai' (10x), 'quantum' (max)",
+                        "default": "auto"
+                    },
+                    "token_budget": {
+                        "type": "integer",
+                        "description": "Maximum tokens for response (warns if exceeded, default: 10000)",
+                        "default": 10000,
+                        "minimum": 1000,
+                        "maximum": 50000
+                    },
+                    "include_git": {
+                        "type": "boolean",
+                        "description": "Include git status/branch info (default: true)",
+                        "default": true
+                    },
+                    "key_files_only": {
+                        "type": "boolean",
+                        "description": "Only include key project files in listing (default: false)",
+                        "default": false
+                    }
+                },
+                "required": ["path"]
+            }),
+        },
+        ToolDefinition {
             name: "find_code_files".to_string(),
             description: "💻 Find all source code files by programming language. Supports 25+ languages including Python, JavaScript, TypeScript, Rust, Go, Java, C++, and more. Use languages=['all'] to find all code files, or specify specific languages. Returns structured JSON perfect for further analysis.".to_string(),
             input_schema: json!({
@@ -1144,7 +1200,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "find_collaborative_memories".to_string(),
-            description: "🔮 Search for previously anchored collaborative memories using keywords. Retrieves insights, solutions, and breakthroughs from past sessions. Perfect for 'What was that solution we found last week?' moments!".to_string(),
+            description: "🔮 Search for previously anchored collaborative memories. NOW WITH WAVE RESONANCE! Two modes: keyword search (fast) or resonance search (semantic similarity). Use resonance for 'find something similar to X' queries!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "required": ["keywords"],
@@ -1152,7 +1208,23 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     "keywords": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Keywords to search for"
+                        "description": "Keywords to search for (or query terms for resonance)"
+                    },
+                    "use_resonance": {
+                        "type": "boolean",
+                        "description": "Use wave resonance for semantic similarity search (default: false)",
+                        "default": false
+                    },
+                    "memory_type": {
+                        "type": "string",
+                        "enum": ["pattern", "solution", "conversation", "technical", "learning", "joke"],
+                        "description": "Filter by memory type (for resonance search)"
+                    },
+                    "resonance_threshold": {
+                        "type": "number",
+                        "description": "Minimum similarity score 0.0-1.0 (default: 0.3)",
+                        "minimum": 0.0,
+                        "maximum": 1.0
                     },
                     "project_path": {
                         "type": "string",
@@ -1163,6 +1235,64 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                         "description": "Maximum memories to return (default: 10)",
                         "minimum": 1,
                         "maximum": 50
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "wave_memory".to_string(),
+            description: "🌊 Direct access to Wave Memory - the ultimate memory system for Claude Code! Store memories as waves with emotional encoding, retrieve by resonance, check stats. This is THE memory tool for persistent context across sessions.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["operation"],
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["stats", "anchor", "find", "resonance", "get", "delete"],
+                        "description": "Operation: stats (view memory stats), anchor (store memory), find (keyword search), resonance (semantic search), get (by ID), delete (by ID)"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Memory content (for anchor operation)"
+                    },
+                    "keywords": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Keywords for anchor/find/resonance"
+                    },
+                    "memory_type": {
+                        "type": "string",
+                        "enum": ["pattern", "solution", "conversation", "technical", "learning", "joke"],
+                        "description": "Memory type (pattern=deep insights, solution=breakthroughs, technical=code patterns, joke=shared humor)",
+                        "default": "technical"
+                    },
+                    "valence": {
+                        "type": "number",
+                        "description": "Emotional valence -1.0 (negative) to 1.0 (positive)",
+                        "minimum": -1.0,
+                        "maximum": 1.0
+                    },
+                    "arousal": {
+                        "type": "number",
+                        "description": "Emotional arousal 0.0 (calm) to 1.0 (excited)",
+                        "minimum": 0.0,
+                        "maximum": 1.0
+                    },
+                    "memory_id": {
+                        "type": "string",
+                        "description": "Memory ID (for get/delete operations)"
+                    },
+                    "threshold": {
+                        "type": "number",
+                        "description": "Resonance threshold for similarity search (default: 0.3)",
+                        "minimum": 0.0,
+                        "maximum": 1.0
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum results (default: 10)",
+                        "minimum": 1,
+                        "maximum": 100
                     }
                 }
             }),
@@ -1354,6 +1484,177 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
     }))
 }
 
+/// Handle wave_memory tool - direct access to wave-based memory system
+async fn handle_wave_memory(args: Value) -> Result<Value> {
+    use crate::mcp::wave_memory::{get_wave_memory, MemoryType};
+
+    let operation = args["operation"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing operation"))?;
+
+    let wave_memory = get_wave_memory();
+    let mut manager = wave_memory.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+
+    match operation {
+        "stats" => {
+            Ok(json!({
+                "operation": "stats",
+                "wave_memory": manager.stats(),
+                "message": "🌊 Wave Memory statistics",
+            }))
+        }
+        "anchor" => {
+            let content = args["content"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing content for anchor"))?
+                .to_string();
+            let keywords: Vec<String> = args["keywords"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let memory_type = args["memory_type"]
+                .as_str()
+                .map(MemoryType::parse)
+                .unwrap_or(MemoryType::Technical);
+            let valence = args["valence"].as_f64().unwrap_or(0.0) as f32;
+            let arousal = args["arousal"].as_f64().unwrap_or(0.5) as f32;
+
+            let id = manager.anchor(
+                content.clone(),
+                keywords.clone(),
+                memory_type,
+                valence,
+                arousal,
+                "tandem:human:claude".to_string(),
+                None,
+            )?;
+
+            Ok(json!({
+                "operation": "anchor",
+                "success": true,
+                "memory_id": id,
+                "content_preview": if content.len() > 50 { format!("{}...", &content[..50]) } else { content },
+                "keywords": keywords,
+                "memory_type": format!("{:?}", memory_type),
+                "emotional_encoding": {
+                    "valence": valence,
+                    "arousal": arousal,
+                },
+                "message": "🌊 Memory anchored as wave",
+            }))
+        }
+        "find" => {
+            let keywords: Vec<String> = args["keywords"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let max_results = args["max_results"].as_u64().unwrap_or(10) as usize;
+
+            let results = manager.find_by_keywords(&keywords, max_results);
+            let memories: Vec<_> = results.iter().map(|mem| {
+                json!({
+                    "id": mem.id,
+                    "content": mem.content,
+                    "keywords": mem.keywords,
+                    "memory_type": format!("{:?}", mem.memory_type),
+                    "valence": mem.valence,
+                    "arousal": mem.arousal,
+                    "access_count": mem.access_count,
+                })
+            }).collect();
+
+            Ok(json!({
+                "operation": "find",
+                "keywords": keywords,
+                "total_found": memories.len(),
+                "memories": memories,
+            }))
+        }
+        "resonance" => {
+            let keywords: Vec<String> = args["keywords"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let memory_type = args["memory_type"]
+                .as_str()
+                .map(MemoryType::parse)
+                .unwrap_or(MemoryType::Technical);
+            let threshold = args["threshold"].as_f64().unwrap_or(0.3) as f32;
+            let max_results = args["max_results"].as_u64().unwrap_or(10) as usize;
+
+            let query = keywords.join(" ");
+            let results = manager.find_by_resonance(&query, &keywords, memory_type, threshold, max_results);
+            let memories: Vec<_> = results.iter().map(|(mem, resonance)| {
+                json!({
+                    "id": mem.id,
+                    "content": mem.content,
+                    "keywords": mem.keywords,
+                    "memory_type": format!("{:?}", mem.memory_type),
+                    "resonance_score": format!("{:.2}", resonance),
+                    "valence": mem.valence,
+                    "arousal": mem.arousal,
+                })
+            }).collect();
+
+            Ok(json!({
+                "operation": "resonance",
+                "search_mode": "wave_interference",
+                "query": keywords,
+                "threshold": threshold,
+                "total_found": memories.len(),
+                "memories": memories,
+                "message": "🌊 Found memories by wave resonance",
+            }))
+        }
+        "get" => {
+            let id = args["memory_id"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing memory_id"))?;
+
+            if let Some(mem) = manager.get(id) {
+                Ok(json!({
+                    "operation": "get",
+                    "found": true,
+                    "memory": {
+                        "id": mem.id,
+                        "content": mem.content,
+                        "keywords": mem.keywords,
+                        "memory_type": format!("{:?}", mem.memory_type),
+                        "valence": mem.valence,
+                        "arousal": mem.arousal,
+                        "created_at": mem.created_at.to_rfc3339(),
+                        "last_accessed": mem.last_accessed.to_rfc3339(),
+                        "access_count": mem.access_count,
+                        "origin": mem.origin,
+                        "grid_position": { "x": mem.x, "y": mem.y, "z": mem.z },
+                    }
+                }))
+            } else {
+                Ok(json!({
+                    "operation": "get",
+                    "found": false,
+                    "memory_id": id,
+                    "message": "Memory not found",
+                }))
+            }
+        }
+        "delete" => {
+            let id = args["memory_id"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing memory_id"))?;
+
+            let deleted = manager.delete(id);
+            Ok(json!({
+                "operation": "delete",
+                "success": deleted,
+                "memory_id": id,
+                "message": if deleted { "Memory deleted" } else { "Memory not found" },
+            }))
+        }
+        _ => Err(anyhow::anyhow!("Unknown wave_memory operation: {}", operation)),
+    }
+}
+
 pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let tool_name = params["name"]
         .as_str()
@@ -1375,6 +1676,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "get_digest" => get_digest(args, ctx_clone.clone()).await,
         "quick_tree" => quick_tree(args, ctx_clone.clone()).await,
         "project_overview" => project_overview(args, ctx_clone.clone()).await,
+        "project_context_dump" => project_context_dump(args, ctx_clone.clone()).await,
         "find_code_files" => find_code_files(args, ctx_clone.clone()).await,
         "find_config_files" => find_config_files(args, ctx_clone.clone()).await,
         "find_projects" => find_projects(args, ctx_clone.clone()).await,
@@ -1439,6 +1741,9 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
             let req: crate::mcp::context_tools::FindMemoriesRequest = serde_json::from_value(args)?;
             let permission_check = |_perm_req| Ok(true);
             crate::mcp::context_tools::find_collaborative_memories(req, permission_check).await
+        }
+        "wave_memory" => {
+            handle_wave_memory(args).await
         }
         "get_collaboration_rapport" => {
             let req: crate::mcp::context_tools::GetRapportRequest = serde_json::from_value(args)?;
@@ -1521,6 +1826,41 @@ struct AnalyzeDirectoryArgs {
     path_mode: String,
     #[serde(default)]
     compress: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectContextDumpArgs {
+    path: String,
+    #[serde(default = "default_context_depth")]
+    max_depth: usize,
+    #[serde(default = "default_max_files")]
+    max_files: usize,
+    #[serde(default)]
+    include_content: bool,
+    #[serde(default = "default_compression")]
+    compression: String,
+    #[serde(default = "default_token_budget")]
+    token_budget: usize,
+    #[serde(default = "default_true")]
+    include_git: bool,
+    #[serde(default)]
+    key_files_only: bool,
+}
+
+fn default_context_depth() -> usize {
+    5
+}
+
+fn default_max_files() -> usize {
+    100
+}
+
+fn default_compression() -> String {
+    "auto".to_string()
+}
+
+fn default_token_budget() -> usize {
+    10000
 }
 
 fn default_mode() -> String {
@@ -2335,6 +2675,292 @@ async fn project_overview(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             "text": overview_text
         }]
     }))
+}
+
+/// Full project context dump for AI assistants - one call to understand everything
+async fn project_context_dump(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
+    let dump_args: ProjectContextDumpArgs = serde_json::from_value(args)?;
+    let path = std::path::Path::new(&dump_args.path);
+
+    let mut output_sections: Vec<String> = Vec::new();
+
+    // Header
+    output_sections.push("PROJECT_CONTEXT_DUMP_V1:".to_string());
+    output_sections.push(format!("PATH:{}", path.display()));
+
+    // 1. Git context (if enabled)
+    if dump_args.include_git {
+        let git_info = get_git_context(&dump_args.path).await.unwrap_or_default();
+        if !git_info.is_empty() {
+            output_sections.push(format!("GIT:{}", git_info.replace('\n', " | ")));
+        }
+    }
+
+    // 2. Scan directory with configured depth
+    // Note: marqant is for markdown file compression, not directory analysis
+    // So we use summary-ai for structure when marqant is requested
+    let structure_mode = match dump_args.compression.as_str() {
+        "quantum" => "quantum",
+        _ => "summary-ai", // auto, marqant, and any other value use summary-ai for structure
+    };
+    // Keep original compression mode for file content processing
+    let content_compression = dump_args.compression.as_str();
+
+    let scan_result = analyze_directory(
+        json!({
+            "path": dump_args.path,
+            "mode": structure_mode,
+            "max_depth": dump_args.max_depth,
+            "show_ignored": true
+        }),
+        ctx.clone(),
+    )
+    .await?;
+
+    let structure_text = scan_result["content"][0]["text"].as_str().unwrap_or("");
+
+    // 3. Identify key files
+    let key_files = identify_project_key_files(&dump_args.path).await;
+    if !key_files.is_empty() {
+        output_sections.push(format!("KEY_FILES:{}", key_files.join(",")));
+    }
+
+    // 4. Detect project type
+    let project_type = detect_project_type_simple(&dump_args.path).await;
+    output_sections.push(format!("TYPE:{}", project_type));
+
+    // 5. Add directory structure
+    output_sections.push(format!("STRUCTURE:\n{}", structure_text));
+
+    // 6. Optionally include key file contents (with compression if requested)
+    if dump_args.include_content {
+        let content_budget = dump_args.token_budget / 3; // Reserve 1/3 of budget for content
+        let contents = read_key_files_content(&dump_args.path, &key_files, content_budget, content_compression).await;
+        if !contents.is_empty() {
+            output_sections.push(format!("FILE_CONTENTS:\n{}", contents));
+        }
+    }
+
+    // Combine all sections
+    let full_output = output_sections.join("\n");
+
+    // Token estimation (rough: 1 token ≈ 4 chars)
+    let estimated_tokens = full_output.len() / 4;
+
+    // Add footer with token estimate
+    let mut final_output = full_output;
+    final_output.push_str(&format!("\nEND_PROJECT_CONTEXT_DUMP\nTOKENS_EST:{:x}", estimated_tokens));
+
+    // Build metadata with warning if over budget
+    let mut metadata = json!({
+        "estimated_tokens": estimated_tokens,
+        "compression_mode": dump_args.compression,
+        "max_depth": dump_args.max_depth,
+        "max_files": dump_args.max_files,
+    });
+
+    if estimated_tokens > dump_args.token_budget {
+        metadata["warning"] = json!(format!(
+            "Estimated tokens ({}) exceeds budget ({}). Consider: reducing max_depth, using 'quantum' compression, or disabling include_content",
+            estimated_tokens, dump_args.token_budget
+        ));
+    }
+
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": final_output
+        }],
+        "metadata": metadata
+    }))
+}
+
+/// Identify key project files (README, CLAUDE.md, config files, entry points)
+async fn identify_project_key_files(path: &str) -> Vec<String> {
+    let priority_files = [
+        "README.md", "README", "readme.md",
+        "CLAUDE.md", ".claude/CLAUDE.md",
+        "Cargo.toml", "package.json", "pyproject.toml", "go.mod", "Makefile",
+        "docker-compose.yml", "Dockerfile",
+        "src/main.rs", "src/lib.rs", "src/index.ts", "src/index.js",
+        "main.py", "app.py", "main.go", "index.js", "index.ts",
+        ".env.example", "requirements.txt", "setup.py",
+    ];
+
+    let mut found = Vec::new();
+    let base_path = std::path::Path::new(path);
+
+    for file in &priority_files {
+        let full_path = base_path.join(file);
+        if full_path.exists() {
+            found.push(file.to_string());
+        }
+    }
+
+    found
+}
+
+/// Simple project type detection
+async fn detect_project_type_simple(path: &str) -> String {
+    let base_path = std::path::Path::new(path);
+
+    // Check for language-specific markers
+    if base_path.join("Cargo.toml").exists() {
+        return "CODE[Rust]".to_string();
+    }
+    if base_path.join("package.json").exists() {
+        if base_path.join("tsconfig.json").exists() {
+            return "CODE[TypeScript]".to_string();
+        }
+        return "CODE[JavaScript]".to_string();
+    }
+    if base_path.join("pyproject.toml").exists() || base_path.join("setup.py").exists() {
+        return "CODE[Python]".to_string();
+    }
+    if base_path.join("go.mod").exists() {
+        return "CODE[Go]".to_string();
+    }
+    if base_path.join("Gemfile").exists() {
+        return "CODE[Ruby]".to_string();
+    }
+    if base_path.join("pom.xml").exists() || base_path.join("build.gradle").exists() {
+        return "CODE[Java]".to_string();
+    }
+
+    "MIXED".to_string()
+}
+
+/// Read contents of key files with token budget and optional compression
+async fn read_key_files_content(path: &str, key_files: &[String], max_tokens: usize, compression: &str) -> String {
+    use crate::formatters::marqant::MarqantFormatter;
+
+    let mut output = String::new();
+    let mut tokens_used = 0;
+    let base_path = std::path::Path::new(path);
+
+    // Priority order for content inclusion
+    let content_priority = ["CLAUDE.md", ".claude/CLAUDE.md", "README.md", "README", "Cargo.toml", "package.json"];
+
+    for priority_file in &content_priority {
+        if tokens_used >= max_tokens {
+            break;
+        }
+
+        // Check if this file is in our key_files list
+        if key_files.iter().any(|f| f == *priority_file || f.ends_with(priority_file)) {
+            let file_path = base_path.join(priority_file);
+            if let Ok(content) = std::fs::read_to_string(&file_path) {
+                // Apply compression based on mode
+                let compressed_content = match compression {
+                    "marqant" => {
+                        // Marqant compression for markdown files
+                        if priority_file.ends_with(".md") {
+                            MarqantFormatter::compress_markdown(&content).unwrap_or_else(|_| content.clone())
+                        } else {
+                            content.clone()
+                        }
+                    }
+                    "quantum" => {
+                        // Quantum compression - ultra aggressive, structure only
+                        compress_file_quantum(&content, priority_file)
+                    }
+                    _ => content.clone(), // auto/summary-ai: no extra compression on contents
+                };
+
+                let file_tokens = compressed_content.len() / 4;
+
+                // Truncate if would exceed budget
+                let content_to_add = if tokens_used + file_tokens > max_tokens {
+                    let remaining_chars = (max_tokens - tokens_used) * 4;
+                    let truncate_at = remaining_chars.min(compressed_content.len());
+                    // Find a valid UTF-8 char boundary
+                    let safe_truncate = compressed_content
+                        .char_indices()
+                        .take_while(|(i, _)| *i < truncate_at)
+                        .last()
+                        .map(|(i, c)| i + c.len_utf8())
+                        .unwrap_or(0);
+                    format!("{}...[TRUNCATED]", &compressed_content[..safe_truncate])
+                } else {
+                    compressed_content
+                };
+
+                let compression_tag = match compression {
+                    "marqant" if priority_file.ends_with(".md") => "[MQ]",
+                    "quantum" => "[Q]",
+                    _ => "",
+                };
+                output.push_str(&format!("---FILE:{}{}---\n{}\n", priority_file, compression_tag, content_to_add));
+                tokens_used += content_to_add.len() / 4;
+            }
+        }
+    }
+
+    output
+}
+
+/// Quantum compression for file contents - structure only, maximum reduction
+fn compress_file_quantum(content: &str, filename: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let line_count = lines.len();
+
+    if filename.ends_with(".md") {
+        // For markdown: extract headers and first line of each section
+        let mut result = String::new();
+        let mut in_code_block = false;
+
+        for line in &lines {
+            if line.starts_with("```") {
+                in_code_block = !in_code_block;
+                continue;
+            }
+            if in_code_block {
+                continue;
+            }
+            if line.starts_with('#') {
+                result.push_str(line);
+                result.push('\n');
+            }
+        }
+
+        format!("Q[{}L]:\n{}", line_count, result)
+    } else if filename.ends_with(".toml") || filename.ends_with(".json") {
+        // For config files: extract top-level keys
+        let mut keys = Vec::new();
+        for line in &lines {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                keys.push(trimmed.to_string());
+            } else if trimmed.contains('=') && !trimmed.starts_with('#') {
+                if let Some(key) = trimmed.split('=').next() {
+                    let key = key.trim();
+                    if !key.contains(' ') && keys.len() < 20 {
+                        keys.push(key.to_string());
+                    }
+                }
+            } else if trimmed.starts_with('"') && trimmed.contains(':') {
+                // JSON key
+                if let Some(key) = trimmed.split(':').next() {
+                    let key = key.trim().trim_matches('"');
+                    if keys.len() < 20 {
+                        keys.push(key.to_string());
+                    }
+                }
+            }
+        }
+        format!("Q[{}L]:KEYS:{}", line_count, keys.join(","))
+    } else {
+        // For other files: first 5 and last 2 lines
+        let preview: Vec<&str> = if line_count <= 10 {
+            lines.clone()
+        } else {
+            let mut p = lines[..5].to_vec();
+            p.push("...");
+            p.extend_from_slice(&lines[line_count.saturating_sub(2)..]);
+            p
+        };
+        format!("Q[{}L]:\n{}", line_count, preview.join("\n"))
+    }
 }
 
 async fn find_code_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {

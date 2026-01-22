@@ -594,6 +594,49 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "required": ["path"]
             }
         }),
+        json!({
+            "name": "project_context_dump",
+            "description": "📦 FULL PROJECT CONTEXT - Get a complete, token-efficient project dump for AI assistants in ONE CALL! Includes directory tree, key files, git info, with configurable compression.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the project root"
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Maximum directory depth (1-20, default: 5)"
+                    },
+                    "max_files": {
+                        "type": "integer",
+                        "description": "Maximum files to include (10-1000, default: 100)"
+                    },
+                    "include_content": {
+                        "type": "boolean",
+                        "description": "Include contents of key files (default: false)"
+                    },
+                    "compression": {
+                        "type": "string",
+                        "enum": ["auto", "marqant", "summary-ai", "quantum"],
+                        "description": "Compression mode (default: auto = summary-ai)"
+                    },
+                    "token_budget": {
+                        "type": "integer",
+                        "description": "Token budget warning threshold (default: 10000)"
+                    },
+                    "include_git": {
+                        "type": "boolean",
+                        "description": "Include git status info (default: true)"
+                    },
+                    "key_files_only": {
+                        "type": "boolean",
+                        "description": "Only show key project files (default: false)"
+                    }
+                },
+                "required": ["path"]
+            }
+        }),
     ]
 }
 
@@ -654,6 +697,14 @@ pub async fn dispatch_consolidated_tool(
         "read" => {
             super::tools::handle_tools_call(
                 json!({ "name": "read", "arguments": params }),
+                ctx,
+            )
+            .await
+        }
+        // 📦 Full project context dump for AI assistants
+        "project_context_dump" => {
+            super::tools::handle_tools_call(
+                json!({ "name": "project_context_dump", "arguments": params }),
                 ctx,
             )
             .await

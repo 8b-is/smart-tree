@@ -1,6 +1,9 @@
 //! MCP tools for context gathering from AI tool directories
+//!
+//! Now powered by Wave Memory for semantic storage and resonance-based retrieval!
 
 use crate::context_gatherer::{ContextGatherer, GatherConfig, GatheredContext};
+use crate::mcp::wave_memory::{get_wave_memory, MemoryType};
 use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -360,79 +363,132 @@ fn default_origin() -> String {
 }
 
 /// Anchor a collaborative memory for future retrieval
+///
+/// Now powered by Wave Memory - memories are stored as waves in a 3D cognitive grid
+/// with emotional encoding and semantic positioning for resonance-based retrieval!
 pub async fn anchor_collaborative_memory(
     req: AnchorMemoryRequest,
     _permission_check: impl Fn(serde_json::Value) -> Result<bool>,
 ) -> Result<Value> {
-    let project_path = if let Some(path) = req.project_path {
-        PathBuf::from(path)
-    } else {
-        std::env::current_dir()?
+    let project_path = req.project_path.as_ref().map(PathBuf::from);
+
+    // Convert anchor type to memory type for wave storage
+    let memory_type = MemoryType::parse(&req.anchor_type);
+
+    // Parse emotional context from the content (simple heuristics)
+    let (valence, arousal) = estimate_emotional_context(&req.context, &req.anchor_type);
+
+    // Use wave memory for storage
+    let wave_memory = get_wave_memory();
+    let result = {
+        let mut manager = wave_memory.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        manager.anchor(
+            req.context.clone(),
+            req.keywords.clone(),
+            memory_type,
+            valence,
+            arousal,
+            req.origin.clone(),
+            project_path.clone(),
+        )
     };
 
-    // Parse origin
-    let origin = if req.origin.starts_with("tandem:") {
-        let parts: Vec<&str> = req.origin.split(':').collect();
-        if parts.len() >= 3 {
-            crate::context_gatherer::collab_session::CollaborativeOrigin::Tandem {
-                human: parts[1].to_string(),
-                ai: parts[2].to_string(),
+    match result {
+        Ok(anchor_id) => {
+            // Also store in legacy system for backward compatibility
+            if let Some(ref path) = project_path {
+                let config = GatherConfig::default();
+                let mut gatherer = ContextGatherer::new(path.clone(), config);
+
+                // Parse origin for legacy system
+                let origin = if req.origin.starts_with("tandem:") {
+                    let parts: Vec<&str> = req.origin.split(':').collect();
+                    if parts.len() >= 3 {
+                        crate::context_gatherer::collab_session::CollaborativeOrigin::Tandem {
+                            human: parts[1].to_string(),
+                            ai: parts[2].to_string(),
+                        }
+                    } else {
+                        crate::context_gatherer::collab_session::CollaborativeOrigin::Emergent
+                    }
+                } else if req.origin.starts_with("ai:") {
+                    let ai_name = req.origin.strip_prefix("ai:").unwrap_or("claude");
+                    crate::context_gatherer::collab_session::CollaborativeOrigin::Single(ai_name.to_string())
+                } else if req.origin == "human" {
+                    crate::context_gatherer::collab_session::CollaborativeOrigin::Single("human".to_string())
+                } else {
+                    crate::context_gatherer::collab_session::CollaborativeOrigin::Emergent
+                };
+
+                let anchor_type = match req.anchor_type.as_str() {
+                    "pattern_insight" | "pattern" => crate::context_gatherer::collab_session::AnchorType::PatternInsight,
+                    "solution" | "breakthrough" => crate::context_gatherer::collab_session::AnchorType::Solution,
+                    "learning" | "learning_moment" => crate::context_gatherer::collab_session::AnchorType::LearningMoment,
+                    "joke" | "shared_joke" => crate::context_gatherer::collab_session::AnchorType::SharedJoke,
+                    "technical" | "technical_pattern" => crate::context_gatherer::collab_session::AnchorType::TechnicalPattern,
+                    "process" | "process_improvement" => crate::context_gatherer::collab_session::AnchorType::ProcessImprovement,
+                    _ => crate::context_gatherer::collab_session::AnchorType::PatternInsight,
+                };
+
+                let _ = gatherer.anchor_memory(origin, anchor_type, req.context.clone(), req.keywords.clone());
             }
-        } else {
-            return Ok(json!({
-                "error": "Invalid tandem origin format. Use: tandem:<human>:<ai>"
-            }));
-        }
-    } else if req.origin.starts_with("ai:") {
-        let ai_name = req.origin.strip_prefix("ai:").unwrap_or("claude");
-        crate::context_gatherer::collab_session::CollaborativeOrigin::Single(ai_name.to_string())
-    } else if req.origin == "human" {
-        crate::context_gatherer::collab_session::CollaborativeOrigin::Single("human".to_string())
-    } else {
-        crate::context_gatherer::collab_session::CollaborativeOrigin::Emergent
-    };
 
-    // Parse anchor type
-    let anchor_type = match req.anchor_type.as_str() {
-        "pattern_insight" | "pattern" => {
-            crate::context_gatherer::collab_session::AnchorType::PatternInsight
+            Ok(json!({
+                "success": true,
+                "anchor_id": anchor_id,
+                "message": format!("🌊 Memory anchored as wave with {} keywords", req.keywords.len()),
+                "wave_info": {
+                    "frequency_band": format!("{:?}", memory_type),
+                    "emotional_valence": valence,
+                    "emotional_arousal": arousal,
+                },
+                "retrieval_hint": "Use find_collaborative_memories for keyword search, or wave_memory for resonance search",
+            }))
         }
-        "solution" => crate::context_gatherer::collab_session::AnchorType::Solution,
-        "breakthrough" => crate::context_gatherer::collab_session::AnchorType::Breakthrough,
-        "learning" | "learning_moment" => {
-            crate::context_gatherer::collab_session::AnchorType::LearningMoment
-        }
-        "joke" | "shared_joke" => crate::context_gatherer::collab_session::AnchorType::SharedJoke,
-        "technical" | "technical_pattern" => {
-            crate::context_gatherer::collab_session::AnchorType::TechnicalPattern
-        }
-        "process" | "process_improvement" => {
-            crate::context_gatherer::collab_session::AnchorType::ProcessImprovement
-        }
-        _ => crate::context_gatherer::collab_session::AnchorType::PatternInsight,
-    };
-
-    // Create a minimal gatherer just for anchoring
-    let config = GatherConfig::default();
-    let mut gatherer = ContextGatherer::new(project_path.clone(), config);
-
-    // Anchor the memory
-    match gatherer.anchor_memory(
-        origin,
-        anchor_type,
-        req.context.clone(),
-        req.keywords.clone(),
-    ) {
-        Ok(anchor_id) => Ok(json!({
-            "success": true,
-            "anchor_id": anchor_id,
-            "message": format!("Memory anchored successfully with {} keywords", req.keywords.len()),
-            "retrieval_hint": "Use find_collaborative_memories to retrieve this later",
-        })),
         Err(e) => Ok(json!({
             "error": format!("Failed to anchor memory: {}", e)
         })),
     }
+}
+
+/// Estimate emotional context from content (simple heuristics)
+fn estimate_emotional_context(content: &str, anchor_type: &str) -> (f32, f32) {
+    let content_lower = content.to_lowercase();
+
+    // Base valence/arousal from anchor type
+    let (mut valence, mut arousal): (f32, f32) = match anchor_type {
+        "breakthrough" | "solution" => (0.8, 0.7),  // Very positive, exciting
+        "joke" | "shared_joke" => (0.9, 0.8),       // Very positive, high energy
+        "learning" | "learning_moment" => (0.5, 0.5), // Neutral-positive, moderate
+        "pattern" | "pattern_insight" => (0.3, 0.3), // Calm, thoughtful
+        "technical" => (0.2, 0.4),                   // Neutral, focused
+        _ => (0.0, 0.5),                             // Neutral
+    };
+
+    // Adjust based on content sentiment words
+    let positive_words = ["solved", "fixed", "works", "success", "great", "awesome", "love", "perfect", "breakthrough"];
+    let negative_words = ["bug", "error", "failed", "problem", "issue", "crash", "broken"];
+    let excitement_words = ["!", "amazing", "incredible", "finally", "eureka", "aha"];
+
+    for word in positive_words.iter() {
+        if content_lower.contains(word) {
+            valence = (valence + 0.1_f32).min(1.0_f32);
+        }
+    }
+
+    for word in negative_words.iter() {
+        if content_lower.contains(word) {
+            valence = (valence - 0.1_f32).max(-1.0_f32);
+        }
+    }
+
+    for word in excitement_words.iter() {
+        if content_lower.contains(word) {
+            arousal = (arousal + 0.1_f32).min(1.0_f32);
+        }
+    }
+
+    (valence, arousal)
 }
 
 /// Request structure for find_collaborative_memories
@@ -444,30 +500,108 @@ pub struct FindMemoriesRequest {
     pub project_path: Option<String>,
     /// Maximum results to return
     pub max_results: Option<usize>,
+    /// Use resonance search (semantic similarity) instead of just keywords
+    #[serde(default)]
+    pub use_resonance: bool,
+    /// Optional memory type filter
+    pub memory_type: Option<String>,
+    /// Minimum resonance threshold (0.0 to 1.0, default 0.3)
+    pub resonance_threshold: Option<f32>,
 }
 
 /// Find previously anchored collaborative memories
+///
+/// Now supports two search modes:
+/// 1. Keyword search (default): Fast lookup by exact keyword matches
+/// 2. Resonance search (use_resonance: true): Semantic similarity via wave interference
 pub async fn find_collaborative_memories(
     req: FindMemoriesRequest,
     _permission_check: impl Fn(serde_json::Value) -> Result<bool>,
 ) -> Result<Value> {
-    let project_path = if let Some(path) = req.project_path {
-        PathBuf::from(path)
-    } else {
-        std::env::current_dir()?
-    };
-
-    let config = GatherConfig::default();
-    let gatherer = ContextGatherer::new(project_path, config);
-
-    let memories = gatherer.find_relevant_memories(&req.keywords);
     let max_results = req.max_results.unwrap_or(10);
 
-    Ok(json!({
-        "keywords_searched": req.keywords,
-        "total_found": memories.len(),
-        "memories": memories.into_iter().take(max_results).collect::<Vec<_>>(),
-    }))
+    // Use wave memory for search
+    let wave_memory = get_wave_memory();
+    let mut manager = wave_memory.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+
+    if req.use_resonance {
+        // Resonance search: find semantically similar memories
+        let memory_type = req.memory_type
+            .as_ref()
+            .map(|s| MemoryType::parse(s))
+            .unwrap_or(MemoryType::Technical);
+        let threshold = req.resonance_threshold.unwrap_or(0.3);
+
+        let query_content = req.keywords.join(" ");
+        let results = manager.find_by_resonance(
+            &query_content,
+            &req.keywords,
+            memory_type,
+            threshold,
+            max_results,
+        );
+
+        let memories: Vec<_> = results.iter().map(|(mem, resonance)| {
+            json!({
+                "id": &mem.id,
+                "content": &mem.content,
+                "keywords": &mem.keywords,
+                "memory_type": format!("{:?}", mem.memory_type),
+                "resonance_score": format!("{:.2}", resonance),
+                "emotional_valence": mem.valence,
+                "emotional_arousal": mem.arousal,
+                "created_at": mem.created_at.to_rfc3339(),
+                "access_count": mem.access_count,
+                "origin": &mem.origin,
+            })
+        }).collect();
+
+        Ok(json!({
+            "search_mode": "resonance",
+            "keywords_searched": req.keywords,
+            "resonance_threshold": threshold,
+            "total_found": memories.len(),
+            "memories": memories,
+            "wave_stats": manager.stats(),
+        }))
+    } else {
+        // Keyword search: fast lookup
+        let results = manager.find_by_keywords(&req.keywords, max_results);
+
+        let memories: Vec<_> = results.iter().map(|mem| {
+            json!({
+                "id": &mem.id,
+                "content": &mem.content,
+                "keywords": &mem.keywords,
+                "memory_type": format!("{:?}", mem.memory_type),
+                "emotional_valence": mem.valence,
+                "emotional_arousal": mem.arousal,
+                "created_at": mem.created_at.to_rfc3339(),
+                "access_count": mem.access_count,
+                "origin": &mem.origin,
+            })
+        }).collect();
+
+        // Also check legacy storage for backward compatibility
+        let project_path = req.project_path
+            .as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+        let config = GatherConfig::default();
+        let gatherer = ContextGatherer::new(project_path, config);
+        let legacy_memories = gatherer.find_relevant_memories(&req.keywords);
+
+        Ok(json!({
+            "search_mode": "keyword",
+            "keywords_searched": req.keywords,
+            "total_found": memories.len(),
+            "memories": memories,
+            "legacy_memories_found": legacy_memories.len(),
+            "wave_stats": manager.stats(),
+            "tip": "Use use_resonance:true for semantic similarity search!",
+        }))
+    }
 }
 
 /// Request structure for get_collaboration_rapport
