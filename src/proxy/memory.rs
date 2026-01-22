@@ -47,6 +47,15 @@ impl ProxyMemory {
         Ok(memory)
     }
 
+    /// Create an in-memory only instance that doesn't persist to disk
+    /// Used as a fallback when filesystem access fails
+    pub fn in_memory_only() -> Self {
+        Self {
+            storage_path: PathBuf::from("/dev/null"), // Dummy path, won't be used
+            scopes: HashMap::new(),
+        }
+    }
+
     pub fn get_scope(&self, scope_id: &str) -> Option<&ConversationScope> {
         self.scopes.get(scope_id)
     }
@@ -85,6 +94,10 @@ impl ProxyMemory {
     }
 
     fn save(&self) -> Result<()> {
+        // Skip saving if using the in-memory only fallback
+        if self.storage_path == PathBuf::from("/dev/null") {
+            return Ok(());
+        }
         let content = serde_json::to_string_pretty(&self.scopes)?;
         fs::write(&self.storage_path, content)?;
         Ok(())

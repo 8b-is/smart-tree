@@ -153,8 +153,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     // Initialize proxy memory for conversation persistence
     let proxy_memory = ProxyMemory::new().unwrap_or_else(|e| {
         eprintln!("Warning: Could not initialize proxy memory: {}", e);
-        // Create a fallback in-memory only version
-        ProxyMemory::new().expect("Memory initialization should not fail twice")
+        eprintln!("  Falling back to in-memory only mode (no persistence)");
+        // Create a fallback in-memory only version that doesn't require filesystem access
+        ProxyMemory::in_memory_only()
     });
 
     let state = Arc::new(RwLock::new(DaemonState {

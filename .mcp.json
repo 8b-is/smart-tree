@@ -29,7 +29,7 @@
     },
     "st": {
       "type": "stdio",
-      "command": "/opt/homebrew/bin/st",
+      "command": "st",
       "args": [
         "--mcp"
       ],
