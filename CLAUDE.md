@@ -1,17 +1,22 @@
-# CLAUDE.md - Smart Tree v6.2.0 Comprehensive Development Guide
+# CLAUDE.md - Smart Tree v6.5.1 Comprehensive Development Guide
 
 **Location**: `/aidata/aye/smart-tree`
-**Language**: 100% Rust (173 source files)
+**Language**: 100% Rust (174 source files)
 **Binary Size**: ~29MB core (TUI/Dashboard optional)
-**Latest Version**: 6.2.0
+**Latest Version**: 6.5.1
 
-## What's New in 6.2.0
+## What's New in 6.5.1
+
+- **Security Scanner**: `--security-scan` detects supply chain attack patterns (IPFS/IPNS injection, fake verification, claude-flow references)
+- **Aggressive Scanning**: Security scan ignores .gitignore to scan node_modules and hidden directories
+- **Risk Classification**: Findings categorized as Critical/High/Medium/Low with context-aware adjustment
+- **Actionable Recommendations**: Scanner provides cleanup steps and remediation guidance
+
+## Previous: 6.2.0
 
 - **Session Persistence**: `SessionStart`/`SessionEnd` hooks auto-save and restore context
 - **Smart Restore**: `--claude-restore` only shows relevant, recent context (24h window)
 - **Feature Gates**: TUI and Dashboard now optional (`--features tui`, `--features dashboard`)
-- **Cleaner Cargo.toml**: Removed unused dependencies, organized by category
-- **Human-in-the-loop**: Dashboard designed for daemon mode with user control
 
 ## Quick Start for Returning Claude Instances
 

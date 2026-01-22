@@ -232,7 +232,10 @@ impl ConsciousnessManager {
             return Ok(());
         }
 
-        eprintln!("🧠 Consciousness restored from {}", self.save_path.display());
+        eprintln!(
+            "🧠 Consciousness restored from {}",
+            self.save_path.display()
+        );
 
         Ok(())
     }
@@ -308,11 +311,7 @@ impl ConsciousnessManager {
         });
 
         let has_insights = !self.state.insights.is_empty();
-        let has_todos = self
-            .state
-            .todos
-            .iter()
-            .any(|t| t.status != "completed");
+        let has_todos = self.state.todos.iter().any(|t| t.status != "completed");
         let has_notes = !self.state.notes.is_empty();
         let has_focus = !self.state.project_context.current_focus.is_empty();
         let has_project_name = !self.state.project_context.project_name.is_empty()

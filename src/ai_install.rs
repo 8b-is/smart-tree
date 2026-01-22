@@ -5,8 +5,8 @@
 //! This module provides interactive and non-interactive installation
 //! of Smart Tree's AI integrations: MCP servers, hooks, plugins, and configs.
 
-use crate::cli::{AiTarget, InstallScope};
 use crate::claude_init::{ClaudeInit, McpInstaller};
+use crate::cli::{AiTarget, InstallScope};
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::fs;
@@ -82,7 +82,10 @@ impl AiInstaller {
 
     /// Run interactive installation with user prompts
     fn run_interactive(&self) -> Result<()> {
-        println!("\nThis will configure Smart Tree for {}.", self.target_name());
+        println!(
+            "\nThis will configure Smart Tree for {}.",
+            self.target_name()
+        );
         println!("Scope: {}\n", self.scope_description());
 
         // Show existing configuration status first
@@ -102,19 +105,47 @@ impl AiInstaller {
         println!("  [a] Install/Update ALL integrations (includes cleanup)");
         println!("  [c] Clean foreign MCPs/hooks only - remove tool sprawl");
         if available.install_mcp {
-            let status = if existing.iter().any(|c| c.name.contains("MCP") && c.enabled) { "(update)" } else { "(install)" };
-            println!("  [1] MCP Server {} - Enable 30+ tools in your AI assistant", status);
+            let status = if existing.iter().any(|c| c.name.contains("MCP") && c.enabled) {
+                "(update)"
+            } else {
+                "(install)"
+            };
+            println!(
+                "  [1] MCP Server {} - Enable 30+ tools in your AI assistant",
+                status
+            );
         }
         if available.install_hooks {
-            let status = if existing.iter().any(|c| c.name.contains("Hooks") && c.enabled) { "(update)" } else { "(install)" };
+            let status = if existing
+                .iter()
+                .any(|c| c.name.contains("Hooks") && c.enabled)
+            {
+                "(update)"
+            } else {
+                "(install)"
+            };
             println!("  [2] Hooks {} - Automatic context on every prompt", status);
         }
         if available.install_claude_md {
-            let status = if existing.iter().any(|c| c.name.contains("CLAUDE.md") && c.enabled) { "(update)" } else { "(create)" };
+            let status = if existing
+                .iter()
+                .any(|c| c.name.contains("CLAUDE.md") && c.enabled)
+            {
+                "(update)"
+            } else {
+                "(create)"
+            };
             println!("  [3] CLAUDE.md {} - Project-specific AI guidance", status);
         }
         if available.create_settings {
-            let status = if existing.iter().any(|c| c.name.contains("Settings") && c.enabled) { "(update)" } else { "(create)" };
+            let status = if existing
+                .iter()
+                .any(|c| c.name.contains("Settings") && c.enabled)
+            {
+                "(update)"
+            } else {
+                "(create)"
+            };
             println!("  [4] Settings {} - AI-optimized configuration", status);
         }
         println!("  [s] Show detailed status only");
@@ -147,9 +178,7 @@ impl AiInstaller {
                 };
                 self.execute_install(&cleanup_only)
             }
-            "a" | "all" | "" => {
-                self.execute_install(&available)
-            }
+            "a" | "all" | "" => self.execute_install(&available),
             _ => {
                 let options = self.parse_selection(&input, &available);
                 self.execute_install(&options)
@@ -293,7 +322,10 @@ impl AiInstaller {
                 let installer = McpInstaller::new()?;
                 let result = installer.install()?;
                 if result.success {
-                    println!("  ✅ {}", result.message.lines().next().unwrap_or("MCP installed"));
+                    println!(
+                        "  ✅ {}",
+                        result.message.lines().next().unwrap_or("MCP installed")
+                    );
                 } else {
                     anyhow::bail!("{}", result.message)
                 }
@@ -324,14 +356,14 @@ impl AiInstaller {
 
         if mcp_json_path.exists() {
             // Read and update existing config
-            let content = fs::read_to_string(&mcp_json_path)
-                .context("Failed to read .mcp.json")?;
-            let mut config: Value = serde_json::from_str(&content)
-                .unwrap_or_else(|_| json!({"mcpServers": {}}));
+            let content = fs::read_to_string(&mcp_json_path).context("Failed to read .mcp.json")?;
+            let mut config: Value =
+                serde_json::from_str(&content).unwrap_or_else(|_| json!({"mcpServers": {}}));
 
             // Ensure mcpServers exists and has st
             if let Some(obj) = config.as_object_mut() {
-                let servers = obj.entry("mcpServers".to_string())
+                let servers = obj
+                    .entry("mcpServers".to_string())
                     .or_insert_with(|| json!({}));
                 if let Some(servers_obj) = servers.as_object_mut() {
                     if !servers_obj.contains_key("st") {
@@ -349,7 +381,10 @@ impl AiInstaller {
                 }
             });
             fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
-            println!("  ✅ Created {} with st MCP server", mcp_json_path.display());
+            println!(
+                "  ✅ Created {} with st MCP server",
+                mcp_json_path.display()
+            );
         }
 
         Ok(())
@@ -467,7 +502,10 @@ impl AiInstaller {
             settings
         };
 
-        fs::write(&settings_file, serde_json::to_string_pretty(&final_settings)?)?;
+        fs::write(
+            &settings_file,
+            serde_json::to_string_pretty(&final_settings)?,
+        )?;
         println!("  ✅ Settings saved to {}", settings_file.display());
         Ok(())
     }
@@ -494,7 +532,7 @@ impl AiInstaller {
             "ruv-swarm",
             "flow-nexus",
             "hive-mind",
-            "npx ",  // External npm packages running on every command
+            "npx ", // External npm packages running on every command
             "swarm",
             "queen",
             "worker",
@@ -520,8 +558,7 @@ impl AiInstaller {
         }
 
         // 2. Clean ~/.claude/.claude/settings.json (the nested one with enabledMcpjsonServers)
-        let nested_settings = dirs::home_dir()
-            .map(|h| h.join(".claude/.claude/settings.json"));
+        let nested_settings = dirs::home_dir().map(|h| h.join(".claude/.claude/settings.json"));
 
         if let Some(path) = nested_settings {
             if path.exists() {
@@ -530,8 +567,7 @@ impl AiInstaller {
         }
 
         // 3. Clean ~/.claude/settings.json
-        let user_settings = dirs::home_dir()
-            .map(|h| h.join(".claude/settings.json"));
+        let user_settings = dirs::home_dir().map(|h| h.join(".claude/settings.json"));
 
         if let Some(path) = user_settings {
             if path.exists() {
@@ -556,8 +592,7 @@ impl AiInstaller {
 
     /// Clean a parent .mcp.json file of foreign MCP servers
     fn clean_parent_mcp_json(&self, path: &std::path::Path, patterns: &[&str]) -> Result<usize> {
-        let content = fs::read_to_string(path)
-            .context("Failed to read .mcp.json")?;
+        let content = fs::read_to_string(path).context("Failed to read .mcp.json")?;
 
         // Handle empty or whitespace-only files
         if content.trim().is_empty() {
@@ -584,11 +619,15 @@ impl AiInstaller {
 
                     for name in server_names {
                         // Check if server name or config matches foreign patterns
-                        let config_str = servers_obj.get(&name)
+                        let config_str = servers_obj
+                            .get(&name)
                             .map(|v| serde_json::to_string(v).unwrap_or_default())
                             .unwrap_or_default();
 
-                        if patterns.iter().any(|p| name.contains(p) || config_str.contains(p)) {
+                        if patterns
+                            .iter()
+                            .any(|p| name.contains(p) || config_str.contains(p))
+                        {
                             servers_obj.remove(&name);
                             cleaned += 1;
                             println!("    Removed MCP server '{}' from {}", name, path.display());
@@ -608,11 +647,10 @@ impl AiInstaller {
 
     /// Clean a specific settings file of foreign integrations
     fn clean_settings_file(&self, path: &std::path::Path, patterns: &[&str]) -> Result<usize> {
-        let content = fs::read_to_string(path)
-            .context("Failed to read settings file")?;
+        let content = fs::read_to_string(path).context("Failed to read settings file")?;
 
-        let mut config: Value = serde_json::from_str(&content)
-            .context("Failed to parse settings JSON")?;
+        let mut config: Value =
+            serde_json::from_str(&content).context("Failed to parse settings JSON")?;
 
         let mut cleaned = 0;
 
@@ -643,7 +681,10 @@ impl AiInstaller {
                                 let removed = original_len - arr.len();
                                 if removed > 0 {
                                     cleaned += removed;
-                                    println!("    Removed {} foreign {} hook(s)", removed, hook_type);
+                                    println!(
+                                        "    Removed {} foreign {} hook(s)",
+                                        removed, hook_type
+                                    );
                                 }
                             }
                         }
@@ -757,10 +798,13 @@ impl ConfigManager {
     pub fn display_configs(&self) {
         let configs = self.list_configs();
 
-        println!("\n📋 AI Integration Status ({})", match self.scope {
-            InstallScope::Project => "Project",
-            InstallScope::User => "User",
-        });
+        println!(
+            "\n📋 AI Integration Status ({})",
+            match self.scope {
+                InstallScope::Project => "Project",
+                InstallScope::User => "User",
+            }
+        );
         println!("{}", "─".repeat(50));
 
         for config in &configs {
@@ -797,7 +841,8 @@ impl ConfigManager {
         let hooks_dir = match self.scope {
             InstallScope::Project => std::env::current_dir().ok(),
             InstallScope::User => dirs::home_dir(),
-        }.map(|p| p.join(".claude"));
+        }
+        .map(|p| p.join(".claude"));
 
         let hooks_file = hooks_dir.as_ref().map(|d| d.join("hooks.json"));
         let exists = hooks_file.as_ref().map(|p| p.exists()).unwrap_or(false);
@@ -833,7 +878,8 @@ impl ConfigManager {
         let settings_dir = match self.scope {
             InstallScope::Project => std::env::current_dir().ok(),
             InstallScope::User => dirs::home_dir(),
-        }.map(|p| p.join(".claude"));
+        }
+        .map(|p| p.join(".claude"));
 
         let settings_file = settings_dir.as_ref().map(|d| d.join("settings.json"));
         let exists = settings_file.as_ref().map(|p| p.exists()).unwrap_or(false);
@@ -843,7 +889,8 @@ impl ConfigManager {
                 if let Ok(content) = fs::read_to_string(path) {
                     if let Ok(config) = serde_json::from_str::<Value>(&content) {
                         if let Some(st) = config.get("smart_tree") {
-                            let version = st.get("version")
+                            let version = st
+                                .get("version")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("unknown");
                             format!("Smart Tree v{} settings", version)

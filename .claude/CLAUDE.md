@@ -1,12 +1,17 @@
-# CLAUDE.md - Smart Tree v6.2.0
+# CLAUDE.md - Smart Tree v6.5.1
 
 This Rust project uses Smart Tree for optimal AI context management.
 
-## What's New in 6.2.0
+## What's New in 6.5.1
+- **Security Scanner**: `--security-scan` detects supply chain attack patterns
+- **Pattern Detection**: IPFS/IPNS injection, fake verification, known risk packages (claude-flow)
+- **Aggressive Mode**: Ignores .gitignore to scan node_modules and all hidden directories
+- **Risk Classification**: Critical/High/Medium/Low with context-aware adjustment
+
+## Previous: 6.2.0
 - **Session Persistence**: `SessionStart`/`SessionEnd` hooks auto-save and restore context
 - **Smart Restore**: `--claude-restore` only shows relevant, recent context (24h window)
 - **Feature Gates**: TUI and Dashboard now optional (`--features tui`, `--features dashboard`)
-- **Foreign MCP Cleanup**: `--ai-install --cleanup` removes untrusted MCP integrations
 
 ## Essential Commands
 

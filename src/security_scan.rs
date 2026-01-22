@@ -182,14 +182,10 @@ impl SecurityScanner {
     fn should_scan_file(&self, path: &Path) -> bool {
         // Skip binary extensions
         let skip_extensions = [
-            "png", "jpg", "jpeg", "gif", "ico", "webp", "svg",
-            "woff", "woff2", "ttf", "otf", "eot",
-            "mp3", "mp4", "wav", "ogg", "webm",
-            "zip", "tar", "gz", "bz2", "xz", "7z",
-            "exe", "dll", "so", "dylib",
-            "pdf", "doc", "docx", "xls", "xlsx",
-            "pyc", "pyo", "class", "o", "a",
-            "wasm", "mem8",
+            "png", "jpg", "jpeg", "gif", "ico", "webp", "svg", "woff", "woff2", "ttf", "otf",
+            "eot", "mp3", "mp4", "wav", "ogg", "webm", "zip", "tar", "gz", "bz2", "xz", "7z",
+            "exe", "dll", "so", "dylib", "pdf", "doc", "docx", "xls", "xlsx", "pyc", "pyo",
+            "class", "o", "a", "wasm", "mem8",
         ];
 
         if let Some(ext) = path.extension() {
@@ -267,7 +263,12 @@ impl SecurityScanner {
 
         // Summary
         report.push_str("\u{1F4CA} Summary:\n");
-        for level in [RiskLevel::Critical, RiskLevel::High, RiskLevel::Medium, RiskLevel::Low] {
+        for level in [
+            RiskLevel::Critical,
+            RiskLevel::High,
+            RiskLevel::Medium,
+            RiskLevel::Low,
+        ] {
             if let Some(findings) = by_risk.get(&level) {
                 let icon = match level {
                     RiskLevel::Critical => "\u{1F6A8}",
@@ -275,13 +276,23 @@ impl SecurityScanner {
                     RiskLevel::Medium => "\u{1F7E1}",
                     RiskLevel::Low => "\u{1F535}",
                 };
-                report.push_str(&format!("  {} {}: {} findings\n", icon, level, findings.len()));
+                report.push_str(&format!(
+                    "  {} {}: {} findings\n",
+                    icon,
+                    level,
+                    findings.len()
+                ));
             }
         }
         report.push('\n');
 
         // Detailed findings by risk level
-        for level in [RiskLevel::Critical, RiskLevel::High, RiskLevel::Medium, RiskLevel::Low] {
+        for level in [
+            RiskLevel::Critical,
+            RiskLevel::High,
+            RiskLevel::Medium,
+            RiskLevel::Low,
+        ] {
             if let Some(findings) = by_risk.get(&level) {
                 let header = match level {
                     RiskLevel::Critical => "\u{1F6A8} CRITICAL RISK",
@@ -296,12 +307,18 @@ impl SecurityScanner {
                 // Group by pattern name
                 let mut by_pattern: HashMap<&str, Vec<&&SecurityFinding>> = HashMap::new();
                 for finding in findings {
-                    by_pattern.entry(&finding.pattern_name).or_default().push(finding);
+                    by_pattern
+                        .entry(&finding.pattern_name)
+                        .or_default()
+                        .push(finding);
                 }
 
                 for (pattern_name, pattern_findings) in by_pattern {
-                    report.push_str(&format!("\n  \u{1F50E} {} ({} occurrences)\n",
-                        pattern_name, pattern_findings.len()));
+                    report.push_str(&format!(
+                        "\n  \u{1F50E} {} ({} occurrences)\n",
+                        pattern_name,
+                        pattern_findings.len()
+                    ));
                     report.push_str(&format!("     {}\n", pattern_findings[0].description));
 
                     // Show first 5 files
@@ -309,18 +326,26 @@ impl SecurityScanner {
                         let short_path = finding.file_path.to_string_lossy();
                         // Truncate long paths
                         let display_path = if short_path.len() > 60 {
-                            format!("...{}", &short_path[short_path.len()-57..])
+                            format!("...{}", &short_path[short_path.len() - 57..])
                         } else {
                             short_path.to_string()
                         };
-                        report.push_str(&format!("     {}. {}:{}\n",
-                            i + 1, display_path, finding.line_number));
-                        report.push_str(&format!("        Match: {}\n",
-                            truncate(&finding.matched_text, 50)));
+                        report.push_str(&format!(
+                            "     {}. {}:{}\n",
+                            i + 1,
+                            display_path,
+                            finding.line_number
+                        ));
+                        report.push_str(&format!(
+                            "        Match: {}\n",
+                            truncate(&finding.matched_text, 50)
+                        ));
                     }
                     if pattern_findings.len() > 5 {
-                        report.push_str(&format!("     ... and {} more\n",
-                            pattern_findings.len() - 5));
+                        report.push_str(&format!(
+                            "     ... and {} more\n",
+                            pattern_findings.len() - 5
+                        ));
                     }
                 }
             }
@@ -356,7 +381,7 @@ impl Default for SecurityScanner {
 
 fn truncate(s: &str, max_len: usize) -> String {
     if s.len() > max_len {
-        format!("{}...", &s[..max_len-3])
+        format!("{}...", &s[..max_len - 3])
     } else {
         s.to_string()
     }
@@ -382,7 +407,9 @@ mod tests {
         let content = "npx claude-flow@alpha swarm init";
         let mut findings = Vec::new();
         scanner.scan_content(Path::new("test.md"), content, &mut findings);
-        assert!(findings.iter().any(|f| f.pattern_name == "Known Risk Package"));
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_name == "Known Risk Package"));
     }
 
     #[test]
@@ -391,6 +418,8 @@ mod tests {
         let content = "return signature.length === 64;";
         let mut findings = Vec::new();
         scanner.scan_content(Path::new("verify.ts"), content, &mut findings);
-        assert!(findings.iter().any(|f| f.pattern_name == "Fake Verification"));
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_name == "Fake Verification"));
     }
 }

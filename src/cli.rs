@@ -229,11 +229,21 @@ pub struct Cli {
     pub install_ai: bool,
 
     /// Installation scope: project (local .claude/) or user (~/.claude/, ~/.config/)
-    #[arg(long = "install-scope", value_enum, default_value = "project", help_heading = "AI Integration")]
+    #[arg(
+        long = "install-scope",
+        value_enum,
+        default_value = "project",
+        help_heading = "AI Integration"
+    )]
     pub install_scope: InstallScope,
 
     /// Target AI platform for configuration
-    #[arg(long, value_enum, default_value = "claude", help_heading = "AI Integration")]
+    #[arg(
+        long,
+        value_enum,
+        default_value = "claude",
+        help_heading = "AI Integration"
+    )]
     pub ai_target: AiTarget,
 
     /// Skip interactive prompts (use defaults or provided flags)
@@ -244,7 +254,11 @@ pub struct Cli {
     // CLAUDE CODE INTEGRATION (Legacy - prefer --install-ai)
     // =========================================================================
     /// Configure Claude Code hooks (enable/disable/status)
-    #[arg(long, value_name = "ACTION", help_heading = "Claude Code Integration (Legacy)")]
+    #[arg(
+        long,
+        value_name = "ACTION",
+        help_heading = "Claude Code Integration (Legacy)"
+    )]
     pub hooks_config: Option<String>,
 
     /// Quick setup: Install Smart Tree hooks in Claude Code

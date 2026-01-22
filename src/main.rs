@@ -1597,7 +1597,9 @@ async fn handle_claude_restore() -> Result<()> {
             if is_relevant {
                 println!("{}", manager.get_summary());
                 println!("\n{}", manager.get_context_reminder());
-                println!("\n💡 TIP: Run `st --claude-save` before ending session to preserve context.");
+                println!(
+                    "\n💡 TIP: Run `st --claude-save` before ending session to preserve context."
+                );
             } else {
                 println!("🧠 Fresh session - previous context not applicable.");
                 println!("   Run `st -m context .` for project overview.");
@@ -1708,7 +1710,10 @@ async fn handle_security_scan(path: &str) -> Result<()> {
         .count();
 
     if critical_count > 0 {
-        eprintln!("\n⚠️  {} CRITICAL findings require immediate attention!", critical_count);
+        eprintln!(
+            "\n⚠️  {} CRITICAL findings require immediate attention!",
+            critical_count
+        );
         std::process::exit(1);
     }
 

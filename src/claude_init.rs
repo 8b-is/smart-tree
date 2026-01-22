@@ -14,10 +14,19 @@ use crate::TreeStats;
 
 /// Valid Claude Code hook event types
 const VALID_HOOK_KEYS: &[&str] = &[
-    "SessionStart", "UserPromptSubmit", "PreToolUse",
-    "PermissionRequest", "PostToolUse", "PostToolUseFailure",
-    "SubagentStart", "SubagentStop", "Stop",
-    "PreCompact", "SessionEnd", "Notification", "Setup"
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "SubagentStart",
+    "SubagentStop",
+    "Stop",
+    "PreCompact",
+    "SessionEnd",
+    "Notification",
+    "Setup",
 ];
 
 /// Ask user for confirmation before overwriting a file
@@ -262,7 +271,10 @@ impl ClaudeInit {
         }
 
         if updated {
-            println!("\n🎉 Claude integration updated for {:?} project!", self.project_type);
+            println!(
+                "\n🎉 Claude integration updated for {:?} project!",
+                self.project_type
+            );
         } else {
             println!("\n✨ No changes made. Use --force to overwrite.");
         }
@@ -626,7 +638,10 @@ Use `st --help` to explore more features!
 
     /// Show what settings would be generated without writing
     pub fn show_suggested(&self) -> Result<()> {
-        println!("📋 Suggested Claude integration for {:?} project:\n", self.project_type);
+        println!(
+            "📋 Suggested Claude integration for {:?} project:\n",
+            self.project_type
+        );
 
         // Generate settings
         let hook_mode = if self.stats.total_files > 1000 {
@@ -654,7 +669,7 @@ Use `st --help` to explore more features!
                 "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
                 "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
                 "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}]
-            })
+            }),
         };
 
         let settings = json!({"hooks": hooks});
