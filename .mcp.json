@@ -1,32 +1,5 @@
 {
   "mcpServers": {
-    "claude-flow@alpha": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "claude-flow@alpha",
-        "mcp",
-        "start"
-      ]
-    },
-    "ruv-swarm": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "ruv-swarm@latest",
-        "mcp",
-        "start"
-      ]
-    },
-    "flow-nexus": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "flow-nexus@latest",
-        "mcp",
-        "start"
-      ]
-    },
     "st": {
       "type": "stdio",
       "command": "st",

@@ -206,24 +206,23 @@ fn main() {
 
     #[test]
     fn test_token_assignment() {
-        // Use content that will definitely benefit from tokenization
-        let content = "This is a longer test phrase that repeats. This is a longer test phrase that repeats. This is a longer test phrase that repeats. Another different phrase here.";
-        let (tokens, tokenized) = MarqantFormatter::tokenize_content(content);
+        // Test with markdown content that definitely triggers tokenization
+        // Static tokens need enough repetition to save bytes:
+        // For "## " (3 chars), we need count * 3 > count + 3 + 3, so count > 2
+        // Using 5+ occurrences to ensure threshold is met
+        let markdown_content = "## Section 1\n\n## Section 2\n\n## Section 3\n\n## Section 4\n\n## Section 5\n\nContent here.";
+        let (tokens, tokenized) = MarqantFormatter::tokenize_content(markdown_content);
 
-        // Check if any tokenization occurred
-        if tokens.is_empty() {
-            // If no tokens, at least verify the static tokens would work on markdown
-            let markdown_content = "## Header\n## Header\n## Header\nSome content here.";
-            let (md_tokens, _md_tokenized) = MarqantFormatter::tokenize_content(markdown_content);
-            assert!(
-                !md_tokens.is_empty() || tokenized != content,
-                "Tokenization should create tokens or modify content"
-            );
-        } else {
-            // Verify tokens were created and content was modified
-            assert!(!tokens.is_empty(), "Should have created tokens");
-            assert_ne!(tokenized, content, "Content should be tokenized");
-        }
+        // The tokenization should either:
+        // 1. Create token mappings for repeated patterns, OR
+        // 2. Modify the content with static token replacements
+        // With 5 occurrences of "## ", this should definitely trigger tokenization
+        assert!(
+            !tokens.is_empty() || tokenized != markdown_content,
+            "Tokenization should create tokens or modify content. Got tokens: {:?}, content modified: {}",
+            tokens.keys().collect::<Vec<_>>(),
+            tokenized != markdown_content
+        );
     }
 }
 
