@@ -650,8 +650,8 @@ impl SmartEditor {
             }
             SupportedLanguage::JavaScript | SupportedLanguage::TypeScript => {
                 // For now, use CommonJS style which is more common
-                if alias.is_some() {
-                    format!("const {} = require('{}');", alias.unwrap(), import)
+                if let Some(a) = alias {
+                    format!("const {} = require('{}');", a, import)
                 } else {
                     format!("const {} = require('{}');", import, import)
                 }
