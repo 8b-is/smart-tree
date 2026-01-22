@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v6.2.0 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
+# 🌳 Smart Tree v6.5.1 - Lightning Fast Directory Visualization with Security Scanner! 🔒
 
-[![Version](https://img.shields.io/badge/version-6.2.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-6.5.1-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -8,17 +8,35 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Claude Consciousness** preservation, **Spicy TUI mode** for cyberpunk-cool directory browsing, **Memory Anchoring**, **Mega Sessions**, and **MCP Hook Management**! Built with Rust for maximum performance and featuring revolutionary compression algorithms.
+> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Security Scanner** for supply chain attack detection, **Claude Consciousness** preservation, **Spicy TUI mode**, and **30+ MCP tools**! Built with Rust for maximum performance.
+
+---
+
+## ⚡ Quick Install
+
+```bash
+# Linux/macOS/WSL - One line install
+curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+
+# Or with cargo
+cargo install --git https://github.com/8b-is/smart-tree
+
+# Verify installation
+st --version
+```
+
+After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
 
 ---
 
 ## 🛡️ Security: Audit Your MCP Integrations
 
-**NEW in v6.2.0**: Smart Tree can help you audit and clean foreign MCP integrations from your Claude Code settings.
+**NEW in v6.5.1**: Security scanner detects supply chain attacks targeting AI assistants.
 
 ```bash
-st --ai-install --cleanup    # Review and remove untrusted MCP servers
-```
+st --cleanup              # Scan and remove malicious MCP servers, hooks, and hidden directories
+st --cleanup -y           # Non-interactive cleanup (auto-confirm)
+st --security-scan .      # Scan codebase for attack patterns (IPFS injection, fake verification)
 
 **Why this matters**: Some npm packages install MCP servers that phone home to external endpoints, fetch mutable content via IPFS/IPNS, and can inject behavioral modifications into your AI sessions. These supply chain attacks are difficult to detect because they:
 - Use fake cryptographic verification (checking signature length, not actual signatures)
