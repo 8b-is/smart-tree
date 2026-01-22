@@ -1,352 +1,947 @@
-# Claude Code Configuration - SPARC Development Environment
+# CLAUDE.md - Smart Tree v5.4.0 Comprehensive Development Guide
 
-## 🚨 CRITICAL: CONCURRENT EXECUTION & FILE MANAGEMENT
+**Location**: `/aidata/ayeverse/smart-tree`
+**Language**: 100% Rust (173 source files)
+**Binary Size**: ~11MB (highly optimized)
+**Latest Version**: 5.4.0
 
-**ABSOLUTE RULES**:
-1. ALL operations MUST be concurrent/parallel in a single message
-2. **NEVER save working files, text/mds and tests to the root folder**
-3. ALWAYS organize files in appropriate subdirectories
-4. **USE CLAUDE CODE'S TASK TOOL** for spawning agents concurrently, not just MCP
+## Quick Start for Returning Claude Instances
 
-### ⚡ GOLDEN RULE: "1 MESSAGE = ALL RELATED OPERATIONS"
-
-**MANDATORY PATTERNS:**
-- **TodoWrite**: ALWAYS batch ALL todos in ONE call (5-10+ todos minimum)
-- **Task tool (Claude Code)**: ALWAYS spawn ALL agents in ONE message with full instructions
-- **File operations**: ALWAYS batch ALL reads/writes/edits in ONE message
-- **Bash commands**: ALWAYS batch ALL terminal operations in ONE message
-- **Memory operations**: ALWAYS batch ALL memory store/retrieve in ONE message
-
-### 🎯 CRITICAL: Claude Code Task Tool for Agent Execution
-
-**Claude Code's Task tool is the PRIMARY way to spawn agents:**
-```javascript
-// ✅ CORRECT: Use Claude Code's Task tool for parallel agent execution
-[Single Message]:
-  Task("Research agent", "Analyze requirements and patterns...", "researcher")
-  Task("Coder agent", "Implement core features...", "coder")
-  Task("Tester agent", "Create comprehensive tests...", "tester")
-  Task("Reviewer agent", "Review code quality...", "reviewer")
-  Task("Architect agent", "Design system architecture...", "system-architect")
-```
-
-**MCP tools are ONLY for coordination setup:**
-- `mcp__claude-flow__swarm_init` - Initialize coordination topology
-- `mcp__claude-flow__agent_spawn` - Define agent types for coordination
-- `mcp__claude-flow__task_orchestrate` - Orchestrate high-level workflows
-
-### 📁 File Organization Rules
-
-**NEVER save to root folder. Use these directories:**
-- `/src` - Source code files
-- `/tests` - Test files
-- `/docs` - Documentation and markdown files
-- `/config` - Configuration files
-- `/scripts` - Utility scripts
-- `/examples` - Example code
-
-## Project Overview
-
-This project uses SPARC (Specification, Pseudocode, Architecture, Refinement, Completion) methodology with Claude-Flow orchestration for systematic Test-Driven Development.
-
-## SPARC Commands
-
-### Core Commands
-- `npx claude-flow sparc modes` - List available modes
-- `npx claude-flow sparc run <mode> "<task>"` - Execute specific mode
-- `npx claude-flow sparc tdd "<feature>"` - Run complete TDD workflow
-- `npx claude-flow sparc info <mode>` - Get mode details
-
-### Batchtools Commands
-- `npx claude-flow sparc batch <modes> "<task>"` - Parallel execution
-- `npx claude-flow sparc pipeline "<task>"` - Full pipeline processing
-- `npx claude-flow sparc concurrent <mode> "<tasks-file>"` - Multi-task processing
-
-### Build Commands
-- `npm run build` - Build project
-- `npm run test` - Run tests
-- `npm run lint` - Linting
-- `npm run typecheck` - Type checking
-
-## SPARC Workflow Phases
-
-1. **Specification** - Requirements analysis (`sparc run spec-pseudocode`)
-2. **Pseudocode** - Algorithm design (`sparc run spec-pseudocode`)
-3. **Architecture** - System design (`sparc run architect`)
-4. **Refinement** - TDD implementation (`sparc tdd`)
-5. **Completion** - Integration (`sparc run integration`)
-
-## Code Style & Best Practices
-
-- **Modular Design**: Files under 500 lines
-- **Environment Safety**: Never hardcode secrets
-- **Test-First**: Write tests before implementation
-- **Clean Architecture**: Separate concerns
-- **Documentation**: Keep updated
-
-## 🚀 Available Agents (54 Total)
-
-### Core Development
-`coder`, `reviewer`, `tester`, `planner`, `researcher`
-
-### Swarm Coordination
-`hierarchical-coordinator`, `mesh-coordinator`, `adaptive-coordinator`, `collective-intelligence-coordinator`, `swarm-memory-manager`
-
-### Consensus & Distributed
-`byzantine-coordinator`, `raft-manager`, `gossip-coordinator`, `consensus-builder`, `crdt-synchronizer`, `quorum-manager`, `security-manager`
-
-### Performance & Optimization
-`perf-analyzer`, `performance-benchmarker`, `task-orchestrator`, `memory-coordinator`, `smart-agent`
-
-### GitHub & Repository
-`github-modes`, `pr-manager`, `code-review-swarm`, `issue-tracker`, `release-manager`, `workflow-automation`, `project-board-sync`, `repo-architect`, `multi-repo-swarm`
-
-### SPARC Methodology
-`sparc-coord`, `sparc-coder`, `specification`, `pseudocode`, `architecture`, `refinement`
-
-### Specialized Development
-`backend-dev`, `mobile-dev`, `ml-developer`, `cicd-engineer`, `api-docs`, `system-architect`, `code-analyzer`, `base-template-generator`
-
-### Testing & Validation
-`tdd-london-swarm`, `production-validator`
-
-### Migration & Planning
-`migration-planner`, `swarm-init`
-
-## 🎯 Claude Code vs MCP Tools
-
-### Claude Code Handles ALL EXECUTION:
-- **Task tool**: Spawn and run agents concurrently for actual work
-- File operations (Read, Write, Edit, MultiEdit, Glob, Grep)
-- Code generation and programming
-- Bash commands and system operations
-- Implementation work
-- Project navigation and analysis
-- TodoWrite and task management
-- Git operations
-- Package management
-- Testing and debugging
-
-### MCP Tools ONLY COORDINATE:
-- Swarm initialization (topology setup)
-- Agent type definitions (coordination patterns)
-- Task orchestration (high-level planning)
-- Memory management
-- Neural features
-- Performance tracking
-- GitHub integration
-
-**KEY**: MCP coordinates the strategy, Claude Code's Task tool executes with real agents.
-
-## 🚀 Quick Setup
+If this is your second+ session on smart-tree, use this section:
 
 ```bash
-# Add MCP servers (Claude Flow required, others optional)
-claude mcp add claude-flow npx claude-flow@alpha mcp start
-claude mcp add ruv-swarm npx ruv-swarm mcp start  # Optional: Enhanced coordination
-claude mcp add flow-nexus npx flow-nexus@latest mcp start  # Optional: Cloud features
+# Get back up to speed (5 seconds)
+st -m context .                    # See what changed since last time
+st -m quantum .                    # Super-compressed project overview
+
+# Build & Test (follows pre-commit checklist automatically)
+./scripts/manage.sh test           # Runs: cargo fmt + clippy + cargo test
+
+# Run MCP server (for Claude Desktop integration)
+./scripts/manage.sh mcp-run
 ```
-
-## MCP Tool Categories
-
-### Coordination
-`swarm_init`, `agent_spawn`, `task_orchestrate`
-
-### Monitoring
-`swarm_status`, `agent_list`, `agent_metrics`, `task_status`, `task_results`
-
-### Memory & Neural
-`memory_usage`, `neural_status`, `neural_train`, `neural_patterns`
-
-### GitHub Integration
-`github_swarm`, `repo_analyze`, `pr_enhance`, `issue_triage`, `code_review`
-
-### System
-`benchmark_run`, `features_detect`, `swarm_monitor`
-
-### Flow-Nexus MCP Tools (Optional Advanced Features)
-Flow-Nexus extends MCP capabilities with 70+ cloud-based orchestration tools:
-
-**Key MCP Tool Categories:**
-- **Swarm & Agents**: `swarm_init`, `swarm_scale`, `agent_spawn`, `task_orchestrate`
-- **Sandboxes**: `sandbox_create`, `sandbox_execute`, `sandbox_upload` (cloud execution)
-- **Templates**: `template_list`, `template_deploy` (pre-built project templates)
-- **Neural AI**: `neural_train`, `neural_patterns`, `seraphina_chat` (AI assistant)
-- **GitHub**: `github_repo_analyze`, `github_pr_manage` (repository management)
-- **Real-time**: `execution_stream_subscribe`, `realtime_subscribe` (live monitoring)
-- **Storage**: `storage_upload`, `storage_list` (cloud file management)
-
-**Authentication Required:**
-- Register: `mcp__flow-nexus__user_register` or `npx flow-nexus@latest register`
-- Login: `mcp__flow-nexus__user_login` or `npx flow-nexus@latest login`
-- Access 70+ specialized MCP tools for advanced orchestration
-
-## 🚀 Agent Execution Flow with Claude Code
-
-### The Correct Pattern:
-
-1. **Optional**: Use MCP tools to set up coordination topology
-2. **REQUIRED**: Use Claude Code's Task tool to spawn agents that do actual work
-3. **REQUIRED**: Each agent runs hooks for coordination
-4. **REQUIRED**: Batch all operations in single messages
-
-### Example Full-Stack Development:
-
-```javascript
-// Single message with all agent spawning via Claude Code's Task tool
-[Parallel Agent Execution]:
-  Task("Backend Developer", "Build REST API with Express. Use hooks for coordination.", "backend-dev")
-  Task("Frontend Developer", "Create React UI. Coordinate with backend via memory.", "coder")
-  Task("Database Architect", "Design PostgreSQL schema. Store schema in memory.", "code-analyzer")
-  Task("Test Engineer", "Write Jest tests. Check memory for API contracts.", "tester")
-  Task("DevOps Engineer", "Setup Docker and CI/CD. Document in memory.", "cicd-engineer")
-  Task("Security Auditor", "Review authentication. Report findings via hooks.", "reviewer")
-  
-  // All todos batched together
-  TodoWrite { todos: [...8-10 todos...] }
-  
-  // All file operations together
-  Write "backend/server.js"
-  Write "frontend/App.jsx"
-  Write "database/schema.sql"
-```
-
-## 📋 Agent Coordination Protocol
-
-### Every Agent Spawned via Task Tool MUST:
-
-**1️⃣ BEFORE Work:**
-```bash
-npx claude-flow@alpha hooks pre-task --description "[task]"
-npx claude-flow@alpha hooks session-restore --session-id "swarm-[id]"
-```
-
-**2️⃣ DURING Work:**
-```bash
-npx claude-flow@alpha hooks post-edit --file "[file]" --memory-key "swarm/[agent]/[step]"
-npx claude-flow@alpha hooks notify --message "[what was done]"
-```
-
-**3️⃣ AFTER Work:**
-```bash
-npx claude-flow@alpha hooks post-task --task-id "[task]"
-npx claude-flow@alpha hooks session-end --export-metrics true
-```
-
-## 🎯 Concurrent Execution Examples
-
-### ✅ CORRECT WORKFLOW: MCP Coordinates, Claude Code Executes
-
-```javascript
-// Step 1: MCP tools set up coordination (optional, for complex tasks)
-[Single Message - Coordination Setup]:
-  mcp__claude-flow__swarm_init { topology: "mesh", maxAgents: 6 }
-  mcp__claude-flow__agent_spawn { type: "researcher" }
-  mcp__claude-flow__agent_spawn { type: "coder" }
-  mcp__claude-flow__agent_spawn { type: "tester" }
-
-// Step 2: Claude Code Task tool spawns ACTUAL agents that do the work
-[Single Message - Parallel Agent Execution]:
-  // Claude Code's Task tool spawns real agents concurrently
-  Task("Research agent", "Analyze API requirements and best practices. Check memory for prior decisions.", "researcher")
-  Task("Coder agent", "Implement REST endpoints with authentication. Coordinate via hooks.", "coder")
-  Task("Database agent", "Design and implement database schema. Store decisions in memory.", "code-analyzer")
-  Task("Tester agent", "Create comprehensive test suite with 90% coverage.", "tester")
-  Task("Reviewer agent", "Review code quality and security. Document findings.", "reviewer")
-  
-  // Batch ALL todos in ONE call
-  TodoWrite { todos: [
-    {id: "1", content: "Research API patterns", status: "in_progress", priority: "high"},
-    {id: "2", content: "Design database schema", status: "in_progress", priority: "high"},
-    {id: "3", content: "Implement authentication", status: "pending", priority: "high"},
-    {id: "4", content: "Build REST endpoints", status: "pending", priority: "high"},
-    {id: "5", content: "Write unit tests", status: "pending", priority: "medium"},
-    {id: "6", content: "Integration tests", status: "pending", priority: "medium"},
-    {id: "7", content: "API documentation", status: "pending", priority: "low"},
-    {id: "8", content: "Performance optimization", status: "pending", priority: "low"}
-  ]}
-  
-  // Parallel file operations
-  Bash "mkdir -p app/{src,tests,docs,config}"
-  Write "app/package.json"
-  Write "app/src/server.js"
-  Write "app/tests/server.test.js"
-  Write "app/docs/API.md"
-```
-
-### ❌ WRONG (Multiple Messages):
-```javascript
-Message 1: mcp__claude-flow__swarm_init
-Message 2: Task("agent 1")
-Message 3: TodoWrite { todos: [single todo] }
-Message 4: Write "file.js"
-// This breaks parallel coordination!
-```
-
-## Performance Benefits
-
-- **84.8% SWE-Bench solve rate**
-- **32.3% token reduction**
-- **2.8-4.4x speed improvement**
-- **27+ neural models**
-
-## Hooks Integration
-
-### Pre-Operation
-- Auto-assign agents by file type
-- Validate commands for safety
-- Prepare resources automatically
-- Optimize topology by complexity
-- Cache searches
-
-### Post-Operation
-- Auto-format code
-- Train neural patterns
-- Update memory
-- Analyze performance
-- Track token usage
-
-### Session Management
-- Generate summaries
-- Persist state
-- Track metrics
-- Restore context
-- Export workflows
-
-## Advanced Features (v2.0.0)
-
-- 🚀 Automatic Topology Selection
-- ⚡ Parallel Execution (2.8-4.4x speed)
-- 🧠 Neural Training
-- 📊 Bottleneck Analysis
-- 🤖 Smart Auto-Spawning
-- 🛡️ Self-Healing Workflows
-- 💾 Cross-Session Memory
-- 🔗 GitHub Integration
-
-## Integration Tips
-
-1. Start with basic swarm init
-2. Scale agents gradually
-3. Use memory for context
-4. Monitor progress regularly
-5. Train patterns from success
-6. Enable hooks automation
-7. Use GitHub tools first
-
-## Support
-
-- Documentation: https://github.com/ruvnet/claude-flow
-- Issues: https://github.com/ruvnet/claude-flow/issues
-- Flow-Nexus Platform: https://flow-nexus.ruv.io (registration required for cloud features)
 
 ---
 
-Remember: **Claude Flow coordinates, Claude Code creates!**
+## Project Overview
 
-# important-instruction-reminders
-Do what has been asked; nothing more, nothing less.
-NEVER create files unless they're absolutely necessary for achieving your goal.
-ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
-Never save working files, text/mds and tests to the root folder.
+**Smart Tree** is a lightning-fast, AI-friendly directory visualization tool built in Rust.
+
+**Key Metrics**:
+- 10-24x faster than traditional `tree` command
+- 30+ MCP tools for AI integration
+- Multiple compression formats (AI, Quantum, Marqant)
+- Spicy TUI mode for interactive exploration
+- Real-time SSE streaming support
+- 25+ output format types
+
+**Architecture**: Single binary (`st`) that can also output `mq` (Marqant compression) and `m8` (MEM8 consciousness tools).
+
+---
+
+## Essential Build & Test Commands
+
+### Pre-Commit Checklist (REQUIRED)
+
+Before any git commit, always run:
+
+```bash
+./scripts/manage.sh test
+```
+
+This runs (in order):
+1. `cargo test` - All unit tests
+2. `cargo clippy -- -D warnings` - Strict linting (no warnings allowed!)
+3. `cargo fmt -- --check` - Format verification
+
+**Why this matters**: Smart Tree has strict quality gates. Clippy warnings will fail CI/CD.
+
+### Standard Build Commands
+
+```bash
+# Release build (10x faster runtime, what you almost always want)
+cargo build --release
+
+# Debug build (slower runtime, better debugging symbols)
+cargo build
+
+# Release build with specific features
+cargo build --release --features "std"
+
+# Quick format + lint check
+cargo fmt && cargo clippy -- -D warnings
+```
+
+### Test-Specific Commands
+
+```bash
+# Run all tests with output (great for debugging)
+cargo test -- --nocapture
+
+# Test a specific module
+cargo test scanner                 # Tests in scanner.rs
+cargo test formatters              # Tests in formatters/
+
+# Single test by name
+cargo test test_quantum -- --exact --nocapture
+
+# Integration tests
+cargo test --test mcp_integration -- --nocapture
+
+# Benchmarks (if any)
+cargo bench                        # Criterion benchmarks if configured
+```
+
+### Using manage.sh (Recommended)
+
+The project includes a powerful `scripts/manage.sh` that handles most tasks:
+
+```bash
+# Interactive menu
+./scripts/manage.sh menu           # Launch interactive setup
+
+# Build
+./scripts/manage.sh build release  # Release mode (can also specify debug)
+./scripts/manage.sh build          # Interactive menu
+
+# Test (recommended way)
+./scripts/manage.sh test           # Runs full suite + clippy + fmt
+
+# Run the tool
+./scripts/manage.sh run            # Interactive arguments
+./scripts/manage.sh run -- . -d 3  # Direct args: analyze . with depth 3
+
+# Install binary
+./scripts/manage.sh install        # Install to /usr/local/bin (may need sudo)
+
+# Version management
+./scripts/manage.sh bump patch     # v5.4.0 → v5.4.1
+./scripts/manage.sh bump minor     # v5.4.0 → v5.5.0
+./scripts/manage.sh release v6.0.0 "Major feature release"
+
+# MCP/Server commands
+./scripts/manage.sh mcp-run        # Run as MCP stdio server
+./scripts/manage.sh mcp-config     # Show Claude Desktop config
+./scripts/manage.sh mcp-tools      # List all 30+ tools
+
+# Demos
+./scripts/manage.sh demo-stream    # Show streaming mode
+./scripts/manage.sh demo-search    # Show content search
+./scripts/manage.sh demo-relations # Show code relations
+```
+
+Use `-n` flag for non-interactive mode:
+```bash
+NON_INTERACTIVE=true ./scripts/manage.sh build release
+```
+
+---
+
+## Architecture Overview
+
+### Core Design Pattern
+
+Smart Tree uses a **Scanner → Formatter** pipeline:
+
+1. **Scanner** (`src/scanner.rs`): Traverses directories, collects metadata
+   - Respects `.gitignore` patterns
+   - Handles symlinks safely
+   - Permission-aware (marks inaccessible with `*`)
+   - ~1800 lines of core logic
+
+2. **Formatters** (`src/formatters/`): Convert scan results to output
+   - 25+ different formats supported
+   - Each formatter implements `Formatter` trait
+   - Composable (formatters can wrap other formatters)
+
+3. **MCP Server** (`src/mcp/`): Exposes tools via Model Context Protocol
+   - JSON-RPC stdio server
+   - 30+ tools for AI assistants
+   - Consciousness persistence (`~/.mem8/`)
+
+### Directory Structure
+
+```
+src/
+├── main.rs                           # CLI entry point (clap 4.5)
+├── lib.rs                            # Module declarations
+├── scanner.rs                        # Directory traversal (core logic)
+├── terminal.rs                       # Smart Tree Terminal Interface
+│
+├── formatters/                       # 25+ output formats
+│   ├── mod.rs                        # Formatter trait definition
+│   ├── classic.rs                    # Traditional tree view
+│   ├── ai.rs                         # Token-efficient AI format (80% smaller!)
+│   ├── quantum.rs                    # Wave-based compression (100x!)
+│   ├── marqant.rs                    # Markdown compression
+│   ├── hex.rs                        # Hex-encoded AI format
+│   ├── json.rs, csv.rs, tsv.rs      # Data formats
+│   ├── stats.rs, digest.rs           # Metadata summaries
+│   ├── semantic.rs                   # Semantic grouping
+│   ├── relations.rs                  # Code relationship analysis
+│   ├── sse.rs                        # Server-Sent Events streaming
+│   └── ... (18 more formatters)
+│
+├── mcp/                              # Model Context Protocol
+│   ├── mod.rs                        # Server entry point
+│   ├── tools_consolidated.rs         # 30+ tool definitions
+│   ├── smart_edit.rs                 # AST-aware code editing
+│   ├── unified_watcher.rs            # Real-time file monitoring
+│   ├── consciousness/                # Memory persistence
+│   └── ... (20+ supporting modules)
+│
+├── spicy_tui.rs                      # Interactive TUI mode
+├── spicy_fuzzy.rs                    # Fuzzy matching for TUI
+│
+├── compression_manager.rs            # Global compression control
+├── content_detector.rs               # Detects file types
+├── relations.rs                      # Code relationship analyzer
+├── semantic.rs                       # Semantic analysis
+├── inputs.rs                         # Universal input adapters
+├── tokenizer.rs                      # Smart tokenization
+│
+└── bin/                              # Additional binaries
+    ├── mq.rs                         # Marqant markdown compressor
+    ├── m8.rs                         # MEM8 consciousness tools
+    ├── tree.rs                       # Tree command alternative
+    └── import_claude_memories.rs     # Claude context import
+```
+
+### Key File Count & Sizes
+
+- **Total Source Files**: 173 Rust files
+- **Main Binary Target**: `st` (11MB release)
+- **Additional Binaries**: `mq`, `m8`, `tree`
+- **Tests**: 10 integration test files
+- **Dependencies**: ~140 (see Cargo.toml)
+
+### Critical Dependencies
+
+```toml
+# CLI & Async
+clap 4.5              # Argument parsing
+tokio 1.42            # Async runtime with full features
+async-trait           # Async trait support
+
+# Data Processing
+serde/serde_json      # Serialization
+regex/globset         # Pattern matching & gitignore support
+walkdir 2.5           # Directory traversal
+rayon                 # Parallel processing
+
+# Compression & Encoding
+flate2                # Zlib compression
+base64                # Base64 encoding
+bincode               # Binary serialization
+
+# AI/ML Integration
+tree-sitter + 10 language modules  # AST parsing
+fuzzy-matcher         # Fuzzy search for TUI
+syntect               # Syntax highlighting
+
+# Terminal UI
+ratatui 0.25          # Terminal UI framework (TUI mode)
+crossterm             # Terminal manipulation
+termimad              # Markdown rendering
+colored               # Color output
+
+# MCP/Server
+axum 0.7              # Web framework (WebSocket support)
+hyper 1.7             # HTTP protocol
+reqwest               # HTTP client
+
+# File operations
+notify 6.1            # File system watching
+gix 0.73              # Git operations (will become g8t)
+
+# Utilities
+chrono                # Date/time
+humansize 2.1         # Human-readable sizes
+uuid                  # Unique identifiers
+```
+
+---
+
+## Testing Patterns & Practices
+
+### Test Organization
+
+```
+tests/
+├── test_unified_integration.rs   # Integration tests
+├── test_smart_edit.rs            # Smart Edit tool tests
+├── test_claude_integration.rs     # Claude-specific integration
+├── mcp_integration.rs            # MCP server tests
+└── ...
+```
+
+### How to Run Tests
+
+```bash
+# All tests (REQUIRED before commit)
+cargo test
+
+# Specific test file
+cargo test --test test_smart_edit
+
+# Single test
+cargo test test_scanner_basic -- --exact --nocapture
+
+# With logging
+RUST_LOG=debug cargo test -- --nocapture
+
+# Benchmarks
+cargo bench
+```
+
+### Testing Philosophy
+
+- **No Mock Data**: Smart Tree tests use real file system operations
+- **Permission Handling**: Tests verify `*` markers for inaccessible directories
+- **Large Directory Tests**: Tests include 1M+ file scenarios
+- **Async Testing**: Uses tokio runtime for async code
+- **Property-Based**: Some tests use quickcheck-style randomization
+
+### Common Test Patterns You'll See
+
+```rust
+#[test]
+fn test_scanner_respects_gitignore() {
+    // Create temp directory with .gitignore
+    // Verify ignored files are marked
+}
+
+#[tokio::test]
+async fn test_mcp_tool_execution() {
+    // Async test for MCP tools
+}
+
+#[test]
+fn test_formatter_output() {
+    // Verify formatter produces expected format
+}
+```
+
+---
+
+## Formatter Architecture (Core to Smart Tree)
+
+### Implementing a New Formatter
+
+All formatters implement the `Formatter` trait:
+
+```rust
+pub trait Formatter {
+    fn format(&self, nodes: &[FileNode]) -> Result<String>;
+    fn supports_streaming(&self) -> bool { false }
+}
+```
+
+**Location**: `src/formatters/mod.rs` (trait definition)
+
+**To add a new formatter**:
+
+1. Create `src/formatters/my_format.rs`:
+```rust
+use crate::scanner::FileNode;
+pub struct MyFormatter;
+
+impl Formatter for MyFormatter {
+    fn format(&self, nodes: &[FileNode]) -> Result<String> {
+        // Implement your format
+        Ok(String::new())
+    }
+}
+```
+
+2. Add to `src/formatters/mod.rs`:
+```rust
+pub mod my_format;
+pub use my_format::MyFormatter;
+```
+
+3. Add to CLI in `src/main.rs`:
+```rust
+#[derive(ValueEnum)]
+enum FormatterType {
+    MyFormat,
+    // ... others
+}
+```
+
+4. Wire it in the format dispatch:
+```rust
+FormatterType::MyFormat => {
+    let formatter = MyFormatter;
+    formatter.format(&nodes)?
+}
+```
+
+5. Test it:
+```bash
+cargo test formatters::
+./scripts/manage.sh test
+```
+
+### Key Formatters
+
+| Formatter | Purpose | Token Efficiency |
+|-----------|---------|------------------|
+| `classic` | Traditional tree view | 100% (baseline) |
+| `ai` | AI-optimized output | 20% (5x smaller!) |
+| `quantum` | Wave compression | <1% (100x+!) |
+| `hex` | Hex-encoded for AI | 30% |
+| `json` | Machine-readable | 60% |
+| `stats` | Metadata only | 10% |
+| `digest` | Ultra-compact summary | 5% |
+| `semantic` | Grouped by type/purpose | 15% |
+| `relations` | Code dependencies | 25% |
+| `sse` | Real-time streaming | N/A (streaming) |
+| `marqant` | Markdown compression | 10-30% |
+
+**Performance Tips**:
+- Use `--mode quantum` for massive directories (100x compression!)
+- Use `--mode ai --compress` for LLM context (80% reduction)
+- Use `--mode digest` for pre-analysis (5% of original)
+- Use `--stream` for directories >100k files
+
+---
+
+## MCP (Model Context Protocol) Integration
+
+### Running as MCP Server
+
+```bash
+# Start MCP server (stdio-based)
+./scripts/manage.sh mcp-run
+
+# Or directly
+cargo run --release -- --mcp
+
+# List all available tools
+./scripts/manage.sh mcp-tools
+
+# Show Claude Desktop config
+./scripts/manage.sh mcp-config
+```
+
+### Available MCP Tools (30+)
+
+**Project Analysis**:
+- `overview` - Quick 3-level project scan
+- `find` - Powerful file discovery (type, pattern, recent, large)
+- `search` - Content search with line context
+- `analyze` - Deep analysis (git, statistics, semantic)
+- `analyze:git_status` - Git-aware directory analysis
+
+**Code Editing**:
+- `edit` - AST-aware code editing (90% token reduction!)
+- `edit:get_functions` - List all functions in file
+- `edit:insert_function` - Add new function
+- `edit:remove_function` - Remove function
+- `edit:smart_edit` - Multiple edits at once
+
+**Memory & Context**:
+- `context:gather_project` - Full project context
+- `context:collaboration_rapport` - Session history
+- `context:suggest_insights` - AI suggestions
+- `history:get_file` - File change history
+- `history:get_project` - Project audit trail
+- `memory:anchor` - Save breakthrough insight
+- `memory:find` - Recall saved insights
+
+**Advanced Features**:
+- `sse` - Real-time directory monitoring
+- `hooks` - Claude Code hook management (enable/disable/test)
+- `server_info` - Smart Tree capabilities
+- `verify_permissions` - Check directory access
+- `unified_watcher` - Monitor multiple directories
+
+### MCP Tool Usage Examples
+
+```javascript
+// Get quick overview
+overview {mode:'quick', path:'.', depth:2}
+
+// Find Rust files
+find {type:'code', languages:['rust'], path:'src'}
+
+// Search for TODOs
+search {keyword:'TODO', include_content:true}
+
+// Edit with AST awareness
+edit {operation:'get_functions', file_path:'src/main.rs'}
+
+// Gather full context
+context {operation:'gather_project', project_path:'.'}
+
+// Enable Claude Code hooks
+hooks {operation:'set', hook_type:'UserPromptSubmit', enabled:true}
+
+// Real-time monitoring
+sse {path:'./src', heartbeat_interval:30}
+```
+
+### How MCP Tools Are Implemented
+
+**Location**: `src/mcp/tools_consolidated.rs` (main tool implementations)
+
+Each tool is a JSON-RPC method that:
+1. Receives parameters as JSON
+2. Executes the operation
+3. Returns results as JSON
+
+The server reads JSON-RPC requests from stdin and writes responses to stdout.
+
+---
+
+## Performance & Optimization
+
+### Why Smart Tree is Fast
+
+1. **Single-pass directory traversal**: `walkdir` crate does smart iteration
+2. **Parallel processing**: `rayon` for independent operations
+3. **Smart memory management**: `unsafe` blocks used sparingly, with comments
+4. **Format-specific optimizations**: Each formatter optimizes for its use case
+5. **Streaming mode**: Doesn't load everything in memory (`--stream` flag)
+
+### Benchmarking
+
+```bash
+# Run benchmarks (if configured in Cargo.toml)
+cargo bench
+
+# Manual timing
+time st . -m hex > /dev/null
+time st . -m quantum > /dev/null
+time st . -m ai > /dev/null
+
+# Large directory test
+time st /usr -m hex --depth 2 > /dev/null
+```
+
+### Expected Performance
+
+| Directory Size | Time | vs tree | Speedup |
+|---|---|---|---|
+| 100 files | 2ms | 15ms | 7.5x |
+| 10K files | 35ms | 450ms | 12.8x |
+| 100K files | 198ms | 4.8s | 24.2x |
+| 1M files | 1.9s | 45s | 23.7x |
+
+**Key insight**: Speedup increases with directory size (better cache locality).
+
+---
+
+## Feature Flags & Configuration
+
+### Cargo Features
+
+```toml
+[features]
+default = ["std"]
+std = []           # Standard library (always enabled)
+alloc = []         # Allocator-specific (experimental)
+mem8 = []          # MEM8 consciousness integration
+```
+
+### Environment Variables
+
+```bash
+# Logging
+export RUST_LOG=debug        # Show debug logs
+export RUST_LOG=info         # Info level
+export RUST_LOG=trace        # Trace (very verbose)
+
+# Smart Tree specific
+export ST_DEFAULT_DEPTH=5    # Default tree depth
+export ST_COLOR=always       # Force colors
+export ST_NO_ICONS=1         # Disable emoji icons
+export ST_MAX_FILE_SIZE=10M  # Skip large files
+
+# Build
+export CARGO_BUILD_JOBS=4    # Parallel jobs during build
+```
+
+### Config File
+
+Create `~/.config/smart-tree/config.toml`:
+
+```toml
+[display]
+default_depth = 5
+show_hidden = false
+use_icons = true
+color_mode = "auto"
+
+[performance]
+max_buffer_size = "100MB"
+thread_count = 8
+use_streaming = true
+
+[mcp]
+enabled = true
+port = 3000
+```
+
+---
+
+## Development Workflows
+
+### Adding a New Command-Line Option
+
+1. Edit `src/main.rs` - Update `Cli` struct (clap parsing)
+2. Add logic to handle the new flag
+3. Test with: `cargo run --release -- --help`
+4. Update docs in `README.md` and `docs/st-cheetsheet.md`
+
+### Debugging with Smart Tree Itself
+
+```bash
+# Context on your changes
+st -m context .
+
+# Relationships in modified files
+st -m relations --focus src/main.rs
+
+# Search for your changes
+st --search "let new_var" -m hex
+
+# Watch directory for changes (SSE)
+st --sse
+```
+
+### Running Tests During Development
+
+```bash
+# Quick test (no full cleanup)
+cargo test scanner::test_
+
+# With backtrace for panics
+RUST_BACKTRACE=1 cargo test
+
+# Test a specific feature
+cargo test --features "std" --test mcp_integration
+```
+
+### Updating Dependencies
+
+```bash
+# Check for outdated dependencies
+cargo outdated
+
+# Update all (carefully!)
+cargo update
+
+# Update specific crate
+cargo update --package serde
+
+# Then test!
+./scripts/manage.sh test
+```
+
+---
+
+## Code Patterns & Best Practices
+
+### Error Handling
+
+Smart Tree uses `anyhow::Result<T>` throughout:
+
+```rust
+use anyhow::{Context, Result};
+
+fn process_file(path: &Path) -> Result<String> {
+    let content = std::fs::read_to_string(path)
+        .context("Failed to read file")?;
+    Ok(content)
+}
+```
+
+**Always add context** with `.context()` - helps users debug.
+
+### String vs str
+
+- Use `&str` for function parameters
+- Use `String` for owned values
+- Never `.clone()` when you can use references
+
+```rust
+// Good
+fn analyze(path: &str) -> Result<()> { }
+
+// Avoid
+fn analyze(path: String) -> Result<()> { }
+```
+
+### Async Code
+
+Smart Tree uses `tokio` for async:
+
+```rust
+#[tokio::main]
+async fn main() {
+    // Async entry point
+}
+
+// In libraries
+pub async fn scan_async(path: &Path) -> Result<Vec<FileNode>> {
+    // Async operation
+}
+```
+
+### Avoiding Panics
+
+- Never unwrap unless you're 100% sure (use `.expect("reason")` instead)
+- Use `?` operator for error propagation
+- Mark intentional panics with comments explaining why
+
+```rust
+// Good
+let val = map.get("key").context("missing key")?;
+
+// Avoid
+let val = map.get("key").unwrap();
+
+// Acceptable with comment
+let val = config.port.expect("port required in config");
+```
+
+### Comments & Documentation
+
+Smart Tree has a fun commenting style (the "Cheet" persona). Keep it:
+
+```rust
+// Fun but informative comments explaining the why, not the what
+// Example from scanner.rs:
+// "You've found scanner.rs, the intrepid explorer and engine room of st."
+
+/// Documentation for public items (use ///)
+/// Multiple lines are fine for complex stuff
+pub fn do_something() { }
+```
+
+---
+
+## Debugging & Troubleshooting
+
+### Common Issues
+
+**Issue**: Tests fail with permission errors
+```bash
+# Solution: Run with elevated permissions or use test isolation
+sudo cargo test
+# Or check test directory permissions
+ls -la /tmp/st_test_*
+```
+
+**Issue**: MCP server won't start
+```bash
+# Solution: Check for port conflicts
+lsof -i :3000
+# Or use debug logging
+RUST_LOG=debug st --mcp
+```
+
+**Issue**: Slow compile times
+```bash
+# Solution: Use incremental compilation
+export CARGO_INCREMENTAL=1
+# Or use mold linker (faster than GNU ld)
+# Install: sudo apt install mold
+# Use: RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo build
+```
+
+**Issue**: Binary won't run after build
+```bash
+# Verify it was built
+ls -lh target/release/st
+
+# Try running directly
+./target/release/st --version
+
+# Check dependencies
+ldd target/release/st
+```
+
+### Enabling Debug Output
+
+```bash
+# Maximum verbosity
+RUST_LOG=trace cargo run --release -- . -m hex
+
+# Specific module
+RUST_LOG=st::scanner=debug cargo run --release -- .
+
+# With backtraces
+RUST_BACKTRACE=full cargo run -- .
+```
+
+### Profiling Performance
+
+```bash
+# Use Linux perf (if available)
+cargo build --release
+perf record -g ./target/release/st . -m quantum > /dev/null
+perf report
+
+# Or use flamegraph (install: cargo install flamegraph)
+cargo flamegraph --bin st -- . -m quantum
+```
+
+---
+
+## Git Workflow & Commits
+
+### Pre-Commit Requirements (STRICT)
+
+Before every commit:
+
+```bash
+./scripts/manage.sh test
+```
+
+This must pass with **zero clippy warnings**.
+
+### Commit Message Format
+
+Follow Conventional Commits:
+
+```
+feat: Add quantum compression mode
+fix: Handle symlinks in scanner
+docs: Update README with examples
+refactor: Simplify formatter trait
+perf: Optimize tree traversal
+
+Body (optional):
+- List changes
+- Explain why
+```
+
+### Creating Releases
+
+```bash
+# Bump version (updates Cargo.toml + CLAUDE.md)
+./scripts/manage.sh bump patch      # v5.4.0 → v5.4.1
+./scripts/manage.sh bump minor      # v5.4.0 → v5.5.0
+./scripts/manage.sh bump major      # v5.4.0 → v6.0.0
+
+# Build and create GitHub release
+./scripts/manage.sh release v5.5.0 "New quantum features"
+
+# This will:
+# 1. Create git tag
+# 2. Build release artifacts
+# 3. Upload to GitHub
+# 4. Generate release notes
+```
+
+---
+
+## Project Philosophy & Vision
+
+### Core Principles
+
+1. **Smallest and Fastest**: Every kilobyte counts, every millisecond matters
+2. **AI-First Design**: Optimize for AI context windows (not human readability)
+3. **Constraints = Creativity**: Limited memory? Use wave patterns. Limited tokens? Use compression.
+4. **SID/VIC-II Wisdom**: Work within hardware constraints to achieve magic
+5. **The Cheet's Humor**: Keep development fun and memorable
+
+### Why Different Output Modes Matter
+
+- **classic**: Human-readable (for terminals)
+- **ai**: 80% smaller (for LLM context)
+- **quantum**: 100x+ compression (for massive projects)
+- **hex/json**: Machine parseable
+- **sse**: Real-time monitoring
+
+Each mode is optimized for its audience.
+
+### Future Direction (Roadmap)
+
+- Integration with MEM8 consciousness system
+- WebRTC interface for real-time collaboration
+- Python/JS SDKs for broader ecosystem
+- Kubernetes operators for deployment
+- Hot Tub visualization dashboard
+
+---
+
+## Quick Reference Card
+
+### Commands You'll Use Most
+
+```bash
+# Development loop
+cargo test && cargo fmt          # Quick test
+./scripts/manage.sh test         # Full checklist (do this before commits!)
+
+# Running st
+st .                             # Classic view
+st --mode quantum .              # Compressed
+st --mode ai --compress .        # AI-optimized
+st --mcp                         # Start MCP server
+st --spicy                       # Interactive TUI
+
+# MCP tools
+st -m overview .                 # Quick scan
+st -m find --type rs .           # Find Rust files
+st -m search "TODO" .            # Search content
+st -m analyze --mode semantic .  # Semantic analysis
+
+# Building/Installing
+./scripts/manage.sh build        # Build
+./scripts/manage.sh install      # Install to /usr/local/bin
+./scripts/manage.sh release v5.5.0 "Notes"  # Release
+
+# Debugging
+st -m context . > context.txt    # Save context
+RUST_LOG=debug st --mcp          # Debug logging
+```
+
+### Pre-Commit Checklist
+
+```bash
+# Always do this before git commit
+./scripts/manage.sh test
+
+# Expected output:
+# ✅ cargo test: All tests passed
+# ✅ cargo clippy: No warnings (strict mode)
+# ✅ cargo fmt: Code formatted
+# Then you can commit!
+```
+
+---
+
+## Useful Files to Know About
+
+| File | Purpose |
+|------|---------|
+| `src/main.rs` | CLI entry point (clap 4.5 argument parsing) |
+| `src/lib.rs` | Module declarations (65+ modules!) |
+| `src/scanner.rs` | Core directory traversal engine |
+| `src/formatters/mod.rs` | Formatter trait & registry |
+| `src/mcp/mod.rs` | MCP server implementation |
+| `scripts/manage.sh` | All build/test/release commands |
+| `Cargo.toml` | Dependencies & build config |
+| `tests/` | Integration tests |
+| `docs/INDEX.md` | Full documentation index |
+| `README.md` | Project overview |
+
+---
+
+## Need More Info?
+
+- **Full Docs**: `st --help` or `docs/INDEX.md`
+- **MCP Tools**: `./scripts/manage.sh mcp-tools`
+- **Examples**: `./scripts/manage.sh examples`
+- **Cheat Sheet**: `st --cheet`
+- **Code Comments**: Start with "The Cheet" persona comments in source
+
+---
+
+**Made with Rust by the 8b-is team**  
+*"Smallest and fastest."* - The Cheet

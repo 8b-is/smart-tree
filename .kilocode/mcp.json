@@ -1,1 +1,0 @@
-{"mcpServers":{"smart-tree":{"command":"st","args":["--mcp"],"env":{},"alwaysAllow":["overview","find","analyze","hooks","read","search","edit","history","context","memory","feedback","compare","server_info","verify_permissions","sse","unified_watcher"]}}}
