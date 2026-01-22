@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v5.5.0 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
+# 🌳 Smart Tree v6.1.2 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
 
-[![Version](https://img.shields.io/badge/version-5.5.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-6.1.2-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -35,7 +35,7 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v5.5.0
+## 🌟 What's NEW in v6.1.2
 
 | Feature | Description | Command |
 |---------|-------------|---------|
@@ -81,7 +81,7 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 
 # Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v5.5.0 st
+cargo install --git https://github.com/8b-is/smart-tree --tag v6.1.2 st
 
 # 🚀 One-command MCP setup for Claude Desktop!
 st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config
