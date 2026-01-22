@@ -227,6 +227,37 @@ pub struct Cli {
     pub hooks_install: bool,
 
     // =========================================================================
+    // LLM PROXY - Unified AI interface
+    // =========================================================================
+    /// Call an LLM provider via the unified proxy
+    #[arg(long, help_heading = "LLM Proxy")]
+    pub proxy: bool,
+
+    /// LLM provider to use (openai, anthropic, google, candle)
+    #[arg(long, value_name = "PROVIDER", help_heading = "LLM Proxy")]
+    pub provider: Option<String>,
+
+    /// LLM model to use
+    #[arg(long, value_name = "MODEL", help_heading = "LLM Proxy")]
+    pub model: Option<String>,
+
+    /// Prompt for the LLM (if not provided, reads from stdin)
+    #[arg(long, value_name = "PROMPT", help_heading = "LLM Proxy")]
+    pub prompt: Option<String>,
+
+    /// Memory scope for the conversation (e.g., "project-x")
+    #[arg(long, value_name = "SCOPE", help_heading = "LLM Proxy")]
+    pub scope: Option<String>,
+
+    /// Start the OpenAI-compatible proxy server
+    #[arg(long, help_heading = "LLM Proxy")]
+    pub proxy_server: bool,
+
+    /// Port for the proxy server
+    #[arg(long, default_value = "8448", help_heading = "LLM Proxy")]
+    pub proxy_port: u16,
+
+    // =========================================================================
     // LOGGING & TRANSPARENCY
     // =========================================================================
     /// Enable activity logging to JSONL file

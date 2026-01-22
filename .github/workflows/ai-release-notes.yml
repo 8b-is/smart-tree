@@ -1,0 +1,165 @@
+# ============================================================================
+# AI-Powered Release Notes Generator - Smart Tree
+# ============================================================================
+# Uses Claude to generate intelligent, comprehensive release notes
+# Automatically triggered after successful release builds
+# ============================================================================
+name: AI Release Notes Generator 📝
+
+on:
+  workflow_run:
+    workflows: ["Release 🚀"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag to generate release notes for'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: read
+
+jobs:
+  generate-ai-notes:
+    name: Generate AI Release Notes 🤖
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+    - name: Checkout code 📦
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: 'recursive'
+
+    - name: Determine tag name 🏷️
+      id: tag
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          TAG="${{ github.event.inputs.tag_name }}"
+        else
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        fi
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+        echo "Using tag: $TAG"
+
+    - name: Collect release context 📊
+      id: context
+      run: |
+        TAG="${{ steps.tag.outputs.tag }}"
+
+        # Get previous tag
+        PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+        echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+        # Generate commit summary
+        if [[ -n "$PREV_TAG" ]]; then
+          COMMIT_LOG=$(git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" | head -50)
+          COMMIT_COUNT=$(git rev-list "${PREV_TAG}..${TAG}" --count)
+        else
+          COMMIT_LOG=$(git log --pretty=format:"- %s (%h)" -20)
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+        fi
+
+        # Get file change statistics
+        if [[ -n "$PREV_TAG" ]]; then
+          STATS=$(git diff --stat "${PREV_TAG}..${TAG}" | tail -1)
+          CHANGED_FILES=$(git diff --name-only "${PREV_TAG}..${TAG}" | wc -l)
+        else
+          STATS="Initial release"
+          CHANGED_FILES="N/A"
+        fi
+
+        # Save to files for the AI prompt
+        echo "$COMMIT_LOG" > /tmp/commits.txt
+        echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+        echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+        echo "stats=$STATS" >> $GITHUB_OUTPUT
+
+    - name: Analyze breaking changes 🔍
+      id: breaking
+      run: |
+        TAG="${{ steps.tag.outputs.tag }}"
+        PREV_TAG="${{ steps.context.outputs.prev_tag }}"
+
+        # Look for breaking change indicators
+        BREAKING=""
+        if [[ -n "$PREV_TAG" ]]; then
+          # Check commit messages for breaking change markers
+          if git log "${PREV_TAG}..${TAG}" --grep="BREAKING" --oneline | head -5 > /tmp/breaking.txt; then
+            if [[ -s /tmp/breaking.txt ]]; then
+              BREAKING="true"
+              echo "has_breaking=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+          # Check for major API changes in src/
+          MAJOR_CHANGES=$(git diff "${PREV_TAG}..${TAG}" --name-only -- 'src/cli.rs' 'src/mcp/' 'src/lib.rs' | wc -l)
+          echo "major_changes=$MAJOR_CHANGES" >> $GITHUB_OUTPUT
+        fi
+
+        echo "has_breaking=${BREAKING:-false}" >> $GITHUB_OUTPUT
+
+    - name: Generate AI Release Notes 🤖
+      uses: anthropics/claude-code-action@v1
+      with:
+        claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        prompt: |
+          Generate comprehensive release notes for Smart Tree ${{ steps.tag.outputs.tag }}.
+
+          ## Context
+          - Previous version: ${{ steps.context.outputs.prev_tag || 'Initial release' }}
+          - Commits in this release: ${{ steps.context.outputs.commit_count }}
+          - Files changed: ${{ steps.context.outputs.changed_files }}
+          - Has breaking changes: ${{ steps.breaking.outputs.has_breaking }}
+
+          ## Recent Commits
+          $(cat /tmp/commits.txt)
+
+          ## Instructions
+          Create release notes with these sections:
+
+          1. **🎸 Highlights** - 2-3 bullet points of most important changes
+          2. **✨ New Features** - List new capabilities added
+          3. **🐛 Bug Fixes** - Issues resolved
+          4. **🚀 Performance** - Any performance improvements
+          5. **🔧 Developer Experience** - CLI/API changes
+          6. **⚠️ Breaking Changes** - Only if applicable
+          7. **📦 Dependencies** - Notable dependency updates
+
+          Style guidelines:
+          - Use emojis sparingly but appropriately
+          - Be concise but informative
+          - Mention AI-friendliness improvements prominently
+          - Include MCP protocol enhancements if any
+          - End with "Built with 💙 by Hue, Aye, Trisha, and The Cheet"
+
+          Output the release notes in Markdown format.
+          Then use `gh release edit ${{ steps.tag.outputs.tag }} --notes-file <generated-notes>` to update the release.
+
+        claude_args: '--allowed-tools "Bash(gh release:*),Read,Glob,Grep"'
+
+  notify-completion:
+    name: Notify Release Ready 📢
+    needs: generate-ai-notes
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Post completion summary 📊
+      run: |
+        echo "# 📝 AI Release Notes Generation" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ needs.generate-ai-notes.result }}" == "success" ]]; then
+          echo "✅ Release notes generated successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The release has been updated with AI-generated notes." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Release notes generation needs attention." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please review the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+        fi
