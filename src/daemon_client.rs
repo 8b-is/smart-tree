@@ -11,8 +11,13 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(unix)]
+use std::process::Stdio;
 use std::time::Duration;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 /// Simple percent-encoding for URL query parameters
 fn percent_encode(s: &str) -> String {

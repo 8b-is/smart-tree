@@ -114,9 +114,9 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
     (lat_major, lat_minor, lat_patch) > (curr_major, curr_minor, curr_patch)
 }
 
-/// Check for available updates (network call)
-pub fn check_for_update() -> Result<Option<String>> {
-    let client = reqwest::blocking::Client::builder()
+/// Check for available updates (network call) - async version
+pub async fn check_for_update() -> Result<Option<String>> {
+    let client = reqwest::Client::builder()
         .user_agent("smart-tree-updater")
         .timeout(Duration::from_secs(10))
         .build()?;
@@ -124,8 +124,10 @@ pub fn check_for_update() -> Result<Option<String>> {
     let response: GitHubRelease = client
         .get(GITHUB_RELEASES_API)
         .send()
+        .await
         .context("Failed to connect to GitHub")?
         .json()
+        .await
         .context("Failed to parse GitHub response")?;
 
     // Update cache
@@ -142,13 +144,13 @@ pub fn check_for_update() -> Result<Option<String>> {
     }
 }
 
-/// Check for update using cache if within rate limit
-pub fn check_for_update_cached() -> Option<String> {
+/// Check for update using cache if within rate limit - async version
+pub async fn check_for_update_cached() -> Option<String> {
     let cache = load_cache();
 
     if should_check_update() {
         // Perform actual check
-        match check_for_update() {
+        match check_for_update().await {
             Ok(Some(version)) => Some(version),
             Ok(None) => None,
             Err(_) => None, // Silently fail on network errors
@@ -251,8 +253,8 @@ fn needs_sudo(install_dir: &Path) -> bool {
     }
 }
 
-/// Download and install the update
-pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
+/// Download and install the update - async version
+pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     let (arch, os) = get_platform()?;
     let install_dir = find_install_dir()?;
 
@@ -303,7 +305,7 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
     let archive_path = temp_dir.join(&archive_name);
 
     // Download
-    let client = reqwest::blocking::Client::builder()
+    let client = reqwest::Client::builder()
         .user_agent("smart-tree-updater")
         .timeout(Duration::from_secs(300))
         .build()?;
@@ -311,13 +313,14 @@ pub fn download_and_install(version: &str, yes: bool) -> Result<()> {
     let response = client
         .get(&download_url)
         .send()
+        .await
         .context("Failed to download release")?;
 
     if !response.status().is_success() {
         bail!("Download failed: HTTP {}", response.status());
     }
 
-    let bytes = response.bytes()?;
+    let bytes = response.bytes().await?;
     fs::write(&archive_path, &bytes)?;
 
     println!("Extracting...");
@@ -466,13 +469,13 @@ fn find_binary_in_dir(dir: &Path, binary_name: &str) -> Result<PathBuf> {
     bail!("Could not find {} in downloaded archive", binary_name)
 }
 
-/// Run the update command
-pub fn run_update(yes: bool) -> Result<()> {
+/// Run the update command - async version
+pub async fn run_update(yes: bool) -> Result<()> {
     println!("Checking for updates...");
 
-    match check_for_update()? {
+    match check_for_update().await? {
         Some(version) => {
-            download_and_install(&version, yes)?;
+            download_and_install(&version, yes).await?;
         }
         None => {
             println!(

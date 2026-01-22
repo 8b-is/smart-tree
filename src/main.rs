@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
     // Check for updates on startup (rate-limited, non-blocking)
     // Skip if --no-update-check is set or if this is an exclusive command
     if !cli.no_update_check && !cli.version && !cli.update && !cli.mcp && !cli.daemon {
-        if let Some(latest) = st::updater::check_for_update_cached() {
+        if let Some(latest) = st::updater::check_for_update_cached().await {
             st::updater::print_update_banner(&latest);
         }
     }
@@ -335,7 +335,7 @@ async fn main() -> Result<()> {
         return show_version_with_updates().await;
     }
     if cli.update {
-        return st::updater::run_update(false);
+        return st::updater::run_update(false).await;
     }
     if let Some(names) = cli.rename_project {
         if names.len() != 2 {
