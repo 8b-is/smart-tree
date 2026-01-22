@@ -559,8 +559,21 @@ impl AiInstaller {
         let content = fs::read_to_string(path)
             .context("Failed to read .mcp.json")?;
 
-        let mut config: Value = serde_json::from_str(&content)
-            .context("Failed to parse .mcp.json")?;
+        // Handle empty or whitespace-only files
+        if content.trim().is_empty() {
+            // Delete the empty file as it's not useful
+            let _ = fs::remove_file(path);
+            return Ok(0);
+        }
+
+        let mut config: Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(_) => {
+                // Invalid JSON - delete the malformed file
+                let _ = fs::remove_file(path);
+                return Ok(0);
+            }
+        };
 
         let mut cleaned = 0;
 

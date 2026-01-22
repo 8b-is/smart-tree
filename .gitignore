@@ -20,7 +20,8 @@ pip-wheel-metadata/
 .claude
 
 # --- Claude Consciousness ---
-
+.claude_consciousness.m8
+*.claude_consciousness.m8
 
 # --- Mem8 - Memories ---
 .mem8/

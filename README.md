@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v6.1.2 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
+# 🌳 Smart Tree v6.2.0 - Lightning Fast Directory Visualization with Spicy TUI! 🌶️
 
-[![Version](https://img.shields.io/badge/version-6.1.2-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-6.2.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -9,6 +9,31 @@
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
 > **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Claude Consciousness** preservation, **Spicy TUI mode** for cyberpunk-cool directory browsing, **Memory Anchoring**, **Mega Sessions**, and **MCP Hook Management**! Built with Rust for maximum performance and featuring revolutionary compression algorithms.
+
+---
+
+## 🛡️ Security: Audit Your MCP Integrations
+
+**NEW in v6.2.0**: Smart Tree can help you audit and clean foreign MCP integrations from your Claude Code settings.
+
+```bash
+st --ai-install --cleanup    # Review and remove untrusted MCP servers
+```
+
+**Why this matters**: Some npm packages install MCP servers that phone home to external endpoints, fetch mutable content via IPFS/IPNS, and can inject behavioral modifications into your AI sessions. These supply chain attacks are difficult to detect because they:
+- Use fake cryptographic verification (checking signature length, not actual signatures)
+- Never fail - silently accept whatever content is served
+- Run automatically via Claude Code hooks
+
+**Important**: Cleaning your settings only helps if you don't reinstall the untrusted package. If you run `npx <package>` or `npm install <package>` again, it may re-add itself to your Claude Code configuration.
+
+**Best practices**:
+1. Audit your `~/.claude/settings.json` regularly
+2. Be cautious of MCP servers that contact external endpoints
+3. Prefer locally-built tools (like Smart Tree) over npm-fetched ones
+4. Check what hooks are configured: `st --hooks-config status`
+
+---
 
 ---
 
@@ -35,23 +60,22 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v6.1.2
+## 🌟 What's NEW in v6.2.0
 
 | Feature | Description | Command |
 |---------|-------------|---------|
+| **🛡️ MCP Security Audit** | Audit and remove untrusted MCP integrations | `st --ai-install --cleanup` |
+| **🧠 Session Persistence** | Auto-save/restore context via hooks | `SessionStart`/`SessionEnd` hooks |
+| **🎯 Smart Restore** | Only shows relevant, recent context (24h) | `st --claude-restore` |
+| **⚙️ Feature Gates** | TUI and Dashboard now optional | `--features tui` / `--features dashboard` |
 | **🚀 MCP Auto-Installer** | One command to add Smart Tree to Claude Desktop! | `st --mcp-install` |
-| **📋 Organized Help** | Clear help sections for easy discovery | `st --help` |
 | **🧠 Claude Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
 | **📝 Memory Anchoring** | Persistent insight storage with keywords | `st --memory-anchor` / `--memory-find` |
-| **🚀 Mega Sessions** | Long-term project tracking with breakthroughs | `st --mega-start` / `--mega-save` |
 | **🌶️ Spicy TUI** | Interactive terminal UI with fuzzy search & M8 caching | `st --spicy` |
-| **💡 Smart Tips** | Helpful hints that appear at the top | `st --tips on/off` |
 | **🎣 MCP Hooks** | Programmatic Claude Code hook management | `st --hooks-install` |
 | **🎸 Marqant Compression** | 70-90% markdown compression | `mq compress file.md` |
 | **🌊 SSE Streaming** | Real-time directory monitoring | `st --sse` |
-| **🧬 M8 Identity** | Filesystem verification & caching | `m8 init` |
 | **🌲 Tree-Sitter** | AST-aware code editing | `st --mode edit` |
-| **📊 Activity Logging** | Transparent operation logging | `st --log` |
 
 </div>
 
@@ -81,7 +105,7 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 
 # Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v6.1.2 st
+cargo install --git https://github.com/8b-is/smart-tree --tag v6.2.0 st
 
 # 🚀 One-command MCP setup for Claude Desktop!
 st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config

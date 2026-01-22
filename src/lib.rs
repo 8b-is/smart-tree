@@ -31,6 +31,7 @@ pub mod scanner; // The heart of directory traversal and file metadata collectio
 pub mod scanner_safety; // Safety mechanisms to prevent crashes on large directories
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
+#[cfg(feature = "tui")]
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod tree_sitter_quantum;
@@ -72,8 +73,10 @@ pub mod updater;
 // Project tags management - tag and categorize projects
 pub mod project_tags;
 
-// Spicy TUI - cyberpunk-style terminal interface!
+// Spicy TUI - cyberpunk-style terminal interface! (requires `tui` feature)
+#[cfg(feature = "tui")]
 pub mod spicy_fuzzy;
+#[cfg(feature = "tui")]
 pub mod spicy_tui_enhanced;
 
 // Emoji mapping - bringing life to file types!
@@ -125,10 +128,12 @@ pub mod q8_caster_bridge;
 // VAD with Marine Algorithm - Voice Activity Detection from MEM8
 pub mod vad_marine;
 
-// egui Dashboard - Real-time collaborative dashboard
+// egui Dashboard - Real-time collaborative dashboard (requires `dashboard` feature)
+#[cfg(feature = "dashboard")]
 pub mod dashboard_egui;
 
 // Dashboard WebSocket Server - Real-time bidirectional communication for telepathic pair programming!
+#[cfg(feature = "dashboard")]
 pub mod dashboard_ws;
 
 // MEM8 Binary Format - The REAL wave-based .m8 format
@@ -140,7 +145,8 @@ pub mod m8_format_converter;
 // Quantum Wave Signatures - Full 32-bit consciousness patterns (not horse apples!)
 pub mod quantum_wave_signature;
 
-// Wave Compass - Omni's consciousness drift visualizer with resonance detection!
+// Wave Compass - Omni's consciousness drift visualizer with resonance detection! (requires `dashboard` feature)
+#[cfg(feature = "dashboard")]
 pub mod wave_compass;
 
 // Claude Hook Handler - Comprehensive context provider for conversations

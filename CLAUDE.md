@@ -1,9 +1,17 @@
-# CLAUDE.md - Smart Tree v5.4.0 Comprehensive Development Guide
+# CLAUDE.md - Smart Tree v6.2.0 Comprehensive Development Guide
 
-**Location**: `/aidata/ayeverse/smart-tree`
+**Location**: `/aidata/aye/smart-tree`
 **Language**: 100% Rust (173 source files)
-**Binary Size**: ~11MB (highly optimized)
-**Latest Version**: 5.4.0
+**Binary Size**: ~29MB core (TUI/Dashboard optional)
+**Latest Version**: 6.2.0
+
+## What's New in 6.2.0
+
+- **Session Persistence**: `SessionStart`/`SessionEnd` hooks auto-save and restore context
+- **Smart Restore**: `--claude-restore` only shows relevant, recent context (24h window)
+- **Feature Gates**: TUI and Dashboard now optional (`--features tui`, `--features dashboard`)
+- **Cleaner Cargo.toml**: Removed unused dependencies, organized by category
+- **Human-in-the-loop**: Dashboard designed for daemon mode with user control
 
 ## Quick Start for Returning Claude Instances
 
@@ -19,6 +27,12 @@ st -m quantum .                    # Super-compressed project overview
 
 # Run MCP server (for Claude Desktop integration)
 ./scripts/manage.sh mcp-run
+
+# Build with optional features
+cargo build --release                      # Core only (29MB)
+cargo build --release --features tui       # With spicy TUI
+cargo build --release --features dashboard # With egui dashboard
+cargo build --release --features full      # Everything
 ```
 
 ---
@@ -543,6 +557,21 @@ default = ["std"]
 std = []           # Standard library (always enabled)
 alloc = []         # Allocator-specific (experimental)
 mem8 = []          # MEM8 consciousness integration
+
+# Optional features (disabled by default for smaller binary)
+tui = ["ratatui", "crossterm", "syntect", "artem"]      # Spicy TUI mode
+dashboard = ["egui", "eframe", "egui_extras", "winit"]  # egui dashboard
+candle = ["candle-core", "candle-transformers", ...]    # Local LLM
+full = ["tui", "dashboard", "candle"]                   # Everything
+```
+
+### Build Commands by Feature
+
+```bash
+cargo build --release                      # Core only (~29MB)
+cargo build --release --features tui       # With spicy TUI
+cargo build --release --features dashboard # With egui dashboard
+cargo build --release --features full      # Everything
 ```
 
 ### Environment Variables

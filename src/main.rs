@@ -56,7 +56,6 @@ use st::{
     inputs::InputProcessor,
     parse_size,
     rename_project::{rename_project, RenameOptions},
-    terminal::SmartTreeTerminal,
     Scanner,
     ScannerConfig, // The mighty Scanner and its configuration.
 };
@@ -89,17 +88,26 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Handle spicy TUI mode
+    // Handle spicy TUI mode (requires `tui` feature)
     if cli.spicy {
-        // Check if TUI is enabled via feature flags
-        let flags = feature_flags::features();
-        if !flags.enable_tui {
-            eprintln!("Error: Terminal UI is disabled by configuration or compliance mode.");
-            eprintln!("Contact your administrator to enable this feature.");
+        #[cfg(feature = "tui")]
+        {
+            // Check if TUI is enabled via feature flags
+            let flags = feature_flags::features();
+            if !flags.enable_tui {
+                eprintln!("Error: Terminal UI is disabled by configuration or compliance mode.");
+                eprintln!("Contact your administrator to enable this feature.");
+                return Ok(());
+            }
+            let path = std::env::current_dir()?;
+            return st::spicy_tui_enhanced::run_enhanced_spicy_tui(path).await;
+        }
+        #[cfg(not(feature = "tui"))]
+        {
+            eprintln!("Error: Spicy TUI mode requires the 'tui' feature.");
+            eprintln!("Rebuild with: cargo build --release --features tui");
             return Ok(());
         }
-        let path = std::env::current_dir()?;
-        return st::spicy_tui_enhanced::run_enhanced_spicy_tui(path).await;
     }
 
     // Initialize logging if requested
@@ -1448,14 +1456,25 @@ async fn run_mcp_server() -> Result<()> {
     server.run_stdio().await
 }
 
-/// Run the Smart Tree Terminal Interface - Your coding companion!
+/// Run the Smart Tree Terminal Interface - Your coding companion! (requires `tui` feature)
+#[cfg(feature = "tui")]
 async fn run_terminal() -> Result<()> {
+    use st::terminal::SmartTreeTerminal;
     // Create and run the terminal interface
     let mut terminal = SmartTreeTerminal::new()?;
     terminal.run().await
 }
 
-/// Launch the egui dashboard with real-time visualization
+#[cfg(not(feature = "tui"))]
+async fn run_terminal() -> Result<()> {
+    eprintln!("Error: Terminal mode requires the 'tui' feature.");
+    eprintln!("Rebuild with: cargo build --release --features tui");
+    Ok(())
+}
+
+/// Launch the egui dashboard with real-time visualization (requires `dashboard` feature)
+/// NOTE: Dashboard should only be run via daemon mode with human-in-the-loop
+#[cfg(feature = "dashboard")]
 async fn run_dashboard() -> Result<()> {
     use st::dashboard_egui::{
         default_status_feed_url, start_dashboard, DashboardState, McpActivity, MemoryStats,
@@ -1465,6 +1484,7 @@ async fn run_dashboard() -> Result<()> {
     println!("🚀 Launching Smart Tree Dashboard...");
     println!("🎨 Prepare for visual awesomeness!");
     println!("🤖 Real-time AI collaboration enabled!");
+    println!("👤 Human-in-the-loop mode active - you're in control!");
 
     // Create initial dashboard state with some default data
     let state = Arc::new(DashboardState {
@@ -1498,6 +1518,14 @@ async fn run_dashboard() -> Result<()> {
 
     // Launch the dashboard (this blocks until window is closed)
     start_dashboard(state).await
+}
+
+#[cfg(not(feature = "dashboard"))]
+async fn run_dashboard() -> Result<()> {
+    eprintln!("Error: Dashboard mode requires the 'dashboard' feature.");
+    eprintln!("Rebuild with: cargo build --release --features dashboard");
+    eprintln!("NOTE: Dashboard is designed for daemon mode with human-in-the-loop control.");
+    Ok(())
 }
 
 /// Run the Smart Tree Daemon - System-wide AI context service
