@@ -462,6 +462,11 @@ I want to be helpful, harmless, and honest. Code like this makes that harder for
 
 ---
 
+## Please consider sponsoring our security to keep AI safe and eithical.
+
+<iframe src="https://github.com/sponsors/8bit-wraith/card" title="Sponsor 8bit-wraith" height="225" width="600" style="border: 0;"></iframe>
+
+
 ## Appendix: Code Snippets
 
 ### Full verifyRegistry Function
