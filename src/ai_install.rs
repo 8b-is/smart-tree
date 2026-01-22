@@ -83,38 +83,64 @@ impl AiInstaller {
         println!("\nThis will configure Smart Tree for {}.", self.target_name());
         println!("Scope: {}\n", self.scope_description());
 
-        // Discover what can be installed
+        // Show existing configuration status first
+        let manager = ConfigManager::new(self.scope);
+        let existing = manager.list_configs();
+
+        println!("Current Status:");
+        for config in &existing {
+            let icon = if config.enabled { "✅" } else { "⬜" };
+            println!("  {} {}", icon, config.name);
+        }
+
+        // Discover what can be installed/updated
         let available = self.discover_options();
 
-        // Show available options
-        println!("Available integrations:");
+        println!("\nActions:");
+        println!("  [a] Install/Update ALL integrations");
         if available.install_mcp {
-            println!("  [1] MCP Server - Enable 30+ tools in your AI assistant");
+            let status = if existing.iter().any(|c| c.name.contains("MCP") && c.enabled) { "(update)" } else { "(install)" };
+            println!("  [1] MCP Server {} - Enable 30+ tools in your AI assistant", status);
         }
         if available.install_hooks {
-            println!("  [2] Hooks - Automatic context on every prompt");
+            let status = if existing.iter().any(|c| c.name.contains("Hooks") && c.enabled) { "(update)" } else { "(install)" };
+            println!("  [2] Hooks {} - Automatic context on every prompt", status);
         }
         if available.install_claude_md {
-            println!("  [3] CLAUDE.md - Project-specific AI guidance");
+            let status = if existing.iter().any(|c| c.name.contains("CLAUDE.md") && c.enabled) { "(update)" } else { "(create)" };
+            println!("  [3] CLAUDE.md {} - Project-specific AI guidance", status);
         }
         if available.create_settings {
-            println!("  [4] Settings - AI-optimized configuration");
+            let status = if existing.iter().any(|c| c.name.contains("Settings") && c.enabled) { "(update)" } else { "(create)" };
+            println!("  [4] Settings {} - AI-optimized configuration", status);
         }
+        println!("  [s] Show detailed status only");
+        println!("  [q] Quit without changes");
 
-        println!("\nPress Enter to install all, or type numbers to select (e.g., '1,3'): ");
+        print!("\nChoice [a/1-4/s/q]: ");
         io::stdout().flush()?;
 
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        let input = input.trim();
+        let input = input.trim().to_lowercase();
 
-        let options = if input.is_empty() {
-            available
-        } else {
-            self.parse_selection(input, &available)
-        };
-
-        self.execute_install(&options)
+        match input.as_str() {
+            "q" | "quit" | "exit" => {
+                println!("No changes made.");
+                return Ok(());
+            }
+            "s" | "status" => {
+                manager.display_configs();
+                return Ok(());
+            }
+            "a" | "all" | "" => {
+                self.execute_install(&available)
+            }
+            _ => {
+                let options = self.parse_selection(&input, &available);
+                self.execute_install(&options)
+            }
+        }
     }
 
     /// Run non-interactive installation with defaults
@@ -417,4 +443,192 @@ impl AiInstaller {
 pub fn run_ai_install(scope: InstallScope, target: AiTarget, interactive: bool) -> Result<()> {
     let installer = AiInstaller::new(scope, target, interactive)?;
     installer.install()
+}
+
+// =============================================================================
+// Configuration Manager - View and manage existing AI integrations
+// =============================================================================
+
+/// Existing configuration status
+#[derive(Debug)]
+pub struct ConfigStatus {
+    pub name: String,
+    pub enabled: bool,
+    pub path: Option<PathBuf>,
+    pub details: String,
+}
+
+/// AI Configuration Manager - lists and manages existing configs
+pub struct ConfigManager {
+    scope: InstallScope,
+}
+
+impl ConfigManager {
+    pub fn new(scope: InstallScope) -> Self {
+        Self { scope }
+    }
+
+    /// Get all existing configurations
+    pub fn list_configs(&self) -> Vec<ConfigStatus> {
+        let mut configs = Vec::new();
+
+        // Check MCP installation
+        configs.push(self.check_mcp_status());
+
+        // Check hooks
+        configs.push(self.check_hooks_status());
+
+        // Check settings
+        configs.push(self.check_settings_status());
+
+        // Check CLAUDE.md (project only)
+        if matches!(self.scope, InstallScope::Project) {
+            configs.push(self.check_claude_md_status());
+        }
+
+        configs
+    }
+
+    /// Display configurations in a nice format
+    pub fn display_configs(&self) {
+        let configs = self.list_configs();
+
+        println!("\n📋 AI Integration Status ({})", match self.scope {
+            InstallScope::Project => "Project",
+            InstallScope::User => "User",
+        });
+        println!("{}", "─".repeat(50));
+
+        for config in &configs {
+            let status_icon = if config.enabled { "✅" } else { "❌" };
+            println!("\n{} {}", status_icon, config.name);
+            println!("   {}", config.details);
+            if let Some(path) = &config.path {
+                println!("   📁 {}", path.display());
+            }
+        }
+
+        println!("\n{}", "─".repeat(50));
+        println!("💡 Use 'st -i' to install/update integrations");
+    }
+
+    fn check_mcp_status(&self) -> ConfigStatus {
+        let installer = McpInstaller::default();
+        let installed = installer.is_installed().unwrap_or(false);
+        let config_path = McpInstaller::get_claude_desktop_config_path();
+
+        ConfigStatus {
+            name: "MCP Server (Claude Desktop)".to_string(),
+            enabled: installed,
+            path: config_path,
+            details: if installed {
+                "Smart Tree MCP tools available in Claude Desktop".to_string()
+            } else {
+                "Not installed - run 'st -i' to enable 30+ AI tools".to_string()
+            },
+        }
+    }
+
+    fn check_hooks_status(&self) -> ConfigStatus {
+        let hooks_dir = match self.scope {
+            InstallScope::Project => std::env::current_dir().ok(),
+            InstallScope::User => dirs::home_dir(),
+        }.map(|p| p.join(".claude"));
+
+        let hooks_file = hooks_dir.as_ref().map(|d| d.join("hooks.json"));
+        let exists = hooks_file.as_ref().map(|p| p.exists()).unwrap_or(false);
+
+        let details = if exists {
+            if let Some(path) = &hooks_file {
+                if let Ok(content) = fs::read_to_string(path) {
+                    if let Ok(config) = serde_json::from_str::<Value>(&content) {
+                        let hook_count = config.as_object().map(|o| o.len()).unwrap_or(0);
+                        format!("{} hook(s) configured", hook_count)
+                    } else {
+                        "Configuration file exists but may be invalid".to_string()
+                    }
+                } else {
+                    "Configuration file exists".to_string()
+                }
+            } else {
+                "Hooks configured".to_string()
+            }
+        } else {
+            "Not configured - automatic context on prompts".to_string()
+        };
+
+        ConfigStatus {
+            name: "Claude Code Hooks".to_string(),
+            enabled: exists,
+            path: hooks_file,
+            details,
+        }
+    }
+
+    fn check_settings_status(&self) -> ConfigStatus {
+        let settings_dir = match self.scope {
+            InstallScope::Project => std::env::current_dir().ok(),
+            InstallScope::User => dirs::home_dir(),
+        }.map(|p| p.join(".claude"));
+
+        let settings_file = settings_dir.as_ref().map(|d| d.join("settings.json"));
+        let exists = settings_file.as_ref().map(|p| p.exists()).unwrap_or(false);
+
+        let details = if exists {
+            if let Some(path) = &settings_file {
+                if let Ok(content) = fs::read_to_string(path) {
+                    if let Ok(config) = serde_json::from_str::<Value>(&content) {
+                        if let Some(st) = config.get("smart_tree") {
+                            let version = st.get("version")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown");
+                            format!("Smart Tree v{} settings", version)
+                        } else {
+                            "Settings file exists (no Smart Tree config)".to_string()
+                        }
+                    } else {
+                        "Settings file exists".to_string()
+                    }
+                } else {
+                    "Settings file exists".to_string()
+                }
+            } else {
+                "Settings configured".to_string()
+            }
+        } else {
+            "Not configured".to_string()
+        };
+
+        ConfigStatus {
+            name: "Smart Tree Settings".to_string(),
+            enabled: exists,
+            path: settings_file,
+            details,
+        }
+    }
+
+    fn check_claude_md_status(&self) -> ConfigStatus {
+        let claude_md = std::env::current_dir()
+            .ok()
+            .map(|p| p.join(".claude/CLAUDE.md"));
+
+        let exists = claude_md.as_ref().map(|p| p.exists()).unwrap_or(false);
+
+        ConfigStatus {
+            name: "AI Guidance (CLAUDE.md)".to_string(),
+            enabled: exists,
+            path: claude_md,
+            details: if exists {
+                "Project-specific AI instructions available".to_string()
+            } else {
+                "Not created - helps AI understand your project".to_string()
+            },
+        }
+    }
+}
+
+/// Show configuration status for CLI
+pub fn show_ai_config_status(scope: InstallScope) {
+    let manager = ConfigManager::new(scope);
+    manager.display_configs();
 }
