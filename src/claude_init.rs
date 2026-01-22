@@ -294,7 +294,7 @@ impl ClaudeInit {
             "context" // Rich context for small projects
         };
 
-        // Build hook configuration
+        // Build hook configuration with SessionStart/SessionEnd for context persistence
         let hooks = match self.project_type {
             ProjectType::Rust => {
                 json!({
@@ -303,6 +303,20 @@ impl ClaudeInit {
                         "hooks": [{
                             "type": "command",
                             "command": format!("st -m {} .", hook_mode)
+                        }]
+                    }],
+                    "SessionStart": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-restore"
+                        }]
+                    }],
+                    "SessionEnd": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-save"
                         }]
                     }],
                     "PreToolUse": [{
@@ -323,6 +337,20 @@ impl ClaudeInit {
                             "command": format!("st -m {} .", hook_mode)
                         }]
                     }],
+                    "SessionStart": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-restore"
+                        }]
+                    }],
+                    "SessionEnd": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-save"
+                        }]
+                    }],
                     "PreToolUse": [{
                         "matcher": "pytest|python.*test",
                         "hooks": [{
@@ -339,6 +367,20 @@ impl ClaudeInit {
                         "hooks": [{
                             "type": "command",
                             "command": format!("st -m {} .", hook_mode)
+                        }]
+                    }],
+                    "SessionStart": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-restore"
+                        }]
+                    }],
+                    "SessionEnd": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-save"
                         }]
                     }],
                     "PreToolUse": [{
@@ -358,6 +400,20 @@ impl ClaudeInit {
                         "hooks": [{
                             "type": "command",
                             "command": format!("st -m {} .", hook_mode)
+                        }]
+                    }],
+                    "SessionStart": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-restore"
+                        }]
+                    }],
+                    "SessionEnd": [{
+                        "matcher": "",
+                        "hooks": [{
+                            "type": "command",
+                            "command": "st --claude-save"
                         }]
                     }]
                 })
@@ -584,14 +640,20 @@ Use `st --help` to explore more features!
         let hooks = match self.project_type {
             ProjectType::Rust => json!({
                 "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
+                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
+                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}],
                 "PreToolUse": [{"matcher": "cargo (build|test|run)", "hooks": [{"type": "command", "command": "st -m summary --depth 1 target/"}]}]
             }),
             ProjectType::Python => json!({
                 "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
+                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
+                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}],
                 "PreToolUse": [{"matcher": "pytest|python.*test", "hooks": [{"type": "command", "command": "st -m summary --depth 2 tests/"}]}]
             }),
             _ => json!({
-                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}]
+                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
+                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
+                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}]
             })
         };
 

@@ -5,11 +5,14 @@
 //! critical state information in .m8 consciousness files.
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// Maximum age in hours before context is considered stale
+const MAX_AGE_HOURS: i64 = 24;
 
 /// Consciousness state that persists between Claude sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +92,12 @@ pub struct TodoItem {
     pub created: DateTime<Utc>,
 }
 
+/// Result of relevance check for consciousness state
+struct RelevanceResult {
+    is_relevant: bool,
+    reason: String,
+}
+
 impl Default for ConsciousnessState {
     fn default() -> Self {
         let mut tokenization_rules = HashMap::new();
@@ -139,32 +148,46 @@ impl ConsciousnessManager {
     /// Create new consciousness manager
     pub fn new() -> Self {
         let save_path = PathBuf::from(".claude_consciousness.m8");
-        let state = Self::load_or_default(&save_path);
+        let state = Self::load_or_default(&save_path, false);
+
+        Self { state, save_path }
+    }
+
+    /// Create new consciousness manager (silent - no output)
+    pub fn new_silent() -> Self {
+        let save_path = PathBuf::from(".claude_consciousness.m8");
+        let state = Self::load_or_default(&save_path, true);
 
         Self { state, save_path }
     }
 
     /// Initialize with custom path
     pub fn with_path(save_path: PathBuf) -> Self {
-        let state = Self::load_or_default(&save_path);
+        let state = Self::load_or_default(&save_path, false);
         Self { state, save_path }
     }
 
     /// Load consciousness from file or create default
-    fn load_or_default(path: &Path) -> ConsciousnessState {
+    fn load_or_default(path: &Path, silent: bool) -> ConsciousnessState {
         if path.exists() {
             match fs::read_to_string(path) {
                 Ok(content) => match serde_json::from_str(&content) {
                     Ok(state) => {
-                        eprintln!("🧠 Restored consciousness from {}", path.display());
+                        if !silent {
+                            eprintln!("🧠 Restored consciousness from {}", path.display());
+                        }
                         return state;
                     }
                     Err(e) => {
-                        eprintln!("⚠️ Failed to parse consciousness: {}", e);
+                        if !silent {
+                            eprintln!("⚠️ Failed to parse consciousness: {}", e);
+                        }
                     }
                 },
                 Err(e) => {
-                    eprintln!("⚠️ Failed to read consciousness: {}", e);
+                    if !silent {
+                        eprintln!("⚠️ Failed to read consciousness: {}", e);
+                    }
                 }
             }
         }
@@ -185,7 +208,7 @@ impl ConsciousnessManager {
         Ok(())
     }
 
-    /// Restore consciousness from file
+    /// Restore consciousness from file with smart relevance checking
     pub fn restore(&mut self) -> Result<()> {
         if !self.save_path.exists() {
             return Err(anyhow::anyhow!(
@@ -199,15 +222,119 @@ impl ConsciousnessManager {
 
         self.state = serde_json::from_str(&content).context("Failed to parse consciousness")?;
 
-        eprintln!(
-            "🧠 Restored consciousness from {}",
-            self.save_path.display()
-        );
-        eprintln!("  Session: {}", self.state.session_id);
-        eprintln!("  Last saved: {}", self.state.last_saved);
-        eprintln!("  Working on: {}", self.state.project_context.current_focus);
+        // Check relevance before displaying
+        let relevance = self.check_relevance();
+        if !relevance.is_relevant {
+            eprintln!("🧠 Previous context skipped: {}", relevance.reason);
+            eprintln!("   Use `st -m context .` for fresh project overview.");
+            // Reset to fresh state
+            self.state = ConsciousnessState::default();
+            return Ok(());
+        }
+
+        eprintln!("🧠 Consciousness restored from {}", self.save_path.display());
 
         Ok(())
+    }
+
+    /// Silent restore - returns true if context is relevant, false otherwise
+    pub fn restore_silent(&mut self) -> Result<bool> {
+        if !self.save_path.exists() {
+            return Err(anyhow::anyhow!(
+                "No consciousness file found at {}",
+                self.save_path.display()
+            ));
+        }
+
+        let content =
+            fs::read_to_string(&self.save_path).context("Failed to read consciousness file")?;
+
+        self.state = serde_json::from_str(&content).context("Failed to parse consciousness")?;
+
+        // Check relevance
+        let relevance = self.check_relevance();
+        if !relevance.is_relevant {
+            // Reset to fresh state
+            self.state = ConsciousnessState::default();
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    /// Check if the saved state is relevant to the current session
+    fn check_relevance(&self) -> RelevanceResult {
+        let current_dir = std::env::current_dir().unwrap_or_default();
+
+        // Check 1: Project directory match (allow same project name even if path differs)
+        let saved_name = self
+            .state
+            .working_directory
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let current_name = current_dir
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        if !saved_name.is_empty() && !current_name.is_empty() && saved_name != current_name {
+            return RelevanceResult {
+                is_relevant: false,
+                reason: format!(
+                    "different project (saved: {}, current: {})",
+                    saved_name, current_name
+                ),
+            };
+        }
+
+        // Check 2: Age - context older than 24 hours is stale
+        let age = Utc::now().signed_duration_since(self.state.last_saved);
+        if age > Duration::hours(MAX_AGE_HOURS) {
+            return RelevanceResult {
+                is_relevant: false,
+                reason: format!("stale context ({}h old)", age.num_hours()),
+            };
+        }
+
+        // Check 3: Meaningful content (filter out test data)
+        let has_meaningful_history = self.state.file_history.iter().any(|op| {
+            op.summary != "test"
+                && !op
+                    .file_path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().starts_with("file"))
+                    .unwrap_or(false)
+        });
+
+        let has_insights = !self.state.insights.is_empty();
+        let has_todos = self
+            .state
+            .todos
+            .iter()
+            .any(|t| t.status != "completed");
+        let has_notes = !self.state.notes.is_empty();
+        let has_focus = !self.state.project_context.current_focus.is_empty();
+        let has_project_name = !self.state.project_context.project_name.is_empty()
+            && self.state.project_context.project_name != "unknown";
+
+        if !has_meaningful_history
+            && !has_insights
+            && !has_todos
+            && !has_notes
+            && !has_focus
+            && !has_project_name
+        {
+            return RelevanceResult {
+                is_relevant: false,
+                reason: "no meaningful content (test data only)".to_string(),
+            };
+        }
+
+        RelevanceResult {
+            is_relevant: true,
+            reason: String::new(),
+        }
     }
 
     /// Add file operation to history
@@ -260,39 +387,97 @@ impl ConsciousnessManager {
         });
     }
 
-    /// Get consciousness summary for display
+    /// Get consciousness summary for display (relevance-aware)
     pub fn get_summary(&self) -> String {
-        format!(
-            r#"🧠 Consciousness State:
-  Session: {}
-  Last saved: {}
-  Project: {} ({})
-  Current focus: {}
-  Files touched: {}
-  Insights: {}
-  Active todos: {}
-  Tokenization rules: {}
-  Philosophy: {}"#,
-            self.state.session_id,
-            self.state.last_saved.format("%Y-%m-%d %H:%M:%S UTC"),
-            self.state.project_context.project_name,
-            self.state.project_context.project_type,
-            self.state.project_context.current_focus,
-            self.state.file_history.len(),
-            self.state.insights.len(),
-            self.state
-                .todos
-                .iter()
-                .filter(|t| t.status != "completed")
-                .count(),
-            self.state.tokenization_rules.len(),
-            self.state.philosophy.c64_nostalgia
-        )
+        let relevance = self.check_relevance();
+        if !relevance.is_relevant {
+            return format!(
+                "🧠 Previous context unavailable: {}\n   Run `st -m context .` for fresh overview.",
+                relevance.reason
+            );
+        }
+
+        // Count meaningful file operations (exclude test data)
+        let meaningful_ops = self
+            .state
+            .file_history
+            .iter()
+            .filter(|op| {
+                op.summary != "test"
+                    && !op
+                        .file_path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().starts_with("file"))
+                        .unwrap_or(false)
+            })
+            .count();
+
+        let active_todos = self
+            .state
+            .todos
+            .iter()
+            .filter(|t| t.status != "completed")
+            .count();
+
+        let mut summary = String::from("🧠 Session Context\n");
+        summary.push_str(&"─".repeat(40));
+        summary.push('\n');
+
+        // Only show project info if meaningful
+        if self.state.project_context.project_name != "unknown"
+            && !self.state.project_context.project_name.is_empty()
+        {
+            summary.push_str(&format!(
+                "📁 Project: {} ({})\n",
+                self.state.project_context.project_name, self.state.project_context.project_type
+            ));
+        }
+
+        if !self.state.project_context.current_focus.is_empty() {
+            summary.push_str(&format!(
+                "🎯 Focus: {}\n",
+                self.state.project_context.current_focus
+            ));
+        }
+
+        if meaningful_ops > 0 {
+            summary.push_str(&format!("📝 Recent operations: {}\n", meaningful_ops));
+        }
+
+        if !self.state.insights.is_empty() {
+            summary.push_str(&format!("💡 Insights: {}\n", self.state.insights.len()));
+        }
+
+        if active_todos > 0 {
+            summary.push_str(&format!("✅ Active todos: {}\n", active_todos));
+        }
+
+        // Age indicator
+        let age = Utc::now().signed_duration_since(self.state.last_saved);
+        let age_str = if age.num_hours() > 0 {
+            format!("{}h ago", age.num_hours())
+        } else {
+            format!("{}m ago", age.num_minutes())
+        };
+        summary.push_str(&format!("⏱️  Last saved: {}", age_str));
+
+        summary
     }
 
-    /// Get context reminder for Claude
+    /// Get context reminder for Claude (filters out test data)
     pub fn get_context_reminder(&self) -> String {
-        let mut reminder = String::from("📚 Previous session context:\n");
+        let mut reminder = String::new();
+
+        // Only show context if we have meaningful content
+        let relevance = self.check_relevance();
+        if !relevance.is_relevant {
+            return format!(
+                "🧠 Previous context unavailable: {}\n   Run `st -m context .` for fresh overview.",
+                relevance.reason
+            );
+        }
+
+        reminder.push_str("📚 Previous session context:\n");
 
         if !self.state.project_context.current_focus.is_empty() {
             reminder.push_str(&format!(
@@ -308,18 +493,39 @@ impl ConsciousnessManager {
             }
         }
 
-        if !self.state.todos.is_empty() {
+        let active_todos: Vec<_> = self
+            .state
+            .todos
+            .iter()
+            .filter(|t| t.status != "completed")
+            .collect();
+        if !active_todos.is_empty() {
             reminder.push_str("\n📝 Active todos:\n");
-            for todo in &self.state.todos {
-                if todo.status != "completed" {
-                    reminder.push_str(&format!("  - [{}] {}\n", todo.status, todo.content));
-                }
+            for todo in active_todos.iter().take(5) {
+                reminder.push_str(&format!("  - [{}] {}\n", todo.status, todo.content));
             }
         }
 
-        if !self.state.file_history.is_empty() {
+        // Filter out test data from file history
+        let meaningful_ops: Vec<_> = self
+            .state
+            .file_history
+            .iter()
+            .filter(|op| {
+                op.summary != "test"
+                    && !op
+                        .file_path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().starts_with("file"))
+                        .unwrap_or(false)
+            })
+            .rev()
+            .take(5)
+            .collect();
+
+        if !meaningful_ops.is_empty() {
             reminder.push_str("\n📁 Recent files:\n");
-            for op in self.state.file_history.iter().rev().take(5) {
+            for op in meaningful_ops {
                 reminder.push_str(&format!(
                     "  - {} {}: {}\n",
                     op.operation,
@@ -328,6 +534,15 @@ impl ConsciousnessManager {
                 ));
             }
         }
+
+        // Show age indicator
+        let age = Utc::now().signed_duration_since(self.state.last_saved);
+        let age_str = if age.num_hours() > 0 {
+            format!("{}h ago", age.num_hours())
+        } else {
+            format!("{}m ago", age.num_minutes())
+        };
+        reminder.push_str(&format!("\n⏱️  Last saved: {}", age_str));
 
         reminder
     }

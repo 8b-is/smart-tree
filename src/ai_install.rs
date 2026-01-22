@@ -395,6 +395,13 @@ impl AiInstaller {
                     "type": "command",
                     "command": "st --claude-restore"
                 }]
+            }],
+            "SessionEnd": [{
+                "matcher": "",
+                "hooks": [{
+                    "type": "command",
+                    "command": "st --claude-save"
+                }]
             }]
         })
     }

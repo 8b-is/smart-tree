@@ -1561,18 +1561,23 @@ async fn handle_claude_save() -> Result<()> {
 async fn handle_claude_restore() -> Result<()> {
     use st::mcp::consciousness::ConsciousnessManager;
 
-    let mut manager = ConsciousnessManager::new();
+    // Suppress load messages - we just want the final output
+    let mut manager = ConsciousnessManager::new_silent();
 
-    match manager.restore() {
-        Ok(_) => {
-            println!("{}", manager.get_summary());
-            println!("\n{}", manager.get_context_reminder());
-            println!("\n✅ Consciousness restored successfully!");
+    match manager.restore_silent() {
+        Ok(is_relevant) => {
+            if is_relevant {
+                println!("{}", manager.get_summary());
+                println!("\n{}", manager.get_context_reminder());
+                println!("\n💡 TIP: Run `st --claude-save` before ending session to preserve context.");
+            } else {
+                println!("🧠 Fresh session - previous context not applicable.");
+                println!("   Run `st -m context .` for project overview.");
+            }
         }
-        Err(e) => {
-            eprintln!("⚠️ Could not restore consciousness: {}", e);
-            eprintln!("💡 Run 'st --claude-save' to create a new consciousness file");
-            return Err(e);
+        Err(_) => {
+            println!("🧠 Fresh session - no previous context found.");
+            println!("   Run `st -m context .` for project overview.");
         }
     }
 
