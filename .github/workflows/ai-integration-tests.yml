@@ -263,7 +263,8 @@ jobs:
     - name: Test project overview generation 📋
       run: |
         echo "=== Project Overview Generation Test ==="
-        ./target/release/st --mode context . > /tmp/context_output.txt
+        # Use depth limit to prevent memory issues on large runner workspaces
+        ./target/release/st --mode context --depth 3 . > /tmp/context_output.txt
 
         # Verify context contains essential information
         if grep -qi "rust\|cargo\|src" /tmp/context_output.txt; then

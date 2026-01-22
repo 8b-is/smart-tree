@@ -96,8 +96,8 @@ jobs:
           fi
         done
 
-        # Generate project overview
-        ./target/release/st --mode context . > context-export/PROJECT_CONTEXT.md 2>/dev/null || true
+        # Generate project overview (with depth limit to prevent memory issues)
+        ./target/release/st --mode context --depth 3 . > context-export/PROJECT_CONTEXT.md 2>/dev/null || true
 
         # Generate MCP tool reference
         ./target/release/st --mcp-tools > context-export/MCP_TOOLS.txt 2>/dev/null || true

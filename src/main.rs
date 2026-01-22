@@ -583,10 +583,12 @@ async fn main() -> Result<()> {
         args.show_ignored || matches!(mode, OutputMode::Ai | OutputMode::Digest) || args.everything;
 
     // Smart defaults: Each mode has an ideal depth when user doesn't specify (depth = 0)
+    // Hard cap at 20 to prevent memory issues on deep scans
+    const MAX_SAFE_DEPTH: usize = 20;
     let effective_depth = if args.depth == 0 {
-        get_ideal_depth_for_mode(&mode)
+        get_ideal_depth_for_mode(&mode).min(MAX_SAFE_DEPTH)
     } else {
-        args.depth // User explicitly set depth, respect their choice
+        args.depth.min(MAX_SAFE_DEPTH) // Cap even user-specified depth for safety
     };
 
     let scanner_config = ScannerConfig {

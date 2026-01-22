@@ -221,14 +221,34 @@ pub struct Cli {
     pub get_frequency: bool,
 
     // =========================================================================
-    // CLAUDE CODE INTEGRATION
+    // AI INTEGRATION - Unified setup for all AI platforms
+    // =========================================================================
+    /// Interactive AI integration setup - configures MCP, hooks, plugins for your AI
+    /// If no other flags, launches interactive mode. Use with --install-scope and --ai-target.
+    #[arg(short = 'i', long = "install-ai", help_heading = "AI Integration")]
+    pub install_ai: bool,
+
+    /// Installation scope: project (local .claude/) or user (~/.claude/, ~/.config/)
+    #[arg(long = "install-scope", value_enum, default_value = "project", help_heading = "AI Integration")]
+    pub install_scope: InstallScope,
+
+    /// Target AI platform for configuration
+    #[arg(long, value_enum, default_value = "claude", help_heading = "AI Integration")]
+    pub ai_target: AiTarget,
+
+    /// Skip interactive prompts (use defaults or provided flags)
+    #[arg(long, help_heading = "AI Integration")]
+    pub non_interactive: bool,
+
+    // =========================================================================
+    // CLAUDE CODE INTEGRATION (Legacy - prefer --install-ai)
     // =========================================================================
     /// Configure Claude Code hooks (enable/disable/status)
-    #[arg(long, value_name = "ACTION", help_heading = "Claude Code Integration")]
+    #[arg(long, value_name = "ACTION", help_heading = "Claude Code Integration (Legacy)")]
     pub hooks_config: Option<String>,
 
     /// Quick setup: Install Smart Tree hooks in Claude Code
-    #[arg(long, help_heading = "Claude Code Integration")]
+    #[arg(long, help_heading = "Claude Code Integration (Legacy)")]
     pub hooks_install: bool,
 
     // =========================================================================
@@ -555,6 +575,30 @@ pub enum ColorMode {
     Never,
     /// Auto-detect (colors if terminal)
     Auto,
+}
+
+/// Installation scope for AI integration
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq)]
+pub enum InstallScope {
+    /// Project-local installation (.claude/ in current directory)
+    #[default]
+    Project,
+    /// User-wide installation (~/.claude/ or ~/.config/)
+    User,
+}
+
+/// Target AI platform for configuration
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq)]
+pub enum AiTarget {
+    /// Claude (Anthropic) - default, most features
+    #[default]
+    Claude,
+    /// ChatGPT (OpenAI)
+    Chatgpt,
+    /// Gemini (Google)
+    Gemini,
+    /// Universal - generic config for any AI
+    Universal,
 }
 
 /// Path display mode
