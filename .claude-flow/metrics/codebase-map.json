@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-20T05:22:10.564Z",
+  "timestamp": "2026-01-22T05:34:13.670Z",
   "projectRoot": "/aidata/aye/smart-tree",
   "structure": {
     "hasPackageJson": true,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1768886530564
+  "scannedAt": 1769060053670
 }
