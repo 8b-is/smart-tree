@@ -5,8 +5,12 @@
 //!
 //! "Serving AI requests with a smile and a tree!" - The Cheet 😺
 
-use crate::proxy::{LlmMessage, LlmRequest, LlmRole};
+use crate::proxy::LlmRequest;
 use crate::proxy::memory::MemoryProxy;
+use crate::proxy::openai_compat::{
+    OpenAiRequest, OpenAiResponse, OpenAiErrorResponse, OpenAiError,
+    OpenAiChoice, OpenAiResponseMessage, OpenAiUsage,
+};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -14,7 +18,6 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -110,79 +113,3 @@ async fn chat_completions(
     }
 }
 
-// --- OpenAI API Types ---
-
-#[derive(Debug, Deserialize)]
-struct OpenAiRequest {
-    model: String,
-    messages: Vec<OpenAiMessage>,
-    temperature: Option<f32>,
-    #[serde(rename = "max_tokens")]
-    max_tokens: Option<usize>,
-    stream: Option<bool>,
-    user: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiMessage {
-    role: String,
-    content: String,
-}
-
-impl From<OpenAiMessage> for LlmMessage {
-    fn from(msg: OpenAiMessage) -> Self {
-        Self {
-            role: match msg.role.as_str() {
-                "system" => LlmRole::System,
-                "assistant" => LlmRole::Assistant,
-                _ => LlmRole::User,
-            },
-            content: msg.content,
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiResponse {
-    id: String,
-    object: String,
-    created: u64,
-    model: String,
-    choices: Vec<OpenAiChoice>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    usage: Option<OpenAiUsage>,
-}
-
-/// OpenAI-compatible error response format
-#[derive(Debug, Serialize)]
-struct OpenAiErrorResponse {
-    error: OpenAiError,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiError {
-    message: String,
-    #[serde(rename = "type")]
-    error_type: String,
-    code: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiChoice {
-    index: usize,
-    message: OpenAiResponseMessage,
-    finish_reason: String,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiResponseMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiUsage {
-    prompt_tokens: usize,
-    completion_tokens: usize,
-    total_tokens: usize,
-}

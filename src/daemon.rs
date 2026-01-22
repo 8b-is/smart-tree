@@ -33,6 +33,10 @@ use tokio::sync::oneshot;
 // LLM Proxy integration
 use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmRole};
 use crate::proxy::memory::ProxyMemory;
+use crate::proxy::openai_compat::{
+    OpenAiRequest, OpenAiResponse, OpenAiErrorResponse, OpenAiError,
+    OpenAiChoice, OpenAiResponseMessage, OpenAiUsage,
+};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -696,84 +700,6 @@ fn create_directory_info(path: &std::path::Path) -> Option<DirectoryInfo> {
 // =============================================================================
 // LLM PROXY HANDLERS - OpenAI-compatible chat completions
 // =============================================================================
-
-/// OpenAI-compatible request format
-#[derive(Debug, Deserialize)]
-struct OpenAiRequest {
-    model: String,
-    messages: Vec<OpenAiMessage>,
-    temperature: Option<f32>,
-    #[serde(rename = "max_tokens")]
-    max_tokens: Option<usize>,
-    stream: Option<bool>,
-    /// Use 'user' field as scope ID for memory persistence
-    user: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiMessage {
-    role: String,
-    content: String,
-}
-
-impl From<OpenAiMessage> for LlmMessage {
-    fn from(msg: OpenAiMessage) -> Self {
-        Self {
-            role: match msg.role.as_str() {
-                "system" => LlmRole::System,
-                "assistant" => LlmRole::Assistant,
-                _ => LlmRole::User,
-            },
-            content: msg.content,
-        }
-    }
-}
-
-/// OpenAI-compatible response format
-#[derive(Debug, Serialize)]
-struct OpenAiResponse {
-    id: String,
-    object: String,
-    created: u64,
-    model: String,
-    choices: Vec<OpenAiChoice>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    usage: Option<OpenAiUsage>,
-}
-
-/// OpenAI-compatible error response format
-#[derive(Debug, Serialize)]
-struct OpenAiErrorResponse {
-    error: OpenAiError,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiError {
-    message: String,
-    #[serde(rename = "type")]
-    error_type: String,
-    code: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiChoice {
-    index: usize,
-    message: OpenAiResponseMessage,
-    finish_reason: String,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiResponseMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiUsage {
-    prompt_tokens: usize,
-    completion_tokens: usize,
-    total_tokens: usize,
-}
 
 /// 💬 Chat completions handler - routes to appropriate LLM provider
 async fn chat_completions(
