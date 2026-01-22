@@ -66,6 +66,9 @@ pub mod daemon_client;
 // Self-update mechanism - check and install updates from GitHub releases
 pub mod updater;
 
+// Project tags management - tag and categorize projects
+pub mod project_tags;
+
 // Spicy TUI - cyberpunk-style terminal interface!
 pub mod spicy_fuzzy;
 pub mod spicy_tui_enhanced;
