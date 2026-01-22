@@ -1680,57 +1680,36 @@ async fn handle_update_consciousness(path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Run security scan on directory
+/// Run comprehensive security scan for supply chain attack patterns
+/// IGNORES gitignore to scan everything including node_modules
 async fn handle_security_scan(path: &str) -> Result<()> {
-    use walkdir::WalkDir;
+    use st::security_scan::SecurityScanner;
+    use std::path::Path;
 
-    println!("🔍 Security scanning {}...", path);
+    eprintln!("🔍 Security Scan - Supply Chain Attack Pattern Detection");
+    eprintln!("═══════════════════════════════════════════════════════════════");
+    eprintln!("Scanning: {}", path);
+    eprintln!("Mode: AGGRESSIVE (ignoring .gitignore, scanning node_modules)");
+    eprintln!();
 
-    let mut suspicious_files = Vec::new();
-    let mut file_count = 0;
+    let scanner = SecurityScanner::new();
+    let scan_path = Path::new(path);
 
-    for entry in WalkDir::new(path).max_depth(10) {
-        let entry = entry?;
-        if entry.file_type().is_file() {
-            file_count += 1;
-            let path = entry.path();
+    let findings = scanner.scan_directory(scan_path)?;
 
-            // Check for suspicious patterns
-            if let Some(name) = path.file_name() {
-                let name_str = name.to_string_lossy();
+    // Generate and print report
+    let report = scanner.generate_report(&findings);
+    println!("{}", report);
 
-                // Suspicious names
-                if name_str.contains("exploit")
-                    || name_str.contains("backdoor")
-                    || name_str.contains("keylog")
-                    || name_str.starts_with("...")
-                {
-                    suspicious_files.push(path.to_path_buf());
-                }
-            }
+    // Exit with non-zero code if critical findings
+    let critical_count = findings
+        .iter()
+        .filter(|f| matches!(f.risk_level, st::security_scan::RiskLevel::Critical))
+        .count();
 
-            // Check file content for suspicious patterns (first 1KB)
-            if let Ok(contents) = std::fs::read(path) {
-                let sample = &contents[..contents.len().min(1024)];
-
-                // High entropy check (possible encryption/obfuscation)
-                let entropy = calculate_entropy(sample);
-                if entropy > 7.5 {
-                    suspicious_files.push(path.to_path_buf());
-                }
-            }
-        }
-    }
-
-    println!("📊 Scanned {} files", file_count);
-
-    if suspicious_files.is_empty() {
-        println!("✅ No suspicious files detected");
-    } else {
-        println!("⚠️  {} suspicious files found:", suspicious_files.len());
-        for file in suspicious_files.iter().take(10) {
-            println!("  • {}", file.display());
-        }
+    if critical_count > 0 {
+        eprintln!("\n⚠️  {} CRITICAL findings require immediate attention!", critical_count);
+        std::process::exit(1);
     }
 
     Ok(())
@@ -1792,27 +1771,6 @@ async fn handle_get_frequency(path: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Calculate Shannon entropy for bytes
-fn calculate_entropy(data: &[u8]) -> f64 {
-    let mut freq = [0u64; 256];
-
-    for &byte in data {
-        freq[byte as usize] += 1;
-    }
-
-    let len = data.len() as f64;
-    let mut entropy = 0.0;
-
-    for &count in &freq {
-        if count > 0 {
-            let p = count as f64 / len;
-            entropy -= p * p.log2();
-        }
-    }
-
-    entropy
 }
 
 /// Dump raw consciousness file content

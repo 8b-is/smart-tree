@@ -160,3 +160,6 @@ pub mod st_tokenizer;
 
 // SmartPastCode Registry Integration - Auto-indexing for universal code discovery
 pub mod registry;
+
+// Security Scanner - Detect supply chain attack patterns
+pub mod security_scan;
