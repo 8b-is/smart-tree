@@ -6,10 +6,63 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use serde_json::{json, Value};
 use std::fs;
+use std::io::{self, Write as IoWrite};
 use std::path::{Path, PathBuf};
 
 use crate::scanner::{Scanner, ScannerConfig};
 use crate::TreeStats;
+
+/// Valid Claude Code hook event types
+const VALID_HOOK_KEYS: &[&str] = &[
+    "SessionStart", "UserPromptSubmit", "PreToolUse",
+    "PermissionRequest", "PostToolUse", "PostToolUseFailure",
+    "SubagentStart", "SubagentStop", "Stop",
+    "PreCompact", "SessionEnd", "Notification", "Setup"
+];
+
+/// Ask user for confirmation before overwriting a file
+fn confirm_overwrite(path: &Path) -> bool {
+    print!("   ⚠️  {} exists. Overwrite? [y/N]: ", path.display());
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input).is_ok() {
+        let response = input.trim().to_lowercase();
+        return response == "y" || response == "yes";
+    }
+    false
+}
+
+/// Validate that settings.json has correct hook format
+/// Returns error description if invalid, None if valid
+pub fn validate_settings(path: &Path) -> Result<Option<String>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(path)?;
+    let parsed: Result<Value, _> = serde_json::from_str(&content);
+
+    match parsed {
+        Err(e) => Ok(Some(format!("Invalid JSON: {}", e))),
+        Ok(json) => {
+            if let Some(hooks) = json.get("hooks") {
+                if let Some(obj) = hooks.as_object() {
+                    for key in obj.keys() {
+                        if !VALID_HOOK_KEYS.contains(&key.as_str()) {
+                            return Ok(Some(format!(
+                                "Invalid hook key '{}'. Valid: {}",
+                                key,
+                                VALID_HOOK_KEYS.join(", ")
+                            )));
+                        }
+                    }
+                }
+            }
+            Ok(None)
+        }
+    }
+}
 
 /// Project type detection for optimal hook configuration
 #[derive(Debug, Clone)]
@@ -130,11 +183,11 @@ impl ClaudeInit {
         // Create .claude directory
         fs::create_dir_all(claude_dir).context("Failed to create .claude directory")?;
 
-        // Generate settings.json with optimal hooks
-        self.create_settings_json(claude_dir)?;
+        // Generate settings.json (force=true for new projects)
+        self.create_settings_json(claude_dir, true)?;
 
-        // Generate CLAUDE.md with project-specific guidance
-        self.create_claude_md(claude_dir)?;
+        // Generate CLAUDE.md (force=true for new projects)
+        self.create_claude_md(claude_dir, true)?;
 
         println!(
             "✨ Claude integration initialized for {:?} project!",
@@ -143,75 +196,94 @@ impl ClaudeInit {
         println!("📁 Created .claude/ directory with:");
         println!("   • settings.json - Smart hooks configured");
         println!("   • CLAUDE.md - Project-specific AI guidance");
-        println!("\n💡 Tip: Run 'st --setup-claude' anytime to update with latest optimizations");
+        println!("\n💡 Tip: Run 'st --setup-claude' anytime to update");
 
         Ok(())
     }
 
     /// Update existing Claude configuration
     fn update_existing(&self, claude_dir: &Path) -> Result<()> {
-        println!("🔄 Updating existing Claude integration...");
+        println!("🔄 Checking existing Claude integration...");
 
-        // Check what exists
         let settings_path = claude_dir.join("settings.json");
         let claude_md_path = claude_dir.join("CLAUDE.md");
 
         let mut updated = false;
 
-        // Update or create settings.json
+        // Validate existing settings if present
         if settings_path.exists() {
-            // Read existing to check if it's auto-configured
-            let existing: Value = serde_json::from_str(&fs::read_to_string(&settings_path)?)?;
+            if let Some(error) = validate_settings(&settings_path)? {
+                println!("   ⚠️  settings.json has issues: {}", error);
+                println!("   💡 Suggested fix:");
+                self.show_suggested()?;
+                return Ok(());
+            }
 
-            // Only update if it was auto-configured or user confirms
-            if existing
+            // Check if auto-configured (safe to update silently)
+            let existing: Value = serde_json::from_str(&fs::read_to_string(&settings_path)?)?;
+            let is_auto = existing
                 .get("smart_tree")
                 .and_then(|st| st.get("auto_configured"))
                 .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
-                self.create_settings_json(claude_dir)?;
-                println!("   ✅ Updated settings.json with latest hooks");
-                updated = true;
+                .unwrap_or(false);
+
+            if is_auto {
+                // Auto-configured: safe to update
+                if self.create_settings_json(claude_dir, true)? {
+                    println!("   ✅ Updated settings.json");
+                    updated = true;
+                }
             } else {
-                println!("   ⚠️  settings.json exists (manual config) - skipping update");
-                println!("      To force update, delete .claude/settings.json and run again");
+                // Manual config: ask first (force=false)
+                println!("   ℹ️  settings.json has manual configuration");
+                if self.create_settings_json(claude_dir, false)? {
+                    println!("   ✅ Updated settings.json");
+                    updated = true;
+                } else {
+                    println!("   ⏭️  Skipped settings.json");
+                }
             }
-        } else {
-            self.create_settings_json(claude_dir)?;
-            println!("   ✅ Created missing settings.json");
+        } else if self.create_settings_json(claude_dir, true)? {
+            println!("   ✅ Created settings.json");
             updated = true;
         }
 
-        // Always update CLAUDE.md with fresh stats
-        let claude_md_existed = claude_md_path.exists();
-        self.create_claude_md(claude_dir)?;
-        if claude_md_existed {
-            println!("   ✅ Updated CLAUDE.md with current project stats");
-        } else {
-            println!("   ✅ Created missing CLAUDE.md");
+        // CLAUDE.md - ask before overwriting (force=false)
+        if claude_md_path.exists() {
+            if self.create_claude_md(claude_dir, false)? {
+                println!("   ✅ Updated CLAUDE.md");
+                updated = true;
+            } else {
+                println!("   ⏭️  Skipped CLAUDE.md");
+            }
+        } else if self.create_claude_md(claude_dir, true)? {
+            println!("   ✅ Created CLAUDE.md");
             updated = true;
         }
 
         if updated {
-            println!(
-                "\n🎉 Claude integration updated for {:?} project!",
-                self.project_type
-            );
-            println!(
-                "   Files: {} | Dirs: {} | Size: {} bytes",
-                self.stats.total_files, self.stats.total_dirs, self.stats.total_size
-            );
+            println!("\n🎉 Claude integration updated for {:?} project!", self.project_type);
         } else {
-            println!("\n✨ Claude integration is up to date!");
+            println!("\n✨ No changes made. Use --force to overwrite.");
         }
 
         Ok(())
     }
 
     /// Create settings.json with smart hook configuration
-    fn create_settings_json(&self, claude_dir: &Path) -> Result<()> {
+    /// If file exists, asks for confirmation unless force=true
+    fn create_settings_json(&self, claude_dir: &Path, force: bool) -> Result<bool> {
         let settings_path = claude_dir.join("settings.json");
+
+        // Check if file exists and ask for confirmation
+        if settings_path.exists() && !force {
+            if !confirm_overwrite(&settings_path) {
+                return Ok(false);
+            }
+            // Backup existing file
+            let backup = settings_path.with_extension("json.bak");
+            fs::copy(&settings_path, &backup)?;
+        }
 
         // Choose hook mode based on project size and type
         let hook_mode = if self.stats.total_files > 1000 {
@@ -233,7 +305,7 @@ impl ClaudeInit {
                             "command": format!("st -m {} .", hook_mode)
                         }]
                     }],
-                    "ToolCall": [{
+                    "PreToolUse": [{
                         "matcher": "cargo (build|test|run)",
                         "hooks": [{
                             "type": "command",
@@ -251,7 +323,7 @@ impl ClaudeInit {
                             "command": format!("st -m {} .", hook_mode)
                         }]
                     }],
-                    "ToolCall": [{
+                    "PreToolUse": [{
                         "matcher": "pytest|python.*test",
                         "hooks": [{
                             "type": "command",
@@ -269,7 +341,7 @@ impl ClaudeInit {
                             "command": format!("st -m {} .", hook_mode)
                         }]
                     }],
-                    "ToolCall": [{
+                    "PreToolUse": [{
                         "matcher": "npm (test|build|run)",
                         "hooks": [{
                             "type": "command",
@@ -306,14 +378,32 @@ impl ClaudeInit {
             }
         });
 
-        fs::write(settings_path, serde_json::to_string_pretty(&settings)?)?;
+        let content = serde_json::to_string_pretty(&settings)?;
+        fs::write(&settings_path, &content)?;
 
-        Ok(())
+        // Validate what we wrote
+        if let Some(error) = validate_settings(&settings_path)? {
+            // Revert from backup
+            let backup = settings_path.with_extension("json.bak");
+            if backup.exists() {
+                fs::copy(&backup, &settings_path)?;
+                fs::remove_file(&backup)?;
+            }
+            anyhow::bail!("Validation failed, reverted: {}", error);
+        }
+
+        Ok(true)
     }
 
     /// Create CLAUDE.md with project-specific guidance
-    fn create_claude_md(&self, claude_dir: &Path) -> Result<()> {
+    /// If file exists, asks for confirmation unless force=true
+    fn create_claude_md(&self, claude_dir: &Path, force: bool) -> Result<bool> {
         let claude_md_path = claude_dir.join("CLAUDE.md");
+
+        // Check if file exists and ask for confirmation
+        if claude_md_path.exists() && !force && !confirm_overwrite(&claude_md_path) {
+            return Ok(false);
+        }
 
         let content = match self.project_type {
             ProjectType::Rust => {
@@ -475,6 +565,41 @@ Use `st --help` to explore more features!
 
         fs::write(claude_md_path, content)?;
 
+        Ok(true)
+    }
+
+    /// Show what settings would be generated without writing
+    pub fn show_suggested(&self) -> Result<()> {
+        println!("📋 Suggested Claude integration for {:?} project:\n", self.project_type);
+
+        // Generate settings
+        let hook_mode = if self.stats.total_files > 1000 {
+            "quantum-semantic"
+        } else if self.stats.total_files > 100 {
+            "quantum"
+        } else {
+            "context"
+        };
+
+        let hooks = match self.project_type {
+            ProjectType::Rust => json!({
+                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
+                "PreToolUse": [{"matcher": "cargo (build|test|run)", "hooks": [{"type": "command", "command": "st -m summary --depth 1 target/"}]}]
+            }),
+            ProjectType::Python => json!({
+                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
+                "PreToolUse": [{"matcher": "pytest|python.*test", "hooks": [{"type": "command", "command": "st -m summary --depth 2 tests/"}]}]
+            }),
+            _ => json!({
+                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}]
+            })
+        };
+
+        let settings = json!({"hooks": hooks});
+        println!("━━━ Add to .claude/settings.json ━━━");
+        println!("{}\n", serde_json::to_string_pretty(&settings)?);
+
+        println!("💡 Or run: st --setup-claude (will ask before overwriting)");
         Ok(())
     }
 }

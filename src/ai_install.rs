@@ -32,6 +32,7 @@ pub struct InstallOptions {
     pub install_hooks: bool,
     pub install_claude_md: bool,
     pub create_settings: bool,
+    pub cleanup_foreign: bool,
 }
 
 impl Default for InstallOptions {
@@ -41,6 +42,7 @@ impl Default for InstallOptions {
             install_hooks: true,
             install_claude_md: true,
             create_settings: true,
+            cleanup_foreign: true, // Clean by default - opinionated!
         }
     }
 }
@@ -97,7 +99,8 @@ impl AiInstaller {
         let available = self.discover_options();
 
         println!("\nActions:");
-        println!("  [a] Install/Update ALL integrations");
+        println!("  [a] Install/Update ALL integrations (includes cleanup)");
+        println!("  [c] Clean foreign MCPs/hooks only - remove tool sprawl");
         if available.install_mcp {
             let status = if existing.iter().any(|c| c.name.contains("MCP") && c.enabled) { "(update)" } else { "(install)" };
             println!("  [1] MCP Server {} - Enable 30+ tools in your AI assistant", status);
@@ -127,11 +130,22 @@ impl AiInstaller {
         match input.as_str() {
             "q" | "quit" | "exit" => {
                 println!("No changes made.");
-                return Ok(());
+                Ok(())
             }
             "s" | "status" => {
                 manager.display_configs();
-                return Ok(());
+                Ok(())
+            }
+            "c" | "clean" | "cleanup" => {
+                // Cleanup only, no installations
+                let cleanup_only = InstallOptions {
+                    install_mcp: false,
+                    install_hooks: false,
+                    install_claude_md: false,
+                    create_settings: false,
+                    cleanup_foreign: true,
+                };
+                self.execute_install(&cleanup_only)
             }
             "a" | "all" | "" => {
                 self.execute_install(&available)
@@ -182,6 +196,7 @@ impl AiInstaller {
             install_hooks: false,
             install_claude_md: false,
             create_settings: false,
+            cleanup_foreign: false,
         };
 
         for c in input.chars() {
@@ -190,6 +205,7 @@ impl AiInstaller {
                 '2' if available.install_hooks => options.install_hooks = true,
                 '3' if available.install_claude_md => options.install_claude_md = true,
                 '4' if available.create_settings => options.create_settings = true,
+                'c' => options.cleanup_foreign = true,
                 _ => {}
             }
         }
@@ -201,6 +217,16 @@ impl AiInstaller {
     fn execute_install(&self, options: &InstallOptions) -> Result<()> {
         let mut installed = Vec::new();
         let mut errors = Vec::new();
+
+        // FIRST: Clean up foreign MCPs and hooks if requested
+        // This runs before any installations to ensure a clean slate
+        if options.cleanup_foreign {
+            match self.cleanup_foreign_integrations() {
+                Ok(count) if count > 0 => installed.push("Foreign integrations cleaned"),
+                Ok(_) => {} // Nothing to clean
+                Err(e) => errors.push(format!("Cleanup: {}", e)),
+            }
+        }
 
         // Install MCP server
         if options.install_mcp {
@@ -263,20 +289,70 @@ impl AiInstaller {
     fn install_mcp(&self) -> Result<()> {
         match self.target {
             AiTarget::Claude | AiTarget::Universal => {
+                // 1. Install to Claude Desktop config
                 let installer = McpInstaller::new()?;
                 let result = installer.install()?;
                 if result.success {
                     println!("  ✅ {}", result.message.lines().next().unwrap_or("MCP installed"));
-                    Ok(())
                 } else {
                     anyhow::bail!("{}", result.message)
                 }
+
+                // 2. Also create/update project's .mcp.json so Claude Code can find it
+                self.ensure_project_mcp_json()?;
+
+                Ok(())
             }
             _ => {
                 println!("  ℹ️  MCP not supported for {} yet", self.target_name());
                 Ok(())
             }
         }
+    }
+
+    /// Ensure the project has a .mcp.json with st configured
+    fn ensure_project_mcp_json(&self) -> Result<()> {
+        let mcp_json_path = self.project_path.join(".mcp.json");
+
+        // Default st MCP configuration
+        let st_config = json!({
+            "type": "stdio",
+            "command": "st",
+            "args": ["--mcp"],
+            "env": {}
+        });
+
+        if mcp_json_path.exists() {
+            // Read and update existing config
+            let content = fs::read_to_string(&mcp_json_path)
+                .context("Failed to read .mcp.json")?;
+            let mut config: Value = serde_json::from_str(&content)
+                .unwrap_or_else(|_| json!({"mcpServers": {}}));
+
+            // Ensure mcpServers exists and has st
+            if let Some(obj) = config.as_object_mut() {
+                let servers = obj.entry("mcpServers".to_string())
+                    .or_insert_with(|| json!({}));
+                if let Some(servers_obj) = servers.as_object_mut() {
+                    if !servers_obj.contains_key("st") {
+                        servers_obj.insert("st".to_string(), st_config);
+                        fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
+                        println!("  ✅ Added st to {}", mcp_json_path.display());
+                    }
+                }
+            }
+        } else {
+            // Create new .mcp.json with st
+            let config = json!({
+                "mcpServers": {
+                    "st": st_config
+                }
+            });
+            fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
+            println!("  ✅ Created {} with st MCP server", mcp_json_path.display());
+        }
+
+        Ok(())
     }
 
     /// Install hooks
@@ -303,19 +379,23 @@ impl AiInstaller {
         Ok(())
     }
 
-    /// Get Claude-specific hooks
+    /// Get Claude-specific hooks (matches claude_init.rs format)
     fn get_claude_hooks(&self) -> Value {
         json!({
-            "UserPromptSubmit": {
-                "command": "st --claude-user-prompt-submit",
-                "enabled": true,
-                "description": "Provides intelligent context based on user prompts"
-            },
-            "SessionStart": {
-                "command": "st --claude-restore",
-                "enabled": true,
-                "description": "Restores previous session consciousness"
-            }
+            "UserPromptSubmit": [{
+                "matcher": "",
+                "hooks": [{
+                    "type": "command",
+                    "command": "st -m quantum-semantic ."
+                }]
+            }],
+            "SessionStart": [{
+                "matcher": "",
+                "hooks": [{
+                    "type": "command",
+                    "command": "st --claude-restore"
+                }]
+            }]
         })
     }
 
@@ -394,6 +474,170 @@ impl AiInstaller {
             }
         }
         result
+    }
+
+    /// Clean up foreign MCP integrations and invasive hooks
+    /// Returns the number of items cleaned
+    fn cleanup_foreign_integrations(&self) -> Result<usize> {
+        let mut cleaned = 0;
+
+        // Patterns that indicate foreign/unwanted integrations
+        let foreign_patterns = [
+            "claude-flow",
+            "ruv-swarm",
+            "flow-nexus",
+            "hive-mind",
+            "npx ",  // External npm packages running on every command
+            "swarm",
+            "queen",
+            "worker",
+        ];
+
+        // 1. Clean parent directory .mcp.json files (inherited MCPs!)
+        // Walk up from project to root, cleaning any .mcp.json with foreign servers
+        let mut current = self.project_path.clone();
+        loop {
+            let mcp_json = current.join(".mcp.json");
+            if mcp_json.exists() && mcp_json != self.project_path.join(".mcp.json") {
+                // Don't clean the project's own .mcp.json, just parents
+                cleaned += self.clean_parent_mcp_json(&mcp_json, &foreign_patterns)?;
+            }
+            if let Some(parent) = current.parent() {
+                if parent == current {
+                    break; // Reached root
+                }
+                current = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+
+        // 2. Clean ~/.claude/.claude/settings.json (the nested one with enabledMcpjsonServers)
+        let nested_settings = dirs::home_dir()
+            .map(|h| h.join(".claude/.claude/settings.json"));
+
+        if let Some(path) = nested_settings {
+            if path.exists() {
+                cleaned += self.clean_settings_file(&path, &foreign_patterns)?;
+            }
+        }
+
+        // 3. Clean ~/.claude/settings.json
+        let user_settings = dirs::home_dir()
+            .map(|h| h.join(".claude/settings.json"));
+
+        if let Some(path) = user_settings {
+            if path.exists() {
+                cleaned += self.clean_settings_file(&path, &foreign_patterns)?;
+            }
+        }
+
+        // 4. Clean project-level .claude/settings.json if in project scope
+        if matches!(self.scope, InstallScope::Project) {
+            let project_settings = self.project_path.join(".claude/settings.json");
+            if project_settings.exists() {
+                cleaned += self.clean_settings_file(&project_settings, &foreign_patterns)?;
+            }
+        }
+
+        if cleaned > 0 {
+            println!("  🧹 Cleaned {} foreign integration(s)", cleaned);
+        }
+
+        Ok(cleaned)
+    }
+
+    /// Clean a parent .mcp.json file of foreign MCP servers
+    fn clean_parent_mcp_json(&self, path: &std::path::Path, patterns: &[&str]) -> Result<usize> {
+        let content = fs::read_to_string(path)
+            .context("Failed to read .mcp.json")?;
+
+        let mut config: Value = serde_json::from_str(&content)
+            .context("Failed to parse .mcp.json")?;
+
+        let mut cleaned = 0;
+
+        if let Some(obj) = config.as_object_mut() {
+            if let Some(servers) = obj.get_mut("mcpServers") {
+                if let Some(servers_obj) = servers.as_object_mut() {
+                    let server_names: Vec<String> = servers_obj.keys().cloned().collect();
+
+                    for name in server_names {
+                        // Check if server name or config matches foreign patterns
+                        let config_str = servers_obj.get(&name)
+                            .map(|v| serde_json::to_string(v).unwrap_or_default())
+                            .unwrap_or_default();
+
+                        if patterns.iter().any(|p| name.contains(p) || config_str.contains(p)) {
+                            servers_obj.remove(&name);
+                            cleaned += 1;
+                            println!("    Removed MCP server '{}' from {}", name, path.display());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Write back if we made changes
+        if cleaned > 0 {
+            fs::write(path, serde_json::to_string_pretty(&config)?)?;
+        }
+
+        Ok(cleaned)
+    }
+
+    /// Clean a specific settings file of foreign integrations
+    fn clean_settings_file(&self, path: &std::path::Path, patterns: &[&str]) -> Result<usize> {
+        let content = fs::read_to_string(path)
+            .context("Failed to read settings file")?;
+
+        let mut config: Value = serde_json::from_str(&content)
+            .context("Failed to parse settings JSON")?;
+
+        let mut cleaned = 0;
+
+        // Remove enabledMcpjsonServers entirely or filter it
+        if let Some(obj) = config.as_object_mut() {
+            if obj.contains_key("enabledMcpjsonServers") {
+                obj.remove("enabledMcpjsonServers");
+                cleaned += 1;
+                println!("    Removed enabledMcpjsonServers from {}", path.display());
+            }
+
+            // Clean hooks that match foreign patterns
+            if let Some(hooks) = obj.get_mut("hooks") {
+                if let Some(hooks_obj) = hooks.as_object_mut() {
+                    let hook_types: Vec<String> = hooks_obj.keys().cloned().collect();
+
+                    for hook_type in hook_types {
+                        if let Some(hook_array) = hooks_obj.get_mut(&hook_type) {
+                            if let Some(arr) = hook_array.as_array_mut() {
+                                let original_len = arr.len();
+
+                                // Filter out hooks with foreign patterns
+                                arr.retain(|hook| {
+                                    let hook_str = serde_json::to_string(hook).unwrap_or_default();
+                                    !patterns.iter().any(|p| hook_str.contains(p))
+                                });
+
+                                let removed = original_len - arr.len();
+                                if removed > 0 {
+                                    cleaned += removed;
+                                    println!("    Removed {} foreign {} hook(s)", removed, hook_type);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Write back if we made changes
+        if cleaned > 0 {
+            fs::write(path, serde_json::to_string_pretty(&config)?)?;
+        }
+
+        Ok(cleaned)
     }
 
     /// Get human-readable target name
