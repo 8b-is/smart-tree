@@ -34,7 +34,7 @@ Whatever brought you here, we're thrilled to have you! 🎉
 
 4. **Try it out**:
    ```bash
-   cargo run -- --help
+   cargo run --bin st -- --help
    ```
 
 5. **Install locally** (recommended for development):

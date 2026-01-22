@@ -47,6 +47,9 @@ pub mod feedback_client;
 // Claude integration initializer - auto-configures optimal .claude directory
 pub mod claude_init;
 
+// AI integration installer - unified setup for all AI platforms
+pub mod ai_install;
+
 // Integration helpers for easier usage in other applications
 pub mod integration;
 

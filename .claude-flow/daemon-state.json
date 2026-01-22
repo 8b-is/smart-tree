@@ -3,12 +3,12 @@
   "startedAt": "2026-01-21T10:34:07.641Z",
   "workers": {
     "map": {
-      "runCount": 100,
-      "successCount": 100,
+      "runCount": 101,
+      "successCount": 101,
       "failureCount": 0,
-      "averageDurationMs": 0.17,
-      "lastRun": "2026-01-22T10:49:15.234Z",
-      "nextRun": "2026-01-22T11:04:15.234Z",
+      "averageDurationMs": 0.16831683168316833,
+      "lastRun": "2026-01-22T11:04:15.313Z",
+      "nextRun": "2026-01-22T11:19:15.313Z",
       "isRunning": false
     },
     "audit": {
@@ -17,34 +17,34 @@
       "failureCount": 105,
       "averageDurationMs": 0,
       "lastRun": "2026-01-22T10:56:22.421Z",
-      "nextRun": "2026-01-22T10:51:22.306Z",
-      "isRunning": false
+      "nextRun": "2026-01-22T11:16:22.499Z",
+      "isRunning": true
     },
     "optimize": {
-      "runCount": 75,
+      "runCount": 76,
       "successCount": 0,
-      "failureCount": 75,
+      "failureCount": 76,
       "averageDurationMs": 0,
-      "lastRun": "2026-01-22T10:43:19.180Z",
-      "nextRun": "2026-01-22T10:58:19.180Z",
+      "lastRun": "2026-01-22T11:10:39.162Z",
+      "nextRun": "2026-01-22T11:13:19.281Z",
       "isRunning": false
     },
     "consolidate": {
-      "runCount": 50,
-      "successCount": 50,
+      "runCount": 51,
+      "successCount": 51,
       "failureCount": 0,
-      "averageDurationMs": 0.3400000000000001,
-      "lastRun": "2026-01-22T10:42:16.161Z",
+      "averageDurationMs": 0.3333333333333334,
+      "lastRun": "2026-01-22T11:10:39.162Z",
       "nextRun": "2026-01-22T11:10:11.182Z",
       "isRunning": false
     },
     "testgaps": {
-      "runCount": 60,
+      "runCount": 61,
       "successCount": 0,
-      "failureCount": 60,
+      "failureCount": 61,
       "averageDurationMs": 0,
-      "lastRun": "2026-01-22T10:42:16.160Z",
-      "nextRun": "2026-01-22T11:02:16.161Z",
+      "lastRun": "2026-01-22T11:07:16.357Z",
+      "nextRun": "2026-01-22T11:27:16.360Z",
       "isRunning": false
     },
     "predict": {
@@ -131,5 +131,5 @@
       }
     ]
   },
-  "savedAt": "2026-01-22T10:56:22.422Z"
+  "savedAt": "2026-01-22T11:10:39.162Z"
 }

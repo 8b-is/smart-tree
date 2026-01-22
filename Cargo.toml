@@ -13,6 +13,7 @@ license = "MIT"
 readme = "README.md"
 keywords = ["tree", "directory", "visualization", "ai", "cli"]
 categories = ["command-line-utilities", "filesystem"]
+default-run = "st"  # Make `cargo run` use st by default
 
 [dependencies]
 

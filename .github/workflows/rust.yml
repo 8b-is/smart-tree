@@ -177,16 +177,16 @@ jobs:
     - name: Test binary execution 🎯
       shell: bash
       run: |
-        cargo run -- --version
-        cargo run -- --help
-        cargo run -- --mode classic --depth 1 .
-        cargo run -- --mode hex --depth 1 .
-        cargo run -- --mode ai --depth 1 .
+        cargo run --bin st -- --version
+        cargo run --bin st -- --help
+        cargo run --bin st -- --mode classic --depth 1 .
+        cargo run --bin st -- --mode hex --depth 1 .
+        cargo run --bin st -- --mode ai --depth 1 .
 
     - name: Test MCP tools listing 🛠️
       if: runner.os != 'Windows'
       run: |
-        cargo run -- --mcp-tools | head -20
+        cargo run --bin st -- --mcp-tools | head -20
 
   security:
     name: Security Audit 🔒

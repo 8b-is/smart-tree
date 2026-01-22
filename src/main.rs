@@ -176,6 +176,19 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Handle unified AI integration installer (-i / --install-ai)
+    if cli.install_ai {
+        use st::ai_install::run_ai_install;
+        let interactive = !cli.non_interactive;
+        match run_ai_install(cli.install_scope, cli.ai_target, interactive) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                eprintln!("❌ AI integration setup failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Handle hooks configuration
     if let Some(action) = &cli.hooks_config {
         // Check if hooks are enabled via feature flags
