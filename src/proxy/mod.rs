@@ -12,9 +12,11 @@ use serde::{Deserialize, Serialize};
 pub mod anthropic;
 pub mod candle;
 pub mod google;
+pub mod grok;
 pub mod memory;
 pub mod openai;
 pub mod openai_compat;
+pub mod openrouter;
 pub mod server;
 
 /// 🤖 Common interface for all LLM providers
@@ -110,6 +112,16 @@ impl Default for LlmProxy {
 
         if std::env::var("GOOGLE_API_KEY").is_ok() {
             proxy.add_provider(Box::new(google::GoogleProvider::default()));
+        }
+
+        // Add Grok provider if XAI_API_KEY or GROK_API_KEY is present
+        if std::env::var("XAI_API_KEY").is_ok() || std::env::var("GROK_API_KEY").is_ok() {
+            proxy.add_provider(Box::new(grok::GrokProvider::default()));
+        }
+
+        // Add OpenRouter provider if OPENROUTER_API_KEY is present (access to 100+ models!)
+        if std::env::var("OPENROUTER_API_KEY").is_ok() {
+            proxy.add_provider(Box::new(openrouter::OpenRouterProvider::default()));
         }
 
         // Always add Candle provider (it will check for feature at runtime/compile time)

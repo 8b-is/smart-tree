@@ -404,6 +404,11 @@ async fn main() -> Result<()> {
         return handle_security_scan(&path).await;
     }
 
+    // Handle code review
+    if cli.code_review || cli.review_local || cli.review_grok || cli.review_openrouter {
+        return handle_code_review(&cli).await;
+    }
+
     if cli.token_stats {
         let path = cli.path.unwrap_or_else(|| ".".to_string());
         return handle_token_stats(&path).await;
@@ -789,7 +794,10 @@ async fn main() -> Result<()> {
         // Safety check: Warn about very large result sets for certain modes
         // Context mode doesn't handle huge datasets well, so warn the user
         if matches!(mode, OutputMode::Context) && nodes.len() > 100_000 {
-            eprintln!("⚠️  Warning: Context mode with {} files may be slow or use significant memory.", nodes.len());
+            eprintln!(
+                "⚠️  Warning: Context mode with {} files may be slow or use significant memory.",
+                nodes.len()
+            );
             eprintln!("   Consider using --max-depth to limit the scan, or switch to --mode summary-ai for better performance.");
             eprintln!("   Proceeding anyway...\n");
         }
@@ -1735,6 +1743,59 @@ async fn handle_security_scan(path: &str) -> Result<()> {
         );
         std::process::exit(1);
     }
+
+    Ok(())
+}
+
+/// Handle code review commands
+async fn handle_code_review(cli: &Cli) -> Result<()> {
+    use st::code_review::{display_review, run_code_review, CodeReviewConfig, ReviewProvider};
+
+    // Determine the provider
+    let provider = if cli.review_local {
+        ReviewProvider::Local
+    } else if cli.review_grok {
+        // Check for API key
+        if std::env::var("XAI_API_KEY").is_err() && std::env::var("GROK_API_KEY").is_err() {
+            eprintln!("❌ Grok review requires XAI_API_KEY or GROK_API_KEY environment variable");
+            eprintln!("   Get your API key at: https://console.x.ai/");
+            std::process::exit(1);
+        }
+        ReviewProvider::Grok
+    } else if cli.review_openrouter {
+        // Check for API key
+        let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
+        if api_key.is_empty() {
+            eprintln!("❌ OpenRouter review requires OPENROUTER_API_KEY environment variable");
+            eprintln!("   Get your API key at: https://openrouter.ai/keys");
+            std::process::exit(1);
+        }
+        ReviewProvider::OpenRouter(cli.review_model.clone())
+    } else {
+        // Default to local if just --code-review is used
+        ReviewProvider::Local
+    };
+
+    // Parse focus areas
+    let focus = cli
+        .review_focus
+        .as_ref()
+        .map(|f| f.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_default();
+
+    // Build config
+    let config = CodeReviewConfig {
+        provider,
+        staged: cli.review_staged,
+        files: Vec::new(), // Could add file filtering via path
+        compare_branch: cli.review_branch.clone(),
+        context_lines: 3,
+        focus,
+    };
+
+    // Run the review
+    let result = run_code_review(config).await?;
+    display_review(&result);
 
     Ok(())
 }

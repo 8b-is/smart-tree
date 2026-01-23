@@ -63,6 +63,9 @@ pub mod tips;
 // LLM Proxy - Unified AI interface
 pub mod proxy;
 
+// Code Review - AI-powered code review with Grok, OpenRouter, and more
+pub mod code_review;
+
 // Daemon and client for always-on AI context service
 pub mod daemon;
 pub mod daemon_client;

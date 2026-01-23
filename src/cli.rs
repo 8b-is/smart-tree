@@ -221,6 +221,41 @@ pub struct Cli {
     pub get_frequency: bool,
 
     // =========================================================================
+    // CODE REVIEW - AI-powered code review
+    // =========================================================================
+    /// Run AI-powered code review on current changes
+    #[arg(long, help_heading = "Code Review")]
+    pub code_review: bool,
+
+    /// Use local diff display only (no AI)
+    #[arg(long, help_heading = "Code Review")]
+    pub review_local: bool,
+
+    /// Use Grok (X.AI) for code review (requires XAI_API_KEY)
+    #[arg(long, help_heading = "Code Review")]
+    pub review_grok: bool,
+
+    /// Use OpenRouter for code review (requires OPENROUTER_API_KEY)
+    #[arg(long, help_heading = "Code Review")]
+    pub review_openrouter: bool,
+
+    /// Model to use for code review (e.g., "anthropic/claude-3-haiku")
+    #[arg(long, value_name = "MODEL", help_heading = "Code Review")]
+    pub review_model: Option<String>,
+
+    /// Review staged changes only
+    #[arg(long, help_heading = "Code Review")]
+    pub review_staged: bool,
+
+    /// Compare against specific branch
+    #[arg(long, value_name = "BRANCH", help_heading = "Code Review")]
+    pub review_branch: Option<String>,
+
+    /// Focus areas for review (e.g., "security,performance")
+    #[arg(long, value_name = "AREAS", help_heading = "Code Review")]
+    pub review_focus: Option<String>,
+
+    // =========================================================================
     // AI INTEGRATION - Unified setup for all AI platforms
     // =========================================================================
     /// Interactive AI integration setup - configures MCP, hooks, plugins for your AI
