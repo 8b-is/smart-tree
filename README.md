@@ -1,6 +1,6 @@
 # 🌳 Smart Tree v6.5.1 - Lightning Fast Directory Visualization with Security Scanner! 🔒
 
-[![Version](https://img.shields.io/badge/version-6.5.1-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-6.5.2-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
