@@ -477,4 +477,23 @@ mod tests {
             ConversationType::MessageArray
         ));
     }
+
+    #[test]
+    fn test_lazy_wave_grid_initialization() {
+        // Test that creating a ConversationMemory doesn't immediately allocate 34GB
+        // This test would fail with the old code that allocated WaveGrid in new()
+        let memory_result = ConversationMemory::new();
+        
+        // Should succeed without OOM
+        assert!(memory_result.is_ok());
+        
+        let memory = memory_result.unwrap();
+        
+        // Wave grid should be None initially (lazy)
+        assert!(memory.wave_grid.is_none());
+        
+        // Listing conversations should work without allocating the grid
+        let _list_result = memory.list_conversations();
+        // Don't fail the test if directory doesn't exist, just verify no crash
+    }
 }
