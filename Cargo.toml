@@ -83,9 +83,12 @@ dashmap = "6.1"
 libc = "0.2"
 fuzzy-matcher = "0.3"  # Used by MCP smart_background_searcher
 
-# PTY support for web dashboard terminal
-portable-pty = { version = "0.8", optional = true }
-open = { version = "5.0", optional = true }  # Open URLs in browser
+# PTY support for web dashboard terminal (always included)
+portable-pty = "0.8"
+open = "5.0"  # Open URLs in browser
+
+# Network CIDR parsing for --allow flag
+ipnet = "2.9"
 
 # Git operations (will become g8t)
 gix = { version = "0.73", default-features = false, features = ["blocking-network-client"] }
@@ -166,11 +169,10 @@ tui = ["ratatui", "crossterm", "syntect", "artem"]
 # Local LLM inference
 candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
 
-# Web dashboard - browser-based terminal + file browser
-web-dashboard = ["portable-pty", "open"]
+# Web dashboard is now always included (no feature flag needed)
 
 # Full features
-full = ["tui", "candle", "web-dashboard"]
+full = ["tui", "candle"]
 
 [profile.release]
 lto = true

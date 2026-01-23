@@ -3,20 +3,98 @@
 use super::{api, assets, websocket, DashboardState, SharedState};
 use anyhow::Result;
 use axum::{
-    http::header,
-    response::{Html, IntoResponse},
+    body::Body,
+    extract::ConnectInfo,
+    http::{header, Request, StatusCode},
+    middleware::Next,
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Router,
 };
-use std::net::SocketAddr;
+use ipnet::IpNet;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Allowed networks for connection filtering
+#[derive(Clone)]
+struct AllowedNetworks {
+    networks: Vec<IpNet>,
+    allow_all: bool,
+}
+
+impl AllowedNetworks {
+    fn new(cidrs: Vec<String>) -> Self {
+        if cidrs.is_empty() {
+            // Default: localhost only
+            return Self {
+                networks: vec![
+                    "127.0.0.0/8".parse().unwrap(),
+                    "::1/128".parse().unwrap(),
+                ],
+                allow_all: false,
+            };
+        }
+
+        let mut networks = Vec::new();
+        let mut allow_all = false;
+
+        for cidr in cidrs {
+            if cidr == "0.0.0.0/0" || cidr == "::/0" || cidr == "any" {
+                allow_all = true;
+                break;
+            }
+            if let Ok(net) = cidr.parse::<IpNet>() {
+                networks.push(net);
+            } else {
+                eprintln!("Warning: Invalid CIDR '{}', ignoring", cidr);
+            }
+        }
+
+        Self { networks, allow_all }
+    }
+
+    fn is_allowed(&self, ip: IpAddr) -> bool {
+        if self.allow_all {
+            return true;
+        }
+        // Always allow localhost
+        if ip.is_loopback() {
+            return true;
+        }
+        self.networks.iter().any(|net| net.contains(&ip))
+    }
+}
+
+/// Middleware to check if client IP is allowed
+async fn check_allowed_network(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let allowed = req
+        .extensions()
+        .get::<AllowedNetworks>()
+        .map(|nets| nets.is_allowed(addr.ip()))
+        .unwrap_or(true);
+
+    if allowed {
+        Ok(next.run(req).await)
+    } else {
+        eprintln!("Rejected connection from {}", addr.ip());
+        Err(StatusCode::FORBIDDEN)
+    }
+}
+
 /// Start the web dashboard server
-pub async fn start_server(port: u16, open_browser: bool) -> Result<()> {
+pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<String>) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let state: SharedState = Arc::new(RwLock::new(DashboardState::new(cwd)));
+
+    let has_explicit_networks = !allow_networks.is_empty();
+    let allowed = AllowedNetworks::new(allow_networks.clone());
+    let bind_all = has_explicit_networks || allowed.allow_all;
 
     let app = Router::new()
         // Static assets
@@ -36,20 +114,44 @@ pub async fn start_server(port: u16, open_browser: bool) -> Result<()> {
         .route("/api/markdown", get(api::render_markdown))
         // WebSocket endpoints
         .route("/ws/terminal", get(websocket::terminal_handler))
+        .layer(axum::Extension(allowed.clone()))
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    // Bind to all interfaces if networks specified, localhost otherwise
+    let bind_addr: IpAddr = if bind_all {
+        [0, 0, 0, 0].into()
+    } else {
+        [127, 0, 0, 1].into()
+    };
+    let addr = SocketAddr::from((bind_addr, port));
 
     println!("\x1b[32m");
-    println!("  ╔══════════════════════════════════════════════╗");
-    println!("  ║     Smart Tree Web Dashboard                 ║");
-    println!("  ╠══════════════════════════════════════════════╣");
-    println!("  ║  http://127.0.0.1:{}                      ║", port);
-    println!("  ║                                              ║");
-    println!("  ║  Terminal: Real PTY with bash/zsh            ║");
-    println!("  ║  Files: Browse and edit                      ║");
-    println!("  ║  Preview: Markdown rendering                 ║");
-    println!("  ╚══════════════════════════════════════════════╝");
+    println!("  ╔══════════════════════════════════════════════════════╗");
+    println!("  ║        Smart Tree Web Dashboard                      ║");
+    println!("  ╠══════════════════════════════════════════════════════╣");
+    if bind_all {
+        println!("  ║  http://0.0.0.0:{}                                ║", port);
+        println!("  ║                                                      ║");
+        println!("  ║  Allowed networks:                                   ║");
+        if allowed.allow_all {
+            println!("  ║    ANY (0.0.0.0/0)                                   ║");
+        } else {
+            for net in &allowed.networks {
+                if !net.addr().is_loopback() {
+                    println!("  ║    {}                                       ║", net);
+                }
+            }
+        }
+    } else {
+        println!("  ║  http://127.0.0.1:{}                              ║", port);
+        println!("  ║                                                      ║");
+        println!("  ║  Localhost only (use --allow for network access)     ║");
+    }
+    println!("  ║                                                      ║");
+    println!("  ║  Terminal: Real PTY with bash/zsh                    ║");
+    println!("  ║  Files: Browse and edit                              ║");
+    println!("  ║  Preview: Markdown rendering                         ║");
+    println!("  ╚══════════════════════════════════════════════════════╝");
     println!("\x1b[0m");
 
     if open_browser {
@@ -60,7 +162,11 @@ pub async fn start_server(port: u16, open_browser: bool) -> Result<()> {
     }
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
@@ -71,10 +177,7 @@ async fn serve_index() -> Html<&'static str> {
 }
 
 async fn serve_css() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/css")],
-        assets::STYLE_CSS,
-    )
+    ([(header::CONTENT_TYPE, "text/css")], assets::STYLE_CSS)
 }
 
 async fn serve_js() -> impl IntoResponse {
@@ -92,10 +195,7 @@ async fn serve_xterm_js() -> impl IntoResponse {
 }
 
 async fn serve_xterm_css() -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "text/css")],
-        assets::XTERM_CSS,
-    )
+    ([(header::CONTENT_TYPE, "text/css")], assets::XTERM_CSS)
 }
 
 async fn serve_xterm_fit_js() -> impl IntoResponse {

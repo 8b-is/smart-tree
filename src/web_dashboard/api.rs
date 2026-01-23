@@ -307,7 +307,7 @@ fn get_file_type(name: &str) -> String {
     .to_string()
 }
 
-fn get_mime_type(path: &PathBuf) -> String {
+fn get_mime_type(path: &std::path::Path) -> String {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -331,7 +331,7 @@ fn get_mime_type(path: &PathBuf) -> String {
     .to_string()
 }
 
-fn is_binary_file(path: &PathBuf) -> bool {
+fn is_binary_file(path: &std::path::Path) -> bool {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())

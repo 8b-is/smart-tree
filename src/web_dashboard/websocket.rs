@@ -31,7 +31,7 @@ async fn handle_terminal(socket: WebSocket, state: SharedState) {
                 message: format!("Failed to spawn shell: {}", e),
             };
             let _ = sender
-                .send(Message::Text(serde_json::to_string(&error_msg).unwrap().into()))
+                .send(Message::Text(serde_json::to_string(&error_msg).unwrap()))
                 .await;
             return;
         }
@@ -84,7 +84,7 @@ async fn handle_terminal(socket: WebSocket, state: SharedState) {
         while let Some(data) = rx.recv().await {
             let msg = TerminalMessage::Output { data };
             if let Ok(json) = serde_json::to_string(&msg) {
-                if sender.send(Message::Text(json.into())).await.is_err() {
+                if sender.send(Message::Text(json)).await.is_err() {
                     break;
                 }
             }

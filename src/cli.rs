@@ -62,7 +62,7 @@ pub struct Cli {
     pub terminal: bool,
 
     /// Launch web dashboard - browser-based terminal + file browser
-    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
+    #[arg(long, help_heading = "Interactive Modes")]
     pub dashboard: bool,
 
     /// Port for web dashboard (default: 8420)
@@ -72,6 +72,11 @@ pub struct Cli {
     /// Open browser automatically when starting dashboard
     #[arg(long, help_heading = "Interactive Modes")]
     pub open_browser: bool,
+
+    /// Allow connections from specific networks (CIDR notation, e.g., 172.30.50.0/24)
+    /// Can be specified multiple times. Default: 127.0.0.1 only
+    #[arg(long = "allow", value_name = "CIDR", help_heading = "Interactive Modes")]
+    pub allow: Vec<String>,
 
     // =========================================================================
     // MCP SERVER (Model Context Protocol)

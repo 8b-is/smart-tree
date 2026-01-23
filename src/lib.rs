@@ -131,8 +131,7 @@ pub mod q8_caster_bridge;
 // VAD with Marine Algorithm - Voice Activity Detection from MEM8
 pub mod vad_marine;
 
-// Web Dashboard - Browser-based terminal + file browser (requires `web-dashboard` feature)
-#[cfg(feature = "web-dashboard")]
+// Web Dashboard - Browser-based terminal + file browser (always included)
 pub mod web_dashboard;
 
 // MEM8 Binary Format - The REAL wave-based .m8 format

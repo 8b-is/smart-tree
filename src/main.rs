@@ -253,7 +253,7 @@ async fn main() -> Result<()> {
 
     if cli.dashboard {
         // Launch the web dashboard - works anywhere, no display needed!
-        return run_web_dashboard(cli.dashboard_port, cli.open_browser).await;
+        return run_web_dashboard(cli.dashboard_port, cli.open_browser, cli.allow.clone()).await;
     }
 
     if cli.daemon {
@@ -1480,16 +1480,8 @@ async fn run_terminal() -> Result<()> {
 }
 
 /// Launch the web dashboard - browser-based terminal + file browser
-#[cfg(feature = "web-dashboard")]
-async fn run_web_dashboard(port: u16, open_browser: bool) -> Result<()> {
-    st::web_dashboard::start_server(port, open_browser).await
-}
-
-#[cfg(not(feature = "web-dashboard"))]
-async fn run_web_dashboard(_port: u16, _open_browser: bool) -> Result<()> {
-    eprintln!("Error: Web dashboard requires the 'web-dashboard' feature.");
-    eprintln!("Rebuild with: cargo build --release --features web-dashboard");
-    Ok(())
+async fn run_web_dashboard(port: u16, open_browser: bool, allow_networks: Vec<String>) -> Result<()> {
+    st::web_dashboard::start_server(port, open_browser, allow_networks).await
 }
 
 /// Run the Smart Tree Daemon - System-wide AI context service
