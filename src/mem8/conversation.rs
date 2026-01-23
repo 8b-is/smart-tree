@@ -16,8 +16,8 @@ use super::wave::{MemoryWave, WaveGrid};
 pub struct ConversationMemory {
     /// Base directory for storing conversations (~/.mem8/conversations/)
     base_path: PathBuf,
-    /// Wave grid for memory storage
-    wave_grid: WaveGrid,
+    /// Wave grid for memory storage (lazy-initialized to avoid 34GB allocation!)
+    wave_grid: Option<WaveGrid>,
     /// Smart structure analyzer
     analyzer: ConversationAnalyzer,
 }
@@ -34,9 +34,16 @@ impl ConversationMemory {
 
         Ok(Self {
             base_path,
-            wave_grid: WaveGrid::new(),
+            wave_grid: None, // Don't allocate 34GB until actually needed!
             analyzer: ConversationAnalyzer::new(),
         })
+    }
+    
+    /// Ensure wave grid is initialized (lazy initialization)
+    fn ensure_wave_grid(&mut self) {
+        if self.wave_grid.is_none() {
+            self.wave_grid = Some(WaveGrid::new());
+        }
     }
 
     /// Intelligently detect and save conversation from JSON
@@ -45,6 +52,9 @@ impl ConversationMemory {
         json_data: &Value,
         source: Option<&str>,
     ) -> Result<PathBuf> {
+        // Ensure wave grid is initialized before using it
+        self.ensure_wave_grid();
+        
         // Analyze the JSON structure to understand conversation format
         let analysis = self.analyzer.analyze(json_data)?;
 
@@ -66,11 +76,13 @@ impl ConversationMemory {
         let waves = self.conversation_to_waves(&analysis)?;
 
         // Store in wave grid
-        for (idx, wave) in waves.iter().enumerate() {
-            let x = (idx % 256) as u8;
-            let y = ((idx / 256) % 256) as u8;
-            let z = (idx / (256 * 256)) as u16;
-            self.wave_grid.store(x, y, z, wave.clone());
+        if let Some(ref mut grid) = self.wave_grid {
+            for (idx, wave) in waves.iter().enumerate() {
+                let x = (idx % 256) as u8;
+                let y = ((idx / 256) % 256) as u8;
+                let z = (idx / (256 * 256)) as u16;
+                grid.store(x, y, z, wave.clone());
+            }
         }
 
         // For now, save directly as JSON until M8Writer is properly implemented
@@ -464,5 +476,24 @@ mod tests {
             analysis.conversation_type,
             ConversationType::MessageArray
         ));
+    }
+
+    #[test]
+    fn test_lazy_wave_grid_initialization() {
+        // Test that creating a ConversationMemory doesn't immediately allocate 34GB
+        // This test would fail with the old code that allocated WaveGrid in new()
+        let memory_result = ConversationMemory::new();
+        
+        // Should succeed without OOM
+        assert!(memory_result.is_ok());
+        
+        let memory = memory_result.unwrap();
+        
+        // Wave grid should be None initially (lazy)
+        assert!(memory.wave_grid.is_none());
+        
+        // Listing conversations should work without allocating the grid
+        let _list_result = memory.list_conversations();
+        // Don't fail the test if directory doesn't exist, just verify no crash
     }
 }
