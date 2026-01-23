@@ -133,7 +133,12 @@ impl ConversationMemory {
 
     /// List all saved conversations
     pub fn list_conversations(&self) -> Result<Vec<ConversationSummary>> {
+        
         let mut summaries = Vec::new();
+    
+        if !self.base_path.exists() {
+            return Ok(summaries);
+        }
 
         for entry in fs::read_dir(&self.base_path)? {
             let entry = entry?;
