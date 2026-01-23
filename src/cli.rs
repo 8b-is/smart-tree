@@ -61,9 +61,17 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub terminal: bool,
 
-    /// Launch egui Dashboard - real-time visualization
+    /// Launch web dashboard - browser-based terminal + file browser
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub dashboard: bool,
+
+    /// Port for web dashboard (default: 8420)
+    #[arg(long, default_value = "8420", help_heading = "Interactive Modes")]
+    pub dashboard_port: u16,
+
+    /// Open browser automatically when starting dashboard
+    #[arg(long, help_heading = "Interactive Modes")]
+    pub open_browser: bool,
 
     // =========================================================================
     // MCP SERVER (Model Context Protocol)

@@ -83,6 +83,10 @@ dashmap = "6.1"
 libc = "0.2"
 fuzzy-matcher = "0.3"  # Used by MCP smart_background_searcher
 
+# PTY support for web dashboard terminal
+portable-pty = { version = "0.8", optional = true }
+open = { version = "5.0", optional = true }  # Open URLs in browser
+
 # Git operations (will become g8t)
 gix = { version = "0.73", default-features = false, features = ["blocking-network-client"] }
 
@@ -116,11 +120,8 @@ crossterm = { version = "0.27", optional = true }
 syntect = { version = "5.0", optional = true }
 artem = { version = "2.0", optional = true }
 
-# Dashboard GUI - disabled by default (daemon-only)
-egui = { version = "0.32", optional = true }
-eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow"], optional = true }
-egui_extras = { version = "0.32", optional = true }
-winit = { version = "0.30", optional = true }
+# Dashboard GUI - REMOVED (replaced by web-dashboard)
+# egui, eframe, egui_extras, winit removed - use web-dashboard instead
 
 # Local LLM support (candle)
 candle-core = { version = "0.8", optional = true }
@@ -159,14 +160,17 @@ mem8 = []
 # Terminal UI mode (spicy)
 tui = ["ratatui", "crossterm", "syntect", "artem"]
 
-# Dashboard GUI (for daemon mode with human-in-the-loop)
-dashboard = ["egui", "eframe", "egui_extras", "winit"]
+# Dashboard GUI - REMOVED (use web-dashboard instead)
+# dashboard = ["egui", "eframe", "egui_extras", "winit"]
 
 # Local LLM inference
 candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
 
+# Web dashboard - browser-based terminal + file browser
+web-dashboard = ["portable-pty", "open"]
+
 # Full features
-full = ["tui", "dashboard", "candle"]
+full = ["tui", "candle", "web-dashboard"]
 
 [profile.release]
 lto = true

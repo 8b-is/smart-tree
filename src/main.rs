@@ -252,21 +252,8 @@ async fn main() -> Result<()> {
     }
 
     if cli.dashboard {
-        // Require a local display for the egui dashboard.
-        let has_display = std::env::var_os("DISPLAY").is_some()
-            || std::env::var_os("WAYLAND_DISPLAY").is_some()
-            || std::env::var_os("WAYLAND_SOCKET").is_some();
-
-        if !has_display {
-            eprintln!(
-                "⚠️  The graphical dashboard needs a local display and isn't available in this remote session yet."
-            );
-            eprintln!("💡 Tip: run st locally or wait for the upcoming browser dashboard mode.");
-            return Ok(());
-        }
-
-        // Launch the egui dashboard!
-        return run_dashboard().await;
+        // Launch the web dashboard - works anywhere, no display needed!
+        return run_web_dashboard(cli.dashboard_port, cli.open_browser).await;
     }
 
     if cli.daemon {
@@ -1147,16 +1134,9 @@ fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result
         tips.push(tip);
     }
 
-    // Show a maximum of 3 tips to avoid overwhelming the user
-    let selected_tips: Vec<_> = tips.choose_multiple(&mut rng, 3.min(tips.len())).collect();
-
-    if !selected_tips.is_empty() {
-        eprintln!(); // Add some space
-        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
-        for tip in selected_tips {
-            eprintln!("\x1b[2m{tip}\x1b[0m");
-        }
-        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
+    // Show just 1 tip to keep output clean
+    if let Some(tip) = tips.choose(&mut rng) {
+        eprintln!("\x1b[2m{tip}\x1b[0m");
     }
 
     Ok(())
@@ -1499,59 +1479,16 @@ async fn run_terminal() -> Result<()> {
     Ok(())
 }
 
-/// Launch the egui dashboard with real-time visualization (requires `dashboard` feature)
-/// NOTE: Dashboard should only be run via daemon mode with human-in-the-loop
-#[cfg(feature = "dashboard")]
-async fn run_dashboard() -> Result<()> {
-    use st::dashboard_egui::{
-        default_status_feed_url, start_dashboard, DashboardState, McpActivity, MemoryStats,
-    };
-    use std::sync::{Arc, RwLock};
-
-    println!("🚀 Launching Smart Tree Dashboard...");
-    println!("🎨 Prepare for visual awesomeness!");
-    println!("🤖 Real-time AI collaboration enabled!");
-    println!("👤 Human-in-the-loop mode active - you're in control!");
-
-    // Create initial dashboard state with some default data
-    let state = Arc::new(DashboardState {
-        command_history: Arc::new(RwLock::new(std::collections::VecDeque::new())),
-        active_displays: Arc::new(RwLock::new(vec![])),
-        voice_active: Arc::new(RwLock::new(false)),
-        voice_salience: Arc::new(RwLock::new(0.0)),
-        memory_usage: Arc::new(RwLock::new(MemoryStats {
-            total_memories: 0,
-            token_efficiency: 0.0,
-            backwards_position: 0,
-            importance_scores: vec![],
-        })),
-        found_chats: Arc::new(RwLock::new(vec![])),
-        cast_status: Arc::new(RwLock::new(st::dashboard_egui::CastStatus {
-            casting_to: None,
-            content_type: "None".to_string(),
-            latency_ms: 0.0,
-        })),
-        ideas_buffer: Arc::new(RwLock::new(vec![])),
-
-        // MCP Integration fields - "Let's collaborate in real-time!" 🚀
-        mcp_activity: Arc::new(RwLock::new(McpActivity::default())),
-        file_access_log: Arc::new(RwLock::new(vec![])),
-        active_tool: Arc::new(RwLock::new(None)),
-        user_hints: Arc::new(RwLock::new(std::collections::VecDeque::new())),
-        ws_connections: Arc::new(RwLock::new(0)),
-        repo_status_feed: Arc::new(RwLock::new(vec![])),
-        status_feed_endpoint: Arc::new(RwLock::new(default_status_feed_url())),
-    });
-
-    // Launch the dashboard (this blocks until window is closed)
-    start_dashboard(state).await
+/// Launch the web dashboard - browser-based terminal + file browser
+#[cfg(feature = "web-dashboard")]
+async fn run_web_dashboard(port: u16, open_browser: bool) -> Result<()> {
+    st::web_dashboard::start_server(port, open_browser).await
 }
 
-#[cfg(not(feature = "dashboard"))]
-async fn run_dashboard() -> Result<()> {
-    eprintln!("Error: Dashboard mode requires the 'dashboard' feature.");
-    eprintln!("Rebuild with: cargo build --release --features dashboard");
-    eprintln!("NOTE: Dashboard is designed for daemon mode with human-in-the-loop control.");
+#[cfg(not(feature = "web-dashboard"))]
+async fn run_web_dashboard(_port: u16, _open_browser: bool) -> Result<()> {
+    eprintln!("Error: Web dashboard requires the 'web-dashboard' feature.");
+    eprintln!("Rebuild with: cargo build --release --features web-dashboard");
     Ok(())
 }
 
@@ -1623,18 +1560,14 @@ async fn handle_claude_restore() -> Result<()> {
         Ok(is_relevant) => {
             if is_relevant {
                 println!("{}", manager.get_summary());
-                println!("\n{}", manager.get_context_reminder());
-                println!(
-                    "\n💡 TIP: Run `st --claude-save` before ending session to preserve context."
-                );
+                println!("{}", manager.get_context_reminder());
+                println!("TIP: Run `st --claude-save` before ending session to preserve context.");
             } else {
-                println!("🧠 Fresh session - previous context not applicable.");
-                println!("   Run `st -m context .` for project overview.");
+                println!("TIP: Run `st -m context .` for project overview.");
             }
         }
         Err(_) => {
-            println!("🧠 Fresh session - no previous context found.");
-            println!("   Run `st -m context .` for project overview.");
+            println!("TIP: Run `st -m context .` for project overview.");
         }
     }
 

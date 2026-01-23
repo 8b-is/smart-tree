@@ -38,7 +38,7 @@ impl ConversationMemory {
             analyzer: ConversationAnalyzer::new(),
         })
     }
-    
+
     /// Ensure wave grid is initialized (lazy initialization)
     fn ensure_wave_grid(&mut self) {
         if self.wave_grid.is_none() {
@@ -54,7 +54,7 @@ impl ConversationMemory {
     ) -> Result<PathBuf> {
         // Ensure wave grid is initialized before using it
         self.ensure_wave_grid();
-        
+
         // Analyze the JSON structure to understand conversation format
         let analysis = self.analyzer.analyze(json_data)?;
 
@@ -133,9 +133,8 @@ impl ConversationMemory {
 
     /// List all saved conversations
     pub fn list_conversations(&self) -> Result<Vec<ConversationSummary>> {
-        
         let mut summaries = Vec::new();
-    
+
         if !self.base_path.exists() {
             return Ok(summaries);
         }
@@ -488,15 +487,15 @@ mod tests {
         // Test that creating a ConversationMemory doesn't immediately allocate 34GB
         // This test would fail with the old code that allocated WaveGrid in new()
         let memory_result = ConversationMemory::new();
-        
+
         // Should succeed without OOM
         assert!(memory_result.is_ok());
-        
+
         let memory = memory_result.unwrap();
-        
+
         // Wave grid should be None initially (lazy)
         assert!(memory.wave_grid.is_none());
-        
+
         // Listing conversations should work without allocating the grid
         let _list_result = memory.list_conversations();
         // Don't fail the test if directory doesn't exist, just verify no crash

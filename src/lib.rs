@@ -131,13 +131,9 @@ pub mod q8_caster_bridge;
 // VAD with Marine Algorithm - Voice Activity Detection from MEM8
 pub mod vad_marine;
 
-// egui Dashboard - Real-time collaborative dashboard (requires `dashboard` feature)
-#[cfg(feature = "dashboard")]
-pub mod dashboard_egui;
-
-// Dashboard WebSocket Server - Real-time bidirectional communication for telepathic pair programming!
-#[cfg(feature = "dashboard")]
-pub mod dashboard_ws;
+// Web Dashboard - Browser-based terminal + file browser (requires `web-dashboard` feature)
+#[cfg(feature = "web-dashboard")]
+pub mod web_dashboard;
 
 // MEM8 Binary Format - The REAL wave-based .m8 format
 pub mod mem8_binary;
@@ -148,9 +144,9 @@ pub mod m8_format_converter;
 // Quantum Wave Signatures - Full 32-bit consciousness patterns (not horse apples!)
 pub mod quantum_wave_signature;
 
-// Wave Compass - Omni's consciousness drift visualizer with resonance detection! (requires `dashboard` feature)
-#[cfg(feature = "dashboard")]
-pub mod wave_compass;
+// Wave Compass - moved to web_dashboard
+// #[cfg(feature = "dashboard")]
+// pub mod wave_compass;
 
 // Claude Hook Handler - Comprehensive context provider for conversations
 pub mod claude_hook;

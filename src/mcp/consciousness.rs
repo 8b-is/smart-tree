@@ -396,59 +396,20 @@ impl ConsciousnessManager {
             );
         }
 
-        // Count meaningful file operations (exclude test data)
-        let meaningful_ops = self
-            .state
-            .file_history
-            .iter()
-            .filter(|op| {
-                op.summary != "test"
-                    && !op
-                        .file_path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().starts_with("file"))
-                        .unwrap_or(false)
-            })
-            .count();
-
-        let active_todos = self
-            .state
-            .todos
-            .iter()
-            .filter(|t| t.status != "completed")
-            .count();
-
-        let mut summary = String::from("🧠 Session Context\n");
-        summary.push_str(&"─".repeat(40));
-        summary.push('\n');
+        let mut parts = Vec::new();
 
         // Only show project info if meaningful
         if self.state.project_context.project_name != "unknown"
             && !self.state.project_context.project_name.is_empty()
         {
-            summary.push_str(&format!(
-                "📁 Project: {} ({})\n",
+            parts.push(format!(
+                "📁 {} ({})",
                 self.state.project_context.project_name, self.state.project_context.project_type
             ));
         }
 
         if !self.state.project_context.current_focus.is_empty() {
-            summary.push_str(&format!(
-                "🎯 Focus: {}\n",
-                self.state.project_context.current_focus
-            ));
-        }
-
-        if meaningful_ops > 0 {
-            summary.push_str(&format!("📝 Recent operations: {}\n", meaningful_ops));
-        }
-
-        if !self.state.insights.is_empty() {
-            summary.push_str(&format!("💡 Insights: {}\n", self.state.insights.len()));
-        }
-
-        if active_todos > 0 {
-            summary.push_str(&format!("✅ Active todos: {}\n", active_todos));
+            parts.push(format!("🎯 {}", self.state.project_context.current_focus));
         }
 
         // Age indicator
@@ -458,92 +419,40 @@ impl ConsciousnessManager {
         } else {
             format!("{}m ago", age.num_minutes())
         };
-        summary.push_str(&format!("⏱️  Last saved: {}", age_str));
+        parts.push(format!("⏱️ {}", age_str));
 
-        summary
+        parts.join(" | ")
     }
 
     /// Get context reminder for Claude (filters out test data)
     pub fn get_context_reminder(&self) -> String {
-        let mut reminder = String::new();
-
         // Only show context if we have meaningful content
         let relevance = self.check_relevance();
         if !relevance.is_relevant {
-            return format!(
-                "🧠 Previous context unavailable: {}\n   Run `st -m context .` for fresh overview.",
-                relevance.reason
-            );
+            return String::new();
         }
 
-        reminder.push_str("📚 Previous session context:\n");
+        let mut parts = Vec::new();
 
         if !self.state.project_context.current_focus.is_empty() {
-            reminder.push_str(&format!(
-                "  Working on: {}\n",
-                self.state.project_context.current_focus
-            ));
+            parts.push(format!("Working on: {}", self.state.project_context.current_focus));
         }
 
-        if !self.state.insights.is_empty() {
-            reminder.push_str("\n💡 Key insights:\n");
-            for insight in self.state.insights.iter().rev().take(3) {
-                reminder.push_str(&format!("  - {}: {}\n", insight.category, insight.content));
-            }
-        }
-
-        let active_todos: Vec<_> = self
+        let active_todos = self
             .state
             .todos
             .iter()
             .filter(|t| t.status != "completed")
-            .collect();
-        if !active_todos.is_empty() {
-            reminder.push_str("\n📝 Active todos:\n");
-            for todo in active_todos.iter().take(5) {
-                reminder.push_str(&format!("  - [{}] {}\n", todo.status, todo.content));
-            }
+            .count();
+        if active_todos > 0 {
+            parts.push(format!("{} pending todos", active_todos));
         }
 
-        // Filter out test data from file history
-        let meaningful_ops: Vec<_> = self
-            .state
-            .file_history
-            .iter()
-            .filter(|op| {
-                op.summary != "test"
-                    && !op
-                        .file_path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().starts_with("file"))
-                        .unwrap_or(false)
-            })
-            .rev()
-            .take(5)
-            .collect();
-
-        if !meaningful_ops.is_empty() {
-            reminder.push_str("\n📁 Recent files:\n");
-            for op in meaningful_ops {
-                reminder.push_str(&format!(
-                    "  - {} {}: {}\n",
-                    op.operation,
-                    op.file_path.display(),
-                    op.summary
-                ));
-            }
+        if parts.is_empty() {
+            return String::new();
         }
 
-        // Show age indicator
-        let age = Utc::now().signed_duration_since(self.state.last_saved);
-        let age_str = if age.num_hours() > 0 {
-            format!("{}h ago", age.num_hours())
-        } else {
-            format!("{}m ago", age.num_minutes())
-        };
-        reminder.push_str(&format!("\n⏱️  Last saved: {}", age_str));
-
-        reminder
+        parts.join(" | ")
     }
 }
 

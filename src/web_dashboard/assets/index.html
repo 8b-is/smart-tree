@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Tree Dashboard</title>
+    <link rel="stylesheet" href="/xterm.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">&#x1F332;</span>
+                <span class="logo-text">Smart Tree</span>
+            </div>
+            <div class="header-status">
+                <span class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- File Browser Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-title">Files</span>
+                    <button class="btn-icon" id="refreshFiles" title="Refresh">&#x21BB;</button>
+                </div>
+                <div class="file-tree" id="fileTree">
+                    <!-- File tree will be populated by JS -->
+                </div>
+            </aside>
+
+            <!-- Resize Handle -->
+            <div class="resize-handle" id="resizeHandle"></div>
+
+            <!-- Main Panel -->
+            <main class="main-panel">
+                <!-- Terminal -->
+                <div class="terminal-container" id="terminalContainer">
+                    <div class="panel-header">
+                        <span class="panel-title">Terminal</span>
+                        <div class="terminal-actions">
+                            <button class="btn-icon" id="newTerminal" title="New Terminal">+</button>
+                        </div>
+                    </div>
+                    <div class="terminal-wrapper" id="terminal"></div>
+                </div>
+
+                <!-- Preview Pane (collapsible) -->
+                <div class="preview-container" id="previewContainer">
+                    <div class="panel-header">
+                        <span class="panel-title" id="previewTitle">Preview</span>
+                        <button class="btn-icon" id="closePreview" title="Close">&#x2715;</button>
+                    </div>
+                    <div class="preview-content" id="previewContent">
+                        <div class="preview-placeholder">
+                            Select a file to preview
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="cwdDisplay"></span>
+            </div>
+            <div class="status-right">
+                <span class="status-item" id="connectionCount">0 connections</span>
+                <span class="status-item">v<span id="versionDisplay">-</span></span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/xterm.min.js"></script>
+    <script src="/xterm-addon-fit.min.js"></script>
+    <script src="/marked.min.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>
