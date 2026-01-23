@@ -11,6 +11,12 @@ use std::io::Write;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Maximum number of nodes to process before switching to summary mode
+const MAX_NODES_FOR_ITERATION: usize = 100_000;
+
+/// Maximum number of nodes to check when searching for key/recent files
+const MAX_NODES_TO_CHECK: usize = 10_000;
+
 pub struct ContextFormatter {
     show_git: bool,
     show_memories: bool,
@@ -116,7 +122,6 @@ impl Formatter for ContextFormatter {
         root_path: &Path,
     ) -> Result<()> {
         // Safety check: Warn if there are too many nodes to process efficiently
-        const MAX_NODES_FOR_ITERATION: usize = 100_000;
         let node_count = nodes.len();
         let should_skip_iteration = node_count > MAX_NODES_FOR_ITERATION;
         
@@ -220,7 +225,7 @@ fn find_key_files(nodes: &[FileNode]) -> Vec<String> {
 
     let mut found = Vec::new();
     // Limit iteration for very large directories
-    let max_to_check = nodes.len().min(10_000);
+    let max_to_check = nodes.len().min(MAX_NODES_TO_CHECK);
     
     for node in nodes.iter().take(max_to_check) {
         if let Some(file_name) = node.path.file_name() {
@@ -244,7 +249,7 @@ fn find_recent_files(nodes: &[FileNode], seconds: u64) -> Vec<String> {
 
     let mut recent = Vec::new();
     // Limit iteration for very large directories
-    let max_to_check = nodes.len().min(10_000);
+    let max_to_check = nodes.len().min(MAX_NODES_TO_CHECK);
     
     for node in nodes.iter().take(max_to_check) {
         if !node.is_dir {
