@@ -968,6 +968,16 @@ const MALICIOUS_DIRECTORIES: &[&str] = &[
     ".ruv-swarm",
 ];
 
+/// Subdirectories within ~/.claude/ that malicious packages may install into
+const CLAUDE_SUBDIRS_TO_SCAN: &[&str] = &[
+    "skills",
+    "commands",
+    "hooks",
+    "plugins",
+    "extensions",
+    "tools",
+];
+
 /// Finding from the security cleanup scan
 #[derive(Debug)]
 pub struct CleanupFinding {
@@ -980,6 +990,7 @@ pub struct CleanupFinding {
 #[derive(Debug, Clone, Copy)]
 pub enum CleanupCategory {
     HiddenDirectory,
+    ClaudeSubdirectory,
     McpServer,
     Hook,
     EnabledServer,
@@ -989,6 +1000,7 @@ impl std::fmt::Display for CleanupCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CleanupCategory::HiddenDirectory => write!(f, "Hidden Directory"),
+            CleanupCategory::ClaudeSubdirectory => write!(f, "Claude Subdirectory"),
             CleanupCategory::McpServer => write!(f, "MCP Server"),
             CleanupCategory::Hook => write!(f, "Hook"),
             CleanupCategory::EnabledServer => write!(f, "Enabled Server"),
@@ -1019,13 +1031,16 @@ impl SecurityCleanup {
         // Phase 1: Scan for hidden malware directories
         self.scan_hidden_directories()?;
 
-        // Phase 2: Scan MCP configurations
+        // Phase 2: Scan ~/.claude/ subdirectories (skills, commands, hooks, etc.)
+        self.scan_claude_subdirectories()?;
+
+        // Phase 3: Scan MCP configurations
         self.scan_mcp_configurations()?;
 
-        // Phase 3: Scan Claude settings for malicious hooks
+        // Phase 4: Scan Claude settings for malicious hooks
         self.scan_claude_settings()?;
 
-        // Phase 4: Scan parent directory .mcp.json files
+        // Phase 5: Scan parent directory .mcp.json files
         self.scan_parent_mcp_files()?;
 
         // Display findings
@@ -1084,6 +1099,85 @@ impl SecurityCleanup {
                         "HIGH".to_string()
                     },
                 });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scan ~/.claude/ subdirectories for malicious content
+    fn scan_claude_subdirectories(&mut self) -> Result<()> {
+        let home = match dirs::home_dir() {
+            Some(h) => h,
+            None => return Ok(()),
+        };
+
+        let claude_dir = home.join(".claude");
+        if !claude_dir.exists() {
+            return Ok(());
+        }
+
+        for subdir in CLAUDE_SUBDIRS_TO_SCAN {
+            let subdir_path = claude_dir.join(subdir);
+            if subdir_path.exists() && subdir_path.is_dir() {
+                // Check contents for malicious patterns
+                if let Ok(entries) = fs::read_dir(&subdir_path) {
+                    for entry in entries.flatten() {
+                        let entry_name = entry.file_name().to_string_lossy().to_string();
+                        let entry_path = entry.path();
+
+                        // Check if entry name matches malicious packages
+                        for malicious in MALICIOUS_PACKAGES {
+                            if entry_name.contains(malicious) {
+                                self.findings.push(CleanupFinding {
+                                    category: CleanupCategory::ClaudeSubdirectory,
+                                    path: entry_path.clone(),
+                                    description: format!(
+                                        "~/.claude/{}/{} - matches malicious package '{}'",
+                                        subdir, entry_name, malicious
+                                    ),
+                                    risk_level: "CRITICAL".to_string(),
+                                });
+                            }
+                        }
+
+                        // Also check file contents for malicious patterns if it's a file
+                        if entry_path.is_file() {
+                            if let Ok(content) = fs::read_to_string(&entry_path) {
+                                for malicious in MALICIOUS_PACKAGES {
+                                    if content.contains(malicious) {
+                                        self.findings.push(CleanupFinding {
+                                            category: CleanupCategory::ClaudeSubdirectory,
+                                            path: entry_path.clone(),
+                                            description: format!(
+                                                "~/.claude/{}/{} - references malicious package '{}'",
+                                                subdir, entry_name, malicious
+                                            ),
+                                            risk_level: "CRITICAL".to_string(),
+                                        });
+                                        break; // Only report once per file
+                                    }
+                                }
+
+                                // Check for IPFS/IPNS patterns
+                                if content.contains("ipfs.io")
+                                    || content.contains("dweb.link")
+                                    || content.contains("k51qzi5uqu5")
+                                {
+                                    self.findings.push(CleanupFinding {
+                                        category: CleanupCategory::ClaudeSubdirectory,
+                                        path: entry_path.clone(),
+                                        description: format!(
+                                            "~/.claude/{}/{} - contains IPFS/IPNS references (potential C2)",
+                                            subdir, entry_name
+                                        ),
+                                        risk_level: "CRITICAL".to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -1300,6 +1394,7 @@ impl SecurityCleanup {
         for finding in &self.findings {
             let cat = match finding.category {
                 CleanupCategory::HiddenDirectory => "Hidden Directories",
+                CleanupCategory::ClaudeSubdirectory => "Claude Subdirectories (~/.claude/)",
                 CleanupCategory::McpServer => "MCP Server Configurations",
                 CleanupCategory::Hook => "Claude Hooks",
                 CleanupCategory::EnabledServer => "Enabled Server Inheritance",
@@ -1334,10 +1429,11 @@ impl SecurityCleanup {
 
         if !self.yes {
             println!("The following actions will be taken:");
-            println!("  1. Remove hidden malware directories");
-            println!("  2. Remove malicious MCP server entries from configs");
-            println!("  3. Remove malicious hooks from settings");
-            println!("  4. Remove enabledMcpjsonServers entries\n");
+            println!("  1. Remove hidden malware directories (~/.claude-flow/, etc.)");
+            println!("  2. Remove malicious files from ~/.claude/ subdirectories");
+            println!("  3. Remove malicious MCP server entries from configs");
+            println!("  4. Remove malicious hooks from settings");
+            println!("  5. Remove enabledMcpjsonServers entries\n");
 
             print!("Proceed with cleanup? [y/N] ");
             io::stdout().flush()?;
@@ -1377,6 +1473,27 @@ impl SecurityCleanup {
                         ));
                     }
                 },
+                CleanupCategory::ClaudeSubdirectory => {
+                    // Remove the file or directory
+                    let result = if finding.path.is_dir() {
+                        fs::remove_dir_all(&finding.path)
+                    } else {
+                        fs::remove_file(&finding.path)
+                    };
+                    match result {
+                        Ok(_) => {
+                            println!("  ✅ Removed: {}", finding.path.display());
+                            cleaned += 1;
+                        }
+                        Err(e) => {
+                            errors.push(format!(
+                                "Failed to remove {}: {}",
+                                finding.path.display(),
+                                e
+                            ));
+                        }
+                    }
+                }
                 CleanupCategory::McpServer => {
                     match self.remove_mcp_server(&finding.path, &finding.description) {
                         Ok(true) => {
