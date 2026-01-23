@@ -786,6 +786,14 @@ async fn main() -> Result<()> {
             (file_nodes, stats, scan_path.clone())
         };
 
+        // Safety check: Warn about very large result sets for certain modes
+        // Context mode doesn't handle huge datasets well, so warn the user
+        if matches!(mode, OutputMode::Context) && nodes.len() > 100_000 {
+            eprintln!("⚠️  Warning: Context mode with {} files may be slow or use significant memory.", nodes.len());
+            eprintln!("   Consider using --max-depth to limit the scan, or switch to --mode summary-ai for better performance.");
+            eprintln!("   Proceeding anyway...\n");
+        }
+
         // Create the appropriate formatter based on the selected mode.
         let formatter: Box<dyn Formatter> = match mode {
             OutputMode::Auto => {

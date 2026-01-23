@@ -115,6 +115,19 @@ impl Formatter for ContextFormatter {
         stats: &TreeStats,
         root_path: &Path,
     ) -> Result<()> {
+        // Safety check: Warn if there are too many nodes to process efficiently
+        const MAX_NODES_FOR_ITERATION: usize = 100_000;
+        let node_count = nodes.len();
+        let should_skip_iteration = node_count > MAX_NODES_FOR_ITERATION;
+        
+        if should_skip_iteration {
+            eprintln!(
+                "⚠️  Warning: Large directory ({} files). Context mode will use summary data only.",
+                node_count
+            );
+            eprintln!("   Consider using --max-depth to limit the scan, or use --mode summary-ai instead.");
+        }
+
         writeln!(writer, "=== Smart Tree Context ===")?;
         writeln!(writer)?;
 
@@ -137,42 +150,48 @@ impl Formatter for ContextFormatter {
             stats.total_files, stats.total_dirs, stats.total_size
         )?;
 
-        // Count files by extension
-        let mut ext_counts = std::collections::HashMap::new();
-        for node in nodes {
-            if !node.is_dir {
-                if let Some(ext) = node.path.extension() {
-                    let ext_str = ext.to_string_lossy().to_string();
-                    *ext_counts.entry(ext_str).or_insert(0) += 1;
+        // Count files by extension - but only if node count is reasonable
+        if !should_skip_iteration {
+            let mut ext_counts = std::collections::HashMap::new();
+            for node in nodes {
+                if !node.is_dir {
+                    if let Some(ext) = node.path.extension() {
+                        let ext_str = ext.to_string_lossy().to_string();
+                        *ext_counts.entry(ext_str).or_insert(0) += 1;
+                    }
                 }
             }
-        }
 
-        let mut exts: Vec<_> = ext_counts.iter().collect();
-        exts.sort_by(|a, b| b.1.cmp(a.1));
+            let mut exts: Vec<_> = ext_counts.iter().collect();
+            exts.sort_by(|a, b| b.1.cmp(a.1));
 
-        let ext_str: Vec<_> = exts
-            .iter()
-            .take(10)
-            .map(|(ext, count)| format!("{}:{}", ext, count))
-            .collect();
-        if !ext_str.is_empty() {
-            writeln!(writer, "EXT:{}", ext_str.join(","))?;
-        }
-
-        // Find and show key files
-        let key_files = find_key_files(nodes);
-        if !key_files.is_empty() {
-            writeln!(writer, "KEY:{}", key_files.join(","))?;
-        }
-
-        // Recent changes
-        let recent = find_recent_files(nodes, 86400); // Last 24 hours
-        if !recent.is_empty() {
-            writeln!(writer, "\n⏰ Recent changes:")?;
-            for file in recent.iter().take(5) {
-                writeln!(writer, "  • {}", file)?;
+            let ext_str: Vec<_> = exts
+                .iter()
+                .take(10)
+                .map(|(ext, count)| format!("{}:{}", ext, count))
+                .collect();
+            if !ext_str.is_empty() {
+                writeln!(writer, "EXT:{}", ext_str.join(","))?;
             }
+
+            // Find and show key files
+            let key_files = find_key_files(nodes);
+            if !key_files.is_empty() {
+                writeln!(writer, "KEY:{}", key_files.join(","))?;
+            }
+
+            // Recent changes
+            let recent = find_recent_files(nodes, 86400); // Last 24 hours
+            if !recent.is_empty() {
+                writeln!(writer, "\n⏰ Recent changes:")?;
+                for file in recent.iter().take(5) {
+                    writeln!(writer, "  • {}", file)?;
+                }
+            }
+        } else {
+            // For very large directories, just note that detailed analysis is skipped
+            writeln!(writer, "\n⚠️  Detailed file analysis skipped due to large directory size")?;
+            writeln!(writer, "   Total files: {}, Total dirs: {}", stats.total_files, stats.total_dirs)?;
         }
 
         // Memory context
@@ -200,7 +219,10 @@ fn find_key_files(nodes: &[FileNode]) -> Vec<String> {
     ];
 
     let mut found = Vec::new();
-    for node in nodes {
+    // Limit iteration for very large directories
+    let max_to_check = nodes.len().min(10_000);
+    
+    for node in nodes.iter().take(max_to_check) {
         if let Some(file_name) = node.path.file_name() {
             let name = file_name.to_string_lossy();
             if important.contains(&name.as_ref()) && !found.contains(&name.to_string()) {
@@ -221,7 +243,10 @@ fn find_recent_files(nodes: &[FileNode], seconds: u64) -> Vec<String> {
         .as_secs();
 
     let mut recent = Vec::new();
-    for node in nodes {
+    // Limit iteration for very large directories
+    let max_to_check = nodes.len().min(10_000);
+    
+    for node in nodes.iter().take(max_to_check) {
         if !node.is_dir {
             if let Ok(duration) = node.modified.duration_since(UNIX_EPOCH) {
                 let file_time = duration.as_secs();
