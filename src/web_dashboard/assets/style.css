@@ -22,7 +22,8 @@
     --header-height: 40px;
     --status-height: 24px;
     --panel-header-height: 28px;
-    --preview-width: 400px;
+    --tab-height: 32px;
+    --terminal-height: 300px;
 }
 
 * {
@@ -73,6 +74,22 @@ body {
     font-weight: bold;
     letter-spacing: 1px;
     text-shadow: var(--glow);
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Hide mobile menu on desktop */
+.mobile-menu-btn {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-btn {
+        display: flex;
+    }
 }
 
 .connection-status {
@@ -231,7 +248,7 @@ body {
     margin-left: 8px;
 }
 
-/* Resize Handle */
+/* Resize Handles */
 .resize-handle {
     width: 4px;
     background: var(--border);
@@ -244,7 +261,36 @@ body {
     background: var(--accent);
 }
 
-/* Main Panel - Horizontal split for terminal + preview */
+.terminal-resize-handle {
+    height: 4px;
+    background: var(--border);
+    cursor: row-resize;
+    transition: background 0.2s;
+    flex-shrink: 0;
+    display: none;
+}
+
+.terminal-resize-handle:hover {
+    background: var(--accent);
+}
+
+.preview-resize-handle {
+    width: 4px;
+    background: var(--border);
+    cursor: col-resize;
+    flex-shrink: 0;
+    display: none;
+}
+
+.preview-resize-handle.visible {
+    display: block;
+}
+
+.preview-resize-handle:hover {
+    background: var(--accent);
+}
+
+/* Main Panel - Flexible layout */
 .main-panel {
     flex: 1;
     display: flex;
@@ -253,13 +299,243 @@ body {
     min-width: 0;
 }
 
+/* Bottom layout mode */
+.dashboard.layout-bottom .main-panel {
+    flex-direction: column;
+}
+
+.dashboard.layout-bottom .terminal-resize-handle {
+    display: block;
+}
+
+.dashboard.layout-bottom .terminal-container {
+    height: var(--terminal-height);
+    min-height: 100px;
+    max-height: 80vh;
+    flex: none;
+}
+
+.dashboard.layout-bottom .preview-container {
+    /* In bottom layout, preview goes above terminal */
+    order: -1;
+}
+
+.dashboard.layout-bottom .preview-resize-handle {
+    /* In bottom layout, resize handle is horizontal */
+    width: 100%;
+    height: 4px;
+    cursor: row-resize;
+    order: -1;
+}
+
 /* Terminal Container */
 .terminal-container {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 300px;
+    min-height: 100px;
     overflow: hidden;
+    background: var(--bg-primary);
+}
+
+/* Terminal Tabs */
+.terminal-tabs {
+    display: flex;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.terminal-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    height: var(--tab-height);
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--fg-dim);
+    transition: all 0.1s;
+    white-space: nowrap;
+}
+
+.terminal-tab:hover {
+    background: var(--bg-hover);
+    color: var(--fg-secondary);
+}
+
+.terminal-tab.active {
+    background: var(--bg-primary);
+    color: var(--fg-primary);
+    border-bottom: 2px solid var(--accent);
+}
+
+.terminal-tab .tab-title {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-tab .tab-close {
+    opacity: 0;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 10px;
+    transition: opacity 0.1s;
+}
+
+.terminal-tab:hover .tab-close {
+    opacity: 0.5;
+}
+
+.terminal-tab .tab-close:hover {
+    opacity: 1;
+    background: var(--error);
+    color: white;
+}
+
+.terminal-actions {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 8px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+/* Quick Action Buttons */
+.quick-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+}
+
+.btn-quick {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--fg-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-quick:hover {
+    background: var(--bg-hover);
+    color: var(--fg-primary);
+    border-color: var(--accent-dim);
+    box-shadow: var(--glow);
+}
+
+.btn-quick:active {
+    transform: scale(0.95);
+}
+
+.btn-quick-icon {
+    font-size: 14px;
+}
+
+.btn-quick-label {
+    font-weight: 500;
+}
+
+/* Highlight Claude buttons */
+.btn-quick#btnClaudeContinue:hover,
+.btn-quick#btnClaudeNew:hover {
+    border-color: var(--accent);
+    box-shadow: var(--glow-accent);
+}
+
+@media (max-width: 768px) {
+    .quick-actions {
+        margin-left: 8px;
+        padding-left: 8px;
+        flex-wrap: wrap;
+    }
+
+    .btn-quick {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-height: 36px;
+    }
+
+    .btn-quick-label {
+        display: none;
+    }
+
+    .btn-quick-icon {
+        font-size: 18px;
+    }
+}
+
+.terminals-wrapper {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.terminal-instance {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+    padding: 4px;
+}
+
+.terminal-instance.active {
+    display: block;
+}
+
+/* CRT Scanline Effect (subtle) */
+.terminal-instance::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(0, 0, 0, 0.03) 2px,
+        rgba(0, 0, 0, 0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Preview Container */
+.preview-container {
+    width: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+    overflow: hidden;
+    transition: width 0.2s ease;
+    background: var(--bg-secondary);
+}
+
+.preview-container.visible {
+    width: 400px;
+    min-width: 200px;
+    max-width: 60vw;
 }
 
 .panel-header {
@@ -280,55 +556,10 @@ body {
     color: var(--fg-secondary);
 }
 
-.terminal-wrapper {
-    flex: 1;
-    padding: 4px;
-    background: var(--bg-primary);
-    position: relative;
-    overflow: hidden;
-}
-
-/* CRT Scanline Effect (subtle) */
-.terminal-wrapper::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: repeating-linear-gradient(
-        0deg,
-        transparent 0px,
-        transparent 2px,
-        rgba(0, 0, 0, 0.03) 2px,
-        rgba(0, 0, 0, 0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* Preview Container - Now a side panel */
-.preview-container {
-    width: 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    border-left: 1px solid var(--border);
-    overflow: hidden;
-    transition: width 0.2s ease;
-}
-
-.preview-container.visible {
-    width: var(--preview-width);
-    min-width: 300px;
-    max-width: 50vw;
-}
-
 .preview-content {
     flex: 1;
     overflow: auto;
     padding: 16px;
-    background: var(--bg-secondary);
 }
 
 .preview-placeholder {
@@ -433,7 +664,7 @@ body {
 }
 
 .git-branch::before {
-    content: '⎇ ';
+    content: '\2387 ';
     opacity: 0.7;
 }
 
@@ -497,20 +728,20 @@ body {
 }
 
 /* File Type Icons */
-.icon-folder::before { content: '📁'; }
-.icon-folder-open::before { content: '📂'; }
-.icon-rust::before { content: '🦀'; }
-.icon-python::before { content: '🐍'; }
-.icon-javascript::before { content: '📜'; }
-.icon-typescript::before { content: '📘'; }
-.icon-markdown::before { content: '📝'; }
+.icon-folder::before { content: '\1F4C1'; }
+.icon-folder-open::before { content: '\1F4C2'; }
+.icon-rust::before { content: '\1F980'; }
+.icon-python::before { content: '\1F40D'; }
+.icon-javascript::before { content: '\1F4DC'; }
+.icon-typescript::before { content: '\1F4D8'; }
+.icon-markdown::before { content: '\1F4DD'; }
 .icon-json::before { content: '{}'; font-size: 10px; }
-.icon-html::before { content: '🌐'; }
-.icon-css::before { content: '🎨'; }
-.icon-shell::before { content: '💻'; }
-.icon-file::before { content: '📄'; }
-.icon-lock::before { content: '🔒'; }
-.icon-config::before { content: '⚙️'; }
+.icon-html::before { content: '\1F310'; }
+.icon-css::before { content: '\1F3A8'; }
+.icon-shell::before { content: '\1F4BB'; }
+.icon-file::before { content: '\1F4C4'; }
+.icon-lock::before { content: '\1F512'; }
+.icon-config::before { content: '\2699\FE0F'; }
 
 /* Glow effects on hover */
 .file-item:hover .file-icon {
@@ -532,14 +763,197 @@ body {
     animation: select-glow 0.3s ease-out;
 }
 
-/* Preview resize handle */
-.preview-resize-handle {
-    width: 4px;
-    background: var(--border);
-    cursor: col-resize;
-    flex-shrink: 0;
+/* =================================
+   MOBILE & TOUCH SUPPORT
+   ================================= */
+
+/* Touch-friendly resize handles */
+@media (pointer: coarse) {
+    .resize-handle,
+    .terminal-resize-handle,
+    .preview-resize-handle {
+        width: 12px;
+        height: 12px;
+    }
+
+    .terminal-resize-handle {
+        height: 12px;
+    }
 }
 
-.preview-resize-handle:hover {
-    background: var(--accent);
+/* Mobile breakpoint */
+@media (max-width: 768px) {
+    :root {
+        --sidebar-width: 100%;
+        --header-height: 48px;
+        --tab-height: 40px;
+        --panel-header-height: 36px;
+    }
+
+    .header {
+        padding: 0 8px;
+    }
+
+    .logo-text {
+        font-size: 14px;
+    }
+
+    /* Mobile: Sidebar becomes overlay */
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: var(--header-height);
+        bottom: var(--status-height);
+        width: 80vw;
+        max-width: 300px;
+        z-index: 100;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+    }
+
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    .sidebar.collapsed {
+        transform: translateX(-100%);
+    }
+
+    .resize-handle {
+        display: none;
+    }
+
+    /* Mobile menu button */
+    .mobile-menu-btn {
+        display: flex;
+        font-size: 20px;
+        padding: 8px 12px;
+    }
+
+    /* Larger touch targets */
+    .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 18px;
+    }
+
+    .file-item {
+        padding: 10px 12px;
+        min-height: 44px;
+    }
+
+    .terminal-tab {
+        padding: 0 16px;
+        min-width: 100px;
+    }
+
+    .terminal-tab .tab-close {
+        opacity: 1;
+        padding: 8px;
+    }
+
+    /* Bottom layout by default on mobile */
+    .dashboard {
+        --terminal-height: 40vh;
+    }
+
+    .dashboard .main-panel {
+        flex-direction: column;
+    }
+
+    .dashboard .terminal-resize-handle {
+        display: block;
+        height: 16px;
+    }
+
+    .dashboard .terminal-container {
+        height: var(--terminal-height);
+        min-height: 150px;
+        flex: none;
+    }
+
+    .dashboard .editor-area {
+        flex: 1;
+    }
+
+    /* Preview takes full width on mobile */
+    .preview-container.visible {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: var(--header-height);
+        bottom: var(--status-height);
+        width: 100%;
+        max-width: 100%;
+        z-index: 90;
+    }
+
+    /* Status bar adjustments */
+    .status-bar {
+        padding: 0 8px;
+    }
+
+    .keyboard-hint {
+        display: none;
+    }
+}
+
+/* Overlay backdrop for mobile */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    right: 0;
+    bottom: var(--status-height);
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+}
+
+.sidebar-backdrop.visible {
+    display: block;
+}
+
+/* Voice button */
+.btn-voice {
+    background: none;
+    border: none;
+    color: var(--fg-dim);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 16px;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+.btn-voice:hover {
+    background: var(--bg-hover);
+    color: var(--fg-primary);
+}
+
+.btn-voice.speaking {
+    color: var(--accent);
+    animation: pulse 1s infinite;
+}
+
+/* Touch feedback */
+@media (pointer: coarse) {
+    .btn-icon:active,
+    .file-item:active,
+    .terminal-tab:active {
+        background: var(--accent-dim);
+        transform: scale(0.98);
+    }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .status-bar {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .header {
+        padding-top: env(safe-area-inset-top);
+    }
 }

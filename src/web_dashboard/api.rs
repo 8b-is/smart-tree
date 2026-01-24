@@ -66,9 +66,9 @@ pub async fn health(State(state): State<SharedState>) -> Json<HealthResponse> {
 }
 
 /// Get current git branch by reading .git/HEAD
-fn get_git_branch(cwd: &PathBuf) -> Option<String> {
+fn get_git_branch(cwd: &std::path::Path) -> Option<String> {
     // Walk up to find .git directory
-    let mut current = cwd.clone();
+    let mut current = cwd.to_path_buf();
     loop {
         let git_dir = current.join(".git");
         if git_dir.exists() {

@@ -2,21 +2,26 @@
 
 class Dashboard {
     constructor() {
-        this.terminal = null;
-        this.fitAddon = null;
-        this.ws = null;
+        this.terminals = [];
+        this.activeTerminalId = null;
+        this.terminalCounter = 0;
         this.currentPath = null;
         this.selectedFile = null;
         this.sidebarWidth = 250;
+        this.previewWidth = 400;
+        this.terminalHeight = 300;
+        this.layout = 'side'; // 'side' or 'bottom'
 
         this.init();
     }
 
     async init() {
-        this.initTerminal();
-        this.initWebSocket();
+        this.initLayout();
+        this.initMobile();
+        this.initVoice();
+        this.createTerminal(); // Create first terminal
         this.initFileBrowser();
-        this.initResizer();
+        this.initResizers();
         this.initEventListeners();
         this.initKeyboardShortcuts();
         await this.loadHealth();
@@ -25,9 +30,242 @@ class Dashboard {
         setInterval(() => this.loadHealth(), 30000);
     }
 
-    // Terminal Setup
-    initTerminal() {
-        this.terminal = new Terminal({
+    // Mobile Support
+    initMobile() {
+        this.isMobile = window.innerWidth <= 768;
+
+        const menuBtn = document.getElementById('mobileMenuBtn');
+        const backdrop = document.getElementById('sidebarBackdrop');
+        const sidebar = document.getElementById('sidebar');
+
+        menuBtn.addEventListener('click', () => this.toggleMobileSidebar());
+        backdrop.addEventListener('click', () => this.closeMobileSidebar());
+
+        // Force bottom layout on mobile
+        if (this.isMobile) {
+            this.setLayout('bottom');
+        }
+
+        // Handle orientation change
+        window.addEventListener('resize', () => {
+            const wasMobile = this.isMobile;
+            this.isMobile = window.innerWidth <= 768;
+
+            if (this.isMobile && !wasMobile) {
+                this.setLayout('bottom');
+                this.closeMobileSidebar();
+            }
+        });
+    }
+
+    toggleMobileSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebarBackdrop');
+
+        if (sidebar.classList.contains('mobile-open')) {
+            this.closeMobileSidebar();
+        } else {
+            sidebar.classList.add('mobile-open');
+            sidebar.classList.remove('collapsed');
+            backdrop.classList.add('visible');
+        }
+    }
+
+    closeMobileSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebarBackdrop');
+
+        sidebar.classList.remove('mobile-open');
+        backdrop.classList.remove('visible');
+    }
+
+    // Voice Support (Text-to-Speech)
+    initVoice() {
+        this.voiceEnabled = false;
+        this.speechSynth = window.speechSynthesis;
+        this.voiceBtn = document.getElementById('voiceBtn');
+
+        if (!this.speechSynth) {
+            this.voiceBtn.style.display = 'none';
+            return;
+        }
+
+        this.voiceBtn.addEventListener('click', () => this.toggleVoice());
+
+        // Load saved preference
+        this.voiceEnabled = localStorage.getItem('st-voice') === 'true';
+        this.updateVoiceButton();
+    }
+
+    toggleVoice() {
+        this.voiceEnabled = !this.voiceEnabled;
+        localStorage.setItem('st-voice', this.voiceEnabled);
+        this.updateVoiceButton();
+
+        if (this.voiceEnabled) {
+            this.speak('Voice output enabled');
+        } else {
+            this.speechSynth.cancel();
+        }
+    }
+
+    updateVoiceButton() {
+        if (this.voiceEnabled) {
+            this.voiceBtn.classList.add('speaking');
+            this.voiceBtn.title = 'Voice output ON (click to disable)';
+        } else {
+            this.voiceBtn.classList.remove('speaking');
+            this.voiceBtn.title = 'Voice output OFF (click to enable)';
+        }
+    }
+
+    speak(text) {
+        if (!this.voiceEnabled || !this.speechSynth) return;
+
+        // Cancel any ongoing speech
+        this.speechSynth.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 0.8;
+
+        // Try to use a nice voice
+        const voices = this.speechSynth.getVoices();
+        const preferredVoice = voices.find(v =>
+            v.name.includes('Google') || v.name.includes('Samantha') || v.lang.startsWith('en')
+        );
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+
+        this.speechSynth.speak(utterance);
+    }
+
+    // Voice output buffer and processing
+    processVoiceOutput(text) {
+        if (!this.voiceEnabled) return;
+
+        // Initialize buffer if needed
+        if (!this.voiceBuffer) {
+            this.voiceBuffer = '';
+            this.voiceTimeout = null;
+            this.lastSpokenTime = 0;
+        }
+
+        // Clean ANSI codes
+        const cleaned = text
+            .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // Remove ANSI escape sequences
+            .replace(/\x1b\[\?[0-9;]*[a-zA-Z]/g, '') // Remove cursor codes
+            .replace(/\x07/g, '') // Remove bell
+            .replace(/[\x00-\x1f]/g, (c) => c === '\n' || c === '\r' ? c : ''); // Keep newlines
+
+        this.voiceBuffer += cleaned;
+
+        // Debounce - wait for pause in output
+        if (this.voiceTimeout) {
+            clearTimeout(this.voiceTimeout);
+        }
+
+        this.voiceTimeout = setTimeout(() => {
+            this.speakBuffer();
+        }, 800); // Wait 800ms after last output
+    }
+
+    speakBuffer() {
+        if (!this.voiceBuffer || !this.voiceEnabled) return;
+
+        // Clean up the buffer
+        let text = this.voiceBuffer
+            .replace(/\r\n|\r|\n/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // Skip prompts and short outputs
+        const skipPatterns = [
+            /^\$\s*$/,           // Empty prompt
+            /^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+/,  // SSH-style prompts
+            /^[~\/][^\s]*\$\s*$/, // Path prompts
+            /^\s*$/,             // Whitespace only
+        ];
+
+        if (skipPatterns.some(p => p.test(text))) {
+            this.voiceBuffer = '';
+            return;
+        }
+
+        // Only speak substantial content
+        if (text.length > 15 && text.length < 2000) {
+            // Rate limit - don't speak too frequently
+            const now = Date.now();
+            if (now - this.lastSpokenTime > 2000) {
+                // Truncate very long text
+                if (text.length > 500) {
+                    text = text.substring(0, 500) + '...';
+                }
+                this.speak(text);
+                this.lastSpokenTime = now;
+            }
+        }
+
+        this.voiceBuffer = '';
+    }
+
+    // Speak terminal output (direct call)
+    speakTerminalOutput(text) {
+        if (!this.voiceEnabled) return;
+
+        // Extract meaningful content (skip escape codes, prompts)
+        const cleaned = text
+            .replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI codes
+            .replace(/\r\n|\r|\n/g, ' ')
+            .trim();
+
+        if (cleaned.length > 10 && cleaned.length < 500) {
+            this.speak(cleaned);
+        }
+    }
+
+    // Layout Management
+    initLayout() {
+        // Load saved layout preference
+        const savedLayout = localStorage.getItem('st-layout') || 'side';
+        this.setLayout(savedLayout);
+
+        document.getElementById('toggleLayout').addEventListener('click', () => {
+            this.toggleLayout();
+        });
+    }
+
+    setLayout(layout) {
+        this.layout = layout;
+        const dashboard = document.getElementById('dashboard');
+
+        if (layout === 'bottom') {
+            dashboard.classList.add('layout-bottom');
+        } else {
+            dashboard.classList.remove('layout-bottom');
+        }
+
+        localStorage.setItem('st-layout', layout);
+
+        // Refit all terminals
+        setTimeout(() => {
+            this.terminals.forEach(t => t.fitAddon.fit());
+        }, 100);
+    }
+
+    toggleLayout() {
+        this.setLayout(this.layout === 'side' ? 'bottom' : 'side');
+    }
+
+    // Terminal Management
+    createTerminal() {
+        const id = ++this.terminalCounter;
+        const name = `Terminal ${id}`;
+
+        // Create terminal instance
+        const terminal = new Terminal({
             cursorBlink: true,
             cursorStyle: 'block',
             fontSize: 14,
@@ -59,57 +297,70 @@ class Dashboard {
             scrollback: 10000
         });
 
-        this.fitAddon = new FitAddon.FitAddon();
-        this.terminal.loadAddon(this.fitAddon);
+        const fitAddon = new FitAddon.FitAddon();
+        terminal.loadAddon(fitAddon);
 
-        const container = document.getElementById('terminal');
-        this.terminal.open(container);
-        this.fitAddon.fit();
+        // Create container
+        const container = document.createElement('div');
+        container.className = 'terminal-instance';
+        container.id = `terminal-${id}`;
+        document.getElementById('terminalsWrapper').appendChild(container);
 
-        // Handle resize
-        window.addEventListener('resize', () => this.fitAddon.fit());
+        terminal.open(container);
 
-        // Terminal input
-        this.terminal.onData(data => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ type: 'input', data }));
+        // Create tab
+        const tab = document.createElement('div');
+        tab.className = 'terminal-tab';
+        tab.dataset.id = id;
+        tab.innerHTML = `
+            <span class="tab-title">${name}</span>
+            <span class="tab-close" title="Close">&times;</span>
+        `;
+        document.getElementById('terminalTabs').appendChild(tab);
+
+        // Tab click handlers
+        tab.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('tab-close')) {
+                this.activateTerminal(id);
             }
         });
 
-        // Terminal resize
-        this.terminal.onResize(({ cols, rows }) => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
-            }
+        tab.querySelector('.tab-close').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.closeTerminal(id);
         });
-    }
 
-    // WebSocket Connection
-    initWebSocket() {
+        // WebSocket connection
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/terminal`;
+        const ws = new WebSocket(wsUrl);
 
-        this.ws = new WebSocket(wsUrl);
-
-        this.ws.onopen = () => {
+        ws.onopen = () => {
             this.updateConnectionStatus(true);
-            // Send initial size
-            const { cols, rows } = this.terminal;
-            this.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+            const { cols, rows } = terminal;
+            ws.send(JSON.stringify({ type: 'resize', cols, rows }));
         };
 
-        this.ws.onmessage = (event) => {
+        ws.onmessage = (event) => {
             try {
                 const msg = JSON.parse(event.data);
                 switch (msg.type) {
                     case 'output':
-                        this.terminal.write(msg.data);
+                        terminal.write(msg.data);
+                        // Voice output for significant content
+                        this.processVoiceOutput(msg.data);
                         break;
                     case 'exit':
-                        this.terminal.write(`\r\n[Process exited with code ${msg.code}]\r\n`);
+                        terminal.write(`\r\n[Process exited with code ${msg.code}]\r\n`);
+                        if (this.voiceEnabled) {
+                            this.speak(`Process exited with code ${msg.code}`);
+                        }
                         break;
                     case 'error':
-                        this.terminal.write(`\r\n\x1b[31m[Error: ${msg.message}]\x1b[0m\r\n`);
+                        terminal.write(`\r\n\x1b[31m[Error: ${msg.message}]\x1b[0m\r\n`);
+                        if (this.voiceEnabled) {
+                            this.speak(`Error: ${msg.message}`);
+                        }
                         break;
                 }
             } catch (e) {
@@ -117,15 +368,91 @@ class Dashboard {
             }
         };
 
-        this.ws.onclose = () => {
+        ws.onclose = () => {
             this.updateConnectionStatus(false);
-            this.terminal.write('\r\n\x1b[33m[Disconnected - Reconnecting...]\x1b[0m\r\n');
-            setTimeout(() => this.initWebSocket(), 2000);
+            terminal.write('\r\n\x1b[33m[Disconnected]\x1b[0m\r\n');
         };
 
-        this.ws.onerror = (error) => {
+        ws.onerror = (error) => {
             console.error('WebSocket error:', error);
         };
+
+        // Terminal input
+        terminal.onData(data => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'input', data }));
+            }
+        });
+
+        // Terminal resize
+        terminal.onResize(({ cols, rows }) => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+            }
+        });
+
+        // Store terminal info
+        const terminalInfo = { id, name, terminal, fitAddon, ws, tab, container };
+        this.terminals.push(terminalInfo);
+
+        // Activate this terminal
+        this.activateTerminal(id);
+
+        // Fit after a short delay
+        setTimeout(() => fitAddon.fit(), 50);
+
+        return terminalInfo;
+    }
+
+    activateTerminal(id) {
+        // Deactivate all
+        this.terminals.forEach(t => {
+            t.tab.classList.remove('active');
+            t.container.classList.remove('active');
+        });
+
+        // Activate selected
+        const terminalInfo = this.terminals.find(t => t.id === id);
+        if (terminalInfo) {
+            terminalInfo.tab.classList.add('active');
+            terminalInfo.container.classList.add('active');
+            this.activeTerminalId = id;
+            terminalInfo.terminal.focus();
+            terminalInfo.fitAddon.fit();
+        }
+    }
+
+    closeTerminal(id) {
+        const index = this.terminals.findIndex(t => t.id === id);
+        if (index === -1) return;
+
+        const terminalInfo = this.terminals[index];
+
+        // Close WebSocket
+        if (terminalInfo.ws) {
+            terminalInfo.ws.close();
+        }
+
+        // Remove DOM elements
+        terminalInfo.tab.remove();
+        terminalInfo.container.remove();
+
+        // Remove from array
+        this.terminals.splice(index, 1);
+
+        // If this was active, activate another
+        if (this.activeTerminalId === id && this.terminals.length > 0) {
+            this.activateTerminal(this.terminals[0].id);
+        }
+
+        // If no terminals left, create a new one
+        if (this.terminals.length === 0) {
+            this.createTerminal();
+        }
+    }
+
+    getActiveTerminal() {
+        return this.terminals.find(t => t.id === this.activeTerminalId);
     }
 
     updateConnectionStatus(connected) {
@@ -156,7 +483,8 @@ class Dashboard {
             if (e.key === 'Escape') {
                 searchInput.value = '';
                 this.filterFiles('');
-                this.terminal.focus();
+                const active = this.getActiveTerminal();
+                if (active) active.terminal.focus();
             }
         });
     }
@@ -230,7 +558,7 @@ class Dashboard {
             item.appendChild(size);
         }
 
-        item.addEventListener('click', () => this.handleFileClick(file));
+        item.addEventListener('click', (e) => this.handleFileClick(file, e));
         item.addEventListener('dblclick', () => this.handleFileDoubleClick(file));
 
         return item;
@@ -270,14 +598,14 @@ class Dashboard {
         return parts.join('/') || '.';
     }
 
-    async handleFileClick(file) {
+    handleFileClick(file, e) {
         // Update selection
         document.querySelectorAll('.file-item.selected').forEach(el => el.classList.remove('selected'));
-        event.currentTarget.classList.add('selected');
+        e.currentTarget.classList.add('selected');
         this.selectedFile = file;
 
         if (!file.is_dir) {
-            await this.previewFile(file);
+            this.previewFile(file);
         }
     }
 
@@ -285,7 +613,6 @@ class Dashboard {
         if (file.is_dir) {
             this.loadFiles(file.path);
         } else {
-            // Could open in editor
             this.previewFile(file);
         }
     }
@@ -297,6 +624,7 @@ class Dashboard {
 
         title.textContent = file.name;
         container.classList.add('visible');
+        this.showPreviewHandle(true);
 
         try {
             const response = await fetch(`/api/file?path=${encodeURIComponent(file.path)}`);
@@ -313,8 +641,10 @@ class Dashboard {
             content.innerHTML = `<div class="preview-placeholder">Failed to load file</div>`;
         }
 
-        // Resize terminal to fit
-        setTimeout(() => this.fitAddon.fit(), 100);
+        // Resize terminals to fit
+        setTimeout(() => {
+            this.terminals.forEach(t => t.fitAddon.fit());
+        }, 100);
     }
 
     escapeHtml(text) {
@@ -323,51 +653,315 @@ class Dashboard {
         return div.innerHTML;
     }
 
-    // Sidebar Resizer
-    initResizer() {
+    // Resizers
+    initResizers() {
+        // Sidebar resizer
+        this.initSidebarResizer();
+
+        // Terminal resizer (for bottom layout)
+        this.initTerminalResizer();
+
+        // Preview resizer
+        this.initPreviewResizer();
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            this.terminals.forEach(t => t.fitAddon.fit());
+        });
+    }
+
+    initSidebarResizer() {
         const handle = document.getElementById('resizeHandle');
         const sidebar = document.getElementById('sidebar');
         let isResizing = false;
 
-        handle.addEventListener('mousedown', (e) => {
+        const startResize = () => {
             isResizing = true;
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
-        });
+        };
 
-        document.addEventListener('mousemove', (e) => {
+        const doResize = (clientX) => {
             if (!isResizing) return;
-
-            const newWidth = e.clientX;
+            const newWidth = clientX;
             if (newWidth >= 150 && newWidth <= 400) {
                 sidebar.style.width = newWidth + 'px';
                 this.sidebarWidth = newWidth;
             }
-        });
+        };
 
-        document.addEventListener('mouseup', () => {
+        const endResize = () => {
             if (isResizing) {
                 isResizing = false;
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
-                this.fitAddon.fit();
+                this.terminals.forEach(t => t.fitAddon.fit());
             }
+        };
+
+        // Mouse events
+        handle.addEventListener('mousedown', startResize);
+        document.addEventListener('mousemove', (e) => doResize(e.clientX));
+        document.addEventListener('mouseup', endResize);
+
+        // Touch events
+        handle.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startResize();
         });
+        document.addEventListener('touchmove', (e) => {
+            if (isResizing) doResize(e.touches[0].clientX);
+        });
+        document.addEventListener('touchend', endResize);
+    }
+
+    initTerminalResizer() {
+        const handle = document.getElementById('terminalResizeHandle');
+        const terminalContainer = document.getElementById('terminalContainer');
+        let isResizing = false;
+        let startY = 0;
+        let startHeight = 0;
+
+        const startResize = (clientY) => {
+            isResizing = true;
+            startY = clientY;
+            startHeight = terminalContainer.offsetHeight;
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+        };
+
+        const doResize = (clientY) => {
+            if (!isResizing) return;
+            // Terminal at bottom, drag up = taller
+            const delta = startY - clientY;
+            const newHeight = Math.max(100, Math.min(startHeight + delta, window.innerHeight * 0.8));
+            terminalContainer.style.height = newHeight + 'px';
+            document.documentElement.style.setProperty('--terminal-height', newHeight + 'px');
+            this.terminalHeight = newHeight;
+        };
+
+        const endResize = () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                this.terminals.forEach(t => t.fitAddon.fit());
+            }
+        };
+
+        // Mouse events
+        handle.addEventListener('mousedown', (e) => startResize(e.clientY));
+        document.addEventListener('mousemove', (e) => doResize(e.clientY));
+        document.addEventListener('mouseup', endResize);
+
+        // Touch events
+        handle.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startResize(e.touches[0].clientY);
+        });
+        document.addEventListener('touchmove', (e) => {
+            if (isResizing) doResize(e.touches[0].clientY);
+        });
+        document.addEventListener('touchend', endResize);
+    }
+
+    initPreviewResizer() {
+        const handle = document.getElementById('previewResizeHandle');
+        const preview = document.getElementById('previewContainer');
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        const startResize = (clientX) => {
+            isResizing = true;
+            startX = clientX;
+            startWidth = preview.offsetWidth;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        };
+
+        const doResize = (clientX) => {
+            if (!isResizing) return;
+            // Handle is on LEFT of preview, preview is on RIGHT
+            // Drag left (negative delta) = preview gets wider
+            // Drag right (positive delta) = preview gets smaller
+            const delta = clientX - startX;
+            const newWidth = Math.max(200, Math.min(startWidth - delta, window.innerWidth * 0.6));
+            preview.style.width = newWidth + 'px';
+            this.previewWidth = newWidth;
+        };
+
+        const endResize = () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                this.terminals.forEach(t => t.fitAddon.fit());
+            }
+        };
+
+        // Mouse events
+        handle.addEventListener('mousedown', (e) => startResize(e.clientX));
+        document.addEventListener('mousemove', (e) => doResize(e.clientX));
+        document.addEventListener('mouseup', endResize);
+
+        // Touch events
+        handle.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startResize(e.touches[0].clientX);
+        });
+        document.addEventListener('touchmove', (e) => {
+            if (isResizing) doResize(e.touches[0].clientX);
+        });
+        document.addEventListener('touchend', endResize);
+    }
+
+    // Show/hide preview resize handle
+    showPreviewHandle(show) {
+        const handle = document.getElementById('previewResizeHandle');
+        if (show) {
+            handle.classList.add('visible');
+        } else {
+            handle.classList.remove('visible');
+        }
     }
 
     // Event Listeners
     initEventListeners() {
         document.getElementById('closePreview').addEventListener('click', () => {
             document.getElementById('previewContainer').classList.remove('visible');
-            setTimeout(() => this.fitAddon.fit(), 100);
+            this.showPreviewHandle(false);
+            setTimeout(() => {
+                this.terminals.forEach(t => t.fitAddon.fit());
+            }, 100);
         });
 
         document.getElementById('newTerminal').addEventListener('click', () => {
-            // For now, just clear and reconnect
-            this.terminal.clear();
-            if (this.ws) this.ws.close();
-            this.initWebSocket();
+            this.createTerminal();
         });
+
+        // Quick action buttons
+        this.initQuickActions();
+    }
+
+    // Quick Action Buttons
+    initQuickActions() {
+        document.getElementById('btnClaudeContinue').addEventListener('click', () => {
+            this.runCommand('claude --dangerously-skip-permissions -c');
+        });
+
+        document.getElementById('btnClaudeNew').addEventListener('click', () => {
+            this.runCommand('claude --dangerously-skip-permissions');
+        });
+
+        document.getElementById('btnST').addEventListener('click', () => {
+            this.runCommand('st -m ai .');
+        });
+    }
+
+    // Send command to active terminal
+    runCommand(command) {
+        const active = this.getActiveTerminal();
+        if (active && active.ws && active.ws.readyState === WebSocket.OPEN) {
+            // Send the command with a newline
+            active.ws.send(JSON.stringify({ type: 'input', data: command + '\n' }));
+            active.terminal.focus();
+        }
+    }
+
+    // Keyboard Shortcuts
+    initKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+B: Toggle sidebar
+            if (e.ctrlKey && e.key === 'b') {
+                e.preventDefault();
+                this.toggleSidebar();
+            }
+            // Ctrl+J: Toggle layout
+            if (e.ctrlKey && e.key === 'j') {
+                e.preventDefault();
+                this.toggleLayout();
+            }
+            // Ctrl+`: Focus active terminal
+            if (e.ctrlKey && e.key === '`') {
+                e.preventDefault();
+                const active = this.getActiveTerminal();
+                if (active) active.terminal.focus();
+            }
+            // Ctrl+Shift+`: New terminal
+            if (e.ctrlKey && e.shiftKey && e.key === '`') {
+                e.preventDefault();
+                this.createTerminal();
+            }
+            // Escape: Close preview
+            if (e.key === 'Escape') {
+                const preview = document.getElementById('previewContainer');
+                if (preview.classList.contains('visible')) {
+                    preview.classList.remove('visible');
+                    this.showPreviewHandle(false);
+                    setTimeout(() => {
+                        this.terminals.forEach(t => t.fitAddon.fit());
+                    }, 100);
+                }
+            }
+            // Ctrl+P: Quick file search
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                this.focusFileSearch();
+            }
+            // Ctrl+W: Close terminal tab
+            if (e.ctrlKey && e.key === 'w') {
+                e.preventDefault();
+                if (this.activeTerminalId) {
+                    this.closeTerminal(this.activeTerminalId);
+                }
+            }
+            // Ctrl+Tab: Next terminal
+            if (e.ctrlKey && e.key === 'Tab') {
+                e.preventDefault();
+                this.nextTerminal(e.shiftKey ? -1 : 1);
+            }
+        });
+    }
+
+    nextTerminal(direction) {
+        if (this.terminals.length <= 1) return;
+
+        const currentIndex = this.terminals.findIndex(t => t.id === this.activeTerminalId);
+        let nextIndex = currentIndex + direction;
+
+        if (nextIndex < 0) nextIndex = this.terminals.length - 1;
+        if (nextIndex >= this.terminals.length) nextIndex = 0;
+
+        this.activateTerminal(this.terminals[nextIndex].id);
+    }
+
+    toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const handle = document.getElementById('resizeHandle');
+
+        if (sidebar.classList.contains('collapsed')) {
+            sidebar.classList.remove('collapsed');
+            sidebar.style.width = this.sidebarWidth + 'px';
+            handle.style.display = '';
+        } else {
+            sidebar.classList.add('collapsed');
+            sidebar.style.width = '0';
+            handle.style.display = 'none';
+        }
+        setTimeout(() => {
+            this.terminals.forEach(t => t.fitAddon.fit());
+        }, 200);
+    }
+
+    focusFileSearch() {
+        const sidebar = document.getElementById('sidebar');
+        // Ensure sidebar is visible
+        if (sidebar.classList.contains('collapsed')) {
+            this.toggleSidebar();
+        }
+        // Focus the search input
+        document.getElementById('fileSearchInput').focus();
     }
 
     // Health Check
@@ -389,61 +983,6 @@ class Dashboard {
         } catch (e) {
             console.error('Health check failed:', e);
         }
-    }
-
-    // Keyboard Shortcuts
-    initKeyboardShortcuts() {
-        document.addEventListener('keydown', (e) => {
-            // Ctrl+B: Toggle sidebar
-            if (e.ctrlKey && e.key === 'b') {
-                e.preventDefault();
-                this.toggleSidebar();
-            }
-            // Ctrl+`: Focus terminal
-            if (e.ctrlKey && e.key === '`') {
-                e.preventDefault();
-                this.terminal.focus();
-            }
-            // Escape: Close preview
-            if (e.key === 'Escape') {
-                const preview = document.getElementById('previewContainer');
-                if (preview.classList.contains('visible')) {
-                    preview.classList.remove('visible');
-                    setTimeout(() => this.fitAddon.fit(), 100);
-                }
-            }
-            // Ctrl+P: Quick file search (future)
-            if (e.ctrlKey && e.key === 'p') {
-                e.preventDefault();
-                this.focusFileSearch();
-            }
-        });
-    }
-
-    toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const handle = document.getElementById('resizeHandle');
-
-        if (sidebar.classList.contains('collapsed')) {
-            sidebar.classList.remove('collapsed');
-            sidebar.style.width = this.sidebarWidth + 'px';
-            handle.style.display = '';
-        } else {
-            sidebar.classList.add('collapsed');
-            sidebar.style.width = '0';
-            handle.style.display = 'none';
-        }
-        setTimeout(() => this.fitAddon.fit(), 200);
-    }
-
-    focusFileSearch() {
-        const sidebar = document.getElementById('sidebar');
-        // Ensure sidebar is visible
-        if (sidebar.classList.contains('collapsed')) {
-            this.toggleSidebar();
-        }
-        // Focus the search input
-        document.getElementById('fileSearchInput').focus();
     }
 }
 
