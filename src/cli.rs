@@ -187,7 +187,8 @@ pub struct Cli {
     // MEMORY & SESSIONS - Persistent knowledge
     // =========================================================================
     /// Anchor a memory: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
-    #[arg(long, num_args = 3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"], help_heading = "Memory & Sessions")]
+    /// Use --memory-anchor without arguments for detailed help
+    #[arg(long, num_args = 0..=3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"], help_heading = "Memory & Sessions")]
     pub memory_anchor: Option<Vec<String>>,
 
     /// Find memories by keywords

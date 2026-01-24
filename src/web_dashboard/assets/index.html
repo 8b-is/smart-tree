@@ -31,6 +31,9 @@
                     <span class="sidebar-title">Files</span>
                     <button class="btn-icon" id="refreshFiles" title="Refresh">&#x21BB;</button>
                 </div>
+                <div class="file-search">
+                    <input type="text" id="fileSearchInput" placeholder="Filter files..." autocomplete="off">
+                </div>
                 <div class="file-tree" id="fileTree">
                     <!-- File tree will be populated by JS -->
                 </div>
@@ -70,10 +73,12 @@
         <!-- Status Bar -->
         <footer class="status-bar">
             <div class="status-left">
+                <span class="git-branch" id="gitBranch" title="Git branch"></span>
                 <span id="cwdDisplay"></span>
             </div>
             <div class="status-right">
                 <span class="status-item" id="connectionCount">0 connections</span>
+                <span class="status-item keyboard-hint" title="Keyboard shortcuts">Ctrl+B: sidebar | Ctrl+`: terminal</span>
                 <span class="status-item">v<span id="versionDisplay">-</span></span>
             </div>
         </footer>

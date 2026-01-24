@@ -105,7 +105,8 @@ pub mod file_history;
 // MEM8 - Wave-based cognitive architecture for consciousness simulation
 pub mod mem8;
 
-// Tree Agent - Living forest orchestrator for AI-human development
+// n8x (Nexus Agent) - Living forest orchestrator for AI-human development
+// Binary: `n8x` (formerly `tree`, renamed to avoid shadowing Unix tree)
 pub mod tree_agent;
 
 // Context Gatherer - Searches AI tool directories for project context
@@ -143,9 +144,6 @@ pub mod m8_format_converter;
 // Quantum Wave Signatures - Full 32-bit consciousness patterns (not horse apples!)
 pub mod quantum_wave_signature;
 
-// Wave Compass - moved to web_dashboard
-// #[cfg(feature = "dashboard")]
-// pub mod wave_compass;
 
 // Claude Hook Handler - Comprehensive context provider for conversations
 pub mod claude_hook;

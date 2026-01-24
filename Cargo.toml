@@ -138,8 +138,8 @@ name = "mq"
 path = "src/bin/mq.rs"
 
 [[bin]]
-name = "tree"
-path = "src/bin/tree.rs"
+name = "n8x"
+path = "src/bin/n8x.rs"
 
 [[bin]]
 name = "m8"

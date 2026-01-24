@@ -22,7 +22,8 @@ const GITHUB_RELEASES_API: &str = "https://api.github.com/repos/8b-is/smart-tree
 const UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
 
 /// Binaries included in the release tarball
-const BINARIES: &[&str] = &["st", "mq", "m8", "tree"];
+/// Note: "n8x" replaces "tree" to avoid shadowing the real tree command
+const BINARIES: &[&str] = &["st", "mq", "m8", "n8x"];
 
 /// Current version from Cargo.toml
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -368,6 +369,7 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     // Install binaries
     println!("Installing binaries...");
 
+    let mut installed_count = 0;
     for binary in BINARIES {
         let binary_name = if cfg!(windows) {
             format!("{}.exe", binary)
@@ -376,7 +378,14 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         };
 
         // Find binary in temp dir (might be at root or in subdirectory)
-        let src_path = find_binary_in_dir(&temp_dir, &binary_name)?;
+        let src_path = match find_binary_in_dir(&temp_dir, &binary_name) {
+            Ok(path) => path,
+            Err(_) => {
+                // Binary not in archive - skip it (older releases may not have all binaries)
+                println!("  \x1b[33m⚠\x1b[0m {} (not in archive, skipping)", binary);
+                continue;
+            }
+        };
         let dest_path = install_dir.join(&binary_name);
 
         // IMPORTANT: Remove old binary first to avoid macOS zombie process issue
@@ -422,6 +431,12 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         }
 
         println!("  \x1b[32m✓\x1b[0m {}", binary);
+        installed_count += 1;
+    }
+
+    // Ensure at least the main binary was installed
+    if installed_count == 0 {
+        bail!("No binaries were installed from the archive");
     }
 
     // Update cache

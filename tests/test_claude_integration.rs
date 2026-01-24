@@ -149,6 +149,7 @@ fn test_context_mode_output() {
             category: FileCategory::Rust,
             search_matches: None,
             filesystem_type: FilesystemType::Ext4,
+            git_branch: None,
         },
         FileNode {
             path: PathBuf::from("Cargo.toml"),
@@ -167,6 +168,7 @@ fn test_context_mode_output() {
             category: FileCategory::Config,
             search_matches: None,
             filesystem_type: FilesystemType::Ext4,
+            git_branch: None,
         },
     ];
 

@@ -97,6 +97,13 @@ impl HexFormatter {
             name
         };
 
+        // Add git branch for directories
+        let display_name = if let Some(ref branch) = node.git_branch {
+            format!("{} [{}]", display_name, branch)
+        } else {
+            display_name
+        };
+
         // Add search matches if present
         let display_name_with_search = if let Some(matches) = &node.search_matches {
             if matches.total_count > 0 {

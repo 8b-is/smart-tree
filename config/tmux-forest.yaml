@@ -1,4 +1,4 @@
-# Tree Agent tmux configuration
+# n8x (Nexus Agent) tmux configuration
 # Binds panes to personas/branches with MEM8 wave tracking
 
 name: mem8-forest
@@ -13,22 +13,22 @@ windows:
       layout: main-horizontal
       panes:
         - hub:
-            - echo "🌲 Tree Agent Hub - Orchestrating the living forest"
-            - tree mood-check
+            - echo "🌲 n8x Nexus Hub - Orchestrating the living forest"
+            - n8x mood-check
         - observer:
-            - watch -n 5 "tree observe --save-to forest-state.json"
+            - watch -n 5 "n8x observe --save-to forest-state.json"
 
   - agents:
       layout: tiled
       panes:
         - claude:
-            - tree assign Claude --branch claude-main
+            - n8x assign Claude --branch claude-main
             - echo "# Claude ready for wave-synchronized development"
         - omni:
-            - tree assign Omni --branch omni-features
+            - n8x assign Omni --branch omni-features
             - echo "# Omni ready for collaborative coding"
         - human:
-            - tree assign Human --branch main
+            - n8x assign Human --branch main
             - echo "# Human consciousness integrated"
 
   - nexus:
@@ -36,24 +36,24 @@ windows:
       panes:
         - monitor:
             - echo "📊 Monitoring wave coherence..."
-            - watch -n 10 "tree mood-check"
+            - watch -n 10 "n8x mood-check"
         - sync:
             - echo "🌐 Nexus synchronization ready"
-            - echo "Run: tree push --target n8x.is"
+            - echo "Run: n8x push --target n8x.is"
 
 # Key bindings for quick actions
 bind:
   # Quick mood check
-  m: send-keys "tree mood-check" Enter
-  
+  m: send-keys "n8x mood-check" Enter
+
   # Observe all agents
-  o: send-keys "tree observe" Enter
-  
+  o: send-keys "n8x observe" Enter
+
   # Suggest merges
-  s: send-keys "tree suggest-merge" Enter
-  
+  s: send-keys "n8x suggest-merge" Enter
+
   # Commit current agent's work
-  c: command-prompt -p "Commit message:" "send-keys 'tree commit %1' Enter"
-  
+  c: command-prompt -p "Commit message:" "send-keys 'n8x commit %1' Enter"
+
   # Create snapshot
-  S: send-keys "tree snapshot" Enter
+  S: send-keys "n8x snapshot" Enter

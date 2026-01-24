@@ -1,4 +1,4 @@
-# 🌳 Smart Tree v6.5.1 - Lightning Fast Directory Visualization with Security Scanner! 🔒
+# 🌳 Smart Tree v6.5.2 - Lightning Fast Directory Visualization with Web Dashboard! 🌐
 
 [![Version](https://img.shields.io/badge/version-6.5.2-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -78,14 +78,14 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v6.2.0
+## 🌟 What's NEW in v6.5.2
 
 | Feature | Description | Command |
 |---------|-------------|---------|
-| **🛡️ MCP Security Audit** | Audit and remove untrusted MCP integrations | `st --ai-install --cleanup` |
-| **🧠 Session Persistence** | Auto-save/restore context via hooks | `SessionStart`/`SessionEnd` hooks |
-| **🎯 Smart Restore** | Only shows relevant, recent context (24h) | `st --claude-restore` |
-| **⚙️ Feature Gates** | TUI and Dashboard now optional | `--features tui` / `--features dashboard` |
+| **🌐 Web Dashboard** | Browser-based dashboard with real PTY terminal! | `st --dashboard` |
+| **🌿 Git Branch Display** | Shows current branch in directory listings | Automatic for .git dirs |
+| **🔒 Network Allow-listing** | CIDR-based access control for remote dashboard | `st --dashboard --allow 10.0.0.0/8` |
+| **🛡️ Security Scanner** | Detect supply chain attack patterns | `st --security-scan` |
 | **🚀 MCP Auto-Installer** | One command to add Smart Tree to Claude Desktop! | `st --mcp-install` |
 | **🧠 Claude Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
 | **📝 Memory Anchoring** | Persistent insight storage with keywords | `st --memory-anchor` / `--memory-find` |
@@ -250,19 +250,28 @@ st --spicy
   - `?` or `F1` - Toggle help overlay
   - `q` or `Esc` - Quit
 
-## 🎛️ egui Dashboard (Local Display Required)
+## 🌐 Web Dashboard - Real PTY Terminal in Your Browser!
 
-Fire up the realtime collaboration dashboard for voice activity, memory stats, Wave Compass signatures, and the new g8t fleet view:
+Fire up the web-based dashboard with a real terminal, file browser, and markdown preview:
 
 ```bash
-st --dashboard
+st --dashboard                    # Start on localhost:8420
+st --dashboard --port 9000        # Custom port
+st --dashboard --open             # Auto-open browser
+st --dashboard --allow 192.168.1.0/24  # Allow network access from subnet
 ```
 
-- Streams the same data the MCP server sees (operations, file touches, user hints)
-- Live g8t status feed with push/pull counts and last commit timestamps
-- Idea board, voice graph, and casting controls in one place
+### Features:
+- **🖥️ Real PTY Terminal**: Full bash/zsh with vim, htop, colors - everything works!
+- **📁 File Browser**: Navigate directories, click to preview files
+- **📝 Markdown Preview**: Render .md files beautifully
+- **🎨 Terminal Aesthetic**: Cyberpunk green-on-black theme with CRT effects
+- **🔒 Network Security**: Localhost-only by default, use `--allow` for remote access
 
-> ⚠️ The current dashboard build needs an attached X11/Wayland display. On headless or remote-only sessions the command exits with a friendly reminder—browser/WASM access is on the roadmap.
+### Keyboard Shortcuts:
+- Terminal supports all standard key combinations
+- File browser: click to select, double-click to navigate
+- Preview pane shows file contents or rendered markdown
 
 ## 💡 Smart Tips System
 
@@ -424,6 +433,7 @@ cargo build --release
 sudo cp target/release/st /usr/local/bin/
 sudo cp target/release/mq /usr/local/bin/
 sudo cp target/release/m8 /usr/local/bin/
+sudo cp target/release/n8x /usr/local/bin/  # Nexus Agent (orchestration)
 
 # Windows (PowerShell as Admin)
 Copy-Item target\release\st.exe C:\Program Files\st\

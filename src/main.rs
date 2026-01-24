@@ -428,9 +428,12 @@ async fn main() -> Result<()> {
     }
 
     // Handle memory operations
-    if let Some(args) = cli.memory_anchor {
+    if let Some(args) = &cli.memory_anchor {
         if args.len() == 3 {
             return handle_memory_anchor(&args[0], &args[1], &args[2]).await;
+        } else {
+            // Show help for memory-anchor
+            return show_memory_anchor_help();
         }
     }
 
@@ -1875,6 +1878,35 @@ async fn handle_claude_kickstart() -> Result<()> {
     println!("\n💡 This format saves ~90% context vs raw JSON!");
     println!("📝 Dynamic context - adapts to your project!");
 
+    Ok(())
+}
+
+/// Show detailed help for memory-anchor command
+fn show_memory_anchor_help() -> Result<()> {
+    println!("🧠 Memory Anchor - Persistent Knowledge Storage");
+    println!("================================================\n");
+    println!("USAGE:");
+    println!("    st --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>\n");
+    println!("ARGUMENTS:");
+    println!("    TYPE      Memory type: insight, decision, pattern, gotcha, todo");
+    println!("    KEYWORDS  Comma-separated search keywords (e.g., \"auth,security,jwt\")");
+    println!("    CONTEXT   The actual content to remember (quote if contains spaces)\n");
+    println!("EXAMPLES:");
+    println!("    st --memory-anchor insight \"auth,jwt\" \"Tokens stored in httpOnly cookies\"");
+    println!("    st --memory-anchor decision \"api,versioning\" \"Use URL-based versioning /v1/\"");
+    println!("    st --memory-anchor pattern \"error,handling\" \"Always use Result<T> with context\"");
+    println!("    st --memory-anchor gotcha \"async,tokio\" \"Don't block the runtime with std::thread::sleep\"");
+    println!("    st --memory-anchor todo \"refactor,auth\" \"Split auth into separate crate\"\n");
+    println!("MEMORY TYPES:");
+    println!("    insight   - General knowledge and discoveries");
+    println!("    decision  - Architectural or design decisions");
+    println!("    pattern   - Code patterns and best practices");
+    println!("    gotcha    - Pitfalls and things to avoid");
+    println!("    todo      - Tasks and reminders\n");
+    println!("RELATED COMMANDS:");
+    println!("    st --memory-find <KEYWORDS>   Find memories by keywords");
+    println!("    st --memory-stats             Show memory statistics\n");
+    println!("💡 Memories persist across sessions in ~/.mem8/memories/");
     Ok(())
 }
 

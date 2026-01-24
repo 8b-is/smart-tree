@@ -129,7 +129,7 @@ Tests use real filesystem operations (no mocks). Async tests require `#[tokio::t
 - `st` - Main CLI
 - `mq` - Marqant markdown compressor
 - `m8` - MEM8 consciousness tools
-- `tree` - Drop-in tree replacement
+- `n8x` - Nexus Agent for AI-human development orchestration
 
 ## Scripts
 

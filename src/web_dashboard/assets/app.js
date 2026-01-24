@@ -18,7 +18,11 @@ class Dashboard {
         this.initFileBrowser();
         this.initResizer();
         this.initEventListeners();
+        this.initKeyboardShortcuts();
         await this.loadHealth();
+
+        // Refresh health periodically
+        setInterval(() => this.loadHealth(), 30000);
     }
 
     // Terminal Setup
@@ -144,6 +148,31 @@ class Dashboard {
     async initFileBrowser() {
         await this.loadFiles();
         document.getElementById('refreshFiles').addEventListener('click', () => this.loadFiles());
+
+        // File search/filter
+        const searchInput = document.getElementById('fileSearchInput');
+        searchInput.addEventListener('input', (e) => this.filterFiles(e.target.value));
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                this.filterFiles('');
+                this.terminal.focus();
+            }
+        });
+    }
+
+    filterFiles(query) {
+        const items = document.querySelectorAll('.file-item');
+        const lowerQuery = query.toLowerCase();
+
+        items.forEach(item => {
+            const name = item.querySelector('.file-name').textContent.toLowerCase();
+            if (!query || name.includes(lowerQuery)) {
+                item.classList.remove('hidden');
+            } else {
+                item.classList.add('hidden');
+            }
+        });
     }
 
     async loadFiles(path = null) {
@@ -348,9 +377,73 @@ class Dashboard {
             const data = await response.json();
             document.getElementById('versionDisplay').textContent = data.version;
             document.getElementById('connectionCount').textContent = `${data.connections} connection${data.connections !== 1 ? 's' : ''}`;
+
+            // Update git branch
+            const gitBranch = document.getElementById('gitBranch');
+            if (data.git_branch) {
+                gitBranch.textContent = data.git_branch;
+                gitBranch.title = `Git branch: ${data.git_branch}`;
+            } else {
+                gitBranch.textContent = '';
+            }
         } catch (e) {
             console.error('Health check failed:', e);
         }
+    }
+
+    // Keyboard Shortcuts
+    initKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+B: Toggle sidebar
+            if (e.ctrlKey && e.key === 'b') {
+                e.preventDefault();
+                this.toggleSidebar();
+            }
+            // Ctrl+`: Focus terminal
+            if (e.ctrlKey && e.key === '`') {
+                e.preventDefault();
+                this.terminal.focus();
+            }
+            // Escape: Close preview
+            if (e.key === 'Escape') {
+                const preview = document.getElementById('previewContainer');
+                if (preview.classList.contains('visible')) {
+                    preview.classList.remove('visible');
+                    setTimeout(() => this.fitAddon.fit(), 100);
+                }
+            }
+            // Ctrl+P: Quick file search (future)
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                this.focusFileSearch();
+            }
+        });
+    }
+
+    toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const handle = document.getElementById('resizeHandle');
+
+        if (sidebar.classList.contains('collapsed')) {
+            sidebar.classList.remove('collapsed');
+            sidebar.style.width = this.sidebarWidth + 'px';
+            handle.style.display = '';
+        } else {
+            sidebar.classList.add('collapsed');
+            sidebar.style.width = '0';
+            handle.style.display = 'none';
+        }
+        setTimeout(() => this.fitAddon.fit(), 200);
+    }
+
+    focusFileSearch() {
+        const sidebar = document.getElementById('sidebar');
+        // Ensure sidebar is visible
+        if (sidebar.classList.contains('collapsed')) {
+            this.toggleSidebar();
+        }
+        // Focus the search input
+        document.getElementById('fileSearchInput').focus();
     }
 }
 

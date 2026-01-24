@@ -105,10 +105,13 @@ jobs:
     #   if: ${{ matrix.cross != true && matrix.os != 'windows-latest' }}
     #   run: cargo test --release --target ${{ matrix.target }}
     
-    - name: Strip binary (Linux/macOS) 🗜️
+    - name: Strip binaries (Linux/macOS) 🗜️
       if: matrix.os != 'windows-latest' && matrix.cross != true
       run: |
-        strip target/${{ matrix.target }}/release/st
+        strip target/${{ matrix.target }}/release/st || true
+        strip target/${{ matrix.target }}/release/mq || true
+        strip target/${{ matrix.target }}/release/m8 || true
+        strip target/${{ matrix.target }}/release/n8x || true
     
     - name: Strip binary (cross-compiled) 🗜️
       if: matrix.cross == true
@@ -125,32 +128,37 @@ jobs:
       shell: bash
       run: |
         cd target/${{ matrix.target }}/release
-        
-        # Set binary name with extension
-        BINARY_NAME="st${{ matrix.extension }}"
-        
+
+        # Set binary extension
+        EXT="${{ matrix.extension }}"
+
+        # All binaries to include (n8x replaces 'tree' to avoid shadowing real tree command)
+        BINARIES="st${EXT} mq${EXT} m8${EXT} n8x${EXT}"
+
         # Set archive names - both versioned and unversioned for compatibility
         VERSIONED_ARCHIVE="st-${{ env.RELEASE_TAG }}-${{ matrix.target }}"
         UNVERSIONED_ARCHIVE="st-${{ matrix.target }}"
-        
+
         # Copy documentation files
         cp ../../../README.md . || true
         cp ../../../LICENSE . || true
         cp ../../../SMART_TREE_CHEET_SHEET.md . || true
-        
+
         # Create archive based on type
         if [[ "${{ matrix.archive }}" == "zip" ]]; then
-          # Windows ZIP - versioned
-          7z a "../../../${VERSIONED_ARCHIVE}.zip" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
+          # Windows ZIP - versioned (include all binaries that exist)
+          7z a "../../../${VERSIONED_ARCHIVE}.zip" $BINARIES README.md LICENSE SMART_TREE_CHEET_SHEET.md 2>/dev/null || \
+          7z a "../../../${VERSIONED_ARCHIVE}.zip" st${EXT} README.md LICENSE SMART_TREE_CHEET_SHEET.md
           # Also create unversioned for backward compatibility
           cp "../../../${VERSIONED_ARCHIVE}.zip" "../../../${UNVERSIONED_ARCHIVE}.zip"
         else
-          # Unix tar.gz - versioned
-          tar czf "../../../${VERSIONED_ARCHIVE}.tar.gz" "$BINARY_NAME" README.md LICENSE SMART_TREE_CHEET_SHEET.md
+          # Unix tar.gz - versioned (include all binaries that exist)
+          tar czf "../../../${VERSIONED_ARCHIVE}.tar.gz" $BINARIES README.md LICENSE SMART_TREE_CHEET_SHEET.md 2>/dev/null || \
+          tar czf "../../../${VERSIONED_ARCHIVE}.tar.gz" st${EXT} README.md LICENSE SMART_TREE_CHEET_SHEET.md
           # Also create unversioned for backward compatibility
           cp "../../../${VERSIONED_ARCHIVE}.tar.gz" "../../../${UNVERSIONED_ARCHIVE}.tar.gz"
         fi
-        
+
         cd ../../..
     
     - name: Generate checksums 🔐

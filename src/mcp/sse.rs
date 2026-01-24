@@ -325,6 +325,7 @@ async fn scan_single_path(path: &Path) -> Result<FileNode> {
         category,
         search_matches: None,
         filesystem_type: crate::scanner::FilesystemType::Unknown,
+        git_branch: None,
     })
 }
 

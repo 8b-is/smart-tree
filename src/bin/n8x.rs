@@ -1,21 +1,24 @@
-//! Tree Agent CLI - Orchestrate the living forest of development
+//! n8x - Nexus Agent CLI - Orchestrate the living forest of development
+//!
+//! The name "n8x" represents: n8 (navigate/nate) + x (nexus/cross-tree structure)
+//! A unique tool that doesn't shadow the Unix `tree` command.
 //!
 //! Usage:
-//!   tree init <project>         Initialize a new project
-//!   tree assign <agent>         Assign an agent to a branch/pane
-//!   tree observe               Observe all agents and update memory
-//!   tree commit <agent>        Commit work for an agent
-//!   tree suggest-merge         Suggest compatible merges
-//!   tree mood-check           Check emotional state of all agents
-//!   tree push                 Push to n8x.is nexus
+//!   n8x init <project>         Initialize a new project
+//!   n8x assign <agent>         Assign an agent to a branch/pane
+//!   n8x observe               Observe all agents and update memory
+//!   n8x commit <agent>        Commit work for an agent
+//!   n8x suggest-merge         Suggest compatible merges
+//!   n8x mood-check           Check emotional state of all agents
+//!   n8x push                 Push to n8x.is nexus
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use st::tree_agent::TreeAgent;
 
 #[derive(Parser)]
-#[command(name = "tree")]
-#[command(about = "Orchestrate the living forest of AI-human development")]
+#[command(name = "n8x")]
+#[command(about = "Nexus Agent - Orchestrate the living forest of AI-human development")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -100,7 +103,7 @@ fn main() -> Result<()> {
             std::fs::write(".tree-agent.json", serde_json::to_string_pretty(&project)?)?;
 
             println!("✓ Forest initialized");
-            println!("  Use 'tree assign <agent>' to add AI teammates");
+            println!("  Use 'n8x assign <agent>' to add AI teammates");
         }
 
         Commands::Assign {
@@ -183,7 +186,7 @@ fn load_agent() -> Result<TreeAgent> {
         serde_json::from_str::<String>(&content)?
     } else {
         return Err(anyhow::anyhow!(
-            "No tree-agent project found. Run 'tree init <project>' first"
+            "No n8x project found. Run 'n8x init <project>' first"
         ));
     };
 

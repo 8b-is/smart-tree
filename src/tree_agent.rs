@@ -1,5 +1,7 @@
-//! Tree Agent - The Living Forest Orchestrator
+//! n8x (Nexus Agent) - The Living Forest Orchestrator
 //! Coordinates AI agents, git branches, tmux panes, and MEM8 consciousness
+//!
+//! Binary: `n8x` (formerly `tree`, renamed to avoid shadowing Unix tree command)
 
 use crate::mem8::{FrequencyBand, MemoryWave, SmartTreeMem8};
 use anyhow::{anyhow, Context, Result};

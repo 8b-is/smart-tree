@@ -27,6 +27,8 @@ pub struct HealthResponse {
     status: String,
     version: String,
     connections: usize,
+    git_branch: Option<String>,
+    cwd: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -46,12 +48,49 @@ pub struct WriteFileRequest {
 
 /// Health check endpoint
 pub async fn health(State(state): State<SharedState>) -> Json<HealthResponse> {
-    let connections = state.read().await.connections;
+    let state_guard = state.read().await;
+    let connections = state_guard.connections;
+    let cwd = state_guard.cwd.clone();
+    drop(state_guard);
+
+    // Try to get git branch
+    let git_branch = get_git_branch(&cwd);
+
     Json(HealthResponse {
         status: "ok".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         connections,
+        git_branch,
+        cwd: cwd.to_string_lossy().to_string(),
     })
+}
+
+/// Get current git branch by reading .git/HEAD
+fn get_git_branch(cwd: &PathBuf) -> Option<String> {
+    // Walk up to find .git directory
+    let mut current = cwd.clone();
+    loop {
+        let git_dir = current.join(".git");
+        if git_dir.exists() {
+            let head_path = git_dir.join("HEAD");
+            if let Ok(content) = fs::read_to_string(&head_path) {
+                let content = content.trim();
+                // ref: refs/heads/branch-name
+                if let Some(branch) = content.strip_prefix("ref: refs/heads/") {
+                    return Some(branch.to_string());
+                }
+                // Detached HEAD - return short hash
+                if content.len() >= 7 {
+                    return Some(format!("({})", &content[..7]));
+                }
+            }
+            break;
+        }
+        if !current.pop() {
+            break;
+        }
+    }
+    None
 }
 
 /// List files in a directory

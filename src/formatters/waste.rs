@@ -509,6 +509,7 @@ mod tests {
                 category: FileCategory::Markdown,
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
+                git_branch: None,
             },
             FileNode {
                 path: PathBuf::from("/test/file2.txt"),
@@ -527,6 +528,7 @@ mod tests {
                 category: FileCategory::Markdown,
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
+                git_branch: None,
             },
         ];
 
@@ -556,6 +558,7 @@ mod tests {
             category: FileCategory::JavaScript,
             search_matches: None,
             filesystem_type: FilesystemType::Ext4,
+            git_branch: None,
         }];
 
         let artifacts = formatter.analyze_build_artifacts(&nodes);

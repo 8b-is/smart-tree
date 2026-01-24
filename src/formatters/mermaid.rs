@@ -496,6 +496,7 @@ mod tests {
                 file_type: FileType::Directory,
                 category: FileCategory::Unknown,
                 filesystem_type: FilesystemType::Unknown,
+                git_branch: None,
             },
             FileNode {
                 path: PathBuf::from("src/main.rs"),
@@ -514,6 +515,7 @@ mod tests {
                 file_type: FileType::RegularFile,
                 category: FileCategory::Rust,
                 filesystem_type: FilesystemType::Unknown,
+                git_branch: None,
             },
         ];
 
