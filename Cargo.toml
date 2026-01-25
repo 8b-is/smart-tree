@@ -1,5 +1,5 @@
 [workspace]
-members = ["expert_prompt_engineer"]
+members = ["expert_prompt_engineer", "st-protocol"]
 exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
@@ -119,6 +119,9 @@ shlex = "1.3"
 # Marqant compression
 marqant = { path = "marqant" }
 
+# ST Protocol for daemon communication
+st-protocol = { path = "st-protocol" }
+
 # === OPTIONAL FEATURES ===
 
 # Terminal UI (spicy mode) - disabled by default
@@ -136,6 +139,10 @@ candle-transformers = { version = "0.8", optional = true }
 candle-nn = { version = "0.8", optional = true }
 hf-hub = { version = "0.4", optional = true }
 tokenizers = { version = "0.21", optional = true }
+
+[[bin]]
+name = "std"
+path = "src/bin/std.rs"
 
 [[bin]]
 name = "mq"
