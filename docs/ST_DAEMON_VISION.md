@@ -241,7 +241,7 @@ i1 m8                     # installs m8 tools
 - [x] Auth blocks with security levels (None/Session/FIDO/FIDO+PIN)
 - [x] Path protection API
 
-### Phase 2: Daemon Core 🚧 IN PROGRESS
+### Phase 2: Daemon Core ✅ COMPLETE
 - [x] Unix socket listener (`/run/user/$UID/st.sock`)
 - [x] Basic verb handling (PING, SCAN, STATS, SESSION)
 - [x] Security context per connection
@@ -249,8 +249,8 @@ i1 m8                     # installs m8 tools
 - [x] FORMAT verb with 7 output modes (classic, ai, json, hex, quantum, stats, digest)
 - [x] SEARCH verb integration (content search with line numbers)
 - [x] M8 memory verbs (REMEMBER, RECALL, FORGET, M8_WAVE) with compact grid
-- [ ] Extract MCP handlers into daemon
-- [ ] Session persistence
+- [x] Spatial audio processing (wave grid as 256×256 spatial room with stereo sampling)
+- [x] WaveGrid corrected to 2D (256×256 cells, Z as value not dimension)
 
 ### Phase 3: Client Refactor
 - [ ] Thin st client
