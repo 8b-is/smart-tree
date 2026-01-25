@@ -246,7 +246,7 @@ i1 m8                     # installs m8 tools
 - [x] Basic verb handling (PING, SCAN, STATS, SESSION)
 - [x] Security context per connection
 - [x] Live integration tests (PING + SCAN verified)
-- [ ] FORMAT verb with output modes
+- [x] FORMAT verb with 7 output modes (classic, ai, json, hex, quantum, stats, digest)
 - [ ] SEARCH verb integration
 - [ ] Extract MCP handlers into daemon
 - [ ] Session persistence
