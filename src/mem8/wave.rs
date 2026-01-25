@@ -117,54 +117,43 @@ impl Default for WaveGrid {
 
 impl WaveGrid {
     /// Create a new wave grid with standard MEM8 dimensions
+    /// Grid is 256×256 (u8×u8 address space), Z (u16) is stored as temporal depth per cell
     pub fn new() -> Self {
-        const WIDTH: usize = 256;
-        const HEIGHT: usize = 256;
-        const DEPTH: usize = 65536;
+        const WIDTH: usize = 256;   // X: u8 coordinate
+        const HEIGHT: usize = 256;  // Y: u8 coordinate
+        const DEPTH: usize = 1;     // Z is a value per cell, not a dimension
 
         Self {
             width: WIDTH,
             height: HEIGHT,
             depth: DEPTH,
-            grid: vec![None; WIDTH * HEIGHT * DEPTH],
+            grid: vec![None; WIDTH * HEIGHT], // 65,536 cells
             noise_floor: 0.1,
         }
     }
 
-    /// Create a smaller wave grid for testing (to avoid memory issues)
+    /// Create a smaller wave grid for testing
     #[cfg(test)]
     pub fn new_test() -> Self {
-        Self::new_compact()
+        Self::new() // Standard grid is already compact
     }
 
-    /// Create a compact wave grid (256×256×256 = 16M voxels, ~128MB)
-    /// Use this for daemons and other memory-constrained environments.
-    /// Note: Full grid is u8×u8×u16 (256×256×65536), compact wraps Z (u16 % 256)
+    /// Create a compact wave grid (same as new() - grid is inherently compact)
+    /// Grid: 256×256 = 65K cells, Z (u16) is temporal depth stored per cell
     pub fn new_compact() -> Self {
-        const WIDTH: usize = 256;  // X: u8
-        const HEIGHT: usize = 256; // Y: u8
-        const DEPTH: usize = 256;  // Z: u16 wrapped to u8
-
-        Self {
-            width: WIDTH,
-            height: HEIGHT,
-            depth: DEPTH,
-            grid: vec![None; WIDTH * HEIGHT * DEPTH],
-            noise_floor: 0.1,
-        }
+        Self::new()
     }
 
-    /// Get linear index from 3D coordinates
-    /// Clamps z to grid depth for safety (supports test grids with smaller depth)
-    fn get_index(&self, x: u8, y: u8, z: u16) -> usize {
+    /// Get linear index from 2D coordinates (X, Y)
+    /// Z is stored as temporal depth with the wave, not as a dimension
+    fn get_index(&self, x: u8, y: u8, _z: u16) -> usize {
         let x = x as usize;
         let y = y as usize;
-        let z = (z as usize).min(self.depth - 1); // Clamp z to grid bounds
-
-        z * self.width * self.height + y * self.width + x
+        y * self.width + x // 2D index: just X,Y
     }
 
     /// Store a memory wave at specific coordinates
+    /// Z (temporal depth) is tracked in AnchoredMemory, not grid structure
     pub fn store(&mut self, x: u8, y: u8, z: u16, wave: MemoryWave) {
         let idx = self.get_index(x, y, z);
 
@@ -181,23 +170,21 @@ impl WaveGrid {
     }
 
     /// Calculate interference pattern at a specific point
+    /// Uses 3×3 neighborhood (X,Y plane)
     pub fn calculate_interference(&self, x: u8, y: u8, z: u16, t: f32) -> f32 {
         let mut total = 0.0;
 
-        // Check 3x3x3 neighborhood for interference
+        // Check 3×3 neighborhood for interference (2D grid)
         for dx in -1i8..=1 {
             for dy in -1i8..=1 {
-                for dz in -1i16..=1 {
-                    let nx = (x as i16 + dx as i16).clamp(0, 255) as u8;
-                    let ny = (y as i16 + dy as i16).clamp(0, 255) as u8;
-                    let nz = (z as i32 + dz as i32).clamp(0, 65535) as u16;
+                let nx = (x as i16 + dx as i16).clamp(0, 255) as u8;
+                let ny = (y as i16 + dy as i16).clamp(0, 255) as u8;
 
-                    if let Some(wave) = self.get(nx, ny, nz) {
-                        // Weight by distance (closer neighbors have more influence)
-                        let distance = ((dx * dx + dy * dy) as f32 + (dz * dz) as f32).sqrt();
-                        let weight = 1.0 / (1.0 + distance);
-                        total += wave.calculate(t) * weight;
-                    }
+                if let Some(wave) = self.get(nx, ny, z) {
+                    // Weight by distance (closer neighbors have more influence)
+                    let distance = ((dx * dx + dy * dy) as f32).sqrt();
+                    let weight = 1.0 / (1.0 + distance);
+                    total += wave.calculate(t) * weight;
                 }
             }
         }
