@@ -264,6 +264,34 @@ impl WaveMemoryManager {
         manager
     }
 
+    /// Create memory manager with compact grid (256×256×256)
+    /// Use this for daemons and memory-constrained environments
+    pub fn new_compact(storage_dir: Option<&Path>) -> Self {
+        let storage_path = storage_dir
+            .map(|p| p.join(".st").join("mem8").join("wave_memory.m8"))
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(".mem8")
+                    .join("wave_memory.m8")
+            });
+
+        let mut manager = Self {
+            wave_grid: Arc::new(RwLock::new(WaveGrid::new_compact())),
+            memories: HashMap::new(),
+            keyword_index: KeywordIndex::default(),
+            storage_path,
+            dirty: false,
+        };
+
+        // Try to load existing memories
+        if let Err(e) = manager.load() {
+            eprintln!("Note: Starting fresh wave memory ({})", e);
+        }
+
+        manager
+    }
+
     /// Create memory manager with smaller grid for testing
     /// Uses 256×256×256 grid instead of 256×256×65536 (256x smaller)
     #[cfg(test)]

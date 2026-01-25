@@ -275,6 +275,76 @@ impl Frame {
 
         Frame::new(Verb::Format, payload)
     }
+
+    /// Create a REMEMBER frame
+    pub fn remember(content: &str, keywords: &str, memory_type: &str) -> Self {
+        let mut payload = Payload::new();
+
+        // Length-prefixed content
+        let content_len = content.len();
+        if content_len <= 126 {
+            payload.push_byte((content_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(content_len as u16);
+        }
+        payload.push_str(content);
+
+        // Length-prefixed keywords
+        let keywords_len = keywords.len();
+        if keywords_len <= 126 {
+            payload.push_byte((keywords_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(keywords_len as u16);
+        }
+        payload.push_str(keywords);
+
+        // Length-prefixed type
+        let type_len = memory_type.len();
+        if type_len <= 126 {
+            payload.push_byte((type_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(type_len as u16);
+        }
+        payload.push_str(memory_type);
+
+        // Default emotional state (neutral)
+        payload.push_byte(128); // valence = 0.0
+        payload.push_byte(128); // arousal = 0.5
+
+        Frame::new(Verb::Remember, payload)
+    }
+
+    /// Create a RECALL frame
+    pub fn recall(keywords: &str, max_results: u8) -> Self {
+        let mut payload = Payload::new();
+
+        // Length-prefixed keywords
+        let keywords_len = keywords.len();
+        if keywords_len <= 126 {
+            payload.push_byte((keywords_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(keywords_len as u16);
+        }
+        payload.push_str(keywords);
+
+        payload.push_byte(max_results);
+
+        Frame::new(Verb::Recall, payload)
+    }
+
+    /// Create a FORGET frame
+    pub fn forget(memory_id: &str) -> Self {
+        Frame::new(Verb::Forget, Payload::from_string(memory_id))
+    }
+
+    /// Create an M8_WAVE frame (get memory stats)
+    pub fn m8_wave() -> Self {
+        Frame::simple(Verb::M8Wave)
+    }
 }
 
 #[cfg(test)]

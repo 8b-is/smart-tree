@@ -144,16 +144,16 @@ impl Verb {
     /// Get the security level required for this verb
     pub fn security_level(self) -> u8 {
         match self {
-            // Level 0: Read-only (no auth)
+            // Level 0: Read-only (no auth) + memory ops (TODO: add auth in Phase 4)
             Verb::Scan | Verb::Search | Verb::Stats | Verb::Ping |
-            Verb::Context | Verb::Recall | Verb::Format => 0,
+            Verb::Context | Verb::Recall | Verb::Format |
+            Verb::Remember | Verb::Forget | Verb::M8Wave => 0,
 
             // Level 1: Local write (session required)
-            Verb::Clear | Verb::Remember |
-            Verb::Subscribe | Verb::Unsubscribe => 1,
+            Verb::Clear | Verb::Subscribe | Verb::Unsubscribe => 1,
 
             // Level 2: Mutate (FIDO required)
-            Verb::Forget | Verb::Elevate => 2,
+            Verb::Elevate => 2,
 
             // Level 3: Admin (FIDO + PIN)
             Verb::Permit | Verb::Deny | Verb::Audit => 3,

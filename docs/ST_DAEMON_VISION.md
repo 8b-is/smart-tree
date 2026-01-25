@@ -245,9 +245,10 @@ i1 m8                     # installs m8 tools
 - [x] Unix socket listener (`/run/user/$UID/st.sock`)
 - [x] Basic verb handling (PING, SCAN, STATS, SESSION)
 - [x] Security context per connection
-- [x] Live integration tests (PING + SCAN verified)
+- [x] Live integration tests (6 tests: PING, SCAN, FORMAT×2, SEARCH, MEMORY)
 - [x] FORMAT verb with 7 output modes (classic, ai, json, hex, quantum, stats, digest)
 - [x] SEARCH verb integration (content search with line numbers)
+- [x] M8 memory verbs (REMEMBER, RECALL, FORGET, M8_WAVE) with compact grid
 - [ ] Extract MCP handlers into daemon
 - [ ] Session persistence
 

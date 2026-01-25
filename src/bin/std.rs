@@ -24,6 +24,7 @@ use st::formatters::{
     json::JsonFormatter, quantum::QuantumFormatter, stats::StatsFormatter, Formatter,
     PathDisplayMode,
 };
+use st::mcp::wave_memory::{MemoryType, WaveMemoryManager};
 use st::scanner::{Scanner, ScannerConfig};
 use st_protocol::{Address, AuthLevel, Frame, Payload, PayloadDecoder, SecurityContext, Verb};
 
@@ -73,12 +74,15 @@ impl Default for ClientSession {
 #[allow(dead_code)]
 struct DaemonState {
     config: DaemonConfig,
-    // Future: MCP context, caches, etc.
+    memory: WaveMemoryManager,
 }
 
 impl DaemonState {
     fn new(config: DaemonConfig) -> Self {
-        DaemonState { config }
+        DaemonState {
+            config,
+            memory: WaveMemoryManager::new_compact(None), // Use compact grid for daemon
+        }
     }
 }
 
@@ -196,9 +200,14 @@ async fn handle_verb(
         }
 
         // Memory verbs
-        Verb::M8Wave | Verb::Remember | Verb::Recall | Verb::Forget => {
-            // TODO: M8 memory integration
-            Frame::error("Memory operations not yet implemented")
+        Verb::Remember => handle_remember(frame.into_payload(), state).await,
+        Verb::Recall => handle_recall(frame.into_payload(), state).await,
+        Verb::Forget => handle_forget(frame.into_payload(), state).await,
+        Verb::M8Wave => {
+            // Return current wave state
+            let state = state.read().await;
+            let stats = state.memory.stats();
+            Frame::new(Verb::Ok, Payload::from_string(&stats.to_string()))
         }
 
         // Admin verbs
@@ -406,6 +415,131 @@ async fn handle_context(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> 
 
     // TODO: integrate with MCP context gathering
     Frame::error("Context gathering not yet implemented")
+}
+
+/// Handle REMEMBER verb - Store a memory
+/// Payload: [content string][keywords string (comma-separated)][type string][valence f32][arousal f32]
+async fn handle_remember(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Frame {
+    let mut decoder = PayloadDecoder::new(&payload);
+
+    // Parse content (required)
+    let content = match decoder.string() {
+        Some(c) if !c.is_empty() => c.to_string(),
+        _ => return Frame::error("Content required for remember"),
+    };
+
+    // Parse keywords (comma-separated)
+    let keywords_str = decoder.string().unwrap_or("");
+    let keywords: Vec<String> = keywords_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // Parse memory type
+    let type_str = decoder.string().unwrap_or("technical");
+    let memory_type = MemoryType::parse(type_str);
+
+    // Parse emotional state (defaults: neutral valence, medium arousal)
+    let valence = decoder.byte().map(|b| (b as f32 - 128.0) / 128.0).unwrap_or(0.0);
+    let arousal = decoder.byte().map(|b| b as f32 / 255.0).unwrap_or(0.5);
+
+    debug!(
+        "REMEMBER content_len={} keywords={:?} type={:?}",
+        content.len(),
+        keywords,
+        memory_type
+    );
+
+    let mut state = state.write().await;
+    match state.memory.anchor(
+        content,
+        keywords,
+        memory_type,
+        valence,
+        arousal,
+        "daemon".to_string(),
+        None,
+    ) {
+        Ok(id) => {
+            // Save to disk
+            let _ = state.memory.save();
+            let response = serde_json::json!({
+                "id": id,
+                "status": "anchored"
+            });
+            Frame::new(Verb::Ok, Payload::from_string(&response.to_string()))
+        }
+        Err(e) => Frame::error(&format!("Remember failed: {e}")),
+    }
+}
+
+/// Handle RECALL verb - Find memories
+/// Payload: [keywords string (comma-separated)][max_results byte]
+async fn handle_recall(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Frame {
+    let mut decoder = PayloadDecoder::new(&payload);
+
+    // Parse keywords (comma-separated)
+    let keywords_str = decoder.string().unwrap_or("");
+    let keywords: Vec<String> = keywords_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if keywords.is_empty() {
+        return Frame::error("Keywords required for recall");
+    }
+
+    let max_results = decoder.byte().unwrap_or(10) as usize;
+
+    debug!("RECALL keywords={:?} max={}", keywords, max_results);
+
+    let mut state = state.write().await;
+    let memories = state.memory.find_by_keywords(&keywords, max_results);
+
+    let results: Vec<_> = memories
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "content": m.content,
+                "keywords": m.keywords,
+                "type": format!("{:?}", m.memory_type),
+                "access_count": m.access_count
+            })
+        })
+        .collect();
+
+    let response = serde_json::json!({
+        "count": results.len(),
+        "memories": results
+    });
+
+    Frame::new(Verb::Ok, Payload::from_string(&response.to_string()))
+}
+
+/// Handle FORGET verb - Delete a memory
+/// Payload: [memory_id string]
+async fn handle_forget(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Frame {
+    let id = match payload.as_str() {
+        Some(id) if !id.is_empty() => id,
+        _ => return Frame::error("Memory ID required for forget"),
+    };
+
+    debug!("FORGET id={}", id);
+
+    let mut state = state.write().await;
+    if state.memory.delete(id) {
+        let _ = state.memory.save();
+        let response = serde_json::json!({
+            "id": id,
+            "status": "forgotten"
+        });
+        Frame::new(Verb::Ok, Payload::from_string(&response.to_string()))
+    } else {
+        Frame::error(&format!("Memory not found: {id}"))
+    }
 }
 
 /// Start the daemon

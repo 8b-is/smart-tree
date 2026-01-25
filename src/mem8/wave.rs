@@ -134,9 +134,16 @@ impl WaveGrid {
     /// Create a smaller wave grid for testing (to avoid memory issues)
     #[cfg(test)]
     pub fn new_test() -> Self {
-        const WIDTH: usize = 256;
-        const HEIGHT: usize = 256;
-        const DEPTH: usize = 256; // Much smaller for tests
+        Self::new_compact()
+    }
+
+    /// Create a compact wave grid (256×256×256 = 16M voxels, ~128MB)
+    /// Use this for daemons and other memory-constrained environments.
+    /// Note: Full grid is u8×u8×u16 (256×256×65536), compact wraps Z (u16 % 256)
+    pub fn new_compact() -> Self {
+        const WIDTH: usize = 256;  // X: u8
+        const HEIGHT: usize = 256; // Y: u8
+        const DEPTH: usize = 256;  // Z: u16 wrapped to u8
 
         Self {
             width: WIDTH,

@@ -275,3 +275,72 @@ fn test_daemon_search() {
 
     println!("\nSEARCH test passed!");
 }
+
+#[test]
+#[ignore] // Run with: cargo test test_daemon_memory -- --ignored --nocapture
+fn test_daemon_memory() {
+    // Ensure clean state
+    stop_daemon();
+    thread::sleep(Duration::from_millis(200));
+
+    // Start daemon
+    let mut daemon = start_daemon();
+
+    // Wait for socket
+    assert!(wait_for_socket(), "Daemon socket not available");
+
+    // Connect
+    let mut stream = UnixStream::connect(socket_path())
+        .expect("Failed to connect to daemon");
+    stream.set_read_timeout(Some(Duration::from_secs(5))).expect("Failed to set timeout");
+
+    // 1. Remember something
+    let remember = Frame::remember("Test memory content", "test,memory,daemon", "technical");
+    stream.write_all(&remember.encode()).expect("Failed to send REMEMBER");
+
+    let mut buf = vec![0u8; 65536];
+    let n = stream.read(&mut buf).expect("Failed to read response");
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+
+    if response.verb() == Verb::Error {
+        let err_msg = response.payload().as_str().unwrap_or("unknown error");
+        panic!("REMEMBER returned error: {}", err_msg);
+    }
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to REMEMBER");
+
+    let output = response.payload().as_str().expect("Expected string payload");
+    assert!(output.contains("id"), "Response should contain memory ID");
+    assert!(output.contains("anchored"), "Response should indicate anchored");
+    println!("REMEMBER response: {}", output);
+
+    // 2. Recall it
+    let recall = Frame::recall("test,memory", 10);
+    stream.write_all(&recall.encode()).expect("Failed to send RECALL");
+
+    let n = stream.read(&mut buf).expect("Failed to read response");
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to RECALL");
+    let output = response.payload().as_str().expect("Expected string payload");
+    assert!(output.contains("memories"), "Response should contain memories");
+    println!("RECALL response: {}", output);
+
+    // 3. Check wave stats
+    let wave = Frame::m8_wave();
+    stream.write_all(&wave.encode()).expect("Failed to send M8_WAVE");
+
+    let n = stream.read(&mut buf).expect("Failed to read response");
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to M8_WAVE");
+    let output = response.payload().as_str().expect("Expected string payload");
+    assert!(output.contains("total_memories"), "Response should contain memory stats");
+    println!("M8_WAVE response: {}", output);
+
+    // Clean up
+    drop(stream);
+    stop_daemon();
+    let _ = daemon.wait();
+
+    println!("\nMEMORY test passed!");
+}
