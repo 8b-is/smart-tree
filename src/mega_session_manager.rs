@@ -47,8 +47,8 @@ pub struct MegaSessionManager {
 
 impl MegaSessionManager {
     pub fn new() -> Result<Self> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let session_dir = Path::new(&home).join(".mem8").join("mega_sessions");
+        let cwd = std::env::current_dir()?;
+        let session_dir = cwd.join(".st").join("mega_sessions");
 
         // Ensure directory exists
         fs::create_dir_all(&session_dir)?;

@@ -32,9 +32,9 @@ pub struct FileHistoryConfig {
 
 impl Default for FileHistoryConfig {
     fn default() -> Self {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self {
-            base_dir: home.join(".mem8").join(".filehistory"),
+            base_dir: cwd.join(".st").join("filehistory"),
             auto_create: true,
             prefer_append: true,
         }

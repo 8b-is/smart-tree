@@ -15,6 +15,7 @@ mod websocket;
 
 pub use server::start_server;
 
+use crate::in_memory_logger::InMemoryLogStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,7 +23,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Shared state for the web dashboard
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DashboardState {
     /// Current working directory for file browser
     pub cwd: PathBuf,
@@ -30,14 +31,17 @@ pub struct DashboardState {
     pub pty_sessions: HashMap<String, pty::PtyHandle>,
     /// Number of active WebSocket connections
     pub connections: usize,
+    /// In-memory store for recent log entries
+    pub log_store: InMemoryLogStore,
 }
 
 impl DashboardState {
-    pub fn new(cwd: PathBuf) -> Self {
+    pub fn new(cwd: PathBuf, log_store: InMemoryLogStore) -> Self {
         Self {
             cwd,
             pty_sessions: HashMap::new(),
             connections: 0,
+            log_store,
         }
     }
 }
@@ -52,6 +56,8 @@ pub enum TerminalMessage {
     Resize { cols: u16, rows: u16 },
     /// Output from PTY to client
     Output { data: String },
+    /// A system message (e.g., connection info)
+    System { message: String },
     /// PTY process exited
     Exit { code: i32 },
     /// Error occurred

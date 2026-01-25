@@ -42,6 +42,9 @@ pub mod universal_format_detector; // Detects format by structure! // Semantic-a
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
 pub mod mcp;
 
+// In-memory logger for API access
+pub mod in_memory_logger;
+
 // Feedback API client for sending feedback to f.8b.is
 pub mod feedback_client;
 
@@ -69,6 +72,9 @@ pub mod code_review;
 // Daemon and client for always-on AI context service
 pub mod daemon;
 pub mod daemon_client;
+
+// Service manager for systemd integration
+pub mod service_manager;
 
 // Self-update mechanism - check and install updates from GitHub releases
 pub mod updater;

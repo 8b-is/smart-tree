@@ -388,3 +388,205 @@ fn is_binary_file(path: &std::path::Path) -> bool {
         "sqlite" | "db"
     )
 }
+
+
+// ----- Config Handling -----
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LayoutConfig {
+    sidebar_width: f64,
+    terminal_height: f64,
+    preview_width: f64,
+    layout_mode: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct ThemeConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bg_primary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bg_secondary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    accent_primary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    accent_secondary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fg_primary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fg_secondary: Option<String>,
+}
+
+fn get_project_st_dir(state: &SharedState) -> Result<PathBuf, String> {
+    let cwd = state.blocking_read().cwd.clone();
+    Ok(cwd.join(".st"))
+}
+
+fn ensure_project_st_dir_exists(state: &SharedState) -> Result<PathBuf, String> {
+    let config_dir = get_project_st_dir(state)?;
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| format!("Failed to create project .st directory: {}", e))?;
+    }
+    Ok(config_dir)
+}
+
+fn get_layout_config_path(state: &SharedState) -> Result<PathBuf, String> {
+    get_project_st_dir(state).map(|dir| dir.join("layout.json"))
+}
+
+impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self {
+            sidebar_width: 25.0,
+            terminal_height: 33.3,
+            preview_width: 33.3,
+            layout_mode: "default".to_string(),
+        }
+    }
+}
+
+pub async fn get_layout_config(
+    State(state): State<SharedState>,
+) -> Result<Json<LayoutConfig>, (StatusCode, String)> {
+    let path = get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    if !path.exists() {
+        return Ok(Json(LayoutConfig::default()));
+    }
+    let content = fs::read_to_string(&path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read layout config: {}", e)))?;
+    let config: LayoutConfig = serde_json::from_str(&content)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse layout config: {}", e)))?;
+    Ok(Json(config))
+}
+
+pub async fn save_layout_config(
+    State(state): State<SharedState>,
+    Json(payload): Json<LayoutConfig>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    ensure_project_st_dir_exists(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let path = get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let content = serde_json::to_string_pretty(&payload)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize layout config: {}", e)))?;
+    fs::write(&path, content)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write layout config: {}", e)))?;
+    Ok(StatusCode::OK)
+}
+
+// --- Theme Config ---
+
+fn get_user_st_dir() -> Result<PathBuf, String> {
+    dirs::home_dir()
+        .map(|home| home.join(".st"))
+        .ok_or_else(|| "Could not find home directory".to_string())
+}
+
+fn ensure_user_st_dir_exists() -> Result<PathBuf, String> {
+    let config_dir = get_user_st_dir()?;
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| format!("Failed to create user .st directory: {}", e))?;
+    }
+    Ok(config_dir)
+}
+
+fn get_theme_config_path() -> Result<PathBuf, String> {
+    get_user_st_dir().map(|dir| dir.join("theme.json"))
+}
+
+pub async fn get_theme_config() -> Result<Json<ThemeConfig>, (StatusCode, String)> {
+    let path = get_theme_config_path().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    if !path.exists() {
+        return Ok(Json(ThemeConfig::default()));
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read theme config: {}", e)))?;
+    
+    if content.is_empty() {
+        return Ok(Json(ThemeConfig::default()));
+    }
+    
+    let config: ThemeConfig = serde_json::from_str(&content)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse theme config: {}", e)))?;
+
+    Ok(Json(config))
+}
+
+pub async fn save_theme_config(
+    Json(payload): Json<ThemeConfig>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    ensure_user_st_dir_exists().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let path = get_theme_config_path().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    
+    // Merge with existing config
+    let mut current_config = if path.exists() {
+        let content = fs::read_to_string(&path).unwrap_or_default();
+        if content.is_empty() {
+            ThemeConfig::default()
+        } else {
+            serde_json::from_str(&content).unwrap_or_default()
+        }
+    } else {
+        ThemeConfig::default()
+    };
+
+    if let Some(val) = payload.bg_primary { current_config.bg_primary = Some(val); }
+    if let Some(val) = payload.bg_secondary { current_config.bg_secondary = Some(val); }
+    if let Some(val) = payload.accent_primary { current_config.accent_primary = Some(val); }
+    if let Some(val) = payload.accent_secondary { current_config.accent_secondary = Some(val); }
+    if let Some(val) = payload.fg_primary { current_config.fg_primary = Some(val); }
+    if let Some(val) = payload.fg_secondary { current_config.fg_secondary = Some(val); }
+
+    let content = serde_json::to_string_pretty(&current_config)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize theme config: {}", e)))?;
+
+    fs::write(&path, content)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write theme config: {}", e)))?;
+
+    Ok(StatusCode::OK)
+}
+
+
+// ----- Log Handling -----
+
+#[derive(Debug, Deserialize)]
+pub struct LogQuery {
+    level: Option<String>,
+}
+
+/// Get recent logs from the in-memory store
+pub async fn get_logs(
+    State(state): State<SharedState>,
+    Query(query): Query<LogQuery>,
+) -> Result<Json<Vec<crate::in_memory_logger::LogEntry>>, StatusCode> {
+    let state_guard = state.read().await;
+    let entries = state_guard.log_store.entries.lock().unwrap();
+
+    let filtered_logs: Vec<crate::in_memory_logger::LogEntry> = if let Some(min_level_str) = query.level {
+        let min_level = match min_level_str.to_uppercase().as_str() {
+            "ERROR" => Some(tracing::Level::ERROR),
+            "WARN" => Some(tracing::Level::WARN),
+            "INFO" => Some(tracing::Level::INFO),
+            "DEBUG" => Some(tracing::Level::DEBUG),
+            "TRACE" => Some(tracing::Level::TRACE),
+            _ => None,
+        };
+
+        if let Some(min_level) = min_level {
+            entries
+                .iter()
+                .filter(|entry| {
+                    entry.level.parse::<tracing::Level>().unwrap_or(tracing::Level::TRACE) <= min_level
+                })
+                .cloned()
+                .collect()
+        } else {
+            entries.iter().cloned().collect()
+        }
+    } else {
+        entries.iter().cloned().collect()
+    };
+
+    Ok(Json(filtered_logs))
+}
+

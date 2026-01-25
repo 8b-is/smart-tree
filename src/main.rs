@@ -53,25 +53,49 @@ use st::{
         waste::WasteFormatter,
         Formatter, PathDisplayMode, StreamingFormatter,
     },
+    in_memory_logger::{InMemoryLoggerLayer, InMemoryLogStore},
     inputs::InputProcessor,
     parse_size,
-    rename_project::{rename_project, RenameOptions},
+    service_manager,
     Scanner,
     ScannerConfig, // The mighty Scanner and its configuration.
 };
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 /// CLI definitions are centralized in [`st::cli`](src/cli.rs) module.
-/// This separation improves maintainability and keeps the main file focused
-/// on orchestration rather than argument parsing logic.
-///
-/// And now, the moment you've all been waiting for: the `main` function!
-/// This is the heart of the st concert. It's where we parse the arguments,
-/// configure the scanner, pick the right formatter for the job, and let it rip.
-/// It returns a `Result` because sometimes, even rockstars hit a wrong note.
+// ...
+// ... existing code ...
+// ...
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
+
+    // Initialize Logging
+    let log_level_str = if let Some(level) = cli.log_level {
+        match level {
+            st::cli::LogLevel::Error => "error",
+            st::cli::LogLevel::Warn => "warn",
+            st::cli::LogLevel::Info => "info",
+            st::cli::LogLevel::Debug => "debug",
+            st::cli::LogLevel::Trace => "trace",
+        }
+    } else {
+        "info" // Default log level
+    };
+
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", log_level_str);
+    }
+    
+    let log_store = InMemoryLogStore::new();
+    let in_memory_layer = InMemoryLoggerLayer::new(log_store.clone());
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(fmt::layer().with_writer(io::stderr))
+        .with(in_memory_layer)
+        .init();
 
     // Check for updates on startup (rate-limited, non-blocking)
     // Skip if --no-update-check is set or if this is an exclusive command
@@ -144,6 +168,21 @@ async fn main() -> Result<()> {
         man.render(&mut io::stdout())?;
         return Ok(());
     }
+    if cli.version {
+        return show_version_with_updates().await;
+    }
+    if cli.update {
+        match check_for_updates_cli().await {
+            Ok(msg) => {
+                println!("{}", msg);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("❌ Update check failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
     if cli.mcp {
         // Check if MCP server is enabled via feature flags
         let flags = feature_flags::features();
@@ -182,6 +221,43 @@ async fn main() -> Result<()> {
             Err(e) => eprintln!("❌ Failed to check MCP status: {}", e),
         }
         return Ok(());
+    }
+
+    // Handle top-level subcommands
+    if let Some(cmd) = cli.cmd {
+        match cmd {
+            st::cli::Cmd::Service(service_command) => {
+                let result = match service_command {
+                    st::cli::Service::Install => service_manager::install(),
+                    st::cli::Service::Uninstall => service_manager::uninstall(),
+                    st::cli::Service::Start => service_manager::start(),
+                    st::cli::Service::Stop => service_manager::stop(),
+                    st::cli::Service::Status => service_manager::status(),
+                    st::cli::Service::Logs => service_manager::logs(),
+                };
+
+                if let Err(e) = result {
+                    eprintln!("❌ Service operation failed: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+
+            st::cli::Cmd::ProjectTags(project_tags) => {
+                let project_path = ".";
+                match project_tags {
+                    st::cli::ProjectTags::Add { tag } => {
+                        st::project_tags::add(project_path, &tag);
+                        println!("Added tag '{}' to the project.", tag);
+                    }
+                    st::cli::ProjectTags::Remove { tag } => {
+                        st::project_tags::remove(project_path, &tag);
+                        println!("Removed tag '{}' from the project.", tag);
+                    }
+                }
+                return Ok(());
+            }
+        }
     }
 
     // Handle security cleanup (--cleanup)
@@ -253,7 +329,7 @@ async fn main() -> Result<()> {
 
     if cli.dashboard {
         // Launch the web dashboard - works anywhere, no display needed!
-        return run_web_dashboard(cli.dashboard_port, cli.open_browser, cli.allow.clone()).await;
+        return run_web_dashboard(cli.dashboard_port, cli.open_browser, cli.allow.clone(), log_store).await;
     }
 
     if cli.daemon {
@@ -319,45 +395,9 @@ async fn main() -> Result<()> {
             } else if cli.auto_daemon {
                 // Auto-start daemon if requested
                 eprintln!("🌳 Starting Smart Tree Daemon...");
-                if let Err(e) = client.start_daemon().await {
-                    eprintln!("⚠️  Failed to start daemon: {}", e);
-                } else {
-                    // Wait a moment for daemon to be ready
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    eprintln!("✅ Daemon started! Future commands will route through it.");
-                }
+                let _ = handle_daemon_start(cli.daemon_port).await;
             }
         }
-    }
-
-    if cli.version {
-        return show_version_with_updates().await;
-    }
-    if cli.update {
-        return st::updater::run_update(false).await;
-    }
-    if let Some(names) = cli.rename_project {
-        if names.len() != 2 {
-            eprintln!("Error: rename-project requires exactly two arguments: OLD_NAME NEW_NAME");
-            return Ok(());
-        }
-        let options = RenameOptions::default();
-        return rename_project(&names[0], &names[1], options).await;
-    }
-
-    if let Some(project_tags) = cli.project_tags {
-        let project_path = ".";
-        match project_tags {
-            st::cli::ProjectTags::Add { tag } => {
-                st::project_tags::add(project_path, &tag);
-                println!("Added tag '{}' to the project.", tag);
-            }
-            st::cli::ProjectTags::Remove { tag } => {
-                st::project_tags::remove(project_path, &tag);
-                println!("Removed tag '{}' from the project.", tag);
-            }
-        }
-        return Ok(());
     }
 
     // Handle Claude integration setup (smart init or update)
@@ -425,6 +465,10 @@ async fn main() -> Result<()> {
 
     if cli.proxy_server {
         return st::proxy::server::start_proxy_server(cli.proxy_port).await;
+    }
+
+    if cli.detect_llms {
+        return handle_detect_llms().await;
     }
 
     // Handle memory operations
@@ -846,6 +890,10 @@ async fn main() -> Result<()> {
                 Box::new(EmotionalFormatter::new(use_color))
             }
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
+            OutputMode::HexTree => {
+                use st::formatters::hextree::HexTreeFormatter;
+                Box::new(HexTreeFormatter::new())
+            }
             OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, no_emoji)),
             OutputMode::Projects => Box::new(ProjectsFormatter::new()),
             OutputMode::Mermaid => {
@@ -1024,7 +1072,7 @@ async fn handle_proxy(cli: &Cli) -> Result<()> {
 
     println!("🌐 Calling {} (model: {})...", provider_name, model);
 
-    let mut proxy = MemoryProxy::new()?;
+    let mut proxy = MemoryProxy::with_local_detection().await?;
     let request = LlmRequest {
         model: model.to_string(),
         messages: vec![LlmMessage {
@@ -1050,6 +1098,53 @@ async fn handle_proxy(cli: &Cli) -> Result<()> {
             "📊 Tokens: {} prompt, {} completion ({} total)",
             usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
         );
+    }
+
+    Ok(())
+}
+
+/// Detect and display local LLM servers
+async fn handle_detect_llms() -> Result<()> {
+    use st::proxy::ollama::{detect_local_llms, LMSTUDIO_PORT, OLLAMA_PORT};
+
+    println!("🔍 Scanning for local LLM servers...\n");
+
+    let detected = detect_local_llms().await;
+
+    if detected.is_empty() {
+        println!("No local LLM servers detected.\n");
+        println!("Expected locations:");
+        println!("  🦙 Ollama:    http://localhost:{}", OLLAMA_PORT);
+        println!("  🖥️  LM Studio: http://localhost:{}", LMSTUDIO_PORT);
+        println!("\nInstall Ollama: https://ollama.ai");
+        println!("Install LM Studio: https://lmstudio.ai");
+    } else {
+        println!("Found {} local LLM server(s):\n", detected.len());
+
+        for info in &detected {
+            match info.server_type {
+                st::proxy::ollama::LocalLlmType::Ollama => {
+                    println!("🦙 Ollama at {}", info.base_url);
+                }
+                st::proxy::ollama::LocalLlmType::LmStudio => {
+                    println!("🖥️  LM Studio at {}", info.base_url);
+                }
+            }
+
+            if info.models.is_empty() {
+                println!("   (no models loaded)");
+            } else {
+                println!("   Available models:");
+                for model in &info.models {
+                    println!("     • {}", model);
+                }
+            }
+            println!();
+        }
+
+        println!("Usage:");
+        println!("  st --proxy --provider ollama --model llama3.2 --prompt \"Hello!\"");
+        println!("  st --proxy --provider lmstudio --model default --prompt \"Hello!\"");
     }
 
     Ok(())
@@ -1483,8 +1578,8 @@ async fn run_terminal() -> Result<()> {
 }
 
 /// Launch the web dashboard - browser-based terminal + file browser
-async fn run_web_dashboard(port: u16, open_browser: bool, allow_networks: Vec<String>) -> Result<()> {
-    st::web_dashboard::start_server(port, open_browser, allow_networks).await
+async fn run_web_dashboard(port: u16, open_browser: bool, allow_networks: Vec<String>, log_store: InMemoryLogStore) -> Result<()> {
+    st::web_dashboard::start_server(port, open_browser, allow_networks, log_store).await
 }
 
 /// Run the Smart Tree Daemon - System-wide AI context service

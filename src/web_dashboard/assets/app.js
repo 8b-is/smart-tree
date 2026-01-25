@@ -11,14 +11,16 @@ class Dashboard {
         this.previewWidth = 400;
         this.terminalHeight = 300;
         this.layout = 'side'; // 'side' or 'bottom'
+        this.debouncedSaveLayout = this.debounce(this.saveLayoutConfig, 500);
 
         this.init();
     }
 
     async init() {
-        this.initLayout();
+        await this.loadThemeConfig(); // Load theme first
         this.initMobile();
         this.initVoice();
+        await this.loadLayoutConfig(); // Load layout
         this.createTerminal(); // Create first terminal
         this.initFileBrowser();
         this.initResizers();
@@ -28,6 +30,110 @@ class Dashboard {
 
         // Refresh health periodically
         setInterval(() => this.loadHealth(), 30000);
+    }
+
+    // --- Config Persistence ---
+
+    debounce(func, delay) {
+        let timeout;
+        return (...args) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+    
+    async loadThemeConfig() {
+        try {
+            const response = await fetch('/api/config/theme');
+            if (response.ok) {
+                const theme = await response.json();
+                for (const [key, value] of Object.entries(theme)) {
+                    if (value) {
+                        // Convert snake_case to --kebab-case
+                        const cssVar = `--${key.replace(/_/g, '-')}`;
+                        document.documentElement.style.setProperty(cssVar, value);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load theme config.', e);
+        }
+    }
+
+    async loadLayoutConfig() {
+        try {
+            const response = await fetch('/api/config/layout');
+            if (response.ok) {
+                const config = await response.json();
+                this.sidebarWidth = config.sidebar_width || 250;
+                this.terminalHeight = config.terminal_height || 300;
+                this.previewWidth = config.preview_width || 400;
+                this.setLayout(config.layout_mode || 'side', false);
+                
+                // Apply loaded sizes
+                document.getElementById('sidebar').style.width = `${this.sidebarWidth}px`;
+                document.documentElement.style.setProperty('--terminal-height', `${this.terminalHeight}px`);
+                const previewContainer = document.getElementById('previewContainer');
+                if (previewContainer.classList.contains('visible')) {
+                    previewContainer.style.width = `${this.previewWidth}px`;
+                }
+
+            } else {
+                this.initLayout(); // Fallback to default
+            }
+        } catch (e) {
+            console.error('Failed to load layout config, using defaults.', e);
+            this.initLayout(); // Fallback to default
+        }
+    }
+
+    async saveLayoutConfig() {
+        const config = {
+            sidebar_width: this.sidebarWidth,
+            terminal_height: this.terminalHeight,
+            preview_width: this.previewWidth,
+            layout_mode: this.layout
+        };
+
+        try {
+            await fetch('/api/config/layout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+        } catch (e) {
+            console.error('Failed to save layout config.', e);
+        }
+    }
+    
+    // Layout Management
+    initLayout() {
+        // This is now a fallback for when API fails
+        this.setLayout('side', false);
+
+        document.getElementById('toggleLayout').addEventListener('click', () => {
+            this.toggleLayout();
+        });
+    }
+
+    setLayout(layout, shouldSave = true) {
+        this.layout = layout;
+        const dashboard = document.getElementById('dashboard');
+
+        if (layout === 'bottom') {
+            dashboard.classList.add('layout-bottom');
+        } else {
+            dashboard.classList.remove('layout-bottom');
+        }
+
+        if (shouldSave) {
+            this.saveLayoutConfig();
+        }
+
+        // Refit all terminals
+        setTimeout(() => {
+            this.terminals.forEach(t => t.fitAddon.fit());
+        }, 100);
     }
 
     // Mobile Support
@@ -349,6 +455,12 @@ class Dashboard {
                         terminal.write(msg.data);
                         // Voice output for significant content
                         this.processVoiceOutput(msg.data);
+                        break;
+                    case 'system':
+                        terminal.write(`\r\n\x1b[36m[System: ${msg.message}]\x1b[0m\r\n`);
+                        if (this.voiceEnabled) {
+                            this.speak(`System: ${msg.message}`);
+                        }
                         break;
                     case 'exit':
                         terminal.write(`\r\n[Process exited with code ${msg.code}]\r\n`);
@@ -684,7 +796,7 @@ class Dashboard {
         const doResize = (clientX) => {
             if (!isResizing) return;
             const newWidth = clientX;
-            if (newWidth >= 150 && newWidth <= 400) {
+            if (newWidth >= 150 && newWidth <= 500) {
                 sidebar.style.width = newWidth + 'px';
                 this.sidebarWidth = newWidth;
             }
@@ -696,6 +808,7 @@ class Dashboard {
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
                 this.terminals.forEach(t => t.fitAddon.fit());
+                this.debouncedSaveLayout();
             }
         };
 
@@ -746,6 +859,7 @@ class Dashboard {
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
                 this.terminals.forEach(t => t.fitAddon.fit());
+                this.debouncedSaveLayout();
             }
         };
 
@@ -797,6 +911,7 @@ class Dashboard {
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
                 this.terminals.forEach(t => t.fitAddon.fit());
+                this.debouncedSaveLayout();
             }
         };
 

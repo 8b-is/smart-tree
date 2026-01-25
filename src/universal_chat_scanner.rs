@@ -350,31 +350,25 @@ impl UniversalChatScanner {
 
     /// Save discovered chats to .m8 files
     pub async fn save_to_m8(&self, destination: &MemoryDestination) -> Result<()> {
-        let base_path = match destination.memory_type {
+        let path: PathBuf = match &destination.memory_type {
             MemoryType::ProjectMemory => {
-                format!(
-                    "~/.mem8/projects/{}",
-                    destination
-                        .project
-                        .as_ref()
-                        .unwrap_or(&"default".to_string())
-                )
+                // Use project-local directory
+                let cwd = std::env::current_dir()?;
+                // No project sub-folder is needed as we are already inside the project's context
+                cwd.join(".st").join("mem8")
             }
-            MemoryType::UserMemory => "~/.mem8/user".to_string(),
+            MemoryType::UserMemory => shellexpand::tilde("~/.mem8/user").into_owned().into(),
             MemoryType::LLMMemory => {
-                format!(
+                let llm_path = format!(
                     "~/.mem8/llm/{}",
-                    destination
-                        .llm_specific
-                        .as_ref()
-                        .unwrap_or(&"general".to_string())
-                )
+                    destination.llm_specific.as_ref().unwrap_or(&"general".to_string())
+                );
+                shellexpand::tilde(&llm_path).into_owned().into()
             }
-            MemoryType::GlobalMemory => "~/.mem8/global".to_string(),
+            MemoryType::GlobalMemory => shellexpand::tilde("~/.mem8/global").into_owned().into(),
         };
 
-        let path = shellexpand::tilde(&base_path);
-        fs::create_dir_all(path.as_ref())?;
+        fs::create_dir_all(&path)?;
 
         // Group chats by source
         let mut by_source: HashMap<String, Vec<&UniversalChat>> = HashMap::new();
@@ -386,8 +380,8 @@ impl UniversalChatScanner {
         // Save each source group to appropriate format
         // .m8j for JSON contexts, .m8 for binary wave format
         for (source, chats) in by_source {
-            let filename = format!("{}/chat_{}.m8j", path, source.to_lowercase());
-            self.write_m8j_file(&filename, chats)?;
+            let filename = path.join(format!("chat_{}.m8j", source.to_lowercase().replace(['{', '}', ':', '"', ' '], "")));
+            self.write_m8j_file(filename.to_str().unwrap_or_default(), chats)?;
         }
 
         Ok(())

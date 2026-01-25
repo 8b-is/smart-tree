@@ -70,7 +70,7 @@ pub struct EmotionalContext {
 impl GitMemory {
     /// Create new git memory system
     pub fn new(repo_path: &str) -> Result<Self> {
-        let storage_path = PathBuf::from(format!("{}/.mem8/git_commits.m8", repo_path));
+        let storage_path = PathBuf::from(repo_path).join(".st").join("mem8").join("git_commits.m8");
 
         // Generate unique frequency based on repo path
         let repo_frequency = Self::generate_repo_frequency(repo_path);

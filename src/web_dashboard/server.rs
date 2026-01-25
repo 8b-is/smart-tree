@@ -1,6 +1,7 @@
 //! Axum HTTP server for the web dashboard
 
 use super::{api, assets, websocket, DashboardState, SharedState};
+use crate::in_memory_logger::InMemoryLogStore;
 use anyhow::Result;
 use axum::{
     body::Body,
@@ -88,9 +89,9 @@ async fn check_allowed_network(
 }
 
 /// Start the web dashboard server
-pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<String>) -> Result<()> {
+pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<String>, log_store: InMemoryLogStore) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let state: SharedState = Arc::new(RwLock::new(DashboardState::new(cwd)));
+    let state: SharedState = Arc::new(RwLock::new(DashboardState::new(cwd, log_store)));
 
     let has_explicit_networks = !allow_networks.is_empty();
     let allowed = AllowedNetworks::new(allow_networks.clone());
@@ -112,6 +113,10 @@ pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<Str
         .route("/api/file", post(api::write_file))
         .route("/api/tree", get(api::get_tree))
         .route("/api/markdown", get(api::render_markdown))
+        .route("/api/logs", get(api::get_logs))
+        // Config endpoints
+        .route("/api/config/layout", get(api::get_layout_config).post(api::save_layout_config))
+        .route("/api/config/theme", get(api::get_theme_config).post(api::save_theme_config))
         // WebSocket endpoints
         .route("/ws/terminal", get(websocket::terminal_handler))
         .layer(axum::Extension(allowed.clone()))

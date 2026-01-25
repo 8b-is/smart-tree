@@ -113,11 +113,9 @@ impl ContextAbsorber {
         })
     }
 
-    fn load_last_absorption_time(project_name: &str) -> Option<SystemTime> {
-        let m8_path = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".mem8")
-            .join(format!("{}_absorbed.m8", project_name));
+    fn load_last_absorption_time(_project_name: &str) -> Option<SystemTime> {
+        let cwd = std::env::current_dir().ok()?;
+        let m8_path = cwd.join(".st").join("absorbed_context.m8");
 
         if m8_path.exists() {
             // Get the modification time of the M8 file
@@ -589,20 +587,21 @@ impl ContextAbsorber {
     }
 
     fn append_to_m8(context: &AbsorbedContext) -> Result<()> {
-        let m8_path = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".mem8")
-            .join(format!("{}_absorbed.m8", context.project_name));
+        let cwd = std::env::current_dir()?;
+        let st_dir = cwd.join(".st");
+        let m8_path = st_dir.join("absorbed_context.m8");
 
         // Ensure directory exists
-        if let Some(parent) = m8_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        fs::create_dir_all(&st_dir)?;
 
         // Append context to M8 file
         let mut existing = if m8_path.exists() {
             let content = fs::read_to_string(&m8_path)?;
-            serde_json::from_str::<Vec<AbsorbedContext>>(&content).unwrap_or_default()
+            if content.is_empty() {
+                Vec::new()
+            } else {
+                serde_json::from_str::<Vec<AbsorbedContext>>(&content).unwrap_or_default()
+            }
         } else {
             Vec::new()
         };
@@ -657,10 +656,8 @@ pub async fn handle_context_absorber(params: Value) -> Result<Value> {
             }))
         }
         "status" => {
-            let m8_path = dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".mem8")
-                .join(format!("{}_absorbed.m8", project_name));
+            let cwd = std::env::current_dir()?;
+            let m8_path = cwd.join(".st").join("absorbed_context.m8");
 
             let count = if m8_path.exists() {
                 let content = fs::read_to_string(&m8_path)?;

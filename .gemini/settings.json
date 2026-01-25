@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "smart-tree": {
+      "command": "st",
+      "args": [
+        "--mcp"
+      ]
+    }
+  }
+}

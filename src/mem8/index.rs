@@ -350,7 +350,7 @@ impl Mem8Index {
     fn index_path() -> Result<PathBuf> {
         let home = dirs::home_dir()
             .context("Could not find home directory")?;
-        Ok(home.join(".mem8").join("index.m8"))
+        Ok(home.join(".st").join("mem8").join("index.m8"))
     }
     
     /// Update from conversation analysis

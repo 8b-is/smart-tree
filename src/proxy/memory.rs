@@ -32,7 +32,7 @@ pub struct ProxyMemory {
 impl ProxyMemory {
     pub fn new() -> Result<Self> {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let storage_path = Path::new(&home).join(".mem8").join("proxy_memory.json");
+        let storage_path = Path::new(&home).join(".st").join("proxy_memory.json");
 
         if let Some(parent) = storage_path.parent() {
             fs::create_dir_all(parent)?;
@@ -123,6 +123,14 @@ impl MemoryProxy {
     pub fn new() -> Result<Self> {
         Ok(Self {
             inner: LlmProxy::default(),
+            memory: ProxyMemory::new()?,
+        })
+    }
+
+    /// Create a new MemoryProxy with auto-detection of local LLMs (Ollama, LM Studio)
+    pub async fn with_local_detection() -> Result<Self> {
+        Ok(Self {
+            inner: LlmProxy::with_local_detection().await,
             memory: ProxyMemory::new()?,
         })
     }

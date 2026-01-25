@@ -5,6 +5,7 @@ use crate::mcp::helpers::{
     scan_with_config, should_use_default_ignores, validate_and_convert_path, ScannerConfigBuilder,
 };
 use crate::mcp::permissions::get_available_tools;
+use crate::mcp::theme_tools;
 use crate::{
     feedback_client::FeedbackClient,
     formatters::{
@@ -829,7 +830,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "track_file_operation".to_string(),
-            description: "🔐 Track file operations with hash-based change detection. Part of the ultimate context-driven system that logs all AI file manipulations to ~/.mem8/.filehistory/. Favors append operations as the least intrusive method. Perfect for maintaining a complete history of AI-assisted code changes!".to_string(),
+            description: "🔐 Track file operations with hash-based change detection. Part of the ultimate context-driven system that logs all AI file manipulations to `./.st/filehistory/`. Favors append operations as the least intrusive method. Perfect for maintaining a complete history of AI-assisted code changes!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -865,7 +866,7 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
         ToolDefinition {
             name: "get_file_history".to_string(),
-            description: "📜 Retrieve complete operation history for a file from the ~/.mem8/.filehistory/ tracking system. Shows all AI manipulations with timestamps, operations, hashes, and agents. Essential for understanding how a file evolved through AI assistance!".to_string(),
+            description: "📜 Retrieve complete operation history for a file from the `./.st/filehistory/` tracking system. Shows all AI manipulations with timestamps, operations, hashes, and agents. Essential for understanding how a file evolved through AI assistance!".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -1424,6 +1425,46 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
             }),
         },
         // ==========================================================================
+        // UI Customization
+        // ==========================================================================
+        ToolDefinition {
+            name: "set_dashboard_theme".to_string(),
+            description: "🎨 Set the visual theme for the dashboard. Allows programmatically changing colors. Changes are saved to the user's ~/.st/theme.json file and will persist across sessions. Please refresh the dashboard to see changes.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bg_primary": { "type": "string", "description": "Main background color (e.g., '#0d0c1d')" },
+                    "bg_secondary": { "type": "string", "description": "Secondary background color (e.g., '#1a1a2e')" },
+                    "accent_primary": { "type": "string", "description": "Primary accent color, for highlights (e.g., '#f0f')" },
+                    "accent_secondary": { "type": "string", "description": "Secondary accent color, for links (e.g., '#0ff')" },
+                    "fg_primary": { "type": "string", "description": "Main text color (e.g., '#e0e0e0')" },
+                    "fg_secondary": { "type": "string", "description": "Secondary text color (e.g., '#a0a0e0')" }
+                },
+                "required": []
+            }),
+        },
+
+        // ==========================================================================
+        // UI Customization
+        // ==========================================================================
+        ToolDefinition {
+            name: "set_dashboard_theme".to_string(),
+            description: "🎨 Set the visual theme for the dashboard. Allows programmatically changing colors. Changes are saved to the user's ~/.st/theme.json file and will persist across sessions. Please refresh the dashboard to see changes.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bg_primary": { "type": "string", "description": "Main background color (e.g., '#0d0c1d')" },
+                    "bg_secondary": { "type": "string", "description": "Secondary background color (e.g., '#1a1a2e')" },
+                    "accent_primary": { "type": "string", "description": "Primary accent color, for highlights (e.g., '#f0f')" },
+                    "accent_secondary": { "type": "string", "description": "Secondary accent color, for links (e.g., '#0ff')" },
+                    "fg_primary": { "type": "string", "description": "Main text color (e.g., '#e0e0e0')" },
+                    "fg_secondary": { "type": "string", "description": "Secondary text color (e.g., '#a0a0e0')" }
+                },
+                "required": []
+            }),
+        },
+
+        // ==========================================================================
         // 📖 SMART READ TOOL - The Treehugger-powered file reader!
         // Compresses code files using AST parsing to show structure with expandable
         // function references. Auto-expands based on context keywords!
@@ -1812,7 +1853,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
                              • OpenWebUI/LMStudio\n\
                              • ChatGPT exports\n\
                              • Text messages (if available)\n\n\
-                             Results will be saved to ~/.mem8/ organized by source.\n\
+                             Results will be saved to the project's ./.st/mem8/ directory, organized by source.\n\
                              Check the terminal for interactive prompts!"
                 }]
             }))
@@ -1820,6 +1861,8 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
 
         // 📖 Smart file read with treehugger compression
         "read" => smart_read(args, ctx_clone.clone()).await,
+        
+        "set_dashboard_theme" => theme_tools::handle_set_dashboard_theme(args).await,
 
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }?;

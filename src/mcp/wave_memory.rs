@@ -239,11 +239,12 @@ impl WaveMemoryManager {
     /// WARNING: This allocates a 4.29 billion voxel grid - use new_test() for tests!
     pub fn new(storage_dir: Option<&Path>) -> Self {
         let storage_path = storage_dir
-            .map(|p| p.join(".wave_memory.m8"))
+            .map(|p| p.join(".st").join("mem8").join("wave_memory.m8"))
             .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".mem8")
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".st")
+                    .join("mem8")
                     .join("wave_memory.m8")
             });
 
@@ -268,11 +269,12 @@ impl WaveMemoryManager {
     #[cfg(test)]
     pub fn new_test(storage_dir: Option<&Path>) -> Self {
         let storage_path = storage_dir
-            .map(|p| p.join(".wave_memory.m8"))
+            .map(|p| p.join(".st").join("mem8").join("wave_memory_test.m8"))
             .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".mem8")
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".st")
+                    .join("mem8")
                     .join("wave_memory_test.m8")
             });
 

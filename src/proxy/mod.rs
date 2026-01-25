@@ -14,6 +14,7 @@ pub mod candle;
 pub mod google;
 pub mod grok;
 pub mod memory;
+pub mod ollama;
 pub mod openai;
 pub mod openai_compat;
 pub mod openrouter;
@@ -94,6 +95,36 @@ impl LlmProxy {
             }
         }
         Err(anyhow::anyhow!("Provider '{}' not found", provider_name))
+    }
+}
+
+impl LlmProxy {
+    /// Create a proxy with auto-detection of local LLMs (Ollama, LM Studio)
+    /// This is async because it needs to probe local ports
+    pub async fn with_local_detection() -> Self {
+        let mut proxy = Self::default();
+
+        // Auto-detect local LLM servers
+        let local_llms = ollama::detect_local_llms().await;
+        for info in local_llms {
+            match info.server_type {
+                ollama::LocalLlmType::Ollama => {
+                    eprintln!("🦙 Detected Ollama with {} model(s)", info.models.len());
+                    proxy.add_provider(Box::new(ollama::OllamaProvider::ollama()));
+                }
+                ollama::LocalLlmType::LmStudio => {
+                    eprintln!("🖥️  Detected LM Studio with {} model(s)", info.models.len());
+                    proxy.add_provider(Box::new(ollama::OllamaProvider::lmstudio()));
+                }
+            }
+        }
+
+        proxy
+    }
+
+    /// List all available providers
+    pub fn list_providers(&self) -> Vec<&'static str> {
+        self.providers.iter().map(|p| p.name()).collect()
     }
 }
 

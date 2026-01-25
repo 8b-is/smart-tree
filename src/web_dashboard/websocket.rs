@@ -37,10 +37,21 @@ async fn handle_terminal(socket: WebSocket, state: SharedState) {
         }
     };
 
-    // Update connection count
+    // Update connection count and send welcome message
     {
         let mut s = state.write().await;
         s.connections += 1;
+        let welcome_msg = TerminalMessage::System {
+            message: format!("Connected to project: {}", s.cwd.to_string_lossy()),
+        };
+        if sender
+            .send(Message::Text(serde_json::to_string(&welcome_msg).unwrap()))
+            .await
+            .is_err()
+        {
+            // Connection closed immediately, bail
+            return;
+        }
     }
 
     let pty_for_read = Arc::clone(&pty_handle);
