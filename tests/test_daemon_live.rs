@@ -224,3 +224,54 @@ fn test_daemon_format_json() {
 
     println!("JSON FORMAT test passed!");
 }
+
+#[test]
+#[ignore] // Run with: cargo test test_daemon_search -- --ignored --nocapture
+fn test_daemon_search() {
+    // Ensure clean state
+    stop_daemon();
+    thread::sleep(Duration::from_millis(200));
+
+    // Start daemon
+    let mut daemon = start_daemon();
+
+    // Wait for socket
+    assert!(wait_for_socket(), "Daemon socket not available");
+
+    // Connect and send SEARCH
+    let mut stream = UnixStream::connect(socket_path())
+        .expect("Failed to connect to daemon");
+
+    // Search for common text in /tmp
+    let search = Frame::search_path("/tmp", "tmp", 10);
+    stream.write_all(&search.encode()).expect("Failed to send SEARCH");
+
+    // Set read timeout since search can take time
+    stream.set_read_timeout(Some(Duration::from_secs(10))).expect("Failed to set timeout");
+
+    // Read response
+    let mut buf = vec![0u8; 65536];
+    let n = stream.read(&mut buf).expect("Failed to read response");
+
+    // Parse response
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+    if response.verb() == Verb::Error {
+        let err_msg = response.payload().as_str().unwrap_or("unknown error");
+        panic!("SEARCH returned error: {}", err_msg);
+    }
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to SEARCH");
+
+    // Check we got JSON results
+    let output = response.payload().as_str().expect("Expected string payload");
+    assert!(output.contains("pattern"), "Response should contain pattern");
+    assert!(output.contains("results"), "Response should contain results");
+
+    println!("SEARCH response ({} bytes):\n{}", output.len(), &output[..output.len().min(1000)]);
+
+    // Clean up
+    drop(stream);
+    stop_daemon();
+    let _ = daemon.wait();
+
+    println!("\nSEARCH test passed!");
+}

@@ -307,12 +307,86 @@ async fn handle_format(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> F
 }
 
 /// Handle SEARCH verb
+/// Payload: [path string][pattern string][max_results byte]
 async fn handle_search(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> Frame {
-    let pattern = payload.as_str().unwrap_or("*");
-    debug!("SEARCH pattern={}", pattern);
+    let mut decoder = PayloadDecoder::new(&payload);
 
-    // TODO: integrate with smart search
-    Frame::error("Search not yet implemented")
+    // Parse path (length-prefixed string)
+    let path_str = decoder.string().unwrap_or(".");
+
+    // Parse pattern (length-prefixed string)
+    let pattern = decoder.string().unwrap_or("");
+
+    // Parse max results
+    let max_results = decoder.byte().unwrap_or(50) as usize;
+
+    debug!("SEARCH path={} pattern={} max={}", path_str, pattern, max_results);
+
+    if pattern.is_empty() {
+        return Frame::error("Search pattern required");
+    }
+
+    let path = Path::new(path_str);
+
+    // Use scanner with search_keyword for content search
+    let config = ScannerConfig {
+        max_depth: 10,
+        search_keyword: Some(pattern.to_string()),
+        include_line_content: true,
+        ..ScannerConfig::default()
+    };
+
+    let (nodes, _stats) = match Scanner::new(path, config).and_then(|s| s.scan()) {
+        Ok(result) => result,
+        Err(e) => return Frame::error(&format!("Search failed: {e}")),
+    };
+
+    // Collect files with matches
+    let mut results: Vec<_> = nodes
+        .iter()
+        .filter_map(|node| {
+            let matches = node.search_matches.as_ref()?;
+            if matches.total_count == 0 {
+                return None;
+            }
+
+            let mut match_info = serde_json::json!({
+                "path": node.path.display().to_string(),
+                "matches": matches.total_count,
+                "truncated": matches.truncated
+            });
+
+            // Include line content if available
+            if let Some(ref lines) = matches.line_content {
+                let line_results: Vec<_> = lines
+                    .iter()
+                    .take(10) // Limit lines per file
+                    .map(|(line_num, content, col)| serde_json::json!({
+                        "line": line_num,
+                        "content": content,
+                        "col": col
+                    }))
+                    .collect();
+                match_info["lines"] = serde_json::json!(line_results);
+            }
+
+            Some((matches.total_count, match_info))
+        })
+        .collect();
+
+    // Sort by match count descending, limit results
+    results.sort_by(|a, b| b.0.cmp(&a.0));
+    results.truncate(max_results);
+
+    let results: Vec<_> = results.into_iter().map(|(_, info)| info).collect();
+
+    let response = serde_json::json!({
+        "pattern": pattern,
+        "count": results.len(),
+        "results": results
+    });
+
+    Frame::new(Verb::Ok, Payload::from_string(&response.to_string()))
 }
 
 /// Handle STATS verb

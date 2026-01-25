@@ -206,9 +206,39 @@ impl Frame {
         Frame::new(Verb::Scan, payload)
     }
 
-    /// Create a SEARCH frame
+    /// Create a SEARCH frame (simple - pattern only)
     pub fn search(pattern: &str) -> Self {
         Frame::new(Verb::Search, Payload::from_string(pattern))
+    }
+
+    /// Create a SEARCH frame with path, pattern, and max results
+    pub fn search_path(path: &str, pattern: &str, max_results: u8) -> Self {
+        let mut payload = Payload::new();
+
+        // Length-prefixed path
+        let path_len = path.len();
+        if path_len <= 126 {
+            payload.push_byte((path_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(path_len as u16);
+        }
+        payload.push_str(path);
+
+        // Length-prefixed pattern
+        let pattern_len = pattern.len();
+        if pattern_len <= 126 {
+            payload.push_byte((pattern_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(pattern_len as u16);
+        }
+        payload.push_str(pattern);
+
+        // Max results
+        payload.push_byte(max_results);
+
+        Frame::new(Verb::Search, payload)
     }
 
     /// Create a FORMAT frame with just mode (lists formats)
