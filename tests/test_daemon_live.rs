@@ -134,3 +134,93 @@ fn test_daemon_scan() {
 
     println!("SCAN test passed!");
 }
+
+#[test]
+#[ignore] // Run with: cargo test test_daemon_format -- --ignored --nocapture
+fn test_daemon_format() {
+    // Ensure clean state
+    stop_daemon();
+    thread::sleep(Duration::from_millis(200));
+
+    // Start daemon
+    let mut daemon = start_daemon();
+
+    // Wait for socket
+    assert!(wait_for_socket(), "Daemon socket not available");
+
+    // Connect and send FORMAT
+    let mut stream = UnixStream::connect(socket_path())
+        .expect("Failed to connect to daemon");
+
+    // FORMAT with classic mode on /tmp
+    let format = Frame::format_path("classic", "/tmp", 1);
+    stream.write_all(&format.encode()).expect("Failed to send FORMAT");
+
+    // Read response
+    let mut buf = vec![0u8; 65536];
+    let n = stream.read(&mut buf).expect("Failed to read response");
+
+    // Parse response
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+    if response.verb() == Verb::Error {
+        let err_msg = response.payload().as_str().unwrap_or("unknown error");
+        panic!("FORMAT returned error: {}", err_msg);
+    }
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to FORMAT");
+
+    // Check we got formatted output (not empty)
+    let output = response.payload().as_str().expect("Expected string payload");
+    assert!(!output.is_empty(), "Response should not be empty");
+
+    println!("FORMAT response ({} bytes):\n{}", output.len(), &output[..output.len().min(1000)]);
+
+    // Clean up
+    drop(stream);
+    stop_daemon();
+    let _ = daemon.wait();
+
+    println!("\nFORMAT test passed!");
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_daemon_format_json -- --ignored --nocapture
+fn test_daemon_format_json() {
+    // Ensure clean state
+    stop_daemon();
+    thread::sleep(Duration::from_millis(200));
+
+    // Start daemon
+    let mut daemon = start_daemon();
+
+    // Wait for socket
+    assert!(wait_for_socket(), "Daemon socket not available");
+
+    // Connect and send FORMAT with JSON mode
+    let mut stream = UnixStream::connect(socket_path())
+        .expect("Failed to connect to daemon");
+
+    let format = Frame::format_path("json", "/tmp", 1);
+    stream.write_all(&format.encode()).expect("Failed to send FORMAT");
+
+    // Read response
+    let mut buf = vec![0u8; 65536];
+    let n = stream.read(&mut buf).expect("Failed to read response");
+
+    // Parse response
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to FORMAT");
+
+    // Check we got valid JSON
+    let output = response.payload().as_str().expect("Expected string payload");
+    assert!(output.starts_with("[") || output.starts_with("{"),
+            "JSON format should start with [ or {{");
+
+    println!("JSON FORMAT response ({} bytes)", output.len());
+
+    // Clean up
+    drop(stream);
+    stop_daemon();
+    let _ = daemon.wait();
+
+    println!("JSON FORMAT test passed!");
+}

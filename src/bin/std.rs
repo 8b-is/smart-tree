@@ -19,6 +19,11 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
+use st::formatters::{
+    ai::AiFormatter, classic::ClassicFormatter, digest::DigestFormatter, hex::HexFormatter,
+    json::JsonFormatter, quantum::QuantumFormatter, stats::StatsFormatter, Formatter,
+    PathDisplayMode,
+};
 use st::scanner::{Scanner, ScannerConfig};
 use st_protocol::{Address, AuthLevel, Frame, Payload, PayloadDecoder, SecurityContext, Verb};
 
@@ -250,15 +255,55 @@ async fn handle_scan(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> Fra
     }
 }
 
-/// Handle FORMAT verb
+/// Handle FORMAT verb - scan and format in one operation
+/// Payload: [mode string][path string][depth byte]
 async fn handle_format(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> Frame {
-    let mode = payload.as_str().unwrap_or("classic");
-    debug!("FORMAT mode={}", mode);
+    let mut decoder = PayloadDecoder::new(&payload);
 
-    // Return supported formats for now
-    let formats = ["classic", "ai", "quantum", "marqant", "json", "hex"];
-    let json = serde_json::to_string(&formats).unwrap_or_default();
-    Frame::new(Verb::Ok, Payload::from_string(&json))
+    // Parse mode (length-prefixed string)
+    let mode = decoder.string().unwrap_or("classic");
+
+    // Parse path (length-prefixed string)
+    let path_str = decoder.string().unwrap_or(".");
+
+    // Parse depth
+    let depth = decoder.byte().unwrap_or(3);
+
+    debug!("FORMAT mode={} path={} depth={}", mode, path_str, depth);
+
+    // Scan the directory
+    let config = ScannerConfig {
+        max_depth: depth as usize,
+        ..ScannerConfig::default()
+    };
+
+    let path = Path::new(path_str);
+    let (nodes, stats) = match Scanner::new(path, config).and_then(|s| s.scan()) {
+        Ok(result) => result,
+        Err(e) => return Frame::error(&format!("Scan failed: {e}")),
+    };
+
+    // Get the appropriate formatter
+    let formatter: Box<dyn Formatter> = match mode {
+        "classic" => Box::new(ClassicFormatter::new(false, false, PathDisplayMode::Relative)),
+        "ai" => Box::new(AiFormatter::new(false, PathDisplayMode::Relative)),
+        "json" => Box::new(JsonFormatter::new(false)),
+        "hex" => Box::new(HexFormatter::new(false, false, false, PathDisplayMode::Relative, false)),
+        "quantum" => Box::new(QuantumFormatter::new()),
+        "stats" => Box::new(StatsFormatter::new()),
+        "digest" => Box::new(DigestFormatter::new()),
+        _ => return Frame::error(&format!("Unknown format mode: {mode}")),
+    };
+
+    // Format to a buffer
+    let mut output = Vec::new();
+    if let Err(e) = formatter.format(&mut output, &nodes, &stats, path) {
+        return Frame::error(&format!("Format failed: {e}"));
+    }
+
+    // Return formatted output
+    let output_str = String::from_utf8_lossy(&output);
+    Frame::new(Verb::Ok, Payload::from_string(&output_str))
 }
 
 /// Handle SEARCH verb

@@ -211,9 +211,39 @@ impl Frame {
         Frame::new(Verb::Search, Payload::from_string(pattern))
     }
 
-    /// Create a FORMAT frame
+    /// Create a FORMAT frame with just mode (lists formats)
     pub fn format(mode: &str) -> Self {
         Frame::new(Verb::Format, Payload::from_string(mode))
+    }
+
+    /// Create a FORMAT frame with mode, path, and depth (scans and formats)
+    pub fn format_path(mode: &str, path: &str, depth: u8) -> Self {
+        let mut payload = Payload::new();
+
+        // Length-prefixed mode
+        let mode_len = mode.len();
+        if mode_len <= 126 {
+            payload.push_byte((mode_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(mode_len as u16);
+        }
+        payload.push_str(mode);
+
+        // Length-prefixed path
+        let path_len = path.len();
+        if path_len <= 126 {
+            payload.push_byte((path_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(path_len as u16);
+        }
+        payload.push_str(path);
+
+        // Depth
+        payload.push_byte(depth);
+
+        Frame::new(Verb::Format, payload)
     }
 }
 

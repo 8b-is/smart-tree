@@ -146,10 +146,10 @@ impl Verb {
         match self {
             // Level 0: Read-only (no auth)
             Verb::Scan | Verb::Search | Verb::Stats | Verb::Ping |
-            Verb::Context | Verb::Recall => 0,
+            Verb::Context | Verb::Recall | Verb::Format => 0,
 
             // Level 1: Local write (session required)
-            Verb::Format | Verb::Clear | Verb::Remember |
+            Verb::Clear | Verb::Remember |
             Verb::Subscribe | Verb::Unsubscribe => 1,
 
             // Level 2: Mutate (FIDO required)
