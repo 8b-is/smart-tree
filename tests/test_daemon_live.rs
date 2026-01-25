@@ -1,0 +1,136 @@
+//! Live daemon integration test
+//!
+//! Starts the daemon, sends protocol frames, validates responses.
+
+use std::io::{Read, Write};
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
+use std::process::{Child, Command};
+use std::thread;
+use std::time::Duration;
+
+use st_protocol::{Frame, Verb};
+
+/// Get the socket path
+fn socket_path() -> PathBuf {
+    std::env::var("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        .join("st.sock")
+}
+
+/// Start the daemon process
+fn start_daemon() -> Child {
+    let daemon_path = std::env::current_dir()
+        .unwrap()
+        .join("target/debug/std");
+
+    Command::new(daemon_path)
+        .arg("start")
+        .spawn()
+        .expect("Failed to start daemon")
+}
+
+/// Stop the daemon
+fn stop_daemon() {
+    let daemon_path = std::env::current_dir()
+        .unwrap()
+        .join("target/debug/std");
+
+    let _ = Command::new(daemon_path)
+        .arg("stop")
+        .status();
+}
+
+/// Wait for socket to be available
+fn wait_for_socket() -> bool {
+    for _ in 0..50 {
+        if socket_path().exists() {
+            // Also try to connect
+            if UnixStream::connect(socket_path()).is_ok() {
+                return true;
+            }
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    false
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_daemon_ping -- --ignored --nocapture
+fn test_daemon_ping() {
+    // Ensure clean state
+    stop_daemon();
+    thread::sleep(Duration::from_millis(200));
+
+    // Start daemon
+    let mut daemon = start_daemon();
+
+    // Wait for socket
+    assert!(wait_for_socket(), "Daemon socket not available");
+
+    // Connect and send PING
+    let mut stream = UnixStream::connect(socket_path())
+        .expect("Failed to connect to daemon");
+
+    let ping = Frame::ping();
+    stream.write_all(&ping.encode()).expect("Failed to send PING");
+
+    // Read response
+    let mut buf = [0u8; 256];
+    let n = stream.read(&mut buf).expect("Failed to read response");
+
+    // Parse response
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to PING");
+
+    // Clean up
+    drop(stream);
+    stop_daemon();
+    let _ = daemon.wait();
+
+    println!("PING test passed!");
+}
+
+#[test]
+#[ignore] // Run with: cargo test test_daemon_scan -- --ignored --nocapture
+fn test_daemon_scan() {
+    // Ensure clean state
+    stop_daemon();
+    thread::sleep(Duration::from_millis(200));
+
+    // Start daemon
+    let mut daemon = start_daemon();
+
+    // Wait for socket
+    assert!(wait_for_socket(), "Daemon socket not available");
+
+    // Connect and send SCAN
+    let mut stream = UnixStream::connect(socket_path())
+        .expect("Failed to connect to daemon");
+
+    let scan = Frame::scan("/tmp", 1);
+    stream.write_all(&scan.encode()).expect("Failed to send SCAN");
+
+    // Read response
+    let mut buf = vec![0u8; 65536];
+    let n = stream.read(&mut buf).expect("Failed to read response");
+
+    // Parse response
+    let response = Frame::decode(&buf[..n]).expect("Failed to decode response");
+    assert_eq!(response.verb(), Verb::Ok, "Expected OK response to SCAN");
+
+    // Check we got JSON back
+    let json_str = response.payload().as_str().expect("Expected string payload");
+    assert!(json_str.contains("files"), "Response should contain file count");
+    assert!(json_str.contains("dirs"), "Response should contain dir count");
+
+    println!("SCAN response: {} bytes", json_str.len());
+
+    // Clean up
+    drop(stream);
+    stop_daemon();
+    let _ = daemon.wait();
+
+    println!("SCAN test passed!");
+}
