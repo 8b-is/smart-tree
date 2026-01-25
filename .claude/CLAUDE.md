@@ -1,32 +1,51 @@
 # CLAUDE.md
 
-This Rust project uses Smart Tree for optimal AI context management.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Stats
-- Files: 608
-- Directories: 88
-- Total size: 1130691897 bytes
-
-## Essential Commands
+## Quick Commands
 
 ```bash
-# Build & Test
-cargo build --release
-cargo test -- --nocapture
-cargo clippy -- -D warnings
+# Pre-commit (REQUIRED)
+./scripts/manage.sh test          # cargo test + clippy -D warnings + fmt --check
 
-# Smart Tree context
-st -m context .          # Full context with git info
-st -m quantum .           # Compressed for large contexts
-st -m relations --focus main.rs  # Code relationships
+# Build
+cargo build --release             # Core binary
+cargo build --release --features tui       # With Spicy TUI
+cargo build --release --features full      # Everything
+
+# Single test
+cargo test test_name -- --exact --nocapture
+
+# MCP server
+cargo run --release -- --mcp
 ```
 
-## Key Patterns
-- Always use `Result<T>` for error handling
-- Prefer `&str` over `String` for function parameters
-- Use `anyhow` for error context
-- Run clippy before commits
+## Architecture
 
-## Smart Tree Integration
-This project has hooks configured to automatically provide context.
-The quantum-semantic mode is used for optimal token efficiency.
+Smart Tree is a 100% Rust directory visualization tool with AI optimization.
+
+**Core flow**: `CLI (main.rs) → Scanner (scanner.rs) → Formatters (formatters/)`
+
+**Key modules**:
+- `src/mcp/` - 30+ JSON-RPC tools for AI assistants
+- `src/mem8/` - Wave-based memory persistence
+- `src/formatters/` - 25+ output formats (classic, ai, quantum, marqant)
+- `src/smart/` - NLP, relevance scoring, git relay
+- `src/web_dashboard/` - Browser-based terminal
+
+**Binaries**: `st` (main), `mq` (marqant), `m8` (mem8), `n8x` (nexus)
+
+## Code Patterns
+
+- Error handling: `anyhow::Result<T>` with `.context()`
+- Prefer `&str` over `String` for parameters
+- Async: `tokio` runtime, use `#[tokio::test]` for async tests
+- Tests use real filesystem (no mocks)
+
+## Feature Flags
+
+```toml
+tui = [...]      # Spicy TUI mode (ratatui)
+candle = [...]   # Local LLM inference
+full = ["tui", "candle"]
+```

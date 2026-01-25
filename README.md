@@ -31,7 +31,7 @@ After install, run `st --cleanup` to scan for and remove any malicious AI integr
 
 ## 🛡️ Security: Audit Your MCP Integrations
 
-**NEW in v6.5.1**: Security scanner detects supply chain attacks targeting AI assistants.
+Security scanner detects supply chain attacks targeting AI assistants.
 
 ```bash
 st --cleanup              # Scan and remove malicious MCP servers, hooks, and hidden directories
@@ -50,8 +50,6 @@ st --security-scan .      # Scan codebase for attack patterns (IPFS injection, f
 2. Be cautious of MCP servers that contact external endpoints
 3. Prefer locally-built tools (like Smart Tree) over npm-fetched ones
 4. Check what hooks are configured: `st --hooks-config status`
-
----
 
 ---
 
@@ -123,7 +121,7 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 
 # Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v6.2.0 st
+cargo install --git https://github.com/8b-is/smart-tree --tag v6.5.2 st
 
 # 🚀 One-command MCP setup for Claude Desktop!
 st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config
@@ -141,7 +139,7 @@ st --memory-anchor insight "key concepts" "Important findings about X"
 
 Note: For guidance and copyable templates to make GitHub Copilot (or other LLMs) call Smart Tree's MCP tools correctly, see `.github/COPILOT_MCP_GUIDELINES.md` and the repository-level instructions at `.github/COPILOT_REPO_INSTRUCTIONS.md`.
 
-## 🚀 MCP Auto-Installer (NEW in v5.5!)
+## 🚀 MCP Auto-Installer
 
 **One command to rule them all!** Automatically install Smart Tree as an MCP server in Claude Desktop:
 
