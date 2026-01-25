@@ -53,7 +53,7 @@ use st::{
         waste::WasteFormatter,
         Formatter, PathDisplayMode, StreamingFormatter,
     },
-    in_memory_logger::{InMemoryLoggerLayer, InMemoryLogStore},
+    in_memory_logger::{InMemoryLogStore, InMemoryLoggerLayer},
     inputs::InputProcessor,
     parse_size,
     service_manager,
@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", log_level_str);
     }
-    
+
     let log_store = InMemoryLogStore::new();
     let in_memory_layer = InMemoryLoggerLayer::new(log_store.clone());
 
@@ -329,7 +329,13 @@ async fn main() -> Result<()> {
 
     if cli.dashboard {
         // Launch the web dashboard - works anywhere, no display needed!
-        return run_web_dashboard(cli.dashboard_port, cli.open_browser, cli.allow.clone(), log_store).await;
+        return run_web_dashboard(
+            cli.dashboard_port,
+            cli.open_browser,
+            cli.allow.clone(),
+            log_store,
+        )
+        .await;
     }
 
     if cli.daemon {
@@ -1578,7 +1584,12 @@ async fn run_terminal() -> Result<()> {
 }
 
 /// Launch the web dashboard - browser-based terminal + file browser
-async fn run_web_dashboard(port: u16, open_browser: bool, allow_networks: Vec<String>, log_store: InMemoryLogStore) -> Result<()> {
+async fn run_web_dashboard(
+    port: u16,
+    open_browser: bool,
+    allow_networks: Vec<String>,
+    log_store: InMemoryLogStore,
+) -> Result<()> {
     st::web_dashboard::start_server(port, open_browser, allow_networks, log_store).await
 }
 
@@ -1988,8 +1999,12 @@ fn show_memory_anchor_help() -> Result<()> {
     println!("    CONTEXT   The actual content to remember (quote if contains spaces)\n");
     println!("EXAMPLES:");
     println!("    st --memory-anchor insight \"auth,jwt\" \"Tokens stored in httpOnly cookies\"");
-    println!("    st --memory-anchor decision \"api,versioning\" \"Use URL-based versioning /v1/\"");
-    println!("    st --memory-anchor pattern \"error,handling\" \"Always use Result<T> with context\"");
+    println!(
+        "    st --memory-anchor decision \"api,versioning\" \"Use URL-based versioning /v1/\""
+    );
+    println!(
+        "    st --memory-anchor pattern \"error,handling\" \"Always use Result<T> with context\""
+    );
     println!("    st --memory-anchor gotcha \"async,tokio\" \"Don't block the runtime with std::thread::sleep\"");
     println!("    st --memory-anchor todo \"refactor,auth\" \"Split auth into separate crate\"\n");
     println!("MEMORY TYPES:");

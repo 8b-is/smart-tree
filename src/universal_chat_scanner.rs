@@ -361,7 +361,10 @@ impl UniversalChatScanner {
             MemoryType::LLMMemory => {
                 let llm_path = format!(
                     "~/.mem8/llm/{}",
-                    destination.llm_specific.as_ref().unwrap_or(&"general".to_string())
+                    destination
+                        .llm_specific
+                        .as_ref()
+                        .unwrap_or(&"general".to_string())
                 );
                 shellexpand::tilde(&llm_path).into_owned().into()
             }
@@ -380,7 +383,10 @@ impl UniversalChatScanner {
         // Save each source group to appropriate format
         // .m8j for JSON contexts, .m8 for binary wave format
         for (source, chats) in by_source {
-            let filename = path.join(format!("chat_{}.m8j", source.to_lowercase().replace(['{', '}', ':', '"', ' '], "")));
+            let filename = path.join(format!(
+                "chat_{}.m8j",
+                source.to_lowercase().replace(['{', '}', ':', '"', ' '], "")
+            ));
             self.write_m8j_file(filename.to_str().unwrap_or_default(), chats)?;
         }
 

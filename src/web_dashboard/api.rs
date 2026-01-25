@@ -115,14 +115,17 @@ pub async fn list_files(
         None => base_path,
     };
 
-    let path = path.canonicalize().map_err(|e| {
-        (StatusCode::NOT_FOUND, format!("Path not found: {}", e))
-    })?;
+    let path = path
+        .canonicalize()
+        .map_err(|e| (StatusCode::NOT_FOUND, format!("Path not found: {}", e)))?;
 
     let mut entries = Vec::new();
 
     let read_dir = fs::read_dir(&path).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read directory: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read directory: {}", e),
+        )
     })?;
 
     for entry in read_dir.flatten() {
@@ -154,12 +157,10 @@ pub async fn list_files(
     }
 
     // Sort: directories first, then alphabetically
-    entries.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(Json(entries))
@@ -170,14 +171,16 @@ pub async fn read_file(
     Query(query): Query<PathQuery>,
 ) -> Result<Json<FileContent>, (StatusCode, String)> {
     let path = query.path.ok_or_else(|| {
-        (StatusCode::BAD_REQUEST, "Missing path parameter".to_string())
+        (
+            StatusCode::BAD_REQUEST,
+            "Missing path parameter".to_string(),
+        )
     })?;
 
     let path = PathBuf::from(&path);
 
-    let metadata = fs::metadata(&path).map_err(|e| {
-        (StatusCode::NOT_FOUND, format!("File not found: {}", e))
-    })?;
+    let metadata = fs::metadata(&path)
+        .map_err(|e| (StatusCode::NOT_FOUND, format!("File not found: {}", e)))?;
 
     if metadata.is_dir() {
         return Err((StatusCode::BAD_REQUEST, "Path is a directory".to_string()));
@@ -194,7 +197,10 @@ pub async fn read_file(
         "[File too large to display]".to_string()
     } else {
         fs::read_to_string(&path).map_err(|e| {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read file: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read file: {}", e),
+            )
         })?
     };
 
@@ -216,7 +222,10 @@ pub async fn write_file(
     let path = PathBuf::from(&request.path);
 
     fs::write(&path, &request.content).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write file: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to write file: {}", e),
+        )
     })?;
 
     Ok((StatusCode::OK, "File saved"))
@@ -244,7 +253,11 @@ pub async fn get_tree(
     Ok(Json(nodes))
 }
 
-fn collect_tree(path: &PathBuf, max_depth: usize, current_depth: usize) -> Result<Vec<FileTreeNode>, (StatusCode, String)> {
+fn collect_tree(
+    path: &PathBuf,
+    max_depth: usize,
+    current_depth: usize,
+) -> Result<Vec<FileTreeNode>, (StatusCode, String)> {
     if current_depth >= max_depth {
         return Ok(Vec::new());
     }
@@ -252,14 +265,21 @@ fn collect_tree(path: &PathBuf, max_depth: usize, current_depth: usize) -> Resul
     let mut entries = Vec::new();
 
     let read_dir = fs::read_dir(path).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read directory: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read directory: {}", e),
+        )
     })?;
 
     for entry in read_dir.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
 
         // Skip hidden files and common ignored directories
-        if name.starts_with('.') || name == "node_modules" || name == "target" || name == "__pycache__" {
+        if name.starts_with('.')
+            || name == "node_modules"
+            || name == "target"
+            || name == "__pycache__"
+        {
             continue;
         }
 
@@ -289,12 +309,10 @@ fn collect_tree(path: &PathBuf, max_depth: usize, current_depth: usize) -> Resul
         });
     }
 
-    entries.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(entries)
@@ -305,12 +323,14 @@ pub async fn render_markdown(
     Query(query): Query<PathQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let path = query.path.ok_or_else(|| {
-        (StatusCode::BAD_REQUEST, "Missing path parameter".to_string())
+        (
+            StatusCode::BAD_REQUEST,
+            "Missing path parameter".to_string(),
+        )
     })?;
 
-    let content = fs::read_to_string(&path).map_err(|e| {
-        (StatusCode::NOT_FOUND, format!("File not found: {}", e))
-    })?;
+    let content = fs::read_to_string(&path)
+        .map_err(|e| (StatusCode::NOT_FOUND, format!("File not found: {}", e)))?;
 
     // Return raw markdown - client will render with marked.js
     Ok(content)
@@ -379,16 +399,40 @@ fn is_binary_file(path: &std::path::Path) -> bool {
 
     matches!(
         ext.as_str(),
-        "png" | "jpg" | "jpeg" | "gif" | "ico" | "webp" |
-        "mp3" | "mp4" | "wav" | "avi" | "mkv" |
-        "zip" | "tar" | "gz" | "bz2" | "xz" | "7z" |
-        "exe" | "dll" | "so" | "dylib" |
-        "pdf" | "doc" | "docx" | "xls" | "xlsx" |
-        "ttf" | "woff" | "woff2" | "eot" |
-        "sqlite" | "db"
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "gif"
+            | "ico"
+            | "webp"
+            | "mp3"
+            | "mp4"
+            | "wav"
+            | "avi"
+            | "mkv"
+            | "zip"
+            | "tar"
+            | "gz"
+            | "bz2"
+            | "xz"
+            | "7z"
+            | "exe"
+            | "dll"
+            | "so"
+            | "dylib"
+            | "pdf"
+            | "doc"
+            | "docx"
+            | "xls"
+            | "xlsx"
+            | "ttf"
+            | "woff"
+            | "woff2"
+            | "eot"
+            | "sqlite"
+            | "db"
     )
 }
-
 
 // ----- Config Handling -----
 
@@ -448,14 +492,23 @@ impl Default for LayoutConfig {
 pub async fn get_layout_config(
     State(state): State<SharedState>,
 ) -> Result<Json<LayoutConfig>, (StatusCode, String)> {
-    let path = get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let path =
+        get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     if !path.exists() {
         return Ok(Json(LayoutConfig::default()));
     }
-    let content = fs::read_to_string(&path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read layout config: {}", e)))?;
-    let config: LayoutConfig = serde_json::from_str(&content)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse layout config: {}", e)))?;
+    let content = fs::read_to_string(&path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read layout config: {}", e),
+        )
+    })?;
+    let config: LayoutConfig = serde_json::from_str(&content).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to parse layout config: {}", e),
+        )
+    })?;
     Ok(Json(config))
 }
 
@@ -464,11 +517,20 @@ pub async fn save_layout_config(
     Json(payload): Json<LayoutConfig>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     ensure_project_st_dir_exists(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let path = get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let content = serde_json::to_string_pretty(&payload)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize layout config: {}", e)))?;
-    fs::write(&path, content)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write layout config: {}", e)))?;
+    let path =
+        get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let content = serde_json::to_string_pretty(&payload).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize layout config: {}", e),
+        )
+    })?;
+    fs::write(&path, content).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to write layout config: {}", e),
+        )
+    })?;
     Ok(StatusCode::OK)
 }
 
@@ -499,15 +561,23 @@ pub async fn get_theme_config() -> Result<Json<ThemeConfig>, (StatusCode, String
         return Ok(Json(ThemeConfig::default()));
     }
 
-    let content = fs::read_to_string(&path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read theme config: {}", e)))?;
-    
+    let content = fs::read_to_string(&path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read theme config: {}", e),
+        )
+    })?;
+
     if content.is_empty() {
         return Ok(Json(ThemeConfig::default()));
     }
-    
-    let config: ThemeConfig = serde_json::from_str(&content)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to parse theme config: {}", e)))?;
+
+    let config: ThemeConfig = serde_json::from_str(&content).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to parse theme config: {}", e),
+        )
+    })?;
 
     Ok(Json(config))
 }
@@ -517,7 +587,7 @@ pub async fn save_theme_config(
 ) -> Result<StatusCode, (StatusCode, String)> {
     ensure_user_st_dir_exists().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let path = get_theme_config_path().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    
+
     // Merge with existing config
     let mut current_config = if path.exists() {
         let content = fs::read_to_string(&path).unwrap_or_default();
@@ -530,22 +600,41 @@ pub async fn save_theme_config(
         ThemeConfig::default()
     };
 
-    if let Some(val) = payload.bg_primary { current_config.bg_primary = Some(val); }
-    if let Some(val) = payload.bg_secondary { current_config.bg_secondary = Some(val); }
-    if let Some(val) = payload.accent_primary { current_config.accent_primary = Some(val); }
-    if let Some(val) = payload.accent_secondary { current_config.accent_secondary = Some(val); }
-    if let Some(val) = payload.fg_primary { current_config.fg_primary = Some(val); }
-    if let Some(val) = payload.fg_secondary { current_config.fg_secondary = Some(val); }
+    if let Some(val) = payload.bg_primary {
+        current_config.bg_primary = Some(val);
+    }
+    if let Some(val) = payload.bg_secondary {
+        current_config.bg_secondary = Some(val);
+    }
+    if let Some(val) = payload.accent_primary {
+        current_config.accent_primary = Some(val);
+    }
+    if let Some(val) = payload.accent_secondary {
+        current_config.accent_secondary = Some(val);
+    }
+    if let Some(val) = payload.fg_primary {
+        current_config.fg_primary = Some(val);
+    }
+    if let Some(val) = payload.fg_secondary {
+        current_config.fg_secondary = Some(val);
+    }
 
-    let content = serde_json::to_string_pretty(&current_config)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize theme config: {}", e)))?;
+    let content = serde_json::to_string_pretty(&current_config).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize theme config: {}", e),
+        )
+    })?;
 
-    fs::write(&path, content)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write theme config: {}", e)))?;
+    fs::write(&path, content).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to write theme config: {}", e),
+        )
+    })?;
 
     Ok(StatusCode::OK)
 }
-
 
 // ----- Log Handling -----
 
@@ -562,31 +651,35 @@ pub async fn get_logs(
     let state_guard = state.read().await;
     let entries = state_guard.log_store.entries.lock().unwrap();
 
-    let filtered_logs: Vec<crate::in_memory_logger::LogEntry> = if let Some(min_level_str) = query.level {
-        let min_level = match min_level_str.to_uppercase().as_str() {
-            "ERROR" => Some(tracing::Level::ERROR),
-            "WARN" => Some(tracing::Level::WARN),
-            "INFO" => Some(tracing::Level::INFO),
-            "DEBUG" => Some(tracing::Level::DEBUG),
-            "TRACE" => Some(tracing::Level::TRACE),
-            _ => None,
-        };
+    let filtered_logs: Vec<crate::in_memory_logger::LogEntry> =
+        if let Some(min_level_str) = query.level {
+            let min_level = match min_level_str.to_uppercase().as_str() {
+                "ERROR" => Some(tracing::Level::ERROR),
+                "WARN" => Some(tracing::Level::WARN),
+                "INFO" => Some(tracing::Level::INFO),
+                "DEBUG" => Some(tracing::Level::DEBUG),
+                "TRACE" => Some(tracing::Level::TRACE),
+                _ => None,
+            };
 
-        if let Some(min_level) = min_level {
-            entries
-                .iter()
-                .filter(|entry| {
-                    entry.level.parse::<tracing::Level>().unwrap_or(tracing::Level::TRACE) <= min_level
-                })
-                .cloned()
-                .collect()
+            if let Some(min_level) = min_level {
+                entries
+                    .iter()
+                    .filter(|entry| {
+                        entry
+                            .level
+                            .parse::<tracing::Level>()
+                            .unwrap_or(tracing::Level::TRACE)
+                            <= min_level
+                    })
+                    .cloned()
+                    .collect()
+            } else {
+                entries.iter().cloned().collect()
+            }
         } else {
             entries.iter().cloned().collect()
-        }
-    } else {
-        entries.iter().cloned().collect()
-    };
+        };
 
     Ok(Json(filtered_logs))
 }
-

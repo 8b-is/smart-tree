@@ -30,10 +30,7 @@ impl AllowedNetworks {
         if cidrs.is_empty() {
             // Default: localhost only
             return Self {
-                networks: vec![
-                    "127.0.0.0/8".parse().unwrap(),
-                    "::1/128".parse().unwrap(),
-                ],
+                networks: vec!["127.0.0.0/8".parse().unwrap(), "::1/128".parse().unwrap()],
                 allow_all: false,
             };
         }
@@ -53,7 +50,10 @@ impl AllowedNetworks {
             }
         }
 
-        Self { networks, allow_all }
+        Self {
+            networks,
+            allow_all,
+        }
     }
 
     fn is_allowed(&self, ip: IpAddr) -> bool {
@@ -89,7 +89,12 @@ async fn check_allowed_network(
 }
 
 /// Start the web dashboard server
-pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<String>, log_store: InMemoryLogStore) -> Result<()> {
+pub async fn start_server(
+    port: u16,
+    open_browser: bool,
+    allow_networks: Vec<String>,
+    log_store: InMemoryLogStore,
+) -> Result<()> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let state: SharedState = Arc::new(RwLock::new(DashboardState::new(cwd, log_store)));
 
@@ -115,8 +120,14 @@ pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<Str
         .route("/api/markdown", get(api::render_markdown))
         .route("/api/logs", get(api::get_logs))
         // Config endpoints
-        .route("/api/config/layout", get(api::get_layout_config).post(api::save_layout_config))
-        .route("/api/config/theme", get(api::get_theme_config).post(api::save_theme_config))
+        .route(
+            "/api/config/layout",
+            get(api::get_layout_config).post(api::save_layout_config),
+        )
+        .route(
+            "/api/config/theme",
+            get(api::get_theme_config).post(api::save_theme_config),
+        )
         // WebSocket endpoints
         .route("/ws/terminal", get(websocket::terminal_handler))
         .layer(axum::Extension(allowed.clone()))
@@ -135,7 +146,10 @@ pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<Str
     println!("  ║        Smart Tree Web Dashboard                      ║");
     println!("  ╠══════════════════════════════════════════════════════╣");
     if bind_all {
-        println!("  ║  http://0.0.0.0:{}                                ║", port);
+        println!(
+            "  ║  http://0.0.0.0:{}                                ║",
+            port
+        );
         println!("  ║                                                      ║");
         println!("  ║  Allowed networks:                                   ║");
         if allowed.allow_all {
@@ -148,7 +162,10 @@ pub async fn start_server(port: u16, open_browser: bool, allow_networks: Vec<Str
             }
         }
     } else {
-        println!("  ║  http://127.0.0.1:{}                              ║", port);
+        println!(
+            "  ║  http://127.0.0.1:{}                              ║",
+            port
+        );
         println!("  ║                                                      ║");
         println!("  ║  Localhost only (use --allow for network access)     ║");
     }

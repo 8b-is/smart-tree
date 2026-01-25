@@ -26,7 +26,9 @@ fn run_command(command: &str, args: &[&str]) -> Result<()> {
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
-    let status = cmd.status().with_context(|| format!("Failed to execute command: {}", command))?;
+    let status = cmd
+        .status()
+        .with_context(|| format!("Failed to execute command: {}", command))?;
 
     if !status.success() {
         error!("Command failed with status: {}", status);
@@ -38,7 +40,8 @@ fn run_command(command: &str, args: &[&str]) -> Result<()> {
 /// Get the project name from the current directory.
 fn get_project_name() -> Result<String> {
     let cwd = env::current_dir()?;
-    let project_name = cwd.file_name()
+    let project_name = cwd
+        .file_name()
         .and_then(|s| s.to_str())
         .context("Could not determine project name from current directory")?;
     Ok(project_name.to_string())
@@ -51,7 +54,10 @@ pub fn install() -> Result<()> {
     // 1. Check if the template file exists
     let template_path = PathBuf::from(SERVICE_TEMPLATE_PATH);
     if !template_path.exists() {
-        error!("Service template not found at '{}'", template_path.display());
+        error!(
+            "Service template not found at '{}'",
+            template_path.display()
+        );
         anyhow::bail!(
             "Service template not found at '{}'. Make sure you are running from the project root.",
             template_path.display()
@@ -65,7 +71,11 @@ pub fn install() -> Result<()> {
 
     // 3. Copy the file
     let dest_path = systemd_path.join(SERVICE_FILE_NAME);
-    info!("Copying '{}' to '{}'", template_path.display(), dest_path.display());
+    info!(
+        "Copying '{}' to '{}'",
+        template_path.display(),
+        dest_path.display()
+    );
     fs::copy(&template_path, &dest_path).with_context(|| {
         format!(
             "Failed to copy service file from {} to {}",
@@ -89,13 +99,16 @@ pub fn install() -> Result<()> {
 /// Uninstall the systemd user service.
 pub fn uninstall() -> Result<()> {
     info!("Uninstalling systemd user service...");
-    
+
     // 1. Get paths
     let systemd_path = get_systemd_user_path()?;
     let dest_path = systemd_path.join(SERVICE_FILE_NAME);
 
     if !dest_path.exists() {
-        warn!("Service file not found at '{}'. Already uninstalled?", dest_path.display());
+        warn!(
+            "Service file not found at '{}'. Already uninstalled?",
+            dest_path.display()
+        );
         return Ok(());
     }
 
@@ -106,7 +119,7 @@ pub fn uninstall() -> Result<()> {
 
     // 3. Reload systemd daemon
     run_command("systemctl", &["--user", "daemon-reload"])?;
-    
+
     info!("Service uninstalled successfully!");
     Ok(())
 }
@@ -139,7 +152,10 @@ pub fn status() -> Result<()> {
     let service_instance = format!("smart-tree-dashboard@{}.service", project_name);
     info!("Checking status for service '{}':", service_instance);
     // We don't mind if this command fails (e.g., service not running)
-    let _ = run_command("systemctl", &["--user", "status", &service_instance, "--no-pager"]);
+    let _ = run_command(
+        "systemctl",
+        &["--user", "status", &service_instance, "--no-pager"],
+    );
     Ok(())
 }
 
@@ -148,6 +164,17 @@ pub fn logs() -> Result<()> {
     let project_name = get_project_name()?;
     let service_instance = format!("smart-tree-dashboard@{}.service", project_name);
     info!("Showing logs for service '{}':", service_instance);
-    let _ = run_command("journalctl", &["--user", "-u", &service_instance, "-n", "50", "--no-pager", "-f"]);
+    let _ = run_command(
+        "journalctl",
+        &[
+            "--user",
+            "-u",
+            &service_instance,
+            "-n",
+            "50",
+            "--no-pager",
+            "-f",
+        ],
+    );
     Ok(())
 }

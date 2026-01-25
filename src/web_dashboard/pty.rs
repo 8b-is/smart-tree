@@ -47,10 +47,16 @@ pub fn spawn_shell(cols: u16, rows: u16) -> Result<PtyHandle> {
     cmd.env("COLORTERM", "truecolor");
 
     // Spawn the shell
-    let _child = pair.slave.spawn_command(cmd).context("Failed to spawn shell")?;
+    let _child = pair
+        .slave
+        .spawn_command(cmd)
+        .context("Failed to spawn shell")?;
 
     // Get reader and writer
-    let reader = pair.master.try_clone_reader().context("Failed to clone reader")?;
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .context("Failed to clone reader")?;
     let writer = pair.master.take_writer().context("Failed to take writer")?;
 
     let id = uuid::Uuid::new_v4().to_string();

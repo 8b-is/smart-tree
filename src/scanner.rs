@@ -763,7 +763,7 @@ impl Scanner {
                 "wasm" | "map" | "sourcemap" => FileCategory::WebAsset,
 
                 // --- Memory Files (MEM|8!) ---
-                "mem8" | "m8" => FileCategory::Memory,
+                "mem8" | "m8" | "mq" => FileCategory::Memory,
 
                 // --- Backup & Temp ---
                 "bak" | "backup" | "old" | "orig" => FileCategory::Backup,

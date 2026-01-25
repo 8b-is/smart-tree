@@ -333,10 +333,16 @@ fn provide_topic_context(prompt: &str) -> Result<()> {
     let lower = prompt.to_lowercase();
 
     // Wave signatures and dashboard
-    if lower.contains("wave") || lower.contains("compass") || lower.contains("signature") || lower.contains("dashboard") {
+    if lower.contains("wave")
+        || lower.contains("compass")
+        || lower.contains("signature")
+        || lower.contains("dashboard")
+    {
         println!("### 🌊 Wave Signature & Dashboard");
         println!("- **Quantum signatures**: `src/quantum_wave_signature.rs`");
-        println!("- **Web dashboard**: `src/web_dashboard/` (browser-based terminal + file browser)");
+        println!(
+            "- **Web dashboard**: `src/web_dashboard/` (browser-based terminal + file browser)"
+        );
         println!("- **4.3 billion unique states** via 32-bit encoding");
         println!("- **Real PTY terminal** with vim/htop support");
         println!();

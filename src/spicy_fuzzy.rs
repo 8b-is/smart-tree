@@ -295,9 +295,7 @@ impl SpicyFuzzySearch {
     fn load_contexts_from_m8() -> Result<HashMap<PathBuf, DirectoryContext>> {
         let mut contexts = HashMap::new();
         let cwd = std::env::current_dir()?;
-        let contexts_dir = cwd
-            .join(".st")
-            .join("contexts");
+        let contexts_dir = cwd.join(".st").join("contexts");
 
         if !contexts_dir.exists() {
             return Ok(contexts);

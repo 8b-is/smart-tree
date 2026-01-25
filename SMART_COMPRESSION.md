@@ -10,7 +10,7 @@ Smart Tree now features an intelligent, token-aware global compression system th
 When an MCP client connects, Smart Tree:
 - Sends a small compressed test message in the initialization response
 - Checks if the client acknowledges compression support
-- Remembers the client's capability for the entire session
+- Remembers the client's capability for the entire sessio√
 
 ```json
 // Initialization response includes:

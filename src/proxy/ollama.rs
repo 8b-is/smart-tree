@@ -68,12 +68,18 @@ impl OllamaProvider {
 
     /// Create provider for Ollama at default port
     pub fn ollama() -> Self {
-        Self::new(&format!("http://localhost:{}", OLLAMA_PORT), LocalLlmType::Ollama)
+        Self::new(
+            &format!("http://localhost:{}", OLLAMA_PORT),
+            LocalLlmType::Ollama,
+        )
     }
 
     /// Create provider for LM Studio at default port
     pub fn lmstudio() -> Self {
-        Self::new(&format!("http://localhost:{}", LMSTUDIO_PORT), LocalLlmType::LmStudio)
+        Self::new(
+            &format!("http://localhost:{}", LMSTUDIO_PORT),
+            LocalLlmType::LmStudio,
+        )
     }
 
     /// Set the default model to use
@@ -358,7 +364,8 @@ mod tests {
         let detected = detect_local_llms().await;
         println!("Detected {} local LLM server(s)", detected.len());
         for info in &detected {
-            println!("  - {} at {} with {} models",
+            println!(
+                "  - {} at {} with {} models",
                 info.server_type,
                 info.base_url,
                 info.models.len()
@@ -377,6 +384,10 @@ mod tests {
         let elapsed = start.elapsed();
 
         assert!(!result);
-        assert!(elapsed.as_millis() < 500, "Timeout took too long: {:?}", elapsed);
+        assert!(
+            elapsed.as_millis() < 500,
+            "Timeout took too long: {:?}",
+            elapsed
+        );
     }
 }

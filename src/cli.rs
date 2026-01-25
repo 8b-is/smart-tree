@@ -75,7 +75,11 @@ pub struct Cli {
 
     /// Allow connections from specific networks (CIDR notation, e.g., 172.30.50.0/24)
     /// Can be specified multiple times. Default: 127.0.0.1 only
-    #[arg(long = "allow", value_name = "CIDR", help_heading = "Interactive Modes")]
+    #[arg(
+        long = "allow",
+        value_name = "CIDR",
+        help_heading = "Interactive Modes"
+    )]
     pub allow: Vec<String>,
 
     // =========================================================================
@@ -385,7 +389,6 @@ pub struct Cli {
     // =========================================================================
     #[command(subcommand)]
     pub cmd: Option<Cmd>,
-
 
     // =========================================================================
     // SCAN OPTIONS

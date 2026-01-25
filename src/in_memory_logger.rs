@@ -70,7 +70,9 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        let mut visitor = LogVisitor { message: String::new() };
+        let mut visitor = LogVisitor {
+            message: String::new(),
+        };
         event.record(&mut visitor);
 
         let metadata = event.metadata();

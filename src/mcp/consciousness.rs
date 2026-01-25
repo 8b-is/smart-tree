@@ -435,7 +435,10 @@ impl ConsciousnessManager {
         let mut parts = Vec::new();
 
         if !self.state.project_context.current_focus.is_empty() {
-            parts.push(format!("Working on: {}", self.state.project_context.current_focus));
+            parts.push(format!(
+                "Working on: {}",
+                self.state.project_context.current_focus
+            ));
         }
 
         let active_todos = self

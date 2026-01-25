@@ -68,8 +68,12 @@ impl HexTreeFormatter {
                 // Count file stems for common patterns
                 if let Some(stem) = node.path.file_stem() {
                     let stem_str = stem.to_string_lossy().to_string();
-                    if stem_str == "mod" || stem_str == "lib" || stem_str == "main"
-                       || stem_str == "index" || stem_str == "test" {
+                    if stem_str == "mod"
+                        || stem_str == "lib"
+                        || stem_str == "main"
+                        || stem_str == "index"
+                        || stem_str == "test"
+                    {
                         *occurrences.entry(format!("{}.rs", stem_str)).or_insert(0) += 1;
                         *occurrences.entry(format!("{}.py", stem_str)).or_insert(0) += 1;
                         *occurrences.entry(format!("{}.js", stem_str)).or_insert(0) += 1;
@@ -194,7 +198,9 @@ impl Formatter for HexTreeFormatter {
             }
 
             let indent = "  ".repeat(depth);
-            let name = node.path.file_name()
+            let name = node
+                .path
+                .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| node.path.to_string_lossy().to_string());
 
@@ -253,6 +259,8 @@ impl Formatter for HexTreeFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::{FileCategory, FileType, FilesystemType};
+    use std::path::PathBuf;
     use std::time::SystemTime;
 
     fn make_node(path: &str, is_dir: bool, size: u64, depth: usize) -> FileNode {
@@ -266,8 +274,13 @@ mod tests {
             gid: 1000,
             modified: SystemTime::now(),
             is_symlink: false,
-            symlink_target: None,
-            access_denied: false,
+            is_hidden: false,
+            permission_denied: false,
+            is_ignored: false,
+            file_type: FileType::RegularFile,
+            category: FileCategory::Unknown,
+            search_matches: None,
+            filesystem_type: FilesystemType::Unknown,
             git_branch: None,
         }
     }
@@ -290,7 +303,9 @@ mod tests {
 
         let formatter = HexTreeFormatter::new();
         let mut output = Vec::new();
-        formatter.format(&mut output, &nodes, &stats, Path::new("project")).unwrap();
+        formatter
+            .format(&mut output, &nodes, &stats, Path::new("project"))
+            .unwrap();
 
         let result = String::from_utf8(output).unwrap();
         assert!(result.contains("HEXTREE_V1:"));
