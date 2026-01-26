@@ -271,6 +271,35 @@ st --dashboard --allow 192.168.1.0/24  # Allow network access from subnet
 - File browser: click to select, double-click to navigate
 - Preview pane shows file contents or rendered markdown
 
+## 🧠 ST Daemon - Always-On AI Context
+
+Smart Tree now runs as a two-product system:
+
+- **`st`** - Fast CLI that auto-starts the daemon when needed
+- **`std`** - The daemon (always-on, binary protocol, shared memory)
+
+```bash
+st .                      # Auto-starts daemon if not running
+st . --no-daemon          # Run standalone (no daemon)
+
+# Manual daemon control
+std start                 # Start daemon
+std stop                  # Stop daemon
+std status                # Check status
+```
+
+### Benefits:
+- **Shared Memory**: Context persists across CLI invocations
+- **Fast Protocol**: Binary wire protocol (control ASCII 0x00-0x1F as opcodes)
+- **LLM Ready**: SSE/HTTP endpoints for AI assistant connections
+- **Unix Socket**: `/run/user/$UID/st.sock` for local IPC
+
+### For LLMs:
+The daemon exposes endpoints for AI assistants to connect:
+- Unix socket for CLI (binary protocol)
+- HTTP on port 8420 for web/SSE
+- Memory verbs: REMEMBER, RECALL, FORGET, M8_WAVE
+
 ## 💡 Smart Tips System
 
 Smart Tree now shows helpful tips at the top of the output!

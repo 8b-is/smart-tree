@@ -60,10 +60,23 @@ cargo run --bin st -- --help
 
 ### Binaries
 
-- `st` - Main CLI
+- `st` - Main CLI (thin, auto-starts daemon)
+- `std` - ST Daemon (binary protocol, Unix socket, always-on brain)
 - `mq` - Marqant markdown compressor
 - `m8` - MEM8 consciousness tools
 - `n8x` - Nexus Agent for AI-human orchestration
+
+### ST Daemon Architecture
+
+Two-product system:
+- `st` routes through `std` daemon when available (auto-starts if not running)
+- `std` listens on Unix socket (`/run/user/$UID/st.sock`) with binary protocol
+- Use `--no-daemon` to run `st` standalone
+
+**Binary Protocol** (`st-protocol` crate):
+- Control ASCII (0x00-0x1F) as opcodes
+- Frame format: `[verb 1B][payload N bytes][0x00 END]`
+- Verbs: PING, SCAN, FORMAT, SEARCH, REMEMBER, RECALL, FORGET, M8_WAVE
 
 ### Adding a New Formatter
 
