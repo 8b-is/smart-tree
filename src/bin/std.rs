@@ -399,11 +399,16 @@ async fn handle_search(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> F
 }
 
 /// Handle STATS verb
-async fn handle_stats(_state: &Arc<RwLock<DaemonState>>) -> Frame {
+async fn handle_stats(state: &Arc<RwLock<DaemonState>>) -> Frame {
+    let state = state.read().await;
+    let mem_stats = state.memory.stats();
+
     let stats = serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
-        "protocol": st_protocol::VERSION,
-        "uptime_secs": 0, // TODO: track uptime
+        "protocol": format!("v{}", st_protocol::VERSION),
+        "memories": mem_stats["total_memories"],
+        "active_waves": mem_stats["active_waves"],
+        "keywords": mem_stats["unique_keywords"],
     });
     Frame::new(Verb::Ok, Payload::from_string(&stats.to_string()))
 }

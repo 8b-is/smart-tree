@@ -179,6 +179,11 @@ impl Frame {
         Frame::simple(Verb::Ping)
     }
 
+    /// Create a STATS frame
+    pub fn stats() -> Self {
+        Frame::simple(Verb::Stats)
+    }
+
     /// Create an OK/ACK frame
     pub fn ok() -> Self {
         Frame::simple(Verb::Ok)

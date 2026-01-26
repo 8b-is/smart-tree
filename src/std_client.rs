@@ -248,6 +248,21 @@ impl StdClient {
         }
     }
 
+    /// Get daemon stats (version, memories, grid info)
+    pub async fn stats(&mut self) -> Result<serde_json::Value> {
+        let frame = Frame::stats();
+        let resp = self.send(&frame).await?;
+
+        if resp.len() > 2 {
+            let payload = &resp[1..resp.len() - 1];
+            let json_str = String::from_utf8(payload.to_vec())
+                .context("Invalid UTF-8 in stats response")?;
+            serde_json::from_str(&json_str).context("Invalid JSON in stats response")
+        } else {
+            Ok(serde_json::json!({}))
+        }
+    }
+
     /// Get wave grid state
     pub async fn m8_wave(&mut self) -> Result<String> {
         let frame = Frame::m8_wave();

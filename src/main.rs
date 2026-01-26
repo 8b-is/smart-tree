@@ -2345,10 +2345,21 @@ async fn handle_daemon_status(_port: u16) -> Result<()> {
         println!("╠═══════════════════════════════════════════════════════════╣");
         println!("║  Socket: {:<48} ║", socket.display());
 
-        // Try to ping
+        // Fetch stats from daemon
         if let Some(mut client) = std_client::StdClient::connect().await {
-            if client.ping().await.unwrap_or(false) {
-                println!("║  Status: responding to PING                               ║");
+            if let Ok(stats) = client.stats().await {
+                let version = stats["version"].as_str().unwrap_or("?");
+                let protocol = stats["protocol"].as_str().unwrap_or("?");
+                let memories = stats["memories"].as_u64().unwrap_or(0);
+                let waves = stats["active_waves"].as_u64().unwrap_or(0);
+                let keywords = stats["keywords"].as_u64().unwrap_or(0);
+
+                println!("║  Version: {:<47} ║", version);
+                println!("║  Protocol: {:<46} ║", protocol);
+                println!("╠═══════════════════════════════════════════════════════════╣");
+                println!("║  Memories: {:<46} ║", memories);
+                println!("║  Active waves: {:<42} ║", waves);
+                println!("║  Keywords: {:<46} ║", keywords);
             }
         }
     } else {
