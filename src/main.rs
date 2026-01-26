@@ -369,6 +369,23 @@ async fn main() -> Result<()> {
     }
 
     // =========================================================================
+    // STD DAEMON - Auto-start the binary protocol daemon if not running
+    // =========================================================================
+    // Check for std daemon (Unix socket) and auto-start if needed
+    if !cli.no_daemon && !cli.daemon {
+        use st::std_client;
+
+        // Quick check if std daemon is running
+        if !std_client::is_daemon_running().await {
+            // Not running - auto-start it
+            if let Err(e) = std_client::ensure_daemon(false).await {
+                // Failed to start - that's okay, continue with local operation
+                tracing::debug!("Failed to start std daemon: {}", e);
+            }
+        }
+    }
+
+    // =========================================================================
     // DAEMON ROUTING - Route through daemon if running for centralized memory
     // =========================================================================
     // Check if we should route through daemon (unless --no-daemon or running as daemon)

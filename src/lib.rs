@@ -72,6 +72,7 @@ pub mod code_review;
 // Daemon and client for always-on AI context service
 pub mod daemon;
 pub mod daemon_client;
+pub mod std_client; // Binary protocol client for std daemon (Unix socket)
 
 // Service manager for systemd integration
 pub mod service_manager;
