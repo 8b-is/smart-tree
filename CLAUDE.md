@@ -110,7 +110,7 @@ fn process(path: &str) -> Result<String> {
 ## Feature Flags
 
 ```toml
-default = ["std"]
+default = []
 tui = ["ratatui", "crossterm", "syntect", "artem"]  # Spicy TUI
 candle = ["candle-core", "candle-transformers", ...] # Local LLM
 full = ["tui", "candle"]

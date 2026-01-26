@@ -166,10 +166,7 @@ assert_cmd = "2.0"
 predicates = "3.1"
 
 [features]
-default = ["std"]
-std = []
-alloc = []
-mem8 = []
+default = []
 
 # Terminal UI mode (spicy)
 tui = ["ratatui", "crossterm", "syntect", "artem"]
