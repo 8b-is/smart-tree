@@ -2063,6 +2063,7 @@ async fn handle_memory_anchor(anchor_type: &str, keywords_str: &str, context: &s
 /// Find memories by keywords
 async fn handle_memory_find(keywords_str: &str) -> Result<()> {
     use st::memory_manager::MemoryManager;
+    use st::std_client;
 
     let mut manager = MemoryManager::new()?;
 
@@ -2073,13 +2074,37 @@ async fn handle_memory_find(keywords_str: &str) -> Result<()> {
 
     let memories = manager.find(&keywords)?;
 
-    if memories.is_empty() {
-        println!("🔍 No memories found for: {}", keywords_str);
+    // Check if daemon is running - if so, show all memories (global view)
+    // If standalone, only show memories from current directory or subdirectories
+    let cwd = std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let daemon_running = std_client::is_daemon_running().await;
+
+    let filtered: Vec<_> = if daemon_running {
+        // Daemon provides global memory access
+        memories
     } else {
-        println!("🧠 Found {} memories:", memories.len());
+        // Standalone: filter to current directory scope
+        memories
+            .into_iter()
+            .filter(|m| m.origin.starts_with(&cwd) || cwd.starts_with(&m.origin))
+            .collect()
+    };
+
+    if filtered.is_empty() {
+        if daemon_running {
+            println!("🔍 No memories found for: {}", keywords_str);
+        } else {
+            println!("🔍 No memories found for '{}' in this directory", keywords_str);
+            println!("   💡 Start daemon for global memory: st --daemon-start");
+        }
+    } else {
+        println!("🧠 Found {} memories{}:", filtered.len(),
+            if daemon_running { " (global)" } else { " (local)" });
         println!("{}", "─".repeat(45));
 
-        for (i, memory) in memories.iter().enumerate() {
+        for (i, memory) in filtered.iter().enumerate() {
             println!(
                 "\n[{}] {} @ {:.2}Hz",
                 i + 1,
