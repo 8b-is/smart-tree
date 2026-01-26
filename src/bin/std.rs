@@ -203,6 +203,9 @@ async fn handle_verb(
         Verb::Remember => handle_remember(frame.into_payload(), state).await,
         Verb::Recall => handle_recall(frame.into_payload(), state).await,
         Verb::Forget => handle_forget(frame.into_payload(), state).await,
+
+        // Audio/Media verbs
+        Verb::Audio => handle_audio(frame.into_payload(), state).await,
         Verb::M8Wave => {
             // Return current wave state
             let state = state.read().await;
@@ -544,6 +547,118 @@ async fn handle_forget(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Fr
         Frame::new(Verb::Ok, Payload::from_string(&response.to_string()))
     } else {
         Frame::error(&format!("Memory not found: {id}"))
+    }
+}
+
+/// Handle AUDIO verb - Store acoustic memory from liquid-rust
+/// Payload format 1 (full AcousticMemory): [AYE8 magic][serialized bytes]
+/// Payload format 2 (simple): [text string][valence byte][arousal byte]
+async fn handle_audio(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Frame {
+    let data = payload.as_bytes();
+
+    // Check for AYE8 magic (full AcousticMemory from liquid-rust)
+    if data.len() > 4 && &data[0..4] == b"AYE8" {
+        // Full acoustic memory format - extract text and emotion
+        // Parse: magic(4) + version(1) + emotion(12) + salience(4) + voice_conf(4) + duration(4) + f0(4) + text_len(4) + text
+        if data.len() < 37 {
+            return Frame::error("AYE8 payload too short");
+        }
+
+        let valence = f32::from_le_bytes(data[5..9].try_into().unwrap_or([0; 4]));
+        let arousal = f32::from_le_bytes(data[9..13].try_into().unwrap_or([0; 4]));
+        let salience = f32::from_le_bytes(data[17..21].try_into().unwrap_or([0; 4]));
+        let voice_conf = f32::from_le_bytes(data[21..25].try_into().unwrap_or([0; 4]));
+
+        let text_len = u32::from_le_bytes(data[33..37].try_into().unwrap_or([0; 4])) as usize;
+        if data.len() < 37 + text_len {
+            return Frame::error("AYE8 text truncated");
+        }
+
+        let text = match String::from_utf8(data[37..37 + text_len].to_vec()) {
+            Ok(t) => t,
+            Err(_) => return Frame::error("Invalid UTF-8 in audio text"),
+        };
+
+        debug!(
+            "AUDIO (AYE8) text_len={} valence={:.2} arousal={:.2} salience={:.2}",
+            text.len(),
+            valence,
+            arousal,
+            salience
+        );
+
+        // Store as memory with acoustic keywords
+        let keywords = vec![
+            "audio".to_string(),
+            "voice".to_string(),
+            if voice_conf > 0.7 { "clear" } else { "unclear" }.to_string(),
+            if arousal > 0.7 { "excited" } else if arousal < 0.3 { "calm" } else { "neutral" }.to_string(),
+        ];
+
+        let mut state = state.write().await;
+        match state.memory.anchor(
+            text,
+            keywords,
+            MemoryType::Learning, // Audio insights are valuable
+            valence,
+            arousal,
+            "audio".to_string(),
+            None,
+        ) {
+            Ok(id) => {
+                let _ = state.memory.save();
+                let response = serde_json::json!({
+                    "id": id,
+                    "status": "anchored",
+                    "source": "acoustic",
+                    "salience": salience
+                });
+                Frame::new(Verb::Ok, Payload::from_string(&response.to_string()))
+            }
+            Err(e) => Frame::error(&format!("Audio store failed: {e}")),
+        }
+    } else {
+        // Simple format: [text string][valence byte][arousal byte]
+        let mut decoder = PayloadDecoder::new(&payload);
+
+        let text = match decoder.string() {
+            Some(t) if !t.is_empty() => t.to_string(),
+            _ => return Frame::error("Text required for audio"),
+        };
+
+        let valence = decoder.byte().map(|b| (b as f32 - 127.5) / 127.5).unwrap_or(0.0);
+        let arousal = decoder.byte().map(|b| b as f32 / 255.0).unwrap_or(0.5);
+
+        debug!(
+            "AUDIO (simple) text_len={} valence={:.2} arousal={:.2}",
+            text.len(),
+            valence,
+            arousal
+        );
+
+        let keywords = vec!["audio".to_string(), "voice".to_string()];
+
+        let mut state = state.write().await;
+        match state.memory.anchor(
+            text,
+            keywords,
+            MemoryType::Learning,
+            valence,
+            arousal,
+            "audio".to_string(),
+            None,
+        ) {
+            Ok(id) => {
+                let _ = state.memory.save();
+                let response = serde_json::json!({
+                    "id": id,
+                    "status": "anchored",
+                    "source": "audio_simple"
+                });
+                Frame::new(Verb::Ok, Payload::from_string(&response.to_string()))
+            }
+            Err(e) => Frame::error(&format!("Audio store failed: {e}")),
+        }
     }
 }
 

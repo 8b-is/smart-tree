@@ -47,6 +47,10 @@ pub enum Verb {
     /// SI (0x0F) - End auth block
     AuthEnd = 0x0F,
 
+    // === Audio/Media ===
+    /// DLE (0x10) - Audio data (AcousticMemory from liquid-rust)
+    Audio = 0x10,
+
     // === Access Control ===
     /// DC1 (0x11) - Permit access
     Permit = 0x11,
@@ -103,6 +107,7 @@ impl Verb {
             0x0D => Some(Verb::Complete),
             0x0E => Some(Verb::AuthStart),
             0x0F => Some(Verb::AuthEnd),
+            0x10 => Some(Verb::Audio),
             0x11 => Some(Verb::Permit),
             0x12 => Some(Verb::Deny),
             0x13 => Some(Verb::Elevate),
@@ -147,7 +152,7 @@ impl Verb {
             // Level 0: Read-only (no auth) + memory ops (TODO: add auth in Phase 4)
             Verb::Scan | Verb::Search | Verb::Stats | Verb::Ping |
             Verb::Context | Verb::Recall | Verb::Format |
-            Verb::Remember | Verb::Forget | Verb::M8Wave => 0,
+            Verb::Remember | Verb::Forget | Verb::M8Wave | Verb::Audio => 0,
 
             // Level 1: Local write (session required)
             Verb::Clear | Verb::Subscribe | Verb::Unsubscribe => 1,
@@ -181,6 +186,7 @@ impl Verb {
             Verb::Complete => "COMPLETE",
             Verb::AuthStart => "AUTH_START",
             Verb::AuthEnd => "AUTH_END",
+            Verb::Audio => "AUDIO",
             Verb::Permit => "PERMIT",
             Verb::Deny => "DENY",
             Verb::Elevate => "ELEVATE",

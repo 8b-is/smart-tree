@@ -350,6 +350,43 @@ impl Frame {
     pub fn m8_wave() -> Self {
         Frame::simple(Verb::M8Wave)
     }
+
+    /// Create an AUDIO frame with AcousticMemory data
+    ///
+    /// Payload format: [AYE8 magic + serialized AcousticMemory bytes]
+    /// The bytes should be from liquid-rust's AcousticMemory::to_bytes()
+    pub fn audio(acoustic_bytes: &[u8]) -> Self {
+        let mut payload = Payload::new();
+        for &b in acoustic_bytes {
+            payload.push_byte(b);
+        }
+        Frame::new(Verb::Audio, payload)
+    }
+
+    /// Create an AUDIO frame with text and emotion (simplified)
+    ///
+    /// For when you don't have full AcousticMemory, just text + emotion
+    pub fn audio_simple(text: &str, valence: f32, arousal: f32) -> Self {
+        let mut payload = Payload::new();
+
+        // Length-prefixed text
+        let text_len = text.len();
+        if text_len <= 126 {
+            payload.push_byte((text_len as u8) + 0x80);
+        } else {
+            payload.push_byte(0xFF);
+            payload.push_u16_le(text_len as u16);
+        }
+        payload.push_str(text);
+
+        // Emotion as two bytes (0-255 range)
+        // valence: -1.0 to 1.0 → 0 to 255
+        // arousal: 0.0 to 1.0 → 0 to 255
+        payload.push_byte(((valence + 1.0) * 127.5) as u8);
+        payload.push_byte((arousal * 255.0) as u8);
+
+        Frame::new(Verb::Audio, payload)
+    }
 }
 
 #[cfg(test)]

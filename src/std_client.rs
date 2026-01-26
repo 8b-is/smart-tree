@@ -275,6 +275,34 @@ impl StdClient {
             Ok(String::new())
         }
     }
+
+    /// Store audio memory (from liquid-rust AcousticMemory)
+    ///
+    /// Pass the raw bytes from AcousticMemory::to_bytes()
+    pub async fn audio(&mut self, acoustic_bytes: &[u8]) -> Result<String> {
+        let frame = Frame::audio(acoustic_bytes);
+        let resp = self.send(&frame).await?;
+
+        if resp.len() > 2 {
+            let payload = &resp[1..resp.len() - 1];
+            String::from_utf8(payload.to_vec()).context("Invalid UTF-8 in audio response")
+        } else {
+            Ok(String::new())
+        }
+    }
+
+    /// Store simple audio memory (text + emotion)
+    pub async fn audio_simple(&mut self, text: &str, valence: f32, arousal: f32) -> Result<String> {
+        let frame = Frame::audio_simple(text, valence, arousal);
+        let resp = self.send(&frame).await?;
+
+        if resp.len() > 2 {
+            let payload = &resp[1..resp.len() - 1];
+            String::from_utf8(payload.to_vec()).context("Invalid UTF-8 in audio response")
+        } else {
+            Ok(String::new())
+        }
+    }
 }
 
 /// Ensure daemon is running, with user feedback
