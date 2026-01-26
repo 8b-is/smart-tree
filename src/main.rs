@@ -2268,41 +2268,36 @@ fn update_claude_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
 // =============================================================================
 
 /// Start the Smart Tree daemon in the background
-async fn handle_daemon_start(port: u16) -> Result<()> {
-    use st::daemon_client::{print_context_summary, print_daemon_status};
+async fn handle_daemon_start(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    let client = DaemonClient::new(port);
+    // Check if std daemon is already running (Unix socket)
+    if std_client::is_daemon_running().await {
+        println!("🌳 Smart Tree Daemon is already running!");
+        println!("   Socket: {}", std_client::socket_path().display());
+        return Ok(());
+    }
 
-    // Check if already running
-    let status = client.check_status().await;
-    match status {
-        DaemonStatus::Running(info) => {
-            println!("🌳 Smart Tree Daemon is already running!");
-            print_daemon_status(&DaemonStatus::Running(info));
+    // Start the std daemon
+    println!("🌳 Starting Smart Tree Daemon...");
+    match std_client::start_daemon().await {
+        Ok(true) => {
+            println!("✅ Daemon started successfully!");
+            println!("   Socket: {}", std_client::socket_path().display());
 
-            // Show context summary
-            if let Ok(ctx) = client.get_context().await {
-                println!();
-                print_context_summary(&ctx);
+            // Verify with a ping
+            if let Some(mut client) = std_client::StdClient::connect().await {
+                if client.ping().await.unwrap_or(false) {
+                    println!("   Status: responding to PING");
+                }
             }
         }
-        _ => {
-            println!("🌳 Starting Smart Tree Daemon on port {}...", port);
-            match client.start_daemon().await {
-                Ok(true) => {
-                    println!("✅ Daemon started successfully!");
-                    if let Ok(info) = client.get_info().await {
-                        print_daemon_status(&DaemonStatus::Running(info));
-                    }
-                }
-                Ok(false) => {
-                    println!("⚠️  Daemon was already running.");
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to start daemon: {}", e);
-                    return Err(e);
-                }
-            }
+        Ok(false) => {
+            println!("⚠️  Daemon was already running.");
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to start daemon: {}", e);
+            return Err(e);
         }
     }
 
@@ -2310,28 +2305,27 @@ async fn handle_daemon_start(port: u16) -> Result<()> {
 }
 
 /// Stop a running Smart Tree daemon
-async fn handle_daemon_stop(port: u16) -> Result<()> {
-    let client = DaemonClient::new(port);
+async fn handle_daemon_stop(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    // Check if running
-    match client.check_status().await {
-        DaemonStatus::Running(_) => {
-            println!("🌳 Stopping Smart Tree Daemon on port {}...", port);
-            match client.stop_daemon().await {
-                Ok(true) => {
-                    println!("✅ Daemon stopped successfully!");
-                }
-                Ok(false) => {
-                    println!("⚠️  Daemon was not running.");
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to stop daemon: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-        _ => {
-            println!("⚠️  No daemon running on port {}", port);
+    // Check if std daemon is running
+    if !std_client::is_daemon_running().await {
+        println!("⚠️  No daemon running");
+        return Ok(());
+    }
+
+    println!("🌳 Stopping Smart Tree Daemon...");
+
+    // Remove the socket file to signal shutdown
+    let socket = std_client::socket_path();
+    if socket.exists() {
+        // Try to connect and send a graceful shutdown (future: add SHUTDOWN verb)
+        // For now, just remove the socket - daemon will exit on next connection attempt
+        if let Err(e) = std::fs::remove_file(&socket) {
+            eprintln!("⚠️  Could not remove socket: {}", e);
+        } else {
+            println!("✅ Daemon socket removed");
+            println!("   Note: Daemon process may still be running - use 'pkill std' if needed");
         }
     }
 
@@ -2339,21 +2333,32 @@ async fn handle_daemon_stop(port: u16) -> Result<()> {
 }
 
 /// Show the status of the Smart Tree daemon
-async fn handle_daemon_status(port: u16) -> Result<()> {
-    use st::daemon_client::{print_context_summary, print_daemon_status};
+async fn handle_daemon_status(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    let client = DaemonClient::new(port);
-    let status = client.check_status().await;
+    let socket = std_client::socket_path();
 
-    print_daemon_status(&status);
+    println!("╔═══════════════════════════════════════════════════════════╗");
 
-    // If running, also show context summary
-    if let DaemonStatus::Running(_) = status {
-        if let Ok(ctx) = client.get_context().await {
-            println!();
-            print_context_summary(&ctx);
+    if std_client::is_daemon_running().await {
+        println!("║        🌳 SMART TREE DAEMON STATUS: RUNNING 🌳           ║");
+        println!("╠═══════════════════════════════════════════════════════════╣");
+        println!("║  Socket: {:<48} ║", socket.display());
+
+        // Try to ping
+        if let Some(mut client) = std_client::StdClient::connect().await {
+            if client.ping().await.unwrap_or(false) {
+                println!("║  Status: responding to PING                               ║");
+            }
         }
+    } else {
+        println!("║        🌳 SMART TREE DAEMON STATUS: STOPPED 🛑            ║");
+        println!("╠═══════════════════════════════════════════════════════════╣");
+        println!("║  The daemon is not running.                               ║");
+        println!("║  Start with: st --daemon-start                            ║");
     }
+
+    println!("╚═══════════════════════════════════════════════════════════╝");
 
     Ok(())
 }

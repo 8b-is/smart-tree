@@ -57,9 +57,8 @@ pub async fn start_daemon() -> Result<bool> {
     }
 
     // Find the std binary - try same directory as current exe first
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+    let exe_path = std::env::current_exe().ok();
+    let exe_dir = exe_path.as_ref().and_then(|p| p.parent());
 
     let std_path = if let Some(dir) = exe_dir {
         let candidate = dir.join("std");
@@ -73,16 +72,27 @@ pub async fn start_daemon() -> Result<bool> {
         PathBuf::from("std")
     };
 
-    // Start daemon as background process
+    // Start daemon as background process using setsid to fully detach
     #[cfg(unix)]
     {
-        Command::new(&std_path)
-            .arg("start")
+        use std::os::unix::process::CommandExt;
+
+        // Use setsid to create a new session, fully detaching the daemon
+        let mut cmd = Command::new(&std_path);
+        cmd.arg("start")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .context("Failed to start std daemon")?;
+            .stderr(Stdio::null());
+
+        // Create new process group
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+
+        cmd.spawn().context("Failed to start std daemon")?;
     }
 
     #[cfg(windows)]
@@ -94,15 +104,16 @@ pub async fn start_daemon() -> Result<bool> {
             .context("Failed to start std daemon")?;
     }
 
-    // Wait for daemon to become ready
-    for _ in 0..20 {
+    // Wait for daemon to become ready (up to 5 seconds)
+    // Daemon may take time to load memories
+    for _ in 0..50 {
         tokio::time::sleep(Duration::from_millis(100)).await;
         if is_daemon_running().await {
             return Ok(true);
         }
     }
 
-    Err(anyhow::anyhow!("Daemon started but not responding"))
+    Err(anyhow::anyhow!("Daemon started but not responding after 5 seconds"))
 }
 
 /// Client for communicating with the STD daemon
