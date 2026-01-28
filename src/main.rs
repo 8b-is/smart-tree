@@ -97,6 +97,12 @@ async fn main() -> Result<()> {
         .with(in_memory_layer)
         .init();
 
+    // First-run signature verification banner
+    // Shows trust status on initial run (official/community/unsigned build)
+    if !cli.mcp && !cli.daemon && !cli.guardian_daemon {
+        service_manager::print_signature_banner();
+    }
+
     // Check for updates on startup (rate-limited, non-blocking)
     // Skip if --no-update-check is set or if this is an exclusive command
     if !cli.no_update_check && !cli.version && !cli.update && !cli.mcp && !cli.daemon {
@@ -366,6 +372,30 @@ async fn main() -> Result<()> {
 
     if cli.daemon_credits {
         return handle_daemon_credits(cli.daemon_port).await;
+    }
+
+    // =========================================================================
+    // AI GUARDIAN - Root daemon for system-wide protection
+    // =========================================================================
+    if cli.guardian_install {
+        return service_manager::guardian_install();
+    }
+
+    if cli.guardian_uninstall {
+        return service_manager::guardian_uninstall();
+    }
+
+    if cli.guardian_status {
+        return service_manager::guardian_status();
+    }
+
+    if cli.guardian_daemon {
+        // Run as guardian daemon (called by systemd)
+        return run_guardian_daemon().await;
+    }
+
+    if let Some(file_path) = &cli.guardian_scan {
+        return handle_guardian_scan(file_path);
     }
 
     // =========================================================================
@@ -2466,6 +2496,164 @@ async fn handle_daemon_credits(port: u16) -> Result<()> {
             eprintln!("❌ Failed to connect to daemon: {}", e);
             return Err(e);
         }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
+// AI GUARDIAN - System-wide protection daemon
+// =============================================================================
+
+/// Run the Guardian daemon (called by systemd service)
+async fn run_guardian_daemon() -> Result<()> {
+    use st::ai_guardian::AiGuardian;
+    use tokio::time::{sleep, Duration};
+
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║    🛡️  SMART TREE GUARDIAN - System-wide AI Protection Active 🛡️            ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+"#);
+
+    let guardian = AiGuardian::new();
+
+    // Watch paths for suspicious files
+    let watch_paths = vec![
+        "/home",
+        "/tmp",
+        "/var/tmp",
+    ];
+
+    println!("Watching paths: {:?}", watch_paths);
+    println!("Press Ctrl+C to stop.\n");
+
+    // Main protection loop
+    loop {
+        for watch_path in &watch_paths {
+            let path = std::path::Path::new(watch_path);
+            if !path.exists() {
+                continue;
+            }
+
+            // Scan for new/modified files with potential injection content
+            scan_directory_for_threats(&guardian, path);
+        }
+
+        // Sleep between scans
+        sleep(Duration::from_secs(60)).await;
+    }
+}
+
+/// Scan a directory for prompt injection threats
+fn scan_directory_for_threats(guardian: &st::ai_guardian::AiGuardian, path: &std::path::Path) {
+    use walkdir::WalkDir;
+
+    let suspicious_extensions = [
+        "md", "txt", "json", "yaml", "yml", "toml", "sh", "py", "js", "ts",
+    ];
+
+    for entry in WalkDir::new(path)
+        .max_depth(3)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let entry_path = entry.path();
+
+        // Skip hidden files and directories
+        if entry_path
+            .file_name()
+            .map(|n| n.to_string_lossy().starts_with('.'))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        // Only scan text files that could contain injection attempts
+        if let Some(ext) = entry_path.extension() {
+            let ext_str = ext.to_string_lossy().to_lowercase();
+            if suspicious_extensions.contains(&ext_str.as_str()) {
+                let threats = guardian.scan_file(entry_path);
+
+                // Report critical and dangerous threats
+                for threat in threats {
+                    if matches!(
+                        threat.level,
+                        st::ai_guardian::ThreatLevel::Critical | st::ai_guardian::ThreatLevel::Dangerous
+                    ) {
+                        eprintln!(
+                            "⚠️  THREAT DETECTED [{:?}] in {}: {}",
+                            threat.level,
+                            threat.location,
+                            threat.pattern
+                        );
+                        eprintln!("    Context: {}", threat.context);
+                        eprintln!("    Recommendation: {}", threat.recommendation);
+                        eprintln!();
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Scan a specific file for prompt injection
+fn handle_guardian_scan(file_path: &std::path::Path) -> Result<()> {
+    use st::ai_guardian::{AiGuardian, ThreatLevel};
+
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║            🛡️  SMART TREE GUARDIAN - File Scan 🛡️                            ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+"#);
+
+    println!("Scanning: {}\n", file_path.display());
+
+    let guardian = AiGuardian::new();
+    let threats = guardian.scan_file(file_path);
+
+    if threats.is_empty() {
+        println!("✅ No threats detected. File appears safe.");
+        return Ok(());
+    }
+
+    // Count by severity
+    let critical = threats.iter().filter(|t| t.level == ThreatLevel::Critical).count();
+    let dangerous = threats.iter().filter(|t| t.level == ThreatLevel::Dangerous).count();
+    let suspicious = threats.iter().filter(|t| t.level == ThreatLevel::Suspicious).count();
+
+    println!("Found {} issues:\n", threats.len());
+    println!("  🔴 Critical:   {}", critical);
+    println!("  🟠 Dangerous:  {}", dangerous);
+    println!("  🟡 Suspicious: {}", suspicious);
+    println!();
+
+    for threat in &threats {
+        let icon = match threat.level {
+            ThreatLevel::Critical => "🔴",
+            ThreatLevel::Dangerous => "🟠",
+            ThreatLevel::Suspicious => "🟡",
+            ThreatLevel::Safe => "🟢",
+        };
+
+        println!("{} [{:?}] {}", icon, threat.level, threat.pattern);
+        println!("   Location: {}", threat.location);
+        if !threat.context.is_empty() {
+            println!("   Context: {}", threat.context);
+        }
+        println!("   Action: {}", threat.recommendation);
+        println!();
+    }
+
+    if critical > 0 {
+        println!("⛔ RECOMMENDATION: DO NOT process this file with AI assistants.");
+        println!("   Critical threats detected that could compromise AI behavior.");
+    } else if dangerous > 0 {
+        println!("⚠️  RECOMMENDATION: Review this file carefully before AI processing.");
+        println!("   Potentially dangerous patterns detected.");
     }
 
     Ok(())

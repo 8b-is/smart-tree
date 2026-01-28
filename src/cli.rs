@@ -228,6 +228,29 @@ pub struct Cli {
     pub mega_list: bool,
 
     // =========================================================================
+    // AI GUARDIAN - System-wide protection
+    // =========================================================================
+    /// Install Smart Tree Guardian as a root daemon (requires sudo)
+    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
+    pub guardian_install: bool,
+
+    /// Uninstall Smart Tree Guardian root daemon
+    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
+    pub guardian_uninstall: bool,
+
+    /// Show Guardian daemon status
+    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
+    pub guardian_status: bool,
+
+    /// Run as Guardian daemon (internal - called by systemd)
+    #[arg(long, exclusive = true, hide = true)]
+    pub guardian_daemon: bool,
+
+    /// Scan content for prompt injection attacks
+    #[arg(long, value_name = "FILE", help_heading = "AI Guardian")]
+    pub guardian_scan: Option<PathBuf>,
+
+    // =========================================================================
     // SECURITY & ANALYSIS
     // =========================================================================
     /// Run security scan for malware patterns
