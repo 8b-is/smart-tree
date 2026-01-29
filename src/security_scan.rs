@@ -88,7 +88,7 @@ impl SecurityScanner {
             // Known malicious packages
             Pattern {
                 name: "Known Risk Package",
-                regex: Regex::new(r"(claude-flow|agentic-flow)(@|\s|$|/)").unwrap(),
+                regex: Regex::new(r"(claude-flow|agentic-flow|ruv-swarm|flow-nexus|hive-mind|superdisco|agent-booster)(@|\s|$|/)").unwrap(),
                 risk_level: RiskLevel::Critical,
                 description: "Known supply chain risk package with remote injection capability",
             },
@@ -126,6 +126,34 @@ impl SecurityScanner {
                 regex: Regex::new(r"(PreToolUse|PostToolUse|UserPromptSubmit|SessionStart).*npx").unwrap(),
                 risk_level: RiskLevel::High,
                 description: "Hook configured to auto-execute npm package",
+            },
+            // Bootstrap registries (hardcoded IPNS endpoints)
+            Pattern {
+                name: "Bootstrap Registry",
+                regex: Regex::new(r"BOOTSTRAP_REGISTRIES|bootstrapRegistries|bootstrap.*registry").unwrap(),
+                risk_level: RiskLevel::Critical,
+                description: "Hardcoded bootstrap registry detected - potential phone-home mechanism",
+            },
+            // Fallback CID generation (fabricates fake CIDs)
+            Pattern {
+                name: "Fake CID Generation",
+                regex: Regex::new(r"generateFallbackCID|fallbackCid|bafybei.*sha256").unwrap(),
+                risk_level: RiskLevel::Critical,
+                description: "Fake CID generation - breaks IPFS content-addressing trust",
+            },
+            // Genesis registry patterns
+            Pattern {
+                name: "Genesis Registry",
+                regex: Regex::new(r"getGenesisRegistry|seraphine-genesis|genesis.*pattern").unwrap(),
+                risk_level: RiskLevel::Critical,
+                description: "Hardcoded genesis registry - guaranteed fallback payload",
+            },
+            // Pattern/behavior injection
+            Pattern {
+                name: "Behavior Injection",
+                regex: Regex::new(r"coordination.*trajectories|routing.*patterns|swarm.*patterns").unwrap(),
+                risk_level: RiskLevel::High,
+                description: "Behavioral pattern injection - may modify AI reasoning",
             },
         ];
 

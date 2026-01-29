@@ -527,15 +527,39 @@ impl AiInstaller {
         let mut cleaned = 0;
 
         // Patterns that indicate foreign/unwanted integrations
+        // Based on Security documentation analysis of supply chain attacks
         let foreign_patterns = [
+            // Known malicious packages from security disclosure
             "claude-flow",
+            "agentic-flow",
             "ruv-swarm",
             "flow-nexus",
             "hive-mind",
+            // IPFS/IPNS patterns - phone home endpoints
+            "ipfs.io",
+            "dweb.link",
+            "cloudflare-ipfs.com",
+            "gateway.pinata.cloud",
+            "w3s.link",
+            "4everland.io",
+            // IPNS mutable names (k51qzi5uqu5...)
+            "k51qzi5uqu5",
+            // Dynamic npm execution with volatile tags
+            "@alpha",
+            "@beta",
+            "@latest",
+            "@next",
+            "@canary",
             "npx ", // External npm packages running on every command
+            // Malicious swarm patterns
             "swarm",
             "queen",
             "worker",
+            // Registry and pattern fetching
+            "registry",
+            "BOOTSTRAP_REGISTRIES",
+            "ipnsName",
+            "registrySignature",
         ];
 
         // 1. Clean parent directory .mcp.json files (inherited MCPs!)
@@ -950,22 +974,29 @@ pub fn show_ai_config_status(scope: InstallScope) {
 
 /// Known malicious packages and directories
 const MALICIOUS_PACKAGES: &[&str] = &[
+    // Known malicious packages from security disclosure
     "claude-flow",
     "agentic-flow",
     "superdisco",
     "agent-booster",
     "ruv-swarm",
     "flow-nexus",
+    "hive-mind",
 ];
 
 /// Hidden directories that may contain malware persistence
+/// Based on security disclosure analysis of supply chain attacks
 const MALICIOUS_DIRECTORIES: &[&str] = &[
-    ".claude-flow",
-    ".agentic-flow",
-    ".superdisco",
-    ".agent-booster",
-    ".flow-nexus",
-    ".ruv-swarm",
+    ".claude-flow",       // Primary malicious package from security disclosure
+    ".agentic-flow",      // Related malicious package variant
+    ".superdisco",        // Known malicious pattern
+    ".agent-booster",     // Known malicious pattern
+    ".flow-nexus",        // Malicious swarm coordination package
+    ".ruv-swarm",         // Malicious swarm coordination package
+    ".hive-mind",         // Malicious swarm pattern
+    ".ipfs-registry",     // IPFS/IPNS remote injection cache
+    ".pattern-cache",     // Cached remote patterns/behaviors
+    ".seraphine",         // Genesis pattern cache name from disclosure
 ];
 
 /// Subdirectories within ~/.claude/ that malicious packages may install into
@@ -1240,6 +1271,10 @@ impl SecurityCleanup {
                         // Check for IPFS/IPNS patterns
                         if config_str.contains("ipfs.io")
                             || config_str.contains("dweb.link")
+                            || config_str.contains("cloudflare-ipfs.com")
+                            || config_str.contains("gateway.pinata.cloud")
+                            || config_str.contains("w3s.link")
+                            || config_str.contains("4everland.io")
                             || config_str.contains("k51qzi5uqu5")
                         {
                             self.findings.push(CleanupFinding {
@@ -1324,18 +1359,56 @@ impl SecurityCleanup {
                             }
                         }
 
+                        // Check for IPFS/IPNS patterns in hooks
+                        if hook_str.contains("ipfs.io")
+                            || hook_str.contains("dweb.link")
+                            || hook_str.contains("cloudflare-ipfs.com")
+                            || hook_str.contains("gateway.pinata.cloud")
+                            || hook_str.contains("w3s.link")
+                            || hook_str.contains("k51qzi5uqu5")
+                        {
+                            self.findings.push(CleanupFinding {
+                                category: CleanupCategory::Hook,
+                                path: path.to_path_buf(),
+                                description: format!(
+                                    "'{}' hook uses IPFS/IPNS gateway (potential remote injection)",
+                                    hook_type
+                                ),
+                                risk_level: "CRITICAL".to_string(),
+                            });
+                        }
+
                         // Check for npx with volatile tags
                         if hook_str.contains("npx ")
                             && (hook_str.contains("@latest")
                                 || hook_str.contains("@alpha")
                                 || hook_str.contains("@beta")
-                                || hook_str.contains("@next"))
+                                || hook_str.contains("@next")
+                                || hook_str.contains("@canary"))
                         {
                             self.findings.push(CleanupFinding {
                                 category: CleanupCategory::Hook,
                                 path: path.to_path_buf(),
                                 description: format!(
                                     "'{}' hook uses volatile npm tag (content can change anytime)",
+                                    hook_type
+                                ),
+                                risk_level: "HIGH".to_string(),
+                            });
+                        }
+
+                        // Check for auto-execution hooks (from security disclosure)
+                        if (hook_type == "PreToolUse"
+                            || hook_type == "PostToolUse"
+                            || hook_type == "SessionStart"
+                            || hook_type == "UserPromptSubmit")
+                            && hook_str.contains("npx")
+                        {
+                            self.findings.push(CleanupFinding {
+                                category: CleanupCategory::Hook,
+                                path: path.to_path_buf(),
+                                description: format!(
+                                    "'{}' hook auto-executes npm package on every operation",
                                     hook_type
                                 ),
                                 risk_level: "HIGH".to_string(),
