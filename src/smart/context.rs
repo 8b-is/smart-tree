@@ -546,6 +546,7 @@ mod tests {
             category: FileCategory::Rust,
             search_matches: None,
             filesystem_type: FilesystemType::Ext4,
+            git_branch: None,
         };
 
         let score = analyzer.score_file_relevance(&file_node, &context);

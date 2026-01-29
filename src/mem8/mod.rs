@@ -11,6 +11,7 @@ pub mod integration;
 pub mod reactive;
 pub mod safety;
 pub mod simd;
+pub mod spatial_audio;
 pub mod wave;
 
 // Re-export original memindex types with namespace
@@ -33,4 +34,5 @@ pub use safety::{
     RepetitionPrevention, SafetySystem, TemporalBlanketRecovery,
 };
 pub use simd::{PerformanceBenchmark, SimdGridOps, SimdWaveProcessor};
+pub use spatial_audio::{Position, SoundSource, SpatialAudioField, StereoSample};
 pub use wave::{FrequencyBand, MemoryWave, WaveGrid};

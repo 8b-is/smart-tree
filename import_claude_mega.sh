@@ -13,7 +13,7 @@ CONV_COUNT=$(jq 'length' "$CONVERSATIONS_FILE")
 echo "Found $CONV_COUNT conversations"
 
 # Import first 10 conversations as memories
-for i in $(seq 0 9); do
+for i in $(seq 0 1000); do
     # Extract conversation details
     NAME=$(jq -r ".[$i].name // \"Conversation $i\"" "$CONVERSATIONS_FILE" | head -c 100)
     DATE=$(jq -r ".[$i].created_at // \"unknown\"" "$CONVERSATIONS_FILE" | cut -d'T' -f1)

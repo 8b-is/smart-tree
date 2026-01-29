@@ -69,7 +69,7 @@ impl Default for ProjectsFormatter {
 impl ProjectsFormatter {
     pub fn new() -> Self {
         Self {
-            max_depth: Some(5),     // Don't go too deep by default
+            max_depth: Some(8),     // Don't go too deep by default
             min_project_size: 1024, // Skip projects < 1KB
             show_dependencies: true,
             condensed_mode: true,
@@ -122,7 +122,31 @@ impl ProjectsFormatter {
                         | "pyproject.toml"
                         | "Dockerfile"
                         | ".gitmodules"
-                );
+                        | "setup.py"
+                        | "Makefile"
+                        | "CMakeLists.txt"
+                        | "configure.ac"
+                        | "Rakefile"
+                        | "build.xml"
+                        | "build.gradle.kts"
+                        | "build.sbt"
+                        | "build.sh"
+                        | "build.ps1"
+                        | "build.bat"
+                        | "CMakeCache.txt"
+                        | "CMakeLists.txt.user"
+                        | "CMakeLists.txt.in"
+                        | "CMakeLists.txt.cmake"
+                        | ".gitignore"
+                        | ".dockerignore"
+                        | "docker-compose.yml"
+                        | "kustomization.yaml"
+                        | "config.yaml"
+                        | "CLAUDE.md"
+                        
+
+
+                    );
 
                 if is_project_marker {
                     let project_path = entry.path().parent().unwrap();
@@ -714,6 +738,7 @@ impl ProjectsFormatter {
             ProjectType::Kubernetes => 0x4B, // K
             ProjectType::Monorepo => 0x4D,   // M
             ProjectType::Unknown => 0x55,    // U
+            
         };
 
         // Simple hash from name

@@ -12,6 +12,7 @@
 
 // Declare the public modules that form the `st` library.
 pub mod activity_logger; // Transparent activity logging in JSONL format
+pub mod ai_guardian; // AI Guardian - Protects AI from prompt injection attacks
 pub mod cli; // Command-line argument definitions (extracted from main.rs)
 pub mod compression_manager; // Smart global compression for all outputs
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
@@ -42,6 +43,9 @@ pub mod universal_format_detector; // Detects format by structure! // Semantic-a
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
 pub mod mcp;
 
+// In-memory logger for API access
+pub mod in_memory_logger;
+
 // Feedback API client for sending feedback to f.8b.is
 pub mod feedback_client;
 
@@ -69,6 +73,10 @@ pub mod code_review;
 // Daemon and client for always-on AI context service
 pub mod daemon;
 pub mod daemon_client;
+pub mod std_client; // Binary protocol client for std daemon (Unix socket)
+
+// Service manager for systemd integration
+pub mod service_manager;
 
 // Self-update mechanism - check and install updates from GitHub releases
 pub mod updater;
@@ -105,7 +113,8 @@ pub mod file_history;
 // MEM8 - Wave-based cognitive architecture for consciousness simulation
 pub mod mem8;
 
-// Tree Agent - Living forest orchestrator for AI-human development
+// n8x (Nexus Agent) - Living forest orchestrator for AI-human development
+// Binary: `n8x` (formerly `tree`, renamed to avoid shadowing Unix tree)
 pub mod tree_agent;
 
 // Context Gatherer - Searches AI tool directories for project context
@@ -131,13 +140,8 @@ pub mod q8_caster_bridge;
 // VAD with Marine Algorithm - Voice Activity Detection from MEM8
 pub mod vad_marine;
 
-// egui Dashboard - Real-time collaborative dashboard (requires `dashboard` feature)
-#[cfg(feature = "dashboard")]
-pub mod dashboard_egui;
-
-// Dashboard WebSocket Server - Real-time bidirectional communication for telepathic pair programming!
-#[cfg(feature = "dashboard")]
-pub mod dashboard_ws;
+// Web Dashboard - Browser-based terminal + file browser (always included)
+pub mod web_dashboard;
 
 // MEM8 Binary Format - The REAL wave-based .m8 format
 pub mod mem8_binary;
@@ -147,10 +151,6 @@ pub mod m8_format_converter;
 
 // Quantum Wave Signatures - Full 32-bit consciousness patterns (not horse apples!)
 pub mod quantum_wave_signature;
-
-// Wave Compass - Omni's consciousness drift visualizer with resonance detection! (requires `dashboard` feature)
-#[cfg(feature = "dashboard")]
-pub mod wave_compass;
 
 // Claude Hook Handler - Comprehensive context provider for conversations
 pub mod claude_hook;

@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 use chrono::NaiveDate;
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -61,9 +61,26 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub terminal: bool,
 
-    /// Launch egui Dashboard - real-time visualization
-    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
+    /// Launch web dashboard - browser-based terminal + file browser
+    #[arg(long, help_heading = "Interactive Modes")]
     pub dashboard: bool,
+
+    /// Port for web dashboard (default: 8420)
+    #[arg(long, default_value = "8420", help_heading = "Interactive Modes")]
+    pub dashboard_port: u16,
+
+    /// Open browser automatically when starting dashboard
+    #[arg(long, help_heading = "Interactive Modes")]
+    pub open_browser: bool,
+
+    /// Allow connections from specific networks (CIDR notation, e.g., 172.30.50.0/24)
+    /// Can be specified multiple times. Default: 127.0.0.1 only
+    #[arg(
+        long = "allow",
+        value_name = "CIDR",
+        help_heading = "Interactive Modes"
+    )]
+    pub allow: Vec<String>,
 
     // =========================================================================
     // MCP SERVER (Model Context Protocol)
@@ -93,47 +110,51 @@ pub struct Cli {
     pub mcp_status: bool,
 
     // =========================================================================
-    // DAEMON - System-wide AI context service with Foken credits
+    // DAEMON & SERVICE
     // =========================================================================
     /// Run as system daemon - always-on AI context service with Foken credit tracking
-    #[arg(long, exclusive = true, help_heading = "Daemon")]
+    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
     pub daemon: bool,
 
     /// Port for daemon mode
-    #[arg(long, default_value = "8420", help_heading = "Daemon")]
+    #[arg(long, default_value = "8420", help_heading = "Daemon & Service")]
     pub daemon_port: u16,
 
     /// Start daemon in background
-    #[arg(long, exclusive = true, help_heading = "Daemon")]
+    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
     pub daemon_start: bool,
 
     /// Stop running daemon
-    #[arg(long, exclusive = true, help_heading = "Daemon")]
+    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
     pub daemon_stop: bool,
 
     /// Show daemon status
-    #[arg(long, exclusive = true, help_heading = "Daemon")]
+    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
     pub daemon_status: bool,
 
     /// Query system context from daemon
-    #[arg(long, exclusive = true, help_heading = "Daemon")]
+    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
     pub daemon_context: bool,
 
     /// List projects detected by daemon
-    #[arg(long, exclusive = true, help_heading = "Daemon")]
+    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
     pub daemon_projects: bool,
 
     /// Show Foken credits
-    #[arg(long, exclusive = true, help_heading = "Daemon")]
+    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
     pub daemon_credits: bool,
 
     /// Bypass daemon and run standalone (don't route through daemon even if running)
-    #[arg(long, help_heading = "Daemon")]
+    #[arg(long, help_heading = "Daemon & Service")]
     pub no_daemon: bool,
 
     /// Auto-start daemon if not running (default: just use if available)
-    #[arg(long, help_heading = "Daemon")]
+    #[arg(long, help_heading = "Daemon & Service")]
     pub auto_daemon: bool,
+
+    /// Set the log level for the daemon and other commands
+    #[arg(long, value_enum, help_heading = "Daemon & Service")]
+    pub log_level: Option<LogLevel>,
 
     // =========================================================================
     // CLAUDE CONSCIOUSNESS - Session state persistence
@@ -174,7 +195,8 @@ pub struct Cli {
     // MEMORY & SESSIONS - Persistent knowledge
     // =========================================================================
     /// Anchor a memory: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
-    #[arg(long, num_args = 3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"], help_heading = "Memory & Sessions")]
+    /// Use --memory-anchor without arguments for detailed help
+    #[arg(long, num_args = 0..=3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"], help_heading = "Memory & Sessions")]
     pub memory_anchor: Option<Vec<String>>,
 
     /// Find memories by keywords
@@ -204,6 +226,29 @@ pub struct Cli {
     /// List all saved mega sessions
     #[arg(long, help_heading = "Memory & Sessions")]
     pub mega_list: bool,
+
+    // =========================================================================
+    // AI GUARDIAN - System-wide protection
+    // =========================================================================
+    /// Install Smart Tree Guardian as a root daemon (requires sudo)
+    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
+    pub guardian_install: bool,
+
+    /// Uninstall Smart Tree Guardian root daemon
+    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
+    pub guardian_uninstall: bool,
+
+    /// Show Guardian daemon status
+    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
+    pub guardian_status: bool,
+
+    /// Run as Guardian daemon (internal - called by systemd)
+    #[arg(long, exclusive = true, hide = true)]
+    pub guardian_daemon: bool,
+
+    /// Scan content for prompt injection attacks
+    #[arg(long, value_name = "FILE", help_heading = "AI Guardian")]
+    pub guardian_scan: Option<PathBuf>,
 
     // =========================================================================
     // SECURITY & ANALYSIS
@@ -340,6 +385,10 @@ pub struct Cli {
     #[arg(long, default_value = "8448", help_heading = "LLM Proxy")]
     pub proxy_port: u16,
 
+    /// Detect local LLM servers (Ollama at :11434, LM Studio at :1234)
+    #[arg(long, help_heading = "LLM Proxy")]
+    pub detect_llms: bool,
+
     // =========================================================================
     // LOGGING & TRANSPARENCY
     // =========================================================================
@@ -354,13 +403,15 @@ pub struct Cli {
     #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2, help_heading = "Project Management")]
     pub rename_project: Option<Vec<String>>,
 
-    /// Manage project tags
-    #[clap(subcommand, name = "project-tags")]
-    pub project_tags: Option<ProjectTags>,
-
     /// Control smart tips (on/off)
     #[arg(long, value_name = "STATE", value_parser = ["on", "off"], help_heading = "Project Management")]
     pub tips: Option<String>,
+
+    // =========================================================================
+    // TOP-LEVEL COMMANDS
+    // =========================================================================
+    #[command(subcommand)]
+    pub cmd: Option<Cmd>,
 
     // =========================================================================
     // SCAN OPTIONS
@@ -394,7 +445,7 @@ pub struct ScanArgs {
     // =========================================================================
     // FILTERING - What to include/exclude
     // =========================================================================
-    /// Find files matching regex pattern (e.g., --find "README\\.md")
+    /// Find files matching regex pattern (e.g., --find "README\.md")
     #[arg(long, help_heading = "Filtering")]
     pub find: Option<String>,
 
@@ -578,6 +629,49 @@ pub struct ScanArgs {
     pub cleanup_diffs: Option<usize>,
 }
 
+#[derive(Debug, Subcommand)]
+pub enum Cmd {
+    /// Manage the smart-tree systemd service (install, start, stop, etc.)
+    #[command(subcommand)]
+    Service(Service),
+
+    /// Manage project tags
+    #[command(subcommand, name = "project-tags")]
+    ProjectTags(ProjectTags),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Service {
+    /// Install the smart-tree daemon as a systemd user service.
+    Install,
+    /// Uninstall the systemd user service.
+    Uninstall,
+    /// Start the systemd user service for the current project.
+    Start,
+    /// Stop the systemd user service for the current project.
+    Stop,
+    /// Show the status of the systemd user service for the current project.
+    Status,
+    /// Show recent logs for the systemd user service.
+    Logs,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProjectTags {
+    /// Add a tag to the project
+    Add {
+        /// The tag to add
+        #[arg(required = true)]
+        tag: String,
+    },
+    /// Remove a tag from the project
+    Remove {
+        /// The tag to remove
+        #[arg(required = true)]
+        tag: String,
+    },
+}
+
 /// Sort field options with intuitive names
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum SortField {
@@ -679,6 +773,8 @@ pub enum OutputMode {
     Classic,
     /// Hexadecimal format with fixed-width fields
     Hex,
+    /// HexTree - readable quantum compression with tree structure
+    HexTree,
     /// JSON output for programmatic use
     Json,
     /// Unix ls -Alh format
@@ -725,22 +821,6 @@ pub enum OutputMode {
     FunctionMarkdown,
 }
 
-#[derive(Debug, Parser)]
-pub enum ProjectTags {
-    /// Add a tag to the project
-    Add {
-        /// The tag to add
-        #[clap(required = true)]
-        tag: String,
-    },
-    /// Remove a tag from the project
-    Remove {
-        /// The tag to remove
-        #[clap(required = true)]
-        tag: String,
-    },
-}
-
 /// Get the ideal depth for each output mode
 pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
     match mode {
@@ -751,7 +831,7 @@ pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
         OutputMode::Stats => 10,
         OutputMode::Digest => 10,
         OutputMode::Emotional => 5,
-        OutputMode::Quantum | OutputMode::QuantumSemantic => 5,
+        OutputMode::Quantum | OutputMode::QuantumSemantic | OutputMode::HexTree => 5,
         OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4,
         OutputMode::Waste => 10,
         OutputMode::Relations => 10,
@@ -770,4 +850,13 @@ pub fn parse_date(date_str: &str) -> Result<SystemTime> {
             .single()
             .context("Invalid timezone")?,
     ))
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
 }

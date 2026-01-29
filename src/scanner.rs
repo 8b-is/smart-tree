@@ -73,6 +73,8 @@ pub struct FileNode {
     pub search_matches: Option<SearchMatches>,
     /// The filesystem type this file resides on
     pub filesystem_type: FilesystemType,
+    /// Git branch if this directory contains a .git folder
+    pub git_branch: Option<String>,
 }
 
 /// Information about search matches within a file
@@ -761,7 +763,7 @@ impl Scanner {
                 "wasm" | "map" | "sourcemap" => FileCategory::WebAsset,
 
                 // --- Memory Files (MEM|8!) ---
-                "mem8" | "m8" => FileCategory::Memory,
+                "mem8" | "m8" | "mq" => FileCategory::Memory,
 
                 // --- Backup & Temp ---
                 "bak" | "backup" | "old" | "orig" => FileCategory::Backup,
@@ -1672,6 +1674,13 @@ impl Scanner {
             false
         };
 
+        // Check for git branch if this is a directory
+        let git_branch = if metadata.is_dir() {
+            Self::get_git_branch(path)
+        } else {
+            None
+        };
+
         Ok(Some(FileNode {
             path: path.to_path_buf(),
             is_dir: metadata.is_dir(),
@@ -1689,7 +1698,36 @@ impl Scanner {
             category,
             search_matches: None, // Search matches are added later by the caller if needed.
             filesystem_type: Self::get_filesystem_type(path),
+            git_branch,
         }))
+    }
+
+    /// ## `get_git_branch`
+    ///
+    /// Gets the current git branch if this directory contains a .git folder.
+    /// Reads directly from .git/HEAD for speed (no subprocess).
+    fn get_git_branch(path: &Path) -> Option<String> {
+        let git_dir = path.join(".git");
+        if !git_dir.exists() {
+            return None;
+        }
+
+        // Read .git/HEAD to get the current ref
+        let head_path = git_dir.join("HEAD");
+        let head_content = std::fs::read_to_string(&head_path).ok()?;
+        let head_content = head_content.trim();
+
+        // HEAD can be either:
+        // 1. "ref: refs/heads/branch-name" (normal branch)
+        // 2. A raw commit hash (detached HEAD)
+        if let Some(branch_ref) = head_content.strip_prefix("ref: refs/heads/") {
+            Some(branch_ref.to_string())
+        } else if head_content.len() >= 7 {
+            // Detached HEAD - show abbreviated commit hash
+            Some(format!(":{}", &head_content[..7]))
+        } else {
+            None
+        }
     }
 
     /// ## `get_filesystem_type`
@@ -1876,6 +1914,7 @@ impl Scanner {
             category: FileCategory::Unknown,
             search_matches: None,
             filesystem_type: Self::get_filesystem_type(path),
+            git_branch: None, // Can't check git for permission-denied directories
         }
     }
 

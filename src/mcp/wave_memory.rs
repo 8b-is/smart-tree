@@ -239,11 +239,12 @@ impl WaveMemoryManager {
     /// WARNING: This allocates a 4.29 billion voxel grid - use new_test() for tests!
     pub fn new(storage_dir: Option<&Path>) -> Self {
         let storage_path = storage_dir
-            .map(|p| p.join(".wave_memory.m8"))
+            .map(|p| p.join(".st").join("mem8").join("wave_memory.m8"))
             .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".mem8")
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".st")
+                    .join("mem8")
                     .join("wave_memory.m8")
             });
 
@@ -263,16 +264,45 @@ impl WaveMemoryManager {
         manager
     }
 
+    /// Create memory manager with compact grid (256×256×256)
+    /// Use this for daemons and memory-constrained environments
+    pub fn new_compact(storage_dir: Option<&Path>) -> Self {
+        let storage_path = storage_dir
+            .map(|p| p.join(".st").join("mem8").join("wave_memory.m8"))
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(".mem8")
+                    .join("wave_memory.m8")
+            });
+
+        let mut manager = Self {
+            wave_grid: Arc::new(RwLock::new(WaveGrid::new_compact())),
+            memories: HashMap::new(),
+            keyword_index: KeywordIndex::default(),
+            storage_path,
+            dirty: false,
+        };
+
+        // Try to load existing memories
+        if let Err(e) = manager.load() {
+            eprintln!("Note: Starting fresh wave memory ({})", e);
+        }
+
+        manager
+    }
+
     /// Create memory manager with smaller grid for testing
     /// Uses 256×256×256 grid instead of 256×256×65536 (256x smaller)
     #[cfg(test)]
     pub fn new_test(storage_dir: Option<&Path>) -> Self {
         let storage_path = storage_dir
-            .map(|p| p.join(".wave_memory.m8"))
+            .map(|p| p.join(".st").join("mem8").join("wave_memory_test.m8"))
             .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".mem8")
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".st")
+                    .join("mem8")
                     .join("wave_memory_test.m8")
             });
 

@@ -269,8 +269,8 @@ impl SpicyFuzzySearch {
 
     /// Save directory context to M8 format
     fn save_context_to_m8(&self, context: &DirectoryContext) -> Result<()> {
-        let m8_path = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
+        let cwd = std::env::current_dir()?;
+        let m8_path = cwd
             .join(".st")
             .join("contexts")
             .join(format!("{:08x}.m8", context.wave_signature));
@@ -294,10 +294,8 @@ impl SpicyFuzzySearch {
     /// Load cached contexts from M8 files
     fn load_contexts_from_m8() -> Result<HashMap<PathBuf, DirectoryContext>> {
         let mut contexts = HashMap::new();
-        let contexts_dir = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".st")
-            .join("contexts");
+        let cwd = std::env::current_dir()?;
+        let contexts_dir = cwd.join(".st").join("contexts");
 
         if !contexts_dir.exists() {
             return Ok(contexts);

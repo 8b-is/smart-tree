@@ -7,6 +7,7 @@ pub mod digest;
 pub mod emotional_new; // The FUN emotional formatter with personality!
 pub mod function_markdown;
 pub mod hex;
+pub mod hextree; // HexTree - quantum meets readable tree structure
 pub mod json;
 pub mod ls;
 pub mod markdown;

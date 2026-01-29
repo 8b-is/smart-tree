@@ -447,6 +447,7 @@ mod tests {
             category: FileCategory::Unknown,
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
+            git_branch: None,
         };
         assert_eq!(formatter.get_emoji(&empty_dir), "📂");
 
@@ -468,6 +469,7 @@ mod tests {
             category: FileCategory::Unknown,
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
+            git_branch: None,
         };
         assert_eq!(formatter.get_emoji(&empty_file), "🪹");
     }
@@ -495,6 +497,7 @@ mod tests {
             category: FileCategory::Unknown,
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
+            git_branch: None,
         };
 
         let perms = formatter.format_permissions(&test_node);

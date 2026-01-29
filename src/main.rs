@@ -53,25 +53,55 @@ use st::{
         waste::WasteFormatter,
         Formatter, PathDisplayMode, StreamingFormatter,
     },
+    in_memory_logger::{InMemoryLogStore, InMemoryLoggerLayer},
     inputs::InputProcessor,
     parse_size,
-    rename_project::{rename_project, RenameOptions},
+    service_manager,
     Scanner,
     ScannerConfig, // The mighty Scanner and its configuration.
 };
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 /// CLI definitions are centralized in [`st::cli`](src/cli.rs) module.
-/// This separation improves maintainability and keeps the main file focused
-/// on orchestration rather than argument parsing logic.
-///
-/// And now, the moment you've all been waiting for: the `main` function!
-/// This is the heart of the st concert. It's where we parse the arguments,
-/// configure the scanner, pick the right formatter for the job, and let it rip.
-/// It returns a `Result` because sometimes, even rockstars hit a wrong note.
+// ...
+// ... existing code ...
+// ...
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
+
+    // Initialize Logging
+    let log_level_str = if let Some(level) = cli.log_level {
+        match level {
+            st::cli::LogLevel::Error => "error",
+            st::cli::LogLevel::Warn => "warn",
+            st::cli::LogLevel::Info => "info",
+            st::cli::LogLevel::Debug => "debug",
+            st::cli::LogLevel::Trace => "trace",
+        }
+    } else {
+        "info" // Default log level
+    };
+
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", log_level_str);
+    }
+
+    let log_store = InMemoryLogStore::new();
+    let in_memory_layer = InMemoryLoggerLayer::new(log_store.clone());
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(fmt::layer().with_writer(io::stderr))
+        .with(in_memory_layer)
+        .init();
+
+    // First-run signature verification banner
+    // Shows trust status on initial run (official/community/unsigned build)
+    if !cli.mcp && !cli.daemon && !cli.guardian_daemon {
+        service_manager::print_signature_banner();
+    }
 
     // Check for updates on startup (rate-limited, non-blocking)
     // Skip if --no-update-check is set or if this is an exclusive command
@@ -144,6 +174,21 @@ async fn main() -> Result<()> {
         man.render(&mut io::stdout())?;
         return Ok(());
     }
+    if cli.version {
+        return show_version_with_updates().await;
+    }
+    if cli.update {
+        match check_for_updates_cli().await {
+            Ok(msg) => {
+                println!("{}", msg);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("❌ Update check failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
     if cli.mcp {
         // Check if MCP server is enabled via feature flags
         let flags = feature_flags::features();
@@ -182,6 +227,43 @@ async fn main() -> Result<()> {
             Err(e) => eprintln!("❌ Failed to check MCP status: {}", e),
         }
         return Ok(());
+    }
+
+    // Handle top-level subcommands
+    if let Some(cmd) = cli.cmd {
+        match cmd {
+            st::cli::Cmd::Service(service_command) => {
+                let result = match service_command {
+                    st::cli::Service::Install => service_manager::install(),
+                    st::cli::Service::Uninstall => service_manager::uninstall(),
+                    st::cli::Service::Start => service_manager::start(),
+                    st::cli::Service::Stop => service_manager::stop(),
+                    st::cli::Service::Status => service_manager::status(),
+                    st::cli::Service::Logs => service_manager::logs(),
+                };
+
+                if let Err(e) = result {
+                    eprintln!("❌ Service operation failed: {}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+
+            st::cli::Cmd::ProjectTags(project_tags) => {
+                let project_path = ".";
+                match project_tags {
+                    st::cli::ProjectTags::Add { tag } => {
+                        st::project_tags::add(project_path, &tag);
+                        println!("Added tag '{}' to the project.", tag);
+                    }
+                    st::cli::ProjectTags::Remove { tag } => {
+                        st::project_tags::remove(project_path, &tag);
+                        println!("Removed tag '{}' from the project.", tag);
+                    }
+                }
+                return Ok(());
+            }
+        }
     }
 
     // Handle security cleanup (--cleanup)
@@ -252,21 +334,14 @@ async fn main() -> Result<()> {
     }
 
     if cli.dashboard {
-        // Require a local display for the egui dashboard.
-        let has_display = std::env::var_os("DISPLAY").is_some()
-            || std::env::var_os("WAYLAND_DISPLAY").is_some()
-            || std::env::var_os("WAYLAND_SOCKET").is_some();
-
-        if !has_display {
-            eprintln!(
-                "⚠️  The graphical dashboard needs a local display and isn't available in this remote session yet."
-            );
-            eprintln!("💡 Tip: run st locally or wait for the upcoming browser dashboard mode.");
-            return Ok(());
-        }
-
-        // Launch the egui dashboard!
-        return run_dashboard().await;
+        // Launch the web dashboard - works anywhere, no display needed!
+        return run_web_dashboard(
+            cli.dashboard_port,
+            cli.open_browser,
+            cli.allow.clone(),
+            log_store,
+        )
+        .await;
     }
 
     if cli.daemon {
@@ -297,6 +372,47 @@ async fn main() -> Result<()> {
 
     if cli.daemon_credits {
         return handle_daemon_credits(cli.daemon_port).await;
+    }
+
+    // =========================================================================
+    // AI GUARDIAN - Root daemon for system-wide protection
+    // =========================================================================
+    if cli.guardian_install {
+        return service_manager::guardian_install();
+    }
+
+    if cli.guardian_uninstall {
+        return service_manager::guardian_uninstall();
+    }
+
+    if cli.guardian_status {
+        return service_manager::guardian_status();
+    }
+
+    if cli.guardian_daemon {
+        // Run as guardian daemon (called by systemd)
+        return run_guardian_daemon().await;
+    }
+
+    if let Some(file_path) = &cli.guardian_scan {
+        return handle_guardian_scan(file_path);
+    }
+
+    // =========================================================================
+    // STD DAEMON - Auto-start the binary protocol daemon if not running
+    // =========================================================================
+    // Check for std daemon (Unix socket) and auto-start if needed
+    if !cli.no_daemon && !cli.daemon {
+        use st::std_client;
+
+        // Quick check if std daemon is running
+        if !std_client::is_daemon_running().await {
+            // Not running - auto-start it
+            if let Err(e) = std_client::ensure_daemon(false).await {
+                // Failed to start - that's okay, continue with local operation
+                tracing::debug!("Failed to start std daemon: {}", e);
+            }
+        }
     }
 
     // =========================================================================
@@ -332,45 +448,9 @@ async fn main() -> Result<()> {
             } else if cli.auto_daemon {
                 // Auto-start daemon if requested
                 eprintln!("🌳 Starting Smart Tree Daemon...");
-                if let Err(e) = client.start_daemon().await {
-                    eprintln!("⚠️  Failed to start daemon: {}", e);
-                } else {
-                    // Wait a moment for daemon to be ready
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    eprintln!("✅ Daemon started! Future commands will route through it.");
-                }
+                let _ = handle_daemon_start(cli.daemon_port).await;
             }
         }
-    }
-
-    if cli.version {
-        return show_version_with_updates().await;
-    }
-    if cli.update {
-        return st::updater::run_update(false).await;
-    }
-    if let Some(names) = cli.rename_project {
-        if names.len() != 2 {
-            eprintln!("Error: rename-project requires exactly two arguments: OLD_NAME NEW_NAME");
-            return Ok(());
-        }
-        let options = RenameOptions::default();
-        return rename_project(&names[0], &names[1], options).await;
-    }
-
-    if let Some(project_tags) = cli.project_tags {
-        let project_path = ".";
-        match project_tags {
-            st::cli::ProjectTags::Add { tag } => {
-                st::project_tags::add(project_path, &tag);
-                println!("Added tag '{}' to the project.", tag);
-            }
-            st::cli::ProjectTags::Remove { tag } => {
-                st::project_tags::remove(project_path, &tag);
-                println!("Removed tag '{}' from the project.", tag);
-            }
-        }
-        return Ok(());
     }
 
     // Handle Claude integration setup (smart init or update)
@@ -440,10 +520,17 @@ async fn main() -> Result<()> {
         return st::proxy::server::start_proxy_server(cli.proxy_port).await;
     }
 
+    if cli.detect_llms {
+        return handle_detect_llms().await;
+    }
+
     // Handle memory operations
-    if let Some(args) = cli.memory_anchor {
+    if let Some(args) = &cli.memory_anchor {
         if args.len() == 3 {
             return handle_memory_anchor(&args[0], &args[1], &args[2]).await;
+        } else {
+            // Show help for memory-anchor
+            return show_memory_anchor_help();
         }
     }
 
@@ -856,6 +943,10 @@ async fn main() -> Result<()> {
                 Box::new(EmotionalFormatter::new(use_color))
             }
             OutputMode::Quantum => Box::new(QuantumFormatter::new()),
+            OutputMode::HexTree => {
+                use st::formatters::hextree::HexTreeFormatter;
+                Box::new(HexTreeFormatter::new())
+            }
             OutputMode::Semantic => Box::new(SemanticFormatter::new(path_display_mode, no_emoji)),
             OutputMode::Projects => Box::new(ProjectsFormatter::new()),
             OutputMode::Mermaid => {
@@ -1034,7 +1125,7 @@ async fn handle_proxy(cli: &Cli) -> Result<()> {
 
     println!("🌐 Calling {} (model: {})...", provider_name, model);
 
-    let mut proxy = MemoryProxy::new()?;
+    let mut proxy = MemoryProxy::with_local_detection().await?;
     let request = LlmRequest {
         model: model.to_string(),
         messages: vec![LlmMessage {
@@ -1060,6 +1151,53 @@ async fn handle_proxy(cli: &Cli) -> Result<()> {
             "📊 Tokens: {} prompt, {} completion ({} total)",
             usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
         );
+    }
+
+    Ok(())
+}
+
+/// Detect and display local LLM servers
+async fn handle_detect_llms() -> Result<()> {
+    use st::proxy::ollama::{detect_local_llms, LMSTUDIO_PORT, OLLAMA_PORT};
+
+    println!("🔍 Scanning for local LLM servers...\n");
+
+    let detected = detect_local_llms().await;
+
+    if detected.is_empty() {
+        println!("No local LLM servers detected.\n");
+        println!("Expected locations:");
+        println!("  🦙 Ollama:    http://localhost:{}", OLLAMA_PORT);
+        println!("  🖥️  LM Studio: http://localhost:{}", LMSTUDIO_PORT);
+        println!("\nInstall Ollama: https://ollama.ai");
+        println!("Install LM Studio: https://lmstudio.ai");
+    } else {
+        println!("Found {} local LLM server(s):\n", detected.len());
+
+        for info in &detected {
+            match info.server_type {
+                st::proxy::ollama::LocalLlmType::Ollama => {
+                    println!("🦙 Ollama at {}", info.base_url);
+                }
+                st::proxy::ollama::LocalLlmType::LmStudio => {
+                    println!("🖥️  LM Studio at {}", info.base_url);
+                }
+            }
+
+            if info.models.is_empty() {
+                println!("   (no models loaded)");
+            } else {
+                println!("   Available models:");
+                for model in &info.models {
+                    println!("     • {}", model);
+                }
+            }
+            println!();
+        }
+
+        println!("Usage:");
+        println!("  st --proxy --provider ollama --model llama3.2 --prompt \"Hello!\"");
+        println!("  st --proxy --provider lmstudio --model default --prompt \"Hello!\"");
     }
 
     Ok(())
@@ -1147,16 +1285,9 @@ fn show_helpful_tips(mode: &OutputMode, depth: usize, args: &ScanArgs) -> Result
         tips.push(tip);
     }
 
-    // Show a maximum of 3 tips to avoid overwhelming the user
-    let selected_tips: Vec<_> = tips.choose_multiple(&mut rng, 3.min(tips.len())).collect();
-
-    if !selected_tips.is_empty() {
-        eprintln!(); // Add some space
-        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
-        for tip in selected_tips {
-            eprintln!("\x1b[2m{tip}\x1b[0m");
-        }
-        eprintln!("\x1b[2m───────────────────────────────────────────────────────\x1b[0m");
+    // Show just 1 tip to keep output clean
+    if let Some(tip) = tips.choose(&mut rng) {
+        eprintln!("\x1b[2m{tip}\x1b[0m");
     }
 
     Ok(())
@@ -1499,60 +1630,14 @@ async fn run_terminal() -> Result<()> {
     Ok(())
 }
 
-/// Launch the egui dashboard with real-time visualization (requires `dashboard` feature)
-/// NOTE: Dashboard should only be run via daemon mode with human-in-the-loop
-#[cfg(feature = "dashboard")]
-async fn run_dashboard() -> Result<()> {
-    use st::dashboard_egui::{
-        default_status_feed_url, start_dashboard, DashboardState, McpActivity, MemoryStats,
-    };
-    use std::sync::{Arc, RwLock};
-
-    println!("🚀 Launching Smart Tree Dashboard...");
-    println!("🎨 Prepare for visual awesomeness!");
-    println!("🤖 Real-time AI collaboration enabled!");
-    println!("👤 Human-in-the-loop mode active - you're in control!");
-
-    // Create initial dashboard state with some default data
-    let state = Arc::new(DashboardState {
-        command_history: Arc::new(RwLock::new(std::collections::VecDeque::new())),
-        active_displays: Arc::new(RwLock::new(vec![])),
-        voice_active: Arc::new(RwLock::new(false)),
-        voice_salience: Arc::new(RwLock::new(0.0)),
-        memory_usage: Arc::new(RwLock::new(MemoryStats {
-            total_memories: 0,
-            token_efficiency: 0.0,
-            backwards_position: 0,
-            importance_scores: vec![],
-        })),
-        found_chats: Arc::new(RwLock::new(vec![])),
-        cast_status: Arc::new(RwLock::new(st::dashboard_egui::CastStatus {
-            casting_to: None,
-            content_type: "None".to_string(),
-            latency_ms: 0.0,
-        })),
-        ideas_buffer: Arc::new(RwLock::new(vec![])),
-
-        // MCP Integration fields - "Let's collaborate in real-time!" 🚀
-        mcp_activity: Arc::new(RwLock::new(McpActivity::default())),
-        file_access_log: Arc::new(RwLock::new(vec![])),
-        active_tool: Arc::new(RwLock::new(None)),
-        user_hints: Arc::new(RwLock::new(std::collections::VecDeque::new())),
-        ws_connections: Arc::new(RwLock::new(0)),
-        repo_status_feed: Arc::new(RwLock::new(vec![])),
-        status_feed_endpoint: Arc::new(RwLock::new(default_status_feed_url())),
-    });
-
-    // Launch the dashboard (this blocks until window is closed)
-    start_dashboard(state).await
-}
-
-#[cfg(not(feature = "dashboard"))]
-async fn run_dashboard() -> Result<()> {
-    eprintln!("Error: Dashboard mode requires the 'dashboard' feature.");
-    eprintln!("Rebuild with: cargo build --release --features dashboard");
-    eprintln!("NOTE: Dashboard is designed for daemon mode with human-in-the-loop control.");
-    Ok(())
+/// Launch the web dashboard - browser-based terminal + file browser
+async fn run_web_dashboard(
+    port: u16,
+    open_browser: bool,
+    allow_networks: Vec<String>,
+    log_store: InMemoryLogStore,
+) -> Result<()> {
+    st::web_dashboard::start_server(port, open_browser, allow_networks, log_store).await
 }
 
 /// Run the Smart Tree Daemon - System-wide AI context service
@@ -1623,18 +1708,14 @@ async fn handle_claude_restore() -> Result<()> {
         Ok(is_relevant) => {
             if is_relevant {
                 println!("{}", manager.get_summary());
-                println!("\n{}", manager.get_context_reminder());
-                println!(
-                    "\n💡 TIP: Run `st --claude-save` before ending session to preserve context."
-                );
+                println!("{}", manager.get_context_reminder());
+                println!("TIP: Run `st --claude-save` before ending session to preserve context.");
             } else {
-                println!("🧠 Fresh session - previous context not applicable.");
-                println!("   Run `st -m context .` for project overview.");
+                println!("TIP: Run `st -m context .` for project overview.");
             }
         }
         Err(_) => {
-            println!("🧠 Fresh session - no previous context found.");
-            println!("   Run `st -m context .` for project overview.");
+            println!("TIP: Run `st -m context .` for project overview.");
         }
     }
 
@@ -1953,6 +2034,39 @@ async fn handle_claude_kickstart() -> Result<()> {
     Ok(())
 }
 
+/// Show detailed help for memory-anchor command
+fn show_memory_anchor_help() -> Result<()> {
+    println!("🧠 Memory Anchor - Persistent Knowledge Storage");
+    println!("================================================\n");
+    println!("USAGE:");
+    println!("    st --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>\n");
+    println!("ARGUMENTS:");
+    println!("    TYPE      Memory type: insight, decision, pattern, gotcha, todo");
+    println!("    KEYWORDS  Comma-separated search keywords (e.g., \"auth,security,jwt\")");
+    println!("    CONTEXT   The actual content to remember (quote if contains spaces)\n");
+    println!("EXAMPLES:");
+    println!("    st --memory-anchor insight \"auth,jwt\" \"Tokens stored in httpOnly cookies\"");
+    println!(
+        "    st --memory-anchor decision \"api,versioning\" \"Use URL-based versioning /v1/\""
+    );
+    println!(
+        "    st --memory-anchor pattern \"error,handling\" \"Always use Result<T> with context\""
+    );
+    println!("    st --memory-anchor gotcha \"async,tokio\" \"Don't block the runtime with std::thread::sleep\"");
+    println!("    st --memory-anchor todo \"refactor,auth\" \"Split auth into separate crate\"\n");
+    println!("MEMORY TYPES:");
+    println!("    insight   - General knowledge and discoveries");
+    println!("    decision  - Architectural or design decisions");
+    println!("    pattern   - Code patterns and best practices");
+    println!("    gotcha    - Pitfalls and things to avoid");
+    println!("    todo      - Tasks and reminders\n");
+    println!("RELATED COMMANDS:");
+    println!("    st --memory-find <KEYWORDS>   Find memories by keywords");
+    println!("    st --memory-stats             Show memory statistics\n");
+    println!("💡 Memories persist across sessions in ~/.mem8/memories/");
+    Ok(())
+}
+
 /// Anchor a memory
 async fn handle_memory_anchor(anchor_type: &str, keywords_str: &str, context: &str) -> Result<()> {
     use st::memory_manager::MemoryManager;
@@ -1979,6 +2093,7 @@ async fn handle_memory_anchor(anchor_type: &str, keywords_str: &str, context: &s
 /// Find memories by keywords
 async fn handle_memory_find(keywords_str: &str) -> Result<()> {
     use st::memory_manager::MemoryManager;
+    use st::std_client;
 
     let mut manager = MemoryManager::new()?;
 
@@ -1989,13 +2104,37 @@ async fn handle_memory_find(keywords_str: &str) -> Result<()> {
 
     let memories = manager.find(&keywords)?;
 
-    if memories.is_empty() {
-        println!("🔍 No memories found for: {}", keywords_str);
+    // Check if daemon is running - if so, show all memories (global view)
+    // If standalone, only show memories from current directory or subdirectories
+    let cwd = std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let daemon_running = std_client::is_daemon_running().await;
+
+    let filtered: Vec<_> = if daemon_running {
+        // Daemon provides global memory access
+        memories
     } else {
-        println!("🧠 Found {} memories:", memories.len());
+        // Standalone: filter to current directory scope
+        memories
+            .into_iter()
+            .filter(|m| m.origin.starts_with(&cwd) || cwd.starts_with(&m.origin))
+            .collect()
+    };
+
+    if filtered.is_empty() {
+        if daemon_running {
+            println!("🔍 No memories found for: {}", keywords_str);
+        } else {
+            println!("🔍 No memories found for '{}' in this directory", keywords_str);
+            println!("   💡 Start daemon for global memory: st --daemon-start");
+        }
+    } else {
+        println!("🧠 Found {} memories{}:", filtered.len(),
+            if daemon_running { " (global)" } else { " (local)" });
         println!("{}", "─".repeat(45));
 
-        for (i, memory) in memories.iter().enumerate() {
+        for (i, memory) in filtered.iter().enumerate() {
             println!(
                 "\n[{}] {} @ {:.2}Hz",
                 i + 1,
@@ -2184,41 +2323,36 @@ fn update_claude_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
 // =============================================================================
 
 /// Start the Smart Tree daemon in the background
-async fn handle_daemon_start(port: u16) -> Result<()> {
-    use st::daemon_client::{print_context_summary, print_daemon_status};
+async fn handle_daemon_start(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    let client = DaemonClient::new(port);
+    // Check if std daemon is already running (Unix socket)
+    if std_client::is_daemon_running().await {
+        println!("🌳 Smart Tree Daemon is already running!");
+        println!("   Socket: {}", std_client::socket_path().display());
+        return Ok(());
+    }
 
-    // Check if already running
-    let status = client.check_status().await;
-    match status {
-        DaemonStatus::Running(info) => {
-            println!("🌳 Smart Tree Daemon is already running!");
-            print_daemon_status(&DaemonStatus::Running(info));
+    // Start the std daemon
+    println!("🌳 Starting Smart Tree Daemon...");
+    match std_client::start_daemon().await {
+        Ok(true) => {
+            println!("✅ Daemon started successfully!");
+            println!("   Socket: {}", std_client::socket_path().display());
 
-            // Show context summary
-            if let Ok(ctx) = client.get_context().await {
-                println!();
-                print_context_summary(&ctx);
+            // Verify with a ping
+            if let Some(mut client) = std_client::StdClient::connect().await {
+                if client.ping().await.unwrap_or(false) {
+                    println!("   Status: responding to PING");
+                }
             }
         }
-        _ => {
-            println!("🌳 Starting Smart Tree Daemon on port {}...", port);
-            match client.start_daemon().await {
-                Ok(true) => {
-                    println!("✅ Daemon started successfully!");
-                    if let Ok(info) = client.get_info().await {
-                        print_daemon_status(&DaemonStatus::Running(info));
-                    }
-                }
-                Ok(false) => {
-                    println!("⚠️  Daemon was already running.");
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to start daemon: {}", e);
-                    return Err(e);
-                }
-            }
+        Ok(false) => {
+            println!("⚠️  Daemon was already running.");
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to start daemon: {}", e);
+            return Err(e);
         }
     }
 
@@ -2226,28 +2360,27 @@ async fn handle_daemon_start(port: u16) -> Result<()> {
 }
 
 /// Stop a running Smart Tree daemon
-async fn handle_daemon_stop(port: u16) -> Result<()> {
-    let client = DaemonClient::new(port);
+async fn handle_daemon_stop(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    // Check if running
-    match client.check_status().await {
-        DaemonStatus::Running(_) => {
-            println!("🌳 Stopping Smart Tree Daemon on port {}...", port);
-            match client.stop_daemon().await {
-                Ok(true) => {
-                    println!("✅ Daemon stopped successfully!");
-                }
-                Ok(false) => {
-                    println!("⚠️  Daemon was not running.");
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to stop daemon: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-        _ => {
-            println!("⚠️  No daemon running on port {}", port);
+    // Check if std daemon is running
+    if !std_client::is_daemon_running().await {
+        println!("⚠️  No daemon running");
+        return Ok(());
+    }
+
+    println!("🌳 Stopping Smart Tree Daemon...");
+
+    // Remove the socket file to signal shutdown
+    let socket = std_client::socket_path();
+    if socket.exists() {
+        // Try to connect and send a graceful shutdown (future: add SHUTDOWN verb)
+        // For now, just remove the socket - daemon will exit on next connection attempt
+        if let Err(e) = std::fs::remove_file(&socket) {
+            eprintln!("⚠️  Could not remove socket: {}", e);
+        } else {
+            println!("✅ Daemon socket removed");
+            println!("   Note: Daemon process may still be running - use 'pkill std' if needed");
         }
     }
 
@@ -2255,21 +2388,43 @@ async fn handle_daemon_stop(port: u16) -> Result<()> {
 }
 
 /// Show the status of the Smart Tree daemon
-async fn handle_daemon_status(port: u16) -> Result<()> {
-    use st::daemon_client::{print_context_summary, print_daemon_status};
+async fn handle_daemon_status(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    let client = DaemonClient::new(port);
-    let status = client.check_status().await;
+    let socket = std_client::socket_path();
 
-    print_daemon_status(&status);
+    println!("╔═══════════════════════════════════════════════════════════╗");
 
-    // If running, also show context summary
-    if let DaemonStatus::Running(_) = status {
-        if let Ok(ctx) = client.get_context().await {
-            println!();
-            print_context_summary(&ctx);
+    if std_client::is_daemon_running().await {
+        println!("║        🌳 SMART TREE DAEMON STATUS: RUNNING 🌳           ║");
+        println!("╠═══════════════════════════════════════════════════════════╣");
+        println!("║  Socket: {:<48} ║", socket.display());
+
+        // Fetch stats from daemon
+        if let Some(mut client) = std_client::StdClient::connect().await {
+            if let Ok(stats) = client.stats().await {
+                let version = stats["version"].as_str().unwrap_or("?");
+                let protocol = stats["protocol"].as_str().unwrap_or("?");
+                let memories = stats["memories"].as_u64().unwrap_or(0);
+                let waves = stats["active_waves"].as_u64().unwrap_or(0);
+                let keywords = stats["keywords"].as_u64().unwrap_or(0);
+
+                println!("║  Version: {:<47} ║", version);
+                println!("║  Protocol: {:<46} ║", protocol);
+                println!("╠═══════════════════════════════════════════════════════════╣");
+                println!("║  Memories: {:<46} ║", memories);
+                println!("║  Active waves: {:<42} ║", waves);
+                println!("║  Keywords: {:<46} ║", keywords);
+            }
         }
+    } else {
+        println!("║        🌳 SMART TREE DAEMON STATUS: STOPPED 🛑            ║");
+        println!("╠═══════════════════════════════════════════════════════════╣");
+        println!("║  The daemon is not running.                               ║");
+        println!("║  Start with: st --daemon-start                            ║");
     }
+
+    println!("╚═══════════════════════════════════════════════════════════╝");
 
     Ok(())
 }
@@ -2341,6 +2496,164 @@ async fn handle_daemon_credits(port: u16) -> Result<()> {
             eprintln!("❌ Failed to connect to daemon: {}", e);
             return Err(e);
         }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
+// AI GUARDIAN - System-wide protection daemon
+// =============================================================================
+
+/// Run the Guardian daemon (called by systemd service)
+async fn run_guardian_daemon() -> Result<()> {
+    use st::ai_guardian::AiGuardian;
+    use tokio::time::{sleep, Duration};
+
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║    🛡️  SMART TREE GUARDIAN - System-wide AI Protection Active 🛡️            ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+"#);
+
+    let guardian = AiGuardian::new();
+
+    // Watch paths for suspicious files
+    let watch_paths = vec![
+        "/home",
+        "/tmp",
+        "/var/tmp",
+    ];
+
+    println!("Watching paths: {:?}", watch_paths);
+    println!("Press Ctrl+C to stop.\n");
+
+    // Main protection loop
+    loop {
+        for watch_path in &watch_paths {
+            let path = std::path::Path::new(watch_path);
+            if !path.exists() {
+                continue;
+            }
+
+            // Scan for new/modified files with potential injection content
+            scan_directory_for_threats(&guardian, path);
+        }
+
+        // Sleep between scans
+        sleep(Duration::from_secs(60)).await;
+    }
+}
+
+/// Scan a directory for prompt injection threats
+fn scan_directory_for_threats(guardian: &st::ai_guardian::AiGuardian, path: &std::path::Path) {
+    use walkdir::WalkDir;
+
+    let suspicious_extensions = [
+        "md", "txt", "json", "yaml", "yml", "toml", "sh", "py", "js", "ts",
+    ];
+
+    for entry in WalkDir::new(path)
+        .max_depth(3)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let entry_path = entry.path();
+
+        // Skip hidden files and directories
+        if entry_path
+            .file_name()
+            .map(|n| n.to_string_lossy().starts_with('.'))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        // Only scan text files that could contain injection attempts
+        if let Some(ext) = entry_path.extension() {
+            let ext_str = ext.to_string_lossy().to_lowercase();
+            if suspicious_extensions.contains(&ext_str.as_str()) {
+                let threats = guardian.scan_file(entry_path);
+
+                // Report critical and dangerous threats
+                for threat in threats {
+                    if matches!(
+                        threat.level,
+                        st::ai_guardian::ThreatLevel::Critical | st::ai_guardian::ThreatLevel::Dangerous
+                    ) {
+                        eprintln!(
+                            "⚠️  THREAT DETECTED [{:?}] in {}: {}",
+                            threat.level,
+                            threat.location,
+                            threat.pattern
+                        );
+                        eprintln!("    Context: {}", threat.context);
+                        eprintln!("    Recommendation: {}", threat.recommendation);
+                        eprintln!();
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Scan a specific file for prompt injection
+fn handle_guardian_scan(file_path: &std::path::Path) -> Result<()> {
+    use st::ai_guardian::{AiGuardian, ThreatLevel};
+
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║            🛡️  SMART TREE GUARDIAN - File Scan 🛡️                            ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+"#);
+
+    println!("Scanning: {}\n", file_path.display());
+
+    let guardian = AiGuardian::new();
+    let threats = guardian.scan_file(file_path);
+
+    if threats.is_empty() {
+        println!("✅ No threats detected. File appears safe.");
+        return Ok(());
+    }
+
+    // Count by severity
+    let critical = threats.iter().filter(|t| t.level == ThreatLevel::Critical).count();
+    let dangerous = threats.iter().filter(|t| t.level == ThreatLevel::Dangerous).count();
+    let suspicious = threats.iter().filter(|t| t.level == ThreatLevel::Suspicious).count();
+
+    println!("Found {} issues:\n", threats.len());
+    println!("  🔴 Critical:   {}", critical);
+    println!("  🟠 Dangerous:  {}", dangerous);
+    println!("  🟡 Suspicious: {}", suspicious);
+    println!();
+
+    for threat in &threats {
+        let icon = match threat.level {
+            ThreatLevel::Critical => "🔴",
+            ThreatLevel::Dangerous => "🟠",
+            ThreatLevel::Suspicious => "🟡",
+            ThreatLevel::Safe => "🟢",
+        };
+
+        println!("{} [{:?}] {}", icon, threat.level, threat.pattern);
+        println!("   Location: {}", threat.location);
+        if !threat.context.is_empty() {
+            println!("   Context: {}", threat.context);
+        }
+        println!("   Action: {}", threat.recommendation);
+        println!();
+    }
+
+    if critical > 0 {
+        println!("⛔ RECOMMENDATION: DO NOT process this file with AI assistants.");
+        println!("   Critical threats detected that could compromise AI behavior.");
+    } else if dangerous > 0 {
+        println!("⚠️  RECOMMENDATION: Review this file carefully before AI processing.");
+        println!("   Potentially dangerous patterns detected.");
     }
 
     Ok(())

@@ -1,0 +1,26 @@
+[Unit]
+Description=Smart Tree Dashboard for project %I
+After=network.target
+
+[Service]
+Type=simple
+# Run as the user who enables the service
+User=%u
+
+# The %I is the instance name from the command (e.g., `my-project` from `systemctl start smart-tree-dashboard@my-project`).
+# This template assumes your projects are in your home directory.
+# CHANGE THIS PATH to match your project structure.
+# For example, if your projects are in /srv/projects, use /srv/projects/%I
+WorkingDirectory=/home/%u/projects/%I
+
+# CHANGE THIS PATH if `st` is not installed in the default cargo bin directory.
+# You can find the path by running `which st`.
+ExecStart=/home/%u/.cargo/bin/st --dashboard
+
+# Keep the service running
+Restart=on-failure
+RestartSec=10
+
+[Install]
+# Make it start on boot if enabled
+WantedBy=default.target

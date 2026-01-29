@@ -221,6 +221,7 @@ mod tests {
                 file_type: FileType::RegularFile,
                 category: FileCategory::Markdown,
                 filesystem_type: FilesystemType::Unknown,
+                git_branch: None,
             },
             FileNode {
                 path: PathBuf::from("src/main.rs"),
@@ -239,6 +240,7 @@ mod tests {
                 file_type: FileType::RegularFile,
                 category: FileCategory::Rust,
                 filesystem_type: FilesystemType::Unknown,
+                git_branch: None,
             },
             FileNode {
                 path: PathBuf::from("tests/test_main.rs"),
@@ -257,6 +259,7 @@ mod tests {
                 file_type: FileType::RegularFile,
                 category: FileCategory::Rust,
                 filesystem_type: FilesystemType::Unknown,
+                git_branch: None,
             },
         ];
 

@@ -294,6 +294,7 @@ mod tests {
                 category: FileCategory::Rust,
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
+                git_branch: None,
             },
             FileNode {
                 path: PathBuf::from("/test/Cargo.toml"),
@@ -312,6 +313,7 @@ mod tests {
                 category: FileCategory::Toml,
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
+                git_branch: None,
             },
         ];
 

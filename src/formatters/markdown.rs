@@ -718,6 +718,7 @@ mod tests {
             file_type: FileType::Directory,
             category: FileCategory::Unknown,
             filesystem_type: FilesystemType::Unknown,
+            git_branch: None,
         }];
 
         let mut stats = TreeStats::default();

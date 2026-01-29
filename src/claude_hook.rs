@@ -332,14 +332,19 @@ fn provide_current_context(prompt: &str) -> Result<()> {
 fn provide_topic_context(prompt: &str) -> Result<()> {
     let lower = prompt.to_lowercase();
 
-    // Wave signatures and compass
-    if lower.contains("wave") || lower.contains("compass") || lower.contains("signature") {
-        println!("### 🌊 Wave Signature & Compass");
+    // Wave signatures and dashboard
+    if lower.contains("wave")
+        || lower.contains("compass")
+        || lower.contains("signature")
+        || lower.contains("dashboard")
+    {
+        println!("### 🌊 Wave Signature & Dashboard");
         println!("- **Quantum signatures**: `src/quantum_wave_signature.rs`");
-        println!("- **Wave compass**: `src/wave_compass.rs`");
-        println!("- **Dashboard integration**: `src/dashboard_egui.rs`");
+        println!(
+            "- **Web dashboard**: `src/web_dashboard/` (browser-based terminal + file browser)"
+        );
         println!("- **4.3 billion unique states** via 32-bit encoding");
-        println!("- **Resonance detection** for harmonic convergence");
+        println!("- **Real PTY terminal** with vim/htop support");
         println!();
     }
 

@@ -250,6 +250,7 @@ fn convert_node(context: &ContextNode, nodes: &mut Vec<crate::FileNode>, depth: 
         },
         search_matches: None,
         filesystem_type: FilesystemType::Unknown,
+        git_branch: None,
     };
 
     nodes.push(node);

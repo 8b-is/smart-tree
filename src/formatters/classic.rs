@@ -714,10 +714,21 @@ impl ClassicFormatter {
         // Apply color to the name based on file category
         let colored_name = if node.is_dir {
             // Directories get bright yellow and bold
-            if self.use_color {
+            let dir_name = if self.use_color {
                 name.bright_yellow().bold().to_string()
             } else {
                 name
+            };
+            // Add git branch if present
+            if let Some(ref branch) = node.git_branch {
+                let branch_display = if self.use_color {
+                    format!(" [{}]", branch.cyan())
+                } else {
+                    format!(" [{}]", branch)
+                };
+                format!("{}{}", dir_name, branch_display)
+            } else {
+                dir_name
             }
         } else if let Some(color) = self.get_color_for_category(node.category) {
             name.color(color).to_string()

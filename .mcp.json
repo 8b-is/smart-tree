@@ -2,10 +2,10 @@
   "mcpServers": {
     "st": {
       "type": "stdio",
-      "command": "st",
+      "command": "cargo run --release",
       "args": [
         "--mcp"
-      ],
+       ],
       "env": {}
     }
   }

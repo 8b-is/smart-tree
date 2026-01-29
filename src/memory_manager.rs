@@ -47,28 +47,25 @@ pub struct MemoryManager {
 impl MemoryManager {
     pub fn new() -> Result<Self> {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let bank_path = Path::new(&home)
-            .join(".mem8")
-            .join("smart_tree_memories.m8");
+        let st_dir = Path::new(&home).join(".st");
+        let bank_path = st_dir.join("memories.m8");
 
         // Ensure directory exists
-        if let Some(parent) = bank_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        fs::create_dir_all(&st_dir)?;
 
         // Load existing memories or create new bank
         let bank = if bank_path.exists() {
             Self::load_m8(&bank_path)?
         } else {
-            // Try to migrate from old JSON format
+            // Try to migrate from old GLOBAL JSON format from .mem8
             let json_path = Path::new(&home)
                 .join(".mem8")
                 .join("smart_tree_memories.json");
+
             if json_path.exists() {
                 let content = fs::read_to_string(&json_path)?;
                 let bank: MemoryBank = serde_json::from_str(&content).unwrap_or_default();
-                // Delete old JSON after migration
-                let _ = fs::remove_file(json_path);
+                // Don't delete the old file, just let the new format be saved in .st
                 bank
             } else {
                 MemoryBank::default()
