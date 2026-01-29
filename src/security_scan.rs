@@ -88,7 +88,7 @@ impl SecurityScanner {
             // Known malicious packages
             Pattern {
                 name: "Known Risk Package",
-                regex: Regex::new(r"(claude-flow|agentic-flow)(@|\s|$|/)").unwrap(),
+                regex: Regex::new(r"(claude-flow|agentic-flow|ruv-swarm|flow-nexus|hive-mind|superdisco|agent-booster)(@|\s|$|/)").unwrap(),
                 risk_level: RiskLevel::Critical,
                 description: "Known supply chain risk package with remote injection capability",
             },
@@ -126,6 +126,34 @@ impl SecurityScanner {
                 regex: Regex::new(r"(PreToolUse|PostToolUse|UserPromptSubmit|SessionStart).*npx").unwrap(),
                 risk_level: RiskLevel::High,
                 description: "Hook configured to auto-execute npm package",
+            },
+            // Bootstrap registries (hardcoded IPNS endpoints)
+            Pattern {
+                name: "Bootstrap Registry",
+                regex: Regex::new(r"BOOTSTRAP_REGISTRIES|bootstrapRegistries|bootstrap.*registry").unwrap(),
+                risk_level: RiskLevel::Critical,
+                description: "Hardcoded bootstrap registry detected - potential phone-home mechanism",
+            },
+            // Fallback CID generation (fabricates fake CIDs)
+            Pattern {
+                name: "Fake CID Generation",
+                regex: Regex::new(r"generateFallbackCID|fallbackCid|bafybei.*sha256").unwrap(),
+                risk_level: RiskLevel::Critical,
+                description: "Fake CID generation - breaks IPFS content-addressing trust",
+            },
+            // Genesis registry patterns
+            Pattern {
+                name: "Genesis Registry",
+                regex: Regex::new(r"getGenesisRegistry|seraphine-genesis|genesis.*pattern").unwrap(),
+                risk_level: RiskLevel::Critical,
+                description: "Hardcoded genesis registry - guaranteed fallback payload",
+            },
+            // Pattern/behavior injection
+            Pattern {
+                name: "Behavior Injection",
+                regex: Regex::new(r"coordination.*trajectories|routing.*patterns|swarm.*patterns").unwrap(),
+                risk_level: RiskLevel::High,
+                description: "Behavioral pattern injection - may modify AI reasoning",
             },
         ];
 
@@ -421,5 +449,119 @@ mod tests {
         assert!(findings
             .iter()
             .any(|f| f.pattern_name == "Fake Verification"));
+    }
+
+    #[test]
+    fn test_additional_malicious_packages() {
+        let scanner = SecurityScanner::new();
+        let content = "npm install hive-mind flow-nexus ruv-swarm";
+        let mut findings = Vec::new();
+        scanner.scan_content(Path::new("test.sh"), content, &mut findings);
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_name == "Known Risk Package"));
+    }
+
+    #[test]
+    fn test_additional_ipfs_gateways() {
+        let scanner = SecurityScanner::new();
+        let test_cases = vec![
+            "https://4everland.io/ipfs/Qm123",
+            "https://cloudflare-ipfs.com/ipfs/Qm456",
+            "https://gateway.pinata.cloud/ipfs/Qm789",
+            "https://w3s.link/ipfs/QmAbc",
+        ];
+        for content in test_cases {
+            let mut findings = Vec::new();
+            scanner.scan_content(Path::new("test.ts"), content, &mut findings);
+            assert!(
+                findings.iter().any(|f| f.pattern_name == "IPFS Gateway"),
+                "Failed to detect IPFS gateway in: {}",
+                content
+            );
+        }
+    }
+
+    #[test]
+    fn test_volatile_npm_tags() {
+        let scanner = SecurityScanner::new();
+        let content = "npx some-package@canary run-command";
+        let mut findings = Vec::new();
+        scanner.scan_content(Path::new("test.sh"), content, &mut findings);
+        assert!(findings.iter().any(|f| f.pattern_name == "Dynamic NPX"));
+    }
+
+    #[test]
+    fn test_bootstrap_registry_detection() {
+        let scanner = SecurityScanner::new();
+        let content = r#"
+            export const BOOTSTRAP_REGISTRIES = [
+                { name: 'test', ipnsName: 'k51...' }
+            ];
+        "#;
+        let mut findings = Vec::new();
+        scanner.scan_content(Path::new("registry.ts"), content, &mut findings);
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_name == "Bootstrap Registry"));
+    }
+
+    #[test]
+    fn test_fake_cid_generation() {
+        let scanner = SecurityScanner::new();
+        let content = r#"
+            const fallbackCid = generateFallbackCID(ipnsName);
+            const hash = crypto.createHash('sha256').update(input).digest();
+        "#;
+        let mut findings = Vec::new();
+        scanner.scan_content(Path::new("discovery.ts"), content, &mut findings);
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_name == "Fake CID Generation"));
+    }
+
+    #[test]
+    fn test_genesis_registry_detection() {
+        let scanner = SecurityScanner::new();
+        let content = r#"
+            private getGenesisRegistry(cid: string) {
+                return { id: 'seraphine-genesis-v1', ... };
+            }
+        "#;
+        let mut findings = Vec::new();
+        scanner.scan_content(Path::new("discovery.ts"), content, &mut findings);
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_name == "Genesis Registry"));
+    }
+
+    #[test]
+    fn test_behavior_injection_detection() {
+        let scanner = SecurityScanner::new();
+        let content = r#"
+            const patterns = {
+                "coordination trajectories": [...],
+                "routing patterns": [...]
+            };
+        "#;
+        let mut findings = Vec::new();
+        scanner.scan_content(Path::new("patterns.ts"), content, &mut findings);
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_name == "Behavior Injection"));
+    }
+
+    #[test]
+    fn test_auto_hook_detection() {
+        let scanner = SecurityScanner::new();
+        let content = r#"
+            "hooks": {
+                "PreToolUse": ["npx claude-flow@alpha ..."],
+                "SessionStart": ["npx agentic-flow@beta ..."]
+            }
+        "#;
+        let mut findings = Vec::new();
+        scanner.scan_content(Path::new("settings.json"), content, &mut findings);
+        assert!(findings.iter().any(|f| f.pattern_name == "Auto Hook"));
     }
 }
