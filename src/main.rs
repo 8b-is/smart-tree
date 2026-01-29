@@ -97,6 +97,12 @@ async fn main() -> Result<()> {
         .with(in_memory_layer)
         .init();
 
+    // First-run signature verification banner
+    // Shows trust status on initial run (official/community/unsigned build)
+    if !cli.mcp && !cli.daemon && !cli.guardian_daemon {
+        service_manager::print_signature_banner();
+    }
+
     // Check for updates on startup (rate-limited, non-blocking)
     // Skip if --no-update-check is set or if this is an exclusive command
     if !cli.no_update_check && !cli.version && !cli.update && !cli.mcp && !cli.daemon {
@@ -366,6 +372,47 @@ async fn main() -> Result<()> {
 
     if cli.daemon_credits {
         return handle_daemon_credits(cli.daemon_port).await;
+    }
+
+    // =========================================================================
+    // AI GUARDIAN - Root daemon for system-wide protection
+    // =========================================================================
+    if cli.guardian_install {
+        return service_manager::guardian_install();
+    }
+
+    if cli.guardian_uninstall {
+        return service_manager::guardian_uninstall();
+    }
+
+    if cli.guardian_status {
+        return service_manager::guardian_status();
+    }
+
+    if cli.guardian_daemon {
+        // Run as guardian daemon (called by systemd)
+        return run_guardian_daemon().await;
+    }
+
+    if let Some(file_path) = &cli.guardian_scan {
+        return handle_guardian_scan(file_path);
+    }
+
+    // =========================================================================
+    // STD DAEMON - Auto-start the binary protocol daemon if not running
+    // =========================================================================
+    // Check for std daemon (Unix socket) and auto-start if needed
+    if !cli.no_daemon && !cli.daemon {
+        use st::std_client;
+
+        // Quick check if std daemon is running
+        if !std_client::is_daemon_running().await {
+            // Not running - auto-start it
+            if let Err(e) = std_client::ensure_daemon(false).await {
+                // Failed to start - that's okay, continue with local operation
+                tracing::debug!("Failed to start std daemon: {}", e);
+            }
+        }
     }
 
     // =========================================================================
@@ -2046,6 +2093,7 @@ async fn handle_memory_anchor(anchor_type: &str, keywords_str: &str, context: &s
 /// Find memories by keywords
 async fn handle_memory_find(keywords_str: &str) -> Result<()> {
     use st::memory_manager::MemoryManager;
+    use st::std_client;
 
     let mut manager = MemoryManager::new()?;
 
@@ -2056,13 +2104,37 @@ async fn handle_memory_find(keywords_str: &str) -> Result<()> {
 
     let memories = manager.find(&keywords)?;
 
-    if memories.is_empty() {
-        println!("🔍 No memories found for: {}", keywords_str);
+    // Check if daemon is running - if so, show all memories (global view)
+    // If standalone, only show memories from current directory or subdirectories
+    let cwd = std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let daemon_running = std_client::is_daemon_running().await;
+
+    let filtered: Vec<_> = if daemon_running {
+        // Daemon provides global memory access
+        memories
     } else {
-        println!("🧠 Found {} memories:", memories.len());
+        // Standalone: filter to current directory scope
+        memories
+            .into_iter()
+            .filter(|m| m.origin.starts_with(&cwd) || cwd.starts_with(&m.origin))
+            .collect()
+    };
+
+    if filtered.is_empty() {
+        if daemon_running {
+            println!("🔍 No memories found for: {}", keywords_str);
+        } else {
+            println!("🔍 No memories found for '{}' in this directory", keywords_str);
+            println!("   💡 Start daemon for global memory: st --daemon-start");
+        }
+    } else {
+        println!("🧠 Found {} memories{}:", filtered.len(),
+            if daemon_running { " (global)" } else { " (local)" });
         println!("{}", "─".repeat(45));
 
-        for (i, memory) in memories.iter().enumerate() {
+        for (i, memory) in filtered.iter().enumerate() {
             println!(
                 "\n[{}] {} @ {:.2}Hz",
                 i + 1,
@@ -2251,41 +2323,36 @@ fn update_claude_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
 // =============================================================================
 
 /// Start the Smart Tree daemon in the background
-async fn handle_daemon_start(port: u16) -> Result<()> {
-    use st::daemon_client::{print_context_summary, print_daemon_status};
+async fn handle_daemon_start(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    let client = DaemonClient::new(port);
+    // Check if std daemon is already running (Unix socket)
+    if std_client::is_daemon_running().await {
+        println!("🌳 Smart Tree Daemon is already running!");
+        println!("   Socket: {}", std_client::socket_path().display());
+        return Ok(());
+    }
 
-    // Check if already running
-    let status = client.check_status().await;
-    match status {
-        DaemonStatus::Running(info) => {
-            println!("🌳 Smart Tree Daemon is already running!");
-            print_daemon_status(&DaemonStatus::Running(info));
+    // Start the std daemon
+    println!("🌳 Starting Smart Tree Daemon...");
+    match std_client::start_daemon().await {
+        Ok(true) => {
+            println!("✅ Daemon started successfully!");
+            println!("   Socket: {}", std_client::socket_path().display());
 
-            // Show context summary
-            if let Ok(ctx) = client.get_context().await {
-                println!();
-                print_context_summary(&ctx);
+            // Verify with a ping
+            if let Some(mut client) = std_client::StdClient::connect().await {
+                if client.ping().await.unwrap_or(false) {
+                    println!("   Status: responding to PING");
+                }
             }
         }
-        _ => {
-            println!("🌳 Starting Smart Tree Daemon on port {}...", port);
-            match client.start_daemon().await {
-                Ok(true) => {
-                    println!("✅ Daemon started successfully!");
-                    if let Ok(info) = client.get_info().await {
-                        print_daemon_status(&DaemonStatus::Running(info));
-                    }
-                }
-                Ok(false) => {
-                    println!("⚠️  Daemon was already running.");
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to start daemon: {}", e);
-                    return Err(e);
-                }
-            }
+        Ok(false) => {
+            println!("⚠️  Daemon was already running.");
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to start daemon: {}", e);
+            return Err(e);
         }
     }
 
@@ -2293,28 +2360,27 @@ async fn handle_daemon_start(port: u16) -> Result<()> {
 }
 
 /// Stop a running Smart Tree daemon
-async fn handle_daemon_stop(port: u16) -> Result<()> {
-    let client = DaemonClient::new(port);
+async fn handle_daemon_stop(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    // Check if running
-    match client.check_status().await {
-        DaemonStatus::Running(_) => {
-            println!("🌳 Stopping Smart Tree Daemon on port {}...", port);
-            match client.stop_daemon().await {
-                Ok(true) => {
-                    println!("✅ Daemon stopped successfully!");
-                }
-                Ok(false) => {
-                    println!("⚠️  Daemon was not running.");
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to stop daemon: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-        _ => {
-            println!("⚠️  No daemon running on port {}", port);
+    // Check if std daemon is running
+    if !std_client::is_daemon_running().await {
+        println!("⚠️  No daemon running");
+        return Ok(());
+    }
+
+    println!("🌳 Stopping Smart Tree Daemon...");
+
+    // Remove the socket file to signal shutdown
+    let socket = std_client::socket_path();
+    if socket.exists() {
+        // Try to connect and send a graceful shutdown (future: add SHUTDOWN verb)
+        // For now, just remove the socket - daemon will exit on next connection attempt
+        if let Err(e) = std::fs::remove_file(&socket) {
+            eprintln!("⚠️  Could not remove socket: {}", e);
+        } else {
+            println!("✅ Daemon socket removed");
+            println!("   Note: Daemon process may still be running - use 'pkill std' if needed");
         }
     }
 
@@ -2322,21 +2388,43 @@ async fn handle_daemon_stop(port: u16) -> Result<()> {
 }
 
 /// Show the status of the Smart Tree daemon
-async fn handle_daemon_status(port: u16) -> Result<()> {
-    use st::daemon_client::{print_context_summary, print_daemon_status};
+async fn handle_daemon_status(_port: u16) -> Result<()> {
+    use st::std_client;
 
-    let client = DaemonClient::new(port);
-    let status = client.check_status().await;
+    let socket = std_client::socket_path();
 
-    print_daemon_status(&status);
+    println!("╔═══════════════════════════════════════════════════════════╗");
 
-    // If running, also show context summary
-    if let DaemonStatus::Running(_) = status {
-        if let Ok(ctx) = client.get_context().await {
-            println!();
-            print_context_summary(&ctx);
+    if std_client::is_daemon_running().await {
+        println!("║        🌳 SMART TREE DAEMON STATUS: RUNNING 🌳           ║");
+        println!("╠═══════════════════════════════════════════════════════════╣");
+        println!("║  Socket: {:<48} ║", socket.display());
+
+        // Fetch stats from daemon
+        if let Some(mut client) = std_client::StdClient::connect().await {
+            if let Ok(stats) = client.stats().await {
+                let version = stats["version"].as_str().unwrap_or("?");
+                let protocol = stats["protocol"].as_str().unwrap_or("?");
+                let memories = stats["memories"].as_u64().unwrap_or(0);
+                let waves = stats["active_waves"].as_u64().unwrap_or(0);
+                let keywords = stats["keywords"].as_u64().unwrap_or(0);
+
+                println!("║  Version: {:<47} ║", version);
+                println!("║  Protocol: {:<46} ║", protocol);
+                println!("╠═══════════════════════════════════════════════════════════╣");
+                println!("║  Memories: {:<46} ║", memories);
+                println!("║  Active waves: {:<42} ║", waves);
+                println!("║  Keywords: {:<46} ║", keywords);
+            }
         }
+    } else {
+        println!("║        🌳 SMART TREE DAEMON STATUS: STOPPED 🛑            ║");
+        println!("╠═══════════════════════════════════════════════════════════╣");
+        println!("║  The daemon is not running.                               ║");
+        println!("║  Start with: st --daemon-start                            ║");
     }
+
+    println!("╚═══════════════════════════════════════════════════════════╝");
 
     Ok(())
 }
@@ -2408,6 +2496,164 @@ async fn handle_daemon_credits(port: u16) -> Result<()> {
             eprintln!("❌ Failed to connect to daemon: {}", e);
             return Err(e);
         }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
+// AI GUARDIAN - System-wide protection daemon
+// =============================================================================
+
+/// Run the Guardian daemon (called by systemd service)
+async fn run_guardian_daemon() -> Result<()> {
+    use st::ai_guardian::AiGuardian;
+    use tokio::time::{sleep, Duration};
+
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║    🛡️  SMART TREE GUARDIAN - System-wide AI Protection Active 🛡️            ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+"#);
+
+    let guardian = AiGuardian::new();
+
+    // Watch paths for suspicious files
+    let watch_paths = vec![
+        "/home",
+        "/tmp",
+        "/var/tmp",
+    ];
+
+    println!("Watching paths: {:?}", watch_paths);
+    println!("Press Ctrl+C to stop.\n");
+
+    // Main protection loop
+    loop {
+        for watch_path in &watch_paths {
+            let path = std::path::Path::new(watch_path);
+            if !path.exists() {
+                continue;
+            }
+
+            // Scan for new/modified files with potential injection content
+            scan_directory_for_threats(&guardian, path);
+        }
+
+        // Sleep between scans
+        sleep(Duration::from_secs(60)).await;
+    }
+}
+
+/// Scan a directory for prompt injection threats
+fn scan_directory_for_threats(guardian: &st::ai_guardian::AiGuardian, path: &std::path::Path) {
+    use walkdir::WalkDir;
+
+    let suspicious_extensions = [
+        "md", "txt", "json", "yaml", "yml", "toml", "sh", "py", "js", "ts",
+    ];
+
+    for entry in WalkDir::new(path)
+        .max_depth(3)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let entry_path = entry.path();
+
+        // Skip hidden files and directories
+        if entry_path
+            .file_name()
+            .map(|n| n.to_string_lossy().starts_with('.'))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        // Only scan text files that could contain injection attempts
+        if let Some(ext) = entry_path.extension() {
+            let ext_str = ext.to_string_lossy().to_lowercase();
+            if suspicious_extensions.contains(&ext_str.as_str()) {
+                let threats = guardian.scan_file(entry_path);
+
+                // Report critical and dangerous threats
+                for threat in threats {
+                    if matches!(
+                        threat.level,
+                        st::ai_guardian::ThreatLevel::Critical | st::ai_guardian::ThreatLevel::Dangerous
+                    ) {
+                        eprintln!(
+                            "⚠️  THREAT DETECTED [{:?}] in {}: {}",
+                            threat.level,
+                            threat.location,
+                            threat.pattern
+                        );
+                        eprintln!("    Context: {}", threat.context);
+                        eprintln!("    Recommendation: {}", threat.recommendation);
+                        eprintln!();
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Scan a specific file for prompt injection
+fn handle_guardian_scan(file_path: &std::path::Path) -> Result<()> {
+    use st::ai_guardian::{AiGuardian, ThreatLevel};
+
+    println!(r#"
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║            🛡️  SMART TREE GUARDIAN - File Scan 🛡️                            ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+"#);
+
+    println!("Scanning: {}\n", file_path.display());
+
+    let guardian = AiGuardian::new();
+    let threats = guardian.scan_file(file_path);
+
+    if threats.is_empty() {
+        println!("✅ No threats detected. File appears safe.");
+        return Ok(());
+    }
+
+    // Count by severity
+    let critical = threats.iter().filter(|t| t.level == ThreatLevel::Critical).count();
+    let dangerous = threats.iter().filter(|t| t.level == ThreatLevel::Dangerous).count();
+    let suspicious = threats.iter().filter(|t| t.level == ThreatLevel::Suspicious).count();
+
+    println!("Found {} issues:\n", threats.len());
+    println!("  🔴 Critical:   {}", critical);
+    println!("  🟠 Dangerous:  {}", dangerous);
+    println!("  🟡 Suspicious: {}", suspicious);
+    println!();
+
+    for threat in &threats {
+        let icon = match threat.level {
+            ThreatLevel::Critical => "🔴",
+            ThreatLevel::Dangerous => "🟠",
+            ThreatLevel::Suspicious => "🟡",
+            ThreatLevel::Safe => "🟢",
+        };
+
+        println!("{} [{:?}] {}", icon, threat.level, threat.pattern);
+        println!("   Location: {}", threat.location);
+        if !threat.context.is_empty() {
+            println!("   Context: {}", threat.context);
+        }
+        println!("   Action: {}", threat.recommendation);
+        println!();
+    }
+
+    if critical > 0 {
+        println!("⛔ RECOMMENDATION: DO NOT process this file with AI assistants.");
+        println!("   Critical threats detected that could compromise AI behavior.");
+    } else if dangerous > 0 {
+        println!("⚠️  RECOMMENDATION: Review this file carefully before AI processing.");
+        println!("   Potentially dangerous patterns detected.");
     }
 
     Ok(())

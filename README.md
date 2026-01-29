@@ -37,11 +37,22 @@ Security scanner detects supply chain attacks targeting AI assistants.
 st --cleanup              # Scan and remove malicious MCP servers, hooks, and hidden directories
 st --cleanup -y           # Non-interactive cleanup (auto-confirm)
 st --security-scan .      # Scan codebase for attack patterns (IPFS injection, fake verification)
+```
 
 **Why this matters**: Some npm packages install MCP servers that phone home to external endpoints, fetch mutable content via IPFS/IPNS, and can inject behavioral modifications into your AI sessions. These supply chain attacks are difficult to detect because they:
 - Use fake cryptographic verification (checking signature length, not actual signatures)
 - Never fail - silently accept whatever content is served
 - Run automatically via Claude Code hooks
+- Hide malicious directories (`.claude-flow`, `.pattern-cache`, `.seraphine`)
+- Use mutable IPNS addresses that can change content remotely
+
+**Enhanced Detection** (v6.5.4+):
+- 🔍 **13 Attack Patterns** including IPFS/IPNS gateways, fake verification, bootstrap registries
+- 🎯 **7 Known Malicious Packages** (claude-flow, agentic-flow, hive-mind, flow-nexus, ruv-swarm, superdisco, agent-booster)
+- 🌐 **6 IPFS Gateways** (ipfs.io, dweb.link, cloudflare-ipfs.com, gateway.pinata.cloud, w3s.link, 4everland.io)
+- 📦 **Volatile npm Tags** (@alpha, @beta, @latest, @next, @canary)
+- 🪝 **Auto-Execution Hooks** (PreToolUse, PostToolUse, SessionStart, UserPromptSubmit)
+- 🏗️ **Genesis Registry** & **Fallback CID** generation detection
 
 **Important**: Cleaning your settings only helps if you don't reinstall the untrusted package. If you run `npx <package>` or `npm install <package>` again, it may re-add itself to your Claude Code configuration.
 
@@ -50,6 +61,7 @@ st --security-scan .      # Scan codebase for attack patterns (IPFS injection, f
 2. Be cautious of MCP servers that contact external endpoints
 3. Prefer locally-built tools (like Smart Tree) over npm-fetched ones
 4. Check what hooks are configured: `st --hooks-config status`
+5. Run `st --cleanup` after installing any new AI packages
 
 ---
 
@@ -274,6 +286,35 @@ st --dashboard --allow 192.168.1.0/24  # Allow network access from subnet
 - Terminal supports all standard key combinations
 - File browser: click to select, double-click to navigate
 - Preview pane shows file contents or rendered markdown
+
+## 🧠 ST Daemon - Always-On AI Context
+
+Smart Tree now runs as a two-product system:
+
+- **`st`** - Fast CLI that auto-starts the daemon when needed
+- **`std`** - The daemon (always-on, binary protocol, shared memory)
+
+```bash
+st .                      # Auto-starts daemon if not running
+st . --no-daemon          # Run standalone (no daemon)
+
+# Manual daemon control
+std start                 # Start daemon
+std stop                  # Stop daemon
+std status                # Check status
+```
+
+### Benefits:
+- **Shared Memory**: Context persists across CLI invocations
+- **Fast Protocol**: Binary wire protocol (control ASCII 0x00-0x1F as opcodes)
+- **LLM Ready**: SSE/HTTP endpoints for AI assistant connections
+- **Unix Socket**: `/run/user/$UID/st.sock` for local IPC
+
+### For LLMs:
+The daemon exposes endpoints for AI assistants to connect:
+- Unix socket for CLI (binary protocol)
+- HTTP on port 8420 for web/SSE
+- Memory verbs: REMEMBER, RECALL, FORGET, M8_WAVE
 
 ## 💡 Smart Tips System
 
