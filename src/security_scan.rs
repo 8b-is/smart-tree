@@ -469,6 +469,7 @@ mod tests {
             "https://4everland.io/ipfs/Qm123",
             "https://cloudflare-ipfs.com/ipfs/Qm456",
             "https://gateway.pinata.cloud/ipfs/Qm789",
+            "https://w3s.link/ipfs/QmAbc",
         ];
         for content in test_cases {
             let mut findings = Vec::new();

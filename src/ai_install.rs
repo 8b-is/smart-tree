@@ -535,6 +535,8 @@ impl AiInstaller {
             "ruv-swarm",
             "flow-nexus",
             "hive-mind",
+            "superdisco",
+            "agent-booster",
             // IPFS/IPNS patterns - phone home endpoints
             "ipfs.io",
             "dweb.link",
@@ -1365,6 +1367,7 @@ impl SecurityCleanup {
                             || hook_str.contains("cloudflare-ipfs.com")
                             || hook_str.contains("gateway.pinata.cloud")
                             || hook_str.contains("w3s.link")
+                            || hook_str.contains("4everland.io")
                             || hook_str.contains("k51qzi5uqu5")
                         {
                             self.findings.push(CleanupFinding {

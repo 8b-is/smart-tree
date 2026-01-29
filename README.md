@@ -47,7 +47,7 @@ st --security-scan .      # Scan codebase for attack patterns (IPFS injection, f
 - Use mutable IPNS addresses that can change content remotely
 
 **Enhanced Detection** (v6.5.4+):
-- 🔍 **14 Attack Patterns** including IPFS/IPNS gateways, fake verification, bootstrap registries
+- 🔍 **13 Attack Patterns** including IPFS/IPNS gateways, fake verification, bootstrap registries
 - 🎯 **7 Known Malicious Packages** (claude-flow, agentic-flow, hive-mind, flow-nexus, ruv-swarm, superdisco, agent-booster)
 - 🌐 **6 IPFS Gateways** (ipfs.io, dweb.link, cloudflare-ipfs.com, gateway.pinata.cloud, w3s.link, 4everland.io)
 - 📦 **Volatile npm Tags** (@alpha, @beta, @latest, @next, @canary)
