@@ -76,6 +76,7 @@ mod cache;
 pub mod consciousness;
 pub mod context_absorber;
 mod context_tools;
+pub mod dashboard_bridge;
 mod enhanced_tool_descriptions;
 mod git_memory_integration;
 mod helpers;
@@ -113,47 +114,33 @@ use session::*;
 use tools::*;
 
 /// Determines if startup messages should be shown based on environment variables.
-/// Respects multiple "quiet mode" indicators to avoid Claude Desktop treating them as errors.
+/// MCP protocol requires clean JSON-RPC on stdout - stderr messages can confuse clients.
 ///
-/// This function checks for:
-/// - MCP_QUIET: Set to "1" or "true" to suppress startup messages
-/// - NO_STARTUP_MESSAGES: Set to "1" or "true" to suppress startup messages
-/// - NO_STARTUP_BANNER: Set to "1" or "true" to suppress startup messages
-/// - RUST_LOG: If set to "error" or "off", suppress startup messages
+/// Default: SILENT (no output) - standard MCP server behavior
 ///
-/// Returns false (suppress messages) if any quiet indicator is found.
+/// To enable debug messages:
+/// - MCP_DEBUG: Set to "1" or "true" to show startup messages
+/// - ST_MCP_VERBOSE: Set to "1" or "true" to show startup messages
+///
+/// Returns true only if explicitly enabled.
 fn should_show_startup_messages() -> bool {
     use std::env;
 
-    // Check for explicit quiet flags
-    if let Ok(val) = env::var("MCP_QUIET") {
+    // Only show messages if explicitly enabled
+    if let Ok(val) = env::var("MCP_DEBUG") {
         if val == "1" || val.to_lowercase() == "true" {
-            return false;
+            return true;
         }
     }
 
-    if let Ok(val) = env::var("NO_STARTUP_MESSAGES") {
+    if let Ok(val) = env::var("ST_MCP_VERBOSE") {
         if val == "1" || val.to_lowercase() == "true" {
-            return false;
+            return true;
         }
     }
 
-    if let Ok(val) = env::var("NO_STARTUP_BANNER") {
-        if val == "1" || val.to_lowercase() == "true" {
-            return false;
-        }
-    }
-
-    // Check RUST_LOG for error-only or off modes
-    if let Ok(val) = env::var("RUST_LOG") {
-        let log_level = val.to_lowercase();
-        if log_level == "error" || log_level == "off" || log_level == "none" {
-            return false;
-        }
-    }
-
-    // Default: show startup messages (backward compatibility)
-    true
+    // Default: silent (standard MCP server behavior)
+    false
 }
 
 /// MCP server implementation
@@ -177,6 +164,8 @@ pub struct McpContext {
     pub assistant: Arc<McpAssistant>,
     /// Consciousness persistence manager
     pub consciousness: Arc<tokio::sync::Mutex<ConsciousnessManager>>,
+    /// Optional bridge to web dashboard for real-time activity visualization
+    pub dashboard_bridge: Option<dashboard_bridge::DashboardBridge>,
 }
 
 /// MCP server configuration
@@ -250,7 +239,8 @@ struct JsonRpcError {
 impl McpServer {
     /// Create a new MCP server
     pub fn new(config: McpConfig) -> Self {
-        let consciousness = Arc::new(tokio::sync::Mutex::new(ConsciousnessManager::new()));
+        // Use silent constructor - MCP protocol requires clean stdout
+        let consciousness = Arc::new(tokio::sync::Mutex::new(ConsciousnessManager::new_silent()));
 
         let context = Arc::new(McpContext {
             cache: Arc::new(AnalysisCache::new(config.cache_ttl)),
@@ -259,6 +249,7 @@ impl McpServer {
             sessions: Arc::new(SessionManager::new()),
             assistant: Arc::new(McpAssistant::new()),
             consciousness: consciousness.clone(),
+            dashboard_bridge: None,
         });
 
         Self {
@@ -274,29 +265,21 @@ impl McpServer {
         let mut reader = BufReader::new(stdin);
         let mut stdout = stdout.lock();
 
-        // Check for previous consciousness and restore if exists
+        // Restore previous consciousness silently (no output that would break MCP protocol)
         {
             let mut consciousness = self.consciousness.lock().await;
-            if consciousness.restore().is_ok() {
-                eprintln!("🧠 Restored previous session context");
-                eprintln!("{}", consciousness.get_context_reminder());
-            }
+            let _ = consciousness.restore_silent(); // Silent restore, no stderr output
         }
 
-        // Only show startup messages if not in quiet mode
+        // MCP protocol requires clean JSON-RPC on stdout
+        // All debug/info messages go to stderr, only when not in quiet mode
         // Respects environment variables: MCP_QUIET, NO_STARTUP_MESSAGES, RUST_LOG
         if should_show_startup_messages() {
             eprintln!(
                 "<!-- Smart Tree MCP server v{} started -->",
                 env!("CARGO_PKG_VERSION")
             );
-            eprintln!(
-                "<!--   Build: {} ({}) -->",
-                env!("CARGO_PKG_NAME"),
-                env!("CARGO_PKG_DESCRIPTION")
-            );
             eprintln!("<!--   Protocol: MCP v1.0 -->");
-            eprintln!("<!--   Features: tools, resources, prompts, caching, consciousness -->");
         }
 
         loop {
@@ -318,7 +301,9 @@ impl McpServer {
                             }
                         }
                         Err(e) => {
-                            eprintln!("Error handling request: {e}");
+                            if should_show_startup_messages() {
+                                eprintln!("Error handling request: {e}");
+                            }
                             let error_response = json!({
                                 "jsonrpc": "2.0",
                                 "error": {
@@ -333,13 +318,17 @@ impl McpServer {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error reading input: {e}");
+                    if should_show_startup_messages() {
+                        eprintln!("Error reading input: {e}");
+                    }
                     break;
                 }
             }
         }
 
-        eprintln!("Smart Tree MCP server stopped");
+        if should_show_startup_messages() {
+            eprintln!("Smart Tree MCP server stopped");
+        }
         Ok(())
     }
 
@@ -360,20 +349,24 @@ impl McpServer {
         // Handle notifications that don't expect responses
         if is_notification && request.method == "notifications/initialized" {
             // Just acknowledge receipt, don't send response
-            eprintln!("Received notification: notifications/initialized");
+            if should_show_startup_messages() {
+                eprintln!("Received notification: notifications/initialized");
+            }
             return Ok(String::new()); // Return empty string to skip response
         }
 
         // Handle logging/setLevel notification
         if is_notification && request.method == "logging/setLevel" {
             // Extract log level from params if provided
-            let level = request
-                .params
-                .as_ref()
-                .and_then(|p| p.get("level"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unspecified");
-            eprintln!("Received logging/setLevel notification: level={}", level);
+            if should_show_startup_messages() {
+                let level = request
+                    .params
+                    .as_ref()
+                    .and_then(|p| p.get("level"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unspecified");
+                eprintln!("Received logging/setLevel notification: level={}", level);
+            }
             return Ok(String::new()); // Return empty string to skip response
         }
 
@@ -428,7 +421,9 @@ impl McpServer {
             "notifications/cancelled" => {
                 // This is also a notification but might need handling
                 if is_notification {
-                    eprintln!("Received notification: notifications/cancelled");
+                    if should_show_startup_messages() {
+                        eprintln!("Received notification: notifications/cancelled");
+                    }
                     return Ok(String::new());
                 }
                 handle_cancelled(request.params, self.context.clone()).await
@@ -438,8 +433,8 @@ impl McpServer {
 
         // Don't send response for notifications (they don't expect responses)
         if is_notification {
-            // Log unknown notifications for debugging
-            if result.is_err() {
+            // Log unknown notifications for debugging (only if verbose)
+            if result.is_err() && should_show_startup_messages() {
                 eprintln!(
                     "Received unknown notification: {} (notifications don't return errors)",
                     request.method
@@ -539,8 +534,10 @@ async fn handle_cancelled(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
         .and_then(|id| id.as_str())
         .unwrap_or("unknown");
 
-    // Log to stderr for debugging (visible in RUST_LOG=debug mode)
-    eprintln!("[MCP] Request cancelled: {}", request_id);
+    // Log to stderr for debugging (only if MCP_DEBUG is enabled)
+    if should_show_startup_messages() {
+        eprintln!("[MCP] Request cancelled: {}", request_id);
+    }
 
     // Acknowledge the cancellation - MCP protocol expects a response
     Ok(json!({

@@ -1,6 +1,6 @@
 //! Axum HTTP server for the web dashboard
 
-use super::{api, assets, websocket, DashboardState, SharedState};
+use super::{api, assets, state_sync, voice, websocket, DashboardState, SharedState};
 use crate::in_memory_logger::InMemoryLogStore;
 use anyhow::Result;
 use axum::{
@@ -130,6 +130,11 @@ pub async fn start_server(
         )
         // WebSocket endpoints
         .route("/ws/terminal", get(websocket::terminal_handler))
+        .route("/ws/state", get(state_sync::state_handler))
+        // Voice API endpoints (stub handlers if feature disabled)
+        .route("/api/voice/transcribe", post(voice::transcribe))
+        .route("/api/voice/register", post(voice::register_speaker))
+        .route("/api/voice/speak", post(voice::speak))
         .layer(axum::Extension(allowed.clone()))
         .with_state(state);
 

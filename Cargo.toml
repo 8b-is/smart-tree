@@ -4,7 +4,7 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "st"
-version = "6.5.4"
+version = "6.6.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -48,7 +48,7 @@ futures-util = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 # HTTP/Networking
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.7", features = ["ws", "multipart"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }
 hyper = "1.7"
 http = "1.3"
@@ -140,6 +140,11 @@ candle-nn = { version = "0.8", optional = true }
 hf-hub = { version = "0.4", optional = true }
 tokenizers = { version = "0.21", optional = true }
 
+# Voice transcription/TTS (liquid-rust)
+# Note: Requires liquid-rust to be properly set up with its dependencies
+# Uncomment when liquid-rust is ready:
+# liquid-rust = { path = "../liquid-rust", optional = true }
+
 [[bin]]
 name = "std"
 path = "src/bin/std.rs"
@@ -180,10 +185,17 @@ tui = ["ratatui", "crossterm", "syntect", "artem"]
 # Local LLM inference
 candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
 
+# Voice transcription/TTS via liquid-rust (requires models)
+# Note: Enable when liquid-rust dependency is uncommented above
+voice = []
+
 # Web dashboard is now always included (no feature flag needed)
 
 # Full features
 full = ["tui", "candle"]
+
+# Full with voice
+full-voice = ["full", "voice"]
 
 [profile.release]
 lto = true

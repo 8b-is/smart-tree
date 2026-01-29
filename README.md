@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v6.5.2 - Lightning Fast Directory Visualization with Web Dashboard! 🌐
+# 🌳 Smart Tree v6.6.0 - Lightning Fast Directory Visualization with Wave Compass! 🌐
 
-[![Version](https://img.shields.io/badge/version-6.5.2-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-6.6.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -76,10 +76,14 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v6.5.2
+## 🌟 What's NEW in v6.6.0
 
 | Feature | Description | Command |
 |---------|-------------|---------|
+| **🧭 Wave Compass** | Real-time MCP activity visualization with file access heatmap | `st --dashboard` |
+| **🔇 Silent MCP** | Protocol-compliant server startup (no stderr noise) | `st --mcp` |
+| **🎙️ Voice Input** | Push-to-talk voice hints (ready for liquid-rust) | Dashboard UI |
+| **⚡ 60fps State Sync** | WebSocket-based real-time dashboard updates | Automatic |
 | **🌐 Web Dashboard** | Browser-based dashboard with real PTY terminal! | `st --dashboard` |
 | **🌿 Git Branch Display** | Shows current branch in directory listings | Automatic for .git dirs |
 | **🔒 Network Allow-listing** | CIDR-based access control for remote dashboard | `st --dashboard --allow 10.0.0.0/8` |
@@ -121,7 +125,7 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 
 # Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v6.5.2 st
+cargo install --git https://github.com/8b-is/smart-tree --tag v6.6.0 st
 
 # 🚀 One-command MCP setup for Claude Desktop!
 st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config

@@ -1101,7 +1101,611 @@ class Dashboard {
     }
 }
 
+// ============================================================================
+// Wave Compass - Real-time MCP Activity Visualization
+// ============================================================================
+
+class WaveCompass {
+    constructor(canvas, onHint) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.onHint = onHint;
+        this.hotRegions = new Map(); // path -> {x, y, intensity, label}
+        this.trail = []; // [{x, y, age}]
+        this.animationId = null;
+
+        // Setup canvas sizing
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        // Click handling
+        canvas.addEventListener('click', (e) => this.handleClick(e));
+
+        // Start animation loop
+        this.animate();
+    }
+
+    resize() {
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
+        this.ctx.scale(dpr, dpr);
+        this.width = rect.width;
+        this.height = rect.height;
+    }
+
+    // Update from state_update message
+    update(data) {
+        // Update hot regions from wave_compass data
+        if (data.wave_compass) {
+            // Clear old regions with decay
+            for (const [path, region] of this.hotRegions) {
+                region.intensity *= 0.95;
+                if (region.intensity < 0.05) {
+                    this.hotRegions.delete(path);
+                }
+            }
+
+            // Add new hot regions
+            for (const region of data.wave_compass.hot_regions || []) {
+                const key = region.label;
+                const existing = this.hotRegions.get(key);
+                if (existing) {
+                    existing.intensity = Math.min(1.0, existing.intensity + region.intensity * 0.5);
+                } else {
+                    this.hotRegions.set(key, {
+                        x: region.x,
+                        y: region.y,
+                        intensity: region.intensity,
+                        label: region.label
+                    });
+                }
+            }
+
+            // Update trail
+            if (data.wave_compass.trail) {
+                for (const point of data.wave_compass.trail) {
+                    this.trail.push({ x: point[0], y: point[1], age: 0 });
+                }
+                // Keep trail bounded
+                while (this.trail.length > 50) {
+                    this.trail.shift();
+                }
+            }
+        }
+
+        // Age the trail
+        for (const point of this.trail) {
+            point.age += 16; // ~60fps
+        }
+        this.trail = this.trail.filter(p => p.age < 5000);
+    }
+
+    animate() {
+        this.render();
+        this.animationId = requestAnimationFrame(() => this.animate());
+    }
+
+    render() {
+        const { ctx, width, height } = this;
+
+        // Clear with dark background
+        ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw subtle grid
+        this.drawGrid();
+
+        // Draw exploration trail
+        this.drawTrail();
+
+        // Draw hot regions
+        for (const [path, region] of this.hotRegions) {
+            this.drawGlowingRegion(region);
+        }
+
+        // Draw labels for high-intensity regions
+        this.drawLabels();
+
+        // Draw title
+        ctx.fillStyle = '#00ff9966';
+        ctx.font = '10px monospace';
+        ctx.fillText('WAVE COMPASS', 8, 14);
+    }
+
+    drawGrid() {
+        const { ctx, width, height } = this;
+        ctx.strokeStyle = 'rgba(0, 255, 100, 0.1)';
+        ctx.lineWidth = 0.5;
+
+        // Vertical lines
+        for (let x = 0; x <= width; x += 40) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+
+        // Horizontal lines
+        for (let y = 0; y <= height; y += 40) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }
+
+        // Quadrant labels
+        ctx.fillStyle = 'rgba(0, 255, 100, 0.2)';
+        ctx.font = '9px monospace';
+        ctx.fillText('src/', 10, height * 0.15);
+        ctx.fillText('tests/', width * 0.55, height * 0.15);
+        ctx.fillText('docs/', 10, height * 0.65);
+        ctx.fillText('scripts/', width * 0.55, height * 0.65);
+    }
+
+    drawTrail() {
+        const { ctx, width, height, trail } = this;
+        if (trail.length < 2) return;
+
+        ctx.beginPath();
+        ctx.moveTo(trail[0].x * width, trail[0].y * height);
+
+        for (let i = 1; i < trail.length; i++) {
+            const point = trail[i];
+            const alpha = Math.max(0, 1 - point.age / 5000);
+            ctx.strokeStyle = `rgba(0, 255, 150, ${alpha * 0.5})`;
+            ctx.lineWidth = 2 * alpha;
+            ctx.lineTo(point.x * width, point.y * height);
+        }
+        ctx.stroke();
+    }
+
+    drawGlowingRegion(region) {
+        const { ctx, width, height } = this;
+        const x = region.x * width;
+        const y = region.y * height;
+        const intensity = region.intensity;
+
+        // Pulsing effect
+        const pulse = Math.sin(Date.now() / 300) * 0.2 + 0.8;
+        const radius = 15 + intensity * 25 * pulse;
+
+        // Outer glow
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        gradient.addColorStop(0, `rgba(0, 255, 100, ${intensity * 0.8})`);
+        gradient.addColorStop(0.5, `rgba(0, 200, 100, ${intensity * 0.4})`);
+        gradient.addColorStop(1, 'rgba(0, 150, 100, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        ctx.fillStyle = `rgba(100, 255, 100, ${intensity})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 5 + intensity * 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawLabels() {
+        const { ctx, width, height } = this;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+
+        for (const [path, region] of this.hotRegions) {
+            if (region.intensity > 0.3) {
+                const x = region.x * width;
+                const y = region.y * height + 25;
+
+                ctx.fillStyle = `rgba(0, 255, 100, ${region.intensity})`;
+                ctx.fillText(region.label, x, y);
+            }
+        }
+        ctx.textAlign = 'left';
+    }
+
+    handleClick(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / this.width;
+        const y = (event.clientY - rect.top) / this.height;
+
+        // Find closest hot region
+        let closest = null;
+        let minDist = Infinity;
+
+        for (const [path, region] of this.hotRegions) {
+            const dist = Math.hypot(x - region.x, y - region.y);
+            if (dist < 0.1 && dist < minDist) {
+                closest = path;
+                minDist = dist;
+            }
+        }
+
+        if (closest && this.onHint) {
+            this.onHint({ type: 'click', target: closest });
+        }
+    }
+
+    destroy() {
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+        }
+    }
+}
+
+// ============================================================================
+// State Sync - WebSocket connection for real-time MCP activity
+// ============================================================================
+
+class StateSync {
+    constructor(onUpdate, onHint) {
+        this.onUpdate = onUpdate;
+        this.onHint = onHint;
+        this.ws = null;
+        this.reconnectDelay = 1000;
+        this.maxReconnectDelay = 30000;
+        this.connected = false;
+
+        this.connect();
+    }
+
+    connect() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/state`;
+
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
+            console.log('[StateSync] Connected');
+            this.connected = true;
+            this.reconnectDelay = 1000; // Reset on successful connect
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'state_update' && this.onUpdate) {
+                    this.onUpdate(data);
+                }
+            } catch (e) {
+                console.error('[StateSync] Failed to parse message:', e);
+            }
+        };
+
+        this.ws.onclose = () => {
+            console.log('[StateSync] Disconnected, reconnecting...');
+            this.connected = false;
+            setTimeout(() => this.connect(), this.reconnectDelay);
+            this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('[StateSync] Error:', error);
+        };
+    }
+
+    sendHint(hint) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            const message = {
+                type: 'hint',
+                hint_type: hint.type,
+                target: hint.target || null,
+                content: hint.content || null,
+                transcript: hint.transcript || null,
+                salience: hint.salience || null
+            };
+            this.ws.send(JSON.stringify(message));
+            console.log('[StateSync] Sent hint:', message);
+        }
+    }
+
+    destroy() {
+        if (this.ws) {
+            this.ws.close();
+        }
+    }
+}
+
+// ============================================================================
+// Hint Input - Text input for sending hints to AI
+// ============================================================================
+
+class HintInput {
+    constructor(container, onSend) {
+        this.onSend = onSend;
+        this.element = this.createUI(container);
+    }
+
+    createUI(container) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'hint-input-wrapper';
+        wrapper.innerHTML = `
+            <input type="text" class="hint-input" placeholder="Type a hint for the AI..." />
+            <button class="hint-send-btn" title="Send hint">→</button>
+        `;
+
+        const input = wrapper.querySelector('.hint-input');
+        const button = wrapper.querySelector('.hint-send-btn');
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && input.value.trim()) {
+                this.send(input.value.trim());
+                input.value = '';
+            }
+        });
+
+        button.addEventListener('click', () => {
+            if (input.value.trim()) {
+                this.send(input.value.trim());
+                input.value = '';
+            }
+        });
+
+        container.appendChild(wrapper);
+        return wrapper;
+    }
+
+    send(content) {
+        if (this.onSend) {
+            this.onSend({ type: 'text', content });
+        }
+    }
+}
+
+// ============================================================================
+// Voice Input - Push-to-talk voice recording for hints
+// ============================================================================
+
+class VoiceInput {
+    constructor(container, onHint) {
+        this.onHint = onHint;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.isRecording = false;
+        this.element = this.createUI(container);
+        this.checkMicrophoneSupport();
+    }
+
+    createUI(container) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'voice-input-wrapper';
+        wrapper.innerHTML = `
+            <button class="voice-record-btn" title="Hold to record voice hint">
+                <span class="voice-icon">&#x1F3A4;</span>
+                <span class="voice-label">Hold to speak</span>
+            </button>
+            <div class="voice-status"></div>
+        `;
+
+        const btn = wrapper.querySelector('.voice-record-btn');
+        const status = wrapper.querySelector('.voice-status');
+
+        // Mouse events (desktop)
+        btn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            this.startRecording();
+        });
+        btn.addEventListener('mouseup', () => this.stopRecording());
+        btn.addEventListener('mouseleave', () => {
+            if (this.isRecording) this.stopRecording();
+        });
+
+        // Touch events (mobile)
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.startRecording();
+        });
+        btn.addEventListener('touchend', () => this.stopRecording());
+        btn.addEventListener('touchcancel', () => {
+            if (this.isRecording) this.stopRecording();
+        });
+
+        this.btn = btn;
+        this.status = status;
+
+        container.appendChild(wrapper);
+        return wrapper;
+    }
+
+    async checkMicrophoneSupport() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            this.btn.disabled = true;
+            this.status.textContent = 'Microphone not supported';
+            this.btn.title = 'Microphone not supported in this browser';
+        }
+    }
+
+    async startRecording() {
+        if (this.isRecording) return;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Use webm-opus for good quality and size
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : 'audio/webm';
+
+            this.mediaRecorder = new MediaRecorder(stream, { mimeType });
+            this.audioChunks = [];
+
+            this.mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    this.audioChunks.push(e.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach(track => track.stop());
+                if (this.audioChunks.length > 0) {
+                    await this.processRecording();
+                }
+            };
+
+            this.mediaRecorder.start(100); // Collect data every 100ms
+            this.isRecording = true;
+            this.btn.classList.add('recording');
+            this.status.textContent = 'Recording...';
+        } catch (err) {
+            console.error('[VoiceInput] Failed to start recording:', err);
+            this.status.textContent = 'Microphone access denied';
+        }
+    }
+
+    stopRecording() {
+        if (!this.isRecording || !this.mediaRecorder) return;
+
+        this.mediaRecorder.stop();
+        this.isRecording = false;
+        this.btn.classList.remove('recording');
+        this.status.textContent = 'Processing...';
+    }
+
+    async processRecording() {
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+
+        // Check minimum recording length (~0.5 seconds)
+        if (audioBlob.size < 5000) {
+            this.status.textContent = 'Recording too short';
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'voice.webm');
+
+            const response = await fetch('/api/voice/transcribe', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                this.status.textContent = result.text || 'Transcribed';
+
+                // Send as voice hint
+                if (this.onHint && result.text) {
+                    this.onHint({
+                        type: 'voice',
+                        transcript: result.text,
+                        salience: result.salience || 0.5,
+                        speaker: result.speaker || null
+                    });
+                }
+
+                // Clear status after a delay
+                setTimeout(() => {
+                    this.status.textContent = '';
+                }, 3000);
+            } else {
+                const error = await response.text();
+                console.error('[VoiceInput] Transcription failed:', error);
+                this.status.textContent = 'Voice not available';
+            }
+        } catch (err) {
+            console.error('[VoiceInput] Request failed:', err);
+            this.status.textContent = 'Connection error';
+        }
+    }
+}
+
+// ============================================================================
+// MCP Activity Panel - Shows current tool and operation status
+// ============================================================================
+
+class McpActivityPanel {
+    constructor(container) {
+        this.container = container;
+        this.element = this.createUI();
+    }
+
+    createUI() {
+        const panel = document.createElement('div');
+        panel.className = 'mcp-activity-panel';
+        panel.innerHTML = `
+            <div class="mcp-status">
+                <span class="mcp-status-dot"></span>
+                <span class="mcp-status-text">Ready</span>
+            </div>
+            <div class="mcp-operation"></div>
+            <div class="mcp-stats">
+                <span class="mcp-tools-count">0 tools</span>
+                <span class="mcp-hints-count">0 hints</span>
+            </div>
+        `;
+        this.container.appendChild(panel);
+        return panel;
+    }
+
+    update(data) {
+        const dot = this.element.querySelector('.mcp-status-dot');
+        const text = this.element.querySelector('.mcp-status-text');
+        const operation = this.element.querySelector('.mcp-operation');
+        const toolsCount = this.element.querySelector('.mcp-tools-count');
+        const hintsCount = this.element.querySelector('.mcp-hints-count');
+
+        if (data.mcp) {
+            if (data.mcp.active_tool) {
+                dot.classList.add('active');
+                text.textContent = data.mcp.active_tool;
+            } else {
+                dot.classList.remove('active');
+                text.textContent = 'Ready';
+            }
+            operation.textContent = data.mcp.current_operation || '';
+            toolsCount.textContent = `${data.mcp.tools_executed || 0} tools`;
+        }
+
+        hintsCount.textContent = `${data.hints_pending || 0} hints`;
+    }
+}
+
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     window.dashboard = new Dashboard();
+
+    // Initialize MCP activity visualization if Wave Compass container exists
+    const compassContainer = document.getElementById('wave-compass-container');
+    const compassCanvas = document.getElementById('wave-compass');
+    const activityPanel = document.getElementById('mcp-activity-panel');
+
+    if (compassCanvas && compassContainer) {
+        // Create state sync connection
+        const stateSync = new StateSync(
+            (data) => {
+                // Update Wave Compass
+                if (window.waveCompass) {
+                    window.waveCompass.update(data);
+                }
+                // Update activity panel
+                if (window.mcpActivityPanel) {
+                    window.mcpActivityPanel.update(data);
+                }
+            }
+        );
+
+        // Create Wave Compass
+        window.waveCompass = new WaveCompass(compassCanvas, (hint) => {
+            stateSync.sendHint(hint);
+        });
+
+        // Create hint input
+        window.hintInput = new HintInput(compassContainer, (hint) => {
+            stateSync.sendHint(hint);
+        });
+
+        // Create voice input
+        window.voiceInput = new VoiceInput(compassContainer, (hint) => {
+            stateSync.sendHint(hint);
+        });
+
+        // Create activity panel
+        if (activityPanel) {
+            window.mcpActivityPanel = new McpActivityPanel(activityPanel);
+        }
+
+        window.stateSync = stateSync;
+    }
 });

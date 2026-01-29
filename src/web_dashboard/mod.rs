@@ -6,14 +6,19 @@
 //! - File browser with navigation
 //! - Markdown preview
 //! - Cool terminal aesthetic
+//! - Real-time MCP activity visualization (Wave Compass)
+//! - User hints/nudges for AI collaboration
 
 mod api;
 mod assets;
 mod pty;
 mod server;
+pub mod state_sync;
+pub mod voice;
 mod websocket;
 
 pub use server::start_server;
+pub use state_sync::{McpActivityState, UserHintsQueue};
 
 use crate::in_memory_logger::InMemoryLogStore;
 use serde::{Deserialize, Serialize};
@@ -21,6 +26,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+/// Shared MCP activity state (thread-safe access from MCP and dashboard)
+pub type SharedMcpActivity = Arc<RwLock<McpActivityState>>;
+
+/// Shared user hints queue (browser → MCP)
+pub type SharedUserHints = Arc<RwLock<UserHintsQueue>>;
 
 /// Shared state for the web dashboard
 #[derive(Debug)]
@@ -33,6 +44,10 @@ pub struct DashboardState {
     pub connections: usize,
     /// In-memory store for recent log entries
     pub log_store: InMemoryLogStore,
+    /// Real-time MCP activity tracking (for Wave Compass)
+    pub mcp_activity: SharedMcpActivity,
+    /// User hints queue (from browser to AI)
+    pub user_hints: SharedUserHints,
 }
 
 impl DashboardState {
@@ -42,7 +57,19 @@ impl DashboardState {
             pty_sessions: HashMap::new(),
             connections: 0,
             log_store,
+            mcp_activity: Arc::new(RwLock::new(McpActivityState::default())),
+            user_hints: Arc::new(RwLock::new(UserHintsQueue::default())),
         }
+    }
+
+    /// Get a clone of the MCP activity state for sharing with MCP context
+    pub fn mcp_activity_handle(&self) -> SharedMcpActivity {
+        Arc::clone(&self.mcp_activity)
+    }
+
+    /// Get a clone of the user hints queue for sharing with MCP context
+    pub fn user_hints_handle(&self) -> SharedUserHints {
+        Arc::clone(&self.user_hints)
     }
 }
 
