@@ -1524,7 +1524,13 @@ async fn check_for_updates_cli() -> Result<String> {
     let api_url =
         std::env::var("SMART_TREE_FEEDBACK_API").unwrap_or_else(|_| "https://f.8b.is".to_string());
 
-    let check_url = format!("{}/version/check/{}", api_url, current_version);
+    // Use the /mcp/check endpoint which doesn't require auth
+    let platform = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let check_url = format!(
+        "{}/mcp/check?version={}&platform={}&arch={}",
+        api_url, current_version, platform, arch
+    );
 
     let response = client
         .get(&check_url)

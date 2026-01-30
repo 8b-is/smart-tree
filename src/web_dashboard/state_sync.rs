@@ -480,7 +480,7 @@ fn build_wave_compass(file_log: &[FileEventDto], _directories: &HashSet<PathBuf>
                 x,
                 y,
                 intensity: intensity.min(1.0),
-                label: dir.split('/').last().unwrap_or(&dir).to_string(),
+                label: dir.split('/').next_back().unwrap_or(&dir).to_string(),
             }
         })
         .filter(|r| r.intensity > 0.05)
@@ -510,7 +510,7 @@ fn path_to_coords(path: &str) -> (f32, f32) {
     }
 
     // First directory determines quadrant
-    let quadrant = match parts.first().map(|s| *s) {
+    let quadrant = match parts.first().copied() {
         Some("src") => (0.0, 0.0),   // Upper-left
         Some("tests") => (0.5, 0.0), // Upper-right
         Some("docs") => (0.0, 0.5),  // Lower-left
