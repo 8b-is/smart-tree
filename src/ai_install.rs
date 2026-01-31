@@ -4,10 +4,35 @@
 //!
 //! This module provides interactive and non-interactive installation
 //! of Smart Tree's AI integrations: MCP servers, hooks, plugins, and configs.
+//!
+//! Note: This is a daemon-only feature. Use `std install-ai` instead of `st -i`.
 
 use crate::claude_init::{ClaudeInit, McpInstaller};
-use crate::cli::{AiTarget, InstallScope};
 use anyhow::{Context, Result};
+
+/// Installation scope for AI integration
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum InstallScope {
+    /// Project-local installation (.claude/ in current directory)
+    #[default]
+    Project,
+    /// User-wide installation (~/.claude/ or ~/.config/)
+    User,
+}
+
+/// Target AI platform for configuration
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum AiTarget {
+    /// Claude (Anthropic) - default, most features
+    #[default]
+    Claude,
+    /// ChatGPT (OpenAI)
+    Chatgpt,
+    /// Gemini (Google)
+    Gemini,
+    /// Universal - generic config for any AI
+    Universal,
+}
 use serde_json::{json, Value};
 use std::fs;
 use std::io::{self, Write};

@@ -166,3 +166,6 @@ pub mod registry;
 
 // Security Scanner - Detect supply chain attack patterns
 pub mod security_scan;
+
+// Collaboration - Humans + AIs working together
+pub mod collab;

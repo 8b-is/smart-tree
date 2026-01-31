@@ -26,11 +26,7 @@ use std::path::PathBuf;
 
 // Pulling in the brains of the operation from our library modules.
 use st::{
-    claude_init::{
-        check_mcp_installation_status, install_mcp_to_claude_desktop,
-        uninstall_mcp_from_claude_desktop, ClaudeInit,
-    },
-    daemon_client::{DaemonClient, DaemonStatus},
+    daemon_client::DaemonClient,
     feature_flags,
     formatters::{
         ai::AiFormatter,
@@ -99,13 +95,13 @@ async fn main() -> Result<()> {
 
     // First-run signature verification banner
     // Shows trust status on initial run (official/community/unsigned build)
-    if !cli.mcp && !cli.daemon && !cli.guardian_daemon {
+    if !cli.mcp {
         service_manager::print_signature_banner();
     }
 
     // Check for updates on startup (rate-limited, non-blocking)
     // Skip if --no-update-check is set or if this is an exclusive command
-    if !cli.no_update_check && !cli.version && !cli.update && !cli.mcp && !cli.daemon {
+    if !cli.no_update_check && !cli.version && !cli.update && !cli.mcp {
         if let Some(latest) = st::updater::check_for_update_cached().await {
             st::updater::print_update_banner(&latest);
         }
@@ -199,36 +195,6 @@ async fn main() -> Result<()> {
         }
         return run_mcp_server().await;
     }
-    if cli.mcp_tools {
-        print_mcp_tools();
-        return Ok(());
-    }
-    if cli.mcp_config {
-        print_mcp_config();
-        return Ok(());
-    }
-    if cli.mcp_install {
-        match install_mcp_to_claude_desktop() {
-            Ok(msg) => println!("{}", msg),
-            Err(e) => eprintln!("❌ MCP installation failed: {}", e),
-        }
-        return Ok(());
-    }
-    if cli.mcp_uninstall {
-        match uninstall_mcp_from_claude_desktop() {
-            Ok(msg) => println!("{}", msg),
-            Err(e) => eprintln!("❌ MCP uninstallation failed: {}", e),
-        }
-        return Ok(());
-    }
-    if cli.mcp_status {
-        match check_mcp_installation_status() {
-            Ok(msg) => println!("{}", msg),
-            Err(e) => eprintln!("❌ Failed to check MCP status: {}", e),
-        }
-        return Ok(());
-    }
-
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
@@ -266,54 +232,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Handle security cleanup (--cleanup)
-    if cli.cleanup {
-        use st::ai_install::run_security_cleanup;
-        match run_security_cleanup(cli.yes) {
-            Ok(_) => return Ok(()),
-            Err(e) => {
-                eprintln!("❌ Security cleanup failed: {}", e);
-                std::process::exit(1);
-            }
-        }
-    }
-
-    // Handle unified AI integration installer (-i / --install-ai)
-    if cli.install_ai {
-        use st::ai_install::run_ai_install;
-        let interactive = !cli.non_interactive;
-        match run_ai_install(cli.install_scope, cli.ai_target, interactive) {
-            Ok(_) => return Ok(()),
-            Err(e) => {
-                eprintln!("❌ AI integration setup failed: {}", e);
-                std::process::exit(1);
-            }
-        }
-    }
-
-    // Handle hooks configuration
-    if let Some(action) = &cli.hooks_config {
-        // Check if hooks are enabled via feature flags
-        let flags = feature_flags::features();
-        if !flags.enable_hooks {
-            eprintln!("Error: Hooks are disabled by configuration or compliance mode.");
-            eprintln!("Contact your administrator to enable this feature.");
-            return Ok(());
-        }
-        return handle_hooks_config(action).await;
-    }
-
-    if cli.hooks_install {
-        // Check if hooks are enabled via feature flags
-        let flags = feature_flags::features();
-        if !flags.enable_hooks {
-            eprintln!("Error: Hooks are disabled by configuration or compliance mode.");
-            eprintln!("Contact your administrator to enable this feature.");
-            return Ok(());
-        }
-        return install_hooks_to_claude().await;
-    }
-
     // Handle diff storage operations
     if cli.scan_opts.view_diffs {
         return handle_view_diffs().await;
@@ -333,215 +251,23 @@ async fn main() -> Result<()> {
         return run_terminal().await;
     }
 
-    if cli.dashboard {
-        // Launch the web dashboard - works anywhere, no display needed!
-        return run_web_dashboard(
-            cli.dashboard_port,
-            cli.open_browser,
-            cli.allow.clone(),
-            log_store,
-        )
-        .await;
-    }
-
-    if cli.daemon {
-        // Run as system daemon - always-on AI context service
-        return run_daemon(cli.daemon_port).await;
-    }
-
-    // Handle daemon management commands
-    if cli.daemon_start {
-        return handle_daemon_start(cli.daemon_port).await;
-    }
-
-    if cli.daemon_stop {
-        return handle_daemon_stop(cli.daemon_port).await;
-    }
-
-    if cli.daemon_status {
-        return handle_daemon_status(cli.daemon_port).await;
-    }
-
-    if cli.daemon_context {
-        return handle_daemon_context(cli.daemon_port).await;
-    }
-
-    if cli.daemon_projects {
-        return handle_daemon_projects(cli.daemon_port).await;
-    }
-
-    if cli.daemon_credits {
-        return handle_daemon_credits(cli.daemon_port).await;
-    }
-
     // =========================================================================
-    // AI GUARDIAN - Root daemon for system-wide protection
+    // STD DAEMON - Auto-start if needed for memory/context tracking
     // =========================================================================
-    if cli.guardian_install {
-        return service_manager::guardian_install();
-    }
-
-    if cli.guardian_uninstall {
-        return service_manager::guardian_uninstall();
-    }
-
-    if cli.guardian_status {
-        return service_manager::guardian_status();
-    }
-
-    if cli.guardian_daemon {
-        // Run as guardian daemon (called by systemd)
-        return run_guardian_daemon().await;
-    }
-
-    if let Some(file_path) = &cli.guardian_scan {
-        return handle_guardian_scan(file_path);
-    }
-
-    // =========================================================================
-    // STD DAEMON - Auto-start the binary protocol daemon if not running
-    // =========================================================================
-    // Check for std daemon (Unix socket) and auto-start if needed
-    if !cli.no_daemon && !cli.daemon {
+    if !cli.no_daemon {
         use st::std_client;
 
-        // Quick check if std daemon is running
+        // Quick check if std daemon is running, auto-start if not
         if !std_client::is_daemon_running().await {
-            // Not running - auto-start it
             if let Err(e) = std_client::ensure_daemon(false).await {
-                // Failed to start - that's okay, continue with local operation
                 tracing::debug!("Failed to start std daemon: {}", e);
             }
         }
     }
 
     // =========================================================================
-    // DAEMON ROUTING - Route through daemon if running for centralized memory
+    // SCAN OPERATION
     // =========================================================================
-    // Check if we should route through daemon (unless --no-daemon or running as daemon)
-    if !cli.no_daemon && !cli.daemon {
-        if let Some(path) = cli.path.as_ref() {
-            let client = DaemonClient::new(cli.daemon_port);
-
-            // Quick check if daemon is running
-            if let DaemonStatus::Running(_) = client.check_status().await {
-                // Daemon is running - record this scan operation for memory tracking
-                // The actual scan still happens locally, but daemon knows about it
-                eprintln!("🌳 Daemon connected - tracking this operation");
-
-                // Record the scan operation with daemon (async, don't block)
-                let path_clone = path.clone();
-                let client_clone = client.clone();
-                tokio::spawn(async move {
-                    let _ = client_clone
-                        .call_tool(
-                            "query_context",
-                            serde_json::json!({
-                                "query": format!("scan:{}", path_clone)
-                            }),
-                        )
-                        .await;
-                });
-
-                // Fall through to normal local execution
-                // The daemon tracks what directories we've looked at
-            } else if cli.auto_daemon {
-                // Auto-start daemon if requested
-                eprintln!("🌳 Starting Smart Tree Daemon...");
-                let _ = handle_daemon_start(cli.daemon_port).await;
-            }
-        }
-    }
-
-    // Handle Claude integration setup (smart init or update)
-    if cli.setup_claude {
-        let project_path = std::env::current_dir()?;
-        let initializer = ClaudeInit::new(project_path)?;
-        return initializer.setup();
-    }
-
-    // Handle Claude consciousness commands
-    if cli.claude_save {
-        return handle_claude_save().await;
-    }
-
-    if cli.claude_restore {
-        return handle_claude_restore().await;
-    }
-
-    if cli.claude_context {
-        return handle_claude_context().await;
-    }
-
-    // Handle consciousness maintenance commands
-    if cli.update_consciousness {
-        let path = cli.path.unwrap_or_else(|| ".".to_string());
-        return handle_update_consciousness(&path).await;
-    }
-
-    if cli.security_scan {
-        let path = cli.path.unwrap_or_else(|| ".".to_string());
-        return handle_security_scan(&path).await;
-    }
-
-    // Handle code review
-    if cli.code_review || cli.review_local || cli.review_grok || cli.review_openrouter {
-        return handle_code_review(&cli).await;
-    }
-
-    if cli.token_stats {
-        let path = cli.path.unwrap_or_else(|| ".".to_string());
-        return handle_token_stats(&path).await;
-    }
-
-    if cli.get_frequency {
-        let path = cli.path.unwrap_or_else(|| ".".to_string());
-        return handle_get_frequency(&path).await;
-    }
-
-    if cli.claude_dump {
-        return handle_claude_dump().await;
-    }
-
-    if cli.claude_kickstart {
-        return handle_claude_kickstart().await;
-    }
-
-    if cli.claude_user_prompt_submit {
-        return st::claude_hook::handle_user_prompt_submit().await;
-    }
-
-    // Handle LLM proxy commands
-    if cli.proxy {
-        return handle_proxy(&cli).await;
-    }
-
-    if cli.proxy_server {
-        return st::proxy::server::start_proxy_server(cli.proxy_port).await;
-    }
-
-    if cli.detect_llms {
-        return handle_detect_llms().await;
-    }
-
-    // Handle memory operations
-    if let Some(args) = &cli.memory_anchor {
-        if args.len() == 3 {
-            return handle_memory_anchor(&args[0], &args[1], &args[2]).await;
-        } else {
-            // Show help for memory-anchor
-            return show_memory_anchor_help();
-        }
-    }
-
-    if let Some(keywords) = cli.memory_find {
-        return handle_memory_find(&keywords).await;
-    }
-
-    if cli.memory_stats {
-        return handle_memory_stats().await;
-    }
-
     // If no action flag was given, proceed with the scan.
     let args = cli.scan_opts;
     let input_str = cli.path.unwrap_or_else(|| ".".to_string());
@@ -1092,114 +818,6 @@ async fn main() -> Result<()> {
     }
 
     // If we've reached here, everything went well!
-    Ok(())
-}
-
-/// Handle LLM proxy requests
-async fn handle_proxy(cli: &Cli) -> Result<()> {
-    use st::proxy::memory::MemoryProxy;
-    use st::proxy::{LlmMessage, LlmRequest, LlmRole};
-    use std::io::{self, Read};
-
-    let provider_name = cli
-        .provider
-        .as_deref()
-        .context("Provider is required for --proxy. Use --provider <NAME>")?;
-    let model = cli
-        .model
-        .as_deref()
-        .context("Model is required for --proxy. Use --model <NAME>")?;
-
-    // Get prompt from argument or stdin
-    let prompt = if let Some(p) = &cli.prompt {
-        p.clone()
-    } else {
-        let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer)?;
-        buffer
-    };
-
-    if prompt.trim().is_empty() {
-        return Err(anyhow::anyhow!("Prompt cannot be empty"));
-    }
-
-    println!("🌐 Calling {} (model: {})...", provider_name, model);
-
-    let mut proxy = MemoryProxy::with_local_detection().await?;
-    let request = LlmRequest {
-        model: model.to_string(),
-        messages: vec![LlmMessage {
-            role: LlmRole::User,
-            content: prompt,
-        }],
-        temperature: None,
-        max_tokens: None,
-        stream: false,
-    };
-
-    let scope_id = cli.scope.as_deref().unwrap_or("default");
-    let response = proxy
-        .complete_with_memory(provider_name, scope_id, request)
-        .await?;
-
-    println!("\n--- Response ---");
-    println!("{}", response.content);
-    println!("----------------");
-
-    if let Some(usage) = response.usage {
-        println!(
-            "📊 Tokens: {} prompt, {} completion ({} total)",
-            usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
-        );
-    }
-
-    Ok(())
-}
-
-/// Detect and display local LLM servers
-async fn handle_detect_llms() -> Result<()> {
-    use st::proxy::ollama::{detect_local_llms, LMSTUDIO_PORT, OLLAMA_PORT};
-
-    println!("🔍 Scanning for local LLM servers...\n");
-
-    let detected = detect_local_llms().await;
-
-    if detected.is_empty() {
-        println!("No local LLM servers detected.\n");
-        println!("Expected locations:");
-        println!("  🦙 Ollama:    http://localhost:{}", OLLAMA_PORT);
-        println!("  🖥️  LM Studio: http://localhost:{}", LMSTUDIO_PORT);
-        println!("\nInstall Ollama: https://ollama.ai");
-        println!("Install LM Studio: https://lmstudio.ai");
-    } else {
-        println!("Found {} local LLM server(s):\n", detected.len());
-
-        for info in &detected {
-            match info.server_type {
-                st::proxy::ollama::LocalLlmType::Ollama => {
-                    println!("🦙 Ollama at {}", info.base_url);
-                }
-                st::proxy::ollama::LocalLlmType::LmStudio => {
-                    println!("🖥️  LM Studio at {}", info.base_url);
-                }
-            }
-
-            if info.models.is_empty() {
-                println!("   (no models loaded)");
-            } else {
-                println!("   Available models:");
-                for model in &info.models {
-                    println!("     • {}", model);
-                }
-            }
-            println!();
-        }
-
-        println!("Usage:");
-        println!("  st --proxy --provider ollama --model llama3.2 --prompt \"Hello!\"");
-        println!("  st --proxy --provider lmstudio --model default --prompt \"Hello!\"");
-    }
-
     Ok(())
 }
 
@@ -1834,60 +1452,10 @@ async fn handle_security_scan(path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Handle code review commands
-async fn handle_code_review(cli: &Cli) -> Result<()> {
-    use st::code_review::{display_review, run_code_review, CodeReviewConfig, ReviewProvider};
+// NOTE: Code review, token stats, and other AI features moved to daemon (std)
+// Use `std --help` for daemon features
 
-    // Determine the provider
-    let provider = if cli.review_local {
-        ReviewProvider::Local
-    } else if cli.review_grok {
-        // Check for API key
-        if std::env::var("XAI_API_KEY").is_err() && std::env::var("GROK_API_KEY").is_err() {
-            eprintln!("❌ Grok review requires XAI_API_KEY or GROK_API_KEY environment variable");
-            eprintln!("   Get your API key at: https://console.x.ai/");
-            std::process::exit(1);
-        }
-        ReviewProvider::Grok
-    } else if cli.review_openrouter {
-        // Check for API key
-        let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-        if api_key.is_empty() {
-            eprintln!("❌ OpenRouter review requires OPENROUTER_API_KEY environment variable");
-            eprintln!("   Get your API key at: https://openrouter.ai/keys");
-            std::process::exit(1);
-        }
-        ReviewProvider::OpenRouter(cli.review_model.clone())
-    } else {
-        // Default to local if just --code-review is used
-        ReviewProvider::Local
-    };
-
-    // Parse focus areas
-    let focus = cli
-        .review_focus
-        .as_ref()
-        .map(|f| f.split(',').map(|s| s.trim().to_string()).collect())
-        .unwrap_or_default();
-
-    // Build config
-    let config = CodeReviewConfig {
-        provider,
-        staged: cli.review_staged,
-        files: Vec::new(), // Could add file filtering via path
-        compare_branch: cli.review_branch.clone(),
-        context_lines: 3,
-        focus,
-    };
-
-    // Run the review
-    let result = run_code_review(config).await?;
-    display_review(&result);
-
-    Ok(())
-}
-
-/// Show tokenization statistics
+/// Show tokenization statistics (kept for debugging)
 async fn handle_token_stats(path: &str) -> Result<()> {
     use st::tokenizer::{TokenStats, Tokenizer};
 

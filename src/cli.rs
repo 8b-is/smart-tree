@@ -61,333 +61,23 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub terminal: bool,
 
-    /// Launch web dashboard - browser-based terminal + file browser
-    #[arg(long, help_heading = "Interactive Modes")]
-    pub dashboard: bool,
-
-    /// Port for web dashboard (default: 8420)
-    #[arg(long, default_value = "8420", help_heading = "Interactive Modes")]
-    pub dashboard_port: u16,
-
-    /// Open browser automatically when starting dashboard
-    #[arg(long, help_heading = "Interactive Modes")]
-    pub open_browser: bool,
-
-    /// Allow connections from specific networks (CIDR notation, e.g., 172.30.50.0/24)
-    /// Can be specified multiple times. Default: 127.0.0.1 only
-    #[arg(
-        long = "allow",
-        value_name = "CIDR",
-        help_heading = "Interactive Modes"
-    )]
-    pub allow: Vec<String>,
-
     // =========================================================================
-    // MCP SERVER (Model Context Protocol)
+    // MCP SERVER (via Daemon)
     // =========================================================================
-    /// Run as MCP server for AI assistants (Claude Desktop, etc.)
+    /// Run as MCP server for AI assistants (auto-starts daemon)
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp: bool,
 
-    /// List all 30+ MCP tools available
-    #[arg(long, exclusive = true, help_heading = "MCP Server")]
-    pub mcp_tools: bool,
-
-    /// Show MCP config snippet (copy to claude_desktop_config.json)
-    #[arg(long, exclusive = true, help_heading = "MCP Server")]
-    pub mcp_config: bool,
-
-    /// Auto-install MCP server to Claude Desktop (one command setup!)
-    #[arg(long, exclusive = true, help_heading = "MCP Server")]
-    pub mcp_install: bool,
-
-    /// Remove MCP server from Claude Desktop
-    #[arg(long, exclusive = true, help_heading = "MCP Server")]
-    pub mcp_uninstall: bool,
-
-    /// Check MCP installation status
-    #[arg(long, exclusive = true, help_heading = "MCP Server")]
-    pub mcp_status: bool,
-
     // =========================================================================
-    // DAEMON & SERVICE
+    // DAEMON CONTROL
     // =========================================================================
-    /// Run as system daemon - always-on AI context service with Foken credit tracking
-    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
-    pub daemon: bool,
-
-    /// Port for daemon mode
-    #[arg(long, default_value = "8420", help_heading = "Daemon & Service")]
-    pub daemon_port: u16,
-
-    /// Start daemon in background
-    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
-    pub daemon_start: bool,
-
-    /// Stop running daemon
-    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
-    pub daemon_stop: bool,
-
-    /// Show daemon status
-    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
-    pub daemon_status: bool,
-
-    /// Query system context from daemon
-    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
-    pub daemon_context: bool,
-
-    /// List projects detected by daemon
-    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
-    pub daemon_projects: bool,
-
-    /// Show Foken credits
-    #[arg(long, exclusive = true, help_heading = "Daemon & Service")]
-    pub daemon_credits: bool,
-
-    /// Bypass daemon and run standalone (don't route through daemon even if running)
-    #[arg(long, help_heading = "Daemon & Service")]
+    /// Bypass daemon and run standalone
+    #[arg(long, help_heading = "Daemon Control")]
     pub no_daemon: bool,
 
-    /// Auto-start daemon if not running (default: just use if available)
-    #[arg(long, help_heading = "Daemon & Service")]
-    pub auto_daemon: bool,
-
-    /// Set the log level for the daemon and other commands
-    #[arg(long, value_enum, help_heading = "Daemon & Service")]
+    /// Set the log level
+    #[arg(long, value_enum, help_heading = "Daemon Control")]
     pub log_level: Option<LogLevel>,
-
-    // =========================================================================
-    // CLAUDE CONSCIOUSNESS - Session state persistence
-    // =========================================================================
-    /// Save session state to .claude_consciousness.m8
-    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
-    pub claude_save: bool,
-
-    /// Restore previous session from .claude_consciousness.m8
-    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
-    pub claude_restore: bool,
-
-    /// Show consciousness status and summary
-    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
-    pub claude_context: bool,
-
-    /// Show ultra-compressed kickstart format
-    #[arg(long, help_heading = "Claude Consciousness")]
-    pub claude_kickstart: bool,
-
-    /// Dump raw consciousness file (debugging)
-    #[arg(long, help_heading = "Claude Consciousness")]
-    pub claude_dump: bool,
-
-    /// Set up Claude integration for this project (.claude/ directory)
-    #[arg(long, exclusive = true, help_heading = "Claude Consciousness")]
-    pub setup_claude: bool,
-
-    /// Update .m8 consciousness files for directory
-    #[arg(long, help_heading = "Claude Consciousness")]
-    pub update_consciousness: bool,
-
-    /// Hook for user prompt submission (internal use)
-    #[arg(long, hide = true)]
-    pub claude_user_prompt_submit: bool,
-
-    // =========================================================================
-    // MEMORY & SESSIONS - Persistent knowledge
-    // =========================================================================
-    /// Anchor a memory: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
-    /// Use --memory-anchor without arguments for detailed help
-    #[arg(long, num_args = 0..=3, value_names = &["TYPE", "KEYWORDS", "CONTEXT"], help_heading = "Memory & Sessions")]
-    pub memory_anchor: Option<Vec<String>>,
-
-    /// Find memories by keywords
-    #[arg(long, help_heading = "Memory & Sessions")]
-    pub memory_find: Option<String>,
-
-    /// Show memory bank statistics
-    #[arg(long, help_heading = "Memory & Sessions")]
-    pub memory_stats: bool,
-
-    /// Start or resume a mega session
-    #[arg(long, help_heading = "Memory & Sessions")]
-    pub mega_start: Option<Option<String>>,
-
-    /// Save current mega session snapshot
-    #[arg(long, help_heading = "Memory & Sessions")]
-    pub mega_save: bool,
-
-    /// Record a breakthrough in mega session
-    #[arg(long, value_name = "DESCRIPTION", help_heading = "Memory & Sessions")]
-    pub mega_breakthrough: Option<String>,
-
-    /// Show mega session statistics
-    #[arg(long, help_heading = "Memory & Sessions")]
-    pub mega_stats: bool,
-
-    /// List all saved mega sessions
-    #[arg(long, help_heading = "Memory & Sessions")]
-    pub mega_list: bool,
-
-    // =========================================================================
-    // AI GUARDIAN - System-wide protection
-    // =========================================================================
-    /// Install Smart Tree Guardian as a root daemon (requires sudo)
-    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
-    pub guardian_install: bool,
-
-    /// Uninstall Smart Tree Guardian root daemon
-    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
-    pub guardian_uninstall: bool,
-
-    /// Show Guardian daemon status
-    #[arg(long, exclusive = true, help_heading = "AI Guardian")]
-    pub guardian_status: bool,
-
-    /// Run as Guardian daemon (internal - called by systemd)
-    #[arg(long, exclusive = true, hide = true)]
-    pub guardian_daemon: bool,
-
-    /// Scan content for prompt injection attacks
-    #[arg(long, value_name = "FILE", help_heading = "AI Guardian")]
-    pub guardian_scan: Option<PathBuf>,
-
-    // =========================================================================
-    // SECURITY & ANALYSIS
-    // =========================================================================
-    /// Run security scan for malware patterns
-    #[arg(long, help_heading = "Security & Analysis")]
-    pub security_scan: bool,
-
-    /// Show tokenization statistics
-    #[arg(long, help_heading = "Security & Analysis")]
-    pub token_stats: bool,
-
-    /// Get wave frequency from .m8 file
-    #[arg(long, help_heading = "Security & Analysis")]
-    pub get_frequency: bool,
-
-    // =========================================================================
-    // CODE REVIEW - AI-powered code review
-    // =========================================================================
-    /// Run AI-powered code review on current changes
-    #[arg(long, help_heading = "Code Review")]
-    pub code_review: bool,
-
-    /// Use local diff display only (no AI)
-    #[arg(long, help_heading = "Code Review")]
-    pub review_local: bool,
-
-    /// Use Grok (X.AI) for code review (requires XAI_API_KEY)
-    #[arg(long, help_heading = "Code Review")]
-    pub review_grok: bool,
-
-    /// Use OpenRouter for code review (requires OPENROUTER_API_KEY)
-    #[arg(long, help_heading = "Code Review")]
-    pub review_openrouter: bool,
-
-    /// Model to use for code review (e.g., "anthropic/claude-3-haiku")
-    #[arg(long, value_name = "MODEL", help_heading = "Code Review")]
-    pub review_model: Option<String>,
-
-    /// Review staged changes only
-    #[arg(long, help_heading = "Code Review")]
-    pub review_staged: bool,
-
-    /// Compare against specific branch
-    #[arg(long, value_name = "BRANCH", help_heading = "Code Review")]
-    pub review_branch: Option<String>,
-
-    /// Focus areas for review (e.g., "security,performance")
-    #[arg(long, value_name = "AREAS", help_heading = "Code Review")]
-    pub review_focus: Option<String>,
-
-    // =========================================================================
-    // AI INTEGRATION - Unified setup for all AI platforms
-    // =========================================================================
-    /// Interactive AI integration setup - configures MCP, hooks, plugins for your AI
-    /// If no other flags, launches interactive mode. Use with --install-scope and --ai-target.
-    #[arg(short = 'i', long = "install-ai", help_heading = "AI Integration")]
-    pub install_ai: bool,
-
-    /// Installation scope: project (local .claude/) or user (~/.claude/, ~/.config/)
-    #[arg(
-        long = "install-scope",
-        value_enum,
-        default_value = "project",
-        help_heading = "AI Integration"
-    )]
-    pub install_scope: InstallScope,
-
-    /// Target AI platform for configuration
-    #[arg(
-        long,
-        value_enum,
-        default_value = "claude",
-        help_heading = "AI Integration"
-    )]
-    pub ai_target: AiTarget,
-
-    /// Skip interactive prompts (use defaults or provided flags)
-    #[arg(long, help_heading = "AI Integration")]
-    pub non_interactive: bool,
-
-    /// Clean up malicious/foreign AI integrations (MCP servers, hooks, hidden directories)
-    /// Scans for known supply chain attack patterns and offers to remove them
-    #[arg(long, help_heading = "AI Integration")]
-    pub cleanup: bool,
-
-    /// Answer yes to all cleanup prompts (use with --cleanup)
-    #[arg(short = 'y', long, help_heading = "AI Integration")]
-    pub yes: bool,
-
-    // =========================================================================
-    // CLAUDE CODE INTEGRATION (Legacy - prefer --install-ai)
-    // =========================================================================
-    /// Configure Claude Code hooks (enable/disable/status)
-    #[arg(
-        long,
-        value_name = "ACTION",
-        help_heading = "Claude Code Integration (Legacy)"
-    )]
-    pub hooks_config: Option<String>,
-
-    /// Quick setup: Install Smart Tree hooks in Claude Code
-    #[arg(long, help_heading = "Claude Code Integration (Legacy)")]
-    pub hooks_install: bool,
-
-    // =========================================================================
-    // LLM PROXY - Unified AI interface
-    // =========================================================================
-    /// Call an LLM provider via the unified proxy
-    #[arg(long, help_heading = "LLM Proxy")]
-    pub proxy: bool,
-
-    /// LLM provider to use (openai, anthropic, google, candle)
-    #[arg(long, value_name = "PROVIDER", help_heading = "LLM Proxy")]
-    pub provider: Option<String>,
-
-    /// LLM model to use
-    #[arg(long, value_name = "MODEL", help_heading = "LLM Proxy")]
-    pub model: Option<String>,
-
-    /// Prompt for the LLM (if not provided, reads from stdin)
-    #[arg(long, value_name = "PROMPT", help_heading = "LLM Proxy")]
-    pub prompt: Option<String>,
-
-    /// Memory scope for the conversation (e.g., "project-x")
-    #[arg(long, value_name = "SCOPE", help_heading = "LLM Proxy")]
-    pub scope: Option<String>,
-
-    /// Start the OpenAI-compatible proxy server
-    #[arg(long, help_heading = "LLM Proxy")]
-    pub proxy_server: bool,
-
-    /// Port for the proxy server
-    #[arg(long, default_value = "8448", help_heading = "LLM Proxy")]
-    pub proxy_port: u16,
-
-    /// Detect local LLM servers (Ollama at :11434, LM Studio at :1234)
-    #[arg(long, help_heading = "LLM Proxy")]
-    pub detect_llms: bool,
 
     // =========================================================================
     // LOGGING & TRANSPARENCY
@@ -396,15 +86,8 @@ pub struct Cli {
     #[arg(long, value_name = "PATH", help_heading = "Logging & Transparency")]
     pub log: Option<Option<String>>,
 
-    // =========================================================================
-    // PROJECT MANAGEMENT
-    // =========================================================================
-    /// Rename project: --rename-project "OldName" "NewName"
-    #[arg(long, exclusive = true, value_names = &["OLD", "NEW"], num_args = 2, help_heading = "Project Management")]
-    pub rename_project: Option<Vec<String>>,
-
     /// Control smart tips (on/off)
-    #[arg(long, value_name = "STATE", value_parser = ["on", "off"], help_heading = "Project Management")]
+    #[arg(long, value_name = "STATE", value_parser = ["on", "off"], help_heading = "Logging & Transparency")]
     pub tips: Option<String>,
 
     // =========================================================================
@@ -727,30 +410,6 @@ pub enum ColorMode {
     Never,
     /// Auto-detect (colors if terminal)
     Auto,
-}
-
-/// Installation scope for AI integration
-#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq)]
-pub enum InstallScope {
-    /// Project-local installation (.claude/ in current directory)
-    #[default]
-    Project,
-    /// User-wide installation (~/.claude/ or ~/.config/)
-    User,
-}
-
-/// Target AI platform for configuration
-#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq)]
-pub enum AiTarget {
-    /// Claude (Anthropic) - default, most features
-    #[default]
-    Claude,
-    /// ChatGPT (OpenAI)
-    Chatgpt,
-    /// Gemini (Google)
-    Gemini,
-    /// Universal - generic config for any AI
-    Universal,
 }
 
 /// Path display mode
