@@ -122,13 +122,11 @@ marqant = { path = "marqant" }
 # ST Protocol for daemon communication
 st-protocol = { path = "st-protocol" }
 
-# === OPTIONAL FEATURES ===
-
-# Terminal UI (spicy mode) - disabled by default
-ratatui = { version = "0.25", optional = true }
-crossterm = { version = "0.27", optional = true }
-syntect = { version = "5.0", optional = true }
-artem = { version = "2.0", optional = true }
+# === TERMINAL UI (built-in) ===
+ratatui = "0.25"
+crossterm = "0.27"
+syntect = "5.0"
+artem = "2.0"
 
 # Dashboard GUI - REMOVED (replaced by web-dashboard)
 # egui, eframe, egui_extras, winit removed - use web-dashboard instead
@@ -173,12 +171,6 @@ predicates = "3.1"
 [features]
 default = []
 
-# Terminal UI mode (spicy)
-tui = ["ratatui", "crossterm", "syntect", "artem"]
-
-# Dashboard GUI - REMOVED (use web-dashboard instead)
-# dashboard = ["egui", "eframe", "egui_extras", "winit"]
-
 # Local LLM inference
 candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
 
@@ -186,10 +178,10 @@ candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenize
 # Note: Enable when liquid-rust dependency is uncommented above
 voice = []
 
-# Web dashboard is now always included (no feature flag needed)
+# Terminal UI (tui) and Web dashboard are now always built-in
 
-# Full features
-full = ["tui", "candle"]
+# Full features (includes candle for local LLM)
+full = ["candle"]
 
 # Full with voice
 full-voice = ["full", "voice"]

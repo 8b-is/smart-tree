@@ -114,26 +114,17 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Handle spicy TUI mode (requires `tui` feature)
+    // Handle spicy TUI mode
     if cli.spicy {
-        #[cfg(feature = "tui")]
-        {
-            // Check if TUI is enabled via feature flags
-            let flags = feature_flags::features();
-            if !flags.enable_tui {
-                eprintln!("Error: Terminal UI is disabled by configuration or compliance mode.");
-                eprintln!("Contact your administrator to enable this feature.");
-                return Ok(());
-            }
-            let path = std::env::current_dir()?;
-            return st::spicy_tui_enhanced::run_enhanced_spicy_tui(path).await;
-        }
-        #[cfg(not(feature = "tui"))]
-        {
-            eprintln!("Error: Spicy TUI mode requires the 'tui' feature.");
-            eprintln!("Rebuild with: cargo build --release --features tui");
+        // Check if TUI is enabled via feature flags
+        let flags = feature_flags::features();
+        if !flags.enable_tui {
+            eprintln!("Error: Terminal UI is disabled by configuration or compliance mode.");
+            eprintln!("Contact your administrator to enable this feature.");
             return Ok(());
         }
+        let path = std::env::current_dir()?;
+        return st::spicy_tui_enhanced::run_enhanced_spicy_tui(path).await;
     }
 
     // Initialize logging if requested
@@ -1239,19 +1230,12 @@ async fn run_mcp_server() -> Result<()> {
 }
 
 /// Run the Smart Tree Terminal Interface - Your coding companion! (requires `tui` feature)
-#[cfg(feature = "tui")]
+/// Run the Smart Tree Terminal Interface
 async fn run_terminal() -> Result<()> {
     use st::terminal::SmartTreeTerminal;
     // Create and run the terminal interface
     let mut terminal = SmartTreeTerminal::new()?;
     terminal.run().await
-}
-
-#[cfg(not(feature = "tui"))]
-async fn run_terminal() -> Result<()> {
-    eprintln!("Error: Terminal mode requires the 'tui' feature.");
-    eprintln!("Rebuild with: cargo build --release --features tui");
-    Ok(())
 }
 
 /// Launch the web dashboard - browser-based terminal + file browser

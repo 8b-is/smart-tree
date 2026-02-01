@@ -32,7 +32,6 @@ pub mod scanner; // The heart of directory traversal and file metadata collectio
 pub mod scanner_safety; // Safety mechanisms to prevent crashes on large directories
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
-#[cfg(feature = "tui")]
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod tree_sitter_quantum;
@@ -84,10 +83,8 @@ pub mod updater;
 // Project tags management - tag and categorize projects
 pub mod project_tags;
 
-// Spicy TUI - cyberpunk-style terminal interface! (requires `tui` feature)
-#[cfg(feature = "tui")]
+// Spicy TUI - cyberpunk-style terminal interface!
 pub mod spicy_fuzzy;
-#[cfg(feature = "tui")]
 pub mod spicy_tui_enhanced;
 
 // Emoji mapping - bringing life to file types!
