@@ -7,12 +7,15 @@
 //! - Foken GPU credit tracking
 //! - MCP-compatible tool interface
 //! - **LLM Proxy** - Unified interface to multiple AI providers with memory!
+//! - **Collaboration Station** - Multi-AI real-time collaboration with Hot Tub mode! 🛁
+//! - **GitHub Auth** - OAuth for i1.is/aye.is identity
 //!
 //! "The always-on brain for your system!" - Cheet
 //!
 //! ## Architecture
 //! All AI features route through the daemon for persistent memory and unified state.
 //! The LLM proxy (OpenAI-compatible at /v1/chat/completions) is integrated directly.
+//! Collaboration hub enables humans and AIs to work together in real-time.
 
 use anyhow::Result;
 use axum::{
@@ -37,6 +40,10 @@ use crate::proxy::openai_compat::{
     OpenAiResponseMessage, OpenAiUsage,
 };
 use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmRole};
+
+// Collaboration Station
+use crate::auth::{create_session_store, GitHubOAuthConfig, SharedSessionStore};
+use crate::collaboration::{create_hub, SharedCollabHub};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -76,6 +83,12 @@ pub struct DaemonState {
     pub llm_proxy: LlmProxy,
     /// Proxy memory - persistent conversation history
     pub proxy_memory: ProxyMemory,
+    /// Collaboration hub - multi-AI real-time collaboration
+    pub collab_hub: SharedCollabHub,
+    /// Session store - GitHub OAuth sessions
+    pub sessions: SharedSessionStore,
+    /// GitHub OAuth config (if available)
+    pub github_oauth: Option<GitHubOAuthConfig>,
 }
 
 /// System-wide context
@@ -162,6 +175,18 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         ProxyMemory::in_memory_only()
     });
 
+    // Initialize collaboration hub
+    let collab_hub = create_hub();
+
+    // Initialize session store for auth
+    let sessions = create_session_store();
+
+    // Check for GitHub OAuth config
+    let github_oauth = GitHubOAuthConfig::from_env();
+    if github_oauth.is_some() {
+        println!("  🔐 GitHub OAuth: configured");
+    }
+
     let state = Arc::new(RwLock::new(DaemonState {
         context: SystemContext::default(),
         credits: CreditTracker::default(),
@@ -169,6 +194,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         shutdown_tx: Some(shutdown_tx),
         llm_proxy,
         proxy_memory,
+        collab_hub,
+        sessions,
+        github_oauth,
     }));
 
     println!("  🤖 LLM Providers: {} available", provider_count);
@@ -209,6 +237,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // LLM Proxy - OpenAI-compatible chat completions
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/models", get(list_models))
+        // Collaboration Station 🛁
+        .route("/collab/presence", get(collab_presence))
+        .route("/collab/ws", get(collab_websocket_handler))
         // WebSocket for real-time
         .route("/ws", get(websocket_handler))
         // Daemon control
@@ -223,6 +254,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - Tools:        /tools");
     println!("  - LLM Proxy:    /v1/chat/completions (OpenAI-compatible!)");
     println!("  - Models:       /v1/models");
+    println!("  - Collab:       /collab/ws (Hot Tub Mode!) 🛁");
     println!("  - WebSocket:    /ws");
     println!("  - Shutdown:     POST /shutdown");
 
@@ -539,6 +571,148 @@ async fn websocket_handler(
         // WebSocket handling for real-time updates
         // TODO: Implement real-time context streaming
     })
+}
+
+// === Collaboration Station Handlers ===
+
+/// Get current collaboration presence
+async fn collab_presence(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> Json<serde_json::Value> {
+    let s = state.read().await;
+    let hub = s.collab_hub.read().await;
+    let presence = hub.get_presence();
+    let hot_tub_count = presence.iter().filter(|p| p.in_hot_tub).count();
+
+    Json(serde_json::json!({
+        "participants": presence,
+        "total": presence.len(),
+        "hot_tub_count": hot_tub_count,
+        "hot_tub_open": hub.is_hot_tub_open()
+    }))
+}
+
+/// WebSocket handler for collaboration
+async fn collab_websocket_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> impl IntoResponse {
+    let hub = state.read().await.collab_hub.clone();
+    ws.on_upgrade(move |socket| handle_collab_connection(socket, hub))
+}
+
+/// Handle a collaboration WebSocket connection
+async fn handle_collab_connection(
+    socket: axum::extract::ws::WebSocket,
+    hub: SharedCollabHub,
+) {
+    use axum::extract::ws::Message;
+    use futures::{SinkExt, StreamExt};
+    use crate::collaboration::{Participant, ParticipantType};
+
+    let (mut sender, mut receiver) = socket.split();
+
+    // Wait for join message
+    let participant_id = loop {
+        match receiver.next().await {
+            Some(Ok(Message::Text(text))) => {
+                #[derive(serde::Deserialize)]
+                struct JoinMsg {
+                    action: String,
+                    name: String,
+                    participant_type: Option<String>,
+                }
+
+                if let Ok(join) = serde_json::from_str::<JoinMsg>(&text) {
+                    if join.action == "join" {
+                        let ptype = join.participant_type
+                            .map(|s| match s.to_lowercase().as_str() {
+                                "human" | "user" => ParticipantType::Human,
+                                "claude" => ParticipantType::Claude,
+                                "omni" => ParticipantType::Omni,
+                                "grok" => ParticipantType::Grok,
+                                _ => ParticipantType::Unknown,
+                            })
+                            .unwrap_or(ParticipantType::Unknown);
+
+                        let participant = Participant::new(join.name.clone(), ptype);
+                        let id = hub.write().await.join(participant);
+
+                        // Send welcome
+                        let welcome = serde_json::json!({
+                            "type": "welcome",
+                            "participant_id": id,
+                            "name": join.name
+                        });
+                        let _ = sender.send(Message::Text(welcome.to_string())).await;
+                        break id;
+                    }
+                }
+            }
+            Some(Ok(Message::Close(_))) | None => return,
+            _ => continue,
+        }
+    };
+
+    // Subscribe to broadcasts
+    let mut broadcast_rx = hub.read().await.subscribe();
+
+    // Forward broadcasts to client
+    let _hub_for_send = hub.clone();
+    let pid_for_send = participant_id.clone();
+    let mut send_task = tokio::spawn(async move {
+        while let Ok(msg) = broadcast_rx.recv().await {
+            let json = serde_json::to_string(&msg).unwrap_or_default();
+            if sender.send(Message::Text(json)).await.is_err() {
+                break;
+            }
+        }
+        pid_for_send
+    });
+
+    // Handle incoming messages
+    let hub_for_recv = hub.clone();
+    let pid_for_recv = participant_id.clone();
+    let mut recv_task = tokio::spawn(async move {
+        while let Some(Ok(msg)) = receiver.next().await {
+            if let Message::Text(text) = msg {
+                #[derive(serde::Deserialize)]
+                #[serde(tag = "action")]
+                enum ClientMsg {
+                    #[serde(rename = "chat")]
+                    Chat { message: String },
+                    #[serde(rename = "hot_tub")]
+                    HotTub,
+                    #[serde(rename = "status")]
+                    Status { status: Option<String>, working_on: Option<String> },
+                }
+
+                if let Ok(client_msg) = serde_json::from_str::<ClientMsg>(&text) {
+                    match client_msg {
+                        ClientMsg::Chat { message } => {
+                            hub_for_recv.read().await.chat(&pid_for_recv, message);
+                        }
+                        ClientMsg::HotTub => {
+                            hub_for_recv.write().await.toggle_hot_tub(&pid_for_recv);
+                        }
+                        ClientMsg::Status { status, working_on } => {
+                            hub_for_recv.write().await.update_status(&pid_for_recv, status, working_on);
+                        }
+                    }
+                }
+            }
+        }
+        pid_for_recv
+    });
+
+    // Wait for either to finish
+    tokio::select! {
+        _ = &mut send_task => recv_task.abort(),
+        _ = &mut recv_task => send_task.abort(),
+    }
+
+    // Clean up
+    hub.write().await.leave(&participant_id);
 }
 
 /// Ping handler - quick check that daemon is responding

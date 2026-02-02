@@ -61,6 +61,18 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub terminal: bool,
 
+    /// Launch web dashboard (browser-based terminal + file browser)
+    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
+    pub dashboard: bool,
+
+    /// Open browser automatically when starting dashboard
+    #[arg(long, requires = "dashboard", help_heading = "Interactive Modes")]
+    pub open_browser: bool,
+
+    /// Start HTTP daemon (MCP over HTTP, LLM proxy, The Custodian)
+    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
+    pub http_daemon: bool,
+
     // =========================================================================
     // MCP SERVER (via Daemon)
     // =========================================================================

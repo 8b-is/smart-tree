@@ -371,12 +371,20 @@ impl AiInstaller {
     fn ensure_project_mcp_json(&self) -> Result<()> {
         let mcp_json_path = self.project_path.join(".mcp.json");
 
-        // Default st MCP configuration
-        let st_config = json!({
+        // stdio MCP configuration (traditional, always works)
+        let st_stdio_config = json!({
             "type": "stdio",
             "command": "st",
             "args": ["--mcp"],
             "env": {}
+        });
+
+        // HTTP MCP configuration (The Custodian watches here! 🧹)
+        // Uses SSE transport - daemon must be running: st --http-daemon
+        let st_http_config = json!({
+            "type": "sse",
+            "url": "http://localhost:8420/mcp",
+            "_note": "Run 'st --http-daemon' first. The Custodian monitors all operations!"
         });
 
         if mcp_json_path.exists() {
@@ -385,29 +393,39 @@ impl AiInstaller {
             let mut config: Value =
                 serde_json::from_str(&content).unwrap_or_else(|_| json!({"mcpServers": {}}));
 
-            // Ensure mcpServers exists and has st
+            // Ensure mcpServers exists and has both st and st-http
             if let Some(obj) = config.as_object_mut() {
                 let servers = obj
                     .entry("mcpServers".to_string())
                     .or_insert_with(|| json!({}));
                 if let Some(servers_obj) = servers.as_object_mut() {
+                    let mut updated = false;
                     if !servers_obj.contains_key("st") {
-                        servers_obj.insert("st".to_string(), st_config);
+                        servers_obj.insert("st".to_string(), st_stdio_config);
+                        updated = true;
+                    }
+                    if !servers_obj.contains_key("st-http") {
+                        servers_obj.insert("st-http".to_string(), st_http_config);
+                        updated = true;
+                    }
+                    if updated {
                         fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
-                        println!("  ✅ Added st to {}", mcp_json_path.display());
+                        println!("  ✅ Updated {}", mcp_json_path.display());
                     }
                 }
             }
         } else {
-            // Create new .mcp.json with st
+            // Create new .mcp.json with both st servers
             let config = json!({
                 "mcpServers": {
-                    "st": st_config
-                }
+                    "st": st_stdio_config,
+                    "st-http": st_http_config
+                },
+                "_comment": "st: stdio (always works), st-http: HTTP with The Custodian (run 'st --http-daemon' first)"
             });
             fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
             println!(
-                "  ✅ Created {} with st MCP server",
+                "  ✅ Created {} with st MCP servers (stdio + HTTP)",
                 mcp_json_path.display()
             );
         }

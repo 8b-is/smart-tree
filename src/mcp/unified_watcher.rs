@@ -1,8 +1,6 @@
 // Unified Watcher - Master control for all context absorption and searching
 // "The all-seeing eye of Smart Tree!" - Aye
 
-#![allow(clippy::await_holding_lock)]
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -10,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tokio::sync::Mutex as TokioMutex;
 
 use super::context_absorber::ContextAbsorber;
 use super::smart_background_searcher::{SearchConfig, SmartBackgroundSearcher};
@@ -46,7 +45,7 @@ impl Default for UnifiedWatcherConfig {
 pub struct UnifiedWatcher {
     config: UnifiedWatcherConfig,
     absorber: Option<Arc<Mutex<ContextAbsorber>>>,
-    searcher: Option<Arc<Mutex<SmartBackgroundSearcher>>>,
+    searcher: Option<Arc<TokioMutex<SmartBackgroundSearcher>>>,
     status: Arc<Mutex<WatcherStatus>>,
 }
 
@@ -126,7 +125,7 @@ impl UnifiedWatcher {
             };
             let mut searcher = SmartBackgroundSearcher::new(search_config)?;
             searcher.start_watching(watch_paths.clone())?;
-            self.searcher = Some(Arc::new(Mutex::new(searcher)));
+            self.searcher = Some(Arc::new(TokioMutex::new(searcher)));
             println!("   ✅ Smart Searcher active");
         }
 
@@ -187,9 +186,8 @@ impl UnifiedWatcher {
 
         // Clear searcher cache
         if let Some(search) = &self.searcher {
-            if let Ok(search_lock) = search.lock() {
-                search_lock.clear_cache();
-            }
+            let search_lock = search.lock().await;
+            search_lock.clear_cache();
         }
 
         // Update status
@@ -214,32 +212,31 @@ impl UnifiedWatcher {
 
     pub async fn search(&self, query: &str) -> Result<Vec<Value>> {
         if let Some(searcher) = &self.searcher {
-            if let Ok(search_lock) = searcher.lock() {
-                let paths: Vec<PathBuf> = self
-                    .config
-                    .watch_paths
-                    .iter()
-                    .map(|p| PathBuf::from(shellexpand::tilde(p).to_string()))
-                    .collect();
+            let search_lock = searcher.lock().await;
+            let paths: Vec<PathBuf> = self
+                .config
+                .watch_paths
+                .iter()
+                .map(|p| PathBuf::from(shellexpand::tilde(p).to_string()))
+                .collect();
 
-                let results = search_lock.search(query, paths).await;
+            let results = search_lock.search(query, paths).await;
 
-                // Convert to JSON for MCP
-                let json_results: Vec<Value> = results
-                    .into_iter()
-                    .map(|r| {
-                        serde_json::json!({
-                            "file": r.file_path.to_string_lossy(),
-                            "line": r.line_number,
-                            "content": r.content,
-                            "score": r.score,
-                            "type": r.file_type,
-                        })
+            // Convert to JSON for MCP
+            let json_results: Vec<Value> = results
+                .into_iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "file": r.file_path.to_string_lossy(),
+                        "line": r.line_number,
+                        "content": r.content,
+                        "score": r.score,
+                        "type": r.file_type,
                     })
-                    .collect();
+                })
+                .collect();
 
-                return Ok(json_results);
-            }
+            return Ok(json_results);
         }
         Ok(Vec::new())
     }
@@ -256,9 +253,9 @@ pub async fn handle_unified_watcher(
 ) -> Result<Value> {
     let action = params["action"].as_str().unwrap_or("status");
 
-    // Use a static instance for the watcher
-    static WATCHER: Lazy<Arc<Mutex<Option<UnifiedWatcher>>>> =
-        Lazy::new(|| Arc::new(Mutex::new(None)));
+    // Use a static instance for the watcher (TokioMutex for async-safe access)
+    static WATCHER: Lazy<Arc<TokioMutex<Option<UnifiedWatcher>>>> =
+        Lazy::new(|| Arc::new(TokioMutex::new(None)));
 
     match action {
         "start" => {
@@ -299,7 +296,7 @@ pub async fn handle_unified_watcher(
             let status = watcher.get_status();
 
             // Store the watcher
-            *WATCHER.lock().unwrap() = Some(watcher);
+            *WATCHER.lock().await = Some(watcher);
 
             Ok(serde_json::json!({
                 "status": "started",
@@ -315,7 +312,7 @@ pub async fn handle_unified_watcher(
         }
 
         "stop" => {
-            if let Some(mut watcher) = WATCHER.lock().unwrap().take() {
+            if let Some(mut watcher) = WATCHER.lock().await.take() {
                 watcher.stop().await?;
                 Ok(serde_json::json!({
                     "status": "stopped",
@@ -334,7 +331,8 @@ pub async fn handle_unified_watcher(
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("Missing query parameter"))?;
 
-            if let Some(watcher) = WATCHER.lock().unwrap().as_ref() {
+            let guard = WATCHER.lock().await;
+            if let Some(watcher) = guard.as_ref() {
                 let results = watcher.search(query).await?;
                 Ok(serde_json::json!({
                     "query": query,
@@ -350,7 +348,8 @@ pub async fn handle_unified_watcher(
         }
 
         "status" => {
-            if let Some(watcher) = WATCHER.lock().unwrap().as_ref() {
+            let guard = WATCHER.lock().await;
+            if let Some(watcher) = guard.as_ref() {
                 let status = watcher.get_status();
                 Ok(serde_json::json!({
                     "running": status.is_running,

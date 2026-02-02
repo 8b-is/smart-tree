@@ -11,7 +11,7 @@ This guide gives contributors the essentials for working on Smart Tree in this r
 
 ## Build, Test, and Development Commands
 - `./scripts/manage.sh test` — pre-commit bundle: `cargo test` + `cargo clippy -D warnings` + `cargo fmt --check`.
-- `cargo build --release [--features tui|full]` — optimized binaries; default builds the core CLI.
+- `cargo build --release` — optimized binaries with TUI built-in; use `--features full` for local LLM (candle).
 - `cargo run --bin st -- --help` — smoke-test the CLI; add flags like `--mode ai --compress` as needed.
 - `cargo test` or `cargo test name -- --exact --nocapture` — run all or targeted tests with output.
 - `cargo fmt --all -- --check` and `cargo clippy -- -D warnings` — enforce style/lints when iterating.

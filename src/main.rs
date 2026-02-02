@@ -8,6 +8,7 @@
 //
 // Brought to you by The Cheet - making code understandable and fun! 🥁🧻
 // -----------------------------------------------------------------------------
+#![allow(dead_code)] // CLI handlers are used via pattern matching
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
@@ -240,6 +241,21 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         return run_terminal().await;
+    }
+
+    if cli.dashboard {
+        // Launch web dashboard
+        return run_web_dashboard(
+            cli.scan_opts.sse_port,
+            cli.open_browser,
+            vec![], // Default: localhost only
+            InMemoryLogStore::new(),
+        ).await;
+    }
+
+    if cli.http_daemon {
+        // Launch HTTP daemon with MCP, LLM proxy, The Custodian
+        return run_daemon(cli.scan_opts.sse_port).await;
     }
 
     // =========================================================================
@@ -2106,6 +2122,7 @@ async fn run_guardian_daemon() -> Result<()> {
 }
 
 /// Scan a directory for prompt injection threats
+#[allow(dead_code)]
 fn scan_directory_for_threats(guardian: &st::ai_guardian::AiGuardian, path: &std::path::Path) {
     use walkdir::WalkDir;
 
@@ -2159,6 +2176,7 @@ fn scan_directory_for_threats(guardian: &st::ai_guardian::AiGuardian, path: &std
 }
 
 /// Scan a specific file for prompt injection
+#[allow(dead_code)]
 fn handle_guardian_scan(file_path: &std::path::Path) -> Result<()> {
     use st::ai_guardian::{AiGuardian, ThreatLevel};
 

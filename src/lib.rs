@@ -87,6 +87,13 @@ pub mod project_tags;
 pub mod spicy_fuzzy;
 pub mod spicy_tui_enhanced;
 
+// Collaboration Station - Multi-AI real-time collaboration! 🛁
+// "Oh Tai, let's invite Omni to the hot tub!" - Hue
+pub mod collaboration;
+
+// Authentication - GitHub OAuth for i1.is and collaboration
+pub mod auth;
+
 // Emoji mapping - bringing life to file types!
 pub mod emoji_mapper;
 // pub mod emotional_depth; // 🎭 Smart Tree has feelings about directories! TODO: Fix implementation

@@ -5,6 +5,30 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.6.0] - 2026-01-30
+
+### 🎯 Major Changes
+- **TUI Built-In**: Terminal UI (ratatui, crossterm, syntect, artem) is now always included
+  - No more `--features tui` required
+  - `st --spicy` and `st --terminal` work out of the box
+  - Simpler installation and usage
+
+### 🌐 Web Dashboard
+- **Wave Compass**: Real-time MCP activity visualization
+- **Silent MCP Mode**: Cleaner operation without verbose output
+- **Voice Infrastructure**: Foundation for voice interaction (coming soon)
+- **Fixed async panic**: Resolved "Cannot block the current thread" error in dashboard API
+
+### 🔧 Improvements
+- **Version Check**: Uses `/mcp/check` endpoint (no authentication required)
+- **LLM Client**: Unified AI interface module added
+- **Clippy Clean**: All warnings resolved
+
+### 📚 Documentation
+- Security research documentation added (`docs/Security/`)
+- Supply chain vulnerability analysis
+- LLM security disclosure documentation
+
 ## [5.0.0] - 2025-09-10
 
 ### 🎭 Major New Features

@@ -460,13 +460,13 @@ pub struct ThemeConfig {
     fg_secondary: Option<String>,
 }
 
-fn get_project_st_dir(state: &SharedState) -> Result<PathBuf, String> {
-    let cwd = state.blocking_read().cwd.clone();
+async fn get_project_st_dir(state: &SharedState) -> Result<PathBuf, String> {
+    let cwd = state.read().await.cwd.clone();
     Ok(cwd.join(".st"))
 }
 
-fn ensure_project_st_dir_exists(state: &SharedState) -> Result<PathBuf, String> {
-    let config_dir = get_project_st_dir(state)?;
+async fn ensure_project_st_dir_exists(state: &SharedState) -> Result<PathBuf, String> {
+    let config_dir = get_project_st_dir(state).await?;
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir)
             .map_err(|e| format!("Failed to create project .st directory: {}", e))?;
@@ -474,8 +474,8 @@ fn ensure_project_st_dir_exists(state: &SharedState) -> Result<PathBuf, String> 
     Ok(config_dir)
 }
 
-fn get_layout_config_path(state: &SharedState) -> Result<PathBuf, String> {
-    get_project_st_dir(state).map(|dir| dir.join("layout.json"))
+async fn get_layout_config_path(state: &SharedState) -> Result<PathBuf, String> {
+    get_project_st_dir(state).await.map(|dir| dir.join("layout.json"))
 }
 
 impl Default for LayoutConfig {
@@ -493,7 +493,7 @@ pub async fn get_layout_config(
     State(state): State<SharedState>,
 ) -> Result<Json<LayoutConfig>, (StatusCode, String)> {
     let path =
-        get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        get_layout_config_path(&state).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     if !path.exists() {
         return Ok(Json(LayoutConfig::default()));
     }
@@ -516,9 +516,9 @@ pub async fn save_layout_config(
     State(state): State<SharedState>,
     Json(payload): Json<LayoutConfig>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    ensure_project_st_dir_exists(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    ensure_project_st_dir_exists(&state).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let path =
-        get_layout_config_path(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        get_layout_config_path(&state).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let content = serde_json::to_string_pretty(&payload).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,

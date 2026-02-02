@@ -100,33 +100,33 @@ pub async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Valu
         other => other,
     };
 
-    // Create formatter
-    let formatter: Box<dyn Formatter> = match effective_mode {
-        "classic" => Box::new(ClassicFormatter::new(mcp_no_emoji, true, path_display_mode)),
-        "hex" => Box::new(HexFormatter::new(
-            true,
-            mcp_no_emoji,
-            args.show_ignored,
-            path_display_mode,
-            false,
-        )),
-        "json" => Box::new(JsonFormatter::new(false)),
-        "ai" => Box::new(AiFormatter::new(mcp_no_emoji, path_display_mode)),
-        "stats" => Box::new(StatsFormatter::new()),
-        "csv" => Box::new(CsvFormatter::new()),
-        "tsv" => Box::new(TsvFormatter::new()),
-        "digest" => Box::new(DigestFormatter::new()),
-        "quantum" => Box::new(QuantumFormatter::new()),
-        "semantic" => Box::new(SemanticFormatter::new(path_display_mode, mcp_no_emoji)),
-        "quantum-semantic" => Box::new(QuantumSemanticFormatter::new()),
-        "summary" => Box::new(SummaryFormatter::new(!mcp_no_emoji)),
-        "summary-ai" => Box::new(SummaryAiFormatter::new(mcp_compress)),
-        _ => return Err(anyhow::anyhow!("Invalid mode: {}", args.mode)),
-    };
-
-    // Format output
+    // Format output (scope formatter to avoid holding it across await)
     let mut output = Vec::new();
-    formatter.format(&mut output, &nodes, &stats, &path)?;
+    {
+        let formatter: Box<dyn Formatter> = match effective_mode {
+            "classic" => Box::new(ClassicFormatter::new(mcp_no_emoji, true, path_display_mode)),
+            "hex" => Box::new(HexFormatter::new(
+                true,
+                mcp_no_emoji,
+                args.show_ignored,
+                path_display_mode,
+                false,
+            )),
+            "json" => Box::new(JsonFormatter::new(false)),
+            "ai" => Box::new(AiFormatter::new(mcp_no_emoji, path_display_mode)),
+            "stats" => Box::new(StatsFormatter::new()),
+            "csv" => Box::new(CsvFormatter::new()),
+            "tsv" => Box::new(TsvFormatter::new()),
+            "digest" => Box::new(DigestFormatter::new()),
+            "quantum" => Box::new(QuantumFormatter::new()),
+            "semantic" => Box::new(SemanticFormatter::new(path_display_mode, mcp_no_emoji)),
+            "quantum-semantic" => Box::new(QuantumSemanticFormatter::new()),
+            "summary" => Box::new(SummaryFormatter::new(!mcp_no_emoji)),
+            "summary-ai" => Box::new(SummaryAiFormatter::new(mcp_compress)),
+            _ => return Err(anyhow::anyhow!("Invalid mode: {}", args.mode)),
+        };
+        formatter.format(&mut output, &nodes, &stats, &path)?;
+    } // formatter dropped here
 
     // Handle different output formats
     let final_output = if args.mode == "quantum" || args.mode == "quantum-semantic" {

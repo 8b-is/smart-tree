@@ -59,6 +59,11 @@ impl AnalysisCache {
         self.entries.len()
     }
 
+    /// Check if cache is empty
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// Clear all entries
     pub fn clear(&self) {
         self.entries.clear();

@@ -11,6 +11,7 @@
 
 mod api;
 mod assets;
+mod collab;
 mod pty;
 mod server;
 pub mod state_sync;
