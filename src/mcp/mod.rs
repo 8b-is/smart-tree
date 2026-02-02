@@ -71,8 +71,8 @@ pub fn fmt_line(n: usize, hex: bool) -> String {
     }
 }
 
-mod assistant;
-mod cache;
+pub mod assistant;
+pub mod cache;
 pub mod consciousness;
 pub mod context_absorber;
 mod context_tools;
@@ -82,12 +82,12 @@ mod git_memory_integration;
 mod helpers;
 mod hook_tools;
 mod negotiation;
-mod permissions;
+pub mod permissions;
 mod proactive_assistant;
 mod prompts;
 mod prompts_enhanced;
 mod resources;
-mod session;
+pub mod session;
 pub mod smart_background_searcher;
 pub mod smart_edit;
 mod smart_edit_diff_viewer;
@@ -96,7 +96,7 @@ mod sse;
 mod theme_tools;
 mod tools;
 mod tools_consolidated;
-mod tools_consolidated_enhanced;
+pub mod tools_consolidated_enhanced;
 pub mod unified_watcher;
 pub mod wave_memory;
 

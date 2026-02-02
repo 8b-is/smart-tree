@@ -8,10 +8,12 @@
 //! - Cool terminal aesthetic
 //! - Real-time MCP activity visualization (Wave Compass)
 //! - User hints/nudges for AI collaboration
+//! - HTTP MCP endpoints (The Custodian watches all operations)
 
 mod api;
 mod assets;
 mod collab;
+pub mod mcp_http;
 mod pty;
 mod server;
 pub mod state_sync;
@@ -20,6 +22,7 @@ mod websocket;
 
 pub use server::start_server;
 pub use state_sync::{McpActivityState, UserHintsQueue};
+pub use mcp_http::{SharedMcpContext, create_mcp_context, mcp_router};
 
 use crate::in_memory_logger::InMemoryLogStore;
 use serde::{Deserialize, Serialize};

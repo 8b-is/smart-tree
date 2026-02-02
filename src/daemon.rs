@@ -5,9 +5,10 @@
 //! - HTTP API for context queries
 //! - WebSocket for real-time updates
 //! - Foken GPU credit tracking
-//! - MCP-compatible tool interface
+//! - **HTTP MCP** - Full MCP protocol over HTTP (not just stdio!)
 //! - **LLM Proxy** - Unified interface to multiple AI providers with memory!
 //! - **Collaboration Station** - Multi-AI real-time collaboration with Hot Tub mode! 🛁
+//! - **The Custodian** - Watches all operations for suspicious patterns 🧹
 //! - **GitHub Auth** - OAuth for i1.is/aye.is identity
 //!
 //! "The always-on brain for your system!" - Cheet
@@ -16,6 +17,7 @@
 //! All AI features route through the daemon for persistent memory and unified state.
 //! The LLM proxy (OpenAI-compatible at /v1/chat/completions) is integrated directly.
 //! Collaboration hub enables humans and AIs to work together in real-time.
+//! The Custodian monitors all MCP operations for data exfiltration and supply chain attacks.
 
 use anyhow::Result;
 use axum::{
@@ -44,6 +46,9 @@ use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmRole};
 // Collaboration Station
 use crate::auth::{create_session_store, GitHubOAuthConfig, SharedSessionStore};
 use crate::collaboration::{create_hub, SharedCollabHub};
+
+// HTTP MCP with The Custodian
+use crate::web_dashboard::mcp_http::{create_mcp_context, mcp_router};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -219,6 +224,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         }
     });
 
+    // Create MCP context for HTTP MCP endpoints
+    let mcp_context = create_mcp_context();
+
     let app = Router::new()
         // Health & Info
         .route("/health", get(health))
@@ -231,7 +239,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // Credit endpoints
         .route("/credits", get(get_credits))
         .route("/credits/record", post(record_credit))
-        // MCP-style tool interface
+        // Legacy tool interface (kept for compatibility)
         .route("/tools", get(list_tools))
         .route("/tools/call", post(call_tool))
         // LLM Proxy - OpenAI-compatible chat completions
@@ -245,13 +253,17 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // Daemon control
         .route("/shutdown", post(shutdown_handler))
         .route("/ping", get(ping))
-        .with_state(state);
+        .with_state(state)
+        // HTTP MCP - Full protocol over HTTP! 🧹 The Custodian watches here
+        // (uses nest_service to allow different state type)
+        .nest_service("/mcp", mcp_router(mcp_context));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     println!("Smart Tree Daemon listening on http://{}", addr);
+    println!("  - MCP HTTP:     /mcp/* (The Custodian watching!) 🧹");
     println!("  - Context API:  /context");
     println!("  - Credits:      /credits");
-    println!("  - Tools:        /tools");
+    println!("  - Tools:        /tools (legacy)");
     println!("  - LLM Proxy:    /v1/chat/completions (OpenAI-compatible!)");
     println!("  - Models:       /v1/models");
     println!("  - Collab:       /collab/ws (Hot Tub Mode!) 🛁");
