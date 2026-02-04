@@ -228,6 +228,8 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     let mcp_context = create_mcp_context();
 
     let app = Router::new()
+        // Welcome page
+        .route("/", get(welcome_page))
         // Health & Info
         .route("/health", get(health))
         .route("/info", get(info))
@@ -285,6 +287,62 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
 }
 
 // API Handlers
+
+async fn welcome_page() -> axum::response::Html<&'static str> {
+    axum::response::Html(r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Tree Daemon</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .container { text-align: center; max-width: 600px; padding: 2rem; }
+        h1 { font-size: 3rem; margin-bottom: 0.5rem; }
+        .emoji { font-size: 4rem; margin-bottom: 1rem; }
+        .version { color: #888; margin-bottom: 2rem; }
+        .endpoints {
+            background: rgba(255,255,255,0.05); border-radius: 12px;
+            padding: 1.5rem; margin: 2rem 0; text-align: left;
+        }
+        .endpoints h2 { font-size: 1rem; color: #888; margin-bottom: 1rem; }
+        .endpoint {
+            display: flex; justify-content: space-between;
+            padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .endpoint:last-child { border: none; }
+        .endpoint a { color: #4ecdc4; text-decoration: none; }
+        .endpoint a:hover { text-decoration: underline; }
+        .custodian { color: #f39c12; font-size: 0.9rem; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">🌳</div>
+        <h1>Smart Tree Daemon</h1>
+        <p class="version">System AI Context Service</p>
+
+        <div class="endpoints">
+            <h2>API ENDPOINTS</h2>
+            <div class="endpoint"><span>Health Check</span><a href="/health">/health</a></div>
+            <div class="endpoint"><span>Server Info</span><a href="/info">/info</a></div>
+            <div class="endpoint"><span>Context API</span><a href="/context">/context</a></div>
+            <div class="endpoint"><span>MCP Protocol</span><a href="/mcp/tools/list">/mcp/*</a></div>
+            <div class="endpoint"><span>LLM Proxy</span><span>/v1/chat/completions</span></div>
+            <div class="endpoint"><span>Models</span><a href="/v1/models">/v1/models</a></div>
+        </div>
+
+        <p class="custodian">🧹 The Custodian is watching all MCP operations</p>
+    </div>
+</body>
+</html>"#)
+}
 
 async fn health() -> &'static str {
     "ok"
