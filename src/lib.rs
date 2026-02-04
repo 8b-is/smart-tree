@@ -33,6 +33,7 @@ pub mod scanner; // The heart of directory traversal and file metadata collectio
 pub mod scanner_interest; // Interest scoring - surfacing what matters
 pub mod scanner_safety; // Safety mechanisms to prevent crashes on large directories
 pub mod scanner_state; // Change detection between scans
+pub mod interest_calculator; // The scoring engine that determines what's interesting
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
@@ -117,6 +118,9 @@ pub use scanner_interest::{
 
 // Re-export state management types for change detection
 pub use scanner_state::{FileSignature, HotDirectory, ScanDelta, ScanState};
+
+// Re-export interest calculator
+pub use interest_calculator::{quick_interest_check, InterestCalculator};
 
 // Re-export context detection for easy access
 pub use context::detect_project_context;

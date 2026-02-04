@@ -234,6 +234,14 @@ impl SecurityScanner {
         path.is_file()
     }
 
+    /// Scan content for security patterns (public API)
+    /// Returns findings for a single file's content
+    pub fn scan_file_content(&self, file_path: &Path, content: &str) -> Vec<SecurityFinding> {
+        let mut findings = Vec::new();
+        self.scan_content(file_path, content, &mut findings);
+        findings
+    }
+
     fn scan_content(&self, file_path: &Path, content: &str, findings: &mut Vec<SecurityFinding>) {
         let path_str = file_path.to_string_lossy();
 
