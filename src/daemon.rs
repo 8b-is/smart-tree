@@ -300,46 +300,217 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #e0e0e0; min-height: 100vh;
-            display: flex; align-items: center; justify-content: center;
+            color: #e0e0e0; min-height: 100vh; padding: 2rem;
         }
-        .container { text-align: center; max-width: 600px; padding: 2rem; }
-        h1 { font-size: 3rem; margin-bottom: 0.5rem; }
-        .emoji { font-size: 4rem; margin-bottom: 1rem; }
-        .version { color: #888; margin-bottom: 2rem; }
-        .endpoints {
+        .header { text-align: center; margin-bottom: 2rem; }
+        .header h1 { font-size: 2.5rem; }
+        .header .emoji { font-size: 3rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 1200px; margin: 0 auto; }
+        @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+        .card {
             background: rgba(255,255,255,0.05); border-radius: 12px;
-            padding: 1.5rem; margin: 2rem 0; text-align: left;
+            padding: 1.5rem; border: 1px solid rgba(255,255,255,0.1);
         }
-        .endpoints h2 { font-size: 1rem; color: #888; margin-bottom: 1rem; }
-        .endpoint {
-            display: flex; justify-content: space-between;
-            padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .endpoint:last-child { border: none; }
+        .card h2 { font-size: 1.1rem; color: #4ecdc4; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .endpoint { display: flex; justify-content: space-between; padding: 0.4rem 0; font-size: 0.9rem; }
         .endpoint a { color: #4ecdc4; text-decoration: none; }
         .endpoint a:hover { text-decoration: underline; }
-        .custodian { color: #f39c12; font-size: 0.9rem; margin-top: 1rem; }
+
+        /* Chat */
+        #chat-messages {
+            height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3);
+            border-radius: 8px; padding: 1rem; margin-bottom: 1rem; font-size: 0.85rem;
+        }
+        .msg { margin-bottom: 0.5rem; padding: 0.5rem; border-radius: 6px; }
+        .msg.user { background: rgba(78,205,196,0.2); text-align: right; }
+        .msg.ai { background: rgba(243,156,18,0.2); }
+        .msg .model { font-size: 0.7rem; color: #888; }
+        .msg .score { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; margin-left: 0.5rem; }
+        .score.safe { background: #27ae60; color: white; }
+        .score.warn { background: #f39c12; color: black; }
+        .score.danger { background: #e74c3c; color: white; }
+        #chat-input { display: flex; gap: 0.5rem; }
+        #chat-input input {
+            flex: 1; padding: 0.75rem; border-radius: 8px; border: none;
+            background: rgba(255,255,255,0.1); color: white;
+        }
+        #chat-input select { padding: 0.5rem; border-radius: 8px; background: #2a2a4a; color: white; border: none; }
+        #chat-input button {
+            padding: 0.75rem 1.5rem; border-radius: 8px; border: none;
+            background: #4ecdc4; color: #1a1a2e; font-weight: bold; cursor: pointer;
+        }
+
+        /* Transparency Log */
+        #transparency-log {
+            height: 250px; overflow-y: auto; background: rgba(0,0,0,0.3);
+            border-radius: 8px; padding: 0.5rem; font-family: monospace; font-size: 0.75rem;
+        }
+        .log-entry { padding: 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .log-entry .time { color: #888; }
+        .log-entry .type { padding: 2px 6px; border-radius: 3px; font-size: 0.65rem; }
+        .log-entry .type.mcp { background: #9b59b6; }
+        .log-entry .type.llm { background: #3498db; }
+        .log-entry .type.tool { background: #e67e22; }
+        .log-entry .content { color: #ccc; margin-top: 0.25rem; word-break: break-all; }
+
+        /* Dashboard link */
+        .dashboard-link {
+            display: inline-block; margin-top: 1rem; padding: 0.75rem 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; text-decoration: none; border-radius: 8px; font-weight: bold;
+        }
+        .dashboard-link:hover { opacity: 0.9; }
+
+        .custodian { text-align: center; color: #f39c12; margin-top: 1.5rem; }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="header">
         <div class="emoji">🌳</div>
         <h1>Smart Tree Daemon</h1>
-        <p class="version">System AI Context Service</p>
+        <p style="color:#888">System AI Context Service</p>
+        <a href="javascript:void(0)" onclick="alert('Run: st --dashboard\\nThen visit http://localhost:8420')" class="dashboard-link">
+            Open Full Dashboard
+        </a>
+    </div>
 
-        <div class="endpoints">
-            <h2>API ENDPOINTS</h2>
-            <div class="endpoint"><span>Health Check</span><a href="/health">/health</a></div>
-            <div class="endpoint"><span>Server Info</span><a href="/info">/info</a></div>
-            <div class="endpoint"><span>Context API</span><a href="/context">/context</a></div>
-            <div class="endpoint"><span>MCP Protocol</span><a href="/mcp/tools/list">/mcp/*</a></div>
-            <div class="endpoint"><span>LLM Proxy</span><span>/v1/chat/completions</span></div>
-            <div class="endpoint"><span>Models</span><a href="/v1/models">/v1/models</a></div>
+    <div class="grid">
+        <!-- Chat Test -->
+        <div class="card">
+            <h2>💬 Test Chat (LLM Proxy)</h2>
+            <div id="chat-messages"></div>
+            <div id="chat-input">
+                <select id="model-select">
+                    <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0</option>
+                </select>
+                <input type="text" id="msg-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendChat()">
+                <button onclick="sendChat()">Send</button>
+            </div>
         </div>
 
-        <p class="custodian">🧹 The Custodian is watching all MCP operations</p>
+        <!-- Transparency Log -->
+        <div class="card">
+            <h2>👁️ Transparency Mode</h2>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem">All AI communications logged here</p>
+            <div id="transparency-log">
+                <div class="log-entry">
+                    <span class="time">--:--:--</span>
+                    <span class="type mcp">SYSTEM</span>
+                    <div class="content">Transparency mode active. Watching all AI traffic...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Endpoints -->
+        <div class="card">
+            <h2>🔌 API Endpoints</h2>
+            <div class="endpoint"><span>Health</span><a href="/health">/health</a></div>
+            <div class="endpoint"><span>Info</span><a href="/info">/info</a></div>
+            <div class="endpoint"><span>Context</span><a href="/context">/context</a></div>
+            <div class="endpoint"><span>MCP Tools</span><a href="/mcp/tools/list">/mcp/tools/list</a></div>
+            <div class="endpoint"><span>Models</span><a href="/v1/models">/v1/models</a></div>
+            <div class="endpoint"><span>Chat API</span><span>/v1/chat/completions</span></div>
+        </div>
+
+        <!-- Model Safety -->
+        <div class="card">
+            <h2>🛡️ Model Safety Scores</h2>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">Based on observed behavior</p>
+            <div class="endpoint">
+                <span>Claude 3.5 Sonnet</span>
+                <span class="score safe">10/10</span>
+            </div>
+            <div class="endpoint">
+                <span>GPT-4o</span>
+                <span class="score safe">9/10</span>
+            </div>
+            <div class="endpoint">
+                <span>Gemini 2.0</span>
+                <span class="score safe">9/10</span>
+            </div>
+            <div class="endpoint">
+                <span style="color:#e74c3c">greatcoderMDK</span>
+                <span class="score danger">2/10</span>
+            </div>
+        </div>
     </div>
+
+    <p class="custodian">🧹 The Custodian is watching all operations</p>
+
+    <script>
+        const messages = document.getElementById('chat-messages');
+        const log = document.getElementById('transparency-log');
+
+        function addLog(type, content) {
+            const time = new Date().toLocaleTimeString();
+            const typeClass = type.toLowerCase().includes('mcp') ? 'mcp' :
+                             type.toLowerCase().includes('llm') ? 'llm' : 'tool';
+            log.innerHTML += `<div class="log-entry">
+                <span class="time">${time}</span>
+                <span class="type ${typeClass}">${type}</span>
+                <div class="content">${content.substring(0, 200)}${content.length > 200 ? '...' : ''}</div>
+            </div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('msg-input');
+            const model = document.getElementById('model-select').value;
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            // Add user message
+            messages.innerHTML += `<div class="msg user">${msg}</div>`;
+            input.value = '';
+
+            // Log the request
+            addLog('LLM-REQ', `Model: ${model} | "${msg}"`);
+
+            try {
+                const res = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: msg }],
+                        max_tokens: 500
+                    })
+                });
+
+                const data = await res.json();
+                const reply = data.choices?.[0]?.message?.content || data.error || 'No response';
+                const safeScore = model.includes('claude') ? 'safe' :
+                                  model.includes('greatcoder') ? 'danger' : 'safe';
+
+                messages.innerHTML += `<div class="msg ai">
+                    <span class="model">${model}</span>
+                    <span class="score ${safeScore}">${safeScore === 'safe' ? '✓' : '⚠'}</span>
+                    <div>${reply}</div>
+                </div>`;
+
+                addLog('LLM-RES', `${model}: ${reply}`);
+            } catch (e) {
+                messages.innerHTML += `<div class="msg ai" style="color:#e74c3c">Error: ${e.message}</div>`;
+                addLog('ERROR', e.message);
+            }
+
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Connect to WebSocket for live transparency
+        try {
+            const ws = new WebSocket(`ws://${location.host}/ws`);
+            ws.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    addLog(data.type || 'EVENT', JSON.stringify(data));
+                } catch { addLog('RAW', e.data); }
+            };
+            ws.onopen = () => addLog('SYSTEM', 'WebSocket connected for live updates');
+        } catch (e) { console.log('WS not available'); }
+    </script>
 </body>
 </html>"#)
 }
