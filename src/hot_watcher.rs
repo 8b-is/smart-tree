@@ -20,7 +20,7 @@
 use crate::scanner_interest::InterestLevel;
 use crate::security_scan::SecurityFinding;
 use anyhow::Result;
-use mem8_core::Wave;
+use crate::mem8_lite::Wave;
 use notify::{
     event::{CreateKind, ModifyKind, RemoveKind},
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,

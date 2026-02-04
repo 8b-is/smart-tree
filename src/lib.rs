@@ -135,6 +135,9 @@ pub mod file_history;
 // MEM8 - Wave-based cognitive architecture for consciousness simulation
 pub mod mem8;
 
+// MEM8 Lite - Minimal wave types for hot directory tracking (self-contained)
+pub mod mem8_lite;
+
 // n8x (Nexus Agent) - Living forest orchestrator for AI-human development
 // Binary: `n8x` (formerly `tree`, renamed to avoid shadowing Unix tree)
 pub mod tree_agent;
