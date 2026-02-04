@@ -326,7 +326,7 @@ pub struct ScanArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Cmd {
-    /// Manage the smart-tree systemd service (install, start, stop, etc.)
+    /// Manage the smart-tree daemon (Linux: systemd, macOS: launchctl, Windows: Task Scheduler)
     #[command(subcommand)]
     Service(Service),
 
@@ -337,17 +337,17 @@ pub enum Cmd {
 
 #[derive(Debug, Subcommand)]
 pub enum Service {
-    /// Install the smart-tree daemon as a systemd user service.
+    /// Install the smart-tree daemon as a system service
     Install,
-    /// Uninstall the systemd user service.
+    /// Uninstall the service
     Uninstall,
-    /// Start the systemd user service for the current project.
+    /// Start the service for the current project
     Start,
-    /// Stop the systemd user service for the current project.
+    /// Stop the service
     Stop,
-    /// Show the status of the systemd user service for the current project.
+    /// Show service status
     Status,
-    /// Show recent logs for the systemd user service.
+    /// Show service logs
     Logs,
 }
 

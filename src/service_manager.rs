@@ -1,5 +1,5 @@
 // Service Manager for Smart Tree Daemon
-// Handles installing, uninstalling, and controlling the systemd user service.
+// Cross-platform service management: Linux (systemd), macOS (launchctl), Windows (Task Scheduler)
 
 use anyhow::{Context, Result};
 use std::env;
@@ -8,14 +8,289 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use tracing::{error, info, warn};
 
-const SERVICE_FILE_NAME: &str = "smart-tree-dashboard@.service";
-const SERVICE_TEMPLATE_PATH: &str = "systemd/smart-tree-dashboard@.service";
+// =============================================================================
+// PLATFORM DETECTION
+// =============================================================================
 
-/// Get the path for the systemd user service files.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Platform {
+    Linux,
+    MacOS,
+    Windows,
+    Unknown,
+}
+
+impl Platform {
+    pub fn current() -> Self {
+        #[cfg(target_os = "linux")]
+        return Platform::Linux;
+
+        #[cfg(target_os = "macos")]
+        return Platform::MacOS;
+
+        #[cfg(target_os = "windows")]
+        return Platform::Windows;
+
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        return Platform::Unknown;
+    }
+
+    pub fn service_manager_name(&self) -> &'static str {
+        match self {
+            Platform::Linux => "systemd",
+            Platform::MacOS => "launchctl",
+            Platform::Windows => "Task Scheduler",
+            Platform::Unknown => "unknown",
+        }
+    }
+}
+
+// =============================================================================
+// LINUX (systemd)
+// =============================================================================
+
+const SYSTEMD_SERVICE_NAME: &str = "smart-tree-dashboard@.service";
+const SYSTEMD_SERVICE_TEMPLATE: &str = "systemd/smart-tree-dashboard@.service";
+
 fn get_systemd_user_path() -> Result<PathBuf> {
     dirs::home_dir()
         .map(|home| home.join(".config").join("systemd").join("user"))
         .context("Could not find home directory")
+}
+
+// =============================================================================
+// macOS (launchctl)
+// =============================================================================
+
+const LAUNCHD_LABEL: &str = "is.8b.smart-tree";
+
+fn get_launchd_user_path() -> Result<PathBuf> {
+    dirs::home_dir()
+        .map(|home| home.join("Library").join("LaunchAgents"))
+        .context("Could not find home directory")
+}
+
+fn get_launchd_plist_path() -> Result<PathBuf> {
+    let agents_dir = get_launchd_user_path()?;
+    Ok(agents_dir.join(format!("{}.plist", LAUNCHD_LABEL)))
+}
+
+fn generate_launchd_plist(project_name: &str) -> String {
+    let st_path = which_st().unwrap_or_else(|_| PathBuf::from("/usr/local/bin/st"));
+    let working_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("/tmp"));
+    let log_path = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".st")
+        .join("daemon.log");
+
+    format!(r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{}.{}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{}</string>
+        <string>--http-daemon</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{}</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>{}</string>
+
+    <key>StandardErrorPath</key>
+    <string>{}</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ST_PROJECT</key>
+        <string>{}</string>
+    </dict>
+</dict>
+</plist>
+"#,
+        LAUNCHD_LABEL,
+        project_name,
+        st_path.display(),
+        working_dir.display(),
+        log_path.display(),
+        log_path.display(),
+        project_name
+    )
+}
+
+fn launchd_install() -> Result<()> {
+    let project_name = get_project_name()?;
+    let plist_path = get_launchd_plist_path()?;
+    let agents_dir = get_launchd_user_path()?;
+
+    // Create LaunchAgents directory if needed
+    fs::create_dir_all(&agents_dir)
+        .with_context(|| format!("Failed to create {}", agents_dir.display()))?;
+
+    // Generate and write plist
+    let plist_content = generate_launchd_plist(&project_name);
+    fs::write(&plist_path, &plist_content)
+        .with_context(|| format!("Failed to write {}", plist_path.display()))?;
+
+    info!("Created LaunchAgent at {}", plist_path.display());
+
+    println!("\n✅ Service installed for project '{}'", project_name);
+    println!("\nTo start: st service start");
+    println!("To stop:  st service stop");
+    println!("Plist:    {}", plist_path.display());
+
+    Ok(())
+}
+
+fn launchd_uninstall() -> Result<()> {
+    let plist_path = get_launchd_plist_path()?;
+
+    // Stop first if running
+    let _ = launchd_stop();
+
+    if plist_path.exists() {
+        fs::remove_file(&plist_path)?;
+        info!("Removed {}", plist_path.display());
+        println!("✅ Service uninstalled");
+    } else {
+        println!("Service was not installed");
+    }
+
+    Ok(())
+}
+
+fn launchd_start() -> Result<()> {
+    let project_name = get_project_name()?;
+    let label = format!("{}.{}", LAUNCHD_LABEL, project_name);
+    let plist_path = get_launchd_plist_path()?;
+
+    if !plist_path.exists() {
+        anyhow::bail!("Service not installed. Run 'st service install' first.");
+    }
+
+    info!("Starting service {}...", label);
+    run_command("launchctl", &["load", plist_path.to_string_lossy().as_ref()])?;
+
+    println!("✅ Service started");
+    println!("\nDashboard: http://localhost:8420");
+    println!("Logs:      tail -f ~/.st/daemon.log");
+
+    Ok(())
+}
+
+fn launchd_stop() -> Result<()> {
+    let project_name = get_project_name()?;
+    let label = format!("{}.{}", LAUNCHD_LABEL, project_name);
+    let plist_path = get_launchd_plist_path()?;
+
+    if !plist_path.exists() {
+        println!("Service not installed");
+        return Ok(());
+    }
+
+    info!("Stopping service {}...", label);
+    let _ = run_command("launchctl", &["unload", plist_path.to_string_lossy().as_ref()]);
+
+    println!("✅ Service stopped");
+    Ok(())
+}
+
+fn launchd_status() -> Result<()> {
+    let project_name = get_project_name()?;
+    let label = format!("{}.{}", LAUNCHD_LABEL, project_name);
+    let plist_path = get_launchd_plist_path()?;
+
+    println!("Smart Tree Service Status (macOS)");
+    println!("─────────────────────────────────");
+    println!("Label:   {}", label);
+    println!("Plist:   {}", plist_path.display());
+
+    if !plist_path.exists() {
+        println!("Status:  NOT INSTALLED");
+        return Ok(());
+    }
+
+    // Check if running
+    let output = Command::new("launchctl")
+        .args(["list"])
+        .output();
+
+    if let Ok(out) = output {
+        let list = String::from_utf8_lossy(&out.stdout);
+        if list.contains(&label) {
+            println!("Status:  🟢 RUNNING");
+        } else {
+            println!("Status:  ⚪ LOADED (not running)");
+        }
+    }
+
+    Ok(())
+}
+
+fn launchd_logs() -> Result<()> {
+    let log_path = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".st")
+        .join("daemon.log");
+
+    println!("Showing logs from {}", log_path.display());
+    println!("─────────────────────────────────");
+
+    run_command("tail", &["-f", log_path.to_string_lossy().as_ref()])?;
+    Ok(())
+}
+
+// =============================================================================
+// WINDOWS (Task Scheduler) - Stub for now
+// =============================================================================
+
+#[cfg(target_os = "windows")]
+fn windows_install() -> Result<()> {
+    println!("Windows service installation not yet implemented.");
+    println!("For now, run 'st --http-daemon' manually or add to startup.");
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn windows_install() -> Result<()> {
+    anyhow::bail!("Windows-specific function called on non-Windows platform")
+}
+
+// =============================================================================
+// FIND ST BINARY
+// =============================================================================
+
+fn which_st() -> Result<PathBuf> {
+    // Try current exe first
+    if let Ok(exe) = std::env::current_exe() {
+        return Ok(exe);
+    }
+
+    // Try PATH
+    let output = Command::new("which")
+        .arg("st")
+        .output();
+
+    if let Ok(out) = output {
+        if out.status.success() {
+            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            return Ok(PathBuf::from(path));
+        }
+    }
+
+    // Fallback
+    Ok(PathBuf::from("/usr/local/bin/st"))
 }
 
 /// Run a shell command and log its output.
@@ -47,135 +322,190 @@ fn get_project_name() -> Result<String> {
     Ok(project_name.to_string())
 }
 
-/// Install the systemd user service.
+// =============================================================================
+// CROSS-PLATFORM PUBLIC API
+// =============================================================================
+
+/// Install the service (cross-platform)
 pub fn install() -> Result<()> {
-    info!("Installing systemd user service...");
+    let platform = Platform::current();
+    println!("Installing Smart Tree service using {}...", platform.service_manager_name());
 
-    // 1. Check if the template file exists
-    let template_path = PathBuf::from(SERVICE_TEMPLATE_PATH);
-    if !template_path.exists() {
-        error!(
-            "Service template not found at '{}'",
-            template_path.display()
-        );
-        anyhow::bail!(
-            "Service template not found at '{}'. Make sure you are running from the project root.",
-            template_path.display()
-        );
+    match platform {
+        Platform::Linux => systemd_install(),
+        Platform::MacOS => launchd_install(),
+        Platform::Windows => {
+            #[cfg(target_os = "windows")]
+            return windows_install();
+            #[cfg(not(target_os = "windows"))]
+            anyhow::bail!("Windows not supported on this platform")
+        }
+        Platform::Unknown => anyhow::bail!("Unsupported platform for service management"),
     }
-
-    // 2. Get systemd user path and create it if it doesn't exist
-    let systemd_path = get_systemd_user_path()?;
-    fs::create_dir_all(&systemd_path)
-        .with_context(|| format!("Failed to create systemd directory at {:?}", systemd_path))?;
-
-    // 3. Copy the file
-    let dest_path = systemd_path.join(SERVICE_FILE_NAME);
-    info!(
-        "Copying '{}' to '{}'",
-        template_path.display(),
-        dest_path.display()
-    );
-    fs::copy(&template_path, &dest_path).with_context(|| {
-        format!(
-            "Failed to copy service file from {} to {}",
-            template_path.display(),
-            dest_path.display()
-        )
-    })?;
-
-    // 4. Reload systemd daemon
-    run_command("systemctl", &["--user", "daemon-reload"])?;
-
-    info!("Service installed successfully!");
-    println!("\nYou may need to edit the service file to configure paths:");
-    println!("   {}", dest_path.display());
-    println!("\nThen, to start the service for this project, run:");
-    println!("   st service start");
-
-    Ok(())
 }
 
-/// Uninstall the systemd user service.
+/// Uninstall the service (cross-platform)
 pub fn uninstall() -> Result<()> {
-    info!("Uninstalling systemd user service...");
+    match Platform::current() {
+        Platform::Linux => systemd_uninstall(),
+        Platform::MacOS => launchd_uninstall(),
+        Platform::Windows => {
+            println!("Windows uninstall not yet implemented");
+            Ok(())
+        }
+        Platform::Unknown => anyhow::bail!("Unsupported platform"),
+    }
+}
 
-    // 1. Get paths
-    let systemd_path = get_systemd_user_path()?;
-    let dest_path = systemd_path.join(SERVICE_FILE_NAME);
+/// Start the service (cross-platform)
+pub fn start() -> Result<()> {
+    match Platform::current() {
+        Platform::Linux => systemd_start(),
+        Platform::MacOS => launchd_start(),
+        Platform::Windows => {
+            println!("Run 'st --http-daemon' manually on Windows");
+            Ok(())
+        }
+        Platform::Unknown => anyhow::bail!("Unsupported platform"),
+    }
+}
 
-    if !dest_path.exists() {
-        warn!(
-            "Service file not found at '{}'. Already uninstalled?",
-            dest_path.display()
-        );
+/// Stop the service (cross-platform)
+pub fn stop() -> Result<()> {
+    match Platform::current() {
+        Platform::Linux => systemd_stop(),
+        Platform::MacOS => launchd_stop(),
+        Platform::Windows => {
+            println!("Stop the process manually on Windows");
+            Ok(())
+        }
+        Platform::Unknown => anyhow::bail!("Unsupported platform"),
+    }
+}
+
+/// Show service status (cross-platform)
+pub fn status() -> Result<()> {
+    match Platform::current() {
+        Platform::Linux => systemd_status(),
+        Platform::MacOS => launchd_status(),
+        Platform::Windows => {
+            println!("Check Task Manager on Windows");
+            Ok(())
+        }
+        Platform::Unknown => anyhow::bail!("Unsupported platform"),
+    }
+}
+
+/// Show service logs (cross-platform)
+pub fn logs() -> Result<()> {
+    match Platform::current() {
+        Platform::Linux => systemd_logs(),
+        Platform::MacOS => launchd_logs(),
+        Platform::Windows => {
+            println!("Check ~/.st/daemon.log on Windows");
+            Ok(())
+        }
+        Platform::Unknown => anyhow::bail!("Unsupported platform"),
+    }
+}
+
+// =============================================================================
+// LINUX (systemd) IMPLEMENTATION
+// =============================================================================
+
+fn systemd_install() -> Result<()> {
+    info!("Installing systemd user service...");
+
+    let template_path = PathBuf::from(SYSTEMD_SERVICE_TEMPLATE);
+    if !template_path.exists() {
+        // Generate a basic service file
+        let project_name = get_project_name()?;
+        let st_path = which_st()?;
+        let working_dir = env::current_dir()?;
+
+        let service_content = format!(r#"[Unit]
+Description=Smart Tree Dashboard for %i
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={} --http-daemon
+WorkingDirectory={}
+Environment=ST_PROJECT=%i
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+"#, st_path.display(), working_dir.display());
+
+        let systemd_path = get_systemd_user_path()?;
+        fs::create_dir_all(&systemd_path)?;
+
+        let dest_path = systemd_path.join(SYSTEMD_SERVICE_NAME);
+        fs::write(&dest_path, service_content)?;
+
+        run_command("systemctl", &["--user", "daemon-reload"])?;
+
+        println!("✅ Service installed for project '{}'", project_name);
+        println!("\nTo start: st service start");
         return Ok(());
     }
 
-    // 2. Remove the file
-    info!("Removing '{}'", dest_path.display());
-    fs::remove_file(&dest_path)
-        .with_context(|| format!("Failed to remove service file at {}", dest_path.display()))?;
+    // Original template-based installation
+    let systemd_path = get_systemd_user_path()?;
+    fs::create_dir_all(&systemd_path)?;
 
-    // 3. Reload systemd daemon
+    let dest_path = systemd_path.join(SYSTEMD_SERVICE_NAME);
+    fs::copy(&template_path, &dest_path)?;
     run_command("systemctl", &["--user", "daemon-reload"])?;
 
-    info!("Service uninstalled successfully!");
+    println!("✅ Service installed");
     Ok(())
 }
 
-/// Start the systemd user service for the current project.
-pub fn start() -> Result<()> {
+fn systemd_uninstall() -> Result<()> {
+    let systemd_path = get_systemd_user_path()?;
+    let dest_path = systemd_path.join(SYSTEMD_SERVICE_NAME);
+
+    if dest_path.exists() {
+        fs::remove_file(&dest_path)?;
+        run_command("systemctl", &["--user", "daemon-reload"])?;
+        println!("✅ Service uninstalled");
+    } else {
+        println!("Service was not installed");
+    }
+    Ok(())
+}
+
+fn systemd_start() -> Result<()> {
     let project_name = get_project_name()?;
     let service_instance = format!("smart-tree-dashboard@{}.service", project_name);
-    info!("Starting service for project '{}'...", project_name);
     run_command("systemctl", &["--user", "start", &service_instance])?;
-    info!("Service started.");
-    println!("\nTo check its status, run:");
-    println!("   st service status");
+    println!("✅ Service started");
+    println!("\nDashboard: http://localhost:8420");
     Ok(())
 }
 
-/// Stop the systemd user service for the current project.
-pub fn stop() -> Result<()> {
+fn systemd_stop() -> Result<()> {
     let project_name = get_project_name()?;
     let service_instance = format!("smart-tree-dashboard@{}.service", project_name);
-    info!("Stopping service for project '{}'...", project_name);
     run_command("systemctl", &["--user", "stop", &service_instance])?;
-    info!("Service stopped.");
+    println!("✅ Service stopped");
     Ok(())
 }
 
-/// Show the status of the systemd user service for the current project.
-pub fn status() -> Result<()> {
+fn systemd_status() -> Result<()> {
     let project_name = get_project_name()?;
     let service_instance = format!("smart-tree-dashboard@{}.service", project_name);
-    info!("Checking status for service '{}':", service_instance);
-    // We don't mind if this command fails (e.g., service not running)
-    let _ = run_command(
-        "systemctl",
-        &["--user", "status", &service_instance, "--no-pager"],
-    );
+    let _ = run_command("systemctl", &["--user", "status", &service_instance, "--no-pager"]);
     Ok(())
 }
 
-/// Show recent logs for the systemd user service.
-pub fn logs() -> Result<()> {
+fn systemd_logs() -> Result<()> {
     let project_name = get_project_name()?;
     let service_instance = format!("smart-tree-dashboard@{}.service", project_name);
-    info!("Showing logs for service '{}':", service_instance);
-    let _ = run_command(
-        "journalctl",
-        &[
-            "--user",
-            "-u",
-            &service_instance,
-            "-n",
-            "50",
-            "--no-pager",
-            "-f",
-        ],
-    );
+    let _ = run_command("journalctl", &["--user", "-u", &service_instance, "-n", "50", "--no-pager", "-f"]);
     Ok(())
 }
 
