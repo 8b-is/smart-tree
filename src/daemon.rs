@@ -382,14 +382,24 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             <div id="chat-messages"></div>
             <div id="chat-input">
                 <select id="model-select">
-                    <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                    <option value="anthropic/claude-3-opus">Claude 3 Opus</option>
-                    <option value="openai/gpt-4o">GPT-4o</option>
-                    <option value="openai/o1-preview">o1-preview</option>
-                    <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash (Free)</option>
-                    <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
-                    <option value="mistralai/mistral-large-2411">Mistral Large</option>
-                    <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+                    <optgroup label="Top Coding Models">
+                        <option value="anthropic/claude-opus-4.5">Claude Opus 4.5</option>
+                        <option value="anthropic/claude-sonnet-4.5">Claude Sonnet 4.5</option>
+                        <option value="openai/gpt-5.2-codex">GPT-5.2 Codex</option>
+                        <option value="google/gemini-3-pro-preview">Gemini 3 Pro</option>
+                        <option value="deepseek/deepseek-v3.2">DeepSeek V3.2</option>
+                        <option value="qwen/qwen3-coder">Qwen3 Coder 480B</option>
+                    </optgroup>
+                    <optgroup label="Fast & Efficient">
+                        <option value="anthropic/claude-haiku-4.5">Claude Haiku 4.5</option>
+                        <option value="x-ai/grok-code-fast-1">Grok Code Fast</option>
+                        <option value="google/gemini-3-flash-preview">Gemini 3 Flash</option>
+                        <option value="moonshotai/kimi-k2.5">Kimi K2.5</option>
+                    </optgroup>
+                    <optgroup label="Free Tier">
+                        <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash (Free)</option>
+                        <option value="z-ai/glm-4.5-air:free">GLM 4.5 Air (Free)</option>
+                    </optgroup>
                 </select>
                 <input type="text" id="msg-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendChat()">
                 <button onclick="sendChat()">Send</button>
