@@ -257,6 +257,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // Daemon control
         .route("/shutdown", post(shutdown_handler))
         .route("/ping", get(ping))
+        // CLI thin-client endpoints - all the meat lives here!
+        .route("/cli/scan", post(crate::daemon_cli::cli_scan_handler))
+        .route("/cli/stream", post(crate::daemon_cli::cli_stream_handler))
         .with_state(state)
         // HTTP MCP - Full protocol over HTTP! 🧹 The Custodian watches here
         // (uses nest_service to allow different state type)
@@ -264,6 +267,8 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     println!("Smart Tree Daemon listening on http://{}", addr);
+    println!("  - CLI Scan:     /cli/scan (thin-client endpoint!)");
+    println!("  - CLI Stream:   /cli/stream (SSE streaming)");
     println!("  - MCP HTTP:     /mcp/* (The Custodian watching!) 🧹");
     println!("  - Context API:  /context");
     println!("  - Credits:      /credits");

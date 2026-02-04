@@ -719,6 +719,11 @@ mod tests {
             category: FileCategory::Unknown,
             filesystem_type: FilesystemType::Unknown,
             git_branch: None,
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         }];
 
         let mut stats = TreeStats::default();

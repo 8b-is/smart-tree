@@ -282,6 +282,11 @@ mod tests {
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
             git_branch: None,
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         }
     }
 

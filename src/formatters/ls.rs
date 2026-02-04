@@ -448,6 +448,11 @@ mod tests {
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
             git_branch: None,
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         };
         assert_eq!(formatter.get_emoji(&empty_dir), "📂");
 
@@ -470,6 +475,11 @@ mod tests {
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
             git_branch: None,
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         };
         assert_eq!(formatter.get_emoji(&empty_file), "🪹");
     }
@@ -498,6 +508,11 @@ mod tests {
             search_matches: None,
             filesystem_type: FilesystemType::Unknown,
             git_branch: None,
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         };
 
         let perms = formatter.format_permissions(&test_node);

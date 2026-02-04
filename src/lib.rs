@@ -30,7 +30,9 @@ pub mod memory_manager; // Real memory management for consciousness!
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
 pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
 pub mod scanner; // The heart of directory traversal and file metadata collection. // For intelligently detecting project context (e.g., Rust, Node.js).
+pub mod scanner_interest; // Interest scoring - surfacing what matters
 pub mod scanner_safety; // Safety mechanisms to prevent crashes on large directories
+pub mod scanner_state; // Change detection between scans
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
@@ -72,6 +74,7 @@ pub mod code_review;
 
 // Daemon and client for always-on AI context service
 pub mod daemon;
+pub mod daemon_cli; // HTTP CLI endpoints for thin-client architecture
 pub mod daemon_client;
 pub mod std_client; // Binary protocol client for std daemon (Unix socket)
 
@@ -105,6 +108,15 @@ pub mod emoji_mapper;
 pub use scanner::{
     parse_size, FileCategory, FileNode, FilesystemType, Scanner, ScannerConfig, TreeStats,
 };
+
+// Re-export interest scoring types for intelligent scanning
+pub use scanner_interest::{
+    ChangeType, InterestFactor, InterestLevel, InterestScore, InterestWeights, TraversalContext,
+    TraversalPath,
+};
+
+// Re-export state management types for change detection
+pub use scanner_state::{FileSignature, HotDirectory, ScanDelta, ScanState};
 
 // Re-export context detection for easy access
 pub use context::detect_project_context;

@@ -222,6 +222,11 @@ mod tests {
                 category: FileCategory::Markdown,
                 filesystem_type: FilesystemType::Unknown,
                 git_branch: None,
+                traversal_context: None,
+                interest: None,
+                security_findings: Vec::new(),
+                change_status: None,
+                content_hash: None,
             },
             FileNode {
                 path: PathBuf::from("src/main.rs"),
@@ -241,6 +246,11 @@ mod tests {
                 category: FileCategory::Rust,
                 filesystem_type: FilesystemType::Unknown,
                 git_branch: None,
+                traversal_context: None,
+                interest: None,
+                security_findings: Vec::new(),
+                change_status: None,
+                content_hash: None,
             },
             FileNode {
                 path: PathBuf::from("tests/test_main.rs"),
@@ -260,6 +270,11 @@ mod tests {
                 category: FileCategory::Rust,
                 filesystem_type: FilesystemType::Unknown,
                 git_branch: None,
+                traversal_context: None,
+                interest: None,
+                security_findings: Vec::new(),
+                change_status: None,
+                content_hash: None,
             },
         ];
 

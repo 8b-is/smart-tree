@@ -547,6 +547,11 @@ mod tests {
             search_matches: None,
             filesystem_type: FilesystemType::Ext4,
             git_branch: None,
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         };
 
         let score = analyzer.score_file_relevance(&file_node, &context);

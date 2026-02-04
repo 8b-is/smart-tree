@@ -251,6 +251,12 @@ fn convert_node(context: &ContextNode, nodes: &mut Vec<crate::FileNode>, depth: 
         search_matches: None,
         filesystem_type: FilesystemType::Unknown,
         git_branch: None,
+        // Smart scanning fields
+        traversal_context: None,
+        interest: None,
+        security_findings: Vec::new(),
+        change_status: None,
+        content_hash: None,
     };
 
     nodes.push(node);

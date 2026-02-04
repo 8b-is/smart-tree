@@ -76,7 +76,7 @@ fn get_launchd_plist_path() -> Result<PathBuf> {
 }
 
 fn generate_launchd_plist(project_name: &str) -> String {
-    let st_path = which_st().unwrap_or_else(|_| PathBuf::from("/usr/local/bin/st"));
+    let std_path = which_std().unwrap_or_else(|_| PathBuf::from("/usr/local/bin/std"));
     let working_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("/tmp"));
     let log_path = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
@@ -93,7 +93,6 @@ fn generate_launchd_plist(project_name: &str) -> String {
     <key>ProgramArguments</key>
     <array>
         <string>{}</string>
-        <string>--http-daemon</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -103,7 +102,7 @@ fn generate_launchd_plist(project_name: &str) -> String {
     <false/>
 
     <key>KeepAlive</key>
-    <false/>
+    <true/>
 
     <key>StandardOutPath</key>
     <string>{}</string>
@@ -121,7 +120,7 @@ fn generate_launchd_plist(project_name: &str) -> String {
 "#,
         LAUNCHD_LABEL,
         project_name,
-        st_path.display(),
+        std_path.display(),
         working_dir.display(),
         log_path.display(),
         log_path.display(),
@@ -137,6 +136,12 @@ fn launchd_install() -> Result<()> {
     // Create LaunchAgents directory if needed
     fs::create_dir_all(&agents_dir)
         .with_context(|| format!("Failed to create {}", agents_dir.display()))?;
+
+    // Create ~/.st directory for logs
+    let st_dir = dirs::home_dir()
+        .map(|h| h.join(".st"))
+        .unwrap_or_else(|| PathBuf::from("/tmp/.st"));
+    fs::create_dir_all(&st_dir).ok();
 
     // Generate and write plist
     let plist_content = generate_launchd_plist(&project_name);
@@ -258,7 +263,7 @@ fn launchd_logs() -> Result<()> {
 #[cfg(target_os = "windows")]
 fn windows_install() -> Result<()> {
     println!("Windows service installation not yet implemented.");
-    println!("For now, run 'st --http-daemon' manually or add to startup.");
+    println!("For now, run 'std' manually or add to startup.");
     Ok(())
 }
 
@@ -268,18 +273,23 @@ fn windows_install() -> Result<()> {
 }
 
 // =============================================================================
-// FIND ST BINARY
+// FIND STD BINARY (the daemon)
 // =============================================================================
 
-fn which_st() -> Result<PathBuf> {
-    // Try current exe first
+fn which_std() -> Result<PathBuf> {
+    // Try to find std next to current exe
     if let Ok(exe) = std::env::current_exe() {
-        return Ok(exe);
+        let std_path = exe.parent().map(|p| p.join("std"));
+        if let Some(path) = std_path {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
     }
 
     // Try PATH
     let output = Command::new("which")
-        .arg("st")
+        .arg("std")
         .output();
 
     if let Ok(out) = output {
@@ -290,7 +300,7 @@ fn which_st() -> Result<PathBuf> {
     }
 
     // Fallback
-    Ok(PathBuf::from("/usr/local/bin/st"))
+    Ok(PathBuf::from("/usr/local/bin/std"))
 }
 
 /// Run a shell command and log its output.
@@ -363,7 +373,7 @@ pub fn start() -> Result<()> {
         Platform::Linux => systemd_start(),
         Platform::MacOS => launchd_start(),
         Platform::Windows => {
-            println!("Run 'st --http-daemon' manually on Windows");
+            println!("Run 'std' manually on Windows");
             Ok(())
         }
         Platform::Unknown => anyhow::bail!("Unsupported platform"),
@@ -420,16 +430,16 @@ fn systemd_install() -> Result<()> {
     if !template_path.exists() {
         // Generate a basic service file
         let project_name = get_project_name()?;
-        let st_path = which_st()?;
+        let std_path = which_std()?;
         let working_dir = env::current_dir()?;
 
         let service_content = format!(r#"[Unit]
-Description=Smart Tree Dashboard for %i
+Description=Smart Tree Daemon for %i
 After=network.target
 
 [Service]
 Type=simple
-ExecStart={} --http-daemon
+ExecStart={}
 WorkingDirectory={}
 Environment=ST_PROJECT=%i
 Restart=on-failure
@@ -437,7 +447,7 @@ RestartSec=5
 
 [Install]
 WantedBy=default.target
-"#, st_path.display(), working_dir.display());
+"#, std_path.display(), working_dir.display());
 
         let systemd_path = get_systemd_user_path()?;
         fs::create_dir_all(&systemd_path)?;

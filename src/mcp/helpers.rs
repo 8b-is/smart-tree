@@ -76,6 +76,14 @@ impl ScannerConfigBuilder {
                 sort_field: None,
                 top_n: None,
                 include_line_content: false,
+                // Smart scanning options (disabled by default for MCP)
+                compute_interest: false,
+                security_scan: false,
+                min_interest: 0.0,
+                track_traversal: false,
+                changes_only: false,
+                compare_state: None,
+                smart_mode: false,
             },
         }
     }

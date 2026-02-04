@@ -295,6 +295,11 @@ mod tests {
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
                 git_branch: None,
+                traversal_context: None,
+                interest: None,
+                security_findings: Vec::new(),
+                change_status: None,
+                content_hash: None,
             },
             FileNode {
                 path: PathBuf::from("/test/Cargo.toml"),
@@ -314,6 +319,11 @@ mod tests {
                 search_matches: None,
                 filesystem_type: FilesystemType::Ext4,
                 git_branch: None,
+                traversal_context: None,
+                interest: None,
+                security_findings: Vec::new(),
+                change_status: None,
+                content_hash: None,
             },
         ];
 

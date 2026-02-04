@@ -337,6 +337,44 @@ impl DaemonClient {
             .context("Failed to parse tools list")
     }
 
+    /// Execute a CLI scan via the daemon
+    ///
+    /// This is the main entry point for the thin-client architecture.
+    /// All scanning and formatting happens in the daemon.
+    pub async fn cli_scan(
+        &self,
+        request: crate::daemon_cli::CliScanRequest,
+    ) -> Result<crate::daemon_cli::CliScanResponse> {
+        let url = format!("{}/cli/scan", self.base_url);
+
+        // Use a longer timeout for scan operations
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .unwrap_or_default();
+
+        let resp = client
+            .post(&url)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to connect to daemon for CLI scan")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let error_body = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "CLI scan failed with status {}: {}",
+                status,
+                error_body
+            ));
+        }
+
+        resp.json::<crate::daemon_cli::CliScanResponse>()
+            .await
+            .context("Failed to parse CLI scan response")
+    }
+
     /// Start the daemon in the background
     ///
     /// Returns Ok(true) if daemon was started, Ok(false) if already running

@@ -268,6 +268,14 @@ impl ProjectRenamer {
             sort_field: None,
             top_n: None,
             include_line_content: false,
+            // Smart scanning options (disabled for rename scan)
+            compute_interest: false,
+            security_scan: false,
+            min_interest: 0.0,
+            track_traversal: false,
+            changes_only: false,
+            compare_state: None,
+            smart_mode: false,
         };
 
         let scanner = Scanner::new(project_path, scanner_config)?;

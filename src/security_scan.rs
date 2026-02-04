@@ -8,13 +8,14 @@
 
 use anyhow::Result;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// Risk level for detected patterns
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -34,7 +35,7 @@ impl std::fmt::Display for RiskLevel {
 }
 
 /// A detected security pattern
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityFinding {
     pub file_path: PathBuf,
     pub line_number: usize,

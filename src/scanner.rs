@@ -13,7 +13,9 @@
 // -----------------------------------------------------------------------------
 //
 
+use crate::scanner_interest::{ChangeType, InterestScore, TraversalContext};
 use crate::scanner_safety::{estimate_node_size, ScannerSafetyLimits, ScannerSafetyTracker};
+use crate::security_scan::SecurityFinding;
 use anyhow::Result;
 use globset::{Glob, GlobSet, GlobSetBuilder}; // For powerful gitignore-style pattern matching.
 use regex::Regex; // For user-defined find patterns.
@@ -75,6 +77,29 @@ pub struct FileNode {
     pub filesystem_type: FilesystemType,
     /// Git branch if this directory contains a .git folder
     pub git_branch: Option<String>,
+
+    // --- Smart Scanning Fields (Phase 2: Intelligent Context-Aware Scanning) ---
+    // These fields enable "surface what matters" scanning
+
+    /// How we reached this location (direct, symlink, mount, dependency)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub traversal_context: Option<TraversalContext>,
+
+    /// Interest score - how relevant is this file right now?
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interest: Option<InterestScore>,
+
+    /// Security findings detected during scan
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub security_findings: Vec<SecurityFinding>,
+
+    /// Change status since last scan (Added, Modified, Deleted, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change_status: Option<ChangeType>,
+
+    /// Content hash for change detection (Blake3/SHA256)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
 }
 
 /// Information about search matches within a file
@@ -429,6 +454,23 @@ pub struct ScannerConfig {
     pub top_n: Option<usize>,
     /// Include actual line content in search results (for AI/MCP use)
     pub include_line_content: bool,
+
+    // --- Smart Scanning Options (Phase 2: Intelligent Context-Aware Scanning) ---
+
+    /// Compute interest scores for each node (default: true when smart mode is enabled)
+    pub compute_interest: bool,
+    /// Perform security scanning during traversal (default: true)
+    pub security_scan: bool,
+    /// Minimum interest score to include in results (0.0-1.0, default: 0.0)
+    pub min_interest: f32,
+    /// Track how we reached each location (symlink, mount, etc.)
+    pub track_traversal: bool,
+    /// Only show changes since last scan
+    pub changes_only: bool,
+    /// Path to previous state file for comparison (or auto-detect from ~/.st/scan_states/)
+    pub compare_state: Option<PathBuf>,
+    /// Enable smart mode - groups by interest, shows changes, minimal output
+    pub smart_mode: bool,
 }
 
 // --- Default Ignore Patterns: The "Please Don't Play These Songs" List ---
@@ -1699,6 +1741,12 @@ impl Scanner {
             search_matches: None, // Search matches are added later by the caller if needed.
             filesystem_type: Self::get_filesystem_type(path),
             git_branch,
+            // Smart scanning fields - populated later by interest calculator
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         }))
     }
 
@@ -1915,6 +1963,12 @@ impl Scanner {
             search_matches: None,
             filesystem_type: Self::get_filesystem_type(path),
             git_branch: None, // Can't check git for permission-denied directories
+            // Smart scanning fields - N/A for permission denied nodes
+            traversal_context: None,
+            interest: None,
+            security_findings: Vec::new(),
+            change_status: None,
+            content_hash: None,
         }
     }
 
@@ -2342,6 +2396,14 @@ mod tests {
             sort_field: None,
             top_n: None,
             include_line_content: false,
+            // Smart scanning options
+            compute_interest: false,
+            security_scan: false,
+            min_interest: 0.0,
+            track_traversal: false,
+            changes_only: false,
+            compare_state: None,
+            smart_mode: false,
         };
         let scanner_result = Scanner::new(temp_dir.path(), config);
         assert!(scanner_result.is_ok());

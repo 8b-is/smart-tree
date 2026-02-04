@@ -772,7 +772,7 @@ async fn main() -> Result<()> {
                 println!("STD is already running");
                 return Ok(());
             }
-            start_daemon(config).await
+            start_unified_daemon(config).await
         }
         "stop" => stop_daemon(&config),
         "status" => {
@@ -782,18 +782,24 @@ async fn main() -> Result<()> {
         "restart" => {
             stop_daemon(&config)?;
             std::thread::sleep(std::time::Duration::from_millis(200));
-            start_daemon(config).await
+            start_unified_daemon(config).await
         }
         "--help" | "-h" => {
-            println!("STD - Smart Tree Daemon");
+            println!("STD - Smart Tree Daemon (Unified)");
             println!();
             println!("Usage: std <command>");
             println!();
             println!("Commands:");
-            println!("  start    Start the daemon");
+            println!("  start    Start the daemon (HTTP + Unix socket)");
             println!("  stop     Stop the daemon");
             println!("  status   Check daemon status");
             println!("  restart  Restart the daemon");
+            println!();
+            println!("HTTP Endpoints (port 8420):");
+            println!("  /cli/scan   - CLI thin-client scanning");
+            println!("  /v1/*       - LLM Proxy (OpenAI-compatible)");
+            println!("  /mcp/*      - HTTP MCP protocol");
+            println!("  /dash       - Web dashboard");
             Ok(())
         }
         _ => {
@@ -802,4 +808,27 @@ async fn main() -> Result<()> {
             std::process::exit(1);
         }
     }
+}
+
+/// Start unified daemon with both HTTP and Unix socket
+async fn start_unified_daemon(socket_config: DaemonConfig) -> Result<()> {
+    // Start HTTP daemon in background task
+    let http_config = st::daemon::DaemonConfig {
+        port: 8420,
+        watch_paths: vec![std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))],
+        orchestrator_url: None, // Foken credits disabled for now
+        enable_credits: false,
+    };
+
+    tokio::spawn(async move {
+        if let Err(e) = st::daemon::start_daemon(http_config).await {
+            error!("HTTP daemon error: {}", e);
+        }
+    });
+
+    // Give HTTP daemon a moment to start
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    // Start Unix socket daemon (this blocks)
+    start_daemon(socket_config).await
 }

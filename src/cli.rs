@@ -83,10 +83,6 @@ pub struct Cli {
     // =========================================================================
     // DAEMON CONTROL
     // =========================================================================
-    /// Bypass daemon and run standalone
-    #[arg(long, help_heading = "Daemon Control")]
-    pub no_daemon: bool,
-
     /// Set the log level
     #[arg(long, value_enum, help_heading = "Daemon Control")]
     pub log_level: Option<LogLevel>,
