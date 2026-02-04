@@ -233,6 +233,8 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // Health & Info
         .route("/health", get(health))
         .route("/info", get(info))
+        .route("/settings", get(get_settings))
+        .route("/settings", post(update_settings))
         // Context endpoints
         .route("/context", get(get_context))
         .route("/context/projects", get(get_projects))
@@ -435,6 +437,19 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 <span class="score danger">2/10</span>
             </div>
         </div>
+
+        <!-- Settings -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>⚙️ Configuration</h2>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">
+                Edit <code>~/.st/config.toml</code> to add API keys and preferences
+            </p>
+            <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                <a href="/settings" class="dashboard-link" style="font-size:0.9rem;padding:0.5rem 1rem;">View Config</a>
+                <a href="/v1/models" class="dashboard-link" style="font-size:0.9rem;padding:0.5rem 1rem;background:linear-gradient(135deg,#27ae60,#2ecc71);">Available Models</a>
+            </div>
+            <pre id="config-preview" style="margin-top:1rem;background:rgba(0,0,0,0.3);padding:1rem;border-radius:8px;font-size:0.75rem;max-height:150px;overflow:auto;display:none;"></pre>
+        </div>
     </div>
 
     <p class="custodian">🧹 The Custodian is watching all operations</p>
@@ -480,7 +495,16 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 });
 
                 const data = await res.json();
-                const reply = data.choices?.[0]?.message?.content || data.error || 'No response';
+                let reply = data.choices?.[0]?.message?.content;
+                if (!reply) {
+                    // Handle error objects
+                    if (data.error) {
+                        reply = typeof data.error === 'object' ?
+                            (data.error.message || JSON.stringify(data.error)) : data.error;
+                    } else {
+                        reply = 'No response';
+                    }
+                }
                 const safeScore = model.includes('claude') ? 'safe' :
                                   model.includes('greatcoder') ? 'danger' : 'safe';
 
@@ -490,7 +514,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                     <div>${reply}</div>
                 </div>`;
 
-                addLog('LLM-RES', `${model}: ${reply}`);
+                addLog('LLM-RES', `${model}: ${typeof reply === 'string' ? reply : JSON.stringify(reply)}`);
             } catch (e) {
                 messages.innerHTML += `<div class="msg ai" style="color:#e74c3c">Error: ${e.message}</div>`;
                 addLog('ERROR', e.message);
@@ -532,6 +556,84 @@ async fn info() -> Json<InfoResponse> {
         version: env!("CARGO_PKG_VERSION"),
         description: "System-wide AI context service with Foken credit tracking",
     })
+}
+
+/// Get current configuration
+async fn get_settings() -> axum::response::Response {
+    use axum::response::IntoResponse;
+    use crate::config::StConfig;
+
+    match StConfig::load() {
+        Ok(config) => {
+            // Return as TOML for readability
+            match toml::to_string_pretty(&config) {
+                Ok(toml_str) => {
+                    let html = format!(r#"<!DOCTYPE html>
+<html><head><title>Smart Tree Config</title>
+<style>
+body {{ font-family: monospace; background: #1a1a2e; color: #e0e0e0; padding: 2rem; }}
+pre {{ background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; overflow-x: auto; }}
+h1 {{ color: #4ecdc4; }}
+.path {{ color: #888; font-size: 0.9rem; }}
+a {{ color: #4ecdc4; }}
+</style></head><body>
+<h1>⚙️ Smart Tree Configuration</h1>
+<p class="path">File: ~/.st/config.toml</p>
+<pre>{}</pre>
+<p><a href="/">← Back to Dashboard</a></p>
+</body></html>"#, toml_str);
+                    axum::response::Html(html).into_response()
+                }
+                Err(e) => (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to serialize config: {}", e)
+                ).into_response()
+            }
+        }
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to load config: {}", e)
+        ).into_response()
+    }
+}
+
+/// Update configuration (POST JSON)
+async fn update_settings(
+    axum::extract::Json(updates): axum::extract::Json<serde_json::Value>
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    use crate::config::StConfig;
+
+    // Load existing config
+    let mut config = match StConfig::load() {
+        Ok(c) => c,
+        Err(e) => return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to load config: {}", e)
+        ).into_response()
+    };
+
+    // Apply updates (simple key-based for now)
+    if let Some(api_keys) = updates.get("api_keys").and_then(|v| v.as_object()) {
+        if let Some(key) = api_keys.get("anthropic").and_then(|v| v.as_str()) {
+            config.api_keys.anthropic = Some(key.to_string());
+        }
+        if let Some(key) = api_keys.get("openai").and_then(|v| v.as_str()) {
+            config.api_keys.openai = Some(key.to_string());
+        }
+        if let Some(key) = api_keys.get("google").and_then(|v| v.as_str()) {
+            config.api_keys.google = Some(key.to_string());
+        }
+    }
+
+    // Save
+    match config.save() {
+        Ok(_) => Json(serde_json::json!({"status": "ok", "message": "Config updated"})).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save config: {}", e)
+        ).into_response()
+    }
 }
 
 #[derive(Serialize)]

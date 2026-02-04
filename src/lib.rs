@@ -14,6 +14,7 @@
 pub mod activity_logger; // Transparent activity logging in JSONL format
 pub mod ai_guardian; // AI Guardian - Protects AI from prompt injection attacks
 pub mod cli; // Command-line argument definitions (extracted from main.rs)
+pub mod config; // Unified configuration: API keys, models, daemon settings
 pub mod compression_manager; // Smart global compression for all outputs
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
 pub mod context;
