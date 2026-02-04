@@ -264,17 +264,20 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
     };
 
     // Determine output mode from args or environment
-    // --smart flag overrides to "smart" mode
+    // Default is now "smart" - surface what matters!
     let mode = if args.smart {
         "smart".to_string()
     } else if matches!(args.mode, OutputMode::Auto) {
-        // Check environment variable
+        // Check environment variable, default to smart
         std::env::var("ST_DEFAULT_MODE")
-            .unwrap_or_else(|_| "classic".to_string())
+            .unwrap_or_else(|_| "smart".to_string())
             .to_lowercase()
     } else {
         format!("{:?}", args.mode).to_lowercase()
     };
+
+    // Smart mode implies smart scanning features
+    let is_smart_mode = mode == "smart";
 
     // Determine path display mode
     let path_mode = match args.path_mode {
@@ -291,10 +294,17 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
         ColorMode::Auto => std::io::stdout().is_terminal(),
     };
 
+    // Smart mode defaults to depth 5 for comprehensive but focused scanning
+    let depth = if args.depth == 0 && is_smart_mode {
+        5
+    } else {
+        args.depth
+    };
+
     Ok(st::daemon_cli::CliScanRequest {
         path,
         mode,
-        depth: args.depth,
+        depth,
         all: args.all,
         respect_gitignore: !args.no_ignore,
         default_ignores: !args.no_default_ignore,
@@ -316,8 +326,8 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
         show_filesystems: args.show_filesystems,
         include_line_content: false, // Not exposed in CLI, used by MCP
         compact: args.compact,
-        // Smart scanning options
-        smart: args.smart,
+        // Smart scanning options - enabled by default in smart mode
+        smart: args.smart || is_smart_mode,
         changes_only: args.changes_only,
         min_interest: args.min_interest,
         security: !args.no_security,
