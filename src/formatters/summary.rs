@@ -148,13 +148,25 @@ impl SummaryFormatter {
         )?;
         writeln!(writer)?;
 
-        // Analyze subdirectories
+        // Analyze subdirectories (skip root-level files)
         let mut subdirs: HashMap<String, (usize, usize, u64)> = HashMap::new();
+        let mut actual_dirs: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for node in nodes {
             if let Ok(relative) = node.path.strip_prefix(root_path) {
-                if let Some(first) = relative.components().next() {
+                let components: Vec<_> = relative.components().collect();
+                if let Some(first) = components.first() {
                     if let Some(name) = first.as_os_str().to_str() {
+                        // Only track as directory if:
+                        // 1. The node is a directory at depth 1, OR
+                        // 2. There are more components (meaning this is a parent dir)
+                        if node.is_dir && components.len() == 1 {
+                            actual_dirs.insert(name.to_string());
+                        }
+                        if components.len() > 1 {
+                            actual_dirs.insert(name.to_string());
+                        }
+
                         let entry = subdirs.entry(name.to_string()).or_insert((0, 0, 0));
                         if node.is_dir {
                             entry.1 += 1;
@@ -167,8 +179,11 @@ impl SummaryFormatter {
             }
         }
 
-        // Sort by size
-        let mut sorted_dirs: Vec<_> = subdirs.into_iter().collect();
+        // Filter to only actual directories and sort by size
+        let mut sorted_dirs: Vec<_> = subdirs
+            .into_iter()
+            .filter(|(name, _)| actual_dirs.contains(name))
+            .collect();
         sorted_dirs.sort_by(|a, b| b.1 .2.cmp(&a.1 .2));
 
         // Show top directories

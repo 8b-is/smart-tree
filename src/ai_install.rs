@@ -458,15 +458,9 @@ impl AiInstaller {
     }
 
     /// Get Claude-specific hooks (matches claude_init.rs format)
+    /// NO automatic UserPromptSubmit dumps - AI requests context via MCP tools when needed
     fn get_claude_hooks(&self) -> Value {
         json!({
-            "UserPromptSubmit": [{
-                "matcher": "",
-                "hooks": [{
-                    "type": "command",
-                    "command": "st -m quantum-semantic ."
-                }]
-            }],
             "SessionStart": [{
                 "matcher": "",
                 "hooks": [{

@@ -297,26 +297,12 @@ impl ClaudeInit {
             fs::copy(&settings_path, &backup)?;
         }
 
-        // Choose hook mode based on project size and type
-        let hook_mode = if self.stats.total_files > 1000 {
-            "quantum-semantic" // Ultra compression for large projects
-        } else if self.stats.total_files > 100 {
-            "quantum" // Good compression for medium projects
-        } else {
-            "context" // Rich context for small projects
-        };
-
-        // Build hook configuration with SessionStart/SessionEnd for context persistence
+        // Build hook configuration - NO automatic context dump on every prompt!
+        // AI should request context via MCP tools when needed, not get flooded every message.
+        // Only SessionStart/End for consciousness persistence, and targeted PreToolUse hooks.
         let hooks = match self.project_type {
             ProjectType::Rust => {
                 json!({
-                    "UserPromptSubmit": [{
-                        "matcher": "",
-                        "hooks": [{
-                            "type": "command",
-                            "command": format!("st -m {} .", hook_mode)
-                        }]
-                    }],
                     "SessionStart": [{
                         "matcher": "",
                         "hooks": [{
@@ -335,20 +321,13 @@ impl ClaudeInit {
                         "matcher": "cargo (build|test|run)",
                         "hooks": [{
                             "type": "command",
-                            "command": "st -m summary --depth 1 target/"
+                            "command": "st -m summary --depth 3 ."
                         }]
                     }]
                 })
             }
             ProjectType::Python => {
                 json!({
-                    "UserPromptSubmit": [{
-                        "matcher": "",
-                        "hooks": [{
-                            "type": "command",
-                            "command": format!("st -m {} .", hook_mode)
-                        }]
-                    }],
                     "SessionStart": [{
                         "matcher": "",
                         "hooks": [{
@@ -367,20 +346,13 @@ impl ClaudeInit {
                         "matcher": "pytest|python.*test",
                         "hooks": [{
                             "type": "command",
-                            "command": "st -m summary --depth 2 tests/"
+                            "command": "st -m summary --depth 3 ."
                         }]
                     }]
                 })
             }
             ProjectType::JavaScript | ProjectType::TypeScript => {
                 json!({
-                    "UserPromptSubmit": [{
-                        "matcher": "",
-                        "hooks": [{
-                            "type": "command",
-                            "command": format!("st -m {} .", hook_mode)
-                        }]
-                    }],
                     "SessionStart": [{
                         "matcher": "",
                         "hooks": [{
@@ -399,21 +371,14 @@ impl ClaudeInit {
                         "matcher": "npm (test|build|run)",
                         "hooks": [{
                             "type": "command",
-                            "command": "st -m summary --no-emoji node_modules --exclude"
+                            "command": "st -m summary --depth 3 ."
                         }]
                     }]
                 })
             }
             _ => {
-                // Generic configuration
+                // Generic configuration - just consciousness persistence
                 json!({
-                    "UserPromptSubmit": [{
-                        "matcher": "",
-                        "hooks": [{
-                            "type": "command",
-                            "command": format!("st -m {} .", hook_mode)
-                        }]
-                    }],
                     "SessionStart": [{
                         "matcher": "",
                         "hooks": [{
@@ -643,30 +608,19 @@ Use `st --help` to explore more features!
             self.project_type
         );
 
-        // Generate settings
-        let hook_mode = if self.stats.total_files > 1000 {
-            "quantum-semantic"
-        } else if self.stats.total_files > 100 {
-            "quantum"
-        } else {
-            "context"
-        };
-
+        // NO automatic UserPromptSubmit dumps - AI requests context via MCP tools when needed
         let hooks = match self.project_type {
             ProjectType::Rust => json!({
-                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
                 "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
                 "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}],
                 "PreToolUse": [{"matcher": "cargo (build|test|run)", "hooks": [{"type": "command", "command": "st -m summary --depth 1 target/"}]}]
             }),
             ProjectType::Python => json!({
-                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
                 "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
                 "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}],
                 "PreToolUse": [{"matcher": "pytest|python.*test", "hooks": [{"type": "command", "command": "st -m summary --depth 2 tests/"}]}]
             }),
             _ => json!({
-                "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": format!("st -m {} .", hook_mode)}]}],
                 "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
                 "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}]
             }),
