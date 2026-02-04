@@ -371,25 +371,30 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
         <div class="emoji">🌳</div>
         <h1>Smart Tree Daemon</h1>
         <p style="color:#888">System AI Context Service</p>
-        <a href="javascript:void(0)" onclick="alert('Run: st --dashboard\\nThen visit http://localhost:8420')" class="dashboard-link">
-            Open Full Dashboard
-        </a>
+        <p style="color:#4ecdc4;margin-top:1rem;">You're viewing the Smart Tree Dashboard</p>
+        <p style="color:#888;font-size:0.85rem;">Bookmark this page: <strong>http://localhost:8420</strong></p>
     </div>
 
     <div class="grid">
         <!-- Chat Test -->
         <div class="card">
-            <h2>💬 Test Chat (LLM Proxy)</h2>
+            <h2>💬 Test Chat (LLM Proxy via OpenRouter)</h2>
             <div id="chat-messages"></div>
             <div id="chat-input">
                 <select id="model-select">
-                    <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-                    <option value="gpt-4o">GPT-4o</option>
-                    <option value="gemini-2.0-flash">Gemini 2.0</option>
+                    <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                    <option value="anthropic/claude-3-opus">Claude 3 Opus</option>
+                    <option value="openai/gpt-4o">GPT-4o</option>
+                    <option value="openai/o1-preview">o1-preview</option>
+                    <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash (Free)</option>
+                    <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+                    <option value="mistralai/mistral-large-2411">Mistral Large</option>
+                    <option value="deepseek/deepseek-r1">DeepSeek R1</option>
                 </select>
                 <input type="text" id="msg-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendChat()">
                 <button onclick="sendChat()">Send</button>
             </div>
+            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Uses OpenRouter - add OPENROUTER_API_KEY to config</p>
         </div>
 
         <!-- Transparency Log -->
@@ -1228,10 +1233,26 @@ async fn chat_completions(
     Json(req): Json<OpenAiRequest>,
 ) -> impl IntoResponse {
     // Parse provider from model name (e.g., "anthropic/claude-3" or just "gpt-4")
+    // Smart routing: detect provider from model name if no explicit prefix
     let (provider_name, model_name) = if let Some((p, m)) = req.model.split_once('/') {
         (p.to_string(), m.to_string())
     } else {
-        ("openai".to_string(), req.model.clone())
+        // Auto-detect provider from model name
+        let model_lower = req.model.to_lowercase();
+        let provider = if model_lower.starts_with("claude") {
+            "openrouter" // Route Claude through OpenRouter (works with OPENROUTER_API_KEY)
+        } else if model_lower.starts_with("gpt") || model_lower.starts_with("o1") || model_lower.starts_with("o3") {
+            "openai"
+        } else if model_lower.starts_with("gemini") {
+            "google"
+        } else if model_lower.starts_with("grok") {
+            "grok"
+        } else if model_lower.contains("llama") || model_lower.contains("mistral") || model_lower.contains("mixtral") {
+            "openrouter" // Open models often via OpenRouter
+        } else {
+            "openrouter" // Default to OpenRouter as it supports many models
+        };
+        (provider.to_string(), req.model.clone())
     };
 
     let internal_req = LlmRequest {
