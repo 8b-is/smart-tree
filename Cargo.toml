@@ -87,6 +87,10 @@ dashmap = "6.1"
 libc = "0.2"
 fuzzy-matcher = "0.3"  # Used by MCP smart_background_searcher
 
+# MEM8 Wave Memory - consciousness substrate for hot directory tracking
+mem8-core = { path = "../aye/crates/mem8-core", features = ["std"] }
+num-complex = "0.4"  # For wave calculations
+
 # PTY support for web dashboard terminal (always included)
 portable-pty = "0.8"
 open = "5.0"  # Open URLs in browser

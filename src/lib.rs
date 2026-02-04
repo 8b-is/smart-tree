@@ -34,6 +34,7 @@ pub mod scanner_interest; // Interest scoring - surfacing what matters
 pub mod scanner_safety; // Safety mechanisms to prevent crashes on large directories
 pub mod scanner_state; // Change detection between scans
 pub mod interest_calculator; // The scoring engine that determines what's interesting
+pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
