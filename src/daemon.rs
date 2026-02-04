@@ -47,6 +47,9 @@ use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmRole};
 use crate::auth::{create_session_store, GitHubOAuthConfig, SharedSessionStore};
 use crate::collaboration::{create_hub, SharedCollabHub};
 
+// Hot Watcher - Wave-powered real-time directory intelligence
+use crate::hot_watcher::HotWatcher;
+
 // HTTP MCP with The Custodian
 use crate::web_dashboard::mcp_http::{create_mcp_context, mcp_router};
 
@@ -94,6 +97,8 @@ pub struct DaemonState {
     pub sessions: SharedSessionStore,
     /// GitHub OAuth config (if available)
     pub github_oauth: Option<GitHubOAuthConfig>,
+    /// Hot Watcher - Wave-powered real-time directory intelligence (MEM8)
+    pub hot_watcher: Arc<RwLock<HotWatcher>>,
 }
 
 /// System-wide context
@@ -192,6 +197,10 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         println!("  🔐 GitHub OAuth: configured");
     }
 
+    // Initialize Hot Watcher for real-time directory intelligence
+    let hot_watcher = Arc::new(RwLock::new(HotWatcher::new()));
+    println!("  🔥 Hot Watcher: ready (MEM8 waves)");
+
     let state = Arc::new(RwLock::new(DaemonState {
         context: SystemContext::default(),
         credits: CreditTracker::default(),
@@ -202,6 +211,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         collab_hub,
         sessions,
         github_oauth,
+        hot_watcher,
     }));
 
     println!("  🤖 LLM Providers: {} available", provider_count);
@@ -260,6 +270,11 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // CLI thin-client endpoints - all the meat lives here!
         .route("/cli/scan", post(crate::daemon_cli::cli_scan_handler))
         .route("/cli/stream", post(crate::daemon_cli::cli_stream_handler))
+        // Hot Watcher - Real-time directory intelligence (MEM8 waves)
+        .route("/watch", post(watch_directory))
+        .route("/watch", axum::routing::delete(unwatch_directory))
+        .route("/watch/status", get(watch_status))
+        .route("/watch/hot", get(watch_hot_directories))
         .with_state(state)
         // HTTP MCP - Full protocol over HTTP! 🧹 The Custodian watches here
         // (uses nest_service to allow different state type)
@@ -276,6 +291,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - LLM Proxy:    /v1/chat/completions (OpenAI-compatible!)");
     println!("  - Models:       /v1/models");
     println!("  - Collab:       /collab/ws (Hot Tub Mode!) 🛁");
+    println!("  - Hot Watcher:  /watch (MEM8 real-time intelligence) 🔥");
     println!("  - WebSocket:    /ws");
     println!("  - Shutdown:     POST /shutdown");
 
@@ -1429,4 +1445,140 @@ async fn list_models(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<serd
         "object": "list",
         "data": models
     }))
+}
+
+// =============================================================================
+// HOT WATCHER ENDPOINTS - Real-time directory intelligence (MEM8 waves)
+// =============================================================================
+
+/// Request to watch a directory
+#[derive(Deserialize)]
+struct WatchRequest {
+    path: String,
+}
+
+/// Response with watched directory info
+#[derive(Serialize)]
+struct WatchResponse {
+    success: bool,
+    path: String,
+    message: String,
+}
+
+/// Start watching a directory
+async fn watch_directory(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Json(req): Json<WatchRequest>,
+) -> Result<Json<WatchResponse>, (StatusCode, String)> {
+    let path = std::path::PathBuf::from(&req.path);
+
+    if !path.exists() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!("Path does not exist: {}", req.path),
+        ));
+    }
+
+    let state_lock = state.read().await;
+    let mut watcher = state_lock.hot_watcher.write().await;
+
+    match watcher.watch(&path) {
+        Ok(()) => Ok(Json(WatchResponse {
+            success: true,
+            path: req.path,
+            message: "Now watching directory with MEM8 waves".to_string(),
+        })),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to watch: {}", e),
+        )),
+    }
+}
+
+/// Stop watching a directory
+async fn unwatch_directory(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Json(req): Json<WatchRequest>,
+) -> Result<Json<WatchResponse>, (StatusCode, String)> {
+    let path = std::path::PathBuf::from(&req.path);
+
+    let state_lock = state.read().await;
+    let mut watcher = state_lock.hot_watcher.write().await;
+
+    match watcher.unwatch(&path) {
+        Ok(()) => Ok(Json(WatchResponse {
+            success: true,
+            path: req.path,
+            message: "Stopped watching directory".to_string(),
+        })),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to unwatch: {}", e),
+        )),
+    }
+}
+
+/// Hot watcher status response
+#[derive(Serialize)]
+struct WatchStatusResponse {
+    total_watched: usize,
+    critical: usize,
+    hot: usize,
+    warm: usize,
+    cold: usize,
+    average_arousal: f64,
+}
+
+/// Get hot watcher status
+async fn watch_status(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> Json<WatchStatusResponse> {
+    let state_lock = state.read().await;
+    let watcher = state_lock.hot_watcher.read().await;
+    let summary = watcher.summary();
+
+    Json(WatchStatusResponse {
+        total_watched: summary.total_watched,
+        critical: summary.critical,
+        hot: summary.hot,
+        warm: summary.warm,
+        cold: summary.cold,
+        average_arousal: summary.average_arousal,
+    })
+}
+
+/// Watched directory in response
+#[derive(Serialize)]
+struct WatchedDirectoryResponse {
+    path: String,
+    arousal: f64,
+    valence: f64,
+    frequency: f64,
+    interest_level: String,
+    security_findings: usize,
+    is_hot: bool,
+}
+
+/// Get hot directories
+async fn watch_hot_directories(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> Json<Vec<WatchedDirectoryResponse>> {
+    let state_lock = state.read().await;
+    let watcher = state_lock.hot_watcher.read().await;
+    let hot_dirs = watcher.get_hot_directories();
+
+    let response: Vec<WatchedDirectoryResponse> = hot_dirs
+        .into_iter()
+        .map(|d| WatchedDirectoryResponse {
+            path: d.path.display().to_string(),
+            arousal: d.wave.arousal,
+            valence: d.wave.emotional_valence,
+            frequency: d.wave.frequency,
+            interest_level: format!("{:?}", d.interest_level),
+            security_findings: d.security_findings.len(),
+            is_hot: d.is_hot(),
+        })
+        .collect();
+
+    Json(response)
 }
