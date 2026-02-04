@@ -192,6 +192,26 @@ pub struct ScanArgs {
     pub everything: bool,
 
     // =========================================================================
+    // SMART SCANNING - Intelligent context-aware output
+    // =========================================================================
+    /// Enable smart mode - surface what matters, not everything
+    /// Groups output by interest: security, changes, important, background
+    #[arg(long, help_heading = "Smart Scanning")]
+    pub smart: bool,
+
+    /// Only show changes since last scan
+    #[arg(long, help_heading = "Smart Scanning")]
+    pub changes_only: bool,
+
+    /// Minimum interest level (0.0-1.0) to display
+    #[arg(long, default_value = "0.0", help_heading = "Smart Scanning")]
+    pub min_interest: f32,
+
+    /// Disable security scanning during traversal
+    #[arg(long, help_heading = "Smart Scanning")]
+    pub no_security: bool,
+
+    // =========================================================================
     // DISPLAY - How output looks
     // =========================================================================
     /// Show filesystem type indicators (X=XFS, 4=ext4, B=Btrfs)

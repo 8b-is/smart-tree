@@ -264,7 +264,10 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
     };
 
     // Determine output mode from args or environment
-    let mode = if matches!(args.mode, OutputMode::Auto) {
+    // --smart flag overrides to "smart" mode
+    let mode = if args.smart {
+        "smart".to_string()
+    } else if matches!(args.mode, OutputMode::Auto) {
         // Check environment variable
         std::env::var("ST_DEFAULT_MODE")
             .unwrap_or_else(|_| "classic".to_string())
@@ -313,11 +316,11 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
         show_filesystems: args.show_filesystems,
         include_line_content: false, // Not exposed in CLI, used by MCP
         compact: args.compact,
-        // Smart scanning options (CLI flags will be added in Phase 8)
-        smart: false, // TODO: Add --smart flag
-        changes_only: false, // TODO: Add --changes-only flag
-        min_interest: 0.0, // TODO: Add --min-interest flag
-        security: true, // Security scanning enabled by default
+        // Smart scanning options
+        smart: args.smart,
+        changes_only: args.changes_only,
+        min_interest: args.min_interest,
+        security: !args.no_security,
     })
 }
 
