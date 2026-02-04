@@ -13,9 +13,11 @@
 // -----------------------------------------------------------------------------
 //
 
+use crate::interest_calculator::InterestCalculator;
 use crate::scanner_interest::{ChangeType, InterestScore, TraversalContext};
 use crate::scanner_safety::{estimate_node_size, ScannerSafetyLimits, ScannerSafetyTracker};
-use crate::security_scan::SecurityFinding;
+use crate::scanner_state::ScanState;
+use crate::security_scan::{SecurityFinding, SecurityScanner};
 use anyhow::Result;
 use globset::{Glob, GlobSet, GlobSetBuilder}; // For powerful gitignore-style pattern matching.
 use regex::Regex; // For user-defined find patterns.
@@ -615,6 +617,13 @@ pub struct Scanner {
     root: PathBuf,
     /// Safety limits to prevent crashes on large directories
     safety_limits: ScannerSafetyLimits,
+
+    // --- Smart Scanning Components (Phase 4) ---
+
+    /// Security scanner for detecting supply chain attack patterns
+    security_scanner: Option<SecurityScanner>,
+    /// Interest calculator for scoring file relevance
+    interest_calculator: Option<InterestCalculator>,
 }
 
 impl Scanner {
@@ -918,6 +927,27 @@ impl Scanner {
                 ScannerSafetyLimits::default()
             };
 
+        // Initialize security scanner if enabled
+        let security_scanner = if config.security_scan {
+            Some(SecurityScanner::new())
+        } else {
+            None
+        };
+
+        // Initialize interest calculator if smart mode or interest computation enabled
+        let interest_calculator = if config.compute_interest || config.smart_mode {
+            // Try to load previous state for change detection
+            let calc = InterestCalculator::new();
+            let calc = if let Ok(Some(prev_state)) = ScanState::load(&canonical_root) {
+                calc.with_previous_state(prev_state)
+            } else {
+                calc
+            };
+            Some(calc)
+        } else {
+            None
+        };
+
         Ok(Self {
             config,
             gitignore,
@@ -926,6 +956,8 @@ impl Scanner {
             ignore_files,
             root: canonical_root, // Store a copy of the root path.
             safety_limits,
+            security_scanner,
+            interest_calculator,
         })
     }
 
@@ -1336,6 +1368,65 @@ impl Scanner {
         })
     }
 
+    /// ## `enrich_with_smart_scanning` - Add Security & Interest Data
+    ///
+    /// Enriches a FileNode with security findings and interest scores.
+    /// This is the heart of "surface what matters" - we analyze each file
+    /// for potential security issues and calculate how interesting it is.
+    fn enrich_with_smart_scanning(&self, node: &mut FileNode) {
+        // Skip directories and very large files for content-based analysis
+        if node.is_dir || node.size > 10_000_000 {
+            // Still calculate interest score for directories
+            if let Some(calc) = &self.interest_calculator {
+                node.interest = Some(calc.calculate(node));
+                node.traversal_context = Some(calc.build_traversal_context(node, None));
+            }
+            return;
+        }
+
+        // Try to read file content for security scanning
+        let content = if self.security_scanner.is_some() && self.should_scan_for_security(node) {
+            fs::read_to_string(&node.path).ok()
+        } else {
+            None
+        };
+
+        // Security scanning
+        if let (Some(scanner), Some(ref content)) = (&self.security_scanner, &content) {
+            let findings = scanner.scan_file_content(&node.path, content);
+            if !findings.is_empty() {
+                node.security_findings = findings;
+            }
+        }
+
+        // Interest calculation (with or without security findings)
+        if let Some(calc) = &self.interest_calculator {
+            let (score, _additional_findings) = if let Some(ref content) = content {
+                calc.calculate_with_security(node, Some(content))
+            } else {
+                (calc.calculate(node), Vec::new())
+            };
+            node.interest = Some(score);
+            node.traversal_context = Some(calc.build_traversal_context(node, None));
+        }
+    }
+
+    /// Check if a file should be scanned for security patterns
+    fn should_scan_for_security(&self, node: &FileNode) -> bool {
+        // Skip binary files based on category
+        !matches!(
+            node.category,
+            FileCategory::Binary
+                | FileCategory::Archive
+                | FileCategory::Image
+                | FileCategory::Video
+                | FileCategory::Audio
+                | FileCategory::DiskImage
+                | FileCategory::Font
+                | FileCategory::Encrypted
+        )
+    }
+
     /// ## `scan` - The Full Scan (Non-Streaming)
     ///
     /// Performs a complete directory scan, collecting all `FileNode`s that meet the criteria
@@ -1386,6 +1477,8 @@ impl Scanner {
                                 if !node.is_dir && self.should_search_file(&node) {
                                     node.search_matches = self.search_in_file(&node.path);
                                 }
+                                // Smart scanning even for ignored files (they might have security issues!)
+                                self.enrich_with_smart_scanning(&mut node);
                                 safety_tracker.add_file(estimate_node_size(
                                     node.path.to_string_lossy().len(),
                                 ));
@@ -1407,6 +1500,8 @@ impl Scanner {
                             if !node.is_dir && self.should_search_file(&node) {
                                 node.search_matches = self.search_in_file(&node.path);
                             }
+                            // Smart scanning: add security findings and interest scores
+                            self.enrich_with_smart_scanning(&mut node);
                             all_nodes_collected.push(node);
                         } else {
                             // process_entry returned None, which means this is a hidden entry and show_hidden is false
@@ -1453,7 +1548,31 @@ impl Scanner {
         // Apply sorting and top-N filtering if requested
         let sorted_nodes = self.apply_sorting_and_limit(final_nodes);
 
+        // Save scan state for future change detection (if smart mode enabled)
+        if self.config.smart_mode || self.config.compute_interest {
+            self.save_scan_state(&sorted_nodes);
+        }
+
         Ok((sorted_nodes, final_stats))
+    }
+
+    /// Save the current scan state for future change detection
+    fn save_scan_state(&self, nodes: &[FileNode]) {
+        use crate::scanner_state::FileSignature;
+
+        let mut state = ScanState::new(self.root.clone());
+
+        for node in nodes {
+            if let Ok(sig) = FileSignature::from_path(&node.path) {
+                state.add_signature(node.path.clone(), sig);
+            }
+        }
+
+        // Save state (ignore errors - this is best-effort)
+        if let Err(e) = state.save() {
+            // Only log in debug mode, don't clutter normal output
+            tracing::debug!("Could not save scan state: {}", e);
+        }
     }
 
     /// ## `has_active_filters`
