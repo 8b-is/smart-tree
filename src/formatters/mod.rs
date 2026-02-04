@@ -19,6 +19,7 @@ pub mod quantum_semantic;
 pub mod relations;
 pub mod relations_formatter;
 pub mod semantic;
+pub mod smart; // Smart formatter - surface what matters, not everything!
 pub mod sse;
 pub mod stats;
 pub mod summary;

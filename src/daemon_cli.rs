@@ -20,6 +20,7 @@ use crate::formatters::{
     projects::ProjectsFormatter,
     quantum::QuantumFormatter,
     semantic::SemanticFormatter,
+    smart::SmartFormatter,
     stats::StatsFormatter,
     tsv::TsvFormatter,
     waste::WasteFormatter,
@@ -390,7 +391,7 @@ fn build_scanner_config(req: &CliScanRequest) -> Result<ScannerConfig> {
 fn get_ideal_depth_for_mode(mode: &str) -> usize {
     match mode.to_lowercase().as_str() {
         "quantum" | "quantum_semantic" => 10,
-        "ai" | "semantic" => 5,
+        "ai" | "semantic" | "smart" => 5,
         "digest" | "stats" => 20,
         "relations" => 3,
         "projects" => 5,
@@ -489,6 +490,12 @@ fn format_output(
         }
         "marqant" => {
             let formatter = MarqantFormatter::new(path_display, no_emoji);
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
+        "smart" => {
+            // The star of the show! Surface what matters, not everything.
+            let formatter = SmartFormatter::new(use_color, !no_emoji)
+                .with_path_mode(path_display);
             formatter.format(writer, nodes, stats, root_path)?;
         }
         // Default to classic for unknown modes
