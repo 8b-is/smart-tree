@@ -159,6 +159,7 @@ impl From<&Participant> for ParticipantSummary {
 }
 
 /// The collaboration hub - manages all sessions and broadcasting
+#[derive(Debug)]
 pub struct CollaborationHub {
     /// All connected participants
     participants: HashMap<String, Participant>,

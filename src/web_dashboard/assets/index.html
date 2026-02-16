@@ -46,6 +46,85 @@
                     <!-- File tree will be populated by JS -->
                 </div>
 
+                <!-- Collaboration Studio -->
+                <div class="collab-section" id="collabSection">
+                    <div class="sidebar-header">
+                        <span class="sidebar-title">Collab Studio</span>
+                        <button class="btn-icon" id="collabToggle" title="Collapse">▾</button>
+                    </div>
+                    <div class="collab-body" id="collabBody">
+                        <div class="collab-onboarding" id="collabOnboarding">
+                            <div class="onboarding-title">From install to flow</div>
+                            <div class="onboarding-steps">
+                                <div class="onboarding-step" data-step="share">
+                                    <span class="step-index">1</span>
+                                    <div class="step-copy">
+                                        <div class="step-label">Share the dashboard</div>
+                                        <div class="step-detail">Invite the team with one link.</div>
+                                    </div>
+                                    <button class="btn-pill" id="copyDashboardUrl">Copy link</button>
+                                </div>
+                                <div class="onboarding-step" data-step="join">
+                                    <span class="step-index">2</span>
+                                    <div class="step-copy">
+                                        <div class="step-label">Join the room</div>
+                                        <div class="step-detail">Pick a name + role.</div>
+                                    </div>
+                                    <button class="btn-pill ghost" id="focusCollabJoin">Join</button>
+                                </div>
+                                <div class="onboarding-step" data-step="status">
+                                    <span class="step-index">3</span>
+                                    <div class="step-copy">
+                                        <div class="step-label">Set a focus</div>
+                                        <div class="step-detail">Share what you are working on.</div>
+                                    </div>
+                                    <button class="btn-pill ghost" id="focusCollabStatus">Set focus</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="collab-join" id="collabJoin">
+                            <div class="collab-join-title">Enter the lounge</div>
+                            <div class="collab-inputs">
+                                <input type="text" id="collabName" placeholder="Your name" autocomplete="off">
+                                <select id="collabType">
+                                    <option value="human">Human</option>
+                                    <option value="claude">Claude</option>
+                                    <option value="omni">Omni</option>
+                                    <option value="grok">Grok</option>
+                                    <option value="gemini">Gemini</option>
+                                    <option value="local_llm">Local LLM</option>
+                                    <option value="smart_tree">Smart Tree</option>
+                                </select>
+                            </div>
+                            <button class="btn-primary" id="collabJoinBtn">Join collaboration</button>
+                            <div class="collab-status" id="collabStatus">Not connected</div>
+                        </div>
+
+                        <div class="collab-live" id="collabLive">
+                            <div class="collab-presence">
+                                <div class="collab-subtitle">In the room</div>
+                                <div class="presence-list" id="presenceList"></div>
+                            </div>
+                            <div class="collab-status-edit">
+                                <input type="text" id="collabStatusInput" placeholder="Status (optional)">
+                                <input type="text" id="collabWorkingInput" placeholder="Working on...">
+                                <div class="status-actions">
+                                    <button class="btn-pill" id="collabUpdateStatus">Update</button>
+                                    <button class="btn-pill ghost" id="collabHotTub">Hot Tub Mode</button>
+                                </div>
+                            </div>
+                            <div class="collab-chat">
+                                <div class="chat-log" id="collabChatLog"></div>
+                                <div class="chat-input">
+                                    <input type="text" id="collabChatInput" placeholder="Say something to the room...">
+                                    <button class="btn-primary" id="collabSendBtn">Send</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Wave Compass - MCP Activity Visualization -->
                 <div class="wave-compass-section">
                     <div class="sidebar-header">

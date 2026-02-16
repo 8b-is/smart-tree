@@ -375,28 +375,28 @@ class Dashboard {
             cursorBlink: true,
             cursorStyle: 'block',
             fontSize: 14,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+            fontFamily: "'IBM Plex Mono', 'JetBrains Mono', 'Fira Code', monospace",
             theme: {
-                background: '#0a0a0a',
-                foreground: '#00ff00',
-                cursor: '#00ff00',
-                cursorAccent: '#0a0a0a',
-                selectionBackground: '#006600',
-                black: '#0a0a0a',
-                red: '#ff4444',
-                green: '#00ff00',
-                yellow: '#ffaa00',
-                blue: '#4444ff',
-                magenta: '#ff44ff',
-                cyan: '#00ffff',
-                white: '#ffffff',
-                brightBlack: '#444444',
-                brightRed: '#ff6666',
-                brightGreen: '#66ff66',
-                brightYellow: '#ffcc66',
-                brightBlue: '#6666ff',
-                brightMagenta: '#ff66ff',
-                brightCyan: '#66ffff',
+                background: '#0f1815',
+                foreground: '#e8f2ec',
+                cursor: '#e8f2ec',
+                cursorAccent: '#0f1815',
+                selectionBackground: 'rgba(31, 122, 110, 0.35)',
+                black: '#0f1815',
+                red: '#d76c6c',
+                green: '#4fb38c',
+                yellow: '#e0a84b',
+                blue: '#5f80bf',
+                magenta: '#b06a2e',
+                cyan: '#3bb3a0',
+                white: '#f5efe6',
+                brightBlack: '#475046',
+                brightRed: '#e48f8f',
+                brightGreen: '#6dd3a8',
+                brightYellow: '#f0c075',
+                brightBlue: '#7c9bd6',
+                brightMagenta: '#c88a52',
+                brightCyan: '#5fd6c2',
                 brightWhite: '#ffffff'
             },
             allowTransparency: true,
@@ -1191,7 +1191,7 @@ class WaveCompass {
         const { ctx, width, height } = this;
 
         // Clear with dark background
-        ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
+        ctx.fillStyle = 'rgba(15, 24, 21, 0.95)';
         ctx.fillRect(0, 0, width, height);
 
         // Draw subtle grid
@@ -1209,14 +1209,14 @@ class WaveCompass {
         this.drawLabels();
 
         // Draw title
-        ctx.fillStyle = '#00ff9966';
-        ctx.font = '10px monospace';
+        ctx.fillStyle = '#1f7a6e66';
+        ctx.font = '10px "IBM Plex Mono", monospace';
         ctx.fillText('WAVE COMPASS', 8, 14);
     }
 
     drawGrid() {
         const { ctx, width, height } = this;
-        ctx.strokeStyle = 'rgba(0, 255, 100, 0.1)';
+        ctx.strokeStyle = 'rgba(31, 122, 110, 0.15)';
         ctx.lineWidth = 0.5;
 
         // Vertical lines
@@ -1236,8 +1236,8 @@ class WaveCompass {
         }
 
         // Quadrant labels
-        ctx.fillStyle = 'rgba(0, 255, 100, 0.2)';
-        ctx.font = '9px monospace';
+        ctx.fillStyle = 'rgba(176, 106, 46, 0.25)';
+        ctx.font = '9px "IBM Plex Mono", monospace';
         ctx.fillText('src/', 10, height * 0.15);
         ctx.fillText('tests/', width * 0.55, height * 0.15);
         ctx.fillText('docs/', 10, height * 0.65);
@@ -1254,7 +1254,7 @@ class WaveCompass {
         for (let i = 1; i < trail.length; i++) {
             const point = trail[i];
             const alpha = Math.max(0, 1 - point.age / 5000);
-            ctx.strokeStyle = `rgba(0, 255, 150, ${alpha * 0.5})`;
+            ctx.strokeStyle = `rgba(59, 179, 160, ${alpha * 0.5})`;
             ctx.lineWidth = 2 * alpha;
             ctx.lineTo(point.x * width, point.y * height);
         }
@@ -1273,9 +1273,9 @@ class WaveCompass {
 
         // Outer glow
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-        gradient.addColorStop(0, `rgba(0, 255, 100, ${intensity * 0.8})`);
-        gradient.addColorStop(0.5, `rgba(0, 200, 100, ${intensity * 0.4})`);
-        gradient.addColorStop(1, 'rgba(0, 150, 100, 0)');
+        gradient.addColorStop(0, `rgba(59, 179, 160, ${intensity * 0.8})`);
+        gradient.addColorStop(0.5, `rgba(31, 122, 110, ${intensity * 0.4})`);
+        gradient.addColorStop(1, 'rgba(31, 122, 110, 0)');
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
@@ -1283,7 +1283,7 @@ class WaveCompass {
         ctx.fill();
 
         // Core
-        ctx.fillStyle = `rgba(100, 255, 100, ${intensity})`;
+        ctx.fillStyle = `rgba(121, 219, 195, ${intensity})`;
         ctx.beginPath();
         ctx.arc(x, y, 5 + intensity * 5, 0, Math.PI * 2);
         ctx.fill();
@@ -1291,7 +1291,7 @@ class WaveCompass {
 
     drawLabels() {
         const { ctx, width, height } = this;
-        ctx.font = '10px monospace';
+        ctx.font = '10px "IBM Plex Mono", monospace';
         ctx.textAlign = 'center';
 
         for (const [path, region] of this.hotRegions) {
@@ -1299,7 +1299,7 @@ class WaveCompass {
                 const x = region.x * width;
                 const y = region.y * height + 25;
 
-                ctx.fillStyle = `rgba(0, 255, 100, ${region.intensity})`;
+                ctx.fillStyle = `rgba(176, 106, 46, ${region.intensity})`;
                 ctx.fillText(region.label, x, y);
             }
         }
@@ -1662,6 +1662,419 @@ class McpActivityPanel {
     }
 }
 
+// ============================================================================
+// Collaboration Panel - Real-time collaboration lounge
+// ============================================================================
+
+class CollabPanel {
+    constructor() {
+        this.section = document.getElementById('collabSection');
+        if (!this.section) return;
+
+        this.ws = null;
+        this.connected = false;
+        this.participantId = null;
+        this.hotTub = false;
+        this.presence = new Map();
+
+        this.cacheElements();
+        this.bindEvents();
+        this.restoreInputs();
+        this.updateVisibility(false);
+    }
+
+    cacheElements() {
+        this.toggleBtn = document.getElementById('collabToggle');
+        this.body = document.getElementById('collabBody');
+        this.statusEl = document.getElementById('collabStatus');
+        this.joinEl = document.getElementById('collabJoin');
+        this.liveEl = document.getElementById('collabLive');
+        this.onboarding = document.getElementById('collabOnboarding');
+        this.stepShare = this.onboarding?.querySelector('[data-step="share"]');
+        this.stepJoin = this.onboarding?.querySelector('[data-step="join"]');
+        this.stepStatus = this.onboarding?.querySelector('[data-step="status"]');
+
+        this.nameInput = document.getElementById('collabName');
+        this.typeSelect = document.getElementById('collabType');
+        this.joinBtn = document.getElementById('collabJoinBtn');
+
+        this.copyBtn = document.getElementById('copyDashboardUrl');
+        this.focusJoinBtn = document.getElementById('focusCollabJoin');
+        this.focusStatusBtn = document.getElementById('focusCollabStatus');
+
+        this.presenceList = document.getElementById('presenceList');
+        this.statusInput = document.getElementById('collabStatusInput');
+        this.workingInput = document.getElementById('collabWorkingInput');
+        this.updateStatusBtn = document.getElementById('collabUpdateStatus');
+        this.hotTubBtn = document.getElementById('collabHotTub');
+
+        this.chatLog = document.getElementById('collabChatLog');
+        this.chatInput = document.getElementById('collabChatInput');
+        this.chatSendBtn = document.getElementById('collabSendBtn');
+    }
+
+    bindEvents() {
+        this.toggleBtn?.addEventListener('click', () => this.toggleCollapse());
+        this.copyBtn?.addEventListener('click', () => this.copyDashboardUrl());
+        this.focusJoinBtn?.addEventListener('click', () => this.focusJoin());
+        this.focusStatusBtn?.addEventListener('click', () => this.focusStatus());
+
+        this.joinBtn?.addEventListener('click', () => this.join());
+        this.chatSendBtn?.addEventListener('click', () => this.sendChat());
+        this.chatInput?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.sendChat();
+            }
+        });
+
+        this.updateStatusBtn?.addEventListener('click', () => this.sendStatus());
+        this.hotTubBtn?.addEventListener('click', () => this.toggleHotTub());
+    }
+
+    restoreInputs() {
+        const savedName = localStorage.getItem('st-collab-name');
+        const savedType = localStorage.getItem('st-collab-type');
+        if (savedName && this.nameInput) this.nameInput.value = savedName;
+        if (savedType && this.typeSelect) this.typeSelect.value = savedType;
+    }
+
+    toggleCollapse() {
+        this.section.classList.toggle('collapsed');
+        if (this.section.classList.contains('collapsed')) {
+            this.toggleBtn.textContent = '▸';
+        } else {
+            this.toggleBtn.textContent = '▾';
+        }
+    }
+
+    focusJoin() {
+        if (this.section.classList.contains('collapsed')) this.toggleCollapse();
+        this.nameInput?.focus();
+    }
+
+    focusStatus() {
+        if (this.section.classList.contains('collapsed')) this.toggleCollapse();
+        this.statusInput?.focus();
+    }
+
+    updateVisibility(isLive) {
+        if (!this.joinEl || !this.liveEl) return;
+        this.joinEl.classList.toggle('hidden', isLive);
+        this.liveEl.classList.toggle('visible', isLive);
+    }
+
+    setStatus(message, state = 'idle') {
+        if (!this.statusEl) return;
+        this.statusEl.textContent = message;
+        this.statusEl.dataset.state = state;
+    }
+
+    join() {
+        const name = this.nameInput?.value.trim();
+        const type = this.typeSelect?.value || 'human';
+
+        if (!name) {
+            this.setStatus('Pick a name to join.', 'error');
+            this.nameInput?.focus();
+            return;
+        }
+
+        localStorage.setItem('st-collab-name', name);
+        localStorage.setItem('st-collab-type', type);
+        this.connect(name, type);
+    }
+
+    connect(name, type) {
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
+        this.setStatus('Connecting...', 'busy');
+        if (this.joinBtn) this.joinBtn.disabled = true;
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/collab`;
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
+            this.connected = true;
+            this.send({ action: 'join', name, participant_type: type });
+            this.setStatus('Joining the room...', 'busy');
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                this.handleServerMessage(msg);
+            } catch (e) {
+                console.error('[Collab] Failed to parse message:', e);
+            }
+        };
+
+        this.ws.onclose = () => {
+            this.connected = false;
+            this.participantId = null;
+            this.setStatus('Disconnected', 'error');
+            this.updateVisibility(false);
+            if (this.joinBtn) this.joinBtn.disabled = false;
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('[Collab] WebSocket error:', error);
+            this.setStatus('Connection error', 'error');
+            if (this.joinBtn) this.joinBtn.disabled = false;
+        };
+    }
+
+    handleServerMessage(msg) {
+        const collabTypes = new Set([
+            'join',
+            'leave',
+            'chat',
+            'status_update',
+            'file_activity',
+            'hot_tub_toggle',
+            'system',
+            'presence'
+        ]);
+
+        if (msg.type === 'welcome') {
+            this.participantId = msg.participant_id;
+            this.setStatus(`Connected as ${msg.name}`, 'online');
+            this.updateVisibility(true);
+            this.markStepComplete('join');
+            this.addSystemMessage(`Welcome ${msg.name}.`);
+            if (this.joinBtn) this.joinBtn.disabled = false;
+            return;
+        }
+
+        if (msg.type === 'error') {
+            this.setStatus(msg.message || 'Collab error', 'error');
+            if (this.joinBtn) this.joinBtn.disabled = false;
+            return;
+        }
+
+        if (msg.type === 'collab' && msg.collab && collabTypes.has(msg.collab.type)) {
+            this.handleCollabMessage(msg.collab);
+            return;
+        }
+
+        if (collabTypes.has(msg.type)) {
+            this.handleCollabMessage(msg);
+        }
+    }
+
+    handleCollabMessage(msg) {
+        switch (msg.type) {
+            case 'presence':
+                this.syncPresence(msg.participants || [], msg.hot_tub_count || 0);
+                break;
+            case 'join':
+                if (msg.participant) {
+                    this.presence.set(msg.participant.id, this.toSummary(msg.participant));
+                    this.renderPresence();
+                    this.addSystemMessage(`${msg.participant.name} joined the room.`);
+                }
+                break;
+            case 'leave':
+                if (msg.participant_id) {
+                    this.presence.delete(msg.participant_id);
+                    this.renderPresence();
+                }
+                if (msg.name) {
+                    this.addSystemMessage(`${msg.name} stepped out.`);
+                }
+                break;
+            case 'chat':
+                this.addChatMessage({
+                    from: msg.from,
+                    name: msg.from_name,
+                    message: msg.message,
+                    hot: msg.hot_tub
+                });
+                break;
+            case 'status_update':
+                this.updatePresenceStatus(msg.participant_id, msg.status);
+                break;
+            case 'hot_tub_toggle':
+                this.addSystemMessage(msg.entering ? `${msg.name} entered Hot Tub mode.` : `${msg.name} left Hot Tub mode.`);
+                if (msg.participant_id === this.participantId) {
+                    this.setHotTubState(msg.entering);
+                }
+                break;
+            case 'system':
+                if (msg.message) this.addSystemMessage(msg.message);
+                break;
+            case 'file_activity':
+                if (msg.path) {
+                    this.addSystemMessage(`File activity: ${msg.action} ${msg.path}`);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    syncPresence(participants, hotTubCount) {
+        this.presence.clear();
+        participants.forEach((p) => {
+            this.presence.set(p.id, p);
+        });
+        this.renderPresence();
+        if (typeof hotTubCount === 'number') {
+            this.hotTubBtn?.setAttribute('data-count', hotTubCount.toString());
+        }
+    }
+
+    updatePresenceStatus(id, status) {
+        if (!id) return;
+        const existing = this.presence.get(id);
+        if (existing) {
+            existing.status = status;
+            this.presence.set(id, existing);
+            this.renderPresence();
+        }
+    }
+
+    renderPresence() {
+        if (!this.presenceList) return;
+        this.presenceList.innerHTML = '';
+        const participants = Array.from(this.presence.values());
+        participants.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        participants.forEach((p) => {
+            const row = document.createElement('div');
+            row.className = 'presence-item' + (p.id === this.participantId ? ' me' : '');
+            row.innerHTML = `
+                <span class="presence-emoji">${this.typeEmoji(p.participant_type)}</span>
+                <span class="presence-name">${this.escapeHtml(p.name || 'Unknown')}</span>
+                ${p.in_hot_tub ? '<span class="presence-badge">🛁</span>' : ''}
+                ${p.status ? `<span class="presence-status">${this.escapeHtml(p.status)}</span>` : ''}
+            `;
+            this.presenceList.appendChild(row);
+        });
+    }
+
+    toSummary(participant) {
+        return {
+            id: participant.id,
+            name: participant.name,
+            participant_type: participant.participant_type,
+            status: participant.status,
+            in_hot_tub: participant.in_hot_tub
+        };
+    }
+
+    sendChat() {
+        const message = this.chatInput?.value.trim();
+        if (!message) return;
+        this.send({ action: 'chat', message });
+        this.chatInput.value = '';
+    }
+
+    sendStatus() {
+        const status = this.statusInput?.value.trim() || null;
+        const workingOn = this.workingInput?.value.trim() || null;
+        this.send({ action: 'status', status, working_on: workingOn });
+        this.markStepComplete('status');
+    }
+
+    toggleHotTub() {
+        this.send({ action: 'hot_tub' });
+    }
+
+    setHotTubState(enabled) {
+        this.hotTub = enabled;
+        if (this.hotTubBtn) {
+            this.hotTubBtn.classList.toggle('active', enabled);
+            this.hotTubBtn.textContent = enabled ? 'Hot Tub Mode: On' : 'Hot Tub Mode';
+        }
+    }
+
+    addChatMessage({ from, name, message, hot }) {
+        if (!this.chatLog) return;
+        const line = document.createElement('div');
+        const isMe = from && this.participantId && from === this.participantId;
+        line.className = `chat-message${isMe ? ' me' : ''}${hot ? ' hot' : ''}`;
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        line.innerHTML = `
+            <div class="chat-meta">
+                <span class="chat-name">${this.escapeHtml(name || 'Unknown')}</span>
+                <span class="chat-time">${time}</span>
+            </div>
+            <div class="chat-text">${this.escapeHtml(message || '')}</div>
+        `;
+        this.chatLog.appendChild(line);
+        this.chatLog.scrollTop = this.chatLog.scrollHeight;
+    }
+
+    addSystemMessage(message) {
+        if (!this.chatLog) return;
+        const line = document.createElement('div');
+        line.className = 'chat-message system';
+        line.textContent = message;
+        this.chatLog.appendChild(line);
+        this.chatLog.scrollTop = this.chatLog.scrollHeight;
+    }
+
+    send(payload) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(payload));
+        }
+    }
+
+    copyDashboardUrl() {
+        const url = window.location.href;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(() => {
+                this.setStatus('Invite link copied.', 'online');
+                this.markStepComplete('share');
+            }).catch(() => {
+                this.fallbackCopy(url);
+            });
+        } else {
+            this.fallbackCopy(url);
+        }
+    }
+
+    fallbackCopy(text) {
+        const input = document.createElement('input');
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+        this.setStatus('Invite link copied.', 'online');
+        this.markStepComplete('share');
+    }
+
+    markStepComplete(step) {
+        const map = { share: this.stepShare, join: this.stepJoin, status: this.stepStatus };
+        const el = map[step];
+        if (el) el.classList.add('completed');
+    }
+
+    typeEmoji(type) {
+        switch ((type || '').toLowerCase()) {
+            case 'human': return '👤';
+            case 'claude': return '🤖';
+            case 'omni': return '🌀';
+            case 'grok': return '⚡';
+            case 'gemini': return '✨';
+            case 'local_llm': return '🏠';
+            case 'smart_tree': return '🌳';
+            default: return '❓';
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     window.dashboard = new Dashboard();
@@ -1708,4 +2121,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         window.stateSync = stateSync;
     }
+
+    window.collabPanel = new CollabPanel();
 });

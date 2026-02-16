@@ -69,6 +69,10 @@ pub struct Cli {
     #[arg(long, requires = "dashboard", help_heading = "Interactive Modes")]
     pub open_browser: bool,
 
+    /// Network CIDR allow-list for dashboard (e.g., 192.168.1.0/24)
+    #[arg(long, value_name = "CIDR", requires = "dashboard", help_heading = "Interactive Modes")]
+    pub allow: Vec<String>,
+
     /// Start HTTP daemon (MCP over HTTP, LLM proxy, The Custodian)
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub http_daemon: bool,
@@ -80,12 +84,148 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp: bool,
 
+    /// Install Smart Tree as MCP server in Claude Desktop
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    pub mcp_install: bool,
+
+    /// Uninstall Smart Tree MCP server from Claude Desktop
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    pub mcp_uninstall: bool,
+
+    /// Check MCP installation status in Claude Desktop
+    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    pub mcp_status: bool,
+
     // =========================================================================
     // DAEMON CONTROL
     // =========================================================================
     /// Set the log level
     #[arg(long, value_enum, help_heading = "Daemon Control")]
     pub log_level: Option<LogLevel>,
+
+    /// Start the Smart Tree daemon
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub daemon_start: bool,
+
+    /// Stop the Smart Tree daemon
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub daemon_stop: bool,
+
+    /// Show Smart Tree daemon status
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub daemon_status: bool,
+
+    /// Get context from the daemon
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub daemon_context: bool,
+
+    /// List projects tracked by the daemon
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub daemon_projects: bool,
+
+    /// Show Foken credits from daemon
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub daemon_credits: bool,
+
+    // =========================================================================
+    // CONSCIOUSNESS & MEMORY
+    // =========================================================================
+    /// Save Claude consciousness state to .claude_consciousness.m8
+    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    pub claude_save: bool,
+
+    /// Restore Claude consciousness from .claude_consciousness.m8
+    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    pub claude_restore: bool,
+
+    /// Show Claude consciousness status and summary
+    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    pub claude_context: bool,
+
+    /// Ultra-compressed consciousness restoration format
+    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    pub claude_kickstart: bool,
+
+    /// Dump raw consciousness file content for debugging
+    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    pub claude_dump: bool,
+
+    /// Anchor a memory: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
+    /// Types: insight, decision, pattern, gotcha, todo
+    #[arg(long, num_args = 3, value_names = ["TYPE", "KEYWORDS", "CONTEXT"], help_heading = "Consciousness & Memory")]
+    pub memory_anchor: Option<Vec<String>>,
+
+    /// Find memories by keywords (comma-separated)
+    #[arg(long, value_name = "KEYWORDS", help_heading = "Consciousness & Memory")]
+    pub memory_find: Option<String>,
+
+    /// Show memory statistics
+    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    pub memory_stats: bool,
+
+    /// Update .m8 consciousness files for a directory
+    #[arg(long, value_name = "PATH", help_heading = "Consciousness & Memory")]
+    pub update_consciousness: Option<String>,
+
+    // =========================================================================
+    // SECURITY
+    // =========================================================================
+    /// Scan codebase for supply chain attack patterns (default: current dir)
+    #[arg(long, value_name = "PATH", default_missing_value = ".", num_args = 0..=1, help_heading = "Security")]
+    pub security_scan: Option<String>,
+
+    /// Scan a file for prompt injection patterns
+    #[arg(long, value_name = "FILE", help_heading = "Security")]
+    pub guardian_scan: Option<String>,
+
+    /// Run Guardian daemon for system-wide AI protection
+    #[arg(long, exclusive = true, help_heading = "Security")]
+    pub guardian_daemon: bool,
+
+    /// Security cleanup - detect and remove malicious MCP entries
+    #[arg(long, exclusive = true, help_heading = "Security")]
+    pub cleanup: bool,
+
+    // =========================================================================
+    // HOOKS
+    // =========================================================================
+    /// Install Smart Tree hooks to Claude Code settings
+    #[arg(long, exclusive = true, help_heading = "Hooks")]
+    pub hooks_install: bool,
+
+    /// Manage hooks: enable, disable, status
+    #[arg(long, value_name = "ACTION", value_parser = ["enable", "disable", "status"], help_heading = "Hooks")]
+    pub hooks_config: Option<String>,
+
+    // =========================================================================
+    // MEGA SESSIONS
+    // =========================================================================
+    /// Start a mega session (persistent cross-context conversation)
+    #[arg(long, value_name = "NAME", default_missing_value = "", num_args = 0..=1, help_heading = "Mega Sessions")]
+    pub mega_start: Option<String>,
+
+    /// Save current mega session snapshot
+    #[arg(long, exclusive = true, help_heading = "Mega Sessions")]
+    pub mega_save: bool,
+
+    /// List all mega sessions
+    #[arg(long, exclusive = true, help_heading = "Mega Sessions")]
+    pub mega_list: bool,
+
+    /// Show mega session statistics
+    #[arg(long, exclusive = true, help_heading = "Mega Sessions")]
+    pub mega_stats: bool,
+
+    // =========================================================================
+    // ANALYSIS
+    // =========================================================================
+    /// Show tokenization statistics for a path
+    #[arg(long, value_name = "PATH", help_heading = "Analysis")]
+    pub token_stats: Option<String>,
+
+    /// Get wave frequency for a directory
+    #[arg(long, value_name = "PATH", help_heading = "Analysis")]
+    pub get_frequency: Option<String>,
 
     // =========================================================================
     // LOGGING & TRANSPARENCY

@@ -77,11 +77,56 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Auto-start daemon in background for any command that might need it.
+    // Skip for modes that run their own servers or are purely informational.
+    let skip_autostart = cli.mcp || cli.http_daemon || cli.guardian_daemon
+        || cli.version || cli.update || cli.cheet || cli.man
+        || cli.completions.is_some() || cli.daemon_start;
+    if !skip_autostart {
+        let client = DaemonClient::default_port();
+        tokio::spawn(async move {
+            let _ = client.ensure_running().await;
+        });
+    }
+
     // Handle tips flag if provided
     if let Some(state) = &cli.tips {
         let enable = state == "on";
         st::tips::handle_tips_flag(enable)?;
         return Ok(());
+    }
+
+    // Handle Claude consciousness commands
+    if cli.claude_save {
+        return handle_claude_save().await;
+    }
+    if cli.claude_restore {
+        return handle_claude_restore().await;
+    }
+    if cli.claude_context {
+        return handle_claude_context().await;
+    }
+    if cli.claude_kickstart {
+        return handle_claude_kickstart().await;
+    }
+    if cli.claude_dump {
+        return handle_claude_dump().await;
+    }
+    if let Some(args) = &cli.memory_anchor {
+        if args.len() == 3 {
+            return handle_memory_anchor(&args[0], &args[1], &args[2]).await;
+        } else {
+            return show_memory_anchor_help();
+        }
+    }
+    if let Some(keywords) = &cli.memory_find {
+        return handle_memory_find(keywords).await;
+    }
+    if cli.memory_stats {
+        return handle_memory_stats().await;
+    }
+    if let Some(path) = &cli.update_consciousness {
+        return handle_update_consciousness(path).await;
     }
 
     // Handle spicy TUI mode
@@ -156,6 +201,15 @@ async fn main() -> Result<()> {
         }
         return run_mcp_server().await;
     }
+    if cli.mcp_install {
+        return handle_mcp_install().await;
+    }
+    if cli.mcp_uninstall {
+        return handle_mcp_uninstall().await;
+    }
+    if cli.mcp_status {
+        return handle_mcp_status().await;
+    }
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
@@ -217,7 +271,7 @@ async fn main() -> Result<()> {
         return run_web_dashboard(
             cli.scan_opts.sse_port,
             cli.open_browser,
-            vec![], // Default: localhost only
+            cli.allow.clone(),
             InMemoryLogStore::new(),
         ).await;
     }
@@ -225,6 +279,71 @@ async fn main() -> Result<()> {
     if cli.http_daemon {
         // Launch HTTP daemon with MCP, LLM proxy, The Custodian
         return run_daemon(cli.scan_opts.sse_port).await;
+    }
+
+    // Handle security commands
+    if let Some(path) = &cli.security_scan {
+        return handle_security_scan(path).await;
+    }
+    if let Some(file) = &cli.guardian_scan {
+        return handle_guardian_scan(std::path::Path::new(file));
+    }
+    if cli.guardian_daemon {
+        return run_guardian_daemon().await;
+    }
+    if cli.cleanup {
+        return handle_security_cleanup().await;
+    }
+
+    // Handle hooks commands
+    if cli.hooks_install {
+        return install_hooks_to_claude().await;
+    }
+    if let Some(action) = &cli.hooks_config {
+        return handle_hooks_config(action).await;
+    }
+
+    // Handle daemon control
+    if cli.daemon_start {
+        return handle_daemon_start(cli.scan_opts.sse_port).await;
+    }
+    if cli.daemon_stop {
+        return handle_daemon_stop(cli.scan_opts.sse_port).await;
+    }
+    if cli.daemon_status {
+        return handle_daemon_status(cli.scan_opts.sse_port).await;
+    }
+    if cli.daemon_context {
+        return handle_daemon_context(cli.scan_opts.sse_port).await;
+    }
+    if cli.daemon_projects {
+        return handle_daemon_projects(cli.scan_opts.sse_port).await;
+    }
+    if cli.daemon_credits {
+        return handle_daemon_credits(cli.scan_opts.sse_port).await;
+    }
+
+    // Handle mega sessions
+    if let Some(name) = &cli.mega_start {
+        let name_opt = if name.is_empty() { None } else { Some(name.as_str()) };
+        return handle_mega_start(name_opt).await;
+    }
+    if cli.mega_save {
+        return handle_mega_save().await;
+    }
+    if cli.mega_list {
+        return handle_mega_list().await;
+    }
+    if cli.mega_stats {
+        return handle_mega_stats().await;
+    }
+
+    // Handle analysis commands
+    if let Some(path) = &cli.token_stats {
+        return handle_token_stats(path).await;
+    }
+    if let Some(path) = &cli.get_frequency {
+        return handle_get_frequency(path).await;
     }
 
     // =========================================================================
@@ -694,8 +813,12 @@ async fn run_daemon(port: u16) -> Result<()> {
 /// Save Claude consciousness state to .claude_consciousness.m8
 async fn handle_claude_save() -> Result<()> {
     use st::mcp::consciousness::ConsciousnessManager;
+    use std::path::PathBuf;
 
-    let mut manager = ConsciousnessManager::new();
+    let mut manager = ConsciousnessManager::new_silent();
+
+    // Clean out any stale test data from previous runs
+    manager.clean_test_data();
 
     // Update with current project info
     let cwd = std::env::current_dir()?;
@@ -713,11 +836,42 @@ async fn handle_claude_save() -> Result<()> {
         || std::path::Path::new("requirements.txt").exists()
     {
         "python"
+    } else if std::path::Path::new("go.mod").exists() {
+        "go"
     } else {
         "unknown"
     };
 
     manager.update_project_context(project_name, project_type, "");
+
+    // Detect key files that exist in the project root
+    let key_file_candidates = [
+        "Cargo.toml",
+        "package.json",
+        "pyproject.toml",
+        "go.mod",
+        "README.md",
+        "CLAUDE.md",
+        ".claude/CLAUDE.md",
+        "src/main.rs",
+        "src/lib.rs",
+        "src/mod.rs",
+        "index.ts",
+        "index.js",
+        "main.py",
+        "Makefile",
+        "Dockerfile",
+    ];
+    let key_files: Vec<PathBuf> = key_file_candidates
+        .iter()
+        .filter(|f| std::path::Path::new(f).exists())
+        .map(|f| PathBuf::from(*f))
+        .collect();
+    manager.set_key_files(key_files);
+
+    // Detect dependencies based on project type
+    let dependencies = detect_project_dependencies(project_type);
+    manager.set_dependencies(dependencies);
 
     // Save the consciousness
     manager.save()?;
@@ -728,6 +882,59 @@ async fn handle_claude_save() -> Result<()> {
     println!("  st --claude-restore");
 
     Ok(())
+}
+
+/// Detect project dependencies from manifest files
+fn detect_project_dependencies(project_type: &str) -> Vec<String> {
+    match project_type {
+        "rust" => {
+            // Parse key dependencies from Cargo.toml
+            if let Ok(content) = std::fs::read_to_string("Cargo.toml") {
+                let mut deps = Vec::new();
+                let mut in_deps = false;
+                for line in content.lines() {
+                    if line.starts_with("[dependencies]") {
+                        in_deps = true;
+                        continue;
+                    }
+                    if line.starts_with('[') && in_deps {
+                        break;
+                    }
+                    if in_deps {
+                        if let Some(name) = line.split('=').next() {
+                            let name = name.trim();
+                            if !name.is_empty() && !name.starts_with('#') {
+                                deps.push(name.to_string());
+                            }
+                        }
+                    }
+                }
+                // Limit to top 20 most important
+                deps.truncate(20);
+                deps
+            } else {
+                vec![]
+            }
+        }
+        "node" => {
+            // Parse key dependencies from package.json
+            if let Ok(content) = std::fs::read_to_string("package.json") {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let mut deps = Vec::new();
+                    if let Some(obj) = json.get("dependencies").and_then(|d| d.as_object()) {
+                        for key in obj.keys().take(20) {
+                            deps.push(key.clone());
+                        }
+                    }
+                    return deps;
+                }
+                vec![]
+            } else {
+                vec![]
+            }
+        }
+        _ => vec![],
+    }
 }
 
 /// Restore Claude consciousness from .claude_consciousness.m8
@@ -1480,6 +1687,135 @@ async fn handle_daemon_credits(port: u16) -> Result<()> {
             return Err(e);
         }
     }
+
+    Ok(())
+}
+
+// =============================================================================
+// MCP INSTALLATION HANDLERS
+// =============================================================================
+
+/// Install Smart Tree as MCP server in Claude Desktop
+async fn handle_mcp_install() -> Result<()> {
+    use st::claude_init::install_mcp_to_claude_desktop;
+
+    println!("📦 Installing Smart Tree MCP server to Claude Desktop...");
+    match install_mcp_to_claude_desktop() {
+        Ok(msg) => println!("{}", msg),
+        Err(e) => {
+            eprintln!("❌ Installation failed: {}", e);
+            eprintln!("\n💡 Manual setup:");
+            print_mcp_config();
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+/// Uninstall Smart Tree MCP server from Claude Desktop
+async fn handle_mcp_uninstall() -> Result<()> {
+    use st::claude_init::uninstall_mcp_from_claude_desktop;
+
+    println!("🗑️  Uninstalling Smart Tree MCP server from Claude Desktop...");
+    match uninstall_mcp_from_claude_desktop() {
+        Ok(msg) => println!("{}", msg),
+        Err(e) => {
+            eprintln!("❌ Uninstall failed: {}", e);
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+/// Check MCP installation status in Claude Desktop
+async fn handle_mcp_status() -> Result<()> {
+    use st::claude_init::check_mcp_installation_status;
+
+    match check_mcp_installation_status() {
+        Ok(msg) => println!("{}", msg),
+        Err(e) => {
+            eprintln!("⚠️  Could not check MCP status: {}", e);
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+// =============================================================================
+// SECURITY CLEANUP HANDLER
+// =============================================================================
+
+/// Run security cleanup to detect and remove malicious MCP entries
+async fn handle_security_cleanup() -> Result<()> {
+    use st::ai_install::run_security_cleanup;
+
+    println!("🔒 Running security cleanup...");
+    run_security_cleanup(false)?;
+    Ok(())
+}
+
+// =============================================================================
+// MEGA SESSION HANDLERS
+// =============================================================================
+
+/// Start a new mega session
+async fn handle_mega_start(name: Option<&str>) -> Result<()> {
+    use st::mega_session_manager::MegaSessionManager;
+
+    let mut manager = MegaSessionManager::new()?;
+    let session_id = manager.start_session(name.map(|s| s.to_string()))?;
+
+    println!("🚀 Mega session started!");
+    println!("   ID: {}", session_id);
+    if let Some(n) = name {
+        if !n.is_empty() {
+            println!("   Name: {}", n);
+        }
+    }
+    println!("\n💡 Use 'st --mega-save' to save session state");
+    println!("   Use 'st --mega-list' to see all sessions");
+
+    Ok(())
+}
+
+/// Save current mega session
+async fn handle_mega_save() -> Result<()> {
+    use st::mega_session_manager::MegaSessionManager;
+
+    let manager = MegaSessionManager::new()?;
+    manager.save_current_session()?;
+    println!("💾 Mega session saved!");
+
+    Ok(())
+}
+
+/// List all mega sessions
+async fn handle_mega_list() -> Result<()> {
+    use st::mega_session_manager::MegaSessionManager;
+
+    let manager = MegaSessionManager::new()?;
+    let sessions = manager.list_sessions()?;
+
+    if sessions.is_empty() {
+        println!("📋 No mega sessions found");
+        println!("\n💡 Start one with: st --mega-start [NAME]");
+    } else {
+        println!("📋 Mega Sessions ({}):", sessions.len());
+        println!("{}", "─".repeat(45));
+        for (i, session) in sessions.iter().enumerate() {
+            println!("  [{}] {}", i + 1, session);
+        }
+    }
+
+    Ok(())
+}
+
+/// Show mega session statistics
+async fn handle_mega_stats() -> Result<()> {
+    use st::mega_session_manager::MegaSessionManager;
+
+    let manager = MegaSessionManager::new()?;
+    println!("{}", manager.get_stats());
 
     Ok(())
 }

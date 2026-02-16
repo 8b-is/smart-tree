@@ -298,15 +298,51 @@ User = Hue (ASM@8yo, UV EPROMs, ferric chloride)
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown".to_string());
 
+        // Detect project type from manifest files
+        let project_type = if Path::new("Cargo.toml").exists() {
+            "rust"
+        } else if Path::new("package.json").exists() {
+            "node"
+        } else if Path::new("pyproject.toml").exists()
+            || Path::new("requirements.txt").exists()
+        {
+            "python"
+        } else if Path::new("go.mod").exists() {
+            "go"
+        } else {
+            "unknown"
+        };
+
+        // Detect key files that exist in the project
+        let key_file_candidates = [
+            "Cargo.toml",
+            "package.json",
+            "pyproject.toml",
+            "go.mod",
+            "README.md",
+            "CLAUDE.md",
+            ".claude/CLAUDE.md",
+            "src/main.rs",
+            "src/lib.rs",
+        ];
+        let key_files: Vec<String> = key_file_candidates
+            .iter()
+            .filter(|f| Path::new(f).exists())
+            .map(|f| f.to_string())
+            .collect();
+
+        // Detect dependencies from manifest
+        let dependencies = Self::detect_dependencies(project_type);
+
         let state = ConsciousnessState {
             session_id: uuid::Uuid::new_v4().to_string(),
             last_saved: Utc::now().to_rfc3339(),
             working_directory: cwd,
             project_context: ProjectContext {
                 project_name,
-                project_type: "rust".to_string(), // Could be detected
-                key_files: vec![],
-                dependencies: vec![],
+                project_type: project_type.to_string(),
+                key_files,
+                dependencies,
                 current_focus: String::new(),
             },
             file_history: vec![],
@@ -327,6 +363,40 @@ User = Hue (ASM@8yo, UV EPROMs, ferric chloride)
         };
 
         serde_json::to_string_pretty(&state).unwrap_or_default()
+    }
+
+    /// Detect project dependencies from manifest files
+    fn detect_dependencies(project_type: &str) -> Vec<String> {
+        match project_type {
+            "rust" => {
+                if let Ok(content) = fs::read_to_string("Cargo.toml") {
+                    let mut deps = Vec::new();
+                    let mut in_deps = false;
+                    for line in content.lines() {
+                        if line.starts_with("[dependencies]") {
+                            in_deps = true;
+                            continue;
+                        }
+                        if line.starts_with('[') && in_deps {
+                            break;
+                        }
+                        if in_deps {
+                            if let Some(name) = line.split('=').next() {
+                                let name = name.trim();
+                                if !name.is_empty() && !name.starts_with('#') {
+                                    deps.push(name.to_string());
+                                }
+                            }
+                        }
+                    }
+                    deps.truncate(20);
+                    deps
+                } else {
+                    vec![]
+                }
+            }
+            _ => vec![],
+        }
     }
 }
 

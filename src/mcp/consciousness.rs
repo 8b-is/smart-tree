@@ -368,6 +368,28 @@ impl ConsciousnessManager {
         self.state.project_context.current_focus = focus.to_string();
     }
 
+    /// Set key files for the project context
+    pub fn set_key_files(&mut self, files: Vec<PathBuf>) {
+        self.state.project_context.key_files = files;
+    }
+
+    /// Set dependencies for the project context
+    pub fn set_dependencies(&mut self, deps: Vec<String>) {
+        self.state.project_context.dependencies = deps;
+    }
+
+    /// Clear stale test data from file history
+    pub fn clean_test_data(&mut self) {
+        self.state.file_history.retain(|op| {
+            op.summary != "test"
+                || !op
+                    .file_path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().starts_with("file"))
+                    .unwrap_or(false)
+        });
+    }
+
     /// Add or update todo
     pub fn update_todo(&mut self, content: &str, status: &str) {
         // Check if todo already exists
@@ -505,7 +527,10 @@ mod tests {
 
     #[test]
     fn test_file_history_limit() {
-        let mut manager = ConsciousnessManager::new();
+        // Use a tempdir to avoid polluting the project's .claude_consciousness.m8
+        let dir = tempdir().unwrap();
+        let save_path = dir.path().join("test_history_limit.m8");
+        let mut manager = ConsciousnessManager::with_path(save_path);
 
         // Add 150 operations
         for i in 0..150 {

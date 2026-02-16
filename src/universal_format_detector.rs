@@ -159,27 +159,44 @@ impl UniversalFormatDetector {
             // Track depth based on format
             match self.format {
                 DataFormat::HTML | DataFormat::XML => {
-                    // Count < and > to track depth
-                    for ch in line.chars() {
-                        match ch {
-                            '<' => {
-                                if !line.contains("</") {
-                                    // Opening tag
-                                    line_pattern.opener_count += 1;
-                                }
-                            }
-                            '>' => {
+                    // Track XML/HTML depth by scanning for tags character by character
+                    let chars: Vec<char> = line.chars().collect();
+                    let mut i = 0;
+                    while i < chars.len() {
+                        if chars[i] == '<' {
+                            // Check if closing tag </...>
+                            if i + 1 < chars.len() && chars[i + 1] == '/' {
                                 line_pattern.closer_count += 1;
-                                if line.contains("</") {
-                                    // Closing tag
-                                    current_depth = current_depth.saturating_sub(1);
-                                } else if !line.contains("/>") {
-                                    // Not self-closing
+                                current_depth = current_depth.saturating_sub(1);
+                                // Skip past >
+                                while i < chars.len() && chars[i] != '>' {
+                                    i += 1;
+                                }
+                            } else {
+                                // Check if self-closing by scanning ahead for />
+                                let mut self_closing = false;
+                                let mut j = i + 1;
+                                while j < chars.len() && chars[j] != '>' {
+                                    j += 1;
+                                }
+                                if j > 0 && chars[j.saturating_sub(1)] == '/' {
+                                    self_closing = true;
+                                }
+                                if self_closing {
+                                    // Self-closing tag: no depth change
+                                    i = j;
+                                } else {
+                                    // Opening tag: increase depth
+                                    line_pattern.opener_count += 1;
                                     current_depth += 1;
+                                    // Track max depth within the line as tags open/close
+                                    self.pattern.max_depth =
+                                        self.pattern.max_depth.max(current_depth);
+                                    i = j;
                                 }
                             }
-                            _ => {}
                         }
+                        i += 1;
                     }
                 }
                 DataFormat::JSON | DataFormat::JSONL => {

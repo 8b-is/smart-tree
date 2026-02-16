@@ -14,6 +14,7 @@ use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 
 use crate::collaboration::{CollabMessage, Participant, ParticipantType, SharedCollabHub};
+use crate::web_dashboard::SharedState;
 
 /// Request to join collaboration
 #[derive(Debug, Deserialize)]
@@ -60,8 +61,9 @@ fn parse_participant_type(s: &str) -> ParticipantType {
 /// WebSocket handler for collaboration
 pub async fn collab_handler(
     ws: WebSocketUpgrade,
-    State(hub): State<SharedCollabHub>,
+    State(state): State<SharedState>,
 ) -> impl IntoResponse {
+    let hub = state.read().await.collab_hub.clone();
     ws.on_upgrade(move |socket| handle_collab_socket(socket, hub))
 }
 

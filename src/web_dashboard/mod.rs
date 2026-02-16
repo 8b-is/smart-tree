@@ -24,6 +24,7 @@ pub use server::start_server;
 pub use state_sync::{McpActivityState, UserHintsQueue};
 pub use mcp_http::{SharedMcpContext, create_mcp_context, mcp_router};
 
+use crate::collaboration::{create_hub, SharedCollabHub};
 use crate::in_memory_logger::InMemoryLogStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -52,6 +53,8 @@ pub struct DashboardState {
     pub mcp_activity: SharedMcpActivity,
     /// User hints queue (from browser to AI)
     pub user_hints: SharedUserHints,
+    /// Collaboration hub for dashboard sessions
+    pub collab_hub: SharedCollabHub,
 }
 
 impl DashboardState {
@@ -63,6 +66,7 @@ impl DashboardState {
             log_store,
             mcp_activity: Arc::new(RwLock::new(McpActivityState::default())),
             user_hints: Arc::new(RwLock::new(UserHintsQueue::default())),
+            collab_hub: create_hub(),
         }
     }
 
