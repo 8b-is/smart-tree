@@ -63,6 +63,7 @@ pub struct McpToolFlags {
     pub enable_unified_watcher: bool,
     pub enable_hooks_management: bool,
     pub enable_sse: bool,
+    pub enable_google: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,6 +136,7 @@ impl Default for McpToolFlags {
             enable_unified_watcher: true,
             enable_hooks_management: true,
             enable_sse: true,
+            enable_google: cfg!(feature = "google"),
         }
     }
 }
@@ -343,6 +345,9 @@ impl FeatureFlags {
         }
         if self.mcp_tools.enable_sse {
             tools.push("sse".to_string());
+        }
+        if self.mcp_tools.enable_google {
+            tools.push("google".to_string());
         }
 
         tools

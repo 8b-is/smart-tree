@@ -143,6 +143,18 @@ tokenizers = { version = "0.21", optional = true }
 # Uncomment when liquid-rust is ready:
 # liquid-rust = { path = "../liquid-rust", optional = true }
 
+# Google Drive + Gmail integration
+google-gmail1 = { version = "7", optional = true }
+google-drive3 = { version = "7", optional = true }
+yup-oauth2 = { version = "12", optional = true }
+ring = { version = "0.17", optional = true }
+mail-parser = { version = "0.9", optional = true }
+hyper-rustls = { version = "0.27", optional = true, features = ["http1", "native-tokio"] }
+hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "tokio"] }
+mime = { version = "0.3", optional = true }
+mime_guess = { version = "2.0", optional = true }
+http-body-util = { version = "0.1", optional = true }
+
 [[bin]]
 name = "std"
 path = "src/bin/std.rs"
@@ -178,10 +190,18 @@ candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenize
 # Note: Enable when liquid-rust dependency is uncommented above
 voice = []
 
+# Google Drive + Gmail integration
+google = [
+    "google-gmail1", "google-drive3", "yup-oauth2",
+    "ring", "mail-parser",
+    "hyper-rustls", "hyper-util", "mime", "mime_guess",
+    "http-body-util",
+]
+
 # Terminal UI (tui) and Web dashboard are now always built-in
 
 # Full features (includes candle for local LLM)
-full = ["candle"]
+full = ["candle", "google"]
 
 # Full with voice
 full-voice = ["full", "voice"]

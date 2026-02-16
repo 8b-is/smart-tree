@@ -637,6 +637,9 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "required": ["path"]
             }
         }),
+        // Google Drive + Gmail integration (only when feature enabled)
+        #[cfg(feature = "google")]
+        super::google::get_google_tool_definition(),
     ]
 }
 
@@ -706,6 +709,9 @@ pub async fn dispatch_consolidated_tool(
             )
             .await
         }
+        // 🌐 Google Drive + Gmail integration
+        #[cfg(feature = "google")]
+        "google" => super::google::handle_google(params, ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }

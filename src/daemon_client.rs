@@ -37,9 +37,11 @@ pub const DEFAULT_DAEMON_PORT: u16 = 8420;
 #[derive(Debug, Clone)]
 pub struct DaemonClient {
     /// The port the daemon is running on
-    port: u16,
+    pub port: u16,
     /// Base URL for daemon API
     base_url: String,
+    /// Auth token for remote connections
+    auth_token: Option<String>,
     /// HTTP client with timeout
     client: reqwest::Client,
 }
@@ -118,6 +120,37 @@ impl DaemonClient {
         Self {
             port,
             base_url: format!("http://127.0.0.1:{}", port),
+            auth_token: None,
+            client,
+        }
+    }
+
+    /// Create a client for a remote server
+    pub fn new_remote(url: &str, token: Option<String>) -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Some(ref t) = token {
+            if let Ok(val) = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", t)) {
+                headers.insert(reqwest::header::AUTHORIZATION, val);
+            }
+        }
+
+        let client = reqwest::Client::builder()
+            .default_headers(headers)
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_default();
+
+        // Try to parse port from URL, default to 80/443 or 0 if unknown
+        let port = url
+            .rsplit(':')
+            .next()
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(0);
+
+        Self {
+            port,
+            base_url: url.trim_end_matches('/').to_string(),
+            auth_token: token,
             client,
         }
     }
@@ -125,6 +158,12 @@ impl DaemonClient {
     /// Create with default port (8420)
     pub fn default_port() -> Self {
         Self::new(DEFAULT_DAEMON_PORT)
+    }
+
+    /// Create a request builder with correct base URL
+    fn request(&self, method: reqwest::Method, endpoint: &str) -> reqwest::RequestBuilder {
+        let url = format!("{}{}", self.base_url, endpoint);
+        self.client.request(method, &url)
     }
 
     /// Check if the daemon is running
@@ -160,8 +199,7 @@ impl DaemonClient {
 
     /// Health check - returns true if daemon is responsive
     pub async fn health_check(&self) -> Result<bool> {
-        let url = format!("{}/health", self.base_url);
-        match self.client.get(&url).send().await {
+        match self.request(reqwest::Method::GET, "/health").send().await {
             Ok(resp) => Ok(resp.status().is_success()),
             Err(e) => Err(anyhow::anyhow!("Health check failed: {}", e)),
         }
@@ -169,10 +207,8 @@ impl DaemonClient {
 
     /// Get daemon info
     pub async fn get_info(&self) -> Result<DaemonInfo> {
-        let url = format!("{}/info", self.base_url);
         let resp = self
-            .client
-            .get(&url)
+            .request(reqwest::Method::GET, "/info")
             .send()
             .await
             .context("Failed to connect to daemon")?;
@@ -184,10 +220,8 @@ impl DaemonClient {
 
     /// Get system context summary
     pub async fn get_context(&self) -> Result<ContextResponse> {
-        let url = format!("{}/context", self.base_url);
         let resp = self
-            .client
-            .get(&url)
+            .request(reqwest::Method::GET, "/context")
             .send()
             .await
             .context("Failed to connect to daemon")?;
@@ -199,10 +233,8 @@ impl DaemonClient {
 
     /// Get list of detected projects
     pub async fn get_projects(&self) -> Result<Vec<ProjectInfo>> {
-        let url = format!("{}/context/projects", self.base_url);
         let resp = self
-            .client
-            .get(&url)
+            .request(reqwest::Method::GET, "/context/projects")
             .send()
             .await
             .context("Failed to connect to daemon")?;
@@ -214,10 +246,8 @@ impl DaemonClient {
 
     /// Query context by keyword
     pub async fn query_context(&self, query: &str) -> Result<serde_json::Value> {
-        let url = format!("{}/context/query", self.base_url);
         let resp = self
-            .client
-            .post(&url)
+            .request(reqwest::Method::POST, "/context/query")
             .json(&serde_json::json!({ "query": query }))
             .send()
             .await
@@ -235,21 +265,20 @@ impl DaemonClient {
         pattern: Option<&str>,
         depth: Option<usize>,
     ) -> Result<Vec<String>> {
-        let mut url = format!("{}/context/files?", self.base_url);
+        let mut endpoint = "/context/files?".to_string();
 
         if let Some(p) = path {
-            url.push_str(&format!("path={}&", percent_encode(p)));
+            endpoint.push_str(&format!("path={}&", percent_encode(p)));
         }
         if let Some(pat) = pattern {
-            url.push_str(&format!("pattern={}&", percent_encode(pat)));
+            endpoint.push_str(&format!("pattern={}&", percent_encode(pat)));
         }
         if let Some(d) = depth {
-            url.push_str(&format!("depth={}", d));
+            endpoint.push_str(&format!("depth={}", d));
         }
 
         let resp = self
-            .client
-            .get(&url)
+            .request(reqwest::Method::GET, &endpoint)
             .send()
             .await
             .context("Failed to connect to daemon")?;
@@ -261,10 +290,8 @@ impl DaemonClient {
 
     /// Get Foken credits
     pub async fn get_credits(&self) -> Result<CreditsResponse> {
-        let url = format!("{}/credits", self.base_url);
         let resp = self
-            .client
-            .get(&url)
+            .request(reqwest::Method::GET, "/credits")
             .send()
             .await
             .context("Failed to connect to daemon")?;
@@ -280,10 +307,8 @@ impl DaemonClient {
         tokens_saved: u64,
         description: &str,
     ) -> Result<CreditsResponse> {
-        let url = format!("{}/credits/record", self.base_url);
         let resp = self
-            .client
-            .post(&url)
+            .request(reqwest::Method::POST, "/credits/record")
             .json(&serde_json::json!({
                 "tokens_saved": tokens_saved,
                 "description": description
@@ -303,15 +328,13 @@ impl DaemonClient {
         name: &str,
         arguments: serde_json::Value,
     ) -> Result<serde_json::Value> {
-        let url = format!("{}/tools/call", self.base_url);
         let req = ToolCallRequest {
             name: name.to_string(),
             arguments,
         };
 
         let resp = self
-            .client
-            .post(&url)
+            .request(reqwest::Method::POST, "/tools/call")
             .json(&req)
             .send()
             .await
@@ -324,10 +347,8 @@ impl DaemonClient {
 
     /// List available daemon tools
     pub async fn list_tools(&self) -> Result<Vec<serde_json::Value>> {
-        let url = format!("{}/tools", self.base_url);
         let resp = self
-            .client
-            .get(&url)
+            .request(reqwest::Method::GET, "/tools")
             .send()
             .await
             .context("Failed to connect to daemon")?;
@@ -379,6 +400,12 @@ impl DaemonClient {
     ///
     /// Returns Ok(true) if daemon was started, Ok(false) if already running
     pub async fn start_daemon(&self) -> Result<bool> {
+        if self.port == 0 {
+            return Err(anyhow::anyhow!(
+                "Cannot start daemon for remote client (no port specified)"
+            ));
+        }
+
         // First check if already running
         if matches!(self.check_status().await, DaemonStatus::Running(_)) {
             return Ok(false);
@@ -434,31 +461,32 @@ impl DaemonClient {
             return Ok(false);
         }
 
-        // Try to send a shutdown request (we'll add this endpoint to daemon)
-        let url = format!("{}/shutdown", self.base_url);
-        match self.client.post(&url).send().await {
+        // Try to send a shutdown request
+        match self.request(reqwest::Method::POST, "/shutdown").send().await {
             Ok(_) => {
                 // Wait for daemon to stop
                 tokio::time::sleep(Duration::from_millis(500)).await;
                 Ok(true)
             }
             Err(_) => {
-                // If endpoint doesn't exist, try finding and killing the process
-                #[cfg(unix)]
-                {
-                    // Find process listening on our port and kill it
-                    let output = Command::new("lsof")
-                        .args(["-ti", &format!(":{}", self.port)])
-                        .output();
+                // If endpoint doesn't exist, try finding and killing the process (local only)
+                if self.port != 0 {
+                    #[cfg(unix)]
+                    {
+                        // Find process listening on our port and kill it
+                        let output = Command::new("lsof")
+                            .args(["-ti", &format!(":{}", self.port)])
+                            .output();
 
-                    if let Ok(output) = output {
-                        if let Ok(pid_str) = String::from_utf8(output.stdout) {
-                            for pid in pid_str.lines() {
-                                if let Ok(pid) = pid.trim().parse::<i32>() {
-                                    let _ = Command::new("kill").arg(pid.to_string()).output();
+                        if let Ok(output) = output {
+                            if let Ok(pid_str) = String::from_utf8(output.stdout) {
+                                for pid in pid_str.lines() {
+                                    if let Ok(pid) = pid.trim().parse::<i32>() {
+                                        let _ = Command::new("kill").arg(pid.to_string()).output();
+                                    }
                                 }
+                                return Ok(true);
                             }
-                            return Ok(true);
                         }
                     }
                 }
@@ -476,6 +504,9 @@ impl DaemonClient {
         match self.check_status().await {
             DaemonStatus::Running(info) => Ok(info),
             DaemonStatus::NotRunning => {
+                if self.port == 0 {
+                    return Err(anyhow::anyhow!("Remote daemon not running at {}", self.base_url));
+                }
                 eprintln!("🌳 Starting Smart Tree daemon on port {}...", self.port);
                 self.start_daemon().await?;
                 self.get_info().await
@@ -621,6 +652,14 @@ mod tests {
     fn test_default_port() {
         let client = DaemonClient::default_port();
         assert_eq!(client.port, DEFAULT_DAEMON_PORT);
+    }
+
+    #[test]
+    fn test_remote_client() {
+        let client = DaemonClient::new_remote("https://api.example.com", Some("token".to_string()));
+        assert_eq!(client.port, 0);
+        assert_eq!(client.base_url, "https://api.example.com");
+        // Cannot easily check headers on private client, but construction succeeded
     }
 
     #[tokio::test]

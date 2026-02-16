@@ -78,6 +78,7 @@ pub mod code_review;
 pub mod daemon;
 pub mod daemon_cli; // HTTP CLI endpoints for thin-client architecture
 pub mod daemon_client;
+pub mod client_manager;
 pub mod std_client; // Binary protocol client for std daemon (Unix socket)
 
 // Service manager for systemd integration
@@ -194,3 +195,8 @@ pub mod security_scan;
 
 // Collaboration - Humans + AIs working together
 pub mod collab;
+
+// Google Drive + Gmail integration - backup, sync, warm storage, file intelligence
+// "Don't worry, your data is safe with me. I live here with you." - Liquid
+#[cfg(feature = "google")]
+pub mod google_sync;

@@ -100,6 +100,10 @@ pub mod tools_consolidated_enhanced;
 pub mod unified_watcher;
 pub mod wave_memory;
 
+// Google Drive + Gmail integration (behind feature flag)
+#[cfg(feature = "google")]
+pub mod google;
+
 use assistant::*;
 use cache::*;
 use consciousness::*;
