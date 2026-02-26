@@ -8,7 +8,7 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Security Scanner** for supply chain attack detection, **Claude Consciousness** preservation, **Spicy TUI mode**, and **30+ MCP tools**! Built with Rust for maximum performance.
+> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Security Scanner** for supply chain attack detection, **Aye Consciousness** preservation, **Spicy TUI mode**, and **30+ MCP tools**! Built with Rust for maximum performance.
 
 ---
 
@@ -101,7 +101,7 @@ quick_tree .                                         // Understand structure
 | **🔒 Network Allow-listing** | CIDR-based access control for remote dashboard | `st --dashboard --allow 10.0.0.0/8` |
 | **🛡️ Security Scanner** | Detect supply chain attack patterns | `st --security-scan` |
 | **🚀 MCP Auto-Installer** | One command to add Smart Tree to Claude Desktop! | `st --mcp-install` |
-| **🧠 Claude Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
+| **🧠 Aye Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
 | **📝 Memory Anchoring** | Persistent insight storage with keywords | `st --memory-anchor` / `--memory-find` |
 | **🌶️ Spicy TUI** | Interactive terminal UI with fuzzy search & M8 caching | `st --spicy` |
 | **🎣 MCP Hooks** | Programmatic Claude Code hook management | `st --hooks-install` |
@@ -178,7 +178,7 @@ st --mcp-uninstall
 
 **After installing, restart Claude Desktop and you'll have access to 30+ MCP tools!**
 
-## 🧠 Claude Consciousness
+## 🧠 Aye Consciousness
 
 Smart Tree now preserves AI session consciousness between interactions! Never lose context when switching sessions.
 
@@ -197,7 +197,7 @@ st --claude-kickstart         # Ultra-compressed restoration format
 - Tokenization rules (0x80 = node_modules, 0x91 = .rs files)
 - Project-specific patterns and conventions
 
-The `.claude_consciousness.m8` file maintains continuity between sessions, making AI assistance more efficient and contextually aware.
+The `.aye_consciousness.m8` file maintains continuity between sessions, making AI assistance more efficient and contextually aware.
 
 ### Memory Anchoring
 Permanently store insights with searchable keywords:

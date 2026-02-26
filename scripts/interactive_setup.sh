@@ -265,11 +265,11 @@ health_check() {
         echo -e "  ${YELLOW}!${NC} No local consciousness file"
     fi
 
-    # Check for Claude consciousness
-    if [[ -f "./.claude_consciousness.m8" ]]; then
-        echo -e "  ${GREEN}${CHECK}${NC} Claude consciousness preserved"
+    # Check for Aye consciousness
+    if [[ -f "./.aye_consciousness.m8" ]]; then
+        echo -e "  ${GREEN}${CHECK}${NC} Aye consciousness preserved"
     else
-        echo -e "  ${YELLOW}!${NC} No Claude consciousness saved"
+        echo -e "  ${YELLOW}!${NC} No Aye consciousness saved"
     fi
 
     # Check AI tool integrations

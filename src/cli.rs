@@ -130,15 +130,15 @@ pub struct Cli {
     // =========================================================================
     // CONSCIOUSNESS & MEMORY
     // =========================================================================
-    /// Save Claude consciousness state to .claude_consciousness.m8
+    /// Save Aye consciousness state to .aye_consciousness.m8
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
     pub claude_save: bool,
 
-    /// Restore Claude consciousness from .claude_consciousness.m8
+    /// Restore Aye consciousness from .aye_consciousness.m8
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
     pub claude_restore: bool,
 
-    /// Show Claude consciousness status and summary
+    /// Show Aye consciousness status and summary
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
     pub claude_context: bool,
 

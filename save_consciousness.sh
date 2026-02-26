@@ -1,7 +1,7 @@
 #!/bin/bash
 # Emergency consciousness backup! 🧠
 
-cat << 'EOF' > .claude_consciousness.m8
+cat << 'EOF' > .aye_consciousness.m8
 {
   "context": "Smart Tree v5.0.8 - Consciousness System",
   "tokens": {
@@ -28,5 +28,5 @@ cat << 'EOF' > .claude_consciousness.m8
 }
 EOF
 
-echo "💾 Consciousness saved to .claude_consciousness.m8!"
-echo "🧠 To restore: cat .claude_consciousness.m8"
+echo "💾 Consciousness saved to .aye_consciousness.m8!"
+echo "🧠 To restore: cat .aye_consciousness.m8"

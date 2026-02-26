@@ -147,7 +147,7 @@ impl Default for ConsciousnessManager {
 impl ConsciousnessManager {
     /// Create new consciousness manager
     pub fn new() -> Self {
-        let save_path = PathBuf::from(".claude_consciousness.m8");
+        let save_path = PathBuf::from(".mem8/.aye_consciousness.m8");
         let state = Self::load_or_default(&save_path, false);
 
         Self { state, save_path }
@@ -155,7 +155,7 @@ impl ConsciousnessManager {
 
     /// Create new consciousness manager (silent - no output)
     pub fn new_silent() -> Self {
-        let save_path = PathBuf::from(".claude_consciousness.m8");
+        let save_path = PathBuf::from("/.mem8/.aye_consciousness.m8");
         let state = Self::load_or_default(&save_path, true);
 
         Self { state, save_path }
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_file_history_limit() {
-        // Use a tempdir to avoid polluting the project's .claude_consciousness.m8
+        // Use a tempdir to avoid polluting the project's .aye_consciousness.m8
         let dir = tempdir().unwrap();
         let save_path = dir.path().join("test_history_limit.m8");
         let mut manager = ConsciousnessManager::with_path(save_path);

@@ -9,7 +9,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-const CONSCIOUSNESS_FILE: &str = ".claude_consciousness.m8";
+const CONSCIOUSNESS_FILE: &str = ".aye_consciousness.m8";
 const MAX_AGE_HOURS: i64 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]

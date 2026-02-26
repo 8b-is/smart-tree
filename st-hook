@@ -58,7 +58,7 @@ case "$1" in
         ;;
 
     --claude-restore)
-        if [ -f .claude_consciousness.m8 ]; then
+        if [ -f .aye_consciousness.m8 ]; then
             $ST_BIN --claude-restore
         else
             echo "No previous consciousness found"

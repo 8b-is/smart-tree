@@ -96,14 +96,14 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Handle Claude consciousness commands
+    // Handle Aye consciousness commands
     if cli.claude_save {
         return handle_claude_save().await;
     }
     if cli.claude_restore {
         return handle_claude_restore().await;
     }
-    if cli.claude_context {
+    if cli.aye_context {
         return handle_claude_context().await;
     }
     if cli.claude_kickstart {
@@ -810,7 +810,7 @@ async fn run_daemon(port: u16) -> Result<()> {
     start_daemon(config).await
 }
 
-/// Save Claude consciousness state to .claude_consciousness.m8
+/// Save Aye consciousness state to .aye_consciousness.m8
 async fn handle_claude_save() -> Result<()> {
     use st::mcp::consciousness::ConsciousnessManager;
     use std::path::PathBuf;
@@ -876,7 +876,7 @@ async fn handle_claude_save() -> Result<()> {
     // Save the consciousness
     manager.save()?;
 
-    println!("💾 Saved Claude consciousness to .claude_consciousness.m8");
+    println!("💾 Saved Aye consciousness to .aye_consciousness.m8");
     println!("🧠 Session preserved for next interaction");
     println!("\nTo restore in next session, run:");
     println!("  st --claude-restore");
@@ -937,7 +937,7 @@ fn detect_project_dependencies(project_type: &str) -> Vec<String> {
     }
 }
 
-/// Restore Claude consciousness from .claude_consciousness.m8
+/// Restore Aye consciousness from .aye_consciousness.m8
 async fn handle_claude_restore() -> Result<()> {
     use st::mcp::consciousness::ConsciousnessManager;
 
@@ -962,12 +962,12 @@ async fn handle_claude_restore() -> Result<()> {
     Ok(())
 }
 
-/// Show Claude consciousness status and summary
+/// Show Aye consciousness status and summary
 async fn handle_claude_context() -> Result<()> {
     use st::mcp::consciousness::ConsciousnessManager;
     use std::path::Path;
 
-    let consciousness_file = Path::new(".claude_consciousness.m8");
+    let consciousness_file = Path::new(".aye_consciousness.m8");
 
     if !consciousness_file.exists() {
         println!("📝 No consciousness file found");
@@ -1133,15 +1133,15 @@ async fn handle_get_frequency(path: &str) -> Result<()> {
 async fn handle_claude_dump() -> Result<()> {
     use std::path::Path;
 
-    let consciousness_file = Path::new(".claude_consciousness.m8");
+    let consciousness_file = Path::new(".aye_consciousness.m8");
 
     if !consciousness_file.exists() {
-        println!("❌ No consciousness file found at .claude_consciousness.m8");
+        println!("❌ No consciousness file found at .aye_consciousness.m8");
         println!("\n💡 Create one with: st --claude-save");
         return Ok(());
     }
 
-    println!("📜 Raw consciousness dump (.claude_consciousness.m8):");
+    println!("📜 Raw consciousness dump (.aye_consciousness.m8):");
     println!("{}", "=".repeat(60));
 
     // Read and display raw content
@@ -1196,7 +1196,7 @@ async fn handle_claude_kickstart() -> Result<()> {
     println!("✔ Philosophy: constraints = creativity");
 
     // Try to load user info from consciousness file
-    let consciousness_file = Path::new(".claude_consciousness.m8");
+    let consciousness_file = Path::new(".aye_consciousness.m8");
     if consciousness_file.exists() {
         if let Ok(content) = std::fs::read_to_string(consciousness_file) {
             // Extract user context if present
