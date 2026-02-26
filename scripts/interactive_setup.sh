@@ -442,14 +442,29 @@ run_st_client() {
                 echo -e "  --search 'TODO' --type rs"
                 echo
                 read -p "Command: " custom_cmd
+                # If the user entered nothing, go back to the menu
+                if [[ -z "$custom_cmd" ]]; then
+                    echo -e "${YELLOW}No command entered. Returning to menu...${NC}"
+                    sleep 1
+                    continue
+                fi
+                # Convert the custom command string into an array of arguments
+                # This avoids using eval and prevents shell interpretation of metacharacters.
+                # Quoting and spaces in the original input are preserved by the shell
+                # before being split into words for the array.
+                read -r -a st_args <<< "$custom_cmd"
+
                 show_header
                 echo -e "${WAVE} ${BOLD}Running Custom Command${NC} ${WAVE}\n"
                 echo -e "${CYAN}Command: st $custom_cmd${NC}\n"
+
                 if command -v st &> /dev/null; then
-                    eval "st $custom_cmd"
+                    cmd="st"
                 else
-                    eval "./target/release/st $custom_cmd"
+                    cmd="./target/release/st"
                 fi
+
+                "$cmd" "${st_args[@]}"
                 echo -e "\n${GREEN}${CHECK}${NC} Command complete!"
                 echo -e "\nPress any key to continue..."
                 read -n 1 -s
