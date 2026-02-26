@@ -500,7 +500,7 @@ impl DaemonClient {
                         }
                     }
                 }
-                Err(anyhow::anyhow!("Failed to verify daemon status"))
+                unreachable!("Loop should always return")
             }
             DaemonStatus::Starting => {
                 eprintln!("⏳ Daemon is starting, waiting...");
@@ -526,7 +526,7 @@ impl DaemonClient {
                         _ => {}
                     }
                 }
-                Err(anyhow::anyhow!("Daemon startup timeout"))
+                unreachable!("Loop should always return")
             }
             DaemonStatus::Error(e) => {
                 Err(anyhow::anyhow!("Daemon error: {}. Try running 'st --daemon-stop' and then 'st --daemon-start' to restart.", e))

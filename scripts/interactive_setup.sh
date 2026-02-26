@@ -446,9 +446,9 @@ run_st_client() {
                 echo -e "${WAVE} ${BOLD}Running Custom Command${NC} ${WAVE}\n"
                 echo -e "${CYAN}Command: st $custom_cmd${NC}\n"
                 if command -v st &> /dev/null; then
-                    st $custom_cmd
+                    eval "st $custom_cmd"
                 else
-                    ./target/release/st $custom_cmd
+                    eval "./target/release/st $custom_cmd"
                 fi
                 echo -e "\n${GREEN}${CHECK}${NC} Command complete!"
                 echo -e "\nPress any key to continue..."
