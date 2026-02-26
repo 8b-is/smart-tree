@@ -336,19 +336,164 @@ advanced_config() {
     read -n 1 -s
 }
 
+# Run ST Client menu
+run_st_client() {
+    while true; do
+        show_header
+        echo -e "${ROCKET} ${BOLD}Run Smart Tree Client${NC} ${ROCKET}\n"
+
+        echo -e "${BOLD}Select Mode:${NC}\n"
+        echo -e "  ${BOLD}1${NC}) ${TREE} Basic Tree View - Show directory structure"
+        echo -e "  ${BOLD}2${NC}) ${SPARKLES} Spicy TUI - Interactive file browser with fuzzy search"
+        echo -e "  ${BOLD}3${NC}) ${BRAIN} Terminal Interface - Full terminal with AI context"
+        echo -e "  ${BOLD}4${NC}) ${CHART} Web Dashboard - Browser-based file explorer"
+        echo -e "  ${BOLD}5${NC}) ${ROCKET} HTTP Daemon - MCP + LLM Proxy + Custodian"
+        echo -e "  ${BOLD}6${NC}) ${TOOLS} MCP Server - Model Context Protocol (stdio)"
+        echo -e "  ${BOLD}7${NC}) ${WAVE} Custom Command - Enter your own st command"
+        echo -e "  ${BOLD}0${NC}) Back to Main Menu"
+        echo
+        read -p "Enter your choice: " client_choice
+
+        case $client_choice in
+            1)
+                show_header
+                echo -e "${TREE} ${BOLD}Running Basic Tree View${NC} ${TREE}\n"
+                echo -e "${CYAN}Command: st .${NC}\n"
+                if command -v st &> /dev/null; then
+                    st .
+                else
+                    ./target/release/st .
+                fi
+                echo -e "\n${GREEN}${CHECK}${NC} Tree view complete!"
+                echo -e "\nPress any key to continue..."
+                read -n 1 -s
+                ;;
+            2)
+                show_header
+                echo -e "${SPARKLES} ${BOLD}Launching Spicy TUI${NC} ${SPARKLES}\n"
+                echo -e "${CYAN}Command: st --spicy${NC}\n"
+                echo -e "${YELLOW}TIP: Use fuzzy search and arrow keys to navigate!${NC}\n"
+                sleep 2
+                if command -v st &> /dev/null; then
+                    st --spicy
+                else
+                    ./target/release/st --spicy
+                fi
+                ;;
+            3)
+                show_header
+                echo -e "${BRAIN} ${BOLD}Launching Terminal Interface${NC} ${BRAIN}\n"
+                echo -e "${CYAN}Command: st --terminal${NC}\n"
+                echo -e "${YELLOW}TIP: Full terminal with AI-aware context!${NC}\n"
+                sleep 2
+                if command -v st &> /dev/null; then
+                    st --terminal
+                else
+                    ./target/release/st --terminal
+                fi
+                ;;
+            4)
+                show_header
+                echo -e "${CHART} ${BOLD}Launching Web Dashboard${NC} ${CHART}\n"
+                echo -e "${CYAN}Command: st --dashboard --open-browser${NC}\n"
+                echo -e "${YELLOW}TIP: Browser will open automatically. Port: 8421${NC}\n"
+                sleep 2
+                if command -v st &> /dev/null; then
+                    st --dashboard --open-browser
+                else
+                    ./target/release/st --dashboard --open-browser
+                fi
+                ;;
+            5)
+                show_header
+                echo -e "${ROCKET} ${BOLD}Starting HTTP Daemon${NC} ${ROCKET}\n"
+                echo -e "${CYAN}Command: st --http-daemon${NC}\n"
+                echo -e "${YELLOW}Services:${NC}"
+                echo -e "  • MCP over HTTP"
+                echo -e "  • LLM Proxy"
+                echo -e "  • The Custodian (AI Guardian)"
+                echo -e "${YELLOW}Port: 8420${NC}\n"
+                sleep 2
+                if command -v st &> /dev/null; then
+                    st --http-daemon
+                else
+                    ./target/release/st --http-daemon
+                fi
+                ;;
+            6)
+                show_header
+                echo -e "${TOOLS} ${BOLD}Starting MCP Server${NC} ${TOOLS}\n"
+                echo -e "${CYAN}Command: st --mcp${NC}\n"
+                echo -e "${YELLOW}TIP: This runs MCP server on stdio for AI assistants${NC}\n"
+                sleep 2
+                if command -v st &> /dev/null; then
+                    st --mcp
+                else
+                    ./target/release/st --mcp
+                fi
+                ;;
+            7)
+                show_header
+                echo -e "${WAVE} ${BOLD}Custom Command${NC} ${WAVE}\n"
+                echo -e "${CYAN}Enter your st command (without 'st' prefix):${NC}"
+                echo -e "${YELLOW}Examples:${NC}"
+                echo -e "  -m ai ."
+                echo -e "  --mode quantum --compress ."
+                echo -e "  --search 'TODO' --type rs"
+                echo
+                read -p "Command: " custom_cmd
+                # If the user entered nothing, go back to the menu
+                if [[ -z "$custom_cmd" ]]; then
+                    echo -e "${YELLOW}No command entered. Returning to menu...${NC}"
+                    sleep 1
+                    continue
+                fi
+                # Convert the custom command string into an array of arguments
+                # This avoids using eval and prevents shell interpretation of metacharacters.
+                # Quoting and spaces in the original input are preserved by the shell
+                # before being split into words for the array.
+                read -r -a st_args <<< "$custom_cmd"
+
+                show_header
+                echo -e "${WAVE} ${BOLD}Running Custom Command${NC} ${WAVE}\n"
+                echo -e "${CYAN}Command: st $custom_cmd${NC}\n"
+
+                if command -v st &> /dev/null; then
+                    cmd="st"
+                else
+                    cmd="./target/release/st"
+                fi
+
+                "$cmd" "${st_args[@]}"
+                echo -e "\n${GREEN}${CHECK}${NC} Command complete!"
+                echo -e "\nPress any key to continue..."
+                read -n 1 -s
+                ;;
+            0)
+                return
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Please try again.${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 # Main menu
 main_menu() {
     while true; do
         show_header
 
         echo -e "${BOLD}Main Menu:${NC}\n"
-        echo -e "  ${BOLD}1${NC}) ${ROCKET} Quick Install - MCP for all AI tools"
-        echo -e "  ${BOLD}2${NC}) ${TOOLS} Configure Hooks (Claude Code)"
-        echo -e "  ${BOLD}3${NC}) ${CHART} Health Check & Diagnostics"
-        echo -e "  ${BOLD}4${NC}) ${BRAIN} Update Consciousness (current dir)"
-        echo -e "  ${BOLD}5${NC}) ${BOOK} Show Quick Start Guide"
-        echo -e "  ${BOLD}6${NC}) ${SPARKLES} Advanced Configuration"
-        echo -e "  ${BOLD}7${NC}) ${WAVE} Test MEM8 Features"
+        echo -e "  ${BOLD}1${NC}) ${ROCKET} Run Smart Tree Client"
+        echo -e "  ${BOLD}2${NC}) ${ROCKET} Quick Install - MCP for all AI tools"
+        echo -e "  ${BOLD}3${NC}) ${TOOLS} Configure Hooks (Claude Code)"
+        echo -e "  ${BOLD}4${NC}) ${CHART} Health Check & Diagnostics"
+        echo -e "  ${BOLD}5${NC}) ${BRAIN} Update Consciousness (current dir)"
+        echo -e "  ${BOLD}6${NC}) ${BOOK} Show Quick Start Guide"
+        echo -e "  ${BOLD}7${NC}) ${SPARKLES} Advanced Configuration"
+        echo -e "  ${BOLD}8${NC}) ${WAVE} Test MEM8 Features"
         echo -e "  ${BOLD}0${NC}) Exit"
         echo
         echo -e "${PURPLE}Trisha says: 'Organization is the key to happiness!'${NC}"
@@ -357,15 +502,18 @@ main_menu() {
 
         case $choice in
             1)
-                install_mcp_everywhere
+                run_st_client
                 ;;
             2)
-                setup_hooks
+                install_mcp_everywhere
                 ;;
             3)
-                health_check
+                setup_hooks
                 ;;
             4)
+                health_check
+                ;;
+            5)
                 show_header
                 echo -e "${BRAIN} Updating consciousness for current directory...${NC}\n"
                 ./target/release/st --update-consciousness .
@@ -375,7 +523,7 @@ main_menu() {
                 echo -e "\nPress any key to continue..."
                 read -n 1 -s
                 ;;
-            5)
+            6)
                 show_header
                 echo -e "${BOOK} ${BOLD}Quick Start Guide${NC} ${BOOK}\n"
                 echo -e "${YELLOW}Essential Commands:${NC}"
@@ -396,10 +544,10 @@ main_menu() {
                 echo -e "\nPress any key to continue..."
                 read -n 1 -s
                 ;;
-            6)
+            7)
                 advanced_config
                 ;;
-            7)
+            8)
                 show_header
                 echo -e "${WAVE} ${BOLD}Testing MEM8 Features${NC} ${WAVE}\n"
                 echo -e "Running wave analysis on current directory..."

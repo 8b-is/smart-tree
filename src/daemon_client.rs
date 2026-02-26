@@ -478,14 +478,64 @@ impl DaemonClient {
             DaemonStatus::NotRunning => {
                 eprintln!("🌳 Starting Smart Tree daemon on port {}...", self.port);
                 self.start_daemon().await?;
-                self.get_info().await
+                
+                // Retry with exponential backoff to get daemon info
+                let mut delay = Duration::from_millis(100);
+                for attempt in 1..=5 {
+                    match self.get_info().await {
+                        Ok(info) => {
+                            eprintln!("✅ Daemon started successfully!");
+                            return Ok(info);
+                        }
+                        Err(e) if attempt < 5 => {
+                            eprintln!("⏳ Waiting for daemon to become ready... (attempt {}/5)", attempt);
+                            tokio::time::sleep(delay).await;
+                            delay *= 2; // Exponential backoff
+                        }
+                        Err(e) => {
+                            return Err(anyhow::anyhow!(
+                                "Daemon started but failed to respond after 5 attempts: {}",
+                                e
+                            ));
+                        }
+                    }
+                }
+                unreachable!("Loop should always return")
             }
             DaemonStatus::Starting => {
-                // Wait for it to finish starting
-                tokio::time::sleep(Duration::from_secs(2)).await;
-                self.get_info().await
+                eprintln!("⏳ Daemon is starting, waiting...");
+                // Wait for it to finish starting with retry logic
+                let mut delay = Duration::from_millis(500);
+                for attempt in 1..=6 {
+                    tokio::time::sleep(delay).await;
+                    match self.check_status().await {
+                        DaemonStatus::Running(info) => {
+                            eprintln!("✅ Daemon is now running!");
+                            return Ok(info);
+                        }
+                        DaemonStatus::Starting if attempt < 6 => {
+                            eprintln!("⏳ Still starting... (attempt {}/6)", attempt);
+                            delay *= 2; // Exponential backoff
+                        }
+                        DaemonStatus::NotRunning => {
+                            return Err(anyhow::anyhow!(
+                                "Daemon stopped during startup; it did not remain in Starting state"
+                            ));
+                        }
+                        DaemonStatus::Error(e) => {
+                            return Err(anyhow::anyhow!("Daemon startup failed: {}", e));
+                        }
+                        DaemonStatus::Starting => {
+                            // This occurs when attempt == 6 and the daemon is still starting.
+                            return Err(anyhow::anyhow!("Daemon failed to start within timeout"));
+                        }
+                    }
+                }
+                unreachable!("Loop should always return")
             }
-            DaemonStatus::Error(e) => Err(anyhow::anyhow!("Daemon error: {}", e)),
+            DaemonStatus::Error(e) => {
+                Err(anyhow::anyhow!("Daemon error: {}. Try running 'st --daemon-stop' and then 'st --daemon-start' to restart.", e))
+            }
         }
     }
 }
