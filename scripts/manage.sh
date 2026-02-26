@@ -791,6 +791,97 @@ demo_relations() {
     print_success "Relations feature provides semantic X-ray vision for codebases! ${SPARKLE}"
 }
 
+# Run client menu
+run_client_menu() {
+    print_header "Smart Tree Client Launcher ${ROCKET}"
+    
+    echo -e "${YELLOW}Select what to run:${NC}"
+    echo -e "  ${GREEN}1${NC}) Basic Tree View (st .)"
+    echo -e "  ${GREEN}2${NC}) Spicy TUI - Interactive browser"
+    echo -e "  ${GREEN}3${NC}) Terminal Interface"
+    echo -e "  ${GREEN}4${NC}) Web Dashboard"
+    echo -e "  ${GREEN}5${NC}) HTTP Daemon (MCP + Proxy)"
+    echo -e "  ${GREEN}6${NC}) MCP Server (stdio)"
+    echo -e "  ${GREEN}7${NC}) Daemon Control (start/stop/status)"
+    echo -e "  ${GREEN}0${NC}) Cancel"
+    echo
+    read -p "Choice: " client_choice
+    
+    case $client_choice in
+        1)
+            print_header "Running Basic Tree View ${TREE}"
+            cd "$PROJECT_DIR"
+            ./target/release/$BINARY_NAME .
+            ;;
+        2)
+            print_header "Launching Spicy TUI ${SPARKLE}"
+            print_info "Use fuzzy search and arrow keys to navigate!"
+            sleep 1
+            cd "$PROJECT_DIR"
+            ./target/release/$BINARY_NAME --spicy
+            ;;
+        3)
+            print_header "Launching Terminal Interface ${BRAIN}"
+            print_info "Full terminal with AI-aware context!"
+            sleep 1
+            cd "$PROJECT_DIR"
+            ./target/release/$BINARY_NAME --terminal
+            ;;
+        4)
+            print_header "Launching Web Dashboard ${CHART}"
+            print_info "Starting web dashboard on port 8421..."
+            print_info "Browser will open automatically"
+            sleep 1
+            cd "$PROJECT_DIR"
+            ./target/release/$BINARY_NAME --dashboard --open-browser
+            ;;
+        5)
+            print_header "Starting HTTP Daemon ${ROCKET}"
+            print_info "Services: MCP over HTTP, LLM Proxy, The Custodian"
+            print_info "Port: 8420"
+            sleep 1
+            cd "$PROJECT_DIR"
+            ./target/release/$BINARY_NAME --http-daemon
+            ;;
+        6)
+            print_header "Starting MCP Server ${TOOLS}"
+            print_info "Running MCP server on stdio for AI assistants"
+            sleep 1
+            cd "$PROJECT_DIR"
+            ./target/release/$BINARY_NAME --mcp
+            ;;
+        7)
+            print_header "Daemon Control ${GEAR}"
+            echo -e "${YELLOW}Daemon Actions:${NC}"
+            echo -e "  ${GREEN}1${NC}) Start daemon"
+            echo -e "  ${GREEN}2${NC}) Stop daemon"
+            echo -e "  ${GREEN}3${NC}) Check status"
+            echo -e "  ${GREEN}0${NC}) Back"
+            echo
+            read -p "Action: " daemon_action
+            case $daemon_action in
+                1)
+                    print_info "Starting daemon..."
+                    ./target/release/$BINARY_NAME --daemon-start
+                    ;;
+                2)
+                    print_info "Stopping daemon..."
+                    ./target/release/$BINARY_NAME --daemon-stop
+                    ;;
+                3)
+                    ./target/release/$BINARY_NAME --daemon-status
+                    ;;
+            esac
+            ;;
+        0|*)
+            print_info "Cancelled"
+            return
+            ;;
+    esac
+    
+    print_success "Done!"
+}
+
 # Show usage examples
 examples() {
     print_header "Usage Examples ${SPARKLE}"
@@ -855,6 +946,7 @@ ${YELLOW}Usage:${NC} $0 [command] [options]
 ${YELLOW}Commands:${NC}
   ${GREEN}build${NC} [debug|release] [features]  Build the project
   ${GREEN}run${NC} [args...]         Run st with arguments
+  ${GREEN}client${NC}                Launch interactive client menu ${ROCKET}
   ${GREEN}test${NC}                  Run tests, linting, and format check
   ${GREEN}format${NC}                Format code with rustfmt
   ${GREEN}clean${NC}                 Clean build artifacts
@@ -1008,6 +1100,9 @@ main() {
         run)
             shift
             run "$@"
+            ;;
+        client)
+            run_client_menu
             ;;
         test)
             test
