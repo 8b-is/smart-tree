@@ -517,13 +517,18 @@ impl DaemonClient {
                             eprintln!("⏳ Still starting... (attempt {}/6)", attempt);
                             delay *= 2; // Exponential backoff
                         }
+                        DaemonStatus::NotRunning => {
+                            return Err(anyhow::anyhow!(
+                                "Daemon stopped during startup; it did not remain in Starting state"
+                            ));
+                        }
                         DaemonStatus::Error(e) => {
                             return Err(anyhow::anyhow!("Daemon startup failed: {}", e));
                         }
-                        _ if attempt == 6 => {
+                        DaemonStatus::Starting => {
+                            // This occurs when attempt == 6 and the daemon is still starting.
                             return Err(anyhow::anyhow!("Daemon failed to start within timeout"));
                         }
-                        _ => {}
                     }
                 }
                 unreachable!("Loop should always return")
