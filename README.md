@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v6.6.0 - Lightning Fast Directory Visualization with Wave Compass! 🌐
+# 🌳 Smart Tree v7.1.0 - Lightning Fast Directory Visualization with Wave Compass! 🌐
 
-[![Version](https://img.shields.io/badge/version-6.6.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-7.1.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -26,6 +26,32 @@ st --version
 ```
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
+
+### 🎯 Interactive Menu
+
+Smart Tree now includes an interactive menu for easy access to all features:
+
+```bash
+# Launch interactive setup menu (MCP setup, health checks, etc.)
+./scripts/interactive_setup.sh
+
+# Or use the developer menu
+./scripts/manage.sh menu
+
+# Run client menu for quick access to different modes
+./scripts/manage.sh client
+```
+
+**Client Menu Options:**
+1. 🌳 **Basic Tree View** - Classic directory visualization
+2. 🌶️ **Spicy TUI** - Interactive file browser with fuzzy search
+3. 🧠 **Terminal Interface** - Full terminal with AI context
+4. 📊 **Web Dashboard** - Browser-based file explorer
+5. 🚀 **HTTP Daemon** - MCP + LLM Proxy + The Custodian
+6. 🔧 **MCP Server** - Model Context Protocol (stdio)
+7. 🌊 **Custom Command** - Enter any st command
+
+The menu makes it easy to explore Smart Tree's features without memorizing commands!
 
 ---
 
@@ -88,10 +114,13 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v6.6.0
+## 🌟 What's NEW in v7.1.0
 
 | Feature | Description | Command |
 |---------|-------------|---------|
+| **🎯 Interactive Menu** | Easy access to all Smart Tree features with guided menus | `./scripts/manage.sh client` |
+| **🚀 Run Client Menu** | Quick launcher for different Smart Tree modes | In interactive setup |
+| **🔄 Improved Daemon Startup** | Better health checks, retry logic with exponential backoff | Automatic |
 | **🧭 Wave Compass** | Real-time MCP activity visualization with file access heatmap | `st --dashboard` |
 | **🔇 Silent MCP** | Protocol-compliant server startup (no stderr noise) | `st --mcp` |
 | **🎙️ Voice Input** | Push-to-talk voice hints (ready for liquid-rust) | Dashboard UI |
