@@ -61,8 +61,9 @@ Response shows all functions, classes, and their relationships.
 
 **Required Fields:**
 - `file_path` - Path to create
-- `content` - Initial content (optional, defaults to empty)
 
+**Optional Fields:**
+- `content` - Initial content (defaults to empty if omitted)
 **Features:**
 - Automatically creates parent directories
 - Fails if file already exists (prevents accidental overwrites)
