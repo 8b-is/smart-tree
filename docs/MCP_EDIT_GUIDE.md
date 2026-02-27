@@ -172,8 +172,11 @@ Python method:
 - `file_path` - Target file
 - `edits` - Array of edit operations
 
-**Edit Operations:**
+**Edit Operations (currently supported):**
 
+> Note: The SmartEdit engine currently supports only the operations documented in this section (for example, `InsertFunction` and `ReplaceFunction`).  
+> The following SmartEdit sub-operations are **planned but not yet implemented** and will return `"Operation not yet implemented"` if used:  
+> `InsertClass`, `AddMethod`, `WrapCode`, `DeleteElement`, `Rename`, `AddDocumentation`.
 #### InsertFunction
 Required: `name`, `body`
 ```json
