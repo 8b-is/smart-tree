@@ -226,9 +226,11 @@ EXAMPLES:
 💡 OPERATION TYPES:
 
 0️⃣ **create_file** - Create a new file (use this first!)
-   Required: file_path, content
+   Required: file_path
+   Optional: content (defaults to empty file if not provided)
    Creates a new file with initial content. Creates parent directories if needed.
    Example: {operation:'create_file', file_path:'src/utils.rs', content:'// New file\\npub fn hello() {}'}
+   Empty file: {operation:'create_file', file_path:'README.md'}
 
 1️⃣ **get_functions** - View code structure
    Required: file_path
