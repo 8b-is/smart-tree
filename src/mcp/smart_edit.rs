@@ -1069,11 +1069,23 @@ pub async fn handle_create_file(params: Option<Value>) -> Result<Value> {
     std::fs::write(file_path, content)
         .with_context(|| format!("Failed to create file: {}", file_path))?;
 
-    Ok(json!({
+    // Build the standard tool result and wrap it in the MCP content envelope
+    let result = json!({
         "status": "success",
         "file_path": file_path,
         "message": format!("File created: {}", file_path),
         "size": content.len(),
+    });
+
+    let pretty = serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string());
+
+    Ok(json!({
+        "content": [
+            {
+                "type": "text",
+                "text": pretty
+            }
+        ]
     }))
 }
 
