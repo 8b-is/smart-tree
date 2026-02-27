@@ -1488,4 +1488,80 @@ class MyClass:
         assert!(editor.content.contains("def set_value(self, value):"));
         assert!(editor.content.contains("self.value = value"));
     }
+
+    #[tokio::test]
+    async fn test_create_file() {
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        let test_file = dir.path().join("new_test.rs");
+        
+        let params = json!({
+            "file_path": test_file.to_str().unwrap(),
+            "content": "// Test file\npub fn hello() {\n    println!(\"Hello!\");\n}\n"
+        });
+        
+        // Test successful creation
+        let result = handle_create_file(Some(params.clone())).await;
+        assert!(result.is_ok(), "Failed to create file: {:?}", result.err());
+        
+        // Verify file exists
+        assert!(test_file.exists(), "File was not created");
+        
+        // Verify content
+        let content = std::fs::read_to_string(&test_file).unwrap();
+        assert!(content.contains("pub fn hello()"));
+        assert!(content.contains("println!"));
+        
+        // Test that creating existing file fails
+        let result2 = handle_create_file(Some(params)).await;
+        assert!(result2.is_err(), "Should fail when file already exists");
+        assert!(result2.unwrap_err().to_string().contains("already exists"));
+    }
+
+    #[tokio::test]
+    async fn test_create_file_with_parent_dirs() {
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        let test_file = dir.path().join("subdir/nested/test.py");
+        
+        let params = json!({
+            "file_path": test_file.to_str().unwrap(),
+            "content": "def main():\n    print('Hello')\n"
+        });
+        
+        // Should create parent directories
+        let result = handle_create_file(Some(params)).await;
+        assert!(result.is_ok(), "Failed to create file with parent dirs: {:?}", result.err());
+        
+        // Verify file and parents exist
+        assert!(test_file.exists(), "File was not created");
+        assert!(test_file.parent().unwrap().exists(), "Parent directory was not created");
+        
+        // Verify content
+        let content = std::fs::read_to_string(&test_file).unwrap();
+        assert!(content.contains("def main()"));
+    }
+
+    #[tokio::test]
+    async fn test_create_empty_file() {
+        use tempfile::tempdir;
+        
+        let dir = tempdir().unwrap();
+        let test_file = dir.path().join("empty.txt");
+        
+        let params = json!({
+            "file_path": test_file.to_str().unwrap()
+            // No content field - should create empty file
+        });
+        
+        let result = handle_create_file(Some(params)).await;
+        assert!(result.is_ok(), "Failed to create empty file: {:?}", result.err());
+        
+        // Verify file exists and is empty
+        assert!(test_file.exists());
+        let content = std::fs::read_to_string(&test_file).unwrap();
+        assert_eq!(content, "");
+    }
 }
