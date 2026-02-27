@@ -250,11 +250,10 @@ EXAMPLES:
 4️⃣ **smart_edit** - Multiple AST-aware edits
    Required: file_path, edits (array)
    Each edit in array must have 'operation' field
-   Operations: InsertFunction, ReplaceFunction, AddImport, InsertClass, AddMethod, WrapCode, DeleteElement, Rename, AddDocumentation, SmartAppend
+   Operations: InsertFunction, ReplaceFunction, AddImport, SmartAppend
    
    InsertFunction example: {operation:'InsertFunction', name:'helper', body:'def helper(): pass'}
    AddImport example: {operation:'AddImport', import:'os'}
-   InsertClass example: {operation:'InsertClass', name:'MyClass', body:'class MyClass:\\n    pass'}
    SmartAppend example: {operation:'SmartAppend', section:'functions', content:'def new_func(): pass'}",
             "inputSchema": {
                 "type": "object",
