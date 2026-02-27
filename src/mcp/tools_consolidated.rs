@@ -150,6 +150,7 @@ pub async fn handle_edit(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
         "get_functions" => "get_function_tree",
         "insert_function" => "insert_function",
         "remove_function" => "remove_function",
+        "create_file" => "create_file",
         _ => return Err(anyhow::anyhow!("Unknown edit operation: {}", operation)),
     };
 

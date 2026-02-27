@@ -1040,6 +1040,43 @@ pub async fn handle_remove_function(params: Option<Value>) -> Result<Value> {
     .await
 }
 
+/// Create a new file with initial content
+pub async fn handle_create_file(params: Option<Value>) -> Result<Value> {
+    let params = params.context("Parameters required")?;
+
+    let file_path = params["file_path"]
+        .as_str()
+        .context("file_path required")?;
+    
+    let content = params["content"]
+        .as_str()
+        .unwrap_or("");  // Empty file if no content provided
+
+    // Check if file already exists
+    if Path::new(file_path).exists() {
+        return Err(anyhow::anyhow!("File already exists: {}. Use edit operations to modify existing files.", file_path));
+    }
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = Path::new(file_path).parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create parent directories for: {}", file_path))?;
+        }
+    }
+
+    // Write the file
+    std::fs::write(file_path, content)
+        .with_context(|| format!("Failed to create file: {}", file_path))?;
+
+    Ok(json!({
+        "status": "success",
+        "file_path": file_path,
+        "message": format!("File created: {}", file_path),
+        "size": content.len(),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

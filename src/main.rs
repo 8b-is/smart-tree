@@ -103,7 +103,7 @@ async fn main() -> Result<()> {
     if cli.claude_restore {
         return handle_claude_restore().await;
     }
-    if cli.aye_context {
+    if cli.claude_context {
         return handle_claude_context().await;
     }
     if cli.claude_kickstart {

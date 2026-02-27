@@ -223,45 +223,106 @@ EXAMPLES:
             "name": "edit",
             "description": "✨ SMART EDIT - Revolutionary AST-aware editing with 90% token reduction! Edit code by describing changes, not sending diffs. Understands code structure!
 
-💡 TIP: Need to modify code efficiently? Try:
-• edit {operation:'get_functions', file_path:'main.rs'} - See all functions
-• edit {operation:'insert_function', name:'helper', body:'...'} - Add function
-• edit {operation:'smart_edit', edits:[...]} - Multiple edits at once
+💡 OPERATION TYPES:
 
-EXAMPLES:
-✓ View structure: edit {operation:'get_functions', file_path:'app.py'}
-✓ Add function: edit {operation:'insert_function', file_path:'utils.rs', name:'validate', body:'fn validate(input: &str) -> bool { !input.is_empty() }'}
-✓ Remove function: edit {operation:'remove_function', file_path:'old.js', name:'deprecated'}",
+0️⃣ **create_file** - Create a new file (use this first!)
+   Required: file_path, content
+   Creates a new file with initial content. Creates parent directories if needed.
+   Example: {operation:'create_file', file_path:'src/utils.rs', content:'// New file\\npub fn hello() {}'}
+
+1️⃣ **get_functions** - View code structure
+   Required: file_path
+   Returns: All functions, classes, and their relationships
+   Example: {operation:'get_functions', file_path:'app.py'}
+
+2️⃣ **insert_function** - Add a new function
+   Required: file_path, name, body
+   Optional: after, before, class_name, visibility
+   Example: {operation:'insert_function', file_path:'utils.rs', name:'validate', body:'fn validate(input: &str) -> bool { !input.is_empty() }', visibility:'public'}
+
+3️⃣ **remove_function** - Remove a function
+   Required: file_path, name
+   Optional: class_name, force, cascade
+   Example: {operation:'remove_function', file_path:'old.js', name:'deprecated'}
+
+4️⃣ **smart_edit** - Multiple AST-aware edits
+   Required: file_path, edits (array)
+   Each edit in array must have 'operation' field
+   Operations: InsertFunction, ReplaceFunction, AddImport, InsertClass, AddMethod, WrapCode, DeleteElement, Rename, AddDocumentation, SmartAppend
+   
+   InsertFunction example: {operation:'InsertFunction', name:'helper', body:'def helper(): pass'}
+   AddImport example: {operation:'AddImport', import:'os'}
+   InsertClass example: {operation:'InsertClass', name:'MyClass', body:'class MyClass:\\n    pass'}
+   SmartAppend example: {operation:'SmartAppend', section:'functions', content:'def new_func(): pass'}",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["smart_edit", "get_functions", "insert_function", "remove_function"],
-                        "description": "Edit operation type"
+                        "enum": ["create_file", "smart_edit", "get_functions", "insert_function", "remove_function"],
+                        "description": "Edit operation type: 'create_file' (create new file), 'get_functions' (view structure), 'insert_function' (add function), 'remove_function' (delete function), 'smart_edit' (multiple AST edits)"
                     },
                     "file_path": {
                         "type": "string",
-                        "description": "File to edit"
+                        "description": "Path to the file to edit (REQUIRED for all operations)"
                     },
                     "edits": {
                         "type": "array",
-                        "description": "Array of edit operations (smart_edit)",
+                        "description": "Array of edit operations (REQUIRED for 'smart_edit' operation only). Each edit must have 'operation' field and additional fields based on operation type.",
                         "items": {
                             "type": "object",
-                            "description": "Individual edit operation",
+                            "description": "Individual edit operation. Required fields depend on operation type:\n- InsertFunction: name, body (optional: after, before, class_name, visibility)\n- ReplaceFunction: name, new_body (optional: class_name)\n- AddImport: import (optional: alias)\n- InsertClass: name, body (optional: namespace, extends, implements)\n- AddMethod: class_name, method_name, body (optional: visibility)\n- SmartAppend: section, content\n- DeleteElement: element_type, name (optional: parent)\n- Rename: old_name, new_name (optional: scope)\n- WrapCode: start_line, end_line, wrapper_type (optional: condition)\n- AddDocumentation: target_type, target_name, documentation",
                             "properties": {
                                 "operation": {
                                     "type": "string",
-                                    "description": "Type of edit operation"
+                                    "description": "Type of edit operation",
+                                    "enum": ["InsertFunction", "ReplaceFunction", "AddImport", "InsertClass", "AddMethod", "WrapCode", "DeleteElement", "Rename", "AddDocumentation", "SmartAppend"]
                                 },
-                                "target": {
+                                "name": {
                                     "type": "string",
-                                    "description": "What to edit (function name, line number, etc.)"
+                                    "description": "Name of element (REQUIRED for InsertFunction, InsertClass, ReplaceFunction, DeleteElement)"
+                                },
+                                "body": {
+                                    "type": "string",
+                                    "description": "Code body (REQUIRED for InsertFunction, InsertClass, AddMethod)"
+                                },
+                                "new_body": {
+                                    "type": "string",
+                                    "description": "New body (REQUIRED for ReplaceFunction)"
+                                },
+                                "import": {
+                                    "type": "string",
+                                    "description": "Import statement (REQUIRED for AddImport)"
+                                },
+                                "section": {
+                                    "type": "string",
+                                    "description": "Section to append to (REQUIRED for SmartAppend)",
+                                    "enum": ["imports", "functions", "classes", "main"]
                                 },
                                 "content": {
                                     "type": "string",
-                                    "description": "New content or changes to apply"
+                                    "description": "Content to append (REQUIRED for SmartAppend)"
+                                },
+                                "class_name": {
+                                    "type": "string",
+                                    "description": "Class name (optional for methods, REQUIRED for AddMethod)"
+                                },
+                                "method_name": {
+                                    "type": "string",
+                                    "description": "Method name (REQUIRED for AddMethod)"
+                                },
+                                "after": {
+                                    "type": "string",
+                                    "description": "Insert after this element (optional positioning)"
+                                },
+                                "before": {
+                                    "type": "string",
+                                    "description": "Insert before this element (optional positioning)"
+                                },
+                                "visibility": {
+                                    "type": "string",
+                                    "description": "Visibility modifier (optional, defaults to 'private')",
+                                    "enum": ["public", "private", "protected"]
                                 }
                             },
                             "required": ["operation"]
@@ -269,11 +330,40 @@ EXAMPLES:
                     },
                     "name": {
                         "type": "string",
-                        "description": "Function name"
+                        "description": "Function/element name (REQUIRED for 'insert_function' and 'remove_function' operations)"
                     },
                     "body": {
                         "type": "string",
-                        "description": "Function body/code"
+                        "description": "Function body/code (REQUIRED for 'insert_function' operation)"
+                    },
+                    "after": {
+                        "type": "string",
+                        "description": "Insert after this function (optional for 'insert_function')"
+                    },
+                    "before": {
+                        "type": "string",
+                        "description": "Insert before this function (optional for 'insert_function')"
+                    },
+                    "class_name": {
+                        "type": "string",
+                        "description": "Class name for methods (optional for 'insert_function' and 'remove_function')"
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "description": "Visibility modifier (optional for 'insert_function', defaults to 'private')",
+                        "enum": ["public", "private", "protected"]
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Force removal even if dependencies exist (optional for 'remove_function')"
+                    },
+                    "cascade": {
+                        "type": "boolean",
+                        "description": "Also remove dependent functions (optional for 'remove_function')"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "File content (REQUIRED for 'create_file' operation). Can be empty string for empty file."
                     }
                 },
                 "required": ["operation", "file_path"]
