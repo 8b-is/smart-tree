@@ -365,7 +365,7 @@ EXAMPLES:
                     },
                     "content": {
                         "type": "string",
-                        "description": "File content (REQUIRED for 'create_file' operation). Can be empty string for empty file."
+                        "description": "File content (optional for 'create_file' operation; defaults to empty string if omitted). Can be empty string for an intentionally empty file."
                     }
                 },
                 "required": ["operation", "file_path"]
