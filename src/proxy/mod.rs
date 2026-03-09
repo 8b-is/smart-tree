@@ -9,7 +9,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-pub mod anthropic;
+pub mod claude;
+// Re-export for backward compatibility - `proxy::anthropic::AnthropicProvider` still works
+pub use claude as anthropic;
 pub mod candle;
 pub mod google;
 pub mod grok;

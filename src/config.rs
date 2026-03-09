@@ -56,12 +56,14 @@ pub struct ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         let mut aliases = HashMap::new();
-        aliases.insert("claude".into(), "claude-3-5-sonnet-20241022".into());
+        aliases.insert("claude".into(), "claude-sonnet-4-6".into());
+        aliases.insert("opus".into(), "claude-opus-4-6".into());
+        aliases.insert("haiku".into(), "claude-haiku-4-5".into());
         aliases.insert("gpt4".into(), "gpt-4o".into());
         aliases.insert("gemini".into(), "gemini-2.0-flash".into());
 
         Self {
-            default_model: "claude-3-5-sonnet-20241022".into(),
+            default_model: "claude-sonnet-4-6".into(),
             aliases,
             blocked: vec!["greatcoderMDK".into()], // Known bad actor
         }
@@ -100,8 +102,9 @@ pub struct SafetyConfig {
 impl Default for SafetyConfig {
     fn default() -> Self {
         let mut scores = HashMap::new();
-        scores.insert("claude-3-5-sonnet-20241022".into(), 10);
-        scores.insert("claude-3-opus-20240229".into(), 10);
+        scores.insert("claude-opus-4-6".into(), 10);
+        scores.insert("claude-sonnet-4-6".into(), 10);
+        scores.insert("claude-haiku-4-5".into(), 10);
         scores.insert("gpt-4o".into(), 9);
         scores.insert("gpt-4-turbo".into(), 9);
         scores.insert("gemini-2.0-flash".into(), 9);

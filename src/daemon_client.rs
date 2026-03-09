@@ -478,7 +478,7 @@ impl DaemonClient {
             DaemonStatus::NotRunning => {
                 eprintln!("🌳 Starting Smart Tree daemon on port {}...", self.port);
                 self.start_daemon().await?;
-                
+
                 // Retry with exponential backoff to get daemon info
                 let mut delay = Duration::from_millis(100);
                 for attempt in 1..=5 {
@@ -487,8 +487,11 @@ impl DaemonClient {
                             eprintln!("✅ Daemon started successfully!");
                             return Ok(info);
                         }
-                        Err(e) if attempt < 5 => {
-                            eprintln!("⏳ Waiting for daemon to become ready... (attempt {}/5)", attempt);
+                        Err(_e) if attempt < 5 => {
+                            eprintln!(
+                                "⏳ Waiting for daemon to become ready... (attempt {}/5)",
+                                attempt
+                            );
                             tokio::time::sleep(delay).await;
                             delay *= 2; // Exponential backoff
                         }
@@ -533,9 +536,10 @@ impl DaemonClient {
                 }
                 unreachable!("Loop should always return")
             }
-            DaemonStatus::Error(e) => {
-                Err(anyhow::anyhow!("Daemon error: {}. Try running 'st --daemon-stop' and then 'st --daemon-start' to restart.", e))
-            }
+            DaemonStatus::Error(e) => Err(anyhow::anyhow!(
+                "Daemon error: {}. Try running 'st --daemon-stop' and then 'st --daemon-start' to restart.",
+                e
+            )),
         }
     }
 }
