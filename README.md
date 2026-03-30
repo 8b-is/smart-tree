@@ -847,3 +847,8 @@ MIT License - see [LICENSE](LICENSE) for details
 [Website](https://8b.is) • [Issues](https://github.com/8b-is/smart-tree/issues) • [Discussions](https://github.com/8b-is/smart-tree/discussions)
 
 </div>
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/8b-is-smart-tree).
+
