@@ -821,7 +821,6 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md)
 - [Compression Formats](docs/compression.md)
 - [Performance Guide](docs/performance.md)
 - [Claude Integration](docs/claude.md)
-- [Gemini CLI Integration](docs/GEMINI_CLI.md)
 
 ## 🎖️ Credits
 
