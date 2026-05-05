@@ -5,7 +5,7 @@
 
 ```bash
 # Install (pick your poison)
-cargo install st                           # From source
+cargo install smart-tree                   # From crates.io
 brew install smart-tree                    # macOS
 curl -L bit.ly/smart-tree | bash          # Universal installer
 
@@ -192,7 +192,7 @@ st --hot-tub  # Collaborative debugging with Omni! 🛁
 
 ```bash
 # Cargo (Rust users)
-cargo install st --version 4.0.0
+cargo install smart-tree
 
 # From source (hackers)
 git clone https://github.com/8b-is/smart-tree.git

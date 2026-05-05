@@ -57,7 +57,7 @@ exclude = [
     "hooks/",
     "st-hook",
     "st-hook/",
-    "tools/",
+    "/tools/",
     "test_rename_project/",
     "src/bin/mq.rs",
     "src/bin/debug_mcp.rs",

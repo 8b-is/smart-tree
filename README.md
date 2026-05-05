@@ -18,8 +18,8 @@
 # Linux/macOS/WSL - One line install
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
 
-# Or with cargo
-cargo install --git https://github.com/8b-is/smart-tree
+# Or with cargo (now on crates.io!)
+cargo install smart-tree
 
 # Verify installation
 st --version
@@ -155,8 +155,8 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 # Option 2: Homebrew (builds from source)
 brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 
-# Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v6.6.0 st
+# Option 3: Cargo from crates.io (builds from source)
+cargo install smart-tree
 
 # 🚀 One-command MCP setup for Claude Desktop!
 st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config
