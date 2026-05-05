@@ -16,8 +16,12 @@ cargo test --release           # Run performance tests
 cargo test <test_name>         # Run a single test
 cargo run --bin st -- --help   # Run locally without installing
 cargo fmt                      # Format code
+cargo clippy -- -D warnings    # Lint (zero-warning policy)
+./scripts/manage.sh test       # Pre-commit bundle: test + clippy + fmt --check
 ./scripts/build-and-install.sh # Build and install locally (clears shell cache)
 ```
+
+Run `./scripts/manage.sh test` before opening a PR — it is the canonical pre-commit gate. Async tests use `#[tokio::test]`; for verbose diagnostics use `RUST_LOG=debug cargo test -- --nocapture`.
 
 After rebuilding, if `st --version` hangs, run `hash -r` to clear your shell's binary cache.
 
