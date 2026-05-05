@@ -231,7 +231,7 @@ assert_cmd = "2.0"
 predicates = "3.1"
 
 [features]
-default = []
+default = ["full"]
 
 # Local LLM inference
 candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
