@@ -83,9 +83,7 @@ pub async fn call_openai_compatible_with_model(
 
     info!("Calling OpenAI-compatible API at {}", url);
 
-    let mut request = client
-        .post(&url)
-        .header("content-type", "application/json");
+    let mut request = client.post(&url).header("content-type", "application/json");
 
     // Add auth header if API key provided
     if let Some(key) = api_key {
@@ -134,7 +132,7 @@ pub async fn call_claude(
     let client = reqwest::Client::new();
 
     let mut body = serde_json::json!({
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "max_tokens": 1024,
         "messages": messages
     });

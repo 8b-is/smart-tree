@@ -13,9 +13,9 @@ pip install -r sse_requirements.txt
 python3 sse_test_server.py
 ```
 
-This starts a server on http://localhost:8420 with:
-- Browser test page: http://localhost:8420
-- SSE endpoint: http://localhost:8420/sse
+This starts a server on http://localhost:28428 with:
+- Browser test page: http://localhost:28428
+- SSE endpoint: http://localhost:28428/sse
 
 ## 3. Run Curl Tests
 
@@ -28,12 +28,12 @@ This starts a server on http://localhost:8420 with:
 
 #### Basic SSE stream:
 ```bash
-curl -N -H "Accept: text/event-stream" http://localhost:8420/sse
+curl -N -H "Accept: text/event-stream" http://localhost:28428/sse
 ```
 
 #### Pretty-printed JSON events:
 ```bash
-curl -N -H "Accept: text/event-stream" http://localhost:8420/sse 2>/dev/null | \
+curl -N -H "Accept: text/event-stream" http://localhost:28428/sse 2>/dev/null | \
 while IFS= read -r line; do
     [[ $line =~ ^data: ]] && echo "$line" | cut -d' ' -f2- | jq .
 done
@@ -41,13 +41,13 @@ done
 
 #### Filter specific events:
 ```bash
-curl -N -H "Accept: text/event-stream" http://localhost:8420/sse 2>/dev/null | \
+curl -N -H "Accept: text/event-stream" http://localhost:28428/sse 2>/dev/null | \
 grep -E '^event: (created|modified|deleted)' -A2
 ```
 
 #### With timeout (10 seconds):
 ```bash
-timeout 10 curl -N -H "Accept: text/event-stream" http://localhost:8420/sse
+timeout 10 curl -N -H "Accept: text/event-stream" http://localhost:28428/sse
 ```
 
 ## 4. Understanding the Output
@@ -65,7 +65,7 @@ data: {"type":"heartbeat","count":1}
 
 ## 5. Test in Browser
 
-Open http://localhost:8420 in a browser to see a visual representation of the SSE stream.
+Open http://localhost:28428 in a browser to see a visual representation of the SSE stream.
 
 ## 6. Advanced Examples
 
@@ -86,7 +86,7 @@ See `sse_curl_examples.sh` for more advanced usage patterns including:
 
 ## Troubleshooting
 
-1. **No output**: Check server is running on port 8420
+1. **No output**: Check server is running on port 28428
 2. **Buffered output**: Make sure to use `-N` flag
 3. **Connection drops**: Normal for SSE, client should reconnect
 4. **JSON parse errors**: Use `2>/dev/null` to suppress curl progress

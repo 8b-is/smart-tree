@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_inline_address() {
-        let addr = Address::Inline(AddressString::new("192.168.1.5:8420").unwrap());
+        let addr = Address::Inline(AddressString::new("192.168.1.5:28428").unwrap());
         let encoded = addr.encode();
 
         // First byte: 0x80 + 16 = 0x90
@@ -278,7 +278,7 @@ mod tests {
 
         let (decoded, len) = Address::decode(&encoded).unwrap();
         if let Address::Inline(s) = decoded {
-            assert_eq!(s.as_str(), "192.168.1.5:8420");
+            assert_eq!(s.as_str(), "192.168.1.5:28428");
         } else {
             panic!("expected inline address");
         }
@@ -297,18 +297,18 @@ mod tests {
     fn test_host_cache() {
         let mut cache = HostCache::new();
 
-        let idx1 = cache.add("server1.local:8420", "Server 1").unwrap();
-        let idx2 = cache.add("server2.local:8420", "Server 2").unwrap();
+        let idx1 = cache.add("server1.local:28428", "Server 1").unwrap();
+        let idx2 = cache.add("server2.local:28428", "Server 2").unwrap();
 
         assert_eq!(idx1, 1);
         assert_eq!(idx2, 2);
 
         // Duplicate returns same index
-        let idx1_again = cache.add("server1.local:8420", "Server 1").unwrap();
+        let idx1_again = cache.add("server1.local:28428", "Server 1").unwrap();
         assert_eq!(idx1_again, idx1);
 
         // Lookup
-        assert_eq!(cache.get_by_name("server1.local:8420"), Some(1));
-        assert_eq!(cache.get(1).unwrap().0, "server1.local:8420");
+        assert_eq!(cache.get_by_name("server1.local:28428"), Some(1));
+        assert_eq!(cache.get(1).unwrap().0, "server1.local:28428");
     }
 }

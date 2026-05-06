@@ -7,7 +7,7 @@ echo
 
 # Example 1: Basic SSE stream
 echo "1️⃣ Basic SSE Stream (press Ctrl+C to stop):"
-echo "curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse"
+echo "curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse"
 echo
 
 # Example 2: SSE with custom headers
@@ -16,13 +16,13 @@ echo "curl -N \\"
 echo "  -H 'Accept: text/event-stream' \\"
 echo "  -H 'Cache-Control: no-cache' \\"
 echo "  -H 'X-Client-ID: curl-test' \\"
-echo "  http://localhost:8420/sse"
+echo "  http://localhost:28428/sse"
 echo
 
 # Example 3: Parse specific event types
 echo "3️⃣ Parse Only File Events:"
 cat << 'EOF'
-curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse 2>/dev/null | \
+curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse 2>/dev/null | \
 while IFS= read -r line; do
     case "$line" in
         "event: created"|"event: modified"|"event: deleted")
@@ -39,7 +39,7 @@ echo
 # Example 4: Convert SSE to JSON Lines
 echo "4️⃣ Convert SSE to JSON Lines Format:"
 cat << 'EOF'
-curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse 2>/dev/null | \
+curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse 2>/dev/null | \
 awk '
     /^event:/ { event = $2 }
     /^id:/ { id = $2 }
@@ -54,7 +54,7 @@ echo
 # Example 5: Monitor with timestamp
 echo "5️⃣ Monitor Events with Timestamps:"
 cat << 'EOF'
-curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse 2>/dev/null | \
+curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse 2>/dev/null | \
 while IFS= read -r line; do
     if [[ $line =~ ^data: ]]; then
         timestamp=$(date '+%Y-%m-%d %H:%M:%S')
@@ -67,7 +67,7 @@ echo
 # Example 6: Count events by type
 echo "6️⃣ Count Events by Type:"
 cat << 'EOF'
-curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse 2>/dev/null | \
+curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse 2>/dev/null | \
 awk '
     /^event:/ { events[$2]++ }
     END { for (e in events) print e ": " events[e] }
@@ -80,7 +80,7 @@ echo
 # Example 7: Real-time directory monitoring simulation
 echo "7️⃣ Real-time Directory Monitor Display:"
 cat << 'EOF'
-curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse 2>/dev/null | \
+curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse 2>/dev/null | \
 while IFS= read -r line; do
     if [[ $line =~ ^event: ]]; then
         event_type="${line#event: }"
@@ -110,7 +110,7 @@ echo
 # Example 8: Save and replay events
 echo "8️⃣ Save Events for Replay:"
 echo "# Save events"
-echo "curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse > events.sse"
+echo "curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse > events.sse"
 echo
 echo "# Replay events"
 echo "cat events.sse | grep -E '^(event:|data:|id:)' | while read -r line; do echo \"\$line\"; sleep 0.1; done"
@@ -119,7 +119,7 @@ echo
 # Example 9: Using with jq for complex filtering
 echo "9️⃣ Complex Event Filtering with jq:"
 cat << 'EOF'
-curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse 2>/dev/null | \
+curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse 2>/dev/null | \
 grep '^data:' | cut -d' ' -f2- | \
 jq -r 'select(.type == "stats") | "\(.path): \(.stats.total_files) files, \(.stats.total_size) bytes"'
 EOF
@@ -128,7 +128,7 @@ echo
 # Example 10: Performance monitoring
 echo "🔟 Monitor Event Rate:"
 cat << 'EOF'
-curl -N -H 'Accept: text/event-stream' http://localhost:8420/sse 2>/dev/null | \
+curl -N -H 'Accept: text/event-stream' http://localhost:28428/sse 2>/dev/null | \
 awk '
     BEGIN { start = systime(); count = 0 }
     /^event:/ { 

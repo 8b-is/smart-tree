@@ -188,10 +188,10 @@ def create_app():
 
 if __name__ == '__main__':
     print("🚀 Smart Tree SSE Test Server")
-    print("📍 Server running at http://localhost:8420")
-    print("🔗 SSE endpoint: http://localhost:8420/sse")
-    print("🌐 Browser test: http://localhost:8420")
+    print("📍 Server running at http://localhost:28428")
+    print("🔗 SSE endpoint: http://localhost:28428/sse")
+    print("🌐 Browser test: http://localhost:28428")
     print("\nPress Ctrl+C to stop")
     
     app = create_app()
-    web.run_app(app, host='0.0.0.0', port=8420)
+    web.run_app(app, host='0.0.0.0', port=28428)

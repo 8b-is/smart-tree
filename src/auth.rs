@@ -32,7 +32,7 @@ impl GitHubOAuthConfig {
             client_id: std::env::var("GITHUB_CLIENT_ID").ok()?,
             client_secret: std::env::var("GITHUB_CLIENT_SECRET").ok()?,
             redirect_uri: std::env::var("GITHUB_REDIRECT_URI")
-                .unwrap_or_else(|_| "http://localhost:8420/auth/github/callback".to_string()),
+                .unwrap_or_else(|_| "http://localhost:28428/auth/github/callback".to_string()),
             scope: std::env::var("GITHUB_SCOPE")
                 .unwrap_or_else(|_| "read:user user:email".to_string()),
         })

@@ -42,7 +42,7 @@ full\t'Show full absolute paths. Leaves no doubt where things are'"
 complete -c st -l color -d 'When should we splash some color on the output? `auto` (default) uses colors if outputting to a terminal' -r -f -a "always\t'Always use colors, no matter what. Go vibrant!'
 never\t'Never use colors. For the minimalists'
 auto\t'Use colors if the output is a terminal (tty), otherwise disable. This is the default smart behavior'"
-complete -c st -l sse-port -d 'Port for SSE server mode (default: 8420)' -r
+complete -c st -l sse-port -d 'Port for SSE server mode (default: 28428)' -r
 complete -c st -l search -d 'Search for a keyword within file contents. Best used with `--type` to limit search to specific file types (e.g., `--type rs --search "TODO"`). This is like having X-ray vision for your files!' -r
 complete -c st -l mermaid-style -d 'Mermaid diagram style (only used with --mode mermaid). Options: flowchart (default), mindmap, gitgraph' -r -f -a "flowchart\t'Traditional flowchart (default)'
 mindmap\t'Mind map style'
@@ -81,7 +81,7 @@ complete -c st -l mcp-optimize -d 'MCP/API optimization mode. Automatically enab
 complete -c st -l compact -d 'For JSON output, this makes it compact (one line) instead of pretty-printed. Saves space, but might make Trish\'s eyes water if she tries to read it directly'
 complete -c st -l ai-json -d 'For AI mode, wraps the output in a JSON structure. Makes it easier for programmatic consumption by our AI overlords (just kidding... mostly)'
 complete -c st -l stream -d 'Stream output as files are scanned. This is a game-changer for very large directories! You\'ll see results trickling in, rather than waiting for the whole scan to finish. Note: Compression is disabled in stream mode for now'
-complete -c st -l sse-server -d 'Start SSE server mode for real-time directory monitoring (experimental). This starts an HTTP server that streams directory changes as Server-Sent Events. Example: st --sse-server --sse-port 8420 /path/to/watch'
+complete -c st -l sse-server -d 'Start SSE server mode for real-time directory monitoring (experimental). This starts an HTTP server that streams directory changes as Server-Sent Events. Example: st --sse-server --sse-port 28428 /path/to/watch'
 complete -c st -l semantic -d 'Group files by semantic similarity (inspired by Omni\'s wisdom!). Uses content-aware tokenization to identify conceptually related files. Perfect for understanding project structure at a higher level. Example groups: "tests", "documentation", "configuration", "source code"'
 complete -c st -l no-markdown-mermaid -d 'Exclude mermaid diagrams from markdown report (only used with --mode markdown)'
 complete -c st -l no-markdown-tables -d 'Exclude tables from markdown report (only used with --mode markdown)'

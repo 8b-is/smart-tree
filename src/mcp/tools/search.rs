@@ -105,12 +105,27 @@ pub async fn find_files(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         }));
     }
 
+    let total_count = results.len();
+    let limit = args.limit;
+    let offset = args.offset.unwrap_or(0);
+
+    if offset > 0 || limit.is_some() {
+        results = results
+            .into_iter()
+            .skip(offset)
+            .take(limit.unwrap_or(total_count))
+            .collect();
+    }
+
     let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&json!({
                 "found": fmt_num(results.len(), use_hex),
+                "total_count": fmt_num(total_count, use_hex),
+                "offset": fmt_num(offset, use_hex),
+                "limit_applied": limit.is_some(),
                 "files": results
             }))?
         }]
@@ -267,12 +282,27 @@ pub async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         projects.push(proj);
     }
 
+    let total_count = projects.len();
+    let limit = args["limit"].as_u64().map(|n| n as usize);
+    let offset = args["offset"].as_u64().map(|n| n as usize).unwrap_or(0);
+
+    if offset > 0 || limit.is_some() {
+        projects = projects
+            .into_iter()
+            .skip(offset)
+            .take(limit.unwrap_or(total_count))
+            .collect();
+    }
+
     let use_hex = ctx.config.hex_numbers;
     Ok(json!({
         "projects": projects,
         "count": fmt_num(projects.len(), use_hex),
+        "total_count": fmt_num(total_count, use_hex),
         "search_path": path.display().to_string(),
-        "max_depth": fmt_num(depth, use_hex)
+        "max_depth": fmt_num(depth, use_hex),
+        "offset": fmt_num(offset, use_hex),
+        "limit_applied": limit.is_some()
     }))
 }
 

@@ -2,7 +2,7 @@
 
 use super::{FileTreeNode, SharedState};
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -683,3 +683,102 @@ pub async fn get_logs(
 
     Ok(Json(filtered_logs))
 }
+
+// ----- Prompt Handling -----
+
+#[derive(Debug, Deserialize)]
+pub struct PromptRequest {
+    pub question: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PromptResponse {
+    pub answer: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PromptAnswer {
+    pub answer: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PromptListResponse {
+    pub id: String,
+    pub question: String,
+}
+
+/// AI requests a prompt to be answered by the user
+pub async fn ask_prompt(
+    State(state): State<SharedState>,
+    Json(request): Json<PromptRequest>,
+) -> Result<Json<PromptResponse>, (StatusCode, String)> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let prompt_id = {
+        let dashboard = state.read().await;
+        let id = dashboard
+            .prompt_manager
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .to_string();
+        
+        dashboard.prompt_manager.pending.write().await.insert(id.clone(), tx);
+        dashboard.prompt_manager.active_prompts.write().await.insert(id.clone(), request.question.clone());
+        dashboard.collab_hub.read().await.announce_prompt(id.clone(), request.question.clone());
+        id
+    };
+
+    // Wait for the answer
+    match rx.await {
+        Ok(answer) => {
+            // Clean up active prompt
+            let dashboard = state.read().await;
+            dashboard.prompt_manager.active_prompts.write().await.remove(&prompt_id);
+            
+            Ok(Json(PromptResponse { answer }))
+        }
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Prompt cancelled or server shutting down".to_string(),
+        )),
+    }
+}
+
+/// User provides an answer to a prompt
+pub async fn answer_prompt(
+    State(state): State<SharedState>,
+    Path(prompt_id): Path<String>,
+    Json(answer): Json<PromptAnswer>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let dashboard = state.read().await;
+    let mut pending = dashboard.prompt_manager.pending.write().await;
+    
+    if let Some(tx) = pending.remove(&prompt_id) {
+        let _ = tx.send(answer.answer);
+        
+        // Also cleanup active prompts
+        dashboard.prompt_manager.active_prompts.write().await.remove(&prompt_id);
+        
+        Ok(StatusCode::OK)
+    } else {
+        Err((StatusCode::NOT_FOUND, "Prompt ID not found".to_string()))
+    }
+}
+
+/// Get all active prompts (fallback in case UI wants to fetch)
+pub async fn get_active_prompts(
+    State(state): State<SharedState>,
+) -> Json<Vec<PromptListResponse>> {
+    let dashboard = state.read().await;
+    let prompts = dashboard.prompt_manager.active_prompts.read().await;
+    
+    let list: Vec<PromptListResponse> = prompts
+        .iter()
+        .map(|(id, q)| PromptListResponse {
+            id: id.clone(),
+            question: q.clone(),
+        })
+        .collect();
+        
+    Json(list)
+}
+

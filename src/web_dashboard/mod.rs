@@ -29,8 +29,26 @@ use crate::in_memory_logger::InMemoryLogStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{oneshot, RwLock};
+
+#[derive(Debug)]
+pub struct PromptManager {
+    pub next_id: AtomicUsize,
+    pub pending: Arc<RwLock<HashMap<String, oneshot::Sender<String>>>>,
+    pub active_prompts: Arc<RwLock<HashMap<String, String>>>, // id -> question
+}
+
+impl PromptManager {
+    pub fn new() -> Self {
+        Self {
+            next_id: AtomicUsize::new(1),
+            pending: Arc::new(RwLock::new(HashMap::new())),
+            active_prompts: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+}
 
 /// Shared MCP activity state (thread-safe access from MCP and dashboard)
 pub type SharedMcpActivity = Arc<RwLock<McpActivityState>>;
@@ -55,6 +73,8 @@ pub struct DashboardState {
     pub user_hints: SharedUserHints,
     /// Collaboration hub for dashboard sessions
     pub collab_hub: SharedCollabHub,
+    /// Pending AI prompts waiting for user answers
+    pub prompt_manager: PromptManager,
 }
 
 impl DashboardState {
@@ -67,6 +87,7 @@ impl DashboardState {
             mcp_activity: Arc::new(RwLock::new(McpActivityState::default())),
             user_hints: Arc::new(RwLock::new(UserHintsQueue::default())),
             collab_hub: create_hub(),
+            prompt_manager: PromptManager::new(),
         }
     }
 

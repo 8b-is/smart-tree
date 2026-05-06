@@ -47,7 +47,7 @@
 📂 8b.is/api/.m8 (87.5Hz)
   RESTful API with wave-based authentication
   Endpoints: /auth, /memories, /waves
-  Port: 8420
+  Port: 28428
   Auth: JWT with MEM8 signature
 ```
 **Tokens used:** ~400 (but ONLY when needed!)

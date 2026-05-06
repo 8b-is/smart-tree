@@ -713,211 +713,235 @@ impl McpInstaller {
         Ok(PathBuf::from("st"))
     }
 
-    /// Get Claude Desktop config path for current OS
-    /// macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json
-    /// Windows: %APPDATA%/Claude/claude_desktop_config.json
-    /// Linux:   ~/.config/Claude/claude_desktop_config.json
-    pub fn get_claude_desktop_config_path() -> Option<PathBuf> {
+    /// Get MCP target config paths for all known local desktop AI setups
+    /// Returns a list of (AgentName, ConfigPath)
+    pub fn get_all_target_configs() -> Vec<(&'static str, PathBuf)> {
+        let mut paths = Vec::new();
+
+        // 1. Claude Desktop
         #[cfg(target_os = "macos")]
-        {
-            dirs::home_dir()
-                .map(|h| h.join("Library/Application Support/Claude/claude_desktop_config.json"))
+        if let Some(h) = dirs::home_dir() {
+            paths.push(("Claude Desktop", h.join("Library/Application Support/Claude/claude_desktop_config.json")));
         }
-
         #[cfg(target_os = "windows")]
-        {
-            dirs::config_dir().map(|c| c.join("Claude/claude_desktop_config.json"))
+        if let Some(c) = dirs::config_dir() {
+            paths.push(("Claude Desktop", c.join("Claude/claude_desktop_config.json")));
         }
-
         #[cfg(target_os = "linux")]
-        {
-            dirs::config_dir().map(|c| c.join("Claude/claude_desktop_config.json"))
+        if let Some(c) = dirs::config_dir() {
+            paths.push(("Claude Desktop", c.join("Claude/claude_desktop_config.json")));
         }
 
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            None
+        // 2. Gemini / Antigravity
+        if let Some(h) = dirs::home_dir() {
+            paths.push(("Antigravity", h.join(".gemini/antigravity/mcp_config.json")));
+            paths.push(("Gemini", h.join(".gemini/mcp_config.json")));
         }
+
+        paths
     }
 
-    /// Install Smart Tree MCP server to Claude Desktop config
-    pub fn install(&self) -> Result<McpInstallResult> {
-        // Get config path
-        let config_path = self
-            .custom_config_path
-            .clone()
-            .or_else(Self::get_claude_desktop_config_path)
-            .context(
-                "Could not determine Claude Desktop config path. \
-                Are you on a supported OS (macOS, Windows, Linux)?",
-            )?;
+    /// Install Smart Tree MCP server to all detected Desktop configs
+    pub fn install_all(&self) -> Result<Vec<McpInstallResult>> {
+        let targets = if let Some(custom) = &self.custom_config_path {
+            vec![("Custom", custom.clone())]
+        } else {
+            Self::get_all_target_configs()
+        };
 
-        // Ensure parent directory exists
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create Claude config directory")?;
+        if targets.is_empty() {
+            anyhow::bail!("No supported agent configurations found for this OS.");
         }
 
-        // Read existing config or create new
-        let (mut config, was_update) = if config_path.exists() {
-            let content = fs::read_to_string(&config_path)
-                .context("Failed to read existing Claude Desktop config")?;
-            let config: Value = serde_json::from_str(&content)
-                .context("Failed to parse existing Claude Desktop config as JSON")?;
-            (config, true)
-        } else {
-            (json!({}), false)
-        };
+        let mut results = Vec::new();
 
-        // Create backup if updating existing config
-        let backup_path = if was_update {
-            let backup = config_path.with_extension(format!(
-                "json.backup.{}",
-                Local::now().format("%Y%m%d_%H%M%S")
-            ));
-            fs::copy(&config_path, &backup)
-                .context("Failed to create backup of existing config")?;
-            Some(backup)
-        } else {
-            None
-        };
+        for (agent_name, config_path) in targets {
+            // Ensure parent directory exists
+            if let Some(parent) = config_path.parent() {
+                if fs::create_dir_all(parent).is_err() {
+                    continue; // Skip if we don't have permissions or bad path
+                }
+            }
 
-        // Build the Smart Tree MCP server config
-        let st_config = json!({
-            "command": self.st_binary_path.to_string_lossy(),
-            "args": ["--mcp"],
-            "env": {}
-        });
+            // Read existing config or create new
+            let (mut config, was_update) = if config_path.exists() {
+                if let Ok(content) = fs::read_to_string(&config_path) {
+                    if let Ok(json_val) = serde_json::from_str::<Value>(&content) {
+                        (json_val, true)
+                    } else {
+                        (json!({}), false)
+                    }
+                } else {
+                    (json!({}), false)
+                }
+            } else {
+                (json!({}), false)
+            };
 
-        // Update or create mcpServers section
-        if config.get("mcpServers").is_none() {
-            config["mcpServers"] = json!({});
-        }
+            // Create backup if updating existing config
+            let backup_path = if was_update {
+                let backup = config_path.with_extension(format!(
+                    "json.backup.{}",
+                    Local::now().format("%Y%m%d_%H%M%S")
+                ));
+                let _ = fs::copy(&config_path, &backup);
+                Some(backup)
+            } else {
+                None
+            };
 
-        // Check if already installed
-        let already_installed = config["mcpServers"].get("smart-tree").is_some();
+            // Build the Smart Tree MCP server config
+            let st_config = json!({
+                "command": self.st_binary_path.to_string_lossy(),
+                "args": ["--mcp"],
+                "env": {}
+            });
 
-        // Add/update Smart Tree entry
-        config["mcpServers"]["smart-tree"] = st_config;
+            // Update or create mcpServers section
+            if config.get("mcpServers").is_none() {
+                config["mcpServers"] = json!({});
+            }
 
-        // Write updated config with pretty formatting
-        let formatted =
-            serde_json::to_string_pretty(&config).context("Failed to serialize config to JSON")?;
-        fs::write(&config_path, formatted)
-            .context("Failed to write updated Claude Desktop config")?;
+            // Check if already installed
+            let already_installed = config["mcpServers"].get("smart-tree").is_some();
 
-        let message = if already_installed {
-            format!(
-                "✨ Updated Smart Tree MCP server in Claude Desktop!\n\
-                   📁 Config: {}\n\
-                   🔧 Binary: {}\n\n\
-                   🔄 Restart Claude Desktop to apply changes.",
-                config_path.display(),
-                self.st_binary_path.display()
-            )
-        } else {
-            format!(
-                "🎉 Smart Tree MCP server installed to Claude Desktop!\n\
-                   📁 Config: {}\n\
-                   🔧 Binary: {}\n\n\
-                   🚀 Restart Claude Desktop to start using st's 30+ MCP tools!",
-                config_path.display(),
-                self.st_binary_path.display()
-            )
-        };
+            // Add/update Smart Tree entry
+            config["mcpServers"]["smart-tree"] = st_config;
 
-        Ok(McpInstallResult {
-            success: true,
-            config_path,
-            backup_path,
-            message,
-            was_update: already_installed,
-        })
-    }
+            // Write updated config with pretty formatting
+            if let Ok(formatted) = serde_json::to_string_pretty(&config) {
+                if fs::write(&config_path, formatted).is_err() {
+                    continue; // Skip on write failure
+                }
+            }
 
-    /// Uninstall Smart Tree from Claude Desktop config
-    pub fn uninstall(&self) -> Result<McpInstallResult> {
-        let config_path = self
-            .custom_config_path
-            .clone()
-            .or_else(Self::get_claude_desktop_config_path)
-            .context("Could not determine Claude Desktop config path")?;
+            let message = if already_installed {
+                format!(
+                    "✨ Updated Smart Tree MCP server in {}!\n\
+                       📁 Config: {}\n\
+                       🔧 Binary: {}",
+                    agent_name,
+                    config_path.display(),
+                    self.st_binary_path.display()
+                )
+            } else {
+                format!(
+                    "🎉 Smart Tree MCP server installed to {}!\n\
+                       📁 Config: {}\n\
+                       🔧 Binary: {}",
+                    agent_name,
+                    config_path.display(),
+                    self.st_binary_path.display()
+                )
+            };
 
-        if !config_path.exists() {
-            return Ok(McpInstallResult {
-                success: false,
+            results.push(McpInstallResult {
+                success: true,
                 config_path,
-                backup_path: None,
-                message: "Claude Desktop config not found - nothing to uninstall".to_string(),
-                was_update: false,
+                backup_path,
+                message,
+                was_update: already_installed,
             });
         }
 
-        let content = fs::read_to_string(&config_path)?;
-        let mut config: Value = serde_json::from_str(&content)?;
-
-        // Check if smart-tree is installed
-        if config["mcpServers"].get("smart-tree").is_none() {
-            return Ok(McpInstallResult {
-                success: false,
-                config_path,
-                backup_path: None,
-                message: "Smart Tree MCP server is not installed".to_string(),
-                was_update: false,
-            });
-        }
-
-        // Create backup
-        let backup = config_path.with_extension(format!(
-            "json.backup.{}",
-            Local::now().format("%Y%m%d_%H%M%S")
-        ));
-        fs::copy(&config_path, &backup)?;
-
-        // Remove smart-tree entry
-        if let Some(servers) = config["mcpServers"].as_object_mut() {
-            servers.remove("smart-tree");
-        }
-
-        // Write updated config
-        fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
-
-        Ok(McpInstallResult {
-            success: true,
-            config_path,
-            backup_path: Some(backup),
-            message: "🗑️  Smart Tree MCP server removed from Claude Desktop.\n\
-                     Restart Claude Desktop to apply changes."
-                .to_string(),
-            was_update: true,
-        })
+        Ok(results)
     }
 
-    /// Check if Smart Tree is installed in Claude Desktop
+    /// Uninstall Smart Tree from Desktop configs
+    pub fn uninstall_all(&self) -> Result<Vec<McpInstallResult>> {
+        let targets = if let Some(custom) = &self.custom_config_path {
+            vec![("Custom", custom.clone())]
+        } else {
+            Self::get_all_target_configs()
+        };
+
+        let mut results = Vec::new();
+
+        for (agent_name, config_path) in targets {
+            if !config_path.exists() {
+                continue;
+            }
+
+            let content = match fs::read_to_string(&config_path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            let mut config: Value = match serde_json::from_str(&content) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            let was_removed = if let Some(servers) = config.get_mut("mcpServers").and_then(|s| s.as_object_mut()) {
+                servers.remove("smart-tree").is_some()
+            } else {
+                false
+            };
+
+            if was_removed {
+                let backup = config_path.with_extension(format!(
+                    "json.backup.{}",
+                    Local::now().format("%Y%m%d_%H%M%S")
+                ));
+                let _ = fs::copy(&config_path, &backup);
+
+                if let Ok(formatted) = serde_json::to_string_pretty(&config) {
+                    let _ = fs::write(&config_path, formatted);
+                }
+
+                results.push(McpInstallResult {
+                    success: true,
+                    config_path: config_path.clone(),
+                    backup_path: Some(backup),
+                    message: format!(
+                        "🗑️ Removed Smart Tree MCP server from {}.\n\
+                           📁 Config: {}",
+                        agent_name,
+                        config_path.display()
+                    ),
+                    was_update: true,
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Check if Smart Tree is installed in any target config
     pub fn is_installed(&self) -> Result<bool> {
-        let config_path = self
-            .custom_config_path
-            .clone()
-            .or_else(Self::get_claude_desktop_config_path);
+        let targets = if let Some(custom) = &self.custom_config_path {
+            vec![("Custom", custom.clone())]
+        } else {
+            Self::get_all_target_configs()
+        };
 
-        if let Some(path) = config_path {
+        for (_, path) in targets {
             if path.exists() {
-                let content = fs::read_to_string(&path)?;
-                let config: Value = serde_json::from_str(&content)?;
-                return Ok(config["mcpServers"].get("smart-tree").is_some());
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(config) = serde_json::from_str::<Value>(&content) {
+                        if config["mcpServers"].get("smart-tree").is_some() {
+                            return Ok(true);
+                        }
+                    }
+                }
             }
         }
 
         Ok(false)
     }
 
-    /// Get status information about current installation
+    /// Get status information about current installation across agents
     pub fn status(&self) -> Result<Value> {
-        let config_path = Self::get_claude_desktop_config_path();
+        let targets = Self::get_all_target_configs();
         let is_installed = self.is_installed().unwrap_or(false);
+        
+        let paths: Vec<String> = targets.into_iter()
+            .map(|(_, p)| p.display().to_string())
+            .collect();
 
         Ok(json!({
             "installed": is_installed,
-            "config_path": config_path.map(|p| p.display().to_string()),
+            "config_paths": paths,
             "binary_path": self.st_binary_path.display().to_string(),
             "binary_exists": self.st_binary_path.exists(),
         }))
@@ -935,17 +959,35 @@ impl Default for McpInstaller {
 
 /// Quick installation function for CLI use
 /// Returns a human-readable result message
-pub fn install_mcp_to_claude_desktop() -> Result<String> {
+pub fn install_mcp_to_desktop() -> Result<String> {
     let installer = McpInstaller::new()?;
-    let result = installer.install()?;
-    Ok(result.message)
+    let results = installer.install_all()?;
+    let msg = results.into_iter()
+        .filter(|r| r.success)
+        .map(|r| r.message)
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if msg.is_empty() {
+        Ok("Nothing to install or update.".to_string())
+    } else {
+        Ok(msg)
+    }
 }
 
 /// Quick uninstall function for CLI use
-pub fn uninstall_mcp_from_claude_desktop() -> Result<String> {
+pub fn uninstall_mcp_from_desktop() -> Result<String> {
     let installer = McpInstaller::new()?;
-    let result = installer.uninstall()?;
-    Ok(result.message)
+    let results = installer.uninstall_all()?;
+    let msg = results.into_iter()
+        .filter(|r| r.success)
+        .map(|r| r.message)
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if msg.is_empty() {
+        Ok("No installations found to remove.".to_string())
+    } else {
+        Ok(msg)
+    }
 }
 
 /// Check MCP installation status
@@ -954,22 +996,22 @@ pub fn check_mcp_installation_status() -> Result<String> {
     let status = installer.status()?;
 
     let installed = status["installed"].as_bool().unwrap_or(false);
-    let config_path = status["config_path"].as_str().unwrap_or("unknown");
+    let config_paths = status["config_paths"].as_array();
 
     if installed {
         Ok(format!(
             "✅ Smart Tree MCP server is installed!\n\
-             📁 Config: {}\n\
+             📁 Configs: {:?}\n\
              🔧 Binary: {}",
-            config_path,
+            config_paths,
             status["binary_path"].as_str().unwrap_or("st")
         ))
     } else {
         Ok(format!(
             "❌ Smart Tree MCP server is NOT installed.\n\
-             📁 Expected config: {}\n\
+             📁 Expected configs: {:?}\n\
              💡 Run 'st --mcp-install' to install",
-            config_path
+            config_paths
         ))
     }
 }

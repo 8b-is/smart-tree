@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="/xterm.css">
     <link rel="stylesheet" href="/style.css">
 </head>
+
 <body>
     <div class="dashboard" id="dashboard">
         <!-- Header -->
@@ -153,7 +155,8 @@
                     <div class="terminal-actions">
                         <button class="btn-icon" id="newTerminal" title="New AI Console (Ctrl+Shift+`)">+</button>
                         <div class="quick-actions">
-                            <button class="btn-quick" id="btnClaudeContinue" title="Claude Code (continue conversation)">
+                            <button class="btn-quick" id="btnClaudeContinue"
+                                title="Claude Code (continue conversation)">
                                 <span class="btn-quick-icon">&#x1F916;</span>
                                 <span class="btn-quick-label">Claude -c</span>
                             </button>
@@ -204,9 +207,26 @@
         </footer>
     </div>
 
+        <!-- AI Prompt Modal -->
+        <div class="prompt-modal-backdrop" id="promptModalBackdrop">
+            <div class="prompt-modal" id="promptModal">
+                <div class="prompt-modal-header">
+                    <span class="prompt-modal-title">AI Question</span>
+                </div>
+                <div class="prompt-modal-body">
+                    <div class="prompt-question" id="promptQuestion">Waiting for prompt...</div>
+                    <textarea class="prompt-input" id="promptInput" placeholder="Type your answer here..." rows="4"></textarea>
+                </div>
+                <div class="prompt-modal-footer">
+                    <button class="btn-primary" id="promptSubmitBtn">Submit Answer</button>
+                </div>
+            </div>
+        </div>
+
     <script src="/xterm.min.js"></script>
     <script src="/xterm-addon-fit.min.js"></script>
     <script src="/marked.min.js"></script>
     <script src="/app.js"></script>
 </body>
+
 </html>

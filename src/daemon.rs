@@ -21,8 +21,9 @@
 
 use anyhow::Result;
 use axum::{
-    extract::{Query, State, WebSocketUpgrade},
+    extract::{Query, Request, State, WebSocketUpgrade},
     http::StatusCode,
+    middleware::{self, Next},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -53,10 +54,130 @@ use crate::hot_watcher::HotWatcher;
 // HTTP MCP with The Custodian
 use crate::web_dashboard::mcp_http::{create_mcp_context, mcp_router};
 
+// =============================================================================
+// DAEMON AUTH TOKEN
+// =============================================================================
+
+/// Get the path to the daemon auth token file.
+/// Respects ST_TOKEN_PATH env var (for systemd StateDirectory), falls back to ~/.st/daemon.token
+pub fn token_path() -> PathBuf {
+    if let Ok(p) = std::env::var("ST_TOKEN_PATH") {
+        return PathBuf::from(p);
+    }
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".st")
+        .join("daemon.token")
+}
+
+/// Load or generate the daemon auth token.
+/// Creates a new random token on first run and persists it.
+pub fn load_or_create_token() -> Result<String> {
+    let path = token_path();
+
+    // Try to read existing token
+    if path.exists() {
+        let token = std::fs::read_to_string(&path)?.trim().to_string();
+        if !token.is_empty() {
+            return Ok(token);
+        }
+    }
+
+    // Generate new 32-byte random hex token
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let bytes: Vec<u8> = (0..32).map(|_| rng.gen::<u8>()).collect();
+    let token = hex::encode(&bytes);
+
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Write token with appropriate permissions
+    std::fs::write(&path, &token)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // System-level token (/var/lib/smart-tree/) needs to be world-readable
+        // so CLI clients can authenticate. User-level token stays private.
+        let mode = if path.starts_with("/var/lib") {
+            0o644
+        } else {
+            0o600
+        };
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))?;
+    }
+
+    println!("  🔑 Generated new daemon auth token at {}", path.display());
+    Ok(token)
+}
+
+/// Load existing token (for clients). Returns None if no token file exists.
+/// Prioritizes the system-level daemon token.
+pub fn load_token() -> Option<String> {
+    load_all_tokens().into_iter().next()
+}
+
+/// Load all available valid tokens (for servers to accept any valid local token).
+pub fn load_all_tokens() -> Vec<String> {
+    let mut tokens = Vec::new();
+
+    // 1. Check system-level daemon token
+    let system_path = std::path::PathBuf::from("/var/lib/smart-tree/daemon.token");
+    if let Ok(token) = std::fs::read_to_string(&system_path) {
+        let t = token.trim().to_string();
+        if !t.is_empty() {
+            tokens.push(t);
+        }
+    }
+
+    // 2. Add user local token
+    let path = token_path();
+    if let Ok(token) = std::fs::read_to_string(&path) {
+        let t = token.trim().to_string();
+        if !t.is_empty() && !tokens.contains(&t) {
+            tokens.push(t);
+        }
+    }
+
+    tokens
+}
+
+/// Auth middleware: validates Bearer token on all routes except /health
+async fn auth_middleware(
+    State(expected_tokens): State<Vec<String>>,
+    req: Request,
+    next: Next,
+) -> impl IntoResponse {
+    // Allow /health without auth (for health checks and monitoring)
+    if req.uri().path() == "/health" {
+        return next.run(req).await;
+    }
+
+    // Check Authorization header
+    let auth_header = req
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok());
+
+    match auth_header {
+        Some(header) if header.starts_with("Bearer ") => {
+            let provided = &header[7..];
+            if expected_tokens.iter().any(|t| t == provided) {
+                next.run(req).await
+            } else {
+                (StatusCode::UNAUTHORIZED, "Invalid token").into_response()
+            }
+        }
+        _ => (StatusCode::UNAUTHORIZED, "Bearer token required").into_response(),
+    }
+}
+
 /// Daemon configuration
 #[derive(Debug, Clone)]
 pub struct DaemonConfig {
-    /// HTTP port (default: 8420)
+    /// HTTP port (default: 28428)
     pub port: u16,
     /// Directories to watch
     pub watch_paths: Vec<PathBuf>,
@@ -64,15 +185,18 @@ pub struct DaemonConfig {
     pub orchestrator_url: Option<String>,
     /// Enable credit tracking
     pub enable_credits: bool,
+    /// Allow connections from external hosts (default: false, localhost only)
+    pub allow_external: bool,
 }
 
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
-            port: 8420,
+            port: 28428,
             watch_paths: vec![],
             orchestrator_url: Some("wss://gpu.foken.ai/api/credits".to_string()),
             enable_credits: true,
+            allow_external: false,
         }
     }
 }
@@ -169,6 +293,10 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     ╚═══════════════════════════════════════════════════════════╝
     "#
     );
+
+    // Load or generate auth token
+    let auth_token = load_or_create_token()?;
+    println!("  🔑 Auth token: loaded ({})", token_path().display());
 
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -276,12 +404,22 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/watch/status", get(watch_status))
         .route("/watch/hot", get(watch_hot_directories))
         .with_state(state)
-        // HTTP MCP - Full protocol over HTTP! 🧹 The Custodian watches here
+        // Bearer token auth on all routes (except /health, handled inside middleware)
+        .layer(middleware::from_fn_with_state(load_all_tokens(), auth_middleware))
+        // HTTP MCP - Full protocol over HTTP! 🧹 The Custodian watching
         // (uses nest_service to allow different state type)
         .nest_service("/mcp", mcp_router(mcp_context));
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    let bind_addr: [u8; 4] = if config.allow_external {
+        [0, 0, 0, 0]
+    } else {
+        [127, 0, 0, 1]
+    };
+    let addr = SocketAddr::from((bind_addr, config.port));
     println!("Smart Tree Daemon listening on http://{}", addr);
+    if !config.allow_external {
+        println!("  🔒 Bound to localhost only (set allow_external=true in ~/.st/config.toml to allow external)");
+    }
     println!("  - CLI Scan:     /cli/scan (thin-client endpoint!)");
     println!("  - CLI Stream:   /cli/stream (SSE streaming)");
     println!("  - MCP HTTP:     /mcp/* (The Custodian watching!) 🧹");
@@ -393,7 +531,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
         <h1>Smart Tree Daemon</h1>
         <p style="color:#888">System AI Context Service</p>
         <p style="color:#4ecdc4;margin-top:1rem;">You're viewing the Smart Tree Dashboard</p>
-        <p style="color:#888;font-size:0.85rem;">Bookmark this page: <strong>http://localhost:8420</strong></p>
+        <p style="color:#888;font-size:0.85rem;">Bookmark this page: <strong>http://localhost:28428</strong></p>
     </div>
 
     <div class="grid">

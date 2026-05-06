@@ -23,25 +23,25 @@ pub async fn list_hooks(_params: Value) -> Result<Value> {
     let hooks = vec![
         HookConfig {
             hook_type: "UserPromptSubmit".to_string(),
-            command: format!("{} --claude-user-prompt-submit", get_hook_path()),
+            command: format!("{} --agent-context", get_hook_path()),
             enabled: check_hook_enabled("UserPromptSubmit"),
             description: "Provides intelligent context based on user prompts".to_string(),
         },
         HookConfig {
             hook_type: "PreToolUse".to_string(),
-            command: format!("{} --claude-pre-tool", get_hook_path()),
+            command: format!("{} --agent-pre-tool", get_hook_path()),
             enabled: check_hook_enabled("PreToolUse"),
             description: "Validates tool usage before execution".to_string(),
         },
         HookConfig {
             hook_type: "PostToolUse".to_string(),
-            command: format!("{} --claude-post-tool", get_hook_path()),
+            command: format!("{} --agent-post-tool", get_hook_path()),
             enabled: check_hook_enabled("PostToolUse"),
             description: "Processes tool results for better context".to_string(),
         },
         HookConfig {
             hook_type: "SessionStart".to_string(),
-            command: format!("{} --claude-restore", get_hook_path()),
+            command: format!("{} --agent-restore", get_hook_path()),
             enabled: check_hook_enabled("SessionStart"),
             description: "Restores consciousness from previous session".to_string(),
         },
@@ -72,11 +72,11 @@ pub async fn set_hook(params: Value) -> Result<Value> {
 
     // Map hook type to correct command flag
     let flag = match hook_type {
-        "UserPromptSubmit" => "--claude-user-prompt-submit",
-        "PreToolUse" => "--claude-pre-tool",
-        "PostToolUse" => "--claude-post-tool",
-        "SessionStart" => "--claude-restore",
-        _ => "--claude-user-prompt-submit",
+        "UserPromptSubmit" => "--agent-context",
+        "PreToolUse" => "--agent-pre-tool",
+        "PostToolUse" => "--agent-post-tool",
+        "SessionStart" => "--agent-restore",
+        _ => "--agent-context",
     };
     let default_command = format!("{} {}", get_hook_path(), flag);
     let command = params["command"].as_str().unwrap_or(&default_command);
@@ -111,7 +111,7 @@ pub async fn set_hook(params: Value) -> Result<Value> {
         "command": command,
         "enabled": enabled,
         "message": if enabled {
-            format!("Hook '{}' has been configured. You may need to restart Claude Code or use /hooks to apply.", hook_type)
+            format!("Hook '{}' has been configured. You may need to restart your AI Agent or use /hooks to apply.", hook_type)
         } else {
             format!("Hook '{}' has been disabled.", hook_type)
         }
@@ -146,7 +146,7 @@ pub async fn remove_hook(params: Value) -> Result<Value> {
 
             return Ok(json!({
                 "success": true,
-                "message": format!("Hook '{}' has been removed. Use /hooks in Claude Code to update.", hook_type)
+                "message": format!("Hook '{}' has been removed. Use /hooks in your AI Agent to update.", hook_type)
             }));
         }
     }
@@ -167,10 +167,10 @@ pub async fn test_hook(params: Value) -> Result<Value> {
 
     // Determine the command based on hook type
     let command = match hook_type {
-        "UserPromptSubmit" => format!("{} --claude-user-prompt-submit", get_hook_path()),
-        "PreToolUse" => format!("{} --claude-pre-tool", get_hook_path()),
-        "PostToolUse" => format!("{} --claude-post-tool", get_hook_path()),
-        "SessionStart" => format!("{} --claude-restore", get_hook_path()),
+        "UserPromptSubmit" => format!("{} --agent-context", get_hook_path()),
+        "PreToolUse" => format!("{} --agent-pre-tool", get_hook_path()),
+        "PostToolUse" => format!("{} --agent-post-tool", get_hook_path()),
+        "SessionStart" => format!("{} --agent-restore", get_hook_path()),
         _ => {
             return Ok(json!({
                 "success": false,
@@ -240,13 +240,13 @@ pub async fn get_hook_commands(_params: Value) -> Result<Value> {
 
     Ok(json!({
         "commands": {
-            "UserPromptSubmit": format!("{} --claude-user-prompt-submit", hook_path),
-            "PreToolUse": format!("{} --claude-pre-tool", hook_path),
-            "PostToolUse": format!("{} --claude-post-tool", hook_path),
-            "SessionStart": format!("{} --claude-restore", hook_path),
-            "SessionEnd": format!("{} --claude-save", hook_path),
+            "UserPromptSubmit": format!("{} --agent-context", hook_path),
+            "PreToolUse": format!("{} --agent-pre-tool", hook_path),
+            "PostToolUse": format!("{} --agent-post-tool", hook_path),
+            "SessionStart": format!("{} --agent-restore", hook_path),
+            "SessionEnd": format!("{} --agent-save", hook_path),
         },
-        "instructions": "Copy the command for the hook you want and paste it in Claude Code's /hooks command",
+        "instructions": "Copy the command for the hook you want and paste it in your AI Agent's /hooks command",
         "hook_path": hook_path,
     }))
 }

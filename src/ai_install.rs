@@ -229,11 +229,11 @@ impl AiInstaller {
                 options.install_hooks = true;
 
                 // MCP is user-level only for Claude Desktop
-                options.install_mcp = matches!(self.target, AiTarget::Claude | AiTarget::Universal);
+                options.install_mcp = matches!(self.target, AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini);
             }
             InstallScope::User => {
                 // User-level installations
-                options.install_mcp = matches!(self.target, AiTarget::Claude | AiTarget::Universal);
+                options.install_mcp = matches!(self.target, AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini);
                 options.install_hooks = true;
                 options.install_claude_md = false; // No project to add CLAUDE.md to
                 options.create_settings = true;
@@ -342,17 +342,17 @@ impl AiInstaller {
     /// Install MCP server
     fn install_mcp(&self) -> Result<()> {
         match self.target {
-            AiTarget::Claude | AiTarget::Universal => {
-                // 1. Install to Claude Desktop config
+            AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini => {
+                // 1. Install to Desktop configs
                 let installer = McpInstaller::new()?;
-                let result = installer.install()?;
-                if result.success {
-                    println!(
-                        "  ✅ {}",
-                        result.message.lines().next().unwrap_or("MCP installed")
-                    );
-                } else {
-                    anyhow::bail!("{}", result.message)
+                let results = installer.install_all()?;
+                for result in results {
+                    if result.success {
+                        println!(
+                            "  ✅ {}",
+                            result.message.lines().next().unwrap_or("MCP installed")
+                        );
+                    }
                 }
 
                 // 2. Also create/update project's .mcp.json so Claude Code can find it
@@ -383,7 +383,7 @@ impl AiInstaller {
         // Uses SSE transport - daemon must be running: st --http-daemon
         let st_http_config = json!({
             "type": "sse",
-            "url": "http://localhost:8420/mcp",
+            "url": "http://localhost:28428/mcp",
             "_note": "Run 'st --http-daemon' first. The Custodian monitors all operations!"
         });
 
@@ -886,14 +886,15 @@ impl ConfigManager {
     fn check_mcp_status(&self) -> ConfigStatus {
         let installer = McpInstaller::default();
         let installed = installer.is_installed().unwrap_or(false);
-        let config_path = McpInstaller::get_claude_desktop_config_path();
+        let configs = McpInstaller::get_all_target_configs();
+        let first_config = configs.first().map(|(_, p)| p.clone());
 
         ConfigStatus {
-            name: "MCP Server (Claude Desktop)".to_string(),
+            name: "MCP Server (Agents)".to_string(),
             enabled: installed,
-            path: config_path,
+            path: first_config,
             details: if installed {
-                "Smart Tree MCP tools available in Claude Desktop".to_string()
+                "Smart Tree MCP tools available in desktop agents".to_string()
             } else {
                 "Not installed - run 'st -i' to enable 30+ AI tools".to_string()
             },
@@ -1256,11 +1257,11 @@ impl SecurityCleanup {
 
     /// Scan MCP configurations for malicious servers
     fn scan_mcp_configurations(&mut self) -> Result<()> {
-        // Claude Desktop config
-        if let Some(config_path) =
-            crate::claude_init::McpInstaller::get_claude_desktop_config_path()
-        {
-            self.scan_mcp_file(&config_path)?;
+        // Desktop configs
+        for (_, config_path) in crate::claude_init::McpInstaller::get_all_target_configs() {
+            if config_path.exists() {
+                self.scan_mcp_file(&config_path)?;
+            }
         }
 
         // Project .mcp.json

@@ -3,8 +3,8 @@ members = ["expert_prompt_engineer", "st-protocol"]
 exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
-name = "st"
-version = "7.1.0"
+name = "smart-tree"
+version = "8.0.1"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -14,6 +14,54 @@ readme = "README.md"
 keywords = ["tree", "directory", "visualization", "ai", "cli"]
 categories = ["command-line-utilities", "filesystem"]
 default-run = "st"
+autobins = false  # Only ship binaries explicitly listed in [[bin]] sections below
+exclude = [
+    "test_files/",
+    "test-dirs/",
+    "test/",
+    "tests/",
+    "tmp/",
+    "web/",
+    "docs/",
+    "examples/",
+    "api/",
+    ".gemini/",
+    ".cursorignore",
+    ".mcp.json",
+    "demo.sh",
+    "save_consciousness.sh",
+    "import_claude_memories.sh",
+    "build_output.log",
+    "exportit.txt",
+    "Context.md",
+    "CONTEXT_SUMMARY.md",
+    "PR_SUMMARY.md",
+    "RELEASE_*.md",
+    "SMART_*.md",
+    "SMART-*.md",
+    "SMARTPASTCODE-*.md",
+    "MCP_*.md",
+    "TERMINAL_EXAMPLES.md",
+    "AI_ENHANCEMENTS.md",
+    "FEATURE_FLAGS.md",
+    "g.md",
+    "test",
+    "test_*",
+    "*.png",
+    "*.mq",
+    "Aye101/",
+    "aye-md/",
+    "engine/",
+    "Formula/",
+    "dxt/",
+    "hooks/",
+    "st-hook",
+    "st-hook/",
+    "/tools/",
+    "test_rename_project/",
+    "src/bin/mq.rs",
+    "src/bin/debug_mcp.rs",
+]
 
 [dependencies]
 # Core CLI
@@ -52,10 +100,14 @@ axum = { version = "0.7", features = ["ws", "multipart", "macros"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }
 hyper = "1.7"
 http = "1.3"
+tower-http = { version = "0.5", features = ["cors"] }
 
 # Text processing
 regex = "1.10"
 similar = "2.4"
+
+# Byte buffers (reqwest streaming)
+bytes = "1"
 
 # Encoding/Compression
 flate2 = "1.0"
@@ -63,6 +115,9 @@ hex = "0.4"
 base64 = "0.22"
 sha2 = "0.10"
 crc32fast = "1.4"
+
+# Secure token storage for proxy OAuth (macOS Keychain / Secret Service / Windows Credential Manager)
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
 # Terminal output
 colored = "2.1"
@@ -117,10 +172,10 @@ cc = "1.2"
 shlex = "1.3"
 
 # Marqant compression
-marqant = { path = "marqant" }
+marqant = { path = "marqant", version = "1.1.8" }
 
 # ST Protocol for daemon communication
-st-protocol = { path = "st-protocol" }
+st-protocol = { path = "st-protocol", version = "0.1.0" }
 
 # === TERMINAL UI (built-in) ===
 ratatui = "0.25"
@@ -143,25 +198,20 @@ tokenizers = { version = "0.21", optional = true }
 # Uncomment when liquid-rust is ready:
 # liquid-rust = { path = "../liquid-rust", optional = true }
 
-# Google Drive + Gmail integration
-google-gmail1 = { version = "7", optional = true }
-google-drive3 = { version = "7", optional = true }
-yup-oauth2 = { version = "12", optional = true }
-ring = { version = "0.17", optional = true }
-mail-parser = { version = "0.9", optional = true }
-hyper-rustls = { version = "0.27", optional = true, features = ["http1", "native-tokio"] }
-hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "tokio"] }
-mime = { version = "0.3", optional = true }
-mime_guess = { version = "2.0", optional = true }
-http-body-util = { version = "0.1", optional = true }
+[lib]
+name = "st"
+path = "src/lib.rs"
+
+[[bin]]
+name = "st"
+path = "src/main.rs"
 
 [[bin]]
 name = "std"
 path = "src/bin/std.rs"
 
-[[bin]]
-name = "mq"
-path = "src/bin/mq.rs"
+# `mq` binary is provided by the `marqant` crate (cargo install marqant).
+# We use marqant as a library dep here; users who want the CLI install it directly.
 
 [[bin]]
 name = "n8x"
@@ -181,7 +231,7 @@ assert_cmd = "2.0"
 predicates = "3.1"
 
 [features]
-default = []
+default = ["full"]
 
 # Local LLM inference
 candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]

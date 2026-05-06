@@ -199,7 +199,7 @@ Smart Tree is evolving from a visualization tool to your complete coding compani
 
 ```bash
 # Install your construction helper
-cargo install st
+cargo install smart-tree
 
 # Launch terminal interface
 st --terminal

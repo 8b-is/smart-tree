@@ -77,7 +77,7 @@ full\:"Show full absolute paths. Leaves no doubt where things are"))' \
 '--color=[When should we splash some color on the output? \`auto\` (default) uses colors if outputting to a terminal]:COLOR:((always\:"Always use colors, no matter what. Go vibrant!"
 never\:"Never use colors. For the minimalists"
 auto\:"Use colors if the output is a terminal (tty), otherwise disable. This is the default smart behavior"))' \
-'--sse-port=[Port for SSE server mode (default\: 8420)]:SSE_PORT:_default' \
+'--sse-port=[Port for SSE server mode (default\: 28428)]:SSE_PORT:_default' \
 '--search=[Search for a keyword within file contents. Best used with \`--type\` to limit search to specific file types (e.g., \`--type rs --search "TODO"\`). This is like having X-ray vision for your files!]:SEARCH:_default' \
 '--mermaid-style=[Mermaid diagram style (only used with --mode mermaid). Options\: flowchart (default), mindmap, gitgraph]:MERMAID_STYLE:((flowchart\:"Traditional flowchart (default)"
 mindmap\:"Mind map style"
@@ -119,7 +119,7 @@ date\:""))' \
 '--compact[For JSON output, this makes it compact (one line) instead of pretty-printed. Saves space, but might make Trish'\''s eyes water if she tries to read it directly]' \
 '--ai-json[For AI mode, wraps the output in a JSON structure. Makes it easier for programmatic consumption by our AI overlords (just kidding... mostly)]' \
 '--stream[Stream output as files are scanned. This is a game-changer for very large directories! You'\''ll see results trickling in, rather than waiting for the whole scan to finish. Note\: Compression is disabled in stream mode for now]' \
-'--sse-server[Start SSE server mode for real-time directory monitoring (experimental). This starts an HTTP server that streams directory changes as Server-Sent Events. Example\: st --sse-server --sse-port 8420 /path/to/watch]' \
+'--sse-server[Start SSE server mode for real-time directory monitoring (experimental). This starts an HTTP server that streams directory changes as Server-Sent Events. Example\: st --sse-server --sse-port 28428 /path/to/watch]' \
 '--semantic[Group files by semantic similarity (inspired by Omni'\''s wisdom!). Uses content-aware tokenization to identify conceptually related files. Perfect for understanding project structure at a higher level. Example groups\: "tests", "documentation", "configuration", "source code"]' \
 '--no-markdown-mermaid[Exclude mermaid diagrams from markdown report (only used with --mode markdown)]' \
 '--no-markdown-tables[Exclude tables from markdown report (only used with --mode markdown)]' \

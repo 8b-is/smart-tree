@@ -26,6 +26,7 @@ class Dashboard {
         this.initResizers();
         this.initEventListeners();
         this.initKeyboardShortcuts();
+        this.initPromptManager();
         await this.loadHealth();
 
         // Refresh health periodically
@@ -2072,6 +2073,93 @@ class CollabPanel {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // --- AI Prompt Manager ---
+
+    initPromptManager() {
+        this.activePromptId = null;
+        this.promptModal = document.getElementById('promptModalBackdrop');
+        this.promptQuestion = document.getElementById('promptQuestion');
+        this.promptInput = document.getElementById('promptInput');
+        this.promptSubmitBtn = document.getElementById('promptSubmitBtn');
+
+        this.promptSubmitBtn.addEventListener('click', () => this.submitPromptAnswer());
+        
+        // Allow submitting via Ctrl+Enter
+        this.promptInput.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                this.submitPromptAnswer();
+            }
+        });
+
+        // Start polling for prompts
+        setInterval(() => this.pollForPrompts(), 2000);
+        this.pollForPrompts();
+    }
+
+    async pollForPrompts() {
+        // If we already have a prompt open, don't fetch
+        if (this.activePromptId) return;
+
+        try {
+            const response = await fetch('/api/prompt');
+            if (response.ok) {
+                const prompts = await response.json();
+                if (prompts && prompts.length > 0) {
+                    this.showPromptModal(prompts[0]);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to poll prompts:', e);
+        }
+    }
+
+    showPromptModal(prompt) {
+        this.activePromptId = prompt.id;
+        this.promptQuestion.textContent = prompt.question;
+        this.promptInput.value = '';
+        this.promptModal.classList.add('visible');
+        setTimeout(() => this.promptInput.focus(), 100);
+
+        // Optional: Speak the question if voice is enabled
+        if (this.voiceEnabled) {
+            this.speak(`AI is asking: ${prompt.question}`);
+        }
+    }
+
+    async submitPromptAnswer() {
+        if (!this.activePromptId) return;
+
+        const answer = this.promptInput.value.trim();
+        if (!answer) return;
+
+        const promptId = this.activePromptId;
+        this.activePromptId = null; // Prevent double submission
+        
+        try {
+            this.promptSubmitBtn.textContent = 'Submitting...';
+            this.promptSubmitBtn.disabled = true;
+
+            const response = await fetch(`/api/prompt/${promptId}/answer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ answer })
+            });
+
+            if (response.ok) {
+                this.promptModal.classList.remove('visible');
+            } else {
+                console.error('Failed to submit answer');
+                this.activePromptId = promptId; // Restore active prompt
+            }
+        } catch (e) {
+            console.error('Error submitting answer:', e);
+            this.activePromptId = promptId;
+        } finally {
+            this.promptSubmitBtn.textContent = 'Submit Answer';
+            this.promptSubmitBtn.disabled = false;
+        }
     }
 }
 

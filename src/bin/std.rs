@@ -795,7 +795,7 @@ async fn main() -> Result<()> {
             println!("  status   Check daemon status");
             println!("  restart  Restart the daemon");
             println!();
-            println!("HTTP Endpoints (port 8420):");
+            println!("HTTP Endpoints (port 28428):");
             println!("  /cli/scan   - CLI thin-client scanning");
             println!("  /v1/*       - LLM Proxy (OpenAI-compatible)");
             println!("  /mcp/*      - HTTP MCP protocol");
@@ -814,10 +814,11 @@ async fn main() -> Result<()> {
 async fn start_unified_daemon(socket_config: DaemonConfig) -> Result<()> {
     // Start HTTP daemon in background task
     let http_config = st::daemon::DaemonConfig {
-        port: 8420,
+        port: 28428,
         watch_paths: vec![std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))],
         orchestrator_url: None, // Foken credits disabled for now
         enable_credits: false,
+        allow_external: false,
     };
 
     tokio::spawn(async move {

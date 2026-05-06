@@ -21,6 +21,7 @@ pub mod directory;
 pub mod feedback;
 pub mod file_history;
 pub mod git;
+pub mod interactive;
 pub mod search;
 pub mod server;
 pub mod smart_read;
@@ -39,6 +40,7 @@ pub use directory::{
 pub use feedback::{check_for_updates, request_tool, submit_feedback};
 pub use file_history::{get_file_history, get_project_history_summary, track_file_operation};
 pub use git::get_git_status;
+
 pub use search::{
     find_build_files, find_code_files, find_config_files, find_documentation, find_duplicates,
     find_empty_directories, find_files, find_in_timespan, find_large_files, find_projects,
@@ -771,6 +773,20 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
             }),
         },
         ToolDefinition {
+            name: "ask_user".to_string(),
+            description: "🗣️ Ask the human user a question and wait for their answer via the Smart Tree web dashboard. Ideal for clarifying requirements, getting explicit permission, or prompting for input without filling the chat log.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question or prompt to ask the user"
+                    }
+                },
+                "required": ["question"]
+            }),
+        },
+        ToolDefinition {
             name: "watch_directory_sse".to_string(),
             description: "🔄 Watch a directory for real-time changes via Server-Sent Events (SSE). Streams file creation, modification, and deletion events as they happen. Perfect for monitoring active development directories, build outputs, or log folders. Returns an SSE endpoint URL that can be consumed by EventSource API.".to_string(),
             input_schema: json!({
@@ -886,75 +902,159 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         // Smart edit tools
         ToolDefinition {
             name: "smart_edit".to_string(),
-            description: "🚀 Apply multiple smart code edits using minimal tokens! Uses AST understanding to insert functions, replace bodies, add imports, etc. without sending full diffs. Revolutionary token-efficient editing that understands code structure!".to_string(),
+            description: "🚀 Apply multiple smart code edits using minimal tokens! Uses AST understanding to insert functions, replace bodies, add imports, etc. without sending full diffs. Revolutionary token-efficient editing that understands code structure!
+
+📋 OPERATION FIELD REQUIREMENTS:
+• InsertFunction: name (required), body (required), class_name, namespace, after, before, visibility
+• ReplaceFunction: name (required), new_body (required), class_name
+• AddImport: import (required), alias
+• InsertClass: name (required), body (required), namespace, extends, implements
+• AddMethod: class_name (required), method_name (required), body (required), visibility
+• WrapCode: start_line (required), end_line (required), wrapper_type (required), condition
+• DeleteElement: element_type (required), name (required), parent
+• Rename: old_name (required), new_name (required), scope
+• AddDocumentation: target_type (required), target_name (required), documentation (required)
+• SmartAppend: section (required), content (required)
+
+💡 EXAMPLES:
+• Insert function: {operation:'InsertFunction', name:'validate', body:'fn validate(x: i32) -> bool { x > 0 }', visibility:'public'}
+• Add import: {operation:'AddImport', import:'std::collections::HashMap'}
+• Insert class: {operation:'InsertClass', name:'Config', body:'struct Config { value: i32 }'}
+• Smart append: {operation:'SmartAppend', section:'functions', content:'fn helper() {}'}".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Path to the file to edit"
+                        "description": "Path to the file to edit (REQUIRED)"
                     },
                     "edits": {
                         "type": "array",
-                        "description": "Array of smart edit operations",
+                        "description": "Array of smart edit operations (REQUIRED). Each operation has different required fields - see operation-specific requirements in tool description.",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "operation": {
                                     "type": "string",
-                                    "description": "Edit operation type",
+                                    "description": "Edit operation type (REQUIRED for all edits)",
                                     "enum": ["InsertFunction", "ReplaceFunction", "AddImport", "InsertClass", "AddMethod", "WrapCode", "DeleteElement", "Rename", "AddDocumentation", "SmartAppend"]
                                 },
                                 "name": {
                                     "type": "string",
-                                    "description": "Name of the element (function, class, etc.)"
+                                    "description": "Name of element (REQUIRED for InsertFunction, InsertClass, ReplaceFunction, DeleteElement)"
                                 },
                                 "class_name": {
                                     "type": "string",
-                                    "description": "Optional class name for methods"
+                                    "description": "Class name (optional for InsertFunction/ReplaceFunction, REQUIRED for AddMethod)"
+                                },
+                                "method_name": {
+                                    "type": "string",
+                                    "description": "Method name (REQUIRED for AddMethod)"
                                 },
                                 "namespace": {
                                     "type": "string",
-                                    "description": "Optional namespace"
+                                    "description": "Namespace (optional for InsertFunction, InsertClass)"
                                 },
                                 "body": {
                                     "type": "string",
-                                    "description": "Code body to insert/replace"
+                                    "description": "Code body (REQUIRED for InsertFunction, InsertClass, AddMethod)"
                                 },
                                 "new_body": {
                                     "type": "string",
-                                    "description": "New body for ReplaceFunction"
+                                    "description": "New body (REQUIRED for ReplaceFunction)"
                                 },
                                 "import": {
                                     "type": "string",
-                                    "description": "Import statement for AddImport"
+                                    "description": "Import statement (REQUIRED for AddImport)"
                                 },
                                 "alias": {
                                     "type": "string",
-                                    "description": "Optional alias for imports"
+                                    "description": "Import alias (optional for AddImport)"
                                 },
                                 "after": {
                                     "type": "string",
-                                    "description": "Insert after this function/method"
+                                    "description": "Insert after this element (optional positioning for InsertFunction)"
                                 },
                                 "before": {
                                     "type": "string",
-                                    "description": "Insert before this function/method"
+                                    "description": "Insert before this element (optional positioning for InsertFunction)"
                                 },
                                 "visibility": {
                                     "type": "string",
-                                    "description": "Visibility modifier",
-                                    "enum": ["public", "private", "protected"],
-                                    "default": "private"
+                                    "description": "Visibility modifier (optional, defaults to 'private')",
+                                    "enum": ["public", "private", "protected"]
                                 },
                                 "section": {
                                     "type": "string",
-                                    "description": "Section for SmartAppend",
+                                    "description": "Target section (REQUIRED for SmartAppend)",
                                     "enum": ["imports", "functions", "classes", "main"]
                                 },
                                 "content": {
                                     "type": "string",
-                                    "description": "Content to append"
+                                    "description": "Content to append (REQUIRED for SmartAppend)"
+                                },
+                                "element_type": {
+                                    "type": "string",
+                                    "description": "Element type to delete (REQUIRED for DeleteElement)",
+                                    "enum": ["function", "class", "method"]
+                                },
+                                "parent": {
+                                    "type": "string",
+                                    "description": "Parent element name (optional for DeleteElement)"
+                                },
+                                "old_name": {
+                                    "type": "string",
+                                    "description": "Current name (REQUIRED for Rename)"
+                                },
+                                "new_name": {
+                                    "type": "string",
+                                    "description": "New name (REQUIRED for Rename)"
+                                },
+                                "scope": {
+                                    "type": "string",
+                                    "description": "Rename scope (optional for Rename)",
+                                    "enum": ["global", "class", "function"]
+                                },
+                                "target_type": {
+                                    "type": "string",
+                                    "description": "Documentation target type (REQUIRED for AddDocumentation)",
+                                    "enum": ["function", "class", "method"]
+                                },
+                                "target_name": {
+                                    "type": "string",
+                                    "description": "Target element name (REQUIRED for AddDocumentation)"
+                                },
+                                "documentation": {
+                                    "type": "string",
+                                    "description": "Documentation text (REQUIRED for AddDocumentation)"
+                                },
+                                "start_line": {
+                                    "type": "number",
+                                    "description": "Start line (REQUIRED for WrapCode)"
+                                },
+                                "end_line": {
+                                    "type": "number",
+                                    "description": "End line (REQUIRED for WrapCode)"
+                                },
+                                "wrapper_type": {
+                                    "type": "string",
+                                    "description": "Wrapper construct (REQUIRED for WrapCode)",
+                                    "enum": ["try", "if", "while", "for"]
+                                },
+                                "condition": {
+                                    "type": "string",
+                                    "description": "Wrapper condition (optional for WrapCode)"
+                                },
+                                "extends": {
+                                    "type": "string",
+                                    "description": "Base class (optional for InsertClass)"
+                                },
+                                "implements": {
+                                    "type": "array",
+                                    "description": "Interfaces to implement (optional for InsertClass)",
+                                    "items": {
+                                        "type": "string"
+                                    }
                                 }
                             },
                             "required": ["operation"]
@@ -973,6 +1073,24 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                     "file_path": {
                         "type": "string",
                         "description": "Path to the file to analyze"
+                    }
+                },
+                "required": ["file_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "create_file".to_string(),
+            description: "📝 Create a new file with initial content. Automatically creates parent directories if needed. Perfect for starting a new file before using smart_edit operations! Use this BEFORE attempting to edit a non-existent file.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to create (REQUIRED). File must not already exist."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Initial file content (optional, defaults to empty file)"
                     }
                 },
                 "required": ["file_path"]
@@ -1548,6 +1666,9 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "request_tool" => request_tool(args, ctx_clone.clone()).await,
         "check_for_updates" => check_for_updates(args, ctx_clone.clone()).await,
 
+        // Interactive tools
+        "ask_user" => interactive::ask_user(Some(args), ctx_clone.clone()).await,
+
         // SSE tools
         "watch_directory_sse" => watch_directory_sse(args, ctx_clone.clone()).await,
 
@@ -1567,6 +1688,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         "get_function_tree" => crate::mcp::smart_edit::handle_get_function_tree(Some(args)).await,
         "insert_function" => crate::mcp::smart_edit::handle_insert_function(Some(args)).await,
         "remove_function" => crate::mcp::smart_edit::handle_remove_function(Some(args)).await,
+        "create_file" => crate::mcp::smart_edit::handle_create_file(Some(args)).await,
 
         // Context gathering tools (delegated to context_tools module)
         "gather_project_context" => {
@@ -1657,6 +1779,17 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
 
     // Enhance the response with helpful recommendations
     let enhanced_result = ctx.assistant.enhance_response(tool_name, result).await;
+
+    // Global safeguard: Prevent returning massive context to the AI
+    let stringified = serde_json::to_string(&enhanced_result)?;
+    if stringified.len() > 50_000 {
+        return Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": format!("⚠️ ERROR: Tool response was too large to return ({} bytes, max 50,000). The operation succeeded, but returning the data would overwhelm your context window.\n\nPlease use the 'limit' and 'offset' parameters to paginate through the results, or narrow the search parameters.", stringified.len())
+            }]
+        }));
+    }
 
     Ok(enhanced_result)
 }

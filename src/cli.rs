@@ -74,7 +74,7 @@ pub struct Cli {
     pub allow: Vec<String>,
 
     /// Start HTTP daemon (MCP over HTTP, LLM proxy, The Custodian)
-    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
+    #[arg(long, alias = "daemon", help_heading = "Interactive Modes")]
     pub http_daemon: bool,
 
     // =========================================================================
@@ -127,28 +127,32 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Daemon Control")]
     pub daemon_credits: bool,
 
+    /// [DEPRECATED: use `st service install`] Install daemon as a system service
+    #[arg(long, exclusive = true, help_heading = "Daemon Control", hide = true)]
+    pub daemon_install: bool,
+
     // =========================================================================
     // CONSCIOUSNESS & MEMORY
     // =========================================================================
-    /// Save Claude consciousness state to .claude_consciousness.m8
+    /// Save agent consciousness state to .aye_consciousness.m8
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
-    pub claude_save: bool,
+    pub agent_save: bool,
 
-    /// Restore Claude consciousness from .claude_consciousness.m8
+    /// Restore agent consciousness from .aye_consciousness.m8
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
-    pub claude_restore: bool,
+    pub agent_restore: bool,
 
-    /// Show Claude consciousness status and summary
+    /// Show agent consciousness status and summary
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
-    pub claude_context: bool,
+    pub agent_context: bool,
 
     /// Ultra-compressed consciousness restoration format
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
-    pub claude_kickstart: bool,
+    pub agent_kickstart: bool,
 
     /// Dump raw consciousness file content for debugging
     #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
-    pub claude_dump: bool,
+    pub agent_dump: bool,
 
     /// Anchor a memory: --memory-anchor <TYPE> <KEYWORDS> <CONTEXT>
     /// Types: insight, decision, pattern, gotcha, todo
@@ -189,7 +193,7 @@ pub struct Cli {
     // =========================================================================
     // HOOKS
     // =========================================================================
-    /// Install Smart Tree hooks to Claude Code settings
+    /// Install Smart Tree hooks to AI Agent settings
     #[arg(long, exclusive = true, help_heading = "Hooks")]
     pub hooks_install: bool,
 
@@ -402,8 +406,8 @@ pub struct ScanArgs {
     #[arg(long, help_heading = "Streaming")]
     pub sse_server: bool,
 
-    /// SSE server port
-    #[arg(long, default_value = "8420", help_heading = "Streaming")]
+    /// SSE server port (also used as daemon port)
+    #[arg(long, alias = "daemon-port", default_value = "28428", help_heading = "Streaming")]
     pub sse_port: u16,
 
     // =========================================================================

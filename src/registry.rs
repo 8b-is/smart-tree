@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use reqwest::blocking::Client;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -95,8 +96,19 @@ pub struct MarineCodeAnalyzer {
 impl MarineCodeAnalyzer {
     /// Create a new analyzer
     pub fn new(registry_url: &str) -> Result<Self> {
+        let mut headers = HeaderMap::new();
+
+        if let Ok(token) = std::env::var("ST_ROOT_TOKEN") {
+            let mut auth_value = HeaderValue::try_from(token)
+                .context("Invalid characters in ST_ROOT_TOKEN")?;
+            auth_value.set_sensitive(true);
+            let header_name = HeaderName::from_static("x-api-key");
+            headers.insert(header_name, auth_value);
+        }
+
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
+            .default_headers(headers)
             .build()
             .context("Failed to create HTTP client")?;
 

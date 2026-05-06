@@ -5,6 +5,7 @@
 #![allow(clippy::wrong_self_convention)]
 #![allow(clippy::only_used_in_recursion)]
 #![allow(clippy::collapsible_match)]
+#![recursion_limit = "512"]  // Increased for deeply nested JSON schemas in MCP tools
 // It's like the table of contents for our awesome codebase,
 // declaring the modules that make up the `st` library and
 // re-exporting key items for convenient use.

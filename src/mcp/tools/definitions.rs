@@ -162,6 +162,8 @@ pub struct FindFilesArgs {
     pub older_than: Option<String>,
     #[serde(default = "default_max_depth")]
     pub max_depth: usize,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
 }
 
 /// Arguments for verify_permissions tool

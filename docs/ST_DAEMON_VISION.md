@@ -193,7 +193,7 @@ st --mode quantum .       # quantum compression
 
 # Remote operations
 st @server1 .             # remote daemon (cached)
-st @192.168.1.5:8420 .    # explicit address
+st @192.168.1.5:28428 .    # explicit address
 st @* --ping              # discover all daemons
 
 # Daemon control

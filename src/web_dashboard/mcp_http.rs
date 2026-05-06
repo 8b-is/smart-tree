@@ -344,7 +344,7 @@ pub async fn mcp_sse_handler(
         // Send the endpoint event as required by MCP SSE protocol
         Ok(Event::default()
             .event("endpoint")
-            .data(format!("http://localhost:8420/mcp/message?session_id={}", session_id))),
+            .data(format!("http://localhost:28428/mcp/message?session_id={}", session_id))),
         // Send a welcome message
         Ok(Event::default()
             .event("message")

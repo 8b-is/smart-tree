@@ -134,6 +134,11 @@ pub enum CollabMessage {
         participants: Vec<ParticipantSummary>,
         hot_tub_count: usize,
     },
+    /// AI Prompt Request
+    Prompt {
+        prompt_id: String,
+        question: String,
+    },
 }
 
 /// Lightweight participant info for presence updates
@@ -300,6 +305,15 @@ impl CollaborationHub {
     pub fn announce(&self, message: impl Into<String>) {
         let msg = CollabMessage::System {
             message: message.into(),
+        };
+        let _ = self.broadcast_tx.send(msg);
+    }
+
+    /// Broadcast an AI prompt
+    pub fn announce_prompt(&self, prompt_id: String, question: String) {
+        let msg = CollabMessage::Prompt {
+            prompt_id,
+            question,
         };
         let _ = self.broadcast_tx.send(msg);
     }

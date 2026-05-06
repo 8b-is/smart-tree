@@ -5,7 +5,7 @@
 
 ```bash
 # Install (pick your poison)
-cargo install st                           # From source
+cargo install smart-tree                   # From crates.io
 brew install smart-tree                    # macOS
 curl -L bit.ly/smart-tree | bash          # Universal installer
 
@@ -138,7 +138,7 @@ st --newer-than 2025-01-01 --sort newest --top 20
 st -m summary-ai ~/projects/big-codebase > context.txt
 
 # The "Live Monitor" Jam Session
-st --sse-server --sse-port 8420 /path/to/watch
+st --sse-server --sse-port 28428 /path/to/watch
 ```
 
 ## 🔮 8-O Mode Preview (Coming Soon!)
@@ -192,7 +192,7 @@ st --hot-tub  # Collaborative debugging with Omni! 🛁
 
 ```bash
 # Cargo (Rust users)
-cargo install st --version 4.0.0
+cargo install smart-tree
 
 # From source (hackers)
 git clone https://github.com/8b-is/smart-tree.git

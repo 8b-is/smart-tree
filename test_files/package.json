@@ -8,7 +8,7 @@
     "build": "echo 'Building Smart Tree test suite...'",
     "start": "node test.js",
     "quantum": "echo 'Activating MEM|8 quantum compression...'",
-    "mcp": "echo 'Starting MCP server on port 8420...'"
+    "mcp": "echo 'Starting MCP server on port 28428...'"
   },
   "keywords": [
     "smart-tree",
@@ -48,7 +48,7 @@
     "consciousness": true
   },
   "config": {
-    "port": 8420,
+    "port": 28428,
     "mode": "quantum",
     "features": {
       "streaming": true,

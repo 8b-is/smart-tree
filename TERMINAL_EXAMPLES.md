@@ -238,11 +238,11 @@ $ st --mode semantic src/
 ## Live SSE Monitoring
 
 ```bash
-$ st --sse-server --sse-port 8420 /project
+$ st --sse-server --sse-port 28428 /project
 ```
 
 ```
-🌐 SSE Server Started on http://localhost:8420
+🌐 SSE Server Started on http://localhost:28428
 📡 Monitoring: /project
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [08:16:44] 📝 Modified: src/main.rs

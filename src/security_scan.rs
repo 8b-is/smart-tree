@@ -245,15 +245,26 @@ impl SecurityScanner {
     fn scan_content(&self, file_path: &Path, content: &str, findings: &mut Vec<SecurityFinding>) {
         let path_str = file_path.to_string_lossy();
 
-        // Determine if this is an executable context or history
+        // Determine if this is an executable context, documentation, or history
         let is_executable = self.executable_paths.iter().any(|p| path_str.contains(p));
         let is_history = self.history_paths.iter().any(|p| path_str.contains(p));
+        let is_documentation = matches!(
+            file_path.extension().and_then(|e| e.to_str()),
+            Some("txt" | "md" | "rst" | "adoc" | "org")
+        ) || path_str.contains("docs/") || path_str.contains("doc/");
 
         for (line_number, line) in content.lines().enumerate() {
             for pattern in &self.patterns {
                 if let Some(m) = pattern.regex.find(line) {
                     // Adjust risk based on context
-                    let adjusted_risk = if is_history {
+                    let adjusted_risk = if is_documentation {
+                        // Documentation/notes just *mention* packages — not a real threat
+                        match pattern.risk_level {
+                            RiskLevel::Critical => RiskLevel::Low,
+                            RiskLevel::High => RiskLevel::Low,
+                            _ => continue, // skip Medium/Low entirely for docs
+                        }
+                    } else if is_history {
                         // History files are lower risk
                         match pattern.risk_level {
                             RiskLevel::Critical => RiskLevel::Medium,

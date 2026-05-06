@@ -12,6 +12,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use tower_http::cors::CorsLayer;
 use ipnet::IpNet;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
@@ -128,6 +129,9 @@ pub async fn start_server(
             "/api/config/theme",
             get(api::get_theme_config).post(api::save_theme_config),
         )
+        // Prompt endpoints
+        .route("/api/prompt", get(api::get_active_prompts).post(api::ask_prompt))
+        .route("/api/prompt/:prompt_id/answer", post(api::answer_prompt))
         // WebSocket endpoints
         .route("/ws/terminal", get(websocket::terminal_handler))
         .route("/ws/state", get(state_sync::state_handler))
@@ -137,6 +141,7 @@ pub async fn start_server(
         .route("/api/voice/register", post(voice::register_speaker))
         .route("/api/voice/speak", post(voice::speak))
         .layer(axum::Extension(allowed.clone()))
+        .layer(CorsLayer::permissive())
         .with_state(state);
 
     // Bind to all interfaces if networks specified, localhost otherwise

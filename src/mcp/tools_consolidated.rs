@@ -150,6 +150,7 @@ pub async fn handle_edit(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
         "get_functions" => "get_function_tree",
         "insert_function" => "insert_function",
         "remove_function" => "remove_function",
+        "create_file" => "create_file",
         _ => return Err(anyhow::anyhow!("Unknown edit operation: {}", operation)),
     };
 
@@ -279,6 +280,14 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     "end_date": {
                         "type": "string",
                         "description": "End date YYYY-MM-DD (for timespan type)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (for pagination)"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Number of results to skip (for pagination)"
                     }
                 },
                 "required": ["type"]
@@ -637,9 +646,20 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "required": ["path"]
             }
         }),
-        // Google Drive + Gmail integration (only when feature enabled)
-        #[cfg(feature = "google")]
-        super::google::get_google_tool_definition(),
+        json!({
+            "name": "ask_user",
+            "description": "🗣️ Ask the human user a question and wait for their answer via the Smart Tree web dashboard. Ideal for clarifying requirements, getting explicit permission, or prompting for input without filling the chat log.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question or prompt to ask the user"
+                    }
+                },
+                "required": ["question"]
+            }
+        }),
     ]
 }
 
@@ -709,9 +729,13 @@ pub async fn dispatch_consolidated_tool(
             )
             .await
         }
-        // 🌐 Google Drive + Gmail integration
-        #[cfg(feature = "google")]
-        "google" => super::google::handle_google(params, ctx).await,
+        "ask_user" => {
+            super::tools::handle_tools_call(
+                json!({ "name": "ask_user", "arguments": params }),
+                ctx,
+            )
+            .await
+        }
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }
 }

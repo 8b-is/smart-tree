@@ -25,7 +25,7 @@ windows:
             - n8x assign Claude --branch claude-main
             - echo "# Claude ready for wave-synchronized development"
         - omni:
-            - n8x assign Omni --branch omni-features
+            - n8x assign Omni --branch omni-featuress
             - echo "# Omni ready for collaborative coding"
         - human:
             - n8x assign Human --branch main

@@ -576,7 +576,20 @@ async fn handle_consolidated_tools_call(params: Value, ctx: Arc<McpContext>) -> 
     let args = params.get("arguments").cloned();
 
     // The consolidated tools already return properly formatted responses
-    tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await
+    let result = tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await?;
+
+    // Global safeguard: Prevent returning massive context to the AI
+    let stringified = serde_json::to_string(&result)?;
+    if stringified.len() > 50_000 {
+        return Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": format!("⚠️ ERROR: Tool '{}' response was too large to return ({} bytes, max 50,000). The operation succeeded, but returning the data would overwhelm your context window.\n\nPlease use the 'limit' and 'offset' parameters to paginate through the results, or narrow the search parameters.", tool_name, stringified.len())
+            }]
+        }));
+    }
+
+    Ok(result)
 }
 
 /// Check for updates when MCP tools initialize (non-blocking, with timeout)

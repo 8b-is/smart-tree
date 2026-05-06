@@ -6,37 +6,37 @@
  */
 
 :root {
-    --bg-primary: #f6f0e6;
-    --bg-secondary: #f0e5d4;
-    --bg-tertiary: #e6d8c4;
-    --bg-hover: #f7ead5;
+    --bg-primary: #0a0e17;
+    --bg-secondary: #0d121c;
+    --bg-tertiary: #131a26;
+    --bg-hover: rgba(0, 255, 204, 0.1);
 
-    --fg-primary: #1f1a14;
-    --fg-secondary: #3c3125;
-    --fg-dim: #6c5b47;
-    --fg-muted: #8b7a64;
+    --fg-primary: #e8f2ec;
+    --fg-secondary: #b8c9c1;
+    --fg-dim: #738a81;
+    --fg-muted: #4e635b;
 
-    --accent-primary: #1f7a6e;
-    --accent-secondary: #b06a2e;
-    --accent-tertiary: #e07a5f;
+    --accent-primary: #00ffcc;
+    --accent-secondary: #ff9d00;
+    --accent-tertiary: #b05cba;
 
-    --border-color: #d9c8b1;
-    --error: #d14f4f;
-    --warning: #c98a2f;
-    --success: #2f9e6f;
+    --border-color: rgba(0, 255, 204, 0.2);
+    --error: #ff3366;
+    --warning: #ffb84d;
+    --success: #00ffcc;
 
-    --glow-primary: 0 0 12px rgba(31, 122, 110, 0.25);
-    --glow-secondary: 0 0 12px rgba(176, 106, 46, 0.22);
+    --glow-primary: 0 0 15px rgba(0, 255, 204, 0.4);
+    --glow-secondary: 0 0 15px rgba(255, 157, 0, 0.4);
 
-    --surface-1: rgba(255, 255, 255, 0.72);
-    --surface-2: rgba(255, 255, 255, 0.88);
-    --surface-3: rgba(255, 255, 255, 0.96);
-    --shadow-soft: 0 12px 30px rgba(31, 26, 20, 0.12);
-    --shadow-lift: 0 16px 40px rgba(31, 26, 20, 0.2);
+    --surface-1: rgba(10, 14, 23, 0.6);
+    --surface-2: rgba(13, 18, 28, 0.7);
+    --surface-3: rgba(19, 26, 38, 0.8);
+    --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.6);
+    --shadow-lift: 0 16px 40px rgba(0, 0, 0, 0.8);
 
-    --terminal-bg: #0f1815;
-    --terminal-border: #1f2d26;
-    --terminal-glow: rgba(31, 122, 110, 0.25);
+    --terminal-bg: #05070a;
+    --terminal-border: rgba(0, 255, 204, 0.2);
+    --terminal-glow: rgba(0, 255, 204, 0.15);
 
     --border-radius: 12px;
     --sidebar-width: 270px;
@@ -58,9 +58,9 @@
 body {
     font-family: 'Space Grotesk', 'Avenir Next', sans-serif;
     font-size: 13px;
-    background: radial-gradient(1200px 800px at 10% -10%, rgba(31, 122, 110, 0.18), transparent 60%),
-        radial-gradient(900px 600px at 110% 10%, rgba(224, 122, 95, 0.22), transparent 60%),
-        linear-gradient(180deg, #f6f0e6 0%, #f2e7d7 60%, #efe1cd 100%);
+    background: radial-gradient(1200px 800px at 10% -10%, rgba(0, 255, 204, 0.15), transparent 60%),
+        radial-gradient(900px 600px at 110% 10%, rgba(255, 157, 0, 0.15), transparent 60%),
+        linear-gradient(180deg, #0a0e17 0%, #080a10 100%);
     color: var(--fg-primary);
     overflow: hidden;
     height: 100vh;
@@ -74,8 +74,8 @@ body::after {
     inset: -10% -10% auto auto;
     width: 420px;
     height: 420px;
-    background: radial-gradient(circle, rgba(176, 106, 46, 0.18), transparent 60%);
-    filter: blur(10px);
+    background: radial-gradient(circle, rgba(0, 255, 204, 0.1), transparent 60%);
+    filter: blur(15px);
     animation: float 14s ease-in-out infinite;
     pointer-events: none;
     z-index: 0;
@@ -85,7 +85,7 @@ body::after {
     inset: auto auto -15% -10%;
     width: 520px;
     height: 520px;
-    background: radial-gradient(circle, rgba(31, 122, 110, 0.16), transparent 65%);
+    background: radial-gradient(circle, rgba(255, 157, 0, 0.1), transparent 65%);
     animation-delay: -6s;
 }
 
@@ -138,15 +138,17 @@ body::after {
 }
 
 .logo-icon {
-    font-size: 18px;
+    font-size: 20px;
     color: var(--accent-primary);
+    text-shadow: var(--glow-primary);
 }
 
 .logo-text {
     font-family: 'Fraunces', serif;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--fg-primary);
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 10px rgba(0, 255, 204, 0.3);
 }
 
 .header-actions {

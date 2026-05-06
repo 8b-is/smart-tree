@@ -13,7 +13,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Base URL
-BASE_URL="http://localhost:8420"
+BASE_URL="http://localhost:28428"
 
 echo -e "${BLUE}Test 1: Basic SSE Connection${NC}"
 echo "Command: curl -N -H 'Accept: text/event-stream' $BASE_URL/sse"

@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v6.6.0 - Lightning Fast Directory Visualization with Wave Compass! 🌐
+# 🌳 Smart Tree v8.0.0 - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-6.6.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-8.0.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -8,7 +8,7 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Security Scanner** for supply chain attack detection, **Claude Consciousness** preservation, **Spicy TUI mode**, and **30+ MCP tools**! Built with Rust for maximum performance.
+> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Security Scanner** for supply chain attack detection, **Aye Consciousness** preservation, **Spicy TUI mode**, and **30+ MCP tools**! Built with Rust for maximum performance.
 
 ---
 
@@ -18,14 +18,40 @@
 # Linux/macOS/WSL - One line install
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
 
-# Or with cargo
-cargo install --git https://github.com/8b-is/smart-tree
+# Or with cargo (now on crates.io!)
+cargo install smart-tree
 
 # Verify installation
 st --version
 ```
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
+
+### 🎯 Interactive Menu
+
+Smart Tree now includes an interactive menu for easy access to all features:
+
+```bash
+# Launch interactive setup menu (MCP setup, health checks, etc.)
+./scripts/interactive_setup.sh
+
+# Or use the developer menu
+./scripts/manage.sh menu
+
+# Run client menu for quick access to different modes
+./scripts/manage.sh client
+```
+
+**Client Menu Options:**
+1. 🌳 **Basic Tree View** - Classic directory visualization
+2. 🌶️ **Spicy TUI** - Interactive file browser with fuzzy search
+3. 🧠 **Terminal Interface** - Full terminal with AI context
+4. 📊 **Web Dashboard** - Browser-based file explorer
+5. 🚀 **HTTP Daemon** - MCP + LLM Proxy + The Custodian
+6. 🔧 **MCP Server** - Model Context Protocol (stdio)
+7. 🌊 **Custom Command** - Enter any st command
+
+The menu makes it easy to explore Smart Tree's features without memorizing commands!
 
 ---
 
@@ -88,26 +114,19 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v6.6.0
+## 🌟 What's NEW in v8.0.0
 
-| Feature | Description | Command |
-|---------|-------------|---------|
+| Feature | Description | Command/Tool |
+|---------|-------------|--------------|
+| **🌳 The Smart Treehouse** | Premium Cyber-Botanical dark-mode dashboard overhaul and stylish CLI ASCII banner. | `st --dashboard` |
+| **🤖 Remote AI Prompting** | The `ask_user` tool lets AI pause execution, trigger a modal on the dashboard, and ask the human a question. | `ask_user` MCP |
+| **🌍 Agent-Agnostic Integration** | Removed Claude-specific constraints. Hooks and flags are now generalized for any AI (e.g., `st --agent-save`). | `st --hooks-install` |
+| **🧰 Unified MCP Tools** | Intelligently consolidated 50+ granular tools into ~15 powerful, AI-friendly endpoints. | MCP |
+| **🚀 Enhanced AI Context** | AI tools now come bundled with psychological triggers, usage examples, and efficiency tips! | MCP |
+| **🎯 Interactive Menu** | Easy access to all Smart Tree features with guided menus | `./scripts/manage.sh client` |
 | **🧭 Wave Compass** | Real-time MCP activity visualization with file access heatmap | `st --dashboard` |
-| **🔇 Silent MCP** | Protocol-compliant server startup (no stderr noise) | `st --mcp` |
 | **🎙️ Voice Input** | Push-to-talk voice hints (ready for liquid-rust) | Dashboard UI |
-| **⚡ 60fps State Sync** | WebSocket-based real-time dashboard updates | Automatic |
-| **🌐 Web Dashboard** | Browser-based dashboard with real PTY terminal! | `st --dashboard` |
-| **🌿 Git Branch Display** | Shows current branch in directory listings | Automatic for .git dirs |
-| **🔒 Network Allow-listing** | CIDR-based access control for remote dashboard | `st --dashboard --allow 10.0.0.0/8` |
 | **🛡️ Security Scanner** | Detect supply chain attack patterns | `st --security-scan` |
-| **🚀 MCP Auto-Installer** | One command to add Smart Tree to Claude Desktop! | `st --mcp-install` |
-| **🧠 Claude Consciousness** | Save/restore AI session state & context | `st --claude-save/restore/context` |
-| **📝 Memory Anchoring** | Persistent insight storage with keywords | `st --memory-anchor` / `--memory-find` |
-| **🌶️ Spicy TUI** | Interactive terminal UI with fuzzy search & M8 caching | `st --spicy` |
-| **🎣 MCP Hooks** | Programmatic Claude Code hook management | `st --hooks-install` |
-| **🎸 Marqant Compression** | 70-90% markdown compression | `mq compress file.md` |
-| **🌊 SSE Streaming** | Real-time directory monitoring | `st --sse` |
-| **🌲 Tree-Sitter** | AST-aware code editing | `st --mode edit` |
 
 </div>
 
@@ -124,7 +143,7 @@ st --spicy                  # 🌶️ Spicy interactive TUI mode!
 st --mode ai --compress     # AI-optimized (80% smaller)
 st --mode quantum           # Quantum compression (100x smaller!)
 st --search "TODO"          # Lightning-fast content search
-st --claude-save            # Save AI session consciousness
+st --agent-save             # Save AI session consciousness
 st --memory-anchor insight "key concepts" "Important findings about X"
 ```
 
@@ -136,8 +155,8 @@ curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/instal
 # Option 2: Homebrew (builds from source)
 brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree/main/Formula/smart-tree.rb
 
-# Option 3: Cargo (builds from source)
-cargo install --git https://github.com/8b-is/smart-tree --tag v6.6.0 st
+# Option 3: Cargo from crates.io (builds from source)
+cargo install smart-tree
 
 # 🚀 One-command MCP setup for Claude Desktop!
 st --mcp-install    # Auto-adds Smart Tree to Claude Desktop config
@@ -149,7 +168,7 @@ st --spicy                  # 🌶️ Spicy interactive TUI mode!
 st --mode ai --compress     # AI-optimized (80% smaller)
 st --mode quantum           # Quantum compression (100x smaller!)
 st --search "TODO"          # Lightning-fast content search
-st --claude-save            # Save AI session consciousness
+st --agent-save             # Save AI session consciousness
 st --memory-anchor insight "key concepts" "Important findings about X"
 ```
 
@@ -178,16 +197,16 @@ st --mcp-uninstall
 
 **After installing, restart Claude Desktop and you'll have access to 30+ MCP tools!**
 
-## 🧠 Claude Consciousness
+## 🧠 Aye Consciousness
 
 Smart Tree now preserves AI session consciousness between interactions! Never lose context when switching sessions.
 
 ### Save & Restore Sessions
 ```bash
-st --claude-save              # Save current session consciousness
-st --claude-restore           # Load previous session state
-st --claude-context           # Check consciousness status
-st --claude-kickstart         # Ultra-compressed restoration format
+st --agent-save               # Save current session consciousness
+st --agent-restore            # Load previous session state
+st --agent-context            # Check consciousness status
+st --agent-kickstart          # Ultra-compressed restoration format
 ```
 
 **What gets saved:**
@@ -197,7 +216,7 @@ st --claude-kickstart         # Ultra-compressed restoration format
 - Tokenization rules (0x80 = node_modules, 0x91 = .rs files)
 - Project-specific patterns and conventions
 
-The `.claude_consciousness.m8` file maintains continuity between sessions, making AI assistance more efficient and contextually aware.
+The `.aye_consciousness.m8` file maintains continuity between sessions, making AI assistance more efficient and contextually aware.
 
 ### Memory Anchoring
 Permanently store insights with searchable keywords:
@@ -269,17 +288,18 @@ st --spicy
 Fire up the web-based dashboard with a real terminal, file browser, and markdown preview:
 
 ```bash
-st --dashboard                    # Start on localhost:8420
+st --dashboard                    # Start on localhost:28428
 st --dashboard --port 9000        # Custom port
 st --dashboard --open             # Auto-open browser
 st --dashboard --allow 192.168.1.0/24  # Allow network access from subnet
 ```
 
 ### Features:
+- **🌳 The Smart Treehouse**: Premium Cyber-Botanical dark-mode aesthetic with CRT effects!
+- **🤖 Remote AI Prompting**: Allows connected AI agents to trigger interactive modals and ask you questions directly on the dashboard!
 - **🖥️ Real PTY Terminal**: Full bash/zsh with vim, htop, colors - everything works!
 - **📁 File Browser**: Navigate directories, click to preview files
 - **📝 Markdown Preview**: Render .md files beautifully
-- **🎨 Terminal Aesthetic**: Cyberpunk green-on-black theme with CRT effects
 - **🔒 Network Security**: Localhost-only by default, use `--allow` for remote access
 
 ### Keyboard Shortcuts:
@@ -313,7 +333,7 @@ std status                # Check status
 ### For LLMs:
 The daemon exposes endpoints for AI assistants to connect:
 - Unix socket for CLI (binary protocol)
-- HTTP on port 8420 for web/SSE
+- HTTP on port 28428 for web/SSE
 - Memory verbs: REMEMBER, RECALL, FORGET, M8_WAVE
 
 ## 💡 Smart Tips System
@@ -524,7 +544,7 @@ st --modified 7d             # Files modified in last 7 days
 st --git-aware               # Show git status
 st --mode stats              # Directory statistics
 st --stream                  # Streaming mode for huge directories
-st --claude-save             # Save session consciousness
+st --agent-save              # Save session consciousness
 st --security-scan           # Scan for malware patterns & suspicious files
 st --token-stats             # Show tokenization efficiency
 st --update-consciousness    # Auto-maintain directory consciousness
@@ -586,6 +606,11 @@ st --mcp-config >> ~/Library/Application\ Support/Claude/claude_desktop_config.j
 - `track_file_operation`: Track file changes
 
 **Why**: Edit precisely without loading entire files.
+
+### 🗣️ Interaction Tools (Cross-Origin AI Prompting)
+- `ask_user`: Pause execution, trigger a modal on the web dashboard, and ask the human user a question!
+
+**Why**: Get explicit permission or clarify requirements without flooding the chat log.
 
 ### And 20+ more specialized tools!
 
