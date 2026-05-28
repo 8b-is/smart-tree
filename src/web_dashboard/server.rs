@@ -5,9 +5,9 @@ use crate::in_memory_logger::InMemoryLogStore;
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::ConnectInfo,
+    extract::{ConnectInfo, State},
     http::{header, Request, StatusCode},
-    middleware::Next,
+    middleware::{self, Next},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
     Router,
@@ -71,17 +71,12 @@ impl AllowedNetworks {
 
 /// Middleware to check if client IP is allowed
 async fn check_allowed_network(
+    State(allowed): State<AllowedNetworks>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let allowed = req
-        .extensions()
-        .get::<AllowedNetworks>()
-        .map(|nets| nets.is_allowed(addr.ip()))
-        .unwrap_or(true);
-
-    if allowed {
+    if allowed.is_allowed(addr.ip()) {
         Ok(next.run(req).await)
     } else {
         eprintln!("Rejected connection from {}", addr.ip());
@@ -140,7 +135,10 @@ pub async fn start_server(
         .route("/api/voice/transcribe", post(voice::transcribe))
         .route("/api/voice/register", post(voice::register_speaker))
         .route("/api/voice/speak", post(voice::speak))
-        .layer(axum::Extension(allowed.clone()))
+        .layer(middleware::from_fn_with_state(
+            allowed.clone(),
+            check_allowed_network,
+        ))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
