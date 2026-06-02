@@ -178,17 +178,44 @@ impl SecurityScanner {
         }
     }
 
+    /// Directories to skip entirely during directory walk (never descend into)
+    const SKIP_WALK_DIRS: &'static [&'static str] = &[
+        "node_modules",
+        ".git",
+        "target",
+        ".cargo",
+        ".rustup",
+        ".cache",
+        ".npm",
+        ".pnpm",
+        ".yarn",
+        "__pycache__",
+        ".venv",
+        "vendor",
+        ".gradle",
+        ".m2",
+    ];
+
     /// Scan a directory for security patterns
     /// Unlike normal st, this IGNORES gitignore and scans everything
     pub fn scan_directory(&self, path: &Path) -> Result<Vec<SecurityFinding>> {
         let mut findings = Vec::new();
 
-        // Walk directory without respecting gitignore
-        for entry in WalkDir::new(path)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        // Walk directory without respecting gitignore, but skip known non-source dirs
+        let walker = WalkDir::new(path).follow_links(false).into_iter();
+        for entry in walker.filter_entry(|e| {
+            // Skip known non-source directories at the directory level
+            if e.file_type().is_dir() {
+                if let Some(name) = e.file_name().to_str() {
+                    return !Self::SKIP_WALK_DIRS.contains(&name);
+                }
+            }
+            true
+        }) {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
             let file_path = entry.path();
 
             // Skip binary files and very large files
@@ -209,12 +236,48 @@ impl SecurityScanner {
     }
 
     fn should_scan_file(&self, path: &Path) -> bool {
+        let path_str = path.to_string_lossy();
+
+        // Skip directories that are never user-authored source code
+        let skip_dirs = [
+            "node_modules",
+            ".git",
+            "target/release",
+            "target/debug",
+            ".cargo/registry",
+            ".cargo/git",
+            ".rustup",
+            ".cache",
+            ".local/share",
+            ".npm",
+            ".pnpm",
+            ".yarn",
+            "__pycache__",
+            ".venv",
+            "vendor",
+            "dist",
+            "build/intermediates",
+            ".gradle",
+            ".m2",
+            ".go/pkg",
+            "go/pkg/mod",
+        ];
+
+        for skip in &skip_dirs {
+            // Match on path component boundaries (e.g. /node_modules/ or /node_modules at end)
+            if path_str.contains(&format!("/{}/", skip))
+                || path_str.ends_with(&format!("/{}", skip))
+            {
+                return false;
+            }
+        }
+
         // Skip binary extensions
         let skip_extensions = [
             "png", "jpg", "jpeg", "gif", "ico", "webp", "svg", "woff", "woff2", "ttf", "otf",
             "eot", "mp3", "mp4", "wav", "ogg", "webm", "zip", "tar", "gz", "bz2", "xz", "7z",
             "exe", "dll", "so", "dylib", "pdf", "doc", "docx", "xls", "xlsx", "pyc", "pyo",
-            "class", "o", "a", "wasm", "mem8",
+            "class", "o", "a", "wasm", "mem8", "rlib", "rmeta", "d",
         ];
 
         if let Some(ext) = path.extension() {
@@ -223,9 +286,9 @@ impl SecurityScanner {
             }
         }
 
-        // Skip very large files (>10MB)
+        // Skip very large files (>1MB - source files are rarely bigger)
         if let Ok(metadata) = fs::metadata(path) {
-            if metadata.len() > 10 * 1024 * 1024 {
+            if metadata.len() > 1024 * 1024 {
                 return false;
             }
         }
@@ -253,9 +316,31 @@ impl SecurityScanner {
             Some("txt" | "md" | "rst" | "adoc" | "org")
         ) || path_str.contains("docs/") || path_str.contains("doc/");
 
+        // Documentation files that DISCUSS threats should not be flagged as threats
+        let is_documentation = {
+            let ext = file_path
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            ext == "md" || ext == "rst" || ext == "txt" || ext == "adoc"
+                || path_str.contains("/docs/")
+                || path_str.contains("/documentation/")
+        };
+
+        // Source files that define scanner patterns (self-references)
+        let is_scanner_source = path_str.contains("security_scan")
+            || path_str.contains("security_scanner")
+            || path_str.contains("marqant");
+
         for (line_number, line) in content.lines().enumerate() {
             for pattern in &self.patterns {
                 if let Some(m) = pattern.regex.find(line) {
+                    // Skip findings in documentation and scanner source files -
+                    // these files DESCRIBE threats, they don't contain them
+                    if is_documentation || is_scanner_source {
+                        continue;
+                    }
+
                     // Adjust risk based on context
                     let adjusted_risk = if is_documentation {
                         // Documentation/notes just *mention* packages — not a real threat
