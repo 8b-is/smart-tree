@@ -405,7 +405,10 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/watch/hot", get(watch_hot_directories))
         .with_state(state)
         // Bearer token auth on all routes (except /health, handled inside middleware)
-        .layer(middleware::from_fn_with_state(load_all_tokens(), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            load_all_tokens(),
+            auth_middleware,
+        ))
         // HTTP MCP - Full protocol over HTTP! 🧹 The Custodian watching
         // (uses nest_service to allow different state type)
         .nest_service("/mcp", mcp_router(mcp_context));
@@ -450,7 +453,8 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
 // API Handlers
 
 async fn welcome_page() -> axum::response::Html<&'static str> {
-    axum::response::Html(r#"<!DOCTYPE html>
+    axum::response::Html(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -710,7 +714,8 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
         } catch (e) { console.log('WS not available'); }
     </script>
 </body>
-</html>"#)
+</html>"#,
+    )
 }
 
 async fn health() -> &'static str {
@@ -734,15 +739,16 @@ async fn info() -> Json<InfoResponse> {
 
 /// Get current configuration
 async fn get_settings() -> axum::response::Response {
-    use axum::response::IntoResponse;
     use crate::config::StConfig;
+    use axum::response::IntoResponse;
 
     match StConfig::load() {
         Ok(config) => {
             // Return as TOML for readability
             match toml::to_string_pretty(&config) {
                 Ok(toml_str) => {
-                    let html = format!(r#"<!DOCTYPE html>
+                    let html = format!(
+                        r#"<!DOCTYPE html>
 <html><head><title>Smart Tree Config</title>
 <style>
 body {{ font-family: monospace; background: #1a1a2e; color: #e0e0e0; padding: 2rem; }}
@@ -755,36 +761,43 @@ a {{ color: #4ecdc4; }}
 <p class="path">File: ~/.st/config.toml</p>
 <pre>{}</pre>
 <p><a href="/">← Back to Dashboard</a></p>
-</body></html>"#, toml_str);
+</body></html>"#,
+                        toml_str
+                    );
                     axum::response::Html(html).into_response()
                 }
                 Err(e) => (
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to serialize config: {}", e)
-                ).into_response()
+                    format!("Failed to serialize config: {}", e),
+                )
+                    .into_response(),
             }
         }
         Err(e) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to load config: {}", e)
-        ).into_response()
+            format!("Failed to load config: {}", e),
+        )
+            .into_response(),
     }
 }
 
 /// Update configuration (POST JSON)
 async fn update_settings(
-    axum::extract::Json(updates): axum::extract::Json<serde_json::Value>
+    axum::extract::Json(updates): axum::extract::Json<serde_json::Value>,
 ) -> axum::response::Response {
-    use axum::response::IntoResponse;
     use crate::config::StConfig;
+    use axum::response::IntoResponse;
 
     // Load existing config
     let mut config = match StConfig::load() {
         Ok(c) => c,
-        Err(e) => return (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to load config: {}", e)
-        ).into_response()
+        Err(e) => {
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to load config: {}", e),
+            )
+                .into_response()
+        }
     };
 
     // Apply updates (simple key-based for now)
@@ -802,11 +815,14 @@ async fn update_settings(
 
     // Save
     match config.save() {
-        Ok(_) => Json(serde_json::json!({"status": "ok", "message": "Config updated"})).into_response(),
+        Ok(_) => {
+            Json(serde_json::json!({"status": "ok", "message": "Config updated"})).into_response()
+        }
         Err(e) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save config: {}", e)
-        ).into_response()
+            format!("Failed to save config: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -1093,9 +1109,7 @@ async fn websocket_handler(
 // === Collaboration Station Handlers ===
 
 /// Get current collaboration presence
-async fn collab_presence(
-    State(state): State<Arc<RwLock<DaemonState>>>,
-) -> Json<serde_json::Value> {
+async fn collab_presence(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<serde_json::Value> {
     let s = state.read().await;
     let hub = s.collab_hub.read().await;
     let presence = hub.get_presence();
@@ -1119,13 +1133,10 @@ async fn collab_websocket_handler(
 }
 
 /// Handle a collaboration WebSocket connection
-async fn handle_collab_connection(
-    socket: axum::extract::ws::WebSocket,
-    hub: SharedCollabHub,
-) {
+async fn handle_collab_connection(socket: axum::extract::ws::WebSocket, hub: SharedCollabHub) {
+    use crate::collaboration::{Participant, ParticipantType};
     use axum::extract::ws::Message;
     use futures::{SinkExt, StreamExt};
-    use crate::collaboration::{Participant, ParticipantType};
 
     let (mut sender, mut receiver) = socket.split();
 
@@ -1142,7 +1153,8 @@ async fn handle_collab_connection(
 
                 if let Ok(join) = serde_json::from_str::<JoinMsg>(&text) {
                     if join.action == "join" {
-                        let ptype = join.participant_type
+                        let ptype = join
+                            .participant_type
                             .map(|s| match s.to_lowercase().as_str() {
                                 "human" | "user" => ParticipantType::Human,
                                 "claude" => ParticipantType::Claude,
@@ -1201,7 +1213,10 @@ async fn handle_collab_connection(
                     #[serde(rename = "hot_tub")]
                     HotTub,
                     #[serde(rename = "status")]
-                    Status { status: Option<String>, working_on: Option<String> },
+                    Status {
+                        status: Option<String>,
+                        working_on: Option<String>,
+                    },
                 }
 
                 if let Ok(client_msg) = serde_json::from_str::<ClientMsg>(&text) {
@@ -1213,7 +1228,11 @@ async fn handle_collab_connection(
                             hub_for_recv.write().await.toggle_hot_tub(&pid_for_recv);
                         }
                         ClientMsg::Status { status, working_on } => {
-                            hub_for_recv.write().await.update_status(&pid_for_recv, status, working_on);
+                            hub_for_recv.write().await.update_status(
+                                &pid_for_recv,
+                                status,
+                                working_on,
+                            );
                         }
                     }
                 }
@@ -1410,13 +1429,19 @@ async fn chat_completions(
         let model_lower = req.model.to_lowercase();
         let provider = if model_lower.starts_with("claude") {
             "openrouter" // Route Claude through OpenRouter (works with OPENROUTER_API_KEY)
-        } else if model_lower.starts_with("gpt") || model_lower.starts_with("o1") || model_lower.starts_with("o3") {
+        } else if model_lower.starts_with("gpt")
+            || model_lower.starts_with("o1")
+            || model_lower.starts_with("o3")
+        {
             "openai"
         } else if model_lower.starts_with("gemini") {
             "google"
         } else if model_lower.starts_with("grok") {
             "grok"
-        } else if model_lower.contains("llama") || model_lower.contains("mistral") || model_lower.contains("mixtral") {
+        } else if model_lower.contains("llama")
+            || model_lower.contains("mistral")
+            || model_lower.contains("mixtral")
+        {
             "openrouter" // Open models often via OpenRouter
         } else {
             "openrouter" // Default to OpenRouter as it supports many models
@@ -1668,9 +1693,7 @@ struct WatchStatusResponse {
 }
 
 /// Get hot watcher status
-async fn watch_status(
-    State(state): State<Arc<RwLock<DaemonState>>>,
-) -> Json<WatchStatusResponse> {
+async fn watch_status(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<WatchStatusResponse> {
     let state_lock = state.read().await;
     let watcher = state_lock.hot_watcher.read().await;
     let summary = watcher.summary();

@@ -143,10 +143,7 @@ impl ProjectsFormatter {
                         | "kustomization.yaml"
                         | "config.yaml"
                         | "CLAUDE.md"
-                        
-
-
-                    );
+                );
 
                 if is_project_marker {
                     let project_path = entry.path().parent().unwrap();
@@ -738,7 +735,6 @@ impl ProjectsFormatter {
             ProjectType::Kubernetes => 0x4B, // K
             ProjectType::Monorepo => 0x4D,   // M
             ProjectType::Unknown => 0x55,    // U
-            
         };
 
         // Simple hash from name

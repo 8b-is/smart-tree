@@ -222,11 +222,7 @@ impl UserSpace {
                 .unwrap()
                 .as_millis()
         );
-        tracing::info!(
-            "Sharing terminal {} with {}",
-            session_id,
-            with.canonical()
-        );
+        tracing::info!("Sharing terminal {} with {}", session_id, with.canonical());
         Ok(session_id)
     }
 

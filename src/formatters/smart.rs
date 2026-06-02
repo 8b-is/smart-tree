@@ -90,11 +90,11 @@ impl SmartFormatter {
             return "";
         }
         match level {
-            InterestLevel::Critical => "\x1b[1;31m", // Bold red
+            InterestLevel::Critical => "\x1b[1;31m",  // Bold red
             InterestLevel::Important => "\x1b[1;33m", // Bold yellow
-            InterestLevel::Notable => "\x1b[36m",    // Cyan
-            InterestLevel::Background => "\x1b[90m", // Gray
-            InterestLevel::Boring => "\x1b[90m",     // Gray
+            InterestLevel::Notable => "\x1b[36m",     // Cyan
+            InterestLevel::Background => "\x1b[90m",  // Gray
+            InterestLevel::Boring => "\x1b[90m",      // Gray
         }
     }
 
@@ -182,7 +182,10 @@ impl SmartFormatter {
     }
 
     /// Group nodes by interest level
-    fn group_by_interest<'a>(&self, nodes: &'a [FileNode]) -> HashMap<InterestLevel, Vec<&'a FileNode>> {
+    fn group_by_interest<'a>(
+        &self,
+        nodes: &'a [FileNode],
+    ) -> HashMap<InterestLevel, Vec<&'a FileNode>> {
         let mut groups: HashMap<InterestLevel, Vec<&'a FileNode>> = HashMap::new();
 
         for node in nodes {
@@ -199,7 +202,10 @@ impl SmartFormatter {
     }
 
     /// Collect all security findings from nodes
-    fn collect_security_findings<'a>(&self, nodes: &'a [FileNode]) -> Vec<(&'a FileNode, &'a crate::security_scan::SecurityFinding)> {
+    fn collect_security_findings<'a>(
+        &self,
+        nodes: &'a [FileNode],
+    ) -> Vec<(&'a FileNode, &'a crate::security_scan::SecurityFinding)> {
         let mut findings = Vec::new();
         for node in nodes {
             for finding in &node.security_findings {
@@ -212,7 +218,10 @@ impl SmartFormatter {
     }
 
     /// Collect changed files
-    fn collect_changes<'a>(&self, nodes: &'a [FileNode]) -> (Vec<&'a FileNode>, Vec<&'a FileNode>, Vec<&'a FileNode>) {
+    fn collect_changes<'a>(
+        &self,
+        nodes: &'a [FileNode],
+    ) -> (Vec<&'a FileNode>, Vec<&'a FileNode>, Vec<&'a FileNode>) {
         let mut added = Vec::new();
         let mut modified = Vec::new();
         let mut deleted = Vec::new(); // We won't have deleted in nodes, but for completeness
@@ -251,7 +260,13 @@ impl Formatter for SmartFormatter {
         let (project_type, git_branch) = self.detect_project_type(nodes).unwrap_or(("", None));
 
         write!(writer, "{}", self.section_emoji("project"))?;
-        write!(writer, "{}{}{}", self.level_color(InterestLevel::Important), project_name, self.reset())?;
+        write!(
+            writer,
+            "{}{}{}",
+            self.level_color(InterestLevel::Important),
+            project_name,
+            self.reset()
+        )?;
 
         if !project_type.is_empty() {
             write!(writer, " ({})", project_type)?;
@@ -271,7 +286,11 @@ impl Formatter for SmartFormatter {
                 self.section_emoji("security"),
                 self.level_color(InterestLevel::Critical),
                 security_findings.len(),
-                if security_findings.len() == 1 { "" } else { "s" },
+                if security_findings.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                },
                 self.reset()
             )?;
 
@@ -366,13 +385,7 @@ impl Formatter for SmartFormatter {
                     let path = self.format_path(&node.path, root_path);
                     let time = self.time_ago(node.modified);
                     let score = node.interest.as_ref().map(|i| i.score).unwrap_or(0.0);
-                    writeln!(
-                        writer,
-                        "  {} [{}] {:.0}%",
-                        path,
-                        time,
-                        score * 100.0
-                    )?;
+                    writeln!(writer, "  {} [{}] {:.0}%", path, time, score * 100.0)?;
                 }
                 writeln!(writer)?;
             }

@@ -9,9 +9,9 @@ use super::statistics::get_statistics;
 use crate::formatters::{
     ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
     hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-    quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter,
-    stats::StatsFormatter, summary::SummaryFormatter, summary_ai::SummaryAiFormatter,
-    tsv::TsvFormatter, Formatter, PathDisplayMode,
+    quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter, stats::StatsFormatter,
+    summary::SummaryFormatter, summary_ai::SummaryAiFormatter, tsv::TsvFormatter, Formatter,
+    PathDisplayMode,
 };
 use crate::mcp::helpers::{
     scan_with_config, should_use_default_ignores, validate_and_convert_path, ScannerConfigBuilder,

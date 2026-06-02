@@ -1,6 +1,6 @@
-# 🌳 Smart Tree v8.0.2 - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
+# 🌳 Smart Tree s- The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-8.0.2-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-8.1.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -114,7 +114,7 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v8.0.2
+## 🌟 What's NEW in v8.1.0
 
 | Feature | Description | Command/Tool |
 |---------|-------------|--------------|

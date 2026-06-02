@@ -170,11 +170,26 @@ pub struct SyncReport {
 /// Individual action the sync engine will take
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncAction {
-    Upload { relative_path: String },
-    Download { relative_path: String, drive_file_id: String },
-    Conflict { relative_path: String, local_modified: DateTime<Utc>, remote_modified: DateTime<Utc> },
-    Skip { relative_path: String, reason: String },
-    Delete { relative_path: String, side: String },
+    Upload {
+        relative_path: String,
+    },
+    Download {
+        relative_path: String,
+        drive_file_id: String,
+    },
+    Conflict {
+        relative_path: String,
+        local_modified: DateTime<Utc>,
+        remote_modified: DateTime<Utc>,
+    },
+    Skip {
+        relative_path: String,
+        reason: String,
+    },
+    Delete {
+        relative_path: String,
+        side: String,
+    },
 }
 
 // ── Drive File Metadata ─────────────────────────────────────────────

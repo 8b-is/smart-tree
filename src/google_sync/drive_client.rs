@@ -21,15 +21,16 @@ pub struct DriveClient {
 impl DriveClient {
     /// Create a new Drive client with the given authenticator
     pub fn new(auth: GoogleAuthenticator) -> Self {
-        let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-            .build(
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_native_roots()
-                    .expect("native TLS roots")
-                    .https_or_http()
-                    .enable_http1()
-                    .build(),
-            );
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build(
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                        .with_native_roots()
+                        .expect("native TLS roots")
+                        .https_or_http()
+                        .enable_http1()
+                        .build(),
+                );
         let hub = DriveHub::new(client, auth);
         Self {
             hub,
@@ -51,7 +52,10 @@ impl DriveClient {
             .files()
             .list()
             .q(&query)
-            .param("fields", "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)")
+            .param(
+                "fields",
+                "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)",
+            )
             .page_size(100);
 
         if let Some(token) = page_token {
@@ -126,11 +130,7 @@ impl DriveClient {
     }
 
     /// Create a folder in Drive
-    pub async fn create_folder(
-        &self,
-        parent_id: &str,
-        name: &str,
-    ) -> Result<String> {
+    pub async fn create_folder(&self, parent_id: &str, name: &str) -> Result<String> {
         self.rate_limiter.acquire().await;
 
         let folder = DriveFile {
@@ -146,7 +146,10 @@ impl DriveClient {
             .hub
             .files()
             .create(folder)
-            .upload(cursor, "application/vnd.google-apps.folder".parse().unwrap())
+            .upload(
+                cursor,
+                "application/vnd.google-apps.folder".parse().unwrap(),
+            )
             .await
             .context("Failed to create Drive folder")?;
 
@@ -161,7 +164,10 @@ impl DriveClient {
             .hub
             .files()
             .get(file_id)
-            .param("fields", "id,name,mimeType,size,modifiedTime,md5Checksum,parents")
+            .param(
+                "fields",
+                "id,name,mimeType,size,modifiedTime,md5Checksum,parents",
+            )
             .doit()
             .await
             .context("Failed to get file metadata")?;
@@ -170,12 +176,7 @@ impl DriveClient {
     }
 
     /// Update/overwrite an existing file's content
-    pub async fn update_file(
-        &self,
-        file_id: &str,
-        content: &[u8],
-        mime_type: &str,
-    ) -> Result<()> {
+    pub async fn update_file(&self, file_id: &str, content: &[u8], mime_type: &str) -> Result<()> {
         self.rate_limiter.acquire().await;
 
         let file_meta = DriveFile::default();
@@ -217,7 +218,10 @@ impl DriveClient {
             .files()
             .list()
             .q(&search_query)
-            .param("fields", "files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)")
+            .param(
+                "fields",
+                "files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)",
+            )
             .page_size(50)
             .doit()
             .await
@@ -237,7 +241,9 @@ impl DriveClient {
         &'a self,
         folder_id: &'a str,
         prefix: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<(String, DriveFileMetadata)>>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Vec<(String, DriveFileMetadata)>>> + Send + 'a>,
+    > {
         Box::pin(async move {
             let mut all_files = Vec::new();
             let mut page_token = None;
@@ -253,9 +259,7 @@ impl DriveClient {
                     };
 
                     if file.is_folder {
-                        let sub_files = self
-                            .list_files_recursive(&file.id, &path)
-                            .await?;
+                        let sub_files = self.list_files_recursive(&file.id, &path).await?;
                         all_files.extend(sub_files);
                     } else {
                         all_files.push((path, file));

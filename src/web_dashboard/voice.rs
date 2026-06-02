@@ -8,11 +8,7 @@
 //! Requires the `voice` feature flag and liquid-rust models.
 //! Currently returns "not implemented" stubs until liquid-rust is integrated.
 
-use axum::{
-    extract::Multipart,
-    http::StatusCode,
-    Json,
-};
+use axum::{extract::Multipart, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 
 /// Transcription result with salience and speaker info

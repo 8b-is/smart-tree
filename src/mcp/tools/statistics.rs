@@ -3,7 +3,9 @@
 //! Contains get_statistics, get_digest, and directory_size_breakdown handlers.
 
 use crate::formatters::{digest::DigestFormatter, stats::StatsFormatter, Formatter};
-use crate::mcp::helpers::{scan_with_config, should_use_default_ignores, validate_and_convert_path, ScannerConfigBuilder};
+use crate::mcp::helpers::{
+    scan_with_config, should_use_default_ignores, validate_and_convert_path, ScannerConfigBuilder,
+};
 use crate::mcp::{fmt_num64, fmt_size, McpContext};
 use anyhow::Result;
 use serde_json::{json, Value};

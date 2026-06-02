@@ -18,8 +18,8 @@
 
 use crate::scanner::{FileCategory, FileNode, FilesystemType};
 use crate::scanner_interest::{
-    ChangeType, DependencyManager, InterestFactor, InterestLevel, InterestScore,
-    InterestWeights, KeyFileType, RiskLevel, TraversalContext, TraversalPath,
+    ChangeType, DependencyManager, InterestFactor, InterestLevel, InterestScore, InterestWeights,
+    KeyFileType, RiskLevel, TraversalContext, TraversalPath,
 };
 use crate::scanner_state::{FileSignature, ScanState};
 use crate::security_scan::{SecurityFinding, SecurityScanner};
@@ -241,8 +241,8 @@ impl InterestCalculator {
             | "config.json" | "settings.toml" | "settings.yaml" => Some(KeyFileType::Configuration),
 
             // Entry points
-            "main.rs" | "lib.rs" | "mod.rs" | "index.js" | "index.ts" | "main.py" | "__init__.py"
-            | "app.py" | "main.go" | "main.java" => Some(KeyFileType::EntryPoint),
+            "main.rs" | "lib.rs" | "mod.rs" | "index.js" | "index.ts" | "main.py"
+            | "__init__.py" | "app.py" | "main.go" | "main.java" => Some(KeyFileType::EntryPoint),
 
             // License
             "license" | "license.md" | "license.txt" | "copying" => Some(KeyFileType::License),
@@ -460,16 +460,10 @@ impl InterestCalculator {
 
         // Check for git worktree
         let in_git_worktree = node.path.join(".git").exists()
-            || node
-                .path
-                .ancestors()
-                .any(|p| p.join(".git").exists());
+            || node.path.ancestors().any(|p| p.join(".git").exists());
 
         // Check for submodule
-        let in_submodule = node
-            .path
-            .ancestors()
-            .any(|p| p.join(".git").is_file()); // Submodules have .git as file
+        let in_submodule = node.path.ancestors().any(|p| p.join(".git").is_file()); // Submodules have .git as file
 
         TraversalContext {
             path: traversal_path,
@@ -649,7 +643,13 @@ mod tests {
         let score = calc.calculate(&normal);
 
         // The normal file should score higher than node_modules file
-        let node_mod_score = calc.calculate(&make_test_node("node_modules/lodash/index.js", false, 200.0)).score;
+        let node_mod_score = calc
+            .calculate(&make_test_node(
+                "node_modules/lodash/index.js",
+                false,
+                200.0,
+            ))
+            .score;
         assert!(
             score.score > node_mod_score,
             "Normal source file ({}) should have higher interest than node_modules ({})",

@@ -70,7 +70,9 @@ impl<'a> SyncEngine<'a> {
                                 .await
                             {
                                 Ok(_id) => report.uploaded += 1,
-                                Err(e) => report.errors.push(format!("Upload {relative_path}: {e}")),
+                                Err(e) => {
+                                    report.errors.push(format!("Upload {relative_path}: {e}"))
+                                }
                             }
                         }
                         Err(e) => report.errors.push(format!("Read {relative_path}: {e}")),
@@ -79,34 +81,36 @@ impl<'a> SyncEngine<'a> {
                 SyncAction::Download {
                     relative_path,
                     drive_file_id,
-                } => {
-                    match self.drive.download_file(drive_file_id).await {
-                        Ok(content) => {
-                            let local_path = local_root.join(relative_path);
-                            if let Some(parent) = local_path.parent() {
-                                let _ = std::fs::create_dir_all(parent);
-                            }
-                            match std::fs::write(&local_path, &content) {
-                                Ok(()) => report.downloaded += 1,
-                                Err(e) => {
-                                    report.errors.push(format!("Write {relative_path}: {e}"))
-                                }
-                            }
+                } => match self.drive.download_file(drive_file_id).await {
+                    Ok(content) => {
+                        let local_path = local_root.join(relative_path);
+                        if let Some(parent) = local_path.parent() {
+                            let _ = std::fs::create_dir_all(parent);
                         }
-                        Err(e) => report.errors.push(format!("Download {relative_path}: {e}")),
+                        match std::fs::write(&local_path, &content) {
+                            Ok(()) => report.downloaded += 1,
+                            Err(e) => report.errors.push(format!("Write {relative_path}: {e}")),
+                        }
                     }
-                }
+                    Err(e) => report.errors.push(format!("Download {relative_path}: {e}")),
+                },
                 SyncAction::Conflict { relative_path, .. } => {
                     report.conflicts += 1;
-                    report
-                        .errors
-                        .push(format!("Conflict: {relative_path} (manual resolution needed)"));
+                    report.errors.push(format!(
+                        "Conflict: {relative_path} (manual resolution needed)"
+                    ));
                 }
-                SyncAction::Skip { relative_path, reason } => {
+                SyncAction::Skip {
+                    relative_path,
+                    reason,
+                } => {
                     report.skipped += 1;
                     tracing::debug!("Skipped {}: {}", relative_path, reason);
                 }
-                SyncAction::Delete { relative_path, side } => {
+                SyncAction::Delete {
+                    relative_path,
+                    side,
+                } => {
                     tracing::info!("Would delete {} on {}", relative_path, side);
                     report.skipped += 1; // Don't auto-delete, just report
                 }
@@ -126,8 +130,8 @@ impl<'a> SyncEngine<'a> {
         let local_root = Path::new(&config.local_path);
 
         // Scan local files
-        let local_files = scan_local_directory(local_root)
-            .context("Failed to scan local directory")?;
+        let local_files =
+            scan_local_directory(local_root).context("Failed to scan local directory")?;
 
         // Scan remote files
         let remote_files = self

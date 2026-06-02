@@ -45,10 +45,7 @@ impl AddressString {
         }
         let mut data = [0u8; 126];
         data[..s.len()].copy_from_slice(s.as_bytes());
-        Some(AddressString {
-            data,
-            len: s.len(),
-        })
+        Some(AddressString { data, len: s.len() })
     }
 
     /// Get as string slice
@@ -218,7 +215,9 @@ impl HostCache {
 
     /// List all hosts
     pub fn list(&self) -> impl Iterator<Item = (u8, &str, &str)> {
-        self.hosts.iter().map(|(&idx, (host, name))| (idx, host.as_str(), name.as_str()))
+        self.hosts
+            .iter()
+            .map(|(&idx, (host, name))| (idx, host.as_str(), name.as_str()))
     }
 
     /// Number of cached hosts

@@ -344,9 +344,12 @@ mod tests {
         }
 
         // RMS power should be higher in left channel for left-positioned source
-        assert!(left_power > right_power,
-                "Left should be louder for left-positioned source (L:{:.4} R:{:.4})",
-                left_power.sqrt(), right_power.sqrt());
+        assert!(
+            left_power > right_power,
+            "Left should be louder for left-positioned source (L:{:.4} R:{:.4})",
+            left_power.sqrt(),
+            right_power.sqrt()
+        );
     }
 
     #[test]

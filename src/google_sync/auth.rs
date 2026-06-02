@@ -75,10 +75,7 @@ impl GoogleAuth {
             client_secret: client_secret.to_string(),
             auth_uri: "https://accounts.google.com/o/oauth2/auth".to_string(),
             token_uri: "https://oauth2.googleapis.com/token".to_string(),
-            redirect_uris: vec![format!(
-                "http://localhost:{}",
-                port.unwrap_or(8085)
-            )],
+            redirect_uris: vec![format!("http://localhost:{}", port.unwrap_or(8085))],
             ..Default::default()
         };
 
@@ -152,11 +149,7 @@ impl GoogleAuth {
 
     /// Check if we have stored auth configuration
     pub fn has_config(&self) -> bool {
-        self.token_store
-            .load_config()
-            .ok()
-            .flatten()
-            .is_some()
+        self.token_store.load_config().ok().flatten().is_some()
     }
 
     /// Get the stored auth configuration (if any)
@@ -197,16 +190,16 @@ impl GoogleAuth {
             Ok(Some(config)) => {
                 let method = match &config.method {
                     AuthMethod::UserOAuth2 { client_id, .. } => {
-                        format!("User OAuth2 (client: {}...)", &client_id[..8.min(client_id.len())])
+                        format!(
+                            "User OAuth2 (client: {}...)",
+                            &client_id[..8.min(client_id.len())]
+                        )
                     }
                     AuthMethod::ServiceAccount { key_path, .. } => {
                         format!("Service Account ({})", key_path)
                     }
                 };
-                let email = config
-                    .account_email
-                    .as_deref()
-                    .unwrap_or("unknown");
+                let email = config.account_email.as_deref().unwrap_or("unknown");
                 let tokens = if self.has_cached_tokens() {
                     "cached"
                 } else {

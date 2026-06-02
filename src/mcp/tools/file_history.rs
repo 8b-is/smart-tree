@@ -2,7 +2,9 @@
 //!
 //! Contains track_file_operation, get_file_history, and get_project_history_summary handlers.
 
-use super::definitions::{GetFileHistoryArgs, GetProjectHistorySummaryArgs, TrackFileOperationArgs};
+use super::definitions::{
+    GetFileHistoryArgs, GetProjectHistorySummaryArgs, TrackFileOperationArgs,
+};
 use crate::mcp::{is_path_allowed, McpContext};
 use anyhow::Result;
 use serde_json::{json, Value};

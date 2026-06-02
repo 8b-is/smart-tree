@@ -198,11 +198,7 @@ pub async fn handle_drive_sync(params: Value, _ctx: Arc<McpContext>) -> Result<V
     };
 
     let expanded = shellexpand::tilde(local_path);
-    let sync_id = format!(
-        "sync_{}",
-        expanded
-            .replace(['/', '\\', ' '], "_")
-    );
+    let sync_id = format!("sync_{}", expanded.replace(['/', '\\', ' '], "_"));
 
     let mut state = crate::google_sync::models::SyncState {
         sync_id,

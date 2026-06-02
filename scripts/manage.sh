@@ -271,18 +271,6 @@ bump_version() {
         fi
         print_success "Updated CLAUDE.md"
     fi
-
-    # Update README.md version references
-    if [[ -f "README.md" ]]; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s/v$current_version/v$new_version/g" README.md
-            sed -i '' "s/version-${current_version}-/version-${new_version}-/g" README.md
-        else
-            sed -i "s/v$current_version/v$new_version/g" README.md
-            sed -i "s/version-${current_version}-/version-${new_version}-/g" README.md
-        fi
-        print_success "Updated README.md"
-    fi
     
     # Clean up orphaned local tags
     print_info "Cleaning orphaned tags..."

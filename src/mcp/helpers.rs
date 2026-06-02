@@ -5,8 +5,146 @@ use crate::scanner::{FileNode, TreeStats};
 use crate::{Scanner, ScannerConfig};
 use anyhow::{anyhow, Result};
 use regex::Regex;
-use std::path::{Path, PathBuf};
+use serde_json::Value;
+use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
+
+/// Argument keys that carry a single filesystem path. Normalized on every
+/// MCP tool call so agents can pass `~/...`, `$VAR`, or relative paths freely.
+const PATH_KEYS: &[&str] = &[
+    "path",
+    "file_path",
+    "project_path",
+    "path1",
+    "path2",
+    "directory",
+    "dir",
+];
+
+/// Keys that, when present, set the session's remembered current path.
+/// `file_path` is excluded here and handled specially (we remember its parent).
+const SESSION_DIR_KEYS: &[&str] = &["path", "project_path", "directory", "dir"];
+
+/// Expand `~`/`~user`/`$VAR` and resolve relative inputs against `base`.
+///
+/// Returns an absolute, lexically-cleaned path. Does NOT touch the filesystem
+/// (no `canonicalize`) so it works for paths that don't exist yet, e.g. a
+/// `create_file` target, and never follows symlinks unexpectedly.
+pub fn resolve_path(input: &str, base: &Path) -> PathBuf {
+    // Expand `~` and environment variables. If env expansion fails (e.g. an
+    // undefined `$VAR`), fall back to bare tilde expansion, then to the raw input.
+    let expanded = shellexpand::full(input)
+        .map(|c| c.into_owned())
+        .unwrap_or_else(|_| shellexpand::tilde(input).into_owned());
+
+    let p = PathBuf::from(expanded);
+    let abs = if p.is_absolute() { p } else { base.join(p) };
+    normalize_lexically(&abs)
+}
+
+/// Resolve `.` and `..` purely lexically, without consulting the filesystem.
+fn normalize_lexically(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // Pop a normal segment; keep `..` only when there's nothing
+                // poppable and we're not already anchored at a root/prefix.
+                if !out.pop() && !out.has_root() {
+                    out.push("..");
+                }
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// Normalize all path-bearing arguments of an MCP tool call in place, then
+/// remember the directory used as the session's current path.
+///
+/// This is the single choke point that makes `~/`, `$HOME`, and relative paths
+/// "just work" for every tool, and lets agents omit the path on follow-up calls.
+pub fn normalize_path_args(args: &mut Value, ctx: &McpContext) {
+    let base = ctx
+        .cwd
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_else(|_| PathBuf::from("."));
+
+    // Coerce a missing/null argument payload into an empty object so a default
+    // path can still be injected for directory tools called with no arguments.
+    if args.is_null() {
+        *args = Value::Object(serde_json::Map::new());
+    }
+
+    let Some(obj) = args.as_object_mut() else {
+        return;
+    };
+
+    let mut new_cwd: Option<PathBuf> = None;
+
+    for key in PATH_KEYS {
+        if let Some(s) = obj.get(*key).and_then(Value::as_str) {
+            let resolved = resolve_path(s, &base);
+
+            // First session-defining key wins as the remembered directory.
+            if new_cwd.is_none() {
+                if SESSION_DIR_KEYS.contains(key) {
+                    new_cwd = Some(resolved.clone());
+                } else if *key == "file_path" {
+                    // Remember the file's parent directory.
+                    new_cwd = Some(
+                        resolved
+                            .parent()
+                            .map(Path::to_path_buf)
+                            .unwrap_or_else(|| resolved.clone()),
+                    );
+                }
+            }
+
+            obj.insert(
+                key.to_string(),
+                Value::String(resolved.to_string_lossy().into_owned()),
+            );
+        }
+    }
+
+    // Normalize a `paths` array (e.g. multi-path tools) without affecting cwd.
+    if let Some(Value::Array(arr)) = obj.get_mut("paths") {
+        for item in arr.iter_mut() {
+            if let Some(s) = item.as_str() {
+                let resolved = resolve_path(s, &base);
+                *item = Value::String(resolved.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    // If the call carries no path at all, default `path` to the remembered
+    // session directory so agents can omit it on follow-up calls. Tools that
+    // don't take a path simply ignore the extra field.
+    let has_any_path = PATH_KEYS.iter().any(|k| obj.contains_key(*k)) || obj.contains_key("paths");
+    if !has_any_path {
+        obj.insert(
+            "path".to_string(),
+            Value::String(base.to_string_lossy().into_owned()),
+        );
+    }
+
+    if let Some(dir) = new_cwd {
+        // Only follow into an actual directory; if the path is a known file,
+        // keep its parent (already handled above for `file_path`).
+        let dir = if dir.is_file() {
+            dir.parent().map(Path::to_path_buf).unwrap_or(dir)
+        } else {
+            dir
+        };
+        if let Ok(mut guard) = ctx.cwd.lock() {
+            *guard = dir;
+        }
+    }
+}
 
 /// Helper to determine if we should use default ignores
 /// We disable them for /tmp paths to support testing
@@ -200,4 +338,65 @@ impl Default for ScannerConfigBuilder {
 pub fn scan_with_config(path: &Path, config: ScannerConfig) -> Result<(Vec<FileNode>, TreeStats)> {
     let scanner = Scanner::new(path, config)?;
     scanner.scan()
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn tilde_expands_to_home() {
+        let home = dirs::home_dir().expect("home dir");
+        let resolved = resolve_path("~/source/foo", Path::new("/some/base"));
+        assert_eq!(resolved, home.join("source/foo"));
+    }
+
+    #[test]
+    fn bare_tilde_is_home() {
+        let home = dirs::home_dir().expect("home dir");
+        assert_eq!(resolve_path("~", Path::new("/base")), home);
+    }
+
+    #[test]
+    fn relative_resolves_against_base() {
+        assert_eq!(
+            resolve_path("src/main.rs", Path::new("/work/proj")),
+            PathBuf::from("/work/proj/src/main.rs")
+        );
+    }
+
+    #[test]
+    fn dot_resolves_to_base() {
+        assert_eq!(
+            resolve_path(".", Path::new("/work/proj")),
+            PathBuf::from("/work/proj")
+        );
+    }
+
+    #[test]
+    fn absolute_passes_through_cleaned() {
+        assert_eq!(
+            resolve_path("/a/b/../c", Path::new("/ignored")),
+            PathBuf::from("/a/c")
+        );
+    }
+
+    #[test]
+    fn parent_dir_in_relative_collapses() {
+        assert_eq!(
+            resolve_path("../sibling", Path::new("/work/proj")),
+            PathBuf::from("/work/sibling")
+        );
+    }
+
+    #[test]
+    fn env_var_expands() {
+        // $HOME is reliably set in test environments.
+        if let Some(home) = dirs::home_dir() {
+            // Only assert when the env var matches dirs (CI parity).
+            if std::env::var("HOME").map(PathBuf::from).ok() == Some(home.clone()) {
+                assert_eq!(resolve_path("$HOME/x", Path::new("/base")), home.join("x"));
+            }
+        }
+    }
 }

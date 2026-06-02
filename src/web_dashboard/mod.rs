@@ -20,9 +20,9 @@ pub mod state_sync;
 pub mod voice;
 mod websocket;
 
+pub use mcp_http::{create_mcp_context, mcp_router, SharedMcpContext};
 pub use server::start_server;
 pub use state_sync::{McpActivityState, UserHintsQueue};
-pub use mcp_http::{SharedMcpContext, create_mcp_context, mcp_router};
 
 use crate::collaboration::{create_hub, SharedCollabHub};
 use crate::in_memory_logger::InMemoryLogStore;

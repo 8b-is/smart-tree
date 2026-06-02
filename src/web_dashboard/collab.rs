@@ -28,9 +28,17 @@ pub struct JoinRequest {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum ClientMessage {
-    Join { name: String, participant_type: Option<String> },
-    Chat { message: String },
-    Status { status: Option<String>, working_on: Option<String> },
+    Join {
+        name: String,
+        participant_type: Option<String>,
+    },
+    Chat {
+        message: String,
+    },
+    Status {
+        status: Option<String>,
+        working_on: Option<String>,
+    },
     HotTub,
     Ping,
 }
@@ -39,8 +47,13 @@ pub enum ClientMessage {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
-    Welcome { participant_id: String, name: String },
-    Error { message: String },
+    Welcome {
+        participant_id: String,
+        name: String,
+    },
+    Error {
+        message: String,
+    },
     Collab(CollabMessage),
     Pong,
 }
@@ -74,7 +87,11 @@ async fn handle_collab_socket(socket: WebSocket, hub: SharedCollabHub) {
     let participant_id = loop {
         match receiver.next().await {
             Some(Ok(Message::Text(text))) => {
-                if let Ok(ClientMessage::Join { name, participant_type }) = serde_json::from_str(&text) {
+                if let Ok(ClientMessage::Join {
+                    name,
+                    participant_type,
+                }) = serde_json::from_str(&text)
+                {
                     let ptype = participant_type
                         .map(|s| parse_participant_type(&s))
                         .unwrap_or(ParticipantType::Unknown);
@@ -144,7 +161,10 @@ async fn handle_collab_socket(socket: WebSocket, hub: SharedCollabHub) {
                                 );
                             }
                             ClientMessage::HotTub => {
-                                hub_clone.write().await.toggle_hot_tub(&participant_id_clone);
+                                hub_clone
+                                    .write()
+                                    .await
+                                    .toggle_hot_tub(&participant_id_clone);
                             }
                             ClientMessage::Ping => {
                                 // Handled by send_task

@@ -141,7 +141,9 @@ impl Default for TraversalContext {
 }
 
 /// Interest level - human-readable categorization of importance
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub enum InterestLevel {
     /// Not worth showing (generated files, caches, etc.)
     Boring = 0,
@@ -442,7 +444,11 @@ pub struct InterestScore {
 impl InterestScore {
     /// Create a new interest score from factors
     pub fn from_factors(factors: Vec<InterestFactor>) -> Self {
-        let score = factors.iter().map(|f| f.weight()).sum::<f32>().clamp(0.0, 1.0);
+        let score = factors
+            .iter()
+            .map(|f| f.weight())
+            .sum::<f32>()
+            .clamp(0.0, 1.0);
         let level = InterestLevel::from_score(score);
 
         Self {

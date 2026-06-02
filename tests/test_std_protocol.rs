@@ -54,10 +54,7 @@ fn test_search_frame() {
 
 #[test]
 fn test_payload_encoder() {
-    let payload = PayloadEncoder::new()
-        .string("/home/hue")
-        .byte(3)
-        .build();
+    let payload = PayloadEncoder::new().string("/home/hue").byte(3).build();
 
     // Verify length-prefixed string
     let bytes = payload.as_bytes();

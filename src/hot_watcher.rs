@@ -17,10 +17,10 @@
 // -----------------------------------------------------------------------------
 //
 
+use crate::mem8_lite::Wave;
 use crate::scanner_interest::InterestLevel;
 use crate::security_scan::SecurityFinding;
 use anyhow::Result;
-use crate::mem8_lite::Wave;
 use notify::{
     event::{CreateKind, ModifyKind, RemoveKind},
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
@@ -53,9 +53,9 @@ impl WatchedDirectory {
     pub fn new(path: PathBuf) -> Self {
         // Start with a neutral wave at low arousal
         let wave = Wave::new(
-            1.0,  // 1 Hz base frequency (1 change per second baseline)
-            0.0,  // Neutral valence (no security concern yet)
-            0.1,  // Low initial arousal
+            1.0, // 1 Hz base frequency (1 change per second baseline)
+            0.0, // Neutral valence (no security concern yet)
+            0.1, // Low initial arousal
         );
 
         Self {
@@ -105,7 +105,8 @@ impl WatchedDirectory {
         if self.recent_events.len() > 10 {
             // Lots of events = very hot
             self.wave.arousal = 1.0;
-            self.wave.frequency = self.recent_events.len() as f64 / 300.0 * 3600.0; // events per hour
+            self.wave.frequency = self.recent_events.len() as f64 / 300.0 * 3600.0;
+            // events per hour
         }
 
         // Update interest level
@@ -143,7 +144,8 @@ impl WatchedDirectory {
 
         // Valence slowly recovers toward neutral (if no new threats)
         if self.wave.emotional_valence < 0.0 {
-            self.wave.emotional_valence = (self.wave.emotional_valence + 0.0001 * elapsed_secs).min(0.0);
+            self.wave.emotional_valence =
+                (self.wave.emotional_valence + 0.0001 * elapsed_secs).min(0.0);
         }
     }
 
@@ -231,7 +233,10 @@ impl HotWatcher {
         {
             let mut dirs = self.directories.write().unwrap();
             if !dirs.contains_key(path) {
-                dirs.insert(path.to_path_buf(), WatchedDirectory::new(path.to_path_buf()));
+                dirs.insert(
+                    path.to_path_buf(),
+                    WatchedDirectory::new(path.to_path_buf()),
+                );
             }
         }
 
@@ -418,12 +423,7 @@ impl std::fmt::Display for HotWatcherSummary {
         write!(
             f,
             "Watching {} dirs: {} critical, {} hot, {} warm, {} cold (avg arousal: {:.2})",
-            self.total_watched,
-            self.critical,
-            self.hot,
-            self.warm,
-            self.cold,
-            self.average_arousal
+            self.total_watched, self.critical, self.hot, self.warm, self.cold, self.average_arousal
         )
     }
 }

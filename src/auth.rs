@@ -122,7 +122,8 @@ impl SessionStore {
     /// Generate a new OAuth state token
     pub fn create_oauth_state(&mut self) -> String {
         let state = Uuid::new_v4().to_string();
-        self.pending_states.insert(state.clone(), chrono::Utc::now());
+        self.pending_states
+            .insert(state.clone(), chrono::Utc::now());
         state
     }
 
@@ -139,7 +140,8 @@ impl SessionStore {
     /// Store a session
     pub fn create_session(&mut self, github_user: GitHubUser) -> UserSession {
         let session = UserSession::new(github_user);
-        self.sessions.insert(session.session_id.clone(), session.clone());
+        self.sessions
+            .insert(session.session_id.clone(), session.clone());
         session
     }
 
@@ -150,7 +152,9 @@ impl SessionStore {
 
     /// Get a mutable session by ID
     pub fn get_session_mut(&mut self, session_id: &str) -> Option<&mut UserSession> {
-        self.sessions.get_mut(session_id).filter(|s| !s.is_expired())
+        self.sessions
+            .get_mut(session_id)
+            .filter(|s| !s.is_expired())
     }
 
     /// Remove a session
@@ -187,10 +191,7 @@ pub fn create_session_store() -> SharedSessionStore {
 }
 
 /// Exchange GitHub OAuth code for access token
-pub async fn exchange_code_for_token(
-    config: &GitHubOAuthConfig,
-    code: &str,
-) -> Result<String> {
+pub async fn exchange_code_for_token(config: &GitHubOAuthConfig, code: &str) -> Result<String> {
     #[derive(Deserialize)]
     struct TokenResponse {
         access_token: String,

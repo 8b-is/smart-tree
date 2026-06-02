@@ -4,7 +4,7 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "8.0.2"
+version = "8.1.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -240,18 +240,19 @@ candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenize
 # Note: Enable when liquid-rust dependency is uncommented above
 voice = []
 
-# Google Drive + Gmail integration
-google = [
-    "google-gmail1", "google-drive3", "yup-oauth2",
-    "ring", "mail-parser",
-    "hyper-rustls", "hyper-util", "mime", "mime_guess",
-    "http-body-util",
-]
+# Google Drive + Gmail integration.
+# Placeholder feature: the integration deps were removed, so enabling this
+# won't compile the google tools yet — it only marks `google` as a known cfg
+# so `#[cfg(feature = "google")]` blocks don't warn. Code lives in src/mcp/google/.
+# To revive: re-add the optional deps below and list them here.
+#   "google-gmail1", "google-drive3", "yup-oauth2", "ring", "mail-parser",
+#   "hyper-rustls", "hyper-util", "mime", "mime_guess", "http-body-util"
+google = []
 
 # Terminal UI (tui) and Web dashboard are now always built-in
 
 # Full features (includes candle for local LLM)
-full = ["candle", "google"]
+full = ["candle"]
 
 # Full with voice
 full-voice = ["full", "voice"]

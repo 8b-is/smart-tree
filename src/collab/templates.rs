@@ -129,7 +129,11 @@ impl Template {
             init_commands: vec!["corepack enable".to_string()],
             files: HashMap::new(),
             author: Some("smart-tree".to_string()),
-            tags: vec!["node".to_string(), "typescript".to_string(), "web".to_string()],
+            tags: vec![
+                "node".to_string(),
+                "typescript".to_string(),
+                "web".to_string(),
+            ],
         }
     }
 
@@ -272,7 +276,13 @@ impl TemplateRegistry {
         }
 
         // Capture relevant environment variables
-        let capture_vars = ["CARGO_HOME", "RUSTUP_HOME", "PNPM_HOME", "GOPATH", "PYENV_ROOT"];
+        let capture_vars = [
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "PNPM_HOME",
+            "GOPATH",
+            "PYENV_ROOT",
+        ];
         for var in capture_vars {
             if let Ok(value) = std::env::var(var) {
                 template.env.push((var.to_string(), value));

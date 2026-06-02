@@ -83,7 +83,11 @@ impl WarmAnalyzer {
             .collect();
 
         // Sort by score descending (most archivable first)
-        scores.sort_by(|a, b| b.total_score.partial_cmp(&a.total_score).unwrap_or(std::cmp::Ordering::Equal));
+        scores.sort_by(|a, b| {
+            b.total_score
+                .partial_cmp(&a.total_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         scores
     }
@@ -157,7 +161,10 @@ impl WarmAnalyzer {
             || from_lower.contains("digest")
             || from_lower.contains("updates@")
             || from_lower.contains("news@")
-            || email.labels.iter().any(|l| l.to_lowercase().contains("newsletter"));
+            || email
+                .labels
+                .iter()
+                .any(|l| l.to_lowercase().contains("newsletter"));
 
         if is_newsletter {
             Some(ArchiveReason::Newsletter {
@@ -172,9 +179,17 @@ impl WarmAnalyzer {
         let from_lower = email.from.to_lowercase();
 
         let patterns = [
-            "notification@", "alert@", "alerts@", "mailer-daemon",
-            "postmaster@", "system@", "automated@", "do-not-reply",
-            "donotreply", "notify@", "noreply@",
+            "notification@",
+            "alert@",
+            "alerts@",
+            "mailer-daemon",
+            "postmaster@",
+            "system@",
+            "automated@",
+            "do-not-reply",
+            "donotreply",
+            "notify@",
+            "noreply@",
         ];
 
         for pattern in &patterns {

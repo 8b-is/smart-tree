@@ -52,8 +52,8 @@ pub use sse_tools::watch_directory_sse;
 pub use statistics::{directory_size_breakdown, get_digest, get_statistics};
 pub use wave::handle_wave_memory;
 
-use super::McpContext;
 use super::theme_tools;
+use super::McpContext;
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -1614,7 +1614,13 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
     let tool_name = params["name"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
-    let args = params["arguments"].clone();
+    let mut args = params["arguments"].clone();
+
+    // Normalize every path argument up front: expand `~`/`$VAR`, resolve
+    // relative paths against the session's current directory, and remember the
+    // resulting location for follow-up calls. This is the single choke point —
+    // all tools (consolidated or not) route through here.
+    crate::mcp::helpers::normalize_path_args(&mut args, &ctx);
 
     // Record this tool call for learning
     ctx.assistant.record_call(tool_name).await;
@@ -1783,10 +1789,35 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
     // Global safeguard: Prevent returning massive context to the AI
     let stringified = serde_json::to_string(&enhanced_result)?;
     if stringified.len() > 50_000 {
+        use crate::formatters::marqant::MarqantFormatter;
+
+        // Try to extract the inner text if it's the standard MCP format for better compression
+        let mut inner_content = stringified.clone();
+        if let Some(content_array) = enhanced_result.get("content").and_then(|c| c.as_array()) {
+            if let Some(first_item) = content_array.first() {
+                if let Some(text) = first_item.get("text").and_then(|t| t.as_str()) {
+                    inner_content = text.to_string();
+                }
+            }
+        }
+
+        let compressed = MarqantFormatter::compress_markdown(&inner_content)
+            .unwrap_or_else(|_| inner_content.clone());
+
+        if compressed.len() > 100_000 {
+            return Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!("⚠️ ERROR: Tool response was too large to return even after Marqant compression ({} bytes, max 100,000). The operation succeeded, but returning the data would overwhelm your context window.\n\nPlease use the 'limit' and 'offset' parameters to paginate through the results, or narrow the search parameters.", compressed.len())
+                }]
+            }));
+        }
+
         return Ok(json!({
             "content": [{
                 "type": "text",
-                "text": format!("⚠️ ERROR: Tool response was too large to return ({} bytes, max 50,000). The operation succeeded, but returning the data would overwhelm your context window.\n\nPlease use the 'limit' and 'offset' parameters to paginate through the results, or narrow the search parameters.", stringified.len())
+                "text": format!("📦 Response compressed with Marqant due to size (Original: {} bytes, Compressed: {} bytes).\n\n{}",
+                    stringified.len(), compressed.len(), compressed)
             }]
         }));
     }

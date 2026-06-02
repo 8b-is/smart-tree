@@ -475,7 +475,9 @@ async fn ensure_project_st_dir_exists(state: &SharedState) -> Result<PathBuf, St
 }
 
 async fn get_layout_config_path(state: &SharedState) -> Result<PathBuf, String> {
-    get_project_st_dir(state).await.map(|dir| dir.join("layout.json"))
+    get_project_st_dir(state)
+        .await
+        .map(|dir| dir.join("layout.json"))
 }
 
 impl Default for LayoutConfig {
@@ -492,8 +494,9 @@ impl Default for LayoutConfig {
 pub async fn get_layout_config(
     State(state): State<SharedState>,
 ) -> Result<Json<LayoutConfig>, (StatusCode, String)> {
-    let path =
-        get_layout_config_path(&state).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let path = get_layout_config_path(&state)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     if !path.exists() {
         return Ok(Json(LayoutConfig::default()));
     }
@@ -516,9 +519,12 @@ pub async fn save_layout_config(
     State(state): State<SharedState>,
     Json(payload): Json<LayoutConfig>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    ensure_project_st_dir_exists(&state).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let path =
-        get_layout_config_path(&state).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    ensure_project_st_dir_exists(&state)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let path = get_layout_config_path(&state)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let content = serde_json::to_string_pretty(&payload).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -720,10 +726,24 @@ pub async fn ask_prompt(
             .next_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             .to_string();
-        
-        dashboard.prompt_manager.pending.write().await.insert(id.clone(), tx);
-        dashboard.prompt_manager.active_prompts.write().await.insert(id.clone(), request.question.clone());
-        dashboard.collab_hub.read().await.announce_prompt(id.clone(), request.question.clone());
+
+        dashboard
+            .prompt_manager
+            .pending
+            .write()
+            .await
+            .insert(id.clone(), tx);
+        dashboard
+            .prompt_manager
+            .active_prompts
+            .write()
+            .await
+            .insert(id.clone(), request.question.clone());
+        dashboard
+            .collab_hub
+            .read()
+            .await
+            .announce_prompt(id.clone(), request.question.clone());
         id
     };
 
@@ -732,8 +752,13 @@ pub async fn ask_prompt(
         Ok(answer) => {
             // Clean up active prompt
             let dashboard = state.read().await;
-            dashboard.prompt_manager.active_prompts.write().await.remove(&prompt_id);
-            
+            dashboard
+                .prompt_manager
+                .active_prompts
+                .write()
+                .await
+                .remove(&prompt_id);
+
             Ok(Json(PromptResponse { answer }))
         }
         Err(_) => Err((
@@ -751,13 +776,18 @@ pub async fn answer_prompt(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let dashboard = state.read().await;
     let mut pending = dashboard.prompt_manager.pending.write().await;
-    
+
     if let Some(tx) = pending.remove(&prompt_id) {
         let _ = tx.send(answer.answer);
-        
+
         // Also cleanup active prompts
-        dashboard.prompt_manager.active_prompts.write().await.remove(&prompt_id);
-        
+        dashboard
+            .prompt_manager
+            .active_prompts
+            .write()
+            .await
+            .remove(&prompt_id);
+
         Ok(StatusCode::OK)
     } else {
         Err((StatusCode::NOT_FOUND, "Prompt ID not found".to_string()))
@@ -765,12 +795,10 @@ pub async fn answer_prompt(
 }
 
 /// Get all active prompts (fallback in case UI wants to fetch)
-pub async fn get_active_prompts(
-    State(state): State<SharedState>,
-) -> Json<Vec<PromptListResponse>> {
+pub async fn get_active_prompts(State(state): State<SharedState>) -> Json<Vec<PromptListResponse>> {
     let dashboard = state.read().await;
     let prompts = dashboard.prompt_manager.active_prompts.read().await;
-    
+
     let list: Vec<PromptListResponse> = prompts
         .iter()
         .map(|(id, q)| PromptListResponse {
@@ -778,7 +806,6 @@ pub async fn get_active_prompts(
             question: q.clone(),
         })
         .collect();
-        
+
     Json(list)
 }
-

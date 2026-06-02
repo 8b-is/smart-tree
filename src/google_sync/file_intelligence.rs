@@ -46,13 +46,7 @@ fn file_type_rules() -> HashMap<&'static str, &'static [&'static str]> {
 }
 
 /// Directories that commonly accumulate misplaced files
-const CLUTTER_DIRS: &[&str] = &[
-    "Downloads",
-    "Desktop",
-    "Audio Downloads",
-    "tmp",
-    "Temp",
-];
+const CLUTTER_DIRS: &[&str] = &["Downloads", "Desktop", "Audio Downloads", "tmp", "Temp"];
 
 /// Liquid personality messages for file suggestions
 const PERSONALITY_MESSAGES: &[&str] = &[
@@ -84,18 +78,12 @@ pub fn suggest_filing(scan_path: &Path) -> Vec<FileSuggestion> {
                 .unwrap_or("")
                 .to_lowercase();
 
-            let file_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // Check if this file type has expected directories
             if let Some(expected_dirs) = rules.get(ext.as_str()) {
                 // Check if current directory is NOT one of the expected ones
-                let current_dir = scan_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
+                let current_dir = scan_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
                 let in_clutter = CLUTTER_DIRS
                     .iter()

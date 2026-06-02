@@ -150,9 +150,17 @@ impl Verb {
     pub fn security_level(self) -> u8 {
         match self {
             // Level 0: Read-only (no auth) + memory ops (TODO: add auth in Phase 4)
-            Verb::Scan | Verb::Search | Verb::Stats | Verb::Ping |
-            Verb::Context | Verb::Recall | Verb::Format |
-            Verb::Remember | Verb::Forget | Verb::M8Wave | Verb::Audio => 0,
+            Verb::Scan
+            | Verb::Search
+            | Verb::Stats
+            | Verb::Ping
+            | Verb::Context
+            | Verb::Recall
+            | Verb::Format
+            | Verb::Remember
+            | Verb::Forget
+            | Verb::M8Wave
+            | Verb::Audio => 0,
 
             // Level 1: Local write (session required)
             Verb::Clear | Verb::Subscribe | Verb::Unsubscribe => 1,

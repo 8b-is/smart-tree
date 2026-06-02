@@ -5,25 +5,27 @@
 #![allow(clippy::wrong_self_convention)]
 #![allow(clippy::only_used_in_recursion)]
 #![allow(clippy::collapsible_match)]
-#![recursion_limit = "512"]  // Increased for deeply nested JSON schemas in MCP tools
-// It's like the table of contents for our awesome codebase,
-// declaring the modules that make up the `st` library and
-// re-exporting key items for convenient use.
-// Think of it as the friendly librarian pointing you to the right sections!
+#![recursion_limit = "512"] // Increased for deeply nested JSON schemas in MCP tools
+                            // It's like the table of contents for our awesome codebase,
+                            // declaring the modules that make up the `st` library and
+                            // re-exporting key items for convenient use.
+                            // Think of it as the friendly librarian pointing you to the right sections!
 
 // Declare the public modules that form the `st` library.
 pub mod activity_logger; // Transparent activity logging in JSONL format
 pub mod ai_guardian; // AI Guardian - Protects AI from prompt injection attacks
 pub mod cli; // Command-line argument definitions (extracted from main.rs)
-pub mod config; // Unified configuration: API keys, models, daemon settings
 pub mod compression_manager; // Smart global compression for all outputs
+pub mod config; // Unified configuration: API keys, models, daemon settings
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
 pub mod context;
 pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod dynamic_tokenizer;
 pub mod feature_flags; // Enterprise-friendly feature control and compliance
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
+pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
+pub mod interest_calculator; // The scoring engine that determines what's interesting
 pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
 pub mod m8_context_aware; // Context-aware progressive loading
 pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
@@ -34,8 +36,6 @@ pub mod scanner; // The heart of directory traversal and file metadata collectio
 pub mod scanner_interest; // Interest scoring - surfacing what matters
 pub mod scanner_safety; // Safety mechanisms to prevent crashes on large directories
 pub mod scanner_state; // Change detection between scans
-pub mod interest_calculator; // The scoring engine that determines what's interesting
-pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
@@ -76,10 +76,10 @@ pub mod proxy;
 pub mod code_review;
 
 // Daemon and client for always-on AI context service
+pub mod client_manager;
 pub mod daemon;
 pub mod daemon_cli; // HTTP CLI endpoints for thin-client architecture
 pub mod daemon_client;
-pub mod client_manager;
 pub mod std_client; // Binary protocol client for std daemon (Unix socket)
 
 // Service manager for systemd integration

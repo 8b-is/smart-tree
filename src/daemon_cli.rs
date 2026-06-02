@@ -28,12 +28,7 @@ use crate::formatters::{
 };
 use crate::{parse_size, Scanner, ScannerConfig, TreeStats};
 use anyhow::{Context, Result};
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use base64::{engine::general_purpose, Engine as _};
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
@@ -136,7 +131,6 @@ pub struct CliScanRequest {
     pub compact: bool,
 
     // --- Smart Scanning Options (Phase 2: Intelligent Context-Aware Scanning) ---
-
     /// Enable smart mode - groups by interest, shows changes, minimal output
     #[serde(default)]
     pub smart: bool,
@@ -250,17 +244,23 @@ pub async fn cli_scan_handler(
     let path_display = parse_path_mode(&req.path_mode);
 
     let mut output_buffer = Vec::new();
-    format_output(&req, &mut output_buffer, &nodes, &tree_stats, &path, path_display).map_err(
-        |e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CliErrorResponse {
-                    error: "Format failed".to_string(),
-                    details: Some(e.to_string()),
-                }),
-            )
-        },
-    )?;
+    format_output(
+        &req,
+        &mut output_buffer,
+        &nodes,
+        &tree_stats,
+        &path,
+        path_display,
+    )
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(CliErrorResponse {
+                error: "Format failed".to_string(),
+                details: Some(e.to_string()),
+            }),
+        )
+    })?;
     let format_time = format_start.elapsed();
 
     // Optionally compress
@@ -286,10 +286,7 @@ pub async fn cli_scan_handler(
         })?;
         (general_purpose::STANDARD.encode(&compressed_data), true)
     } else {
-        (
-            String::from_utf8_lossy(&output_buffer).to_string(),
-            false,
-        )
+        (String::from_utf8_lossy(&output_buffer).to_string(), false)
     };
 
     // Build stats
@@ -494,8 +491,7 @@ fn format_output(
         }
         "smart" => {
             // The star of the show! Surface what matters, not everything.
-            let formatter = SmartFormatter::new(use_color, !no_emoji)
-                .with_path_mode(path_display);
+            let formatter = SmartFormatter::new(use_color, !no_emoji).with_path_mode(path_display);
             formatter.format(writer, nodes, stats, root_path)?;
         }
         // Default to classic for unknown modes

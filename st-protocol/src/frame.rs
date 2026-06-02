@@ -12,7 +12,7 @@
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-use crate::{Verb, Payload, END, ESC, ProtocolError, ProtocolResult, MAX_FRAME_SIZE};
+use crate::{Payload, ProtocolError, ProtocolResult, Verb, END, ESC, MAX_FRAME_SIZE};
 
 /// A complete protocol frame
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,7 +108,7 @@ impl Frame {
             match data[i] {
                 END => return Some(i + 1),
                 ESC if i + 1 < data.len() => i += 2, // Skip escape sequence
-                ESC => return None, // Incomplete escape
+                ESC => return None,                  // Incomplete escape
                 _ => i += 1,
             }
         }
@@ -431,9 +431,7 @@ mod tests {
 
     #[test]
     fn test_builder() {
-        let frame = FrameBuilder::new(Verb::Search)
-            .string("*.rs")
-            .build();
+        let frame = FrameBuilder::new(Verb::Search).string("*.rs").build();
 
         assert_eq!(frame.verb(), Verb::Search);
         assert_eq!(frame.payload().as_str(), Some("*.rs"));

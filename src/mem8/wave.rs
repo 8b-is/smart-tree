@@ -119,9 +119,9 @@ impl WaveGrid {
     /// Create a new wave grid with standard MEM8 dimensions
     /// Grid is 256×256 (u8×u8 address space), Z (u16) is stored as temporal depth per cell
     pub fn new() -> Self {
-        const WIDTH: usize = 256;   // X: u8 coordinate
-        const HEIGHT: usize = 256;  // Y: u8 coordinate
-        const DEPTH: usize = 1;     // Z is a value per cell, not a dimension
+        const WIDTH: usize = 256; // X: u8 coordinate
+        const HEIGHT: usize = 256; // Y: u8 coordinate
+        const DEPTH: usize = 1; // Z is a value per cell, not a dimension
 
         Self {
             width: WIDTH,

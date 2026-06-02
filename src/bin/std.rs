@@ -87,10 +87,7 @@ impl DaemonState {
 }
 
 /// Handle a single client connection
-async fn handle_client(
-    mut stream: UnixStream,
-    state: Arc<RwLock<DaemonState>>,
-) -> Result<()> {
+async fn handle_client(mut stream: UnixStream, state: Arc<RwLock<DaemonState>>) -> Result<()> {
     let mut session = ClientSession::default();
     let mut buf = vec![0u8; 65536]; // Max frame size
 
@@ -190,9 +187,7 @@ async fn handle_verb(
         }
 
         // Auth verbs
-        Verb::AuthStart | Verb::AuthEnd => {
-            Frame::error("Auth block expected, not standalone verb")
-        }
+        Verb::AuthStart | Verb::AuthEnd => Frame::error("Auth block expected, not standalone verb"),
 
         Verb::Elevate => {
             // TODO: FIDO2 integration
@@ -297,10 +292,20 @@ async fn handle_format(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> F
 
     // Get the appropriate formatter
     let formatter: Box<dyn Formatter> = match mode {
-        "classic" => Box::new(ClassicFormatter::new(false, false, PathDisplayMode::Relative)),
+        "classic" => Box::new(ClassicFormatter::new(
+            false,
+            false,
+            PathDisplayMode::Relative,
+        )),
         "ai" => Box::new(AiFormatter::new(false, PathDisplayMode::Relative)),
         "json" => Box::new(JsonFormatter::new(false)),
-        "hex" => Box::new(HexFormatter::new(false, false, false, PathDisplayMode::Relative, false)),
+        "hex" => Box::new(HexFormatter::new(
+            false,
+            false,
+            false,
+            PathDisplayMode::Relative,
+            false,
+        )),
         "quantum" => Box::new(QuantumFormatter::new()),
         "stats" => Box::new(StatsFormatter::new()),
         "digest" => Box::new(DigestFormatter::new()),
@@ -332,7 +337,10 @@ async fn handle_search(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> F
     // Parse max results
     let max_results = decoder.byte().unwrap_or(50) as usize;
 
-    debug!("SEARCH path={} pattern={} max={}", path_str, pattern, max_results);
+    debug!(
+        "SEARCH path={} pattern={} max={}",
+        path_str, pattern, max_results
+    );
 
     if pattern.is_empty() {
         return Frame::error("Search pattern required");
@@ -373,11 +381,13 @@ async fn handle_search(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> F
                 let line_results: Vec<_> = lines
                     .iter()
                     .take(10) // Limit lines per file
-                    .map(|(line_num, content, col)| serde_json::json!({
-                        "line": line_num,
-                        "content": content,
-                        "col": col
-                    }))
+                    .map(|(line_num, content, col)| {
+                        serde_json::json!({
+                            "line": line_num,
+                            "content": content,
+                            "col": col
+                        })
+                    })
                     .collect();
                 match_info["lines"] = serde_json::json!(line_results);
             }
@@ -449,7 +459,10 @@ async fn handle_remember(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> 
     let memory_type = MemoryType::parse(type_str);
 
     // Parse emotional state (defaults: neutral valence, medium arousal)
-    let valence = decoder.byte().map(|b| (b as f32 - 128.0) / 128.0).unwrap_or(0.0);
+    let valence = decoder
+        .byte()
+        .map(|b| (b as f32 - 128.0) / 128.0)
+        .unwrap_or(0.0);
     let arousal = decoder.byte().map(|b| b as f32 / 255.0).unwrap_or(0.5);
 
     debug!(
@@ -592,7 +605,14 @@ async fn handle_audio(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Fra
             "audio".to_string(),
             "voice".to_string(),
             if voice_conf > 0.7 { "clear" } else { "unclear" }.to_string(),
-            if arousal > 0.7 { "excited" } else if arousal < 0.3 { "calm" } else { "neutral" }.to_string(),
+            if arousal > 0.7 {
+                "excited"
+            } else if arousal < 0.3 {
+                "calm"
+            } else {
+                "neutral"
+            }
+            .to_string(),
         ];
 
         let mut state = state.write().await;
@@ -626,7 +646,10 @@ async fn handle_audio(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Fra
             _ => return Frame::error("Text required for audio"),
         };
 
-        let valence = decoder.byte().map(|b| (b as f32 - 127.5) / 127.5).unwrap_or(0.0);
+        let valence = decoder
+            .byte()
+            .map(|b| (b as f32 - 127.5) / 127.5)
+            .unwrap_or(0.0);
         let arousal = decoder.byte().map(|b| b as f32 / 255.0).unwrap_or(0.5);
 
         debug!(
@@ -666,20 +689,17 @@ async fn handle_audio(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Fra
 async fn start_daemon(config: DaemonConfig) -> Result<()> {
     // Remove stale socket
     if config.socket_path.exists() {
-        std::fs::remove_file(&config.socket_path)
-            .context("Failed to remove stale socket")?;
+        std::fs::remove_file(&config.socket_path).context("Failed to remove stale socket")?;
     }
 
     // Create listener
-    let listener = UnixListener::bind(&config.socket_path)
-        .context("Failed to bind socket")?;
+    let listener = UnixListener::bind(&config.socket_path).context("Failed to bind socket")?;
 
     info!("STD listening on {:?}", config.socket_path);
 
     // Write PID file
     let pid = std::process::id();
-    std::fs::write(&config.pid_path, pid.to_string())
-        .context("Failed to write PID file")?;
+    std::fs::write(&config.pid_path, pid.to_string()).context("Failed to write PID file")?;
 
     // Shared state
     let state = Arc::new(RwLock::new(DaemonState::new(config.clone())));

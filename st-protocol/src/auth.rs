@@ -27,7 +27,7 @@ extern crate std as alloc;
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 extern crate alloc;
 
-use crate::{Verb, ProtocolError, ProtocolResult};
+use crate::{ProtocolError, ProtocolResult, Verb};
 
 /// Authentication level required for operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -110,7 +110,6 @@ impl SessionId {
         SessionId(bytes)
     }
 }
-
 
 /// Ed25519 signature (32 bytes)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,12 +194,10 @@ impl AuthBlock {
             return Err(ProtocolError::InvalidAuthBlock);
         }
 
-        let level = AuthLevel::from_byte(data[0])
-            .ok_or(ProtocolError::InvalidAuthBlock)?;
-        let session = SessionId::from_slice(&data[1..17])
-            .ok_or(ProtocolError::InvalidAuthBlock)?;
-        let signature = Signature::from_slice(&data[17..49])
-            .ok_or(ProtocolError::InvalidAuthBlock)?;
+        let level = AuthLevel::from_byte(data[0]).ok_or(ProtocolError::InvalidAuthBlock)?;
+        let session = SessionId::from_slice(&data[1..17]).ok_or(ProtocolError::InvalidAuthBlock)?;
+        let signature =
+            Signature::from_slice(&data[17..49]).ok_or(ProtocolError::InvalidAuthBlock)?;
 
         Ok(AuthBlock {
             level,

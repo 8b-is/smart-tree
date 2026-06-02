@@ -33,20 +33,20 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std as alloc;
 
-mod verb;
+mod address;
+mod auth;
+mod error;
 mod frame;
 mod payload;
-mod address;
-mod error;
-mod auth;
+mod verb;
 
-pub use verb::Verb;
-pub use frame::{Frame, FrameBuilder};
-pub use payload::{Payload, PayloadEncoder, PayloadDecoder};
 pub use address::{Address, AddressString, HostCache};
-pub use error::{ProtocolError, ProtocolResult};
-pub use auth::{AuthLevel, AuthBlock, SecurityContext, SessionId, Signature};
 pub use auth::{is_protected_path, path_auth_level, PROTECTED_PATHS};
+pub use auth::{AuthBlock, AuthLevel, SecurityContext, SessionId, Signature};
+pub use error::{ProtocolError, ProtocolResult};
+pub use frame::{Frame, FrameBuilder};
+pub use payload::{Payload, PayloadDecoder, PayloadEncoder};
+pub use verb::Verb;
 
 /// Protocol version
 pub const VERSION: u8 = 1;

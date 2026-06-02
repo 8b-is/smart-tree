@@ -45,7 +45,10 @@ pub async fn handle_gmail_list(params: Value, _ctx: Arc<McpContext>) -> Result<V
     }
 
     if let Some(token) = next_page {
-        output.push_str(&format!("\n(More results available, page token: {})", token));
+        output.push_str(&format!(
+            "\n(More results available, page token: {})",
+            token
+        ));
     }
 
     Ok(json!({
@@ -173,7 +176,9 @@ pub async fn handle_gmail_backup_status(_params: Value, _ctx: Arc<McpContext>) -
     for entry in std::fs::read_dir(&progress_dir)? {
         let entry = entry?;
         if let Ok(json) = std::fs::read_to_string(entry.path()) {
-            if let Ok(progress) = serde_json::from_str::<crate::google_sync::models::BackupProgress>(&json) {
+            if let Ok(progress) =
+                serde_json::from_str::<crate::google_sync::models::BackupProgress>(&json)
+            {
                 output.push_str(&format!(
                     "\nBackup: {}/{} messages (started: {})\n",
                     progress.backed_up,
@@ -290,9 +295,7 @@ pub async fn handle_gmail_archive(params: Value, _ctx: Arc<McpContext>) -> Resul
 
 /// Suggest filing for misplaced files
 pub async fn handle_suggest_filing(params: Value, _ctx: Arc<McpContext>) -> Result<Value> {
-    let path = params["path"]
-        .as_str()
-        .unwrap_or("~/Downloads");
+    let path = params["path"].as_str().unwrap_or("~/Downloads");
 
     let expanded = shellexpand::tilde(path);
     let scan_path = std::path::Path::new(expanded.as_ref());
@@ -365,7 +368,8 @@ pub async fn handle_email_triage(params: Value, _ctx: Arc<McpContext>) -> Result
         }));
     }
 
-    let mut output = "Email Triage - Needs Your Attention\n===================================\n\n".to_string();
+    let mut output =
+        "Email Triage - Needs Your Attention\n===================================\n\n".to_string();
 
     for triage in &triages {
         output.push_str(&format!(

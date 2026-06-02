@@ -170,6 +170,12 @@ pub struct McpContext {
     pub consciousness: Arc<tokio::sync::Mutex<ConsciousnessManager>>,
     /// Optional bridge to web dashboard for real-time activity visualization
     pub dashboard_bridge: Option<dashboard_bridge::DashboardBridge>,
+    /// Session "current path": the last directory an agent worked in.
+    ///
+    /// Relative paths (and `.`) in tool arguments are resolved against this,
+    /// and it is updated after each call so an agent can omit the path on
+    /// follow-up calls. Initialized to the process working directory.
+    pub cwd: Arc<std::sync::Mutex<PathBuf>>,
 }
 
 /// MCP server configuration
@@ -254,6 +260,9 @@ impl McpServer {
             assistant: Arc::new(McpAssistant::new()),
             consciousness: consciousness.clone(),
             dashboard_bridge: None,
+            cwd: Arc::new(std::sync::Mutex::new(
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            )),
         });
 
         Self {
@@ -576,7 +585,8 @@ async fn handle_consolidated_tools_call(params: Value, ctx: Arc<McpContext>) -> 
     let args = params.get("arguments").cloned();
 
     // The consolidated tools already return properly formatted responses
-    let result = tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await?;
+    let result =
+        tools_consolidated_enhanced::dispatch_consolidated_tool(tool_name, args, ctx).await?;
 
     // Global safeguard: Prevent returning massive context to the AI
     let stringified = serde_json::to_string(&result)?;

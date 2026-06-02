@@ -41,8 +41,12 @@ pub struct ProviderConfig {
 
 impl ProviderConfig {
     fn client_id(&self) -> Result<String> {
-        std::env::var(self.client_id_env)
-            .map_err(|_| anyhow!("{} not set — register an OAuth app and export the client id", self.client_id_env))
+        std::env::var(self.client_id_env).map_err(|_| {
+            anyhow!(
+                "{} not set — register an OAuth app and export the client id",
+                self.client_id_env
+            )
+        })
     }
 
     fn client_secret(&self) -> Option<String> {
@@ -188,7 +192,11 @@ async fn run_callback(
     let (mut stream, _) = listener.accept().await?;
     let (code, state_got) = read_callback_query(&mut stream).await?;
     if state_got != state_expected {
-        write_plain(&mut stream, "oauth state mismatch — possible CSRF, aborting").await;
+        write_plain(
+            &mut stream,
+            "oauth state mismatch — possible CSRF, aborting",
+        )
+        .await;
         bail!("oauth state mismatch");
     }
 
@@ -220,9 +228,7 @@ async fn run_callback(
     Ok(token)
 }
 
-async fn read_callback_query(
-    stream: &mut tokio::net::TcpStream,
-) -> Result<(String, String)> {
+async fn read_callback_query(stream: &mut tokio::net::TcpStream) -> Result<(String, String)> {
     use tokio::io::AsyncReadExt;
     let mut buf = vec![0u8; 8192];
     let n = stream.read(&mut buf).await?;

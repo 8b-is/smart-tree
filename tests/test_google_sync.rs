@@ -156,7 +156,10 @@ mod google_tests {
         }
 
         // Urgent unread email from CEO should rank high
-        assert!(!triages.is_empty(), "Should have at least one triage result");
+        assert!(
+            !triages.is_empty(),
+            "Should have at least one triage result"
+        );
         assert!(
             triages[0].from.contains("ceo"),
             "CEO's urgent email should be highest priority"
@@ -214,6 +217,9 @@ mod google_tests {
 
         // Should have waited at least a tiny bit
         println!("Waited {}ms for rate limiter refill", elapsed.as_millis());
-        assert!(elapsed.as_millis() < 500, "Shouldn't wait too long with 100/sec refill");
+        assert!(
+            elapsed.as_millis() < 500,
+            "Shouldn't wait too long with 100/sec refill"
+        );
     }
 }

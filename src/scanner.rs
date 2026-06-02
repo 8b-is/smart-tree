@@ -82,7 +82,6 @@ pub struct FileNode {
 
     // --- Smart Scanning Fields (Phase 2: Intelligent Context-Aware Scanning) ---
     // These fields enable "surface what matters" scanning
-
     /// How we reached this location (direct, symlink, mount, dependency)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub traversal_context: Option<TraversalContext>,
@@ -458,7 +457,6 @@ pub struct ScannerConfig {
     pub include_line_content: bool,
 
     // --- Smart Scanning Options (Phase 2: Intelligent Context-Aware Scanning) ---
-
     /// Compute interest scores for each node (default: true when smart mode is enabled)
     pub compute_interest: bool,
     /// Perform security scanning during traversal (default: true)
@@ -619,7 +617,6 @@ pub struct Scanner {
     safety_limits: ScannerSafetyLimits,
 
     // --- Smart Scanning Components (Phase 4) ---
-
     /// Security scanner for detecting supply chain attack patterns
     security_scanner: Option<SecurityScanner>,
     /// Interest calculator for scoring file relevance

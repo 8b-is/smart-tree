@@ -730,11 +730,8 @@ pub async fn dispatch_consolidated_tool(
             .await
         }
         "ask_user" => {
-            super::tools::handle_tools_call(
-                json!({ "name": "ask_user", "arguments": params }),
-                ctx,
-            )
-            .await
+            super::tools::handle_tools_call(json!({ "name": "ask_user", "arguments": params }), ctx)
+                .await
         }
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
     }

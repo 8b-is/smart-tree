@@ -285,8 +285,7 @@ fn linux_install() -> Result<()> {
     let install_path = install_binary()?;
 
     // 2. Create state directory
-    fs::create_dir_all("/var/lib/smart-tree")
-        .context("Failed to create /var/lib/smart-tree")?;
+    fs::create_dir_all("/var/lib/smart-tree").context("Failed to create /var/lib/smart-tree")?;
 
     // 3. Store integrity hash
     let hash = compute_file_hash(&install_path)?;
@@ -302,7 +301,10 @@ fn linux_install() -> Result<()> {
     run_command("systemctl", &["daemon-reload"])?;
     run_command("systemctl", &["enable", "--now", SYSTEMD_DAEMON_SERVICE])?;
 
-    print_install_success("systemctl status smart-tree-daemon", "journalctl -u smart-tree-daemon -f");
+    print_install_success(
+        "systemctl status smart-tree-daemon",
+        "journalctl -u smart-tree-daemon -f",
+    );
     Ok(())
 }
 
@@ -329,7 +331,10 @@ fn linux_start() -> Result<()> {
         return Ok(());
     }
     run_command("systemctl", &["start", SYSTEMD_DAEMON_SERVICE])?;
-    println!("Service started. Dashboard: http://localhost:{}", DAEMON_PORT);
+    println!(
+        "Service started. Dashboard: http://localhost:{}",
+        DAEMON_PORT
+    );
     Ok(())
 }
 
@@ -346,12 +351,18 @@ fn linux_status() -> Result<()> {
     // status doesn't need root — systemctl status works for any user
     println!("Smart Tree Daemon Status (Linux/systemd)");
     println!("─────────────────────────────────────────");
-    let _ = run_command("systemctl", &["status", SYSTEMD_DAEMON_SERVICE, "--no-pager"]);
+    let _ = run_command(
+        "systemctl",
+        &["status", SYSTEMD_DAEMON_SERVICE, "--no-pager"],
+    );
     Ok(())
 }
 
 fn linux_logs() -> Result<()> {
-    let _ = run_command("journalctl", &["-u", SYSTEMD_DAEMON_SERVICE, "-n", "50", "--no-pager", "-f"]);
+    let _ = run_command(
+        "journalctl",
+        &["-u", SYSTEMD_DAEMON_SERVICE, "-n", "50", "--no-pager", "-f"],
+    );
     Ok(())
 }
 
@@ -504,7 +515,10 @@ fn macos_start() -> Result<()> {
         }
     }
 
-    println!("Service started. Dashboard: http://localhost:{}", DAEMON_PORT);
+    println!(
+        "Service started. Dashboard: http://localhost:{}",
+        DAEMON_PORT
+    );
     Ok(())
 }
 
@@ -513,7 +527,11 @@ fn macos_stop() -> Result<()> {
         return Ok(());
     }
     let _ = Command::new("launchctl")
-        .args(["kill", "SIGTERM", &format!("system/{}", LAUNCHD_DAEMON_LABEL)])
+        .args([
+            "kill",
+            "SIGTERM",
+            &format!("system/{}", LAUNCHD_DAEMON_LABEL),
+        ])
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status();
@@ -554,9 +572,7 @@ fn macos_status() -> Result<()> {
         }
         _ => {
             // Fallback: check launchctl list
-            let list = Command::new("launchctl")
-                .args(["list"])
-                .output();
+            let list = Command::new("launchctl").args(["list"]).output();
             if let Ok(out) = list {
                 let text = String::from_utf8_lossy(&out.stdout);
                 if text.contains(LAUNCHD_DAEMON_LABEL) {
@@ -580,7 +596,18 @@ fn macos_logs() -> Result<()> {
     } else {
         // Try system log
         println!("Showing logs from system log...");
-        run_command("log", &["show", "--predicate", "process == \"st\"", "--last", "1h", "--style", "compact"])?;
+        run_command(
+            "log",
+            &[
+                "show",
+                "--predicate",
+                "process == \"st\"",
+                "--last",
+                "1h",
+                "--style",
+                "compact",
+            ],
+        )?;
     }
     Ok(())
 }
@@ -757,7 +784,10 @@ fn windows_start() -> Result<()> {
             return Ok(());
         }
         run_command("sc.exe", &["start", WINDOWS_SERVICE_NAME])?;
-        println!("Service started. Dashboard: http://localhost:{}", DAEMON_PORT);
+        println!(
+            "Service started. Dashboard: http://localhost:{}",
+            DAEMON_PORT
+        );
         Ok(())
     }
 }
@@ -809,7 +839,13 @@ fn windows_logs() -> Result<()> {
 
         if log_path.exists() {
             println!("Showing logs from {}", log_path.display());
-            run_command("powershell", &["-Command", &format!("Get-Content -Path '{}' -Tail 50 -Wait", log_path.display())])?;
+            run_command(
+                "powershell",
+                &[
+                    "-Command",
+                    &format!("Get-Content -Path '{}' -Tail 50 -Wait", log_path.display()),
+                ],
+            )?;
         } else {
             println!("Log file not found at {}", log_path.display());
             println!("Try: Get-EventLog -LogName Application -Source SmartTreeDaemon -Newest 50");
@@ -992,10 +1028,7 @@ pub fn print_signature_banner() {
         }
         SignatureStatus::CommunityBuild(ref signer) => {
             println!("  COMMUNITY BUILD - Signed but NOT by the official 8b.is key.");
-            println!(
-                "  Signer: {}",
-                &signer[..signer.len().min(70)]
-            );
+            println!("  Signer: {}", &signer[..signer.len().min(70)]);
             println!("  Verify you trust this signer before proceeding.");
         }
         SignatureStatus::Unsigned => {
@@ -1175,7 +1208,10 @@ pub fn guardian_status() -> Result<()> {
                 println!("Install: st --guardian-install");
                 return Ok(());
             }
-            let _ = run_command("systemctl", &["status", "smart-tree-guardian.service", "--no-pager"]);
+            let _ = run_command(
+                "systemctl",
+                &["status", "smart-tree-guardian.service", "--no-pager"],
+            );
         }
         Platform::MacOS => {
             let plist = "/Library/LaunchDaemons/is.8b.smart-tree-guardian.plist";

@@ -5,19 +5,19 @@ use crate::in_memory_logger::InMemoryLogStore;
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{ConnectInfo, State},
+    extract::ConnectInfo,
     http::{header, Request, StatusCode},
-    middleware::{self, Next},
+    middleware::Next,
     response::{Html, IntoResponse, Response},
     routing::{get, post},
     Router,
 };
-use tower_http::cors::CorsLayer;
 use ipnet::IpNet;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_http::cors::CorsLayer;
 
 /// Allowed networks for connection filtering
 #[derive(Clone)]
@@ -71,12 +71,17 @@ impl AllowedNetworks {
 
 /// Middleware to check if client IP is allowed
 async fn check_allowed_network(
-    State(allowed): State<AllowedNetworks>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    if allowed.is_allowed(addr.ip()) {
+    let allowed = req
+        .extensions()
+        .get::<AllowedNetworks>()
+        .map(|nets| nets.is_allowed(addr.ip()))
+        .unwrap_or(true);
+
+    if allowed {
         Ok(next.run(req).await)
     } else {
         eprintln!("Rejected connection from {}", addr.ip());
@@ -125,7 +130,10 @@ pub async fn start_server(
             get(api::get_theme_config).post(api::save_theme_config),
         )
         // Prompt endpoints
-        .route("/api/prompt", get(api::get_active_prompts).post(api::ask_prompt))
+        .route(
+            "/api/prompt",
+            get(api::get_active_prompts).post(api::ask_prompt),
+        )
         .route("/api/prompt/:prompt_id/answer", post(api::answer_prompt))
         // WebSocket endpoints
         .route("/ws/terminal", get(websocket::terminal_handler))
@@ -135,10 +143,7 @@ pub async fn start_server(
         .route("/api/voice/transcribe", post(voice::transcribe))
         .route("/api/voice/register", post(voice::register_speaker))
         .route("/api/voice/speak", post(voice::speak))
-        .layer(middleware::from_fn_with_state(
-            allowed.clone(),
-            check_allowed_network,
-        ))
+        .layer(axum::Extension(allowed.clone()))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

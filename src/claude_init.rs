@@ -721,15 +721,24 @@ impl McpInstaller {
         // 1. Claude Desktop
         #[cfg(target_os = "macos")]
         if let Some(h) = dirs::home_dir() {
-            paths.push(("Claude Desktop", h.join("Library/Application Support/Claude/claude_desktop_config.json")));
+            paths.push((
+                "Claude Desktop",
+                h.join("Library/Application Support/Claude/claude_desktop_config.json"),
+            ));
         }
         #[cfg(target_os = "windows")]
         if let Some(c) = dirs::config_dir() {
-            paths.push(("Claude Desktop", c.join("Claude/claude_desktop_config.json")));
+            paths.push((
+                "Claude Desktop",
+                c.join("Claude/claude_desktop_config.json"),
+            ));
         }
         #[cfg(target_os = "linux")]
         if let Some(c) = dirs::config_dir() {
-            paths.push(("Claude Desktop", c.join("Claude/claude_desktop_config.json")));
+            paths.push((
+                "Claude Desktop",
+                c.join("Claude/claude_desktop_config.json"),
+            ));
         }
 
         // 2. Gemini / Antigravity
@@ -872,7 +881,9 @@ impl McpInstaller {
                 Err(_) => continue,
             };
 
-            let was_removed = if let Some(servers) = config.get_mut("mcpServers").and_then(|s| s.as_object_mut()) {
+            let was_removed = if let Some(servers) =
+                config.get_mut("mcpServers").and_then(|s| s.as_object_mut())
+            {
                 servers.remove("smart-tree").is_some()
             } else {
                 false
@@ -934,8 +945,9 @@ impl McpInstaller {
     pub fn status(&self) -> Result<Value> {
         let targets = Self::get_all_target_configs();
         let is_installed = self.is_installed().unwrap_or(false);
-        
-        let paths: Vec<String> = targets.into_iter()
+
+        let paths: Vec<String> = targets
+            .into_iter()
             .map(|(_, p)| p.display().to_string())
             .collect();
 
@@ -962,7 +974,8 @@ impl Default for McpInstaller {
 pub fn install_mcp_to_desktop() -> Result<String> {
     let installer = McpInstaller::new()?;
     let results = installer.install_all()?;
-    let msg = results.into_iter()
+    let msg = results
+        .into_iter()
         .filter(|r| r.success)
         .map(|r| r.message)
         .collect::<Vec<_>>()
@@ -978,7 +991,8 @@ pub fn install_mcp_to_desktop() -> Result<String> {
 pub fn uninstall_mcp_from_desktop() -> Result<String> {
     let installer = McpInstaller::new()?;
     let results = installer.uninstall_all()?;
-    let msg = results.into_iter()
+    let msg = results
+        .into_iter()
         .filter(|r| r.success)
         .map(|r| r.message)
         .collect::<Vec<_>>()

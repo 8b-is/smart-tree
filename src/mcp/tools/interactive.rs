@@ -1,8 +1,8 @@
 use crate::mcp::McpContext;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
-use std::sync::Arc;
 use std::env;
+use std::sync::Arc;
 
 /// Send a prompt to the user via the local dashboard and wait for their response
 pub async fn ask_user(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
@@ -26,15 +26,22 @@ pub async fn ask_user(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Va
     if !response.status().is_success() {
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
-        return Err(anyhow::anyhow!("Dashboard returned error {}: {}", status, text));
+        return Err(anyhow::anyhow!(
+            "Dashboard returned error {}: {}",
+            status,
+            text
+        ));
     }
 
     // Parse the response back
-    let response_json: Value = response.json().await.context("Failed to parse dashboard response")?;
-    
+    let response_json: Value = response
+        .json()
+        .await
+        .context("Failed to parse dashboard response")?;
+
     // Return the answer as plain text or JSON
     let answer = response_json["answer"].as_str().unwrap_or("").to_string();
-    
+
     Ok(json!({
         "answer": answer
     }))

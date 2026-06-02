@@ -31,8 +31,8 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::mcp::{McpConfig, McpContext};
 use crate::mcp::consciousness::ConsciousnessManager;
+use crate::mcp::{McpConfig, McpContext};
 
 /// Shared MCP context for HTTP handlers
 pub type SharedMcpContext = Arc<RwLock<Option<Arc<McpContext>>>>;
@@ -57,11 +57,16 @@ async fn ensure_mcp_context(state: &SharedMcpContext) -> Arc<McpContext> {
     let ctx = Arc::new(McpContext {
         cache: Arc::new(crate::mcp::cache::AnalysisCache::new(config.cache_ttl)),
         config: Arc::new(config),
-        permissions: Arc::new(tokio::sync::Mutex::new(crate::mcp::permissions::PermissionCache::new())),
+        permissions: Arc::new(tokio::sync::Mutex::new(
+            crate::mcp::permissions::PermissionCache::new(),
+        )),
         sessions: Arc::new(crate::mcp::session::SessionManager::new()),
         assistant: Arc::new(crate::mcp::assistant::McpAssistant::new()),
         consciousness,
         dashboard_bridge: None,
+        cwd: Arc::new(std::sync::Mutex::new(
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+        )),
     });
 
     let mut write_guard = state.write().await;
@@ -157,17 +162,22 @@ pub async fn mcp_initialize(
             description: "Smart Tree Daemon - HTTP MCP with The Custodian watching".to_string(),
         },
         capabilities: Capabilities {
-            tools: ToolCapabilities { list_changed: false },
-            resources: ResourceCapabilities { subscribe: false, list_changed: false },
-            prompts: PromptCapabilities { list_changed: false },
+            tools: ToolCapabilities {
+                list_changed: false,
+            },
+            resources: ResourceCapabilities {
+                subscribe: false,
+                list_changed: false,
+            },
+            prompts: PromptCapabilities {
+                list_changed: false,
+            },
         },
     })
 }
 
 /// GET /mcp/tools/list - List available MCP tools
-pub async fn mcp_tools_list(
-    State(state): State<SharedMcpContext>,
-) -> impl IntoResponse {
+pub async fn mcp_tools_list(State(state): State<SharedMcpContext>) -> impl IntoResponse {
     let _ctx = ensure_mcp_context(&state).await;
 
     // Get the enhanced consolidated tools
@@ -200,7 +210,8 @@ pub async fn mcp_tools_call(
         &req.name,
         req.arguments,
         ctx,
-    ).await;
+    )
+    .await;
 
     match result {
         Ok(mut value) => {
@@ -219,15 +230,13 @@ pub async fn mcp_tools_call(
                     "code": -32603,
                     "message": e.to_string()
                 }
-            }))
-        )
+            })),
+        ),
     }
 }
 
 /// GET /mcp/resources/list - List available resources
-pub async fn mcp_resources_list(
-    State(_state): State<SharedMcpContext>,
-) -> impl IntoResponse {
+pub async fn mcp_resources_list(State(_state): State<SharedMcpContext>) -> impl IntoResponse {
     // For now, return empty - resources are mostly file-based
     Json(json!({
         "resources": []
@@ -235,9 +244,7 @@ pub async fn mcp_resources_list(
 }
 
 /// GET /mcp/prompts/list - List available prompts
-pub async fn mcp_prompts_list(
-    State(_state): State<SharedMcpContext>,
-) -> impl IntoResponse {
+pub async fn mcp_prompts_list(State(_state): State<SharedMcpContext>) -> impl IntoResponse {
     Json(json!({
         "prompts": [
             {
@@ -280,8 +287,11 @@ fn evaluate_operation(tool_name: &str, args: &Option<Value>) -> Option<String> {
         let args_str = args.to_string().to_lowercase();
 
         // IPFS/IPNS gateways - code leaving the machine
-        if args_str.contains("ipfs") || args_str.contains("ipns")
-            || args_str.contains("dweb.link") || args_str.contains("w3s.link") {
+        if args_str.contains("ipfs")
+            || args_str.contains("ipns")
+            || args_str.contains("dweb.link")
+            || args_str.contains("w3s.link")
+        {
             return Some(format!(
                 "🧹 Custodian Notice: Operation '{}' references IPFS/IPNS. \
                  Data may be transmitted to external decentralized storage. \
@@ -291,9 +301,12 @@ fn evaluate_operation(tool_name: &str, args: &Option<Value>) -> Option<String> {
         }
 
         // Sensitive file patterns
-        if args_str.contains(".env") || args_str.contains("credentials")
-            || args_str.contains("secret") || args_str.contains(".ssh")
-            || args_str.contains("private_key") {
+        if args_str.contains(".env")
+            || args_str.contains("credentials")
+            || args_str.contains("secret")
+            || args_str.contains(".ssh")
+            || args_str.contains("private_key")
+        {
             return Some(format!(
                 "🧹 Custodian Notice: Operation '{}' involves potentially sensitive files. \
                  Please verify this access is authorized.",
@@ -303,7 +316,8 @@ fn evaluate_operation(tool_name: &str, args: &Option<Value>) -> Option<String> {
 
         // External URLs in write operations
         if (tool_name.contains("write") || tool_name.contains("edit"))
-            && (args_str.contains("http://") || args_str.contains("https://")) {
+            && (args_str.contains("http://") || args_str.contains("https://"))
+        {
             return Some(format!(
                 "🧹 Custodian Notice: Write operation '{}' contains external URLs. \
                  Verify the destination is trusted.",
@@ -342,13 +356,13 @@ pub async fn mcp_sse_handler(
     // Note: endpoint must be absolute URL for Claude Code compatibility
     let events = stream::iter(vec![
         // Send the endpoint event as required by MCP SSE protocol
-        Ok(Event::default()
-            .event("endpoint")
-            .data(format!("http://localhost:28428/mcp/message?session_id={}", session_id))),
+        Ok(Event::default().event("endpoint").data(format!(
+            "http://localhost:28428/mcp/message?session_id={}",
+            session_id
+        ))),
         // Send a welcome message
-        Ok(Event::default()
-            .event("message")
-            .data(serde_json::to_string(&json!({
+        Ok(Event::default().event("message").data(
+            serde_json::to_string(&json!({
                 "jsonrpc": "2.0",
                 "method": "notifications/initialized",
                 "params": {
@@ -358,7 +372,9 @@ pub async fn mcp_sse_handler(
                         "version": env!("CARGO_PKG_VERSION")
                     }
                 }
-            })).unwrap_or_default())),
+            }))
+            .unwrap_or_default(),
+        )),
     ]);
 
     Sse::new(events).keep_alive(KeepAlive::default())
@@ -412,12 +428,14 @@ pub async fn mcp_message_handler(
                 tool_name,
                 Some(arguments),
                 ctx,
-            ).await {
+            )
+            .await
+            {
                 Ok(result) => result,
                 Err(e) => json!({
                     "isError": true,
                     "content": [{ "type": "text", "text": e.to_string() }]
-                })
+                }),
             }
         }
         "resources/list" => json!({ "resources": [] }),
@@ -427,7 +445,7 @@ pub async fn mcp_message_handler(
                 "code": -32601,
                 "message": format!("Method not found: {}", method)
             }
-        })
+        }),
     };
 
     // Build JSON-RPC response
@@ -449,7 +467,10 @@ pub async fn mcp_message_handler(
 // ROUTER SETUP
 // =============================================================================
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 /// Create the MCP HTTP router
 pub fn mcp_router(state: SharedMcpContext) -> Router {

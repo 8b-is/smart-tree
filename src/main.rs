@@ -79,9 +79,16 @@ async fn main() -> Result<()> {
 
     // Auto-start daemon for any command that might need it.
     // Skip for modes that run their own servers or are purely informational.
-    let skip_autostart = cli.mcp || cli.http_daemon || cli.guardian_daemon
-        || cli.version || cli.update || cli.cheet || cli.man
-        || cli.completions.is_some() || cli.daemon_start || cli.daemon_install
+    let skip_autostart = cli.mcp
+        || cli.http_daemon
+        || cli.guardian_daemon
+        || cli.version
+        || cli.update
+        || cli.cheet
+        || cli.man
+        || cli.completions.is_some()
+        || cli.daemon_start
+        || cli.daemon_install
         || matches!(cli.cmd, Some(st::cli::Cmd::Service(_)));
     if !skip_autostart {
         let client = DaemonClient::default_port();
@@ -275,7 +282,8 @@ async fn main() -> Result<()> {
             cli.open_browser,
             cli.allow.clone(),
             InMemoryLogStore::new(),
-        ).await;
+        )
+        .await;
     }
 
     if cli.http_daemon {
@@ -330,7 +338,11 @@ async fn main() -> Result<()> {
 
     // Handle mega sessions
     if let Some(name) = &cli.mega_start {
-        let name_opt = if name.is_empty() { None } else { Some(name.as_str()) };
+        let name_opt = if name.is_empty() {
+            None
+        } else {
+            Some(name.as_str())
+        };
         return handle_mega_start(name_opt).await;
     }
     if cli.mega_save {
@@ -356,15 +368,19 @@ async fn main() -> Result<()> {
     // =========================================================================
     // Ensure daemon is running (always required now)
     let client = DaemonClient::default_port();
-    client.ensure_running().await.context(
-        "Smart Tree daemon could not be started. Try: std start",
-    )?;
+    client
+        .ensure_running()
+        .await
+        .context("Smart Tree daemon could not be started. Try: std start")?;
 
     // Build CLI request from arguments
     let request = build_cli_request(&cli)?;
 
     // Execute scan via daemon
-    let response = client.cli_scan(request.clone()).await.context("Scan failed")?;
+    let response = client
+        .cli_scan(request.clone())
+        .await
+        .context("Scan failed")?;
 
     // Print Treehouse ASCII banner for interactive non-machine modes
     if std::io::stdout().is_terminal() && (request.mode == "smart" || request.mode == "classic") {
@@ -1345,12 +1361,22 @@ async fn handle_memory_find(keywords_str: &str) -> Result<()> {
         if daemon_running {
             println!("🔍 No memories found for: {}", keywords_str);
         } else {
-            println!("🔍 No memories found for '{}' in this directory", keywords_str);
+            println!(
+                "🔍 No memories found for '{}' in this directory",
+                keywords_str
+            );
             println!("   💡 Start daemon for global memory: st --daemon-start");
         }
     } else {
-        println!("🧠 Found {} memories{}:", filtered.len(),
-            if daemon_running { " (global)" } else { " (local)" });
+        println!(
+            "🧠 Found {} memories{}:",
+            filtered.len(),
+            if daemon_running {
+                " (global)"
+            } else {
+                " (local)"
+            }
+        );
         println!("{}", "─".repeat(45));
 
         for (i, memory) in filtered.iter().enumerate() {
@@ -1513,8 +1539,7 @@ fn update_agent_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
         }
 
         // Update or add the UserPromptSubmit hook (not duplicate!)
-        config["hooks"]["UserPromptSubmit"] =
-            json!(format!("{} --agent-context", st_path));
+        config["hooks"]["UserPromptSubmit"] = json!(format!("{} --agent-context", st_path));
 
         println!("📍 Using st binary at: {}", st_path);
     } else {
@@ -1858,22 +1883,20 @@ async fn run_guardian_daemon() -> Result<()> {
     use st::ai_guardian::AiGuardian;
     use tokio::time::{sleep, Duration};
 
-    println!(r#"
+    println!(
+        r#"
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                               ║
 ║    🛡️  SMART TREE GUARDIAN - System-wide AI Protection Active 🛡️            ║
 ║                                                                               ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
-"#);
+"#
+    );
 
     let guardian = AiGuardian::new();
 
     // Watch paths for suspicious files
-    let watch_paths = vec![
-        "/home",
-        "/tmp",
-        "/var/tmp",
-    ];
+    let watch_paths = vec!["/home", "/tmp", "/var/tmp"];
 
     println!("Watching paths: {:?}", watch_paths);
     println!("Press Ctrl+C to stop.\n");
@@ -1931,13 +1954,12 @@ fn scan_directory_for_threats(guardian: &st::ai_guardian::AiGuardian, path: &std
                 for threat in threats {
                     if matches!(
                         threat.level,
-                        st::ai_guardian::ThreatLevel::Critical | st::ai_guardian::ThreatLevel::Dangerous
+                        st::ai_guardian::ThreatLevel::Critical
+                            | st::ai_guardian::ThreatLevel::Dangerous
                     ) {
                         eprintln!(
                             "⚠️  THREAT DETECTED [{:?}] in {}: {}",
-                            threat.level,
-                            threat.location,
-                            threat.pattern
+                            threat.level, threat.location, threat.pattern
                         );
                         eprintln!("    Context: {}", threat.context);
                         eprintln!("    Recommendation: {}", threat.recommendation);
@@ -1954,11 +1976,13 @@ fn scan_directory_for_threats(guardian: &st::ai_guardian::AiGuardian, path: &std
 fn handle_guardian_scan(file_path: &std::path::Path) -> Result<()> {
     use st::ai_guardian::{AiGuardian, ThreatLevel};
 
-    println!(r#"
+    println!(
+        r#"
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║            🛡️  SMART TREE GUARDIAN - File Scan 🛡️                            ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
-"#);
+"#
+    );
 
     println!("Scanning: {}\n", file_path.display());
 
@@ -1971,9 +1995,18 @@ fn handle_guardian_scan(file_path: &std::path::Path) -> Result<()> {
     }
 
     // Count by severity
-    let critical = threats.iter().filter(|t| t.level == ThreatLevel::Critical).count();
-    let dangerous = threats.iter().filter(|t| t.level == ThreatLevel::Dangerous).count();
-    let suspicious = threats.iter().filter(|t| t.level == ThreatLevel::Suspicious).count();
+    let critical = threats
+        .iter()
+        .filter(|t| t.level == ThreatLevel::Critical)
+        .count();
+    let dangerous = threats
+        .iter()
+        .filter(|t| t.level == ThreatLevel::Dangerous)
+        .count();
+    let suspicious = threats
+        .iter()
+        .filter(|t| t.level == ThreatLevel::Suspicious)
+        .count();
 
     println!("Found {} issues:\n", threats.len());
     println!("  🔴 Critical:   {}", critical);

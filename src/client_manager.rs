@@ -8,11 +8,11 @@
 //! - Broadcasting requests to all servers (pattern)
 
 use crate::daemon_client::DaemonClient;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::fs;
-use anyhow::{Context, Result};
+use std::path::PathBuf;
 
 /// Configuration for a single server
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,9 +47,9 @@ impl ClientManager {
 
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read config file: {:?}", path))?;
-        
-        let servers: Vec<ServerConfig> = serde_json::from_str(&content)
-            .with_context(|| "Failed to parse server config")?;
+
+        let servers: Vec<ServerConfig> =
+            serde_json::from_str(&content).with_context(|| "Failed to parse server config")?;
 
         let mut manager = Self::new();
         for server in servers {
@@ -62,9 +62,9 @@ impl ClientManager {
     /// Save current server list to a JSON config file
     pub fn save_to_file(&self, path: &PathBuf) -> Result<()> {
         let servers: Vec<&ServerConfig> = self.servers.values().collect();
-        let json = serde_json::to_string_pretty(&servers)
-            .context("Failed to serialize server config")?;
-        
+        let json =
+            serde_json::to_string_pretty(&servers).context("Failed to serialize server config")?;
+
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
@@ -72,7 +72,7 @@ impl ClientManager {
 
         fs::write(path, json)
             .with_context(|| format!("Failed to write config file: {:?}", path))?;
-        
+
         Ok(())
     }
 
@@ -104,8 +104,14 @@ impl ClientManager {
 
     /// Get clients for all registered servers
     pub fn get_all_clients(&self) -> Vec<(String, DaemonClient)> {
-        self.servers.iter()
-            .map(|(name, config)| (name.clone(), DaemonClient::new_remote(&config.url, config.token.clone())))
+        self.servers
+            .iter()
+            .map(|(name, config)| {
+                (
+                    name.clone(),
+                    DaemonClient::new_remote(&config.url, config.token.clone()),
+                )
+            })
             .collect()
     }
 
@@ -127,15 +133,15 @@ mod tests {
     #[test]
     fn test_manager_crud() {
         let mut manager = ClientManager::new();
-        
+
         manager.add_server("local", "http://localhost:8420", None);
         manager.add_server("remote", "https://api.example.com", Some("token".into()));
 
         assert_eq!(manager.list_servers().len(), 2);
-        
+
         let client = manager.get_client("remote").unwrap();
         // Can't check client internal fields easily, but if it exists it's good
-        
+
         manager.remove_server("local");
         assert_eq!(manager.list_servers().len(), 1);
         assert!(manager.get_client("local").is_none());

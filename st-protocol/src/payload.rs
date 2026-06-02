@@ -15,7 +15,7 @@
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-use crate::{ESC, END, ProtocolError, ProtocolResult};
+use crate::{ProtocolError, ProtocolResult, END, ESC};
 
 /// Raw payload data with escape handling
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,8 +177,8 @@ impl Payload {
 
                 let next = data[i + 1];
                 match next {
-                    END => payload.push_byte(END),  // 0x1B 0x00 = literal 0x00
-                    ESC => payload.push_byte(ESC),  // 0x1B 0x1B = literal 0x1B
+                    END => payload.push_byte(END), // 0x1B 0x00 = literal 0x00
+                    ESC => payload.push_byte(ESC), // 0x1B 0x1B = literal 0x1B
                     _ => return Err(ProtocolError::InvalidEscape),
                 }
                 i += 2;
@@ -359,7 +359,10 @@ impl<'a> PayloadDecoder<'a> {
             // Printable ASCII - read until non-printable or end
             self.pos -= 1;
             let start = self.pos;
-            while self.pos < self.data.len() && self.data[self.pos] >= 0x20 && self.data[self.pos] <= 0x7E {
+            while self.pos < self.data.len()
+                && self.data[self.pos] >= 0x20
+                && self.data[self.pos] <= 0x7E
+            {
                 self.pos += 1;
             }
             let s = core::str::from_utf8(&self.data[start..self.pos]).ok()?;
@@ -438,6 +441,6 @@ mod tests {
         let bytes = payload.as_bytes();
         assert_eq!(bytes[0], 0xFF); // Extended marker
         assert_eq!(bytes[1], 200); // Low byte
-        assert_eq!(bytes[2], 0);   // High byte
+        assert_eq!(bytes[2], 0); // High byte
     }
 }

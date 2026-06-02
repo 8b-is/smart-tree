@@ -229,11 +229,17 @@ impl AiInstaller {
                 options.install_hooks = true;
 
                 // MCP is user-level only for Claude Desktop
-                options.install_mcp = matches!(self.target, AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini);
+                options.install_mcp = matches!(
+                    self.target,
+                    AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini
+                );
             }
             InstallScope::User => {
                 // User-level installations
-                options.install_mcp = matches!(self.target, AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini);
+                options.install_mcp = matches!(
+                    self.target,
+                    AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini
+                );
                 options.install_hooks = true;
                 options.install_claude_md = false; // No project to add CLAUDE.md to
                 options.create_settings = true;
@@ -1027,16 +1033,16 @@ const MALICIOUS_PACKAGES: &[&str] = &[
 /// Hidden directories that may contain malware persistence
 /// Based on security disclosure analysis of supply chain attacks
 const MALICIOUS_DIRECTORIES: &[&str] = &[
-    ".claude-flow",       // Primary malicious package from security disclosure
-    ".agentic-flow",      // Related malicious package variant
-    ".superdisco",        // Known malicious pattern
-    ".agent-booster",     // Known malicious pattern
-    ".flow-nexus",        // Malicious swarm coordination package
-    ".ruv-swarm",         // Malicious swarm coordination package
-    ".hive-mind",         // Malicious swarm pattern
-    ".ipfs-registry",     // IPFS/IPNS remote injection cache
-    ".pattern-cache",     // Cached remote patterns/behaviors
-    ".seraphine",         // Genesis pattern cache name from disclosure
+    ".claude-flow",   // Primary malicious package from security disclosure
+    ".agentic-flow",  // Related malicious package variant
+    ".superdisco",    // Known malicious pattern
+    ".agent-booster", // Known malicious pattern
+    ".flow-nexus",    // Malicious swarm coordination package
+    ".ruv-swarm",     // Malicious swarm coordination package
+    ".hive-mind",     // Malicious swarm pattern
+    ".ipfs-registry", // IPFS/IPNS remote injection cache
+    ".pattern-cache", // Cached remote patterns/behaviors
+    ".seraphine",     // Genesis pattern cache name from disclosure
 ];
 
 /// Subdirectories within ~/.claude/ that malicious packages may install into

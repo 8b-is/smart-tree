@@ -114,8 +114,7 @@ impl DaemonClient {
     pub fn new(port: u16) -> Self {
         let token = crate::daemon::load_token();
 
-        let mut builder = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5));
+        let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(5));
 
         if let Some(ref tok) = token {
             let mut headers = reqwest::header::HeaderMap::new();
@@ -379,8 +378,7 @@ impl DaemonClient {
         let url = format!("{}/cli/scan", self.base_url);
 
         // Use a longer timeout for scan operations, with auth token
-        let mut builder = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(120));
+        let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120));
 
         if let Some(tok) = crate::daemon::load_token() {
             let mut headers = reqwest::header::HeaderMap::new();
@@ -480,7 +478,11 @@ impl DaemonClient {
         }
 
         // Try to send a shutdown request
-        match self.request(reqwest::Method::POST, "/shutdown").send().await {
+        match self
+            .request(reqwest::Method::POST, "/shutdown")
+            .send()
+            .await
+        {
             Ok(_) => {
                 // Wait for daemon to stop
                 tokio::time::sleep(Duration::from_millis(500)).await;

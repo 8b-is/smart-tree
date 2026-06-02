@@ -70,7 +70,12 @@ pub struct Cli {
     pub open_browser: bool,
 
     /// Network CIDR allow-list for dashboard (e.g., 192.168.1.0/24)
-    #[arg(long, value_name = "CIDR", requires = "dashboard", help_heading = "Interactive Modes")]
+    #[arg(
+        long,
+        value_name = "CIDR",
+        requires = "dashboard",
+        help_heading = "Interactive Modes"
+    )]
     pub allow: Vec<String>,
 
     /// Start HTTP daemon (MCP over HTTP, LLM proxy, The Custodian)
@@ -407,7 +412,12 @@ pub struct ScanArgs {
     pub sse_server: bool,
 
     /// SSE server port (also used as daemon port)
-    #[arg(long, alias = "daemon-port", default_value = "28428", help_heading = "Streaming")]
+    #[arg(
+        long,
+        alias = "daemon-port",
+        default_value = "28428",
+        help_heading = "Streaming"
+    )]
     pub sse_port: u16,
 
     // =========================================================================

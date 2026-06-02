@@ -92,7 +92,9 @@ impl FileSignature {
 
     /// Quick check if file might have changed (without hashing)
     pub fn quick_changed(&self, other: &Self) -> bool {
-        self.mtime != other.mtime || self.size != other.size || self.permissions != other.permissions
+        self.mtime != other.mtime
+            || self.size != other.size
+            || self.permissions != other.permissions
     }
 
     /// Full check if file has changed (including hash if available)
@@ -495,7 +497,7 @@ impl ChangeStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-        use tempfile::TempDir;
+    use tempfile::TempDir;
 
     #[test]
     fn test_file_signature_creation() {

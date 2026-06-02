@@ -113,7 +113,9 @@ pub async fn start_daemon() -> Result<bool> {
         }
     }
 
-    Err(anyhow::anyhow!("Daemon started but not responding after 5 seconds"))
+    Err(anyhow::anyhow!(
+        "Daemon started but not responding after 5 seconds"
+    ))
 }
 
 /// Client for communicating with the STD daemon
@@ -161,7 +163,10 @@ impl StdClient {
             .context("Failed to send frame")?;
 
         let mut buf = vec![0u8; 65536];
-        let n = stream.read(&mut buf).await.context("Failed to read response")?;
+        let n = stream
+            .read(&mut buf)
+            .await
+            .context("Failed to read response")?;
         buf.truncate(n);
         Ok(buf)
     }
@@ -255,8 +260,8 @@ impl StdClient {
 
         if resp.len() > 2 {
             let payload = &resp[1..resp.len() - 1];
-            let json_str = String::from_utf8(payload.to_vec())
-                .context("Invalid UTF-8 in stats response")?;
+            let json_str =
+                String::from_utf8(payload.to_vec()).context("Invalid UTF-8 in stats response")?;
             serde_json::from_str(&json_str).context("Invalid JSON in stats response")
         } else {
             Ok(serde_json::json!({}))

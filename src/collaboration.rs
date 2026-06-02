@@ -92,9 +92,7 @@ impl Participant {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CollabMessage {
     /// Someone joined
-    Join {
-        participant: Participant,
-    },
+    Join { participant: Participant },
     /// Someone left
     Leave {
         participant_id: String,
@@ -126,19 +124,14 @@ pub enum CollabMessage {
         entering: bool,
     },
     /// System announcement
-    System {
-        message: String,
-    },
+    System { message: String },
     /// Presence update (periodic)
     Presence {
         participants: Vec<ParticipantSummary>,
         hot_tub_count: usize,
     },
     /// AI Prompt Request
-    Prompt {
-        prompt_id: String,
-        question: String,
-    },
+    Prompt { prompt_id: String, question: String },
 }
 
 /// Lightweight participant info for presence updates
@@ -248,7 +241,12 @@ impl CollaborationHub {
     }
 
     /// Update participant status
-    pub fn update_status(&mut self, participant_id: &str, status: Option<String>, working_on: Option<String>) {
+    pub fn update_status(
+        &mut self,
+        participant_id: &str,
+        status: Option<String>,
+        working_on: Option<String>,
+    ) {
         if let Some(p) = self.participants.get_mut(participant_id) {
             p.status = status.clone();
             p.working_on = working_on.clone();
@@ -282,12 +280,18 @@ impl CollaborationHub {
 
     /// Get current presence
     pub fn get_presence(&self) -> Vec<ParticipantSummary> {
-        self.participants.values().map(ParticipantSummary::from).collect()
+        self.participants
+            .values()
+            .map(ParticipantSummary::from)
+            .collect()
     }
 
     /// Get hot tub participants
     pub fn get_hot_tub_participants(&self) -> Vec<&Participant> {
-        self.participants.values().filter(|p| p.in_hot_tub).collect()
+        self.participants
+            .values()
+            .filter(|p| p.in_hot_tub)
+            .collect()
     }
 
     /// Broadcast presence update

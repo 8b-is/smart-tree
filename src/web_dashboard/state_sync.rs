@@ -345,10 +345,7 @@ pub struct HintMessageDto {
 // ============================================================================
 
 /// Handle WebSocket upgrade for state sync
-pub async fn state_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<SharedState>,
-) -> Response {
+pub async fn state_handler(ws: WebSocketUpgrade, State(state): State<SharedState>) -> Response {
     ws.on_upgrade(|socket| handle_state_socket(socket, state))
 }
 
@@ -455,7 +452,10 @@ fn build_state_update(activity: &McpActivityState, hints: &UserHintsQueue) -> St
 }
 
 /// Build Wave Compass visualization data
-fn build_wave_compass(file_log: &[FileEventDto], _directories: &HashSet<PathBuf>) -> WaveCompassDto {
+fn build_wave_compass(
+    file_log: &[FileEventDto],
+    _directories: &HashSet<PathBuf>,
+) -> WaveCompassDto {
     use std::collections::HashMap;
 
     // Aggregate intensity by directory
@@ -511,9 +511,9 @@ fn path_to_coords(path: &str) -> (f32, f32) {
 
     // First directory determines quadrant
     let quadrant = match parts.first().copied() {
-        Some("src") => (0.0, 0.0),   // Upper-left
-        Some("tests") => (0.5, 0.0), // Upper-right
-        Some("docs") => (0.0, 0.5),  // Lower-left
+        Some("src") => (0.0, 0.0),     // Upper-left
+        Some("tests") => (0.5, 0.0),   // Upper-right
+        Some("docs") => (0.0, 0.5),    // Lower-left
         Some("scripts") => (0.5, 0.5), // Lower-right
         Some("examples") => (0.25, 0.25),
         _ => (0.25, 0.75),
@@ -529,7 +529,8 @@ fn path_to_coords(path: &str) -> (f32, f32) {
 
 /// Simple string hash for stable positioning
 fn simple_hash(s: &str) -> u32 {
-    s.bytes().fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32))
+    s.bytes()
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32))
 }
 
 /// Parse hint message from browser

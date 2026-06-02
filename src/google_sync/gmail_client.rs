@@ -20,15 +20,16 @@ pub struct GmailClient {
 impl GmailClient {
     /// Create a new Gmail client with the given authenticator
     pub fn new(auth: GoogleAuthenticator) -> Self {
-        let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-            .build(
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_native_roots()
-                    .expect("native TLS roots")
-                    .https_or_http()
-                    .enable_http1()
-                    .build(),
-            );
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build(
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                        .with_native_roots()
+                        .expect("native TLS roots")
+                        .https_or_http()
+                        .enable_http1()
+                        .build(),
+                );
         let hub = Gmail::new(client, auth);
         Self {
             hub,
@@ -46,7 +47,11 @@ impl GmailClient {
     ) -> Result<(Vec<EmailMetadata>, Option<String>)> {
         self.rate_limiter.acquire().await;
 
-        let mut req = self.hub.users().messages_list("me").max_results(max_results);
+        let mut req = self
+            .hub
+            .users()
+            .messages_list("me")
+            .max_results(max_results);
 
         if let Some(q) = query {
             req = req.q(q);
@@ -125,7 +130,9 @@ impl GmailClient {
 
     /// Search messages using Gmail query syntax
     pub async fn search(&self, query: &str, max_results: u32) -> Result<Vec<EmailMetadata>> {
-        let (results, _) = self.list_messages(Some(query), None, max_results, None).await?;
+        let (results, _) = self
+            .list_messages(Some(query), None, max_results, None)
+            .await?;
         Ok(results)
     }
 

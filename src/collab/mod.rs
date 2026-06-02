@@ -16,7 +16,7 @@ pub mod templates;
 
 pub use identity::{Identity, IdentityProvider};
 pub use permissions::{AccessLevel, Permission, ProjectAccess};
-pub use space::{UserSpace, SpaceConfig};
+pub use space::{SpaceConfig, UserSpace};
 pub use templates::Template;
 
 use anyhow::Result;
@@ -131,7 +131,9 @@ impl Project {
         }
 
         // Check collaborators
-        self.collaborators.iter().any(|(c, _)| &c.identity == identity)
+        self.collaborators
+            .iter()
+            .any(|(c, _)| &c.identity == identity)
     }
 
     /// Get access level for an identity

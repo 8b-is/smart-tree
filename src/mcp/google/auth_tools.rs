@@ -23,9 +23,7 @@ pub async fn handle_auth_status(_params: Value, _ctx: Arc<McpContext>) -> Result
 pub async fn handle_auth_login(params: Value, _ctx: Arc<McpContext>) -> Result<Value> {
     let auth = crate::google_sync::auth::GoogleAuth::default_store()?;
 
-    let auth_method = params["auth_method"]
-        .as_str()
-        .unwrap_or("user_oauth2");
+    let auth_method = params["auth_method"].as_str().unwrap_or("user_oauth2");
 
     match auth_method {
         "user_oauth2" => {
