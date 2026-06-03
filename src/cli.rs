@@ -277,7 +277,7 @@ pub struct ScanArgs {
         short,
         long,
         value_enum,
-        default_value = "auto",
+        default_value = "classic",
         help_heading = "Output Format"
     )]
     pub mode: OutputMode,
