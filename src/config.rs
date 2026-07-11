@@ -27,6 +27,10 @@ pub struct StConfig {
     /// Safety/trust settings
     #[serde(default)]
     pub safety: SafetyConfig,
+
+    /// Deep security scanning, hash memory, and certificate trust (MagiSCanner)
+    #[serde(default)]
+    pub security: crate::magiscanner::SecurityConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

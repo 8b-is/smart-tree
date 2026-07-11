@@ -412,6 +412,47 @@ impl DaemonClient {
             .context("Failed to parse CLI scan response")
     }
 
+    /// Wait for the HTTP daemon to become healthy
+    async fn wait_for_healthy(&self, attempts: u32) -> bool {
+        for _ in 0..attempts {
+            if self.health_check().await.unwrap_or(false) {
+                return true;
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        false
+    }
+
+    /// Spawn the HTTP daemon directly from the current `st` binary
+    fn spawn_http_daemon_process(&self) -> Result<()> {
+        let exe_path = std::env::current_exe().context("Failed to get current executable path")?;
+        let port = self.port.to_string();
+
+        #[cfg(unix)]
+        {
+            Command::new(&exe_path)
+                .args(["--http-daemon", "--sse-port", &port])
+                .env("ST_DAEMON_PORT", &port)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .context("Failed to start HTTP daemon process")?;
+        }
+
+        #[cfg(windows)]
+        {
+            Command::new(&exe_path)
+                .args(["--http-daemon", "--sse-port", &port])
+                .env("ST_DAEMON_PORT", &port)
+                .creation_flags(0x00000008) // DETACHED_PROCESS
+                .spawn()
+                .context("Failed to start HTTP daemon process")?;
+        }
+
+        Ok(())
+    }
+
     /// Start the daemon in the background
     ///
     /// Returns Ok(true) if daemon was started, Ok(false) if already running
@@ -427,44 +468,28 @@ impl DaemonClient {
             return Ok(false);
         }
 
-        // Get the path to our own executable
-        let exe_path = std::env::current_exe().context("Failed to get current executable path")?;
+        std::env::set_var("ST_DAEMON_PORT", self.port.to_string());
 
-        // Start daemon as a background process
-        // We use setsid on Unix to detach from the terminal
-        #[cfg(unix)]
-        {
-            Command::new(&exe_path)
-                .args(["--daemon", "--daemon-port", &self.port.to_string()])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .context("Failed to start daemon process")?;
-        }
-
-        #[cfg(windows)]
-        {
-            Command::new(&exe_path)
-                .args(["--daemon", "--daemon-port", &self.port.to_string()])
-                .creation_flags(0x00000008) // DETACHED_PROCESS
-                .spawn()
-                .context("Failed to start daemon process")?;
-        }
-
-        // Wait a moment for daemon to start
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
-        // Wait up to 5 seconds for daemon to become healthy
-        for _ in 0..10 {
-            if self.health_check().await.unwrap_or(false) {
-                return Ok(true);
+        // Prefer unified std daemon (HTTP + Unix socket)
+        match crate::std_client::start_daemon().await {
+            Ok(started) if self.wait_for_healthy(20).await => return Ok(started),
+            Ok(_) => {
+                tracing::warn!("std daemon started but HTTP endpoint is not healthy yet");
             }
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            Err(e) => {
+                tracing::debug!("std daemon unavailable, falling back to HTTP daemon: {}", e);
+            }
+        }
+
+        // Fallback: spawn HTTP daemon directly from the current st binary
+        self.spawn_http_daemon_process()?;
+
+        if self.wait_for_healthy(10).await {
+            return Ok(true);
         }
 
         Err(anyhow::anyhow!(
-            "Daemon started but failed to become healthy within 5 seconds"
+            "Daemon started but failed to become healthy within timeout"
         ))
     }
 

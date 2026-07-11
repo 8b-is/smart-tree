@@ -114,6 +114,9 @@ flate2 = "1.0"
 hex = "0.4"
 base64 = "0.22"
 sha2 = "0.10"
+x509-parser = "0.16"
+rusqlite = { version = "0.35", features = ["bundled"] }
+argon2 = "0.5"
 crc32fast = "1.4"
 
 # Secure token storage for proxy OAuth (macOS Keychain / Secret Service / Windows Credential Manager)

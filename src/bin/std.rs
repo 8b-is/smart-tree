@@ -833,8 +833,13 @@ async fn main() -> Result<()> {
 /// Start unified daemon with both HTTP and Unix socket
 async fn start_unified_daemon(socket_config: DaemonConfig) -> Result<()> {
     // Start HTTP daemon in background task
+    let port = std::env::var("ST_DAEMON_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(28428);
+
     let http_config = st::daemon::DaemonConfig {
-        port: 28428,
+        port,
         watch_paths: vec![std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))],
         orchestrator_url: None, // Foken credits disabled for now
         enable_credits: false,

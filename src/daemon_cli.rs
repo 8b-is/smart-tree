@@ -190,23 +190,10 @@ pub struct CliErrorResponse {
     pub details: Option<String>,
 }
 
-/// Handle CLI scan request
-pub async fn cli_scan_handler(
-    State(state): State<Arc<RwLock<DaemonState>>>,
-    Json(req): Json<CliScanRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<CliErrorResponse>)> {
-    // Build scanner config from request
-    let config = build_scanner_config(&req).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(CliErrorResponse {
-                error: "Invalid request".to_string(),
-                details: Some(e.to_string()),
-            }),
-        )
-    })?;
+/// Execute a CLI scan locally (standalone or shared with the HTTP handler)
+pub fn execute_cli_scan(req: &CliScanRequest) -> Result<CliScanResponse> {
+    let config = build_scanner_config(req)?;
 
-    // Resolve path
     let path = PathBuf::from(&req.path);
     let path = if path.is_absolute() {
         path
@@ -216,19 +203,55 @@ pub async fn cli_scan_handler(
             .join(&path)
     };
 
-    // Create scanner and scan
-    let scanner = Scanner::new(&path, config).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(CliErrorResponse {
-                error: "Failed to create scanner".to_string(),
-                details: Some(e.to_string()),
-            }),
-        )
-    })?;
+    let scanner = Scanner::new(&path, config).context("Failed to create scanner")?;
 
     let scan_start = Instant::now();
-    let (nodes, tree_stats) = scanner.scan().map_err(|e| {
+    let (nodes, tree_stats) = scanner.scan().context("Scan failed")?;
+    let scan_time = scan_start.elapsed();
+
+    let format_start = Instant::now();
+    let path_display = parse_path_mode(&req.path_mode);
+
+    let mut output_buffer = Vec::new();
+    format_output(
+        req,
+        &mut output_buffer,
+        &nodes,
+        &tree_stats,
+        &path,
+        path_display,
+    )
+    .context("Format failed")?;
+    let format_time = format_start.elapsed();
+
+    let (output, compressed) = if req.compress {
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&output_buffer)?;
+        let compressed_data = encoder.finish()?;
+        (general_purpose::STANDARD.encode(&compressed_data), true)
+    } else {
+        (String::from_utf8_lossy(&output_buffer).to_string(), false)
+    };
+
+    Ok(CliScanResponse {
+        output,
+        compressed,
+        stats: ScanStats {
+            total_files: tree_stats.total_files,
+            total_dirs: tree_stats.total_dirs,
+            total_size: tree_stats.total_size,
+            scan_time_ms: scan_time.as_millis() as u64,
+            format_time_ms: format_time.as_millis() as u64,
+        },
+    })
+}
+
+/// Handle CLI scan request
+pub async fn cli_scan_handler(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Json(req): Json<CliScanRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<CliErrorResponse>)> {
+    let response = execute_cli_scan(&req).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(CliErrorResponse {
@@ -237,82 +260,17 @@ pub async fn cli_scan_handler(
             }),
         )
     })?;
-    let scan_time = scan_start.elapsed();
 
-    // Select formatter and format output
-    let format_start = Instant::now();
-    let path_display = parse_path_mode(&req.path_mode);
-
-    let mut output_buffer = Vec::new();
-    format_output(
-        &req,
-        &mut output_buffer,
-        &nodes,
-        &tree_stats,
-        &path,
-        path_display,
-    )
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(CliErrorResponse {
-                error: "Format failed".to_string(),
-                details: Some(e.to_string()),
-            }),
-        )
-    })?;
-    let format_time = format_start.elapsed();
-
-    // Optionally compress
-    let (output, compressed) = if req.compress {
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&output_buffer).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CliErrorResponse {
-                    error: "Compression failed".to_string(),
-                    details: Some(e.to_string()),
-                }),
-            )
-        })?;
-        let compressed_data = encoder.finish().map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CliErrorResponse {
-                    error: "Compression failed".to_string(),
-                    details: Some(e.to_string()),
-                }),
-            )
-        })?;
-        (general_purpose::STANDARD.encode(&compressed_data), true)
-    } else {
-        (String::from_utf8_lossy(&output_buffer).to_string(), false)
-    };
-
-    // Build stats
-    let stats = ScanStats {
-        total_files: tree_stats.total_files,
-        total_dirs: tree_stats.total_dirs,
-        total_size: tree_stats.total_size,
-        scan_time_ms: scan_time.as_millis() as u64,
-        format_time_ms: format_time.as_millis() as u64,
-    };
-
-    // Record token savings in daemon state (if compressed)
-    if compressed {
-        let savings = output_buffer.len().saturating_sub(output.len()) as u64;
+    if response.compressed {
         if let Ok(mut state) = state.try_write() {
-            state
-                .credits
-                .record_savings(savings, &format!("CLI scan: {}", req.path));
+            state.credits.record_savings(
+                response.stats.total_size,
+                &format!("CLI scan: {}", req.path),
+            );
         }
     }
 
-    Ok(Json(CliScanResponse {
-        output,
-        compressed,
-        stats,
-    }))
+    Ok(Json(response))
 }
 
 /// Handle streaming CLI scan request (SSE) - simplified version

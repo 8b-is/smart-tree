@@ -72,6 +72,12 @@ pub async fn start_daemon() -> Result<bool> {
         PathBuf::from("std")
     };
 
+    if !std_path.exists() && which::which("std").is_err() {
+        return Err(anyhow::anyhow!(
+            "std daemon binary not found (install std alongside st)"
+        ));
+    }
+
     // Start daemon as background process using setsid to fully detach
     #[cfg(unix)]
     {
@@ -83,6 +89,9 @@ pub async fn start_daemon() -> Result<bool> {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+        if let Ok(port) = std::env::var("ST_DAEMON_PORT") {
+            cmd.env("ST_DAEMON_PORT", port);
+        }
 
         // Create new process group
         unsafe {

@@ -89,6 +89,7 @@ async fn main() -> Result<()> {
         || cli.completions.is_some()
         || cli.daemon_start
         || cli.daemon_install
+        || cli.no_daemon
         || matches!(cli.cmd, Some(st::cli::Cmd::Service(_)));
     if !skip_autostart {
         let client = DaemonClient::default_port();
@@ -304,6 +305,15 @@ async fn main() -> Result<()> {
     if cli.cleanup {
         return handle_security_cleanup().await;
     }
+    if let Some(path) = &cli.integrity_scan {
+        return handle_integrity_scan(path);
+    }
+    if cli.cert_audit {
+        return handle_cert_audit(cli.cert_generate_script);
+    }
+    if let Some(hash) = &cli.hash_lookup {
+        return handle_hash_lookup(hash);
+    }
 
     // Handle hooks commands
     if cli.hooks_install {
@@ -364,23 +374,28 @@ async fn main() -> Result<()> {
     }
 
     // =========================================================================
-    // THIN CLIENT - All scanning/formatting happens in the daemon
+    // THIN CLIENT - Prefer daemon, fall back to local scan when needed
     // =========================================================================
-    // Ensure daemon is running (always required now)
-    let client = DaemonClient::default_port();
-    client
-        .ensure_running()
-        .await
-        .context("Smart Tree daemon could not be started. Try: std start")?;
-
-    // Build CLI request from arguments
     let request = build_cli_request(&cli)?;
 
-    // Execute scan via daemon
-    let response = client
-        .cli_scan(request.clone())
-        .await
-        .context("Scan failed")?;
+    let response = if cli.no_daemon {
+        st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?
+    } else {
+        let client = DaemonClient::default_port();
+        match client.ensure_running().await {
+            Ok(_) => client
+                .cli_scan(request.clone())
+                .await
+                .context("Scan failed")?,
+            Err(e) => {
+                eprintln!("⚠️  Daemon unavailable ({})", e);
+                eprintln!(
+                    "   Falling back to standalone scan. Use --no-daemon to skip this warning."
+                );
+                st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?
+            }
+        }
+    };
 
     // Print Treehouse ASCII banner for interactive non-machine modes
     if std::io::stdout().is_terminal() && (request.mode == "smart" || request.mode == "classic") {
@@ -1108,6 +1123,90 @@ async fn handle_security_scan(path: &str) -> Result<()> {
             critical_count
         );
         std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn handle_integrity_scan(path: &str) -> Result<()> {
+    use st::config::StConfig;
+    use st::magiscanner::service::{print_reports, scan_path};
+
+    let config = StConfig::load()?;
+    let scan_path_buf = std::path::Path::new(path);
+    let recursive = scan_path_buf.is_dir();
+
+    eprintln!("🛡️  Integrity Scan — deep file security analysis");
+    eprintln!("═══════════════════════════════════════════════════");
+    eprintln!("Target: {path}");
+    eprintln!();
+
+    let reports = scan_path(&config.security, scan_path_buf, recursive, None)?;
+    print_reports(&reports);
+
+    let critical = reports
+        .iter()
+        .flat_map(|r| &r.findings)
+        .filter(|f| f.severity >= st::magiscanner::Severity::Critical)
+        .count();
+
+    if critical > 0 {
+        eprintln!("\n⚠️  {critical} CRITICAL finding(s) require attention!");
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn handle_cert_audit(generate_script: bool) -> Result<()> {
+    use st::config::StConfig;
+    use st::magiscanner::service::{
+        audit_system_certificates, cert_blacklist_script, print_cert_audit,
+    };
+
+    let config = StConfig::load()?;
+
+    eprintln!("🔐 Certificate Trust Audit");
+    eprintln!("═══════════════════════════════════════════════════");
+
+    let result = audit_system_certificates(&config.security)?;
+    print_cert_audit(&result);
+
+    if generate_script && !result.flagged.is_empty() {
+        println!("\n--- Blacklist script (review before running!) ---\n");
+        println!("{}", cert_blacklist_script(&result.flagged));
+    }
+
+    if !result.flagged.is_empty() {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn handle_hash_lookup(sha256: &str) -> Result<()> {
+    use st::config::StConfig;
+    use st::magiscanner::service::lookup_hash;
+
+    let config = StConfig::load()?;
+
+    match lookup_hash(&config.security, sha256)? {
+        Some(row) => {
+            println!("SHA256:     {}", row.sha256);
+            println!("Action:     {}", row.action);
+            println!("Times seen: {}", row.times_seen);
+            println!("First seen: {}", row.first_seen);
+            println!("Last seen:  {}", row.last_seen);
+            if let Some(name) = &row.file_name {
+                println!("File name:  {name}");
+            }
+            if let Some(sev) = &row.max_severity {
+                println!("Max severity: {sev}");
+            }
+        }
+        None => {
+            println!("Hash not found in security memory.");
+        }
     }
 
     Ok(())

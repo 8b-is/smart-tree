@@ -136,6 +136,10 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Daemon Control", hide = true)]
     pub daemon_install: bool,
 
+    /// Bypass daemon and scan locally (standalone mode)
+    #[arg(long, help_heading = "Daemon Control")]
+    pub no_daemon: bool,
+
     // =========================================================================
     // CONSCIOUSNESS & MEMORY
     // =========================================================================
@@ -194,6 +198,22 @@ pub struct Cli {
     /// Security cleanup - detect and remove malicious MCP entries
     #[arg(long, exclusive = true, help_heading = "Security")]
     pub cleanup: bool,
+
+    /// Deep integrity scan (exploit detection, hash memory, cert analysis)
+    #[arg(long, value_name = "PATH", help_heading = "Security")]
+    pub integrity_scan: Option<String>,
+
+    /// Audit system CA certificate trust store
+    #[arg(long, help_heading = "Security")]
+    pub cert_audit: bool,
+
+    /// Generate blacklist script from cert audit (use with --cert-audit)
+    #[arg(long, help_heading = "Security")]
+    pub cert_generate_script: bool,
+
+    /// Look up a SHA-256 hash in security memory
+    #[arg(long, value_name = "SHA256", help_heading = "Security")]
+    pub hash_lookup: Option<String>,
 
     // =========================================================================
     // HOOKS

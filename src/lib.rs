@@ -28,6 +28,7 @@ pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and 
 pub mod interest_calculator; // The scoring engine that determines what's interesting
 pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
 pub mod m8_context_aware; // Context-aware progressive loading
+pub mod magiscanner; // Deep file security scanning, hash memory, cert trust
 pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
 pub mod memory_manager; // Real memory management for consciousness!
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!

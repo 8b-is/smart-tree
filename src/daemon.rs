@@ -403,6 +403,19 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/watch", axum::routing::delete(unwatch_directory))
         .route("/watch/status", get(watch_status))
         .route("/watch/hot", get(watch_hot_directories))
+        // Security sentinel (MagiSCanner capabilities)
+        .route(
+            "/security/scan",
+            post(crate::magiscanner::http::security_scan_handler),
+        )
+        .route(
+            "/security/hash/:sha256",
+            get(crate::magiscanner::http::hash_lookup_handler),
+        )
+        .route(
+            "/security/certs/audit",
+            get(crate::magiscanner::http::cert_audit_handler),
+        )
         .with_state(state)
         // Bearer token auth on all routes (except /health, handled inside middleware)
         .layer(middleware::from_fn_with_state(
@@ -433,6 +446,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - Models:       /v1/models");
     println!("  - Collab:       /collab/ws (Hot Tub Mode!) 🛁");
     println!("  - Hot Watcher:  /watch (MEM8 real-time intelligence) 🔥");
+    println!("  - Security:     /security/* (integrity scan, hash memory, cert audit) 🛡️");
     println!("  - WebSocket:    /ws");
     println!("  - Shutdown:     POST /shutdown");
 
