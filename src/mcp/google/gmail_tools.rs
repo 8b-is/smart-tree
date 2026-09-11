@@ -404,7 +404,7 @@ pub(crate) fn not_authenticated_response() -> Value {
 }
 
 /// Rebuild authenticator from stored config
-pub(crate) async fn rebuild_authenticator(
+pub async fn rebuild_authenticator(
     auth: &crate::google_sync::auth::GoogleAuth,
 ) -> Result<crate::google_sync::auth::GoogleAuthenticator> {
     let config = auth

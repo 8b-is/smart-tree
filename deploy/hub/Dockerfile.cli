@@ -1,0 +1,11 @@
+FROM rust@sha256:bf5a9aa29062a6cb03c49bd59a46eb55e3cc770caf598a221a7866e500be3082 AS rust
+FROM ubuntu@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7
+COPY --from=rust /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN printf 'deb https://archive.ubuntu.com/ubuntu jammy main\ndeb https://archive.ubuntu.com/ubuntu jammy-updates main\ndeb https://security.ubuntu.com/ubuntu jammy-security main\n' > /etc/apt/sources.list \
+    && apt-get update -o Acquire::Retries=2 -o Acquire::https::Timeout=30 \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential ca-certificates curl git pkg-config libssl-dev libdbus-1-dev python3 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=rust /usr/local/rustup /usr/local/rustup
+COPY --from=rust /usr/local/cargo /usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
+WORKDIR /build/source

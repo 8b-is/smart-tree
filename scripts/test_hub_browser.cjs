@@ -1,0 +1,48 @@
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const [base, output] = process.argv.slice(2);
+(async () => {
+  await fs.mkdir(output, {recursive:true});
+  const browser = await chromium.launch({headless:true});
+  try {
+    const page = await browser.newPage({viewport:{width:1440,height:1050},colorScheme:'light'});
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.goto(base); await page.locator('.repo-card').first().waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
+    await page.screenshot({path:`${output}/desktop.png`,fullPage:true});
+    await page.getByRole('button',{name:'Switch to dark theme'}).click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
+    await page.screenshot({path:`${output}/desktop-dark.png`,fullPage:true});
+    await page.getByRole('button',{name:'Switch to light theme'}).click();
+    await page.locator('#search').fill('cosmos'); await page.locator('#search-form').getByRole('button').click();
+    await page.locator('.result').first().waitFor();
+    assert.match(await page.locator('#result-summary').textContent(),/Semantic \+ keyword recall/);
+    assert.match(await page.locator('.result').first().textContent(),/Stellar cartography/);
+    await page.getByRole('button',{name:'Clear results'}).click();
+    await page.getByRole('button',{name:'Archive a repository'}).click();
+    assert.equal(await page.locator('#archive-public').isChecked(),false);
+    assert.equal(await page.locator('#archive-recall').isChecked(),false);
+    await page.locator('#archive-url').fill('https://github.com/example/browser-test');
+    await page.getByRole('button',{name:'Request archive',exact:true}).click();
+    await page.locator('#receipt').waitFor({state:'visible'});
+    const download = page.waitForEvent('download'); await page.getByRole('button',{name:'Save receipt'}).click();
+    assert.match((await download).suggestedFilename(),/^smart-tree-archive-/);
+    await page.locator('#archive-dialog .close').click();
+    await page.getByRole('button',{name:'Share feedback'}).click();
+    await page.locator('#feedback-title').fill('Browser smoke'); await page.locator('#feedback-description').fill('The tested feedback form reaches durable hub storage.');
+    await page.getByRole('button',{name:'Send feedback'}).click();
+    await page.waitForFunction(() => document.querySelector('#feedback-form .form-status').textContent.includes('Feedback saved'));
+    await page.locator('#feedback-dialog .close').click();
+    await page.setViewportSize({width:390,height:844}); await page.goto(base); await page.locator('.repo-card').first().waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
+    await page.screenshot({path:`${output}/mobile.png`,fullPage:true});
+    await page.getByRole('button',{name:'Archive a repository'}).click();
+    assert.equal(await page.evaluate(() => document.querySelector('#archive-dialog').scrollWidth > document.querySelector('#archive-dialog').clientWidth),false);
+    await page.keyboard.press('Escape'); assert.equal(await page.locator('#archive-dialog').isVisible(),false);
+    await page.goto(`${base}/docs`); assert.match(await page.title(),/API & coverage/);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
+    assert.deepEqual(errors,[]);
+    console.log('PASS Playwright desktop/mobile, themes, recall, receipts, feedback, dialogs, and docs');
+  } finally { await browser.close(); }
+})().catch(error => {console.error(error);process.exitCode=1;});

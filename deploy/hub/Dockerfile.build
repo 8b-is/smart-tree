@@ -1,0 +1,9 @@
+FROM rust@sha256:bf5a9aa29062a6cb03c49bd59a46eb55e3cc770caf598a221a7866e500be3082
+RUN apt-get update && apt-get install -y --no-install-recommends libdbus-1-dev pkg-config && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY st-protocol ./st-protocol
+COPY expert_prompt_engineer ./expert_prompt_engineer
+COPY systemd ./systemd
+RUN cargo build --locked --release --no-default-features --bin st-hub

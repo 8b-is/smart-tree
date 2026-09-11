@@ -1,0 +1,32 @@
+[Unit]
+Description=Smart Tree archive and recall hub
+After=network-online.target smart-tree-encoder.service
+Wants=network-online.target
+RequiresMountsFor=/data/git
+
+[Service]
+Type=simple
+User=smart-tree-hub
+Group=smart-tree-hub
+EnvironmentFile=/etc/smart-tree-hub/hub.env
+ExecStart=/usr/local/lib/smart-tree-hub/current/st-hub
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/smart-tree-hub /data/git/smart-tree-hub
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryMax=24G
+TasksMax=128
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target

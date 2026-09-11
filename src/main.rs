@@ -319,6 +319,16 @@ async fn main() -> Result<()> {
         return handle_hash_lookup(hash);
     }
 
+    // Handle Google Drive / Sync commands
+    if let Some(action) = &cli.gdrive {
+        return handle_gdrive_command(action).await;
+    }
+
+    // Handle Voice commands
+    if let Some(action) = &cli.voice {
+        return handle_voice_command(action).await;
+    }
+
     // Handle hooks commands
     if cli.hooks_install {
         return install_hooks_to_agent().await;
@@ -2115,4 +2125,161 @@ fn handle_guardian_scan(file_path: &std::path::Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Handle Google Drive CLI commands
+async fn handle_gdrive_command(action: &str) -> Result<()> {
+    #[cfg(not(feature = "google"))]
+    {
+        let _ = action;
+        eprintln!(
+            "Google Drive support is not enabled in this build. Recompile with --features google"
+        );
+        std::process::exit(1);
+    }
+
+    #[cfg(feature = "google")]
+    {
+        match action {
+            "status" => {
+                let auth = st::google_sync::auth::GoogleAuth::default_store()?;
+                let status = auth.status_summary();
+                println!(
+                    "🌐 Google Drive / Gmail Auth Status:\n===================================\n{}",
+                    status
+                );
+                Ok(())
+            }
+            "login" => {
+                println!("🔑 To authenticate Google Drive / Gmail, use the MCP 'google' tool with operation: 'auth_login',\n   or place OAuth2 credentials in ~/.st/google/config.json");
+                Ok(())
+            }
+            "logout" => {
+                let auth = st::google_sync::auth::GoogleAuth::default_store()?;
+                auth.logout()?;
+                println!("✅ Google credentials removed from ~/.st/google/");
+                Ok(())
+            }
+            "list" => {
+                let auth = st::google_sync::auth::GoogleAuth::default_store()?;
+                if !auth.has_cached_tokens() {
+                    println!("Not authenticated with Google. Please configure ~/.st/google/ or authenticate via MCP.");
+                    return Ok(());
+                }
+                let authenticator =
+                    st::mcp::google::gmail_tools::rebuild_authenticator(&auth).await?;
+                let drive = st::google_sync::drive_client::DriveClient::new(authenticator);
+                let (files, _) = drive.list_files("root", None).await?;
+                println!(
+                    "📁 Google Drive Root Files ({} found):\n=====================================",
+                    files.len()
+                );
+                for f in &files {
+                    let kind = if f.is_folder { "[DIR] " } else { "      " };
+                    println!("  • {}{} ({})", kind, f.name, f.mime_type);
+                }
+                Ok(())
+            }
+            "sync" => {
+                let auth = st::google_sync::auth::GoogleAuth::default_store()?;
+                if !auth.has_cached_tokens() {
+                    println!("Not authenticated with Google. Please configure ~/.st/google/ or authenticate via MCP.");
+                    return Ok(());
+                }
+                let authenticator =
+                    st::mcp::google::gmail_tools::rebuild_authenticator(&auth).await?;
+                let drive = st::google_sync::drive_client::DriveClient::new(authenticator);
+                let engine = st::google_sync::sync_engine::SyncEngine::new(&drive)?;
+                let mut state = st::google_sync::models::SyncState {
+                    sync_id: "default_sync".to_string(),
+                    local_path: ".".to_string(),
+                    drive_folder_id: "root".to_string(),
+                    last_sync: None,
+                    direction: st::google_sync::models::SyncDirection::Bidirectional,
+                    file_states: Vec::new(),
+                    conflict_resolution: st::google_sync::models::ConflictStrategy::NewerWins,
+                };
+                let report = engine.sync(&mut state).await?;
+                println!("🔄 Google Drive Sync Complete:\n  Uploaded: {}\n  Downloaded: {}\n  Conflicts: {}\n  Skipped: {}\n  Duration: {}ms",
+                    report.uploaded, report.downloaded, report.conflicts, report.skipped, report.duration_ms);
+                Ok(())
+            }
+            _ => {
+                eprintln!(
+                    "Unknown gdrive action: '{}'. Valid actions: status, login, logout, list, sync",
+                    action
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+/// Handle Voice CLI commands
+async fn handle_voice_command(action: &str) -> Result<()> {
+    #[cfg(not(feature = "voice"))]
+    {
+        let _ = action;
+        eprintln!("Voice support is not enabled in this build. Recompile with --features voice");
+        std::process::exit(1);
+    }
+
+    #[cfg(feature = "voice")]
+    {
+        if action == "status" {
+            let vad = st::vad_marine::MarineVAD::new()?;
+            let is_active = vad.is_voice_active().await;
+            let salience = vad.get_salience().await;
+            let quality = vad.get_voice_quality().await;
+            println!("🎙️ Voice Activity & Marine VAD Status\n====================================");
+            println!(
+                "Status: {}",
+                if is_active {
+                    "Active (Voice Detected)"
+                } else {
+                    "Idle / Ambient"
+                }
+            );
+            println!("Salience: {:.1}%", salience * 100.0);
+            println!("Harmonicity: {:.3}", quality.harmonicity);
+            println!("Zero Crossing Rate: {:.3}", quality.zero_crossing_rate);
+            println!("Energy Variance: {:.3}", quality.energy_variance);
+            println!("Spectral Tilt: {:.3}", quality.spectral_tilt);
+            Ok(())
+        } else if action == "test" {
+            let vad = st::vad_marine::MarineVAD::new()?;
+            let sample_rate = 16000;
+            let frequency = 220.0;
+            let duration = 0.2;
+            let num_samples = (sample_rate as f64 * duration) as usize;
+            let mut samples = vec![0.0f32; num_samples];
+            for (i, sample) in samples.iter_mut().enumerate() {
+                let t = i as f64 / sample_rate as f64;
+                *sample = (2.0 * std::f64::consts::PI * frequency * t).sin() as f32 * 0.6;
+            }
+            let is_voice = vad.process_audio(&samples, sample_rate).await?;
+            let salience = vad.get_salience().await;
+            println!("🧪 Marine VAD Test Run:\n  Voice detected: {}\n  Salience: {:.1}%\n  Algorithm: MEM8 Marine Salience", is_voice, salience * 100.0);
+            Ok(())
+        } else if action.starts_with("speak") {
+            let text = action.strip_prefix("speak").unwrap_or("").trim();
+            let text = if text.is_empty() {
+                "Smart Tree voice output initialized"
+            } else {
+                text
+            };
+            let wav = st::web_dashboard::voice::generate_speech_wav(text, "aye");
+            println!(
+                "🔊 Synthesized speech WAV: {} bytes (16kHz PCM mono, persona 'aye')",
+                wav.len()
+            );
+            Ok(())
+        } else {
+            eprintln!(
+                "Unknown voice action: '{}'. Valid actions: status, test, speak [text]",
+                action
+            );
+            std::process::exit(1);
+        }
+    }
 }

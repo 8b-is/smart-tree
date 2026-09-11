@@ -888,6 +888,42 @@ EXAMPLES:
         }
     }));
 
+    // Add Google Drive & Gmail tools if enabled
+    #[cfg(feature = "google")]
+    if flags.mcp_tools.enable_google {
+        tools.push(super::google::get_google_tool_definition());
+    }
+
+    // Add Voice tools if enabled
+    #[cfg(feature = "voice")]
+    if flags.mcp_tools.enable_voice {
+        tools.push(json!({
+            "name": "voice",
+            "description": "🎙️ VOICE & SPEECH - Real-time Voice Activity Detection (Marine salience algorithm), audio synthesis, and speaker management. Operations: status, speak, speakers",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["status", "speak", "speakers"],
+                        "description": "Voice operation to perform (default: status)",
+                        "default": "status"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to synthesize into audio (for speak)"
+                    },
+                    "voice": {
+                        "type": "string",
+                        "description": "Voice persona (aye, omnimom, claude, alert, sky, adam, bella, nicole, michael)",
+                        "default": "aye"
+                    }
+                },
+                "required": []
+            }
+        }));
+    }
+
     tools
 }
 

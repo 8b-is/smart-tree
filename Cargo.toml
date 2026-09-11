@@ -4,7 +4,7 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "8.1.0"
+version = "10.0.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -199,6 +199,18 @@ marqant = "1.1.8"
 # Uncomment when liquid-rust is ready:
 # liquid-rust = { path = "../liquid-rust", optional = true }
 
+# Google Drive + Gmail integration
+google-gmail1 = { version = "7", optional = true }
+google-drive3 = { version = "7", optional = true }
+yup-oauth2 = { version = "12", optional = true }
+ring = { version = "0.17", optional = true }
+mail-parser = { version = "0.9", optional = true }
+hyper-rustls = { version = "0.27", optional = true, features = ["http1", "native-tokio"] }
+hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "tokio"] }
+mime = { version = "0.3", optional = true }
+mime_guess = { version = "2.0", optional = true }
+http-body-util = { version = "0.1", optional = true }
+
 [lib]
 name = "st"
 path = "src/lib.rs"
@@ -245,22 +257,21 @@ candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenize
 # Note: Enable when liquid-rust dependency is uncommented above
 voice = []
 
-# Google Drive + Gmail integration.
-# Placeholder feature: the integration deps were removed, so enabling this
-# won't compile the google tools yet — it only marks `google` as a known cfg
-# so `#[cfg(feature = "google")]` blocks don't warn. Code lives in src/mcp/google/.
-# To revive: re-add the optional deps below and list them here.
-#   "google-gmail1", "google-drive3", "yup-oauth2", "ring", "mail-parser",
-#   "hyper-rustls", "hyper-util", "mime", "mime_guess", "http-body-util"
-google = []
+# Google Drive + Gmail integration
+google = [
+    "google-gmail1", "google-drive3", "yup-oauth2",
+    "ring", "mail-parser",
+    "hyper-rustls", "hyper-util", "mime", "mime_guess",
+    "http-body-util",
+]
 
 # Terminal UI (tui) and Web dashboard are now always built-in
 
-# Full features (includes candle for local LLM)
-full = ["candle"]
+# Full features (includes candle for local LLM, google drive & gmail sync, and voice)
+full = ["candle", "google", "voice"]
 
-# Full with voice
-full-voice = ["full", "voice"]
+# Full with voice alias
+full-voice = ["full"]
 
 [profile.release]
 lto = true

@@ -31,8 +31,12 @@ const VALID_HOOK_KEYS: &[&str] = &[
 
 /// Ask user for confirmation before overwriting a file
 fn confirm_overwrite(path: &Path) -> bool {
+    use std::io::IsTerminal;
+    if !io::stdin().is_terminal() {
+        return false;
+    }
     print!("   ⚠️  {} exists. Overwrite? [y/N]: ", path.display());
-    io::stdout().flush().unwrap();
+    let _ = io::stdout().flush();
 
     let mut input = String::new();
     if io::stdin().read_line(&mut input).is_ok() {

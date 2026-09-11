@@ -225,6 +225,17 @@ pub struct Cli {
     pub hash_lookup: Option<String>,
 
     // =========================================================================
+    // GOOGLE DRIVE & VOICE
+    // =========================================================================
+    /// Google Drive / Gmail operations (status, list, sync, login, logout)
+    #[arg(long, value_name = "ACTION", help_heading = "Google Drive & Cloud")]
+    pub gdrive: Option<String>,
+
+    /// Voice & audio operations (status, test, speak)
+    #[arg(long, value_name = "ACTION", help_heading = "Voice & Audio")]
+    pub voice: Option<String>,
+
+    // =========================================================================
     // HOOKS
     // =========================================================================
     /// Install Smart Tree hooks to AI Agent settings

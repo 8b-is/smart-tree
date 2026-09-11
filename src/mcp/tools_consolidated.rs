@@ -733,6 +733,93 @@ pub async fn dispatch_consolidated_tool(
             super::tools::handle_tools_call(json!({ "name": "ask_user", "arguments": params }), ctx)
                 .await
         }
+        #[cfg(feature = "google")]
+        "google" => super::google::handle_google(params, ctx).await,
+        #[cfg(feature = "voice")]
+        "voice" => handle_voice(params, ctx).await,
         _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
+    }
+}
+
+/// Consolidated voice tool - VAD metrics, audio synthesis, and speaker management
+#[cfg(feature = "voice")]
+pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
+    let params = params.unwrap_or(json!({}));
+    let operation = params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("status");
+
+    match operation {
+        "status" => {
+            let vad = crate::vad_marine::MarineVAD::new()?;
+            let is_active = vad.is_voice_active().await;
+            let salience = vad.get_salience().await;
+            let quality = vad.get_voice_quality().await;
+            Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!(
+                        "🎙️ Voice Activity & Marine VAD Status\n\
+                         ====================================\n\
+                         Voice Active: {}\n\
+                         Voice Salience: {:.1}%\n\
+                         Harmonicity: {:.3}\n\
+                         Zero-Crossing Rate: {:.3}\n\
+                         Energy Variance: {:.3}\n\
+                         Spectral Tilt: {:.3}",
+                        if is_active { "Active (Speaking)" } else { "Inactive (Silent/Ambient)" },
+                        salience * 100.0,
+                        quality.harmonicity,
+                        quality.zero_crossing_rate,
+                        quality.energy_variance,
+                        quality.spectral_tilt,
+                    )
+                }]
+            }))
+        }
+        "speak" => {
+            let text = params
+                .get("text")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Hello from Smart Tree");
+            let voice = params
+                .get("voice")
+                .and_then(|v| v.as_str())
+                .unwrap_or("aye");
+            let wav_bytes = crate::web_dashboard::voice::generate_speech_wav(text, voice);
+            Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!(
+                        "🔊 Synthesized speech audio for persona '{}' ({} chars, {} bytes WAV audio PCM 16kHz mono)",
+                        voice, text.len(), wav_bytes.len()
+                    )
+                }]
+            }))
+        }
+        "speakers" => {
+            let speakers_dir = dirs::home_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join(".st")
+                .join("voice");
+            let path = speakers_dir.join("speakers.json");
+            let speakers: Vec<serde_json::Value> = if path.exists() {
+                let content = std::fs::read_to_string(&path)?;
+                serde_json::from_str(&content).unwrap_or_default()
+            } else {
+                vec![json!({ "label": "aye", "registered_at": "default", "sample_bytes": 0 })]
+            };
+            Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!("👥 Registered Speakers ({}):\n{}", speakers.len(), serde_json::to_string_pretty(&speakers)?)
+                }]
+            }))
+        }
+        _ => Err(anyhow::anyhow!(
+            "Unknown voice operation: '{}'. Supported: status, speak, speakers",
+            operation
+        )),
     }
 }

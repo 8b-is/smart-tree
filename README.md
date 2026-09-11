@@ -1,6 +1,6 @@
-# 🌳 Smart Tree s- The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
+# 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-8.1.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-10.0.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -139,18 +139,19 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v8.1.0
+## 🌟 What's NEW in v10.0.0
 
 | Feature | Description | Command/Tool |
 |---------|-------------|--------------|
+| **☁️ Google Drive & Gmail Sync** | Full cloud filesystem sync, OAuth authentication, and remote file manipulation. | `st --gdrive`, `google` MCP |
+| **🎙️ Marine VAD & Voice Synthesis** | Real-time voice activity detection, emotional & salience metrics, speaker profiling, and speech synthesis. | `st --voice`, `voice` MCP |
 | **🌳 The Smart Treehouse** | Premium Cyber-Botanical dark-mode dashboard overhaul and stylish CLI ASCII banner. | `st --dashboard` |
 | **🤖 Remote AI Prompting** | The `ask_user` tool lets AI pause execution, trigger a modal on the dashboard, and ask the human a question. | `ask_user` MCP |
-| **🌍 Agent-Agnostic Integration** | Removed Claude-specific constraints. Hooks and flags are now generalized for any AI (e.g., `st --agent-save`). | `st --hooks-install` |
-| **🧰 Unified MCP Tools** | Intelligently consolidated 50+ granular tools into ~15 powerful, AI-friendly endpoints. | MCP |
+| **🌍 Agent-Agnostic Integration** | Universal AI hooks and flags generalized for any AI (e.g., `st --agent-save`). | `st --hooks-install` |
+| **🧰 Unified MCP Tools** | Intelligently consolidated powerful, AI-friendly endpoints with auto-dispatch. | MCP |
 | **🚀 Enhanced AI Context** | AI tools now come bundled with psychological triggers, usage examples, and efficiency tips! | MCP |
 | **🎯 Interactive Menu** | Easy access to all Smart Tree features with guided menus | `./scripts/manage.sh client` |
 | **🧭 Wave Compass** | Real-time MCP activity visualization with file access heatmap | `st --dashboard` |
-| **🎙️ Voice Input** | Push-to-talk voice hints (ready for liquid-rust) | Dashboard UI |
 | **🛡️ Security Scanner** | Detect supply chain attack patterns | `st --security-scan` |
 
 </div>

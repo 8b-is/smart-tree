@@ -64,6 +64,7 @@ pub struct McpToolFlags {
     pub enable_hooks_management: bool,
     pub enable_sse: bool,
     pub enable_google: bool,
+    pub enable_voice: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +138,7 @@ impl Default for McpToolFlags {
             enable_hooks_management: true,
             enable_sse: true,
             enable_google: cfg!(feature = "google"),
+            enable_voice: cfg!(feature = "voice"),
         }
     }
 }
@@ -348,6 +350,9 @@ impl FeatureFlags {
         }
         if self.mcp_tools.enable_google {
             tools.push("google".to_string());
+        }
+        if self.mcp_tools.enable_voice {
+            tools.push("voice".to_string());
         }
 
         tools

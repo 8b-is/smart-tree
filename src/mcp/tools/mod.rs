@@ -60,7 +60,7 @@ use std::sync::Arc;
 
 /// Handle tools/list MCP request
 pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
-    let tools = vec![
+    let mut tools = vec![
         ToolDefinition {
             name: "verify_permissions".to_string(),
             description: "🔐 REQUIRED FIRST STEP: Verify permissions for a path before using other tools. This lightweight check determines which tools are available based on read/write permissions. Always call this first to see what operations are possible!".to_string(),
@@ -1604,6 +1604,18 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
     ];
 
+    #[cfg(feature = "google")]
+    {
+        let flags = crate::feature_flags::features();
+        if flags.mcp_tools.enable_google {
+            if let Ok(tool_def) = serde_json::from_value::<ToolDefinition>(
+                crate::mcp::google::get_google_tool_definition(),
+            ) {
+                tools.push(tool_def);
+            }
+        }
+    }
+
     Ok(json!({
         "tools": tools
     }))
@@ -1779,6 +1791,12 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
 
         // Theme tools
         "set_dashboard_theme" => theme_tools::handle_set_dashboard_theme(args).await,
+
+        #[cfg(feature = "google")]
+        "google" => crate::mcp::google::handle_google(Some(args), ctx_clone).await,
+
+        #[cfg(feature = "voice")]
+        "voice" => crate::mcp::tools_consolidated::handle_voice(Some(args), ctx_clone).await,
 
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }?;
