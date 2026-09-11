@@ -4,7 +4,7 @@ use walkdir::WalkDir;
 use x509_parser::prelude::*;
 
 /// Information about a system CA certificate.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SystemCertInfo {
     pub path: String,
     pub subject_cn: String,
@@ -201,11 +201,7 @@ pub fn generate_blacklist_script(flagged: &[SystemCertInfo]) -> String {
             cert.subject_cn, cert.issuer_country, cert.issuer_org
         ));
         script.push_str(&format!("# Fingerprint: {}\n", cert.fingerprint_sha256));
-        let safe_name = cert
-            .subject_cn
-            .replace(' ', "_")
-            .replace('/', "_")
-            .replace('\\', "_");
+        let safe_name = cert.subject_cn.replace([' ', '/', '\\'], "_");
         script.push_str(&format!(
             "cp \"{}\" \"$BLACKLIST_DIR/{}.pem\"\n\n",
             cert.path, safe_name

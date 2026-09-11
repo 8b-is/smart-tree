@@ -10,6 +10,8 @@
 //!
 //! # Quick Example
 //! ```rust,no_run
+//! use st::proxy::claude::ClaudeClient;
+//! # async fn example() -> anyhow::Result<()> {
 //! let client = ClaudeClient::new("sk-ant-...".to_string());
 //!
 //! // Simple text request
@@ -23,10 +25,15 @@
 //!     .await?;
 //!
 //! println!("{}", response.text().unwrap_or("no text"));
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Streaming Example
 //! ```rust,no_run
+//! use st::proxy::claude::{ClaudeClient, ContentDelta, StreamEvent};
+//! # async fn example() -> anyhow::Result<()> {
+//! let client = ClaudeClient::new("sk-ant-...".to_string());
 //! let mut parser = client.messages()
 //!     .sonnet()
 //!     .user("Write a haiku about Rust")
@@ -40,6 +47,8 @@
 //!         }
 //!     }
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod builder;
@@ -172,6 +181,8 @@ impl AnthropicProvider {
     /// Get a reference to the underlying `ClaudeClient` for full API access.
     ///
     /// ```rust,no_run
+    /// use st::proxy::claude::AnthropicProvider;
+    /// # async fn example() -> anyhow::Result<()> {
     /// let provider = AnthropicProvider::default();
     /// let response = provider.claude_client().messages()
     ///     .opus()
@@ -179,6 +190,8 @@ impl AnthropicProvider {
     ///     .thinking_adaptive()
     ///     .send()
     ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn claude_client(&self) -> &ClaudeClient {
         &self.client

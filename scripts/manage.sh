@@ -171,13 +171,13 @@ test() {
     cd "$PROJECT_DIR"
     
     print_info "Running unit tests..."
-    cargo test
+    cargo test --workspace
     
     print_info "Running clippy (our friendly neighborhood linter)..."
-    cargo clippy -- -D warnings || print_warning "Clippy found some issues!"
+    cargo clippy --workspace -- -D warnings
     
     print_info "Checking formatting..."
-    cargo fmt -- --check || print_warning "Code needs formatting! Run './manage.sh format' to fix."
+    cargo fmt --all -- --check
     
     print_success "All tests passed! Your tree is healthy! ${TREE}"
 }

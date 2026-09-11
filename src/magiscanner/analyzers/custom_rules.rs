@@ -35,6 +35,7 @@ pub struct CustomRule {
 /// 1. /etc/machine-id (unique per install)
 /// 2. DMI board serial (needs root)
 /// 3. DMI product UUID (needs root)
+///
 /// Falls back gracefully if privileged sources unavailable.
 pub fn get_hardware_salt() -> Vec<u8> {
     let mut salt_material = Vec::new();
@@ -168,7 +169,7 @@ impl CustomRuleAnalyzer {
                 let escaped_tld = regex::escape(tld);
                 let tld_pattern = format!(r"(?i)[a-zA-Z0-9\-]+{escaped_tld}");
                 if let Ok(re) = Regex::new(&tld_pattern) {
-                    for m in re.find_iter(text) {
+                    if let Some(m) = re.find(text) {
                         findings.push(Finding {
                             kind: FindingKind::SuspiciousString {
                                 value: format!("blocked_tld:{tld}"),
@@ -189,9 +190,7 @@ impl CustomRuleAnalyzer {
             RuleKind::Company { name } => {
                 let name_lower = name.to_lowercase();
                 let text_lower = text.to_lowercase();
-                let mut search_start = 0;
-                while let Some(pos) = text_lower[search_start..].find(&name_lower) {
-                    let abs_pos = search_start + pos;
+                if let Some(abs_pos) = text_lower.find(&name_lower) {
                     let end = (abs_pos + name.len() + 40).min(text.len());
                     let start = abs_pos.saturating_sub(20);
                     let context = &text[start..end];
@@ -208,9 +207,6 @@ impl CustomRuleAnalyzer {
                         offset: Some(abs_pos),
                         evidence: Some(context.chars().take(100).collect()),
                     });
-                    search_start = abs_pos + name.len();
-                    // Only report first occurrence
-                    break;
                 }
             }
 
@@ -233,8 +229,6 @@ impl CustomRuleAnalyzer {
                             offset: Some(m.start()),
                             evidence: Some(m.as_str().chars().take(80).collect()),
                         });
-                        // Only report first per pattern
-                        break;
                     }
                 }
             }

@@ -9,7 +9,7 @@
 use anyhow::{Context, Result};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tracing::{error, info, warn};
 
@@ -156,7 +156,7 @@ fn escalate_privileges(args: &[&str]) -> Result<bool> {
                 anyhow::bail!("Elevated command failed");
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 
     #[cfg(target_os = "windows")]
@@ -366,7 +366,7 @@ fn linux_logs() -> Result<()> {
     Ok(())
 }
 
-fn generate_systemd_unit(binary_path: &PathBuf) -> String {
+fn generate_systemd_unit(binary_path: &Path) -> String {
     format!(
         r#"[Unit]
 Description=Smart Tree Daemon - AI Context Service
@@ -612,7 +612,7 @@ fn macos_logs() -> Result<()> {
     Ok(())
 }
 
-fn generate_launchd_daemon_plist(binary_path: &PathBuf) -> String {
+fn generate_launchd_daemon_plist(binary_path: &Path) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1020,33 +1020,33 @@ pub fn print_signature_banner() {
 
     let status = verify_gpg_signature();
 
-    println!();
+    eprintln!();
     match status {
         SignatureStatus::OfficialBuild => {
-            println!("  OFFICIAL BUILD - Signed by 8bit-wraith (wraith@8b.is)");
-            println!("  This binary is cryptographically verified as an authentic release.");
+            eprintln!("  OFFICIAL BUILD - Signed by 8bit-wraith (wraith@8b.is)");
+            eprintln!("  This binary is cryptographically verified as an authentic release.");
         }
         SignatureStatus::CommunityBuild(ref signer) => {
-            println!("  COMMUNITY BUILD - Signed but NOT by the official 8b.is key.");
-            println!("  Signer: {}", &signer[..signer.len().min(70)]);
-            println!("  Verify you trust this signer before proceeding.");
+            eprintln!("  COMMUNITY BUILD - Signed but NOT by the official 8b.is key.");
+            eprintln!("  Signer: {}", &signer[..signer.len().min(70)]);
+            eprintln!("  Verify you trust this signer before proceeding.");
         }
         SignatureStatus::Unsigned => {
-            println!("  UNSIGNED BUILD - No GPG signature found.");
-            println!("  This is normal for dev builds or self-compiled versions.");
-            println!("  Official releases: https://i1.is/smart-tree");
+            eprintln!("  UNSIGNED BUILD - No GPG signature found.");
+            eprintln!("  This is normal for dev builds or self-compiled versions.");
+            eprintln!("  Official releases: https://i1.is/smart-tree");
         }
         SignatureStatus::TamperedOrInvalid => {
-            println!("  WARNING: SIGNATURE VERIFICATION FAILED");
-            println!("  The binary signature does NOT match the file contents!");
-            println!("  Re-download from https://i1.is/smart-tree");
+            eprintln!("  WARNING: SIGNATURE VERIFICATION FAILED");
+            eprintln!("  The binary signature does NOT match the file contents!");
+            eprintln!("  Re-download from https://i1.is/smart-tree");
         }
         SignatureStatus::GpgNotAvailable => {
-            println!("  GPG not available - signature verification skipped.");
-            println!("  Install gnupg to enable verification of official builds.");
+            eprintln!("  GPG not available - signature verification skipped.");
+            eprintln!("  Install gnupg to enable verification of official builds.");
         }
     }
-    println!();
+    eprintln!();
 
     if let Some(parent) = first_run_marker.parent() {
         let _ = fs::create_dir_all(parent);

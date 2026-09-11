@@ -1,14 +1,9 @@
-use regex::Regex;
 use sha2::{Digest, Sha256};
-use std::sync::LazyLock;
 use x509_parser::prelude::*;
 
 use crate::magiscanner::analyzers::{AnalysisContext, Analyzer};
+use crate::magiscanner::certificates::{visit_certificates, CertificateInspection};
 use crate::magiscanner::finding::{Finding, FindingKind, Severity};
-
-static PEM_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----").unwrap()
-});
 
 /// Policy for which certificates to distrust.
 #[derive(Debug, Clone)]
@@ -28,7 +23,27 @@ impl CertificateAnalyzer {
         Self { distrust }
     }
 
-    fn analyze_cert_der(&self, der_bytes: &[u8], source: &str) -> Vec<Finding> {
+    pub fn inspect(&self, raw: &[u8]) -> CertificateInspection {
+        let mut result = CertificateInspection::default();
+        let now = chrono::Utc::now();
+        result.issues = visit_certificates(raw, |info, der| {
+            let mut findings = self.analyze_cert_der(der, &info.encoding, now);
+            for finding in &mut findings {
+                finding.offset = Some(info.offset);
+            }
+            result.findings.extend(findings);
+            result.certificates.push(info);
+        });
+        result.certificates.sort_by_key(|cert| cert.offset);
+        result
+    }
+
+    fn analyze_cert_der(
+        &self,
+        der_bytes: &[u8],
+        source: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Vec<Finding> {
         let mut findings = Vec::new();
 
         let cert = match X509Certificate::from_der(der_bytes) {
@@ -111,7 +126,6 @@ impl CertificateAnalyzer {
         }
 
         // Check expiration
-        let now = chrono::Utc::now();
         let not_after = cert.validity().not_after.to_datetime();
         if let chrono::LocalResult::Single(expiry) =
             chrono::DateTime::from_timestamp(not_after.unix_timestamp(), 0)
@@ -136,7 +150,24 @@ impl CertificateAnalyzer {
             }
         }
 
-        // Check self-signed
+        if now.timestamp() < cert.validity().not_before.timestamp() {
+            let not_before = cert.validity().not_before.to_string();
+            findings.push(Finding {
+                kind: FindingKind::NotYetValidCertificate {
+                    subject: subject_cn.clone(),
+                    not_before: not_before.clone(),
+                    fingerprint_sha256: fingerprint.clone(),
+                },
+                severity: Severity::High,
+                description: format!(
+                    "Certificate not yet valid: {subject_cn} (valid from {not_before}) ({source})"
+                ),
+                offset: None,
+                evidence: None,
+            });
+        }
+
+        // Matching names indicate self-issuance, not a verified self-signature.
         if cert.issuer() == cert.subject() {
             findings.push(Finding {
                 kind: FindingKind::SelfSignedCertificate {
@@ -144,7 +175,9 @@ impl CertificateAnalyzer {
                     fingerprint_sha256: fingerprint.clone(),
                 },
                 severity: Severity::Medium,
-                description: format!("Self-signed certificate: {subject_cn} ({source})"),
+                description: format!(
+                    "Self-issued certificate: {subject_cn} (signature not verified) ({source})"
+                ),
                 offset: None,
                 evidence: Some(format!(
                     "CN={subject_cn}, fingerprint={}",
@@ -190,61 +223,7 @@ impl Analyzer for CertificateAnalyzer {
     }
 
     fn analyze(&self, context: &AnalysisContext) -> Result<Vec<Finding>, anyhow::Error> {
-        let mut findings = Vec::new();
-        let text = String::from_utf8_lossy(&context.raw_content);
-
-        // Find PEM certificates
-        for pem_match in PEM_REGEX.find_iter(&text) {
-            let pem_text = pem_match.as_str();
-            if let Ok((_, pem)) = x509_parser::pem::parse_x509_pem(pem_text.as_bytes()) {
-                findings.extend(self.analyze_cert_der(&pem.contents, "embedded PEM"));
-            }
-        }
-
-        // Look for DER-encoded certificates (magic bytes: 0x30 0x82)
-        let raw = &context.raw_content;
-        let mut i = 0;
-        while i + 4 < raw.len() {
-            if raw[i] == 0x30 && raw[i + 1] == 0x82 {
-                let len = ((raw[i + 2] as usize) << 8) | (raw[i + 3] as usize);
-                let total_len = len + 4;
-                if i + total_len <= raw.len() {
-                    let der_slice = &raw[i..i + total_len];
-                    findings.extend(self.analyze_cert_der(der_slice, "embedded DER"));
-                    i += total_len;
-                    continue;
-                }
-            }
-            i += 1;
-        }
-
-        // Deduplicate by fingerprint
-        let mut seen = std::collections::HashSet::new();
-        findings.retain(|f| {
-            let key = match &f.kind {
-                FindingKind::UntrustedCertificate {
-                    fingerprint_sha256,
-                    reason,
-                    ..
-                } => {
-                    format!("{fingerprint_sha256}:{reason}")
-                }
-                FindingKind::ExpiredCertificate {
-                    fingerprint_sha256, ..
-                } => {
-                    format!("{fingerprint_sha256}:expired")
-                }
-                FindingKind::SelfSignedCertificate {
-                    fingerprint_sha256, ..
-                } => {
-                    format!("{fingerprint_sha256}:self_signed")
-                }
-                _ => return true,
-            };
-            seen.insert(key)
-        });
-
-        Ok(findings)
+        Ok(self.inspect(&context.raw_content).findings)
     }
 }
 
@@ -333,5 +312,101 @@ k8Hg+bcBK1/MGXxkN+/GFpZpnakt
             )),
             "should flag unapproved cert"
         );
+    }
+
+    fn inventory_analyzer() -> CertificateAnalyzer {
+        CertificateAnalyzer::new(CertDistrust {
+            country_codes: vec![],
+            org_patterns: vec![],
+            require_approval: false,
+            approved_fingerprints: vec![],
+        })
+    }
+
+    #[test]
+    fn inventory_preserves_binary_offsets_and_deduplicates_encodings() {
+        let (_, pem) = x509_parser::pem::parse_x509_pem(TEST_CERT_PEM.as_bytes()).unwrap();
+        let mut raw = vec![0xff, 0xfe, 0x80];
+        raw.extend_from_slice(TEST_CERT_PEM.as_bytes());
+        raw.extend_from_slice(&pem.contents);
+        let result = inventory_analyzer().inspect(&raw);
+        assert_eq!(result.certificates.len(), 1);
+        let cert = &result.certificates[0];
+        assert_eq!(cert.offset, 3);
+        assert_eq!(cert.encoding, "PEM");
+        assert!(cert.subject.contains("testca"));
+        assert!(cert.issuer.contains("TestOrg"));
+        assert_eq!(
+            cert.fingerprint_sha256,
+            hex::encode(Sha256::digest(&pem.contents))
+        );
+        assert_eq!(cert.validity_at(cert.not_before - 1), "not yet valid");
+        assert_eq!(cert.validity_at(cert.not_before), "within validity period");
+        assert_eq!(cert.validity_at(cert.not_after), "within validity period");
+        assert_eq!(cert.validity_at(cert.not_after + 1), "expired");
+        assert!(result
+            .findings
+            .iter()
+            .all(|finding| finding.offset == Some(3)));
+    }
+
+    #[test]
+    fn der_wrapper_does_not_hide_nested_certificate() {
+        let (_, pem) = x509_parser::pem::parse_x509_pem(TEST_CERT_PEM.as_bytes()).unwrap();
+        let mut wrapped = vec![0x30, 0x82];
+        wrapped.extend_from_slice(&(pem.contents.len() as u16).to_be_bytes());
+        wrapped.extend_from_slice(&pem.contents);
+        let result = inventory_analyzer().inspect(&wrapped);
+        assert_eq!(result.certificates.len(), 1);
+        assert_eq!(result.certificates[0].offset, 4);
+        assert_eq!(result.certificates[0].encoding, "DER");
+    }
+
+    #[test]
+    fn malformed_pem_does_not_hide_following_certificate() {
+        let raw = format!("-----BEGIN CERTIFICATE-----\nbroken\n{TEST_CERT_PEM}");
+        let result = inventory_analyzer().inspect(raw.as_bytes());
+        assert_eq!(result.issues.len(), 1);
+        assert_eq!(result.issues[0].offset, 0);
+        assert_eq!(result.certificates.len(), 1);
+    }
+
+    #[test]
+    fn reports_both_ends_of_the_certificate_validity_window() {
+        let (_, pem) = x509_parser::pem::parse_x509_pem(TEST_CERT_PEM.as_bytes()).unwrap();
+        let analyzer = inventory_analyzer();
+        let result = analyzer.inspect(TEST_CERT_PEM.as_bytes());
+        let cert = &result.certificates[0];
+        let before = chrono::DateTime::from_timestamp(cert.not_before - 1, 0).unwrap();
+        let after = chrono::DateTime::from_timestamp(cert.not_after + 1, 0).unwrap();
+        assert!(analyzer
+            .analyze_cert_der(&pem.contents, "DER", before)
+            .iter()
+            .any(|finding| matches!(finding.kind, FindingKind::NotYetValidCertificate { .. })));
+        assert!(analyzer
+            .analyze_cert_der(&pem.contents, "DER", after)
+            .iter()
+            .any(|finding| matches!(finding.kind, FindingKind::ExpiredCertificate { .. })));
+    }
+
+    #[test]
+    fn explicit_scan_reports_metadata_parse_errors_and_size_limits() {
+        use crate::magiscanner::{certificate_scan::scan_certificates, SecurityConfig};
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("bundle.bin");
+        std::fs::write(&target, TEST_CERT_PEM).unwrap();
+        let mut config = SecurityConfig::default();
+        config.database.path = temp.path().join("security.db").display().to_string();
+        let result = scan_certificates(&config, &target, false).unwrap();
+        assert_eq!(result.files_scanned, 1);
+        assert_eq!(result.files[0].inspection.certificates.len(), 1);
+        assert!(result.skipped.is_empty());
+        std::fs::write(&target, "-----BEGIN CERTIFICATE-----\nbroken").unwrap();
+        let result = scan_certificates(&config, &target, false).unwrap();
+        assert_eq!(result.files[0].inspection.issues.len(), 1);
+        config.scan.max_file_size_mb = 0;
+        let result = scan_certificates(&config, &target, false).unwrap();
+        assert_eq!(result.files_scanned, 0);
+        assert_eq!(result.skipped.len(), 1);
     }
 }

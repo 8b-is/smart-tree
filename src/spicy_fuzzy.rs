@@ -78,7 +78,7 @@ impl SpicyFuzzySearch {
             .collect();
 
         // Sort by score (highest first)
-        all_matches.sort_by(|a, b| b.score.cmp(&a.score));
+        all_matches.sort_by_key(|a| std::cmp::Reverse(a.score));
         all_matches.truncate(max_results);
 
         // Store search results in MEM8 for pattern learning
@@ -148,7 +148,7 @@ impl SpicyFuzzySearch {
             })
             .collect();
 
-        matches.sort_by(|a, b| b.1.cmp(&a.1));
+        matches.sort_by_key(|a| std::cmp::Reverse(a.1));
         matches.truncate(max_results);
 
         Ok(matches)

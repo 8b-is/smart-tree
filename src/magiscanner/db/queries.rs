@@ -309,6 +309,10 @@ impl Database {
 
     // ── Quarantine ──
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Preserve the public API matching the quarantine row columns"
+    )]
     pub fn insert_quarantine(
         &self,
         original_path: &str,
@@ -512,6 +516,10 @@ impl Database {
     // ── Deleted Files ──
 
     /// Record a file that has been deleted from disk.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Preserve the public API matching the deleted-file row columns"
+    )]
     pub fn record_deleted_file(
         &self,
         sha256: &str,
@@ -600,18 +608,20 @@ impl Database {
                      FROM scanned_files s
                      WHERE s.scanned_at < {cutoff}"
             ))?;
-            stmt.query_map([], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, i64>(6)?,
-                ))
-            })?
-            .collect::<Result<Vec<_>, _>>()?
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, i64>(6)?,
+                    ))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            rows
         };
 
         let mut archived = 0;

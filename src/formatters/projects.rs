@@ -159,13 +159,7 @@ impl ProjectsFormatter {
                             // Check parent directory
                             project_path
                                 .parent()
-                                .and_then(|p| {
-                                    if p.join("README.md").exists() {
-                                        Some(p)
-                                    } else {
-                                        None
-                                    }
-                                })
+                                .filter(|&p| p.join("README.md").exists())
                                 .unwrap_or(project_path)
                         } else {
                             project_path
@@ -184,7 +178,7 @@ impl ProjectsFormatter {
         });
 
         let mut result = projects.lock().unwrap().clone();
-        result.sort_by(|a, b| b.last_modified.cmp(&a.last_modified)); // Most recent first
+        result.sort_by_key(|a| std::cmp::Reverse(a.last_modified)); // Most recent first
         Ok(result)
     }
 

@@ -70,6 +70,11 @@ pub enum FindingKind {
         subject: String,
         fingerprint_sha256: String,
     },
+    NotYetValidCertificate {
+        subject: String,
+        not_before: String,
+        fingerprint_sha256: String,
+    },
 }
 
 impl FindingKind {
@@ -83,6 +88,7 @@ impl FindingKind {
             Self::UntrustedCertificate { .. } => "untrusted_certificate",
             Self::ExpiredCertificate { .. } => "expired_certificate",
             Self::SelfSignedCertificate { .. } => "self_signed_certificate",
+            Self::NotYetValidCertificate { .. } => "not_yet_valid_certificate",
         }
     }
 }

@@ -5,11 +5,12 @@
 //!
 //! This is THE memory system for the best Claude Code experience.
 
+use crate::mem8::record_store::RecordStore;
 use crate::mem8::{FrequencyBand, MemoryWave, WaveGrid};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -92,6 +93,7 @@ pub struct AnchoredMemory {
     /// Origin (human, ai:claude, tandem:human:claude)
     pub origin: String,
     /// Project path this memory is associated with
+    #[serde(with = "crate::mem8::path_serde::option")]
     pub project_path: Option<PathBuf>,
 }
 
@@ -208,7 +210,7 @@ impl KeywordIndex {
 
         // Sort by score (most matching keywords first)
         let mut results: Vec<_> = scores.into_iter().collect();
-        results.sort_by(|a, b| b.1.cmp(&a.1));
+        results.sort_by_key(|a| std::cmp::Reverse(a.1));
         results.into_iter().map(|(id, _)| id).collect()
     }
 }
@@ -232,11 +234,14 @@ pub struct WaveMemoryManager {
     storage_path: PathBuf,
     /// Whether changes need saving
     dirty: bool,
+    dirty_ids: BTreeSet<String>,
+    store: Option<RecordStore>,
+    storage_error: Option<String>,
 }
 
 impl WaveMemoryManager {
     /// Create or load memory manager
-    /// WARNING: This allocates a 4.29 billion voxel grid - use new_test() for tests!
+    /// Uses the compact grid; persistent native records remain authoritative.
     pub fn new(storage_dir: Option<&Path>) -> Self {
         let storage_path = storage_dir
             .map(|p| p.join(".st").join("mem8").join("wave_memory.m8"))
@@ -249,16 +254,20 @@ impl WaveMemoryManager {
             });
 
         let mut manager = Self {
-            wave_grid: Arc::new(RwLock::new(WaveGrid::new())),
+            wave_grid: Arc::new(RwLock::new(WaveGrid::new_compact())),
             memories: HashMap::new(),
             keyword_index: KeywordIndex::default(),
             storage_path,
             dirty: false,
+            dirty_ids: BTreeSet::new(),
+            store: None,
+            storage_error: None,
         };
 
         // Try to load existing memories
         if let Err(e) = manager.load() {
-            eprintln!("Note: Starting fresh wave memory ({})", e);
+            tracing::error!(error = %e, "Wave memory unavailable; writes disabled");
+            manager.storage_error = Some(e.to_string());
         }
 
         manager
@@ -270,9 +279,13 @@ impl WaveMemoryManager {
         let storage_path = storage_dir
             .map(|p| p.join(".st").join("mem8").join("wave_memory.m8"))
             .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".mem8")
+                std::env::var_os("ST_MEMORY_DIR")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| {
+                        dirs::home_dir()
+                            .unwrap_or_else(|| PathBuf::from("."))
+                            .join(".mem8")
+                    })
                     .join("wave_memory.m8")
             });
 
@@ -282,14 +295,28 @@ impl WaveMemoryManager {
             keyword_index: KeywordIndex::default(),
             storage_path,
             dirty: false,
+            dirty_ids: BTreeSet::new(),
+            store: None,
+            storage_error: None,
         };
 
         // Try to load existing memories
         if let Err(e) = manager.load() {
-            eprintln!("Note: Starting fresh wave memory ({})", e);
+            tracing::error!(error = %e, "Wave memory unavailable; writes disabled");
+            manager.storage_error = Some(e.to_string());
         }
 
         manager
+    }
+
+    pub fn try_new_compact(storage_dir: Option<&Path>) -> Result<Self> {
+        let manager = Self::new_compact(storage_dir);
+        anyhow::ensure!(
+            manager.storage_error.is_none(),
+            "Cannot restore wave memory: {}",
+            manager.storage_error.as_deref().unwrap_or("unknown error")
+        );
+        Ok(manager)
     }
 
     /// Create memory manager with smaller grid for testing
@@ -312,10 +339,15 @@ impl WaveMemoryManager {
             keyword_index: KeywordIndex::default(),
             storage_path,
             dirty: false,
+            dirty_ids: BTreeSet::new(),
+            store: None,
+            storage_error: None,
         };
 
         // Try to load existing memories (same as regular new())
-        let _ = manager.load();
+        if let Err(error) = manager.load() {
+            manager.storage_error = Some(error.to_string());
+        }
 
         manager
     }
@@ -332,6 +364,10 @@ impl WaveMemoryManager {
         origin: String,
         project_path: Option<PathBuf>,
     ) -> Result<String> {
+        anyhow::ensure!(
+            valence.is_finite() && arousal.is_finite(),
+            "Memory emotion must be finite"
+        );
         let id = uuid::Uuid::new_v4().to_string();
         let (x, y, z) = AnchoredMemory::calculate_coordinates(&content, &keywords, memory_type);
 
@@ -352,6 +388,19 @@ impl WaveMemoryManager {
             project_path,
         };
 
+        self.store
+            .as_mut()
+            .context("Wave memory is unavailable; no volatile fallback is permitted")?
+            .put_with_wave(
+                &format!("anchor/v1/{id}"),
+                &Some(&memory),
+                &crate::mem8_lite::Wave::new(
+                    f64::from(memory.memory_type.frequency()),
+                    f64::from(memory.valence),
+                    f64::from(memory.arousal),
+                ),
+            )?;
+
         // Store in wave grid
         let wave = memory.to_wave();
         if let Ok(mut grid) = self.wave_grid.write() {
@@ -365,7 +414,6 @@ impl WaveMemoryManager {
 
         // Store memory
         self.memories.insert(id.clone(), memory);
-        self.dirty = true;
 
         Ok(id)
     }
@@ -392,6 +440,7 @@ impl WaveMemoryManager {
                 mem.access_count += 1;
                 mem.last_accessed = Utc::now();
                 self.dirty = true;
+                self.dirty_ids.insert(id.clone());
             }
         }
 
@@ -452,6 +501,7 @@ impl WaveMemoryManager {
                 m.access_count += 1;
                 m.last_accessed = Utc::now();
                 self.dirty = true;
+                self.dirty_ids.insert(id.clone());
             }
         }
 
@@ -490,7 +540,8 @@ impl WaveMemoryManager {
             "active_waves": active_count,
             "unique_keywords": self.keyword_index.keywords.len(),
             "by_type": type_counts,
-            "storage_path": self.storage_path.display().to_string(),
+            "storage_path": self.storage_path.with_extension("native.m8").display().to_string(),
+            "storage_error": self.storage_error,
         })
     }
 
@@ -500,69 +551,98 @@ impl WaveMemoryManager {
             return Ok(());
         }
 
-        // Ensure directory exists
-        if let Some(parent) = self.storage_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create memory directory")?;
+        let store = self
+            .store
+            .as_mut()
+            .context("Native wave memory is unavailable")?;
+        for id in self.dirty_ids.clone() {
+            if let Some(memory) = self.memories.get(&id) {
+                store.put_with_wave(
+                    &format!("anchor/v1/{id}"),
+                    &Some(memory),
+                    &crate::mem8_lite::Wave::new(
+                        f64::from(memory.memory_type.frequency()),
+                        f64::from(memory.valence),
+                        f64::from(memory.arousal),
+                    ),
+                )?;
+            }
+            self.dirty_ids.remove(&id);
         }
-
-        // Serialize memories and index
-        let data = serde_json::json!({
-            "version": 1,
-            "memories": self.memories,
-            "keyword_index": self.keyword_index,
-        });
-
-        let json = serde_json::to_string_pretty(&data).context("Failed to serialize memories")?;
-
-        fs::write(&self.storage_path, json).context("Failed to write memory file")?;
-
         self.dirty = false;
-        eprintln!(
-            "💾 Saved {} memories to {}",
-            self.memories.len(),
-            self.storage_path.display()
-        );
-
         Ok(())
     }
 
     /// Load memories from disk
     pub fn load(&mut self) -> Result<()> {
-        if !self.storage_path.exists() {
-            return Err(anyhow::anyhow!("No memory file found"));
+        if self.store.is_some() {
+            return Ok(());
         }
-
-        let json = fs::read_to_string(&self.storage_path).context("Failed to read memory file")?;
-
-        let data: serde_json::Value =
-            serde_json::from_str(&json).context("Failed to parse memory file")?;
-
-        // Load memories
-        if let Some(memories) = data.get("memories") {
-            self.memories = serde_json::from_value(memories.clone())
-                .context("Failed to deserialize memories")?;
+        let mut store = RecordStore::open_memory(&self.storage_path.with_extension("native.m8"))?;
+        if store.get::<bool>("migration/wave-json-v1")? != Some(true) {
+            #[derive(Deserialize)]
+            struct Legacy {
+                version: u32,
+                memories: HashMap<String, AnchoredMemory>,
+            }
+            match fs::read(&self.storage_path) {
+                Ok(bytes) => {
+                    let legacy: Legacy = serde_json::from_slice(&bytes)
+                        .context("Invalid legacy wave memory; original file preserved")?;
+                    anyhow::ensure!(
+                        legacy.version == 1,
+                        "Unsupported legacy wave memory version"
+                    );
+                    for (id, memory) in legacy.memories {
+                        anyhow::ensure!(id == memory.id, "Invalid legacy wave memory ID");
+                        let key = format!("anchor/v1/{id}");
+                        if store.get::<Option<AnchoredMemory>>(&key)?.is_none() {
+                            store.put_with_wave(
+                                &key,
+                                &Some(&memory),
+                                &crate::mem8_lite::Wave::new(
+                                    f64::from(memory.memory_type.frequency()),
+                                    f64::from(memory.valence),
+                                    f64::from(memory.arousal),
+                                ),
+                            )?;
+                        }
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error).context("Cannot read legacy wave memory"),
+            }
+            store.put("migration/wave-json-v1", &true)?;
         }
-
-        // Load keyword index
-        if let Some(index) = data.get("keyword_index") {
-            self.keyword_index = serde_json::from_value(index.clone())
-                .context("Failed to deserialize keyword index")?;
+        let mut memories = HashMap::new();
+        let mut keyword_index = KeywordIndex::default();
+        for key in store.keys_with_prefix("anchor/v1/") {
+            if let Some(Some(mut memory)) = store.get::<Option<AnchoredMemory>>(&key)? {
+                anyhow::ensure!(
+                    key == format!("anchor/v1/{}", memory.id),
+                    "Invalid persisted memory ID"
+                );
+                if let Some(wave) = store.get_wave(&key)? {
+                    memory.valence = wave.emotional_valence as f32;
+                    memory.arousal = wave.arousal as f32;
+                }
+                for keyword in &memory.keywords {
+                    keyword_index.add(keyword, &memory.id);
+                }
+                memories.insert(memory.id.clone(), memory);
+            }
         }
-
-        // Rebuild wave grid from memories
+        // Hydrate the working grid from persisted waves; no semantic re-analysis.
         if let Ok(mut grid) = self.wave_grid.write() {
-            for memory in self.memories.values() {
+            for memory in memories.values() {
                 let wave = memory.to_wave();
                 grid.store(memory.x, memory.y, memory.z, wave);
             }
         }
-
-        eprintln!(
-            "🧠 Loaded {} memories from {}",
-            self.memories.len(),
-            self.storage_path.display()
-        );
-
+        self.memories = memories;
+        self.keyword_index = keyword_index;
+        self.store = Some(store);
+        self.storage_error = None;
         Ok(())
     }
 
@@ -573,6 +653,23 @@ impl WaveMemoryManager {
 
     /// Delete a memory
     pub fn delete(&mut self, id: &str) -> bool {
+        match self.try_delete(id) {
+            Ok(deleted) => deleted,
+            Err(error) => {
+                tracing::error!(%error, "Could not persist memory deletion");
+                false
+            }
+        }
+    }
+
+    pub fn try_delete(&mut self, id: &str) -> Result<bool> {
+        if !self.memories.contains_key(id) {
+            return Ok(false);
+        }
+        self.store
+            .as_mut()
+            .context("Native wave memory is unavailable")?
+            .forget::<AnchoredMemory>(&format!("anchor/v1/{id}"))?;
         if let Some(memory) = self.memories.remove(id) {
             // Note: We don't remove from wave grid (it will decay naturally)
             // But we do remove from keyword index
@@ -581,11 +678,9 @@ impl WaveMemoryManager {
                     ids.retain(|i| i != id);
                 }
             }
-            self.dirty = true;
-            true
-        } else {
-            false
         }
+        self.dirty_ids.remove(id);
+        Ok(true)
     }
 }
 
@@ -616,6 +711,68 @@ pub fn init_wave_memory(storage_dir: &Path) {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn native_migration_and_delete_preserve_legacy_without_resurrection() {
+        let dir = tempdir().unwrap();
+        let mut original = WaveMemoryManager::new_test(Some(dir.path()));
+        let id = original
+            .anchor(
+                "saved conversation".into(),
+                vec!["family".into()],
+                MemoryType::Conversation,
+                0.25,
+                0.75,
+                "user".into(),
+                None,
+            )
+            .unwrap();
+        let memory = original.get(&id).unwrap().clone();
+        let legacy_path = original.storage_path.clone();
+        let native_path = legacy_path.with_extension("native.m8");
+        drop(original);
+        // Simulate an existing deployment that only has the legacy JSON.
+        std::fs::remove_file(&native_path).unwrap();
+        let legacy = serde_json::to_vec(
+            &serde_json::json!({ "version": 1, "memories": { id.clone(): memory } }),
+        )
+        .unwrap();
+        std::fs::write(&legacy_path, &legacy).unwrap();
+        let mut restored = WaveMemoryManager::new_test(Some(dir.path()));
+        assert_eq!(restored.get(&id).unwrap().content, "saved conversation");
+        assert!(restored.try_delete(&id).unwrap());
+        drop(restored);
+        let restored = WaveMemoryManager::new_test(Some(dir.path()));
+        assert!(restored.get(&id).is_none());
+        assert_eq!(std::fs::read(legacy_path).unwrap(), legacy);
+        assert_eq!(
+            &std::fs::read(native_path).unwrap()[8..12],
+            &0x4d454d38u32.to_le_bytes()
+        );
+    }
+
+    #[test]
+    fn corrupt_legacy_wave_memory_disables_writes() {
+        let dir = tempdir().unwrap();
+        let parent = dir.path().join(".st/mem8");
+        std::fs::create_dir_all(&parent).unwrap();
+        let path = parent.join("wave_memory_test.m8");
+        std::fs::write(&path, b"corrupt legacy memory").unwrap();
+        let mut memory = WaveMemoryManager::new_test(Some(dir.path()));
+        assert!(memory.storage_error.is_some());
+        assert!(memory
+            .anchor(
+                "new".into(),
+                vec![],
+                MemoryType::Conversation,
+                0.0,
+                0.5,
+                "user".into(),
+                None
+            )
+            .is_err());
+        assert_eq!(std::fs::read(path).unwrap(), b"corrupt legacy memory");
+    }
 
     #[test]
     fn test_anchor_and_find() {

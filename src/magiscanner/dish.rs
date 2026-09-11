@@ -10,6 +10,10 @@ impl Dish {
         Self { data }
     }
 
+    #[allow(
+        clippy::should_implement_trait,
+        reason = "Preserve the legacy infallible constructor alongside FromStr"
+    )]
     pub fn from_str(s: &str) -> Self {
         Self {
             data: s.as_bytes().to_vec(),
@@ -52,6 +56,14 @@ impl From<&str> for Dish {
 impl From<String> for Dish {
     fn from(s: String) -> Self {
         Self::new(s.into_bytes())
+    }
+}
+
+impl std::str::FromStr for Dish {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
     }
 }
 

@@ -1,7 +1,7 @@
 //! Smart Tree Configuration System
 //!
 //! Unified config for API keys, model preferences, and daemon settings.
-//! Config file: ~/.st/config.toml
+//! Config file: ST_CONFIG_PATH or ~/.st/config.toml
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -125,6 +125,10 @@ impl Default for SafetyConfig {
 impl StConfig {
     /// Get config file path
     pub fn config_path() -> Result<PathBuf> {
+        if let Some(path) = std::env::var_os("ST_CONFIG_PATH") {
+            anyhow::ensure!(!path.is_empty(), "ST_CONFIG_PATH must not be empty");
+            return Ok(PathBuf::from(path));
+        }
         let st_dir = dirs::home_dir()
             .context("Could not find home directory")?
             .join(".st");
@@ -153,6 +157,10 @@ impl StConfig {
     /// Save config to file
     pub fn save(&self) -> Result<()> {
         let path = Self::config_path()?;
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create {}", parent.display()))?;
+        }
         let content = toml::to_string_pretty(self)?;
         fs::write(&path, content)?;
         Ok(())

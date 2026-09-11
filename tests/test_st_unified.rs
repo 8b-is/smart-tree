@@ -50,7 +50,7 @@ fn create_test_directory() -> Result<TempDir> {
 #[test]
 fn test_st_unified_creation() {
     // This is JUICY! Testing the most basic creation path
-    let st = StUnified::new();
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"));
     assert!(st.is_ok(), "Failed to create StUnified instance");
 }
 
@@ -58,7 +58,7 @@ fn test_st_unified_creation() {
 fn test_ls_basic() -> Result<()> {
     // Let's torture this ls function until it confesses its bugs!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.ls(temp_dir.path(), None)?;
 
@@ -80,7 +80,7 @@ fn test_ls_basic() -> Result<()> {
 fn test_ls_with_pattern() -> Result<()> {
     // Pattern matching - where bugs love to hide!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.ls(temp_dir.path(), Some("*.md"))?;
 
@@ -100,15 +100,12 @@ fn test_ls_with_pattern() -> Result<()> {
 fn test_ls_empty_directory() -> Result<()> {
     // Edge case alert! Empty directories are tomorrow's NullPointerExceptions!
     let temp_dir = TempDir::new()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.ls(temp_dir.path(), None)?;
 
     // Should handle empty directory gracefully
-    assert!(
-        result.is_empty() || result.trim().is_empty(),
-        "Empty directory should produce empty or near-empty output"
-    );
+    assert_eq!(result.trim(), "No matching files or directories found");
 
     Ok(())
 }
@@ -117,7 +114,7 @@ fn test_ls_empty_directory() -> Result<()> {
 fn test_read_basic() -> Result<()> {
     // Reading files - the bread and butter of any tool!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.read(&temp_dir.path().join("src/main.rs"), None, None)?;
 
@@ -142,7 +139,7 @@ fn test_read_with_offset_and_limit() -> Result<()> {
         writeln!(file, "Line {}", i)?;
     }
 
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     // Read lines 5-9 (offset 4, limit 5)
     let result = st.read(&test_file, Some(4), Some(5))?;
@@ -158,7 +155,7 @@ fn test_read_with_offset_and_limit() -> Result<()> {
 #[test]
 fn test_read_nonexistent_file() -> Result<()> {
     // File not found - the classic error that keeps on giving!
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.read(Path::new("/definitely/not/a/real/file.txt"), None, None);
 
@@ -174,7 +171,7 @@ fn test_read_offset_beyond_file() -> Result<()> {
     let test_file = temp_dir.path().join("small.txt");
     fs::write(&test_file, "Line 1\nLine 2\nLine 3")?;
 
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
     let result = st.read(&test_file, Some(10), Some(5))?;
 
     assert!(
@@ -189,7 +186,7 @@ fn test_read_offset_beyond_file() -> Result<()> {
 fn test_grep_basic() -> Result<()> {
     // Search functionality - where regex bugs come to party!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.grep("println", temp_dir.path(), None)?;
 
@@ -202,7 +199,7 @@ fn test_grep_basic() -> Result<()> {
 fn test_grep_with_file_type() -> Result<()> {
     // File type filtering - because searching everything is too mainstream!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.grep("test", temp_dir.path(), Some("rs"))?;
 
@@ -215,7 +212,7 @@ fn test_grep_with_file_type() -> Result<()> {
 fn test_grep_no_matches() -> Result<()> {
     // No matches - the silent killer of assumptions!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.grep("definitely_not_in_any_file_12345", temp_dir.path(), None)?;
 
@@ -232,7 +229,7 @@ fn test_grep_no_matches() -> Result<()> {
 fn test_glob_basic() -> Result<()> {
     // Glob patterns - where wildcards run wild!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.glob("*.rs", temp_dir.path())?;
 
@@ -249,7 +246,7 @@ fn test_glob_basic() -> Result<()> {
 fn test_glob_recursive() -> Result<()> {
     // Recursive globs - testing the depths of pattern matching!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.glob("**/*.rs", temp_dir.path())?;
 
@@ -267,7 +264,7 @@ fn test_glob_recursive() -> Result<()> {
 fn test_analyze_basic() -> Result<()> {
     // Directory analysis - the heart of Smart Tree!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.analyze(temp_dir.path(), "classic", 3)?;
 
@@ -282,7 +279,7 @@ fn test_analyze_basic() -> Result<()> {
 fn test_analyze_different_modes() -> Result<()> {
     // Testing all the modes - because variety is the spice of bugs!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let modes = vec!["classic", "ai", "hex", "json", "summary"];
 
@@ -298,7 +295,7 @@ fn test_analyze_different_modes() -> Result<()> {
 fn test_stats() -> Result<()> {
     // Statistics - numbers don't lie, but they can overflow!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.stats(temp_dir.path())?;
 
@@ -318,7 +315,7 @@ fn test_stats() -> Result<()> {
 fn test_semantic_analyze() -> Result<()> {
     // Semantic analysis - where AI meets file systems!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.semantic_analyze(temp_dir.path())?;
 
@@ -335,7 +332,7 @@ fn test_semantic_analyze() -> Result<()> {
 fn test_quick() -> Result<()> {
     // Quick overview - for when you need answers NOW!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.quick(temp_dir.path())?;
 
@@ -351,7 +348,7 @@ fn test_quick() -> Result<()> {
 fn test_understand_project() -> Result<()> {
     // The ultimate test - understanding the whole project!
     let temp_dir = create_test_directory()?;
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.understand_project(temp_dir.path())?;
 
@@ -373,13 +370,47 @@ fn test_understand_project() -> Result<()> {
 
 #[test]
 fn test_binary_not_found() -> Result<()> {
-    // What if st binary doesn't exist? Time to find out!
-    let _st = StUnified::new()?;
+    let temp = TempDir::new()?;
+    assert!(StUnified::with_binary(temp.path().join("missing-st")).is_err());
+    Ok(())
+}
 
-    // This test is tricky because it depends on the actual binary
-    // We'll just ensure the struct is created successfully
-    // The creation itself validates the functionality
+#[test]
+fn test_failed_command_reports_error() -> Result<()> {
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let temp = TempDir::new()?;
+    assert!(st.analyze(temp.path(), "invalid-output-mode", 1).is_err());
+    assert!(st.glob("[", temp.path()).is_err());
+    Ok(())
+}
 
+#[test]
+fn test_glob_unicode_and_absolute_paths() -> Result<()> {
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let temp = TempDir::new()?;
+    let file = temp.path().join("測試7.md");
+    fs::write(&file, "Lunar notes")?;
+    fs::write(temp.path().join("other.txt"), "Unrelated")?;
+    for pattern in ["測試[0-9].md".to_string(), file.display().to_string()] {
+        let output = st.glob(&pattern, temp.path())?;
+        assert!(output.contains("測試7.md"), "Pattern {pattern}: {output}");
+        assert!(!output.contains("other.txt"));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_read_extreme_offset_and_limit() -> Result<()> {
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let temp = TempDir::new()?;
+    let file = temp.path().join("lines.txt");
+    fs::write(&file, "first\nsecond")?;
+    assert!(st
+        .read(&file, Some(usize::MAX), Some(usize::MAX))?
+        .is_empty());
+    assert!(st
+        .read(&file, Some(1), Some(usize::MAX))?
+        .contains("second"));
     Ok(())
 }
 
@@ -393,7 +424,7 @@ fn test_unicode_filenames() -> Result<()> {
     fs::write(temp_dir.path().join("тест.txt"), "Russian test")?;
     fs::write(temp_dir.path().join("🎸.txt"), "Emoji test")?;
 
-    let st = StUnified::new()?;
+    let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
     let result = st.ls(temp_dir.path(), None)?;
 
     // Should handle unicode gracefully (even if output is lossy)
@@ -415,7 +446,7 @@ fn test_symlinks() -> Result<()> {
             temp_dir.path().join("main_link.rs"),
         )?;
 
-        let st = StUnified::new()?;
+        let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
         let result = st.ls(temp_dir.path(), None)?;
 
         assert!(result.contains("main_link.rs"), "Should show symlink");
@@ -439,7 +470,7 @@ fn test_permission_denied() -> Result<()> {
         perms.set_mode(0o000);
         fs::set_permissions(&restricted, perms)?;
 
-        let st = StUnified::new()?;
+        let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
         let result = st.read(&restricted, None, None);
 
         assert!(result.is_err(), "Should error on permission denied");

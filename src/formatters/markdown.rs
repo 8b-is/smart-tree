@@ -73,6 +73,82 @@ impl MarkdownFormatter {
         }
     }
 
+    fn escape_table_cell(text: &str) -> String {
+        text.chars()
+            .map(|ch| match ch {
+                '&' => "&amp;".to_string(),
+                '<' => "&lt;".to_string(),
+                '>' => "&gt;".to_string(),
+                '|' => "&#124;".to_string(),
+                '`' => "&#96;".to_string(),
+                '\\' => "&#92;".to_string(),
+                '*' => "&#42;".to_string(),
+                '_' => "&#95;".to_string(),
+                '[' => "&#91;".to_string(),
+                ']' => "&#93;".to_string(),
+                '\n' => "<br>".to_string(),
+                ch if ch.is_control() => " ".to_string(),
+                ch => ch.to_string(),
+            })
+            .collect()
+    }
+
+    fn write_concerning_files(
+        &self,
+        writer: &mut dyn Write,
+        nodes: &[FileNode],
+        root_path: &Path,
+    ) -> Result<()> {
+        writeln!(
+            writer,
+            "## {}Concerning Files\n",
+            if self.no_emoji { "" } else { "⚠️ " }
+        )?;
+        let mut findings: Vec<_> = nodes
+            .iter()
+            .flat_map(|node| &node.security_findings)
+            .collect();
+        findings.sort_by(|a, b| {
+            b.risk_level
+                .cmp(&a.risk_level)
+                .then_with(|| a.file_path.cmp(&b.file_path))
+                .then_with(|| a.line_number.cmp(&b.line_number))
+                .then_with(|| a.pattern_name.cmp(&b.pattern_name))
+        });
+        if findings.is_empty() {
+            writeln!(
+                writer,
+                "No security findings were reported for the displayed entries.\n"
+            )?;
+        } else {
+            writeln!(
+                writer,
+                "{} finding(s) in the displayed entries, highest risk first.\n",
+                findings.len()
+            )?;
+            writeln!(writer, "| Risk | File | Line | Pattern | Concern |")?;
+            writeln!(writer, "|------|------|------|---------|---------|")?;
+            for finding in findings {
+                let path = finding
+                    .file_path
+                    .strip_prefix(root_path)
+                    .unwrap_or(&finding.file_path);
+                writeln!(
+                    writer,
+                    "| {} | {} | {} | {} | {} |",
+                    finding.risk_level,
+                    Self::escape_table_cell(&path.to_string_lossy()),
+                    finding.line_number,
+                    Self::escape_table_cell(&finding.pattern_name),
+                    Self::escape_table_cell(&finding.description),
+                )?;
+            }
+            writeln!(writer)?;
+        }
+        writeln!(writer, "Coverage follows the tree scan's filters and security settings. Use `st --integrity-scan PATH` for deeper analysis or `st --cert-scan PATH` to inspect embedded certificates.\n")?;
+        Ok(())
+    }
+
     fn get_file_emoji(&self, path: &Path, is_dir: bool) -> &'static str {
         if self.no_emoji {
             return "";
@@ -487,32 +563,30 @@ impl MarkdownFormatter {
     fn write_size_distribution_pie(
         &self,
         writer: &mut dyn Write,
-        _stats: &TreeStats,
+        nodes: &[FileNode],
     ) -> Result<()> {
         writeln!(writer, "## 📊 Size Distribution")?;
         writeln!(writer)?;
 
-        // Group files by size ranges
-        // let mut size_ranges = vec![
-        //     ("< 1 KB", 0u64, 0usize),
-        //     ("1-10 KB", 0, 0),
-        //     ("10-100 KB", 0, 0),
-        //     ("100 KB - 1 MB", 0, 0),
-        //     ("1-10 MB", 0, 0),
-        //     ("10-100 MB", 0, 0),
-        //     ("> 100 MB", 0, 0),
-        // ];
-
-        // This would need access to individual file sizes, so we'll use a placeholder
-        // In a real implementation, we'd track this during scanning
-
+        let mut counts = [0usize; 5];
+        for node in nodes.iter().filter(|node| !node.is_dir) {
+            let bucket = match node.size {
+                0..=1023 => 0,
+                1024..=10239 => 1,
+                10240..=102399 => 2,
+                102400..=1048575 => 3,
+                _ => 4,
+            };
+            counts[bucket] += 1;
+        }
         writeln!(writer, "```mermaid")?;
         writeln!(writer, "pie title File Size Distribution")?;
-        writeln!(writer, "    \"< 1 KB\" : 45")?;
-        writeln!(writer, "    \"1-10 KB\" : 25")?;
-        writeln!(writer, "    \"10-100 KB\" : 15")?;
-        writeln!(writer, "    \"100 KB - 1 MB\" : 10")?;
-        writeln!(writer, "    \"> 1 MB\" : 5")?;
+        for (label, count) in ["< 1 KB", "1-10 KB", "10-100 KB", "100 KB - 1 MB", ">= 1 MB"]
+            .iter()
+            .zip(counts)
+        {
+            writeln!(writer, "    \"{}\" : {}", label, count)?;
+        }
         writeln!(writer, "```")?;
         writeln!(writer)?;
 
@@ -646,6 +720,7 @@ impl Formatter for MarkdownFormatter {
     ) -> Result<()> {
         // Header with overview
         self.write_header(writer, root_path, stats)?;
+        self.write_concerning_files(writer, nodes, root_path)?;
 
         // Mermaid directory diagram
         if self.include_mermaid {
@@ -662,8 +737,7 @@ impl Formatter for MarkdownFormatter {
             if !stats.file_types.is_empty() {
                 self.write_file_type_pie(writer, stats)?;
             }
-            // Size distribution pie (would need more data in real implementation)
-            self.write_size_distribution_pie(writer, stats)?;
+            self.write_size_distribution_pie(writer, nodes)?;
         }
 
         // Largest files
@@ -689,6 +763,107 @@ mod tests {
     use crate::scanner::{FileCategory, FileNode, FileType, FilesystemType, TreeStats};
     use std::path::PathBuf;
     use std::time::SystemTime;
+
+    fn test_node(path: &str) -> FileNode {
+        FileNode {
+            path: PathBuf::from(path),
+            is_dir: false,
+            size: 0,
+            permissions: 0o644,
+            uid: 0,
+            gid: 0,
+            modified: SystemTime::UNIX_EPOCH,
+            is_symlink: false,
+            is_hidden: false,
+            permission_denied: false,
+            is_ignored: false,
+            depth: 1,
+            file_type: FileType::RegularFile,
+            category: FileCategory::Unknown,
+            search_matches: None,
+            filesystem_type: FilesystemType::Unknown,
+            git_branch: None,
+            traversal_context: None,
+            interest: None,
+            security_findings: vec![],
+            change_status: None,
+            content_hash: None,
+        }
+    }
+
+    #[test]
+    fn concerning_files_are_sorted_escaped_and_omit_source_content() {
+        use crate::security_scan::{RiskLevel, SecurityFinding};
+        let mut node = test_node("/project/odd|`<script>\n.rs");
+        for risk in [RiskLevel::Low, RiskLevel::Critical] {
+            node.security_findings.push(SecurityFinding {
+                file_path: node.path.clone(),
+                line_number: 7,
+                pattern_name: "[pattern]|name".to_string(),
+                matched_text: "secret-source-content".to_string(),
+                risk_level: risk,
+                description: "Review <code> & config".to_string(),
+            });
+        }
+        let formatter = MarkdownFormatter::new(PathDisplayMode::Off, true, false, false, false);
+        let mut output = Vec::new();
+        formatter
+            .format(
+                &mut output,
+                &[node],
+                &TreeStats::default(),
+                Path::new("/project"),
+            )
+            .unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("## Concerning Files"));
+        assert!(output.find("| CRITICAL |").unwrap() < output.find("| LOW |").unwrap());
+        assert!(output.contains("odd&#124;&#96;&lt;script&gt;<br>.rs"));
+        assert!(output.contains("&#91;pattern&#93;&#124;name"));
+        assert!(!output.contains("secret-source-content"));
+        assert!(!output.contains("/project/"));
+    }
+
+    #[test]
+    fn empty_concerns_describe_scan_coverage_and_offer_certificate_scan() {
+        let formatter = MarkdownFormatter::new(PathDisplayMode::Off, true, false, true, false);
+        let mut output = Vec::new();
+        formatter
+            .write_concerning_files(&mut output, &[], Path::new("."))
+            .unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("No security findings were reported"));
+        assert!(output.contains("filters and security settings"));
+        assert!(output.contains("st --cert-scan PATH"));
+    }
+
+    #[test]
+    fn size_chart_counts_scanned_files_at_bucket_boundaries() {
+        let mut nodes: Vec<_> = [
+            0, 1023, 1024, 10239, 10240, 102399, 102400, 1048575, 1048576,
+        ]
+        .iter()
+        .map(|&size| {
+            let mut node = test_node("file");
+            node.size = size;
+            node
+        })
+        .collect();
+        let mut directory = test_node("dir");
+        directory.is_dir = true;
+        nodes.push(directory);
+        let formatter = MarkdownFormatter::new(PathDisplayMode::Off, true, false, true, true);
+        let mut output = Vec::new();
+        formatter
+            .write_size_distribution_pie(&mut output, &nodes)
+            .unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("\"< 1 KB\" : 2"));
+        assert!(output.contains("\"1-10 KB\" : 2"));
+        assert!(output.contains("\"10-100 KB\" : 2"));
+        assert!(output.contains("\"100 KB - 1 MB\" : 2"));
+        assert!(output.contains("\">= 1 MB\" : 1"));
+    }
 
     #[test]
     fn test_markdown_formatter() {

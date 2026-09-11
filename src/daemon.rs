@@ -19,7 +19,7 @@
 //! Collaboration hub enables humans and AIs to work together in real-time.
 //! The Custodian monitors all MCP operations for data exfiltration and supply chain attacks.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::{
     extract::{Query, Request, State, WebSocketUpgrade},
     http::StatusCode,
@@ -28,6 +28,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -49,7 +50,9 @@ use crate::auth::{create_session_store, GitHubOAuthConfig, SharedSessionStore};
 use crate::collaboration::{create_hub, SharedCollabHub};
 
 // Hot Watcher - Wave-powered real-time directory intelligence
-use crate::hot_watcher::HotWatcher;
+mod context_memory;
+mod search;
+use context_memory::{Association, ContextMemory, RecallRequest};
 
 // HTTP MCP with The Custodian
 use crate::web_dashboard::mcp_http::{create_mcp_context, mcp_router};
@@ -212,9 +215,9 @@ pub struct DaemonState {
     /// Shutdown signal sender
     pub shutdown_tx: Option<oneshot::Sender<()>>,
     /// LLM Proxy - unified interface to all AI providers
-    pub llm_proxy: LlmProxy,
+    pub llm_proxy: Arc<LlmProxy>,
     /// Proxy memory - persistent conversation history
-    pub proxy_memory: ProxyMemory,
+    pub proxy_memory: Arc<std::sync::Mutex<ProxyMemory>>,
     /// Collaboration hub - multi-AI real-time collaboration
     pub collab_hub: SharedCollabHub,
     /// Session store - GitHub OAuth sessions
@@ -222,21 +225,26 @@ pub struct DaemonState {
     /// GitHub OAuth config (if available)
     pub github_oauth: Option<GitHubOAuthConfig>,
     /// Hot Watcher - Wave-powered real-time directory intelligence (MEM8)
-    pub hot_watcher: Arc<RwLock<HotWatcher>>,
+    pub directory_memory: Arc<std::sync::Mutex<ContextMemory>>,
+    pub recall_view: context_memory::RecallView,
+    /// Compact persistent security scan and certificate history.
+    pub scan_memory: Arc<std::sync::Mutex<crate::magiscanner::memory::ScanMemory>>,
 }
 
 /// System-wide context
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SystemContext {
     /// Known projects
+    #[serde(with = "crate::mem8::path_serde::map")]
     pub projects: HashMap<PathBuf, ProjectInfo>,
     /// Directory consciousnesses
+    #[serde(with = "crate::mem8::path_serde::map")]
     pub consciousnesses: HashMap<PathBuf, DirectoryInfo>,
     /// Last scan timestamp
     pub last_scan: Option<std::time::SystemTime>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectInfo {
     pub path: String,
     pub name: String,
@@ -245,7 +253,7 @@ pub struct ProjectInfo {
     pub essence: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DirectoryInfo {
     pub path: String,
     pub frequency: f64,
@@ -295,23 +303,40 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     );
 
     // Load or generate auth token
-    let auth_token = load_or_create_token()?;
+    load_or_create_token()?;
     println!("  🔑 Auth token: loaded ({})", token_path().display());
 
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     // Initialize LLM proxy with available providers
-    let llm_proxy = LlmProxy::default();
+    let llm_proxy = Arc::new(LlmProxy::default());
     let provider_count = llm_proxy.providers.len();
 
     // Initialize proxy memory for conversation persistence
-    let proxy_memory = ProxyMemory::new().unwrap_or_else(|e| {
-        eprintln!("Warning: Could not initialize proxy memory: {}", e);
-        eprintln!("  Falling back to in-memory only mode (no persistence)");
-        // Create a fallback in-memory only version that doesn't require filesystem access
-        ProxyMemory::in_memory_only()
-    });
+    let memory_directory = crate::mem8::record_store::memory_dir()?;
+    let restore_paths = config.watch_paths.clone();
+    let (proxy_memory, directory_memory) = tokio::task::spawn_blocking(move || -> Result<_> {
+        let proxy_memory =
+            ProxyMemory::open(&memory_directory).context("Cannot restore conversation memory")?;
+        let mut directory_memory =
+            ContextMemory::open(&memory_directory).context("Cannot restore directory memory")?;
+        for path in restore_paths {
+            if path.is_dir() {
+                directory_memory.watch_initial(&path)?;
+            }
+        }
+        Ok((proxy_memory, directory_memory))
+    })
+    .await??;
+    let context = directory_memory.context();
+    let recall_view = directory_memory.recall_view();
+    println!(
+        "  🧠 MEM8: restored {} indexed files",
+        directory_memory.indexed_files()
+    );
+    let proxy_memory = Arc::new(std::sync::Mutex::new(proxy_memory));
+    let directory_memory = Arc::new(std::sync::Mutex::new(directory_memory));
 
     // Initialize collaboration hub
     let collab_hub = create_hub();
@@ -326,11 +351,14 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     }
 
     // Initialize Hot Watcher for real-time directory intelligence
-    let hot_watcher = Arc::new(RwLock::new(HotWatcher::new()));
     println!("  🔥 Hot Watcher: ready (MEM8 waves)");
 
+    let security_config = crate::config::StConfig::load()?.security;
+    let scan_memory = Arc::new(std::sync::Mutex::new(
+        crate::magiscanner::memory::ScanMemory::open(&security_config)?,
+    ));
     let state = Arc::new(RwLock::new(DaemonState {
-        context: SystemContext::default(),
+        context,
         credits: CreditTracker::default(),
         config: config.clone(),
         shutdown_tx: Some(shutdown_tx),
@@ -339,28 +367,12 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         collab_hub,
         sessions,
         github_oauth,
-        hot_watcher,
+        directory_memory,
+        recall_view,
+        scan_memory,
     }));
 
     println!("  🤖 LLM Providers: {} available", provider_count);
-
-    // Initial context scan
-    {
-        let mut s = state.write().await;
-        scan_system_context(&mut s.context, &config.watch_paths)?;
-    }
-
-    // Start background context watcher
-    let state_clone = Arc::clone(&state);
-    let watch_paths = config.watch_paths.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(300)).await;
-            if let Ok(mut s) = state_clone.try_write() {
-                let _ = scan_system_context(&mut s.context, &watch_paths);
-            }
-        }
-    });
 
     // Create MCP context for HTTP MCP endpoints
     let mcp_context = create_mcp_context();
@@ -377,6 +389,8 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/context", get(get_context))
         .route("/context/projects", get(get_projects))
         .route("/context/query", post(query_context))
+        .route("/context/recall", post(recall_context))
+        .route("/context/remember", post(remember_context))
         .route("/context/files", get(list_files))
         // Credit endpoints
         .route("/credits", get(get_credits))
@@ -416,7 +430,15 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             "/security/certs/audit",
             get(crate::magiscanner::http::cert_audit_handler),
         )
-        .with_state(state)
+        .route(
+            "/security/certs/scan",
+            post(crate::magiscanner::http::certificate_scan_handler),
+        )
+        .route(
+            "/security/history",
+            get(crate::magiscanner::http::scan_history_handler),
+        )
+        .with_state(Arc::clone(&state))
         // Bearer token auth on all routes (except /health, handled inside middleware)
         .layer(middleware::from_fn_with_state(
             load_all_tokens(),
@@ -452,16 +474,99 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
+    let (maintenance_stop, mut maintenance_rx) = oneshot::channel::<()>();
+    let maintenance_state = Arc::clone(&state);
+    let maintenance = tokio::spawn(async move {
+        let mut ticks = 0u64;
+        loop {
+            tokio::select! {
+                _ = &mut maintenance_rx => break,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+            }
+            // Reconcile once after startup, then periodically. Existing context
+            // remains available while changed metadata is checked off-thread.
+            let reconcile = ticks.is_multiple_of(300);
+            let checkpoint = ticks.is_multiple_of(30);
+            if let Err(error) = update_directory_memory(&maintenance_state, move |memory| {
+                memory.maintain(reconcile, checkpoint)
+            })
+            .await
+            {
+                tracing::error!(%error, "Directory memory maintenance failed; saved context retained");
+            }
+            ticks = ticks.wrapping_add(1);
+        }
+    });
+
     // Serve with graceful shutdown support
-    axum::serve(listener, app)
+    let served = axum::serve(listener, app)
         .with_graceful_shutdown(async {
             shutdown_rx.await.ok();
             println!("\n🌳 Smart Tree Daemon shutting down gracefully...");
         })
-        .await?;
+        .await;
+    let _ = maintenance_stop.send(());
+    maintenance
+        .await
+        .context("Directory memory worker failed")?;
+    update_directory_memory(&state, |memory| memory.maintain(false, true)).await?;
+    served?;
 
     println!("🌳 Smart Tree Daemon stopped.");
     Ok(())
+}
+
+/// Serialize storage mutations on a blocking worker, publishing a context cache
+/// only after the operation, without holding the daemon lock during disk I/O.
+async fn update_directory_memory<T: Send + 'static>(
+    state: &Arc<RwLock<DaemonState>>,
+    operation: impl FnOnce(&mut ContextMemory) -> Result<T> + Send + 'static,
+) -> Result<T> {
+    let memory = state.read().await.directory_memory.clone();
+    let state = Arc::clone(state);
+    tokio::task::spawn_blocking(move || {
+        let mut memory = memory
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Directory memory lock poisoned"))?;
+        let result = operation(&mut memory);
+        let mut state = state.blocking_write();
+        state.context = memory.context();
+        state.recall_view = memory.recall_view();
+        result
+    })
+    .await
+    .context("Directory memory worker failed")?
+}
+
+async fn recall_context(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Json(request): Json<RecallRequest>,
+) -> Result<Json<Vec<context_memory::RecallHit>>, (StatusCode, String)> {
+    if request.query.len() > 8192
+        || request
+            .after
+            .zip(request.before)
+            .is_some_and(|(after, before)| after >= before)
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid query or time range".into(),
+        ));
+    }
+    let view = state.read().await.recall_view.clone();
+    tokio::task::spawn_blocking(move || Json(view.recall(&request, Utc::now())))
+        .await
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))
+}
+
+async fn remember_context(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Json(association): Json<Association>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let id = update_directory_memory(&state, move |memory| memory.remember(association))
+        .await
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+    Ok(Json(serde_json::json!({ "id": id, "stored": true })))
 }
 
 // API Handlers
@@ -1299,6 +1404,7 @@ async fn shutdown_handler(State(state): State<Arc<RwLock<DaemonState>>>) -> impl
 fn scan_system_context(context: &mut SystemContext, watch_paths: &[PathBuf]) -> Result<()> {
     use walkdir::WalkDir;
 
+    let mut scanned = SystemContext::default();
     for path in watch_paths {
         if !path.exists() {
             continue;
@@ -1308,28 +1414,24 @@ fn scan_system_context(context: &mut SystemContext, watch_paths: &[PathBuf]) -> 
             .max_depth(3)
             .follow_links(false)
             .into_iter()
+            .filter_entry(|entry| {
+                entry.depth() == 0
+                    || (!search::ignored_directory(entry.path())
+                        && !entry.file_name().to_string_lossy().starts_with('.'))
+            })
             .filter_map(|e| e.ok())
         {
             let entry_path = entry.path();
 
-            // Skip hidden directories
-            if entry_path
-                .file_name()
-                .map(|n| n.to_string_lossy().starts_with('.'))
-                .unwrap_or(false)
-            {
-                continue;
-            }
-
             if entry_path.is_dir() {
                 // Detect project
                 if let Some(project) = detect_project(entry_path) {
-                    context.projects.insert(entry_path.to_path_buf(), project);
+                    scanned.projects.insert(entry_path.to_path_buf(), project);
                 }
 
                 // Create directory info
                 if let Some(info) = create_directory_info(entry_path) {
-                    context
+                    scanned
                         .consciousnesses
                         .insert(entry_path.to_path_buf(), info);
                 }
@@ -1337,7 +1439,8 @@ fn scan_system_context(context: &mut SystemContext, watch_paths: &[PathBuf]) -> 
         }
     }
 
-    context.last_scan = Some(std::time::SystemTime::now());
+    scanned.last_scan = Some(std::time::SystemTime::now());
+    *context = scanned;
     Ok(())
 }
 
@@ -1374,10 +1477,23 @@ fn detect_project(path: &std::path::Path) -> Option<ProjectInfo> {
 }
 
 fn read_essence(path: &std::path::Path) -> Option<String> {
+    use std::io::Read;
     for readme in ["CLAUDE.md", "README.md"] {
         let readme_path = path.join(readme);
-        if readme_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&readme_path) {
+        if std::fs::symlink_metadata(&readme_path).is_ok_and(|metadata| metadata.is_file()) {
+            let mut content = String::new();
+            let mut options = std::fs::OpenOptions::new();
+            options.read(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+            }
+            if options
+                .open(&readme_path)
+                .and_then(|file| file.take(64 * 1024).read_to_string(&mut content))
+                .is_ok()
+            {
                 for line in content.lines() {
                     let line = line.trim();
                     if !line.is_empty() && !line.starts_with('#') && !line.starts_with("```") {
@@ -1417,11 +1533,13 @@ fn create_directory_info(path: &std::path::Path) -> Option<DirectoryInfo> {
     let hash = hasher.finish();
     let frequency = 20.0 + (hash % 18000) as f64 / 100.0;
 
+    let mut patterns: Vec<_> = extensions.into_iter().collect();
+    patterns.sort();
     Some(DirectoryInfo {
         path: path.to_string_lossy().to_string(),
         frequency,
         file_count,
-        patterns: extensions.into_iter().collect(),
+        patterns,
     })
 }
 
@@ -1474,10 +1592,31 @@ async fn chat_completions(
     // Use 'user' field as scope ID for memory, default to 'global'
     let scope_id = req.user.clone().unwrap_or_else(|| "global".to_string());
 
-    // Build request with history while holding a write lock briefly
-    let request_with_history = {
-        let state_lock = state.read().await;
+    let (proxy, memory) = {
+        let state = state.read().await;
+        (
+            Arc::clone(&state.llm_proxy),
+            Arc::clone(&state.proxy_memory),
+        )
+    };
+    let history_memory = Arc::clone(&memory);
+    let history_scope = scope_id.clone();
+    let history = tokio::task::spawn_blocking(move || {
+        let memory = history_memory
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Conversation memory lock poisoned"))?;
+        Ok::<_, anyhow::Error>(memory.get_scope(&history_scope).cloned())
+    })
+    .await;
+    let history = match history {
+        Ok(Ok(history)) => history,
+        error => {
+            return memory_error_response(format!("Could not read conversation memory: {error:?}"))
+        }
+    };
 
+    // Build the request from restored memory without locking the daemon.
+    let request_with_history = {
         // Get conversation history from memory
         let mut messages_with_history = Vec::new();
 
@@ -1492,7 +1631,7 @@ async fn chat_completions(
         }
 
         // Add history from memory
-        if let Some(scope) = state_lock.proxy_memory.get_scope(&scope_id) {
+        if let Some(scope) = history {
             for msg in &scope.messages {
                 if msg.role != LlmRole::System {
                     messages_with_history.push(msg.clone());
@@ -1513,20 +1652,10 @@ async fn chat_completions(
         }
     };
 
-    // Call the LLM provider with a read lock (doesn't need mutable access)
-    let llm_result = {
-        let state_lock = state.read().await;
-        state_lock
-            .llm_proxy
-            .complete(&provider_name, request_with_history)
-            .await
-    };
+    let llm_result = proxy.complete(&provider_name, request_with_history).await;
 
     match llm_result {
         Ok(resp) => {
-            // Reacquire write lock for memory/credits updates
-            let mut state_lock = state.write().await;
-
             // Update memory with this exchange
             let mut new_history = Vec::new();
             if let Some(last_user_msg) = internal_req
@@ -1541,12 +1670,22 @@ async fn chat_completions(
                 role: LlmRole::Assistant,
                 content: resp.content.clone(),
             });
-            let _ = state_lock.proxy_memory.update_scope(&scope_id, new_history);
+            let saved = tokio::task::spawn_blocking(move || {
+                memory
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("Conversation memory lock poisoned"))?
+                    .update_scope(&scope_id, new_history)
+            })
+            .await;
+            if !matches!(saved, Ok(Ok(()))) {
+                tracing::error!(error = ?saved, "Could not persist conversation response");
+                return memory_error_response("The provider completed, but the conversation could not be saved. Check daemon storage before retrying.".into());
+            }
 
             // Record credit for token savings (if we compressed context)
             let tokens_used = resp.usage.as_ref().map(|u| u.total_tokens).unwrap_or(0);
             if tokens_used > 0 {
-                state_lock.credits.record_savings(
+                state.write().await.credits.record_savings(
                     tokens_used as u64 / 10, // Award 10% as savings
                     &format!("LLM call to {} ({})", provider_name, req.model),
                 );
@@ -1599,6 +1738,20 @@ async fn chat_completions(
                 .into_response()
         }
     }
+}
+
+fn memory_error_response(message: String) -> axum::response::Response {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(OpenAiErrorResponse {
+            error: OpenAiError {
+                message,
+                error_type: "memory_error".into(),
+                code: None,
+            },
+        }),
+    )
+        .into_response()
 }
 
 /// List available models from all providers
@@ -1655,14 +1808,17 @@ async fn watch_directory(
             format!("Path does not exist: {}", req.path),
         ));
     }
+    if !path.is_dir() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Watch path must be a directory".into(),
+        ));
+    }
 
-    let state_lock = state.read().await;
-    let mut watcher = state_lock.hot_watcher.write().await;
-
-    match watcher.watch(&path) {
-        Ok(()) => Ok(Json(WatchResponse {
+    match update_directory_memory(&state, move |memory| memory.watch(&path)).await {
+        Ok(path) => Ok(Json(WatchResponse {
             success: true,
-            path: req.path,
+            path: path.display().to_string(),
             message: "Now watching directory with MEM8 waves".to_string(),
         })),
         Err(e) => Err((
@@ -1679,13 +1835,10 @@ async fn unwatch_directory(
 ) -> Result<Json<WatchResponse>, (StatusCode, String)> {
     let path = std::path::PathBuf::from(&req.path);
 
-    let state_lock = state.read().await;
-    let mut watcher = state_lock.hot_watcher.write().await;
-
-    match watcher.unwatch(&path) {
-        Ok(()) => Ok(Json(WatchResponse {
+    match update_directory_memory(&state, move |memory| memory.unwatch(&path)).await {
+        Ok(path) => Ok(Json(WatchResponse {
             success: true,
-            path: req.path,
+            path: path.display().to_string(),
             message: "Stopped watching directory".to_string(),
         })),
         Err(e) => Err((
@@ -1707,19 +1860,21 @@ struct WatchStatusResponse {
 }
 
 /// Get hot watcher status
-async fn watch_status(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<WatchStatusResponse> {
-    let state_lock = state.read().await;
-    let watcher = state_lock.hot_watcher.read().await;
-    let summary = watcher.summary();
+async fn watch_status(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> Result<Json<WatchStatusResponse>, (StatusCode, String)> {
+    let summary = update_directory_memory(&state, |memory| Ok(memory.watcher.summary()))
+        .await
+        .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
 
-    Json(WatchStatusResponse {
+    Ok(Json(WatchStatusResponse {
         total_watched: summary.total_watched,
         critical: summary.critical,
         hot: summary.hot,
         warm: summary.warm,
         cold: summary.cold,
         average_arousal: summary.average_arousal,
-    })
+    }))
 }
 
 /// Watched directory in response
@@ -1737,10 +1892,11 @@ struct WatchedDirectoryResponse {
 /// Get hot directories
 async fn watch_hot_directories(
     State(state): State<Arc<RwLock<DaemonState>>>,
-) -> Json<Vec<WatchedDirectoryResponse>> {
-    let state_lock = state.read().await;
-    let watcher = state_lock.hot_watcher.read().await;
-    let hot_dirs = watcher.get_hot_directories();
+) -> Result<Json<Vec<WatchedDirectoryResponse>>, (StatusCode, String)> {
+    let hot_dirs =
+        update_directory_memory(&state, |memory| Ok(memory.watcher.get_hot_directories()))
+            .await
+            .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
 
     let response: Vec<WatchedDirectoryResponse> = hot_dirs
         .into_iter()
@@ -1755,5 +1911,93 @@ async fn watch_hot_directories(
         })
         .collect();
 
-    Json(response)
+    Ok(Json(response))
+}
+
+#[cfg(test)]
+mod memory_api_tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn recall_http_uses_committed_context_while_index_writer_is_busy() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory_memory = ContextMemory::open(temp.path()).unwrap();
+        let recall_view = directory_memory.recall_view();
+        let mut security = crate::magiscanner::SecurityConfig::default();
+        security.database.path = temp.path().join("security.db").display().to_string();
+        let state = Arc::new(RwLock::new(DaemonState {
+            context: directory_memory.context(),
+            credits: CreditTracker::default(),
+            config: DaemonConfig::default(),
+            shutdown_tx: None,
+            llm_proxy: Arc::new(LlmProxy::new()),
+            proxy_memory: Arc::new(std::sync::Mutex::new(
+                ProxyMemory::open(temp.path()).unwrap(),
+            )),
+            collab_hub: create_hub(),
+            sessions: create_session_store(),
+            github_oauth: None,
+            directory_memory: Arc::new(std::sync::Mutex::new(directory_memory)),
+            recall_view,
+            scan_memory: Arc::new(std::sync::Mutex::new(
+                crate::magiscanner::memory::ScanMemory::open(&security).unwrap(),
+            )),
+        }));
+        let app = Router::new()
+            .route("/context/remember", post(remember_context))
+            .route("/context/recall", post(recall_context))
+            .with_state(Arc::clone(&state));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let client = reqwest::Client::new();
+        let response = client
+            .post(format!("{base}/context/remember"))
+            .json(&serde_json::json!({
+                "path": temp.path().join("homework.pdf"), "people": ["daughter"],
+                "notes": "Lunar homework together", "occurred_at": "2026-09-03T16:00:00Z",
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.json::<serde_json::Value>().await.unwrap()["stored"],
+            true
+        );
+
+        let memory = state.read().await.directory_memory.clone();
+        let (locked_tx, locked_rx) = oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let writer = tokio::task::spawn_blocking(move || {
+            let _guard = memory.lock().unwrap();
+            locked_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        });
+        locked_rx.await.unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(3), client.post(format!("{base}/context/recall")).json(&serde_json::json!({
+            "query": "document with my daughter", "after": "2026-09-01T00:00:00Z", "before": "2026-09-07T00:00:00Z",
+        })).send()).await;
+        release_tx.send(()).unwrap();
+        writer.await.unwrap();
+        let response = result
+            .expect("Recall blocked behind the storage writer")
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let hits = response.json::<serde_json::Value>().await.unwrap();
+        assert_eq!(hits.as_array().unwrap().len(), 1);
+        assert!(hits[0]["evidence"][0]
+            .as_str()
+            .unwrap()
+            .contains("daughter"));
+        let invalid = client.post(format!("{base}/context/recall")).json(&serde_json::json!({
+            "query": "homework", "after": "2026-10-01T00:00:00Z", "before": "2026-09-01T00:00:00Z",
+        })).send().await.unwrap();
+        assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+        drop(client);
+        server.abort();
+        let _ = server.await;
+    }
 }

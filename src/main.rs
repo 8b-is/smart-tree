@@ -90,6 +90,7 @@ async fn main() -> Result<()> {
         || cli.daemon_start
         || cli.daemon_install
         || cli.no_daemon
+        || cli.recall.is_some()
         || matches!(cli.cmd, Some(st::cli::Cmd::Service(_)));
     if !skip_autostart {
         let client = DaemonClient::default_port();
@@ -306,7 +307,10 @@ async fn main() -> Result<()> {
         return handle_security_cleanup().await;
     }
     if let Some(path) = &cli.integrity_scan {
-        return handle_integrity_scan(path);
+        return handle_integrity_scan(path, cli.no_daemon).await;
+    }
+    if let Some(path) = &cli.cert_scan {
+        return handle_certificate_scan(path, cli.scan_opts.mode, cli.no_daemon).await;
     }
     if cli.cert_audit {
         return handle_cert_audit(cli.cert_generate_script);
@@ -336,6 +340,13 @@ async fn main() -> Result<()> {
     if cli.daemon_context {
         return handle_daemon_context(cli.scan_opts.sse_port).await;
     }
+    if let Some(query) = &cli.recall {
+        let response = DaemonClient::new(cli.scan_opts.sse_port)
+            .recall_context(query)
+            .await?;
+        println!("{}", serde_json::to_string_pretty(&response)?);
+        return Ok(());
+    }
     if cli.daemon_projects {
         return handle_daemon_projects(cli.scan_opts.sse_port).await;
     }
@@ -343,7 +354,7 @@ async fn main() -> Result<()> {
         return handle_daemon_credits(cli.scan_opts.sse_port).await;
     }
     if cli.daemon_install {
-        return service_manager::daemon_install_system().map_err(Into::into);
+        return service_manager::daemon_install_system();
     }
 
     // Handle mega sessions
@@ -673,7 +684,7 @@ async fn handle_view_diffs() -> Result<()> {
 
     for (file, mut entries) in by_file {
         // Sort by timestamp (newest first)
-        entries.sort_by(|a, b| b.1.cmp(&a.1));
+        entries.sort_by_key(|a| std::cmp::Reverse(a.1));
 
         println!("\n📄 {}", file);
         for (_, timestamp) in entries.iter().take(5) {
@@ -1128,7 +1139,7 @@ async fn handle_security_scan(path: &str) -> Result<()> {
     Ok(())
 }
 
-fn handle_integrity_scan(path: &str) -> Result<()> {
+async fn handle_integrity_scan(path: &str, no_daemon: bool) -> Result<()> {
     use st::config::StConfig;
     use st::magiscanner::service::{print_reports, scan_path};
 
@@ -1141,7 +1152,12 @@ fn handle_integrity_scan(path: &str) -> Result<()> {
     eprintln!("Target: {path}");
     eprintln!();
 
-    let reports = scan_path(&config.security, scan_path_buf, recursive, None)?;
+    let client = DaemonClient::default_port();
+    let reports = if !no_daemon && client.health_check().await.unwrap_or(false) {
+        client.scan_integrity(scan_path_buf).await?.reports
+    } else {
+        scan_path(&config.security, scan_path_buf, recursive, None)?
+    };
     print_reports(&reports);
 
     let critical = reports
@@ -1155,6 +1171,42 @@ fn handle_integrity_scan(path: &str) -> Result<()> {
         std::process::exit(1);
     }
 
+    Ok(())
+}
+
+async fn handle_certificate_scan(
+    path: &str,
+    mode: st::cli::OutputMode,
+    no_daemon: bool,
+) -> Result<()> {
+    use st::magiscanner::certificate_scan::{print_certificate_scan, scan_certificates};
+
+    let config = st::config::StConfig::load()?;
+    let path = std::path::Path::new(path);
+    let client = DaemonClient::default_port();
+    let result = if !no_daemon && client.health_check().await.unwrap_or(false) {
+        client.scan_certificates(path).await?
+    } else {
+        scan_certificates(&config.security, path, true)?
+    };
+    if mode == st::cli::OutputMode::Json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else {
+        print_certificate_scan(&result);
+    }
+    if !result.skipped.is_empty() {
+        anyhow::bail!(
+            "Certificate scan incomplete: {} skipped entry/entries",
+            result.skipped.len()
+        );
+    }
+    if result
+        .files
+        .iter()
+        .any(|file| !file.inspection.issues.is_empty())
+    {
+        anyhow::bail!("Certificate scan found malformed certificate data");
+    }
     Ok(())
 }
 

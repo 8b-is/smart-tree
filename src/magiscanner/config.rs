@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Security sentinel configuration (MagiSCanner capabilities integrated into Smart Tree).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityConfig {
     #[serde(default = "ScanConfig::default")]
     pub scan: ScanConfig,
@@ -157,18 +157,6 @@ impl Default for QuarantineConfig {
             enabled: false,
             auto_quarantine_severity: default_quarantine_severity(),
             directory: default_quarantine_dir(),
-        }
-    }
-}
-
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            scan: ScanConfig::default(),
-            database: DatabaseConfig::default(),
-            watch: WatchConfig::default(),
-            certificates: CertificateConfig::default(),
-            quarantine: QuarantineConfig::default(),
         }
     }
 }

@@ -184,7 +184,7 @@ impl SummaryFormatter {
             .into_iter()
             .filter(|(name, _)| actual_dirs.contains(name))
             .collect();
-        sorted_dirs.sort_by(|a, b| b.1 .2.cmp(&a.1 .2));
+        sorted_dirs.sort_by_key(|a| std::cmp::Reverse(a.1 .2));
 
         // Show top directories
         writeln!(

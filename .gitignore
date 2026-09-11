@@ -27,6 +27,13 @@ pip-wheel-metadata/
 .mem8/
 .st_bumpers
 *.m8
+*.t8
+proxy_memory.lock
+directory_context.lock
+file_index.lock
+wave_memory*.lock
+*.scans.lock
+.st/mem8/
 .m8
 
 # --- Node ---
@@ -118,4 +125,3 @@ yarn-error.log*
 
 2026*
 2025*
-

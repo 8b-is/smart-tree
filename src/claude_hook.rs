@@ -27,7 +27,7 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
     eprintln!("DEBUG: user_prompt length = {}", user_prompt.len());
     eprintln!(
         "DEBUG: user_prompt preview = {:?}",
-        &user_prompt.chars().take(100).collect::<String>()
+        user_prompt.chars().take(100).collect::<String>()
     );
 
     // Start structured output

@@ -179,6 +179,10 @@ pub async fn begin(provider: ProviderConfig, account: String) -> Result<StartedF
     })
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "One callback receives the state and credentials of a single OAuth flow"
+)]
 async fn run_callback(
     listener: TcpListener,
     state_expected: &str,

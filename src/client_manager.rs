@@ -139,7 +139,7 @@ mod tests {
 
         assert_eq!(manager.list_servers().len(), 2);
 
-        let client = manager.get_client("remote").unwrap();
+        manager.get_client("remote").unwrap();
         // Can't check client internal fields easily, but if it exists it's good
 
         manager.remove_server("local");

@@ -79,6 +79,8 @@ pub struct MessageDeltaPayload {
 ///
 /// # Example
 /// ```rust,no_run
+/// use st::proxy::claude::{SseParser, StreamEvent};
+/// # async fn example(client: &reqwest::Client, url: &str) -> anyhow::Result<()> {
 /// let response = client.post(url).send().await?;
 /// let mut parser = SseParser::new(response);
 /// while let Some(event) = parser.next_event().await? {
@@ -88,6 +90,8 @@ pub struct MessageDeltaPayload {
 ///         _ => {}
 ///     }
 /// }
+/// # Ok(())
+/// # }
 /// ```
 pub struct SseParser {
     /// The raw byte stream from reqwest

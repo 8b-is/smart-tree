@@ -82,7 +82,6 @@ fn test_record_operation() -> Result<()> {
 }
 
 #[test]
-#[ignore = "Hangs in CI - needs investigation"]
 fn test_context_detection_coding() -> Result<()> {
     // Detecting coding context - when the developer is in the zone!
     let tracker = StContextTracker::new();
@@ -158,7 +157,6 @@ fn test_context_detection_testing() -> Result<()> {
 }
 
 #[test]
-#[ignore = "Hangs in CI - needs investigation"]
 fn test_context_detection_exploring() -> Result<()> {
     // Exploring context - when you're getting familiar with the codebase!
     let tracker = StContextTracker::new();
@@ -307,6 +305,9 @@ fn test_save_and_load_context() -> Result<()> {
     // Build up some context
     tracker.record_operation(create_test_operation("edit", "/src/main.rs"))?;
     tracker.record_operation(create_test_operation("search TODO", "/src"))?;
+    tracker.record_operation(create_test_operation("search FIXME", "/src"))?;
+    tracker.record_operation(create_test_operation("search error", "/src"))?;
+    let expected_context = tracker.analyze_context()?;
 
     // Save context
     tracker.save_context(temp_dir.path())?;
@@ -324,6 +325,10 @@ fn test_save_and_load_context() -> Result<()> {
     assert!(
         !matches!(context, WorkContext::Exploring { depth: 3, .. }),
         "Should have loaded non-default context"
+    );
+    assert_eq!(
+        serde_json::to_value(context)?,
+        serde_json::to_value(expected_context)?
     );
 
     Ok(())
@@ -435,7 +440,6 @@ fn test_empty_project_knowledge() {
 }
 
 #[test]
-#[ignore = "Hangs in CI - needs investigation"]
 fn test_concurrent_context_updates() -> Result<()> {
     // Concurrency - when multiple threads want to update context!
     use std::thread;

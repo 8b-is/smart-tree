@@ -19,9 +19,12 @@ use crate::formatters::{
     mermaid::{MermaidFormatter, MermaidStyle},
     projects::ProjectsFormatter,
     quantum::QuantumFormatter,
+    quantum_semantic::QuantumSemanticFormatter,
     semantic::SemanticFormatter,
     smart::SmartFormatter,
     stats::StatsFormatter,
+    summary::SummaryFormatter,
+    summary_ai::SummaryAiFormatter,
     tsv::TsvFormatter,
     waste::WasteFormatter,
     Formatter, PathDisplayMode,
@@ -194,14 +197,10 @@ pub struct CliErrorResponse {
 pub fn execute_cli_scan(req: &CliScanRequest) -> Result<CliScanResponse> {
     let config = build_scanner_config(req)?;
 
-    let path = PathBuf::from(&req.path);
-    let path = if path.is_absolute() {
-        path
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(&path)
-    };
+    // Scanner nodes use canonical paths; formatters need the same root.
+    let path = PathBuf::from(&req.path)
+        .canonicalize()
+        .with_context(|| format!("Cannot resolve scan path {}", req.path))?;
 
     let scanner = Scanner::new(&path, config).context("Failed to create scanner")?;
 
@@ -344,8 +343,9 @@ fn build_scanner_config(req: &CliScanRequest) -> Result<ScannerConfig> {
 
 /// Get ideal depth for a given mode
 fn get_ideal_depth_for_mode(mode: &str) -> usize {
-    match mode.to_lowercase().as_str() {
-        "quantum" | "quantum_semantic" => 10,
+    match mode.to_lowercase().replace(['-', '_'], "").as_str() {
+        "quantum" | "quantumsemantic" => 10,
+        "summary" | "summaryai" | "context" => 4,
         "ai" | "semantic" | "smart" => 5,
         "digest" | "stats" => 20,
         "relations" => 3,
@@ -372,7 +372,7 @@ fn format_output(
     root_path: &std::path::Path,
     path_display: PathDisplayMode,
 ) -> Result<()> {
-    let mode = req.mode.to_lowercase();
+    let mode = req.mode.to_lowercase().replace(['-', '_'], "");
     let no_emoji = req.no_emoji;
     let use_color = req.use_color;
 
@@ -423,6 +423,18 @@ fn format_output(
             let formatter = QuantumFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
         }
+        "quantumsemantic" => {
+            let formatter = QuantumSemanticFormatter::new();
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
+        "summary" => {
+            let formatter = SummaryFormatter::new(use_color);
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
+        "summaryai" => {
+            let formatter = SummaryAiFormatter::new(false);
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
         "semantic" => {
             let formatter = SemanticFormatter::new(path_display, no_emoji);
             formatter.format(writer, nodes, stats, root_path)?;
@@ -460,4 +472,49 @@ fn format_output(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn summary_and_quantum_modes_route_to_their_formatters() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("notes.md"), "Lunar geology").unwrap();
+        for (mode, header) in [
+            ("summary-ai", "SUMMARY_AI_V1:"),
+            ("summary_ai", "SUMMARY_AI_V1:"),
+            ("summaryai", "SUMMARY_AI_V1:"),
+            ("quantum-semantic", "QUANTUM_SEMANTIC_V2:"),
+        ] {
+            let request = serde_json::from_value(serde_json::json!({
+                "path": temp.path(), "mode": mode
+            }))
+            .unwrap();
+            assert!(execute_cli_scan(&request)
+                .unwrap()
+                .output
+                .starts_with(header));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_roots_render_their_children() {
+        let temp = tempfile::tempdir().unwrap();
+        let actual = temp.path().join("actual");
+        std::fs::create_dir(&actual).unwrap();
+        std::fs::write(actual.join("notes.md"), "Lunar geology").unwrap();
+        let alias = temp.path().join("alias");
+        std::os::unix::fs::symlink(&actual, &alias).unwrap();
+        let request = serde_json::from_value(serde_json::json!({
+            "path": alias, "mode": "classic"
+        }))
+        .unwrap();
+        assert!(execute_cli_scan(&request)
+            .unwrap()
+            .output
+            .contains("notes.md"));
+    }
 }

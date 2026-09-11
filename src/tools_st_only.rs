@@ -65,6 +65,7 @@ impl StOnlyTools {
     /// Core ST execution
     fn run_st(&self, args: Vec<String>) -> Result<String> {
         let mut cmd = Command::new(&self.config.st_binary);
+        cmd.args(["--no-daemon", "--no-update-check"]);
 
         // Add standard flags
         if !self.config.use_emoji {
@@ -99,7 +100,7 @@ impl StOnlyTools {
 
         if let Some(pattern) = &options.pattern {
             args.push("--find".to_string());
-            args.push(pattern.clone());
+            args.push(crate::st_unified::glob_as_find_regex(pattern)?);
         }
 
         if let Some(file_type) = &options.file_type {
@@ -182,6 +183,7 @@ impl StOnlyTools {
 // Options structures
 #[derive(Default, Clone)]
 pub struct ListOptions {
+    /// File glob, such as `*.md`.
     pub pattern: Option<String>,
     pub file_type: Option<String>,
     pub sort: Option<String>,

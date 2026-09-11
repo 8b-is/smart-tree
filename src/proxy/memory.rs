@@ -5,13 +5,17 @@
 //!
 //! "A proxy that remembers is a proxy that cares!" - The Cheet 😺
 
+use crate::mem8::record_store::{memory_dir, RecordStore};
 use crate::proxy::{LlmMessage, LlmProxy, LlmRequest, LlmResponse, LlmRole};
-use anyhow::Result;
+use anyhow::{ensure, Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+const SCOPE_PREFIX: &str = "scope/v1/";
+const MIGRATION_KEY: &str = "migration/proxy-json-v1";
 
 /// 🧠 Scoped memory for a conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,39 +27,55 @@ pub struct ConversationScope {
 
 /// 🗄️ Persistent memory storage for the proxy
 pub struct ProxyMemory {
-    storage_path: PathBuf,
+    store: RecordStore,
     scopes: HashMap<String, ConversationScope>,
-    /// If true, skip all disk I/O operations
-    in_memory_only: bool,
 }
 
 impl ProxyMemory {
     pub fn new() -> Result<Self> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let storage_path = Path::new(&home).join(".st").join("proxy_memory.json");
-
-        if let Some(parent) = storage_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let mut memory = Self {
-            storage_path,
-            scopes: HashMap::new(),
-            in_memory_only: false,
-        };
-
-        memory.load()?;
-        Ok(memory)
+        Self::open(&memory_dir()?)
     }
 
-    /// Create an in-memory only instance that doesn't persist to disk
-    /// Used as a fallback when filesystem access fails
-    pub fn in_memory_only() -> Self {
-        Self {
-            storage_path: PathBuf::new(), // Empty path, won't be used
-            scopes: HashMap::new(),
-            in_memory_only: true,
+    /// Open compressed conversation records, importing the legacy JSON once.
+    /// The original file is preserved; interrupted imports resume without
+    /// overwriting newer records or resurrecting cleared conversations.
+    pub fn open(directory: &Path) -> Result<Self> {
+        let mut store = RecordStore::open_memory(&directory.join("proxy_memory.m8"))?;
+        if store.get::<bool>(MIGRATION_KEY)? != Some(true) {
+            let legacy_path = directory.join("proxy_memory.json");
+            let legacy = match fs::read(&legacy_path) {
+                Ok(content) => {
+                    serde_json::from_slice::<HashMap<String, ConversationScope>>(&content)
+                        .with_context(|| {
+                            format!("Invalid conversation memory: {}", legacy_path.display())
+                        })?
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
+                Err(error) => return Err(error).context("Cannot read legacy conversation memory"),
+            };
+            for (id, scope) in legacy {
+                ensure!(
+                    id == scope.id,
+                    "Conversation scope ID does not match its key"
+                );
+                let key = format!("{SCOPE_PREFIX}{id}");
+                if store.get::<Option<ConversationScope>>(&key)?.is_none() {
+                    store.put(&key, &Some(scope))?;
+                }
+            }
+            store.put(MIGRATION_KEY, &true)?;
         }
+        let mut scopes = HashMap::new();
+        for key in store.keys_with_prefix(SCOPE_PREFIX) {
+            if let Some(Some(scope)) = store.get::<Option<ConversationScope>>(&key)? {
+                ensure!(
+                    key == format!("{SCOPE_PREFIX}{}", scope.id),
+                    "Invalid conversation scope key"
+                );
+                scopes.insert(scope.id.clone(), scope);
+            }
+        }
+        Ok(Self { store, scopes })
     }
 
     pub fn get_scope(&self, scope_id: &str) -> Option<&ConversationScope> {
@@ -63,10 +83,11 @@ impl ProxyMemory {
     }
 
     pub fn update_scope(&mut self, scope_id: &str, messages: Vec<LlmMessage>) -> Result<()> {
-        let scope = self
+        let mut scope = self
             .scopes
-            .entry(scope_id.to_string())
-            .or_insert_with(|| ConversationScope {
+            .get(scope_id)
+            .cloned()
+            .unwrap_or_else(|| ConversationScope {
                 id: scope_id.to_string(),
                 messages: Vec::new(),
                 last_updated: Utc::now(),
@@ -80,36 +101,126 @@ impl ProxyMemory {
             scope.messages = scope.messages.split_off(scope.messages.len() - 20);
         }
 
-        self.save()?;
+        self.store
+            .put(&format!("{SCOPE_PREFIX}{scope_id}"), &Some(&scope))?;
+        self.scopes.insert(scope_id.to_string(), scope);
         Ok(())
     }
 
     pub fn clear_scope(&mut self, scope_id: &str) -> Result<()> {
+        self.store
+            .forget::<ConversationScope>(&format!("{SCOPE_PREFIX}{scope_id}"))?;
         self.scopes.remove(scope_id);
-        self.save()?;
         Ok(())
     }
+}
 
-    fn load(&mut self) -> Result<()> {
-        // Skip loading if in memory-only mode
-        if self.in_memory_only {
-            return Ok(());
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message(content: &str) -> LlmMessage {
+        LlmMessage {
+            role: LlmRole::User,
+            content: content.into(),
         }
-        if self.storage_path.exists() {
-            let content = fs::read_to_string(&self.storage_path)?;
-            self.scopes = serde_json::from_str(&content).unwrap_or_default();
-        }
-        Ok(())
     }
 
-    fn save(&self) -> Result<()> {
-        // Skip saving if in memory-only mode
-        if self.in_memory_only {
-            return Ok(());
-        }
-        let content = serde_json::to_string_pretty(&self.scopes)?;
-        fs::write(&self.storage_path, content)?;
-        Ok(())
+    #[test]
+    fn conversations_migrate_once_and_clears_survive_restart() {
+        let temp = tempfile::tempdir().unwrap();
+        let legacy = HashMap::from([(
+            "family".to_string(),
+            ConversationScope {
+                id: "family".into(),
+                messages: vec![message("lunar homework with my daughter")],
+                last_updated: Utc::now(),
+            },
+        )]);
+        let bytes = serde_json::to_vec(&legacy).unwrap();
+        let legacy_path = temp.path().join("proxy_memory.json");
+        fs::write(&legacy_path, &bytes).unwrap();
+        let mut memory = ProxyMemory::open(temp.path()).unwrap();
+        assert!(memory.get_scope("family").unwrap().messages[0]
+            .content
+            .contains("daughter"));
+        memory
+            .update_scope("work", vec![message("independent conversation")])
+            .unwrap();
+        memory.clear_scope("family").unwrap();
+        memory.store.compact().unwrap();
+        drop(memory);
+        let memory = ProxyMemory::open(temp.path()).unwrap();
+        assert!(memory.get_scope("family").is_none());
+        assert_eq!(memory.get_scope("work").unwrap().messages.len(), 1);
+        assert_eq!(fs::read(legacy_path).unwrap(), bytes);
+        let native = fs::read(temp.path().join("proxy_memory.m8")).unwrap();
+        assert_eq!(&native[8..12], &0x4d454d38u32.to_le_bytes());
+    }
+
+    #[test]
+    fn partial_import_preserves_newer_scopes_and_tombstones() {
+        let temp = tempfile::tempdir().unwrap();
+        let old_scope = |id: &str| ConversationScope {
+            id: id.into(),
+            messages: vec![message("old")],
+            last_updated: Utc::now(),
+        };
+        fs::write(
+            temp.path().join("proxy_memory.json"),
+            serde_json::to_vec(&HashMap::from([
+                ("updated", old_scope("updated")),
+                ("cleared", old_scope("cleared")),
+                ("pending", old_scope("pending")),
+            ]))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut store = RecordStore::open_memory(&temp.path().join("proxy_memory.m8")).unwrap();
+        let mut newer = old_scope("updated");
+        newer.messages = vec![message("new")];
+        store.put("scope/v1/updated", &Some(newer)).unwrap();
+        store
+            .put("scope/v1/cleared", &None::<ConversationScope>)
+            .unwrap();
+        drop(store);
+        let memory = ProxyMemory::open(temp.path()).unwrap();
+        assert_eq!(
+            memory.get_scope("updated").unwrap().messages[0].content,
+            "new"
+        );
+        assert!(memory.get_scope("cleared").is_none());
+        assert!(memory.get_scope("pending").is_some());
+    }
+
+    #[test]
+    fn malformed_legacy_memory_is_not_silently_replaced() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("proxy_memory.json");
+        fs::write(&path, b"{broken").unwrap();
+        assert!(ProxyMemory::open(temp.path()).is_err());
+        assert_eq!(fs::read(path).unwrap(), b"{broken");
+    }
+
+    #[test]
+    fn retention_is_scoped_and_failed_writes_do_not_publish() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut memory = ProxyMemory::open(temp.path()).unwrap();
+        memory
+            .update_scope("first", (0..25).map(|n| message(&n.to_string())).collect())
+            .unwrap();
+        memory
+            .update_scope("second", vec![message("keep")])
+            .unwrap();
+        assert_eq!(memory.get_scope("first").unwrap().messages.len(), 20);
+        assert_eq!(memory.get_scope("first").unwrap().messages[0].content, "5");
+        memory.store.make_read_only_for_test().unwrap();
+        assert!(memory
+            .update_scope("second", vec![message("uncommitted")])
+            .is_err());
+        assert_eq!(memory.get_scope("second").unwrap().messages.len(), 1);
+        assert!(memory.clear_scope("second").is_err());
+        assert!(memory.get_scope("second").is_some());
     }
 }
 

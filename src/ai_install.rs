@@ -488,7 +488,7 @@ impl AiInstaller {
     fn get_generic_hooks(&self, platform: &str) -> Value {
         json!({
             "context_provider": {
-                "command": format!("st -m context --depth 3 ."),
+                "command": "st -m context --depth 3 .".to_string(),
                 "platform": platform,
                 "description": "Provides project context on demand"
             }

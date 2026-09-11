@@ -4,7 +4,17 @@ use assert_cmd::Command;
 use std::fs;
 use tempfile::TempDir;
 
+// `mq` is shipped by the separate marqant package, not this workspace.
+// Run explicitly with MQ_TEST_BINARY=/path/to/mq cargo test --test test_mq_aggregate -- --ignored.
+fn mq_command() -> Command {
+    Command::new(
+        std::env::var_os("MQ_TEST_BINARY")
+            .expect("Set MQ_TEST_BINARY to the external marqant mq binary"),
+    )
+}
+
 #[test]
+#[ignore = "requires the external marqant mq binary (MQ_TEST_BINARY)"]
 fn test_mq_aggregate_basic() {
     // Create a temporary directory with test markdown files
     let temp_dir = TempDir::new().unwrap();
@@ -30,7 +40,7 @@ fn test_mq_aggregate_basic() {
 
     // Run mq aggregate
     let output_path = temp_path.join("test.mq");
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("mq"));
+    let mut cmd = mq_command();
     let output = cmd
         .args([
             "aggregate",
@@ -80,6 +90,7 @@ fn test_mq_aggregate_basic() {
 }
 
 #[test]
+#[ignore = "requires the external marqant mq binary (MQ_TEST_BINARY)"]
 fn test_mq_aggregate_with_compression() {
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
@@ -96,7 +107,7 @@ fn test_mq_aggregate_with_compression() {
 
     // Run mq aggregate with zlib
     let aggregate_path = temp_path.join("compressed.mq");
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("mq"));
+    let mut cmd = mq_command();
     let output = cmd
         .args([
             "aggregate",
@@ -129,6 +140,7 @@ fn test_mq_aggregate_with_compression() {
 }
 
 #[test]
+#[ignore = "requires the external marqant mq binary (MQ_TEST_BINARY)"]
 fn test_mq_aggregate_with_exclusions() {
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
@@ -145,7 +157,7 @@ fn test_mq_aggregate_with_exclusions() {
 
     // Run with exclusions
     let output_path = temp_path.join("filtered.mq");
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("mq"));
+    let mut cmd = mq_command();
     let output = cmd
         .args([
             "aggregate",

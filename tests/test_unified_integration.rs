@@ -6,9 +6,20 @@ use st::st_context_aware::{ContextualOperation, StContextTracker, WorkContext};
 use st::st_unified::StUnified;
 use st::tools_st_only::{ListOptions, SearchOptions, StOnlyTools, StToolsConfig};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
+
+fn test_config() -> StToolsConfig {
+    StToolsConfig {
+        st_binary: PathBuf::from(env!("CARGO_BIN_EXE_st")),
+        ..StToolsConfig::default()
+    }
+}
+
+fn test_tools() -> StOnlyTools {
+    StOnlyTools::with_config(test_config())
+}
 
 fn create_realistic_project() -> Result<TempDir> {
     let temp_dir = TempDir::new()?;
@@ -180,7 +191,7 @@ fn test_unified_tools_exploration_workflow() -> Result<()> {
     let tracker = Arc::new(StContextTracker::new());
 
     // Step 1: Initial exploration with StUnified
-    let unified = StUnified::new()?;
+    let unified = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     // Get quick overview
     let overview = unified.quick(project.path())?;
@@ -239,7 +250,7 @@ fn test_context_aware_development_workflow() -> Result<()> {
     // Simulating active development with context awareness
     let project = create_realistic_project()?;
     let tracker = Arc::new(StContextTracker::new());
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     // Step 1: Developer starts coding
     tracker.record_operation(ContextualOperation {
@@ -302,8 +313,8 @@ fn test_debugging_workflow_with_all_tools() -> Result<()> {
     // Simulating debugging workflow using all tools together
     let project = create_realistic_project()?;
     let tracker = Arc::new(StContextTracker::new());
-    let unified = StUnified::new()?;
-    let tools = StOnlyTools::new();
+    let unified = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let tools = test_tools();
 
     // Step 1: Error occurs, developer starts searching
     for keyword in &["error", "panic", "TODO", "bug"] {
@@ -352,8 +363,8 @@ fn test_debugging_workflow_with_all_tools() -> Result<()> {
 fn test_full_project_understanding_workflow() -> Result<()> {
     // Complete project understanding using all tools
     let project = create_realistic_project()?;
-    let unified = StUnified::new()?;
-    let tools = StOnlyTools::new();
+    let unified = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let tools = test_tools();
     let tracker = Arc::new(StContextTracker::new());
 
     // Step 1: Project overview
@@ -376,7 +387,7 @@ fn test_full_project_understanding_workflow() -> Result<()> {
         default_mode: "quantum-semantic".to_string(),
         use_emoji: false,
         compress: true,
-        ..Default::default()
+        ..test_config()
     };
     let advanced_tools = StOnlyTools::with_config(config);
 
@@ -419,8 +430,8 @@ fn test_full_project_understanding_workflow() -> Result<()> {
 fn test_performance_optimization_workflow() -> Result<()> {
     // Simulating performance optimization workflow
     let project = create_realistic_project()?;
-    let unified = StUnified::new()?;
-    let tools = StOnlyTools::new();
+    let unified = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let tools = test_tools();
     let tracker = Arc::new(StContextTracker::new());
 
     // Create some "heavy" files to simulate performance issues
@@ -483,8 +494,8 @@ pub fn memory_heavy(size: usize) -> Vec<Vec<u8>> {
 fn test_cross_tool_consistency() -> Result<()> {
     // Ensure all tools provide consistent results
     let project = create_realistic_project()?;
-    let unified = StUnified::new()?;
-    let tools = StOnlyTools::new();
+    let unified = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let tools = test_tools();
 
     // Compare listing results
     let unified_ls = unified.ls(project.path(), None)?;
@@ -580,8 +591,8 @@ fn test_error_handling_integration() -> Result<()> {
     // Test error handling across all tools
     let nonexistent = Path::new("/definitely/not/a/real/path/at/all");
 
-    let unified = StUnified::new()?;
-    let tools = StOnlyTools::new();
+    let unified = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let tools = test_tools();
     let tracker = StContextTracker::new();
 
     // All tools should handle nonexistent paths gracefully
@@ -619,8 +630,8 @@ fn test_error_handling_integration() -> Result<()> {
 fn test_realistic_multi_hour_session() -> Result<()> {
     // Simulate a realistic multi-hour development session
     let project = create_realistic_project()?;
-    let unified = StUnified::new()?;
-    let tools = StOnlyTools::new();
+    let unified = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
+    let tools = test_tools();
     let tracker = Arc::new(StContextTracker::new());
 
     // Hour 1: Initial exploration

@@ -1,11 +1,16 @@
 //! HTTP API handlers for the security sentinel (mounted by the daemon).
 
-use axum::extract::Path;
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
+use super::certificate_scan::{scan_certificates, CertificateScanResult};
+use super::memory::{ScanData, ScanKind, StoredScan};
 use crate::config::StConfig;
+use crate::daemon::DaemonState;
 use crate::magiscanner::service::{
     audit_system_certificates, cert_blacklist_script, scan_path, CertAuditResult,
 };
@@ -23,7 +28,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SecurityScanResponse {
     pub reports: Vec<ScanReport>,
     pub total_findings: usize,
@@ -51,13 +56,24 @@ fn load_security_config() -> crate::magiscanner::SecurityConfig {
 
 /// POST /security/scan — deep integrity scan of a file or directory.
 pub async fn security_scan_handler(
+    State(state): State<Arc<RwLock<DaemonState>>>,
     Json(req): Json<SecurityScanRequest>,
 ) -> Result<Json<SecurityScanResponse>, (StatusCode, String)> {
-    let config = load_security_config();
-    let path = std::path::Path::new(&req.path);
-
-    let reports = scan_path(&config, path, req.recursive, req.recipe.as_deref())
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let memory = Arc::clone(&state.read().await.scan_memory);
+    let reports = tokio::task::spawn_blocking(move || {
+        let config = StConfig::load().map_err(internal_error)?.security;
+        let path = std::path::Path::new(&req.path);
+        let reports = scan_path(&config, path, req.recursive, req.recipe.as_deref())
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        memory
+            .lock()
+            .map_err(internal_error)?
+            .remember(path, req.recursive, ScanData::Integrity(reports.clone()))
+            .map_err(internal_error)?;
+        Ok::<_, (StatusCode, String)>(reports)
+    })
+    .await
+    .map_err(internal_error)??;
 
     let total_findings = reports.iter().map(|r| r.findings.len()).sum();
 
@@ -65,6 +81,67 @@ pub async fn security_scan_handler(
         reports,
         total_findings,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CertificateScanRequest {
+    pub path: String,
+    #[serde(default = "default_true")]
+    pub recursive: bool,
+}
+
+/// POST /security/certs/scan — inspect file certificates and retain the result.
+pub async fn certificate_scan_handler(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Json(req): Json<CertificateScanRequest>,
+) -> Result<Json<CertificateScanResult>, (StatusCode, String)> {
+    let memory = Arc::clone(&state.read().await.scan_memory);
+    let result = tokio::task::spawn_blocking(move || {
+        let config = StConfig::load().map_err(internal_error)?.security;
+        let path = std::path::Path::new(&req.path);
+        let result = scan_certificates(&config, path, req.recursive)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+        memory
+            .lock()
+            .map_err(internal_error)?
+            .remember(path, req.recursive, ScanData::Certificates(result.clone()))
+            .map_err(internal_error)?;
+        Ok::<_, (StatusCode, String)>(result)
+    })
+    .await
+    .map_err(internal_error)??;
+    Ok(Json(result))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ScanHistoryRequest {
+    pub path: String,
+    pub kind: ScanKind,
+}
+
+/// GET /security/history?path=...&kind=certificates — latest stored scan.
+pub async fn scan_history_handler(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    Query(req): Query<ScanHistoryRequest>,
+) -> Result<Json<StoredScan>, (StatusCode, String)> {
+    let memory = Arc::clone(&state.read().await.scan_memory);
+    let result = tokio::task::spawn_blocking(move || {
+        memory
+            .lock()
+            .map_err(internal_error)?
+            .recall(std::path::Path::new(&req.path), req.kind)
+            .map_err(internal_error)
+    })
+    .await
+    .map_err(internal_error)??;
+    result.map(Json).ok_or((
+        StatusCode::NOT_FOUND,
+        "No stored scan for this path and kind".to_string(),
+    ))
+}
+
+fn internal_error(error: impl std::fmt::Display) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
 }
 
 /// GET /security/hash/:sha256 — look up a known file hash.

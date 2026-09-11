@@ -4,7 +4,7 @@
 //! Uses ULTRA_V2 traversal codes rendered as visible Unicode symbols.
 //!
 //! Format:
-//! ```
+//! ```text
 //! HEXTREE_V1:
 //! KEY: ↓=enter ·=same ↑=exit │=tree @=rust #=py $=js
 //! TOK: 80=src 81=tests 82=mod.rs 83=lib.rs
@@ -84,7 +84,7 @@ impl HexTreeFormatter {
 
         // Assign tokens to frequently occurring names
         let mut sorted: Vec<_> = occurrences.into_iter().collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_by_key(|a| std::cmp::Reverse(a.1));
 
         for (name, count) in sorted {
             if count >= self.min_occurrences && self.next_token < 0xFF {

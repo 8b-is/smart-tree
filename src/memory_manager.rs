@@ -132,7 +132,7 @@ impl MemoryManager {
         }
 
         // Sort by timestamp (most recent first)
-        results.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        results.sort_by_key(|a| std::cmp::Reverse(a.timestamp));
 
         Ok(results)
     }

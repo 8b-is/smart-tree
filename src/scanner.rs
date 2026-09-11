@@ -394,17 +394,17 @@ impl TreeStats {
 
             // Update largest files: Add, sort by size (desc), truncate.
             self.largest_files.push((node.size, node.path.clone()));
-            self.largest_files.sort_by(|a, b| b.0.cmp(&a.0)); // Largest first
+            self.largest_files.sort_by_key(|a| std::cmp::Reverse(a.0)); // Largest first
             self.largest_files.truncate(10); // Keep only the top 10
 
             // Update newest files: Add, sort by modification time (desc), truncate.
             self.newest_files.push((node.modified, node.path.clone()));
-            self.newest_files.sort_by(|a, b| b.0.cmp(&a.0)); // Newest first
+            self.newest_files.sort_by_key(|a| std::cmp::Reverse(a.0)); // Newest first
             self.newest_files.truncate(10);
 
             // Update oldest files: Add, sort by modification time (asc), truncate.
             self.oldest_files.push((node.modified, node.path.clone()));
-            self.oldest_files.sort_by(|a, b| a.0.cmp(&b.0)); // Oldest first
+            self.oldest_files.sort_by_key(|a| a.0); // Oldest first
             self.oldest_files.truncate(10);
         }
     }
@@ -1782,7 +1782,7 @@ impl Scanner {
         // Skip if hidden and we are not configured to show hidden files,
         // UNLESS it's an ignored item that we *are* configured to show (is_ignored_by_rules = true, config.show_ignored = true).
         // The `is_ignored_by_rules` flag takes precedence for display if `config.show_ignored` is true.
-        if is_hidden && !self.config.show_hidden && !is_ignored_by_rules {
+        if depth > 0 && is_hidden && !self.config.show_hidden && !is_ignored_by_rules {
             // If it's a directory, we need to tell walkdir to skip its contents.
             if entry.file_type().is_dir() {
                 // This is tricky because `process_entry` doesn't have `walker` to call `skip_current_dir()`.
@@ -2122,7 +2122,7 @@ impl Scanner {
             }
             // Check if the current path is a child of any registered system path.
             for system_root_path in &self.system_paths {
-                if path.starts_with(system_root_path) {
+                if path.starts_with(system_root_path) && !self.root.starts_with(system_root_path) {
                     return Ok(true); // It's inside /tmp, /var/tmp, etc.
                 }
             }
@@ -2359,19 +2359,19 @@ impl Scanner {
             }
             "size" | "largest" => {
                 // Sort by size descending (largest first)
-                nodes.sort_by(|a, b| b.size.cmp(&a.size));
+                nodes.sort_by_key(|a| std::cmp::Reverse(a.size));
             }
             "smallest" => {
                 // Sort by size ascending (smallest first)
-                nodes.sort_by(|a, b| a.size.cmp(&b.size));
+                nodes.sort_by_key(|a| a.size);
             }
             "date" | "newest" => {
                 // Sort by modification time descending (newest first)
-                nodes.sort_by(|a, b| b.modified.cmp(&a.modified));
+                nodes.sort_by_key(|a| std::cmp::Reverse(a.modified));
             }
             "oldest" => {
                 // Sort by modification time ascending (oldest first)
-                nodes.sort_by(|a, b| a.modified.cmp(&b.modified));
+                nodes.sort_by_key(|a| a.modified);
             }
             "type" => {
                 // Sort by file extension, then by name
@@ -2456,6 +2456,29 @@ pub fn parse_size(size_str: &str) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*; // Import everything from the parent module (scanner.rs).
+
+    #[test]
+    fn explicitly_selected_hidden_root_still_scans_visible_children() {
+        let temp = tempfile::Builder::new()
+            .prefix(".st-scan-")
+            .tempdir()
+            .unwrap();
+        std::fs::write(temp.path().join("visible.rs"), "fn main() {}").unwrap();
+        std::fs::write(temp.path().join(".hidden"), "hidden").unwrap();
+        let scanner = Scanner::new(
+            temp.path(),
+            ScannerConfig {
+                max_depth: 2,
+                use_default_ignores: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let (nodes, stats) = scanner.scan().unwrap();
+        assert!(nodes.iter().any(|node| node.path.ends_with("visible.rs")));
+        assert!(!nodes.iter().any(|node| node.path.ends_with(".hidden")));
+        assert_eq!(stats.total_files, 1);
+    }
 
     #[test]
     fn test_parse_size_valid_inputs() {

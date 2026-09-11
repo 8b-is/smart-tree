@@ -272,8 +272,8 @@ mod tests {
         let addr = Address::Inline(AddressString::new("192.168.1.5:28428").unwrap());
         let encoded = addr.encode();
 
-        // First byte: 0x80 + 16 = 0x90
-        assert_eq!(encoded[0], 0x90);
+        // The address has 17 bytes; the prefix is 0x80 + 17.
+        assert_eq!(encoded[0], 0x91);
 
         let (decoded, len) = Address::decode(&encoded).unwrap();
         if let Address::Inline(s) = decoded {
@@ -281,7 +281,7 @@ mod tests {
         } else {
             panic!("expected inline address");
         }
-        assert_eq!(len, 17);
+        assert_eq!(len, 18);
     }
 
     #[test]

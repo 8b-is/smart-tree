@@ -5,11 +5,14 @@
 
 pub mod analyzers;
 pub mod cert_neutralize;
+pub mod certificate_scan;
+pub mod certificates;
 pub mod config;
 pub mod db;
 pub mod dish;
 pub mod finding;
 pub mod http;
+pub mod memory;
 pub mod operation;
 pub mod quarantine;
 pub mod recipe;

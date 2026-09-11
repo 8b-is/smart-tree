@@ -3,6 +3,9 @@
 //! Provides an ergonomic builder pattern for constructing requests:
 //!
 //! ```rust,no_run
+//! use st::proxy::claude::ClaudeClient;
+//! # async fn example() -> anyhow::Result<()> {
+//! let client = ClaudeClient::new("sk-ant-...".to_string());
 //! let response = client.messages()
 //!     .opus()
 //!     .system("You are a Rust expert")
@@ -12,6 +15,8 @@
 //!     .max_tokens(4096)
 //!     .send()
 //!     .await?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! The builder accumulates all parameters, then sends via the parent `ClaudeClient`.

@@ -173,7 +173,7 @@ impl DynamicTokenizer {
 
         // Apply tokens from longest to shortest to avoid substring issues
         let mut tokens_by_length: Vec<(&String, &String)> = self.tokens.iter().collect();
-        tokens_by_length.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        tokens_by_length.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
 
         for (pattern, token) in tokens_by_length {
             compressed = compressed.replace(pattern, &format!("{{{}}}", token));

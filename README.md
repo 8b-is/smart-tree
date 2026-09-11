@@ -63,7 +63,20 @@ Security scanner detects supply chain attacks targeting AI assistants.
 st --cleanup              # Scan and remove malicious MCP servers, hooks, and hidden directories
 st --cleanup -y           # Non-interactive cleanup (auto-confirm)
 st --security-scan .      # Scan codebase for attack patterns (IPFS injection, fake verification)
+st --mode markdown .     # Report includes Concerning Files from the tree scan
+st --cert-scan ./assets  # Inspect PEM bundles and DER certificates embedded in files
+st --cert-scan ./assets --mode json  # Machine-readable certificate inventory
 ```
+
+Certificate scans report subjects, issuers, serials, SHA-256 fingerprints, validity
+dates, alternative names, and file offsets. They inspect metadata without verifying
+signatures, chain trust, or revocation. Malformed PEM blocks and skipped files are
+reported explicitly. The configured file-size limit and symlink policy apply.
+
+The daemon saves the latest integrity and certificate scan for each target in
+compressed token records. `--no-daemon` scans locally. See
+[certificate scanning and daemon scan memory](docs/CERTIFICATE_SCANNING.md) for
+coverage, storage format, and HTTP examples.
 
 **Why this matters**: Some npm packages install MCP servers that phone home to external endpoints, fetch mutable content via IPFS/IPNS, and can inject behavioral modifications into your AI sessions. These supply chain attacks are difficult to detect because they:
 - Use fake cryptographic verification (checking signature length, not actual signatures)
@@ -322,6 +335,7 @@ st . --no-daemon          # Run standalone (no daemon)
 std start                 # Start daemon
 std stop                  # Stop daemon
 std status                # Check status
+st --recall "document with my daughter last week"  # Search saved context (JSON)
 ```
 
 ### Benefits:
@@ -329,6 +343,13 @@ std status                # Check status
 - **Fast Protocol**: Binary wire protocol (control ASCII 0x00-0x1F as opcodes)
 - **LLM Ready**: SSE/HTTP endpoints for AI assistant connections
 - **Unix Socket**: `/run/user/$UID/st.sock` for local IPC
+
+Conversation history and directory context persist in native MEM8/RAW8 blocks.
+The daemon restores saved watches and updates changed files; queries read the
+persisted index without rescanning. File facts use compact dictionary-token
+records. `/context/remember` records people, notes, and time, and `/context/recall`
+returns matching files with evidence. See [persistent context search](docs/CONTEXT_SEARCH.md)
+for API examples, migration, storage details, and current retrieval coverage.
 
 ### For LLMs:
 The daemon exposes endpoints for AI assistants to connect:

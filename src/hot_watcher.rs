@@ -20,15 +20,17 @@
 use crate::mem8_lite::Wave;
 use crate::scanner_interest::InterestLevel;
 use crate::security_scan::SecurityFinding;
-use anyhow::Result;
+use anyhow::{ensure, Context, Result};
 use notify::{
     event::{CreateKind, ModifyKind, RemoveKind},
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::mpsc;
 
 /// A directory being watched with its wave state
@@ -110,6 +112,7 @@ impl WatchedDirectory {
         }
 
         // Update interest level
+        self.wave.frequency = self.wave.frequency.min(f64::from(u16::MAX));
         self.recompute_interest();
     }
 
@@ -147,6 +150,9 @@ impl WatchedDirectory {
             self.wave.emotional_valence =
                 (self.wave.emotional_valence + 0.0001 * elapsed_secs).min(0.0);
         }
+        self.recent_events
+            .retain(|event| event.timestamp.elapsed() < Duration::from_secs(300));
+        self.recompute_interest();
     }
 
     /// Compute interest level from wave properties
@@ -183,7 +189,7 @@ impl WatchedDirectory {
 }
 
 /// Type of watch event
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WatchEventKind {
     Created,
     Modified,
@@ -199,6 +205,77 @@ pub struct WatchEvent {
     pub timestamp: Instant,
 }
 
+/// Portable watch state: monotonic event times are saved as ages.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchSnapshot {
+    #[serde(with = "crate::mem8::path_serde")]
+    pub path: PathBuf,
+    #[serde(skip)] // The authoritative wave is stored in the native MEM8 lane.
+    pub wave: Wave,
+    pub security_findings: Vec<SecurityFinding>,
+    saved_at: SystemTime,
+    events: Vec<(
+        crate::mem8::path_serde::StoredPath,
+        WatchEventKind,
+        Duration,
+    )>,
+}
+
+impl WatchSnapshot {
+    fn capture(directory: &WatchedDirectory) -> Self {
+        Self {
+            path: directory.path.clone(),
+            wave: directory.wave.clone(),
+            security_findings: directory.security_findings.clone(),
+            saved_at: SystemTime::now(),
+            events: directory
+                .recent_events
+                .iter()
+                .map(|event| {
+                    (
+                        crate::mem8::path_serde::StoredPath(event.path.clone()),
+                        event.kind,
+                        event.timestamp.elapsed(),
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    fn restore(&self, now: SystemTime) -> Result<WatchedDirectory> {
+        ensure!(
+            self.wave.frequency.is_finite()
+                && self.wave.frequency >= 0.0
+                && self.wave.arousal.is_finite()
+                && (0.0..=1.0).contains(&self.wave.arousal)
+                && self.wave.emotional_valence.is_finite()
+                && (-1.0..=1.0).contains(&self.wave.emotional_valence),
+            "Invalid persisted directory wave"
+        );
+        let downtime = now.duration_since(self.saved_at).unwrap_or_default();
+        let mut directory = WatchedDirectory::new(self.path.clone());
+        directory.wave = self.wave.clone();
+        directory.security_findings = self.security_findings.clone();
+        directory.recent_events = self
+            .events
+            .iter()
+            .filter_map(|(path, kind, age)| {
+                let age = age.saturating_add(downtime);
+                if age >= Duration::from_secs(300) {
+                    return None;
+                }
+                Some(WatchEvent {
+                    path: path.0.clone(),
+                    kind: *kind,
+                    timestamp: Instant::now().checked_sub(age)?,
+                })
+            })
+            .collect();
+        directory.apply_decay(downtime.as_secs_f64());
+        Ok(directory)
+    }
+}
+
 /// The Hot Watcher - real-time directory intelligence
 pub struct HotWatcher {
     /// Watched directories indexed by path
@@ -211,6 +288,8 @@ pub struct HotWatcher {
     event_tx: mpsc::Sender<WatchEvent>,
     /// Last decay application
     last_decay: Instant,
+    events_dropped: Arc<AtomicBool>,
+    changed_paths: BTreeSet<PathBuf>,
 }
 
 impl HotWatcher {
@@ -224,26 +303,27 @@ impl HotWatcher {
             event_rx: Some(event_rx),
             event_tx,
             last_decay: Instant::now(),
+            events_dropped: Arc::new(AtomicBool::new(false)),
+            changed_paths: BTreeSet::new(),
         }
     }
 
     /// Start watching a directory
     pub fn watch(&mut self, path: &Path) -> Result<()> {
-        // Add to our tracked directories
+        ensure!(path.is_dir(), "Watch path must be an existing directory");
+        if self
+            .directories
+            .read()
+            .map_err(|_| anyhow::anyhow!("Directory watcher lock poisoned"))?
+            .contains_key(path)
         {
-            let mut dirs = self.directories.write().unwrap();
-            if !dirs.contains_key(path) {
-                dirs.insert(
-                    path.to_path_buf(),
-                    WatchedDirectory::new(path.to_path_buf()),
-                );
-            }
+            return Ok(());
         }
 
         // Set up file system watcher if not already done
         if self.watcher.is_none() {
             let tx = self.event_tx.clone();
-            let dirs = Arc::clone(&self.directories);
+            let events_dropped = Arc::clone(&self.events_dropped);
 
             let watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
                 if let Ok(event) = res {
@@ -262,18 +342,16 @@ impl HotWatcher {
 
                     if let Some(kind) = kind {
                         for path in event.paths {
-                            // Find the watched directory this belongs to
-                            let dirs_read = dirs.read().unwrap();
-                            for watched_path in dirs_read.keys() {
-                                if path.starts_with(watched_path) {
-                                    let watch_event = WatchEvent {
-                                        path: path.clone(),
-                                        kind,
-                                        timestamp: Instant::now(),
-                                    };
-                                    let _ = tx.blocking_send(watch_event);
-                                    break;
-                                }
+                            // Never block notify while the bounded queue is full.
+                            if tx
+                                .try_send(WatchEvent {
+                                    path,
+                                    kind,
+                                    timestamp: Instant::now(),
+                                })
+                                .is_err()
+                            {
+                                events_dropped.store(true, Ordering::Relaxed);
                             }
                         }
                     }
@@ -285,16 +363,32 @@ impl HotWatcher {
 
         // Add path to the watcher
         if let Some(ref mut watcher) = self.watcher {
-            watcher.watch(path, RecursiveMode::Recursive)?;
+            watcher
+                .watch(path, RecursiveMode::Recursive)
+                .context("Cannot register directory watch")?;
         }
+        self.directories
+            .write()
+            .map_err(|_| anyhow::anyhow!("Directory watcher lock poisoned"))?
+            .insert(
+                path.to_path_buf(),
+                WatchedDirectory::new(path.to_path_buf()),
+            );
 
         Ok(())
     }
 
     /// Stop watching a directory
     pub fn unwatch(&mut self, path: &Path) -> Result<()> {
+        if self.snapshot(path).is_none() {
+            return Ok(());
+        }
         if let Some(ref mut watcher) = self.watcher {
-            watcher.unwatch(path)?;
+            if let Err(error) = watcher.unwatch(path) {
+                if !matches!(error.kind, notify::ErrorKind::WatchNotFound) {
+                    return Err(error.into());
+                }
+            }
         }
 
         let mut dirs = self.directories.write().unwrap();
@@ -305,6 +399,19 @@ impl HotWatcher {
 
     /// Process pending events (call periodically)
     pub async fn process_events(&mut self) {
+        self.process_pending_events();
+    }
+
+    /// Synchronous variant for the daemon's blocking storage worker.
+    pub fn process_pending_events(&mut self) {
+        if self.events_dropped.swap(false, Ordering::Relaxed) {
+            tracing::warn!(
+                "Directory event queue overflowed; the next context refresh will rescan files"
+            );
+            if let Ok(directories) = self.directories.read() {
+                self.changed_paths.extend(directories.keys().cloned());
+            }
+        }
         // Apply decay
         let elapsed = self.last_decay.elapsed().as_secs_f64();
         if elapsed > 1.0 {
@@ -317,18 +424,43 @@ impl HotWatcher {
 
         // Process new events
         if let Some(ref mut rx) = self.event_rx {
-            while let Ok(event) = rx.try_recv() {
+            for _ in 0..1000 {
+                let Ok(event) = rx.try_recv() else {
+                    break;
+                };
+                self.changed_paths.insert(event.path.clone());
                 let mut dirs = self.directories.write().unwrap();
 
                 // Find the parent watched directory
                 for (watched_path, dir) in dirs.iter_mut() {
                     if event.path.starts_with(watched_path) {
                         dir.record_event(event.clone());
-                        break;
                     }
                 }
             }
         }
+    }
+
+    pub fn snapshot(&self, path: &Path) -> Option<WatchSnapshot> {
+        self.directories
+            .read()
+            .ok()?
+            .get(path)
+            .map(WatchSnapshot::capture)
+    }
+
+    pub fn take_changed_paths(&mut self) -> BTreeSet<PathBuf> {
+        std::mem::take(&mut self.changed_paths)
+    }
+
+    pub fn restore(&mut self, snapshot: &WatchSnapshot) -> Result<()> {
+        let directory = snapshot.restore(SystemTime::now())?;
+        self.watch(&snapshot.path)?;
+        self.directories
+            .write()
+            .map_err(|_| anyhow::anyhow!("Directory watcher lock poisoned"))?
+            .insert(snapshot.path.clone(), directory);
+        Ok(())
     }
 
     /// Get all hot directories (sorted by arousal)
@@ -431,6 +563,36 @@ impl std::fmt::Display for HotWatcherSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restored_watch_applies_downtime_and_expires_bursts() {
+        let mut directory = WatchedDirectory::new(PathBuf::from("/fixture"));
+        directory.record_event(WatchEvent {
+            path: "/fixture/file.md".into(),
+            kind: WatchEventKind::Created,
+            timestamp: Instant::now(),
+        });
+        directory.wave.arousal = 1.0;
+        let snapshot = WatchSnapshot::capture(&directory);
+        let restored = snapshot
+            .restore(snapshot.saved_at + Duration::from_secs(2000))
+            .unwrap();
+        assert!(restored.recent_events.is_empty());
+        assert!(restored.wave.arousal < 0.2);
+        assert_ne!(restored.interest_level, InterestLevel::Important);
+        let backwards_clock = snapshot
+            .restore(snapshot.saved_at - Duration::from_secs(10))
+            .unwrap();
+        assert_eq!(backwards_clock.wave.arousal, 1.0);
+    }
+
+    #[test]
+    fn failed_watch_does_not_create_phantom_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut watcher = HotWatcher::new();
+        assert!(watcher.watch(&temp.path().join("missing")).is_err());
+        assert_eq!(watcher.summary().total_watched, 0);
+    }
 
     #[test]
     fn test_watched_directory_creation() {

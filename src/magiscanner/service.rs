@@ -96,6 +96,26 @@ pub fn cert_blacklist_script(flagged: &[SystemCertInfo]) -> String {
     generate_blacklist_script(flagged)
 }
 
+pub(crate) fn build_certificate_analyzer(
+    config: &SecurityConfig,
+    db: &Database,
+) -> Result<CertificateAnalyzer> {
+    let mut country_codes = config.certificates.distrusted_countries.clone();
+    country_codes.extend(db.get_distrusted_countries()?);
+    country_codes.sort();
+    country_codes.dedup();
+    let mut org_patterns = config.certificates.distrusted_orgs.clone();
+    org_patterns.extend(db.get_distrusted_orgs()?);
+    org_patterns.sort();
+    org_patterns.dedup();
+    Ok(CertificateAnalyzer::new(CertDistrust {
+        country_codes,
+        org_patterns,
+        require_approval: config.certificates.require_approval,
+        approved_fingerprints: db.get_approved_fingerprints()?,
+    }))
+}
+
 fn build_scanner(
     config: &SecurityConfig,
     db: &Database,
@@ -112,24 +132,7 @@ fn build_scanner(
     ];
 
     if config.certificates.enabled {
-        let mut distrusted_countries = config.certificates.distrusted_countries.clone();
-        distrusted_countries.extend(db.get_distrusted_countries()?);
-        distrusted_countries.sort();
-        distrusted_countries.dedup();
-
-        let mut distrusted_orgs = config.certificates.distrusted_orgs.clone();
-        distrusted_orgs.extend(db.get_distrusted_orgs()?);
-        distrusted_orgs.sort();
-        distrusted_orgs.dedup();
-
-        let approved = db.get_approved_fingerprints()?;
-
-        analyzers.push(Box::new(CertificateAnalyzer::new(CertDistrust {
-            country_codes: distrusted_countries,
-            org_patterns: distrusted_orgs,
-            require_approval: config.certificates.require_approval,
-            approved_fingerprints: approved,
-        })));
+        analyzers.push(Box::new(build_certificate_analyzer(config, db)?));
     }
 
     let custom_rule_rows = db.get_enabled_custom_rules()?;
@@ -165,7 +168,10 @@ fn build_scanner(
         }
     }
 
-    Ok(Scanner::new(recipe, analyzers))
+    Ok(Scanner::new(recipe, analyzers).with_limits(
+        config.scan.max_file_size_mb.saturating_mul(1024 * 1024),
+        config.scan.follow_symlinks,
+    ))
 }
 
 fn build_recipe(config: &SecurityConfig, override_str: Option<&str>) -> Result<Recipe> {

@@ -78,11 +78,11 @@ struct DaemonState {
 }
 
 impl DaemonState {
-    fn new(config: DaemonConfig) -> Self {
-        DaemonState {
+    fn new(config: DaemonConfig) -> Result<Self> {
+        Ok(DaemonState {
             config,
-            memory: WaveMemoryManager::new_compact(None), // Use compact grid for daemon
-        }
+            memory: WaveMemoryManager::try_new_compact(None)?,
+        })
     }
 }
 
@@ -397,7 +397,7 @@ async fn handle_search(payload: Payload, _state: &Arc<RwLock<DaemonState>>) -> F
         .collect();
 
     // Sort by match count descending, limit results
-    results.sort_by(|a, b| b.0.cmp(&a.0));
+    results.sort_by_key(|a| std::cmp::Reverse(a.0));
     results.truncate(max_results);
 
     let results: Vec<_> = results.into_iter().map(|(_, info)| info).collect();
@@ -551,8 +551,11 @@ async fn handle_forget(payload: Payload, state: &Arc<RwLock<DaemonState>>) -> Fr
     debug!("FORGET id={}", id);
 
     let mut state = state.write().await;
-    if state.memory.delete(id) {
-        let _ = state.memory.save();
+    let deleted = match state.memory.try_delete(id) {
+        Ok(deleted) => deleted,
+        Err(error) => return Frame::error(&format!("Memory deletion failed: {error}")),
+    };
+    if deleted {
         let response = serde_json::json!({
             "id": id,
             "status": "forgotten"
@@ -702,7 +705,7 @@ async fn start_daemon(config: DaemonConfig) -> Result<()> {
     std::fs::write(&config.pid_path, pid.to_string()).context("Failed to write PID file")?;
 
     // Shared state
-    let state = Arc::new(RwLock::new(DaemonState::new(config.clone())));
+    let state = Arc::new(RwLock::new(DaemonState::new(config.clone())?));
 
     // Accept connections
     loop {

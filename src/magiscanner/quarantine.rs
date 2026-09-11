@@ -132,9 +132,9 @@ pub fn delete_quarantined(quarantine_path: &Path) -> Result<(), QuarantineError>
 
 /// Resolve a path that may contain ~ for home directory.
 pub fn resolve_path(path: &str) -> PathBuf {
-    if path.starts_with("~/") {
+    if let Some(relative) = path.strip_prefix("~/") {
         if let Some(home) = dirs::home_dir() {
-            return home.join(&path[2..]);
+            return home.join(relative);
         }
     }
     PathBuf::from(path)

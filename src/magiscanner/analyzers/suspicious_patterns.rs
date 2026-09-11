@@ -954,7 +954,7 @@ mod tests {
 
     #[test]
     fn test_pdf_javascript() {
-        let mut data = b"%PDF-1.4 some content /JavaScript (evil code) endobj".to_vec();
+        let data = b"%PDF-1.4 some content /JavaScript (evil code) endobj".to_vec();
         let analyzer = SuspiciousPatternAnalyzer::new();
         let ctx = make_context(&data, "test.pdf");
         let findings = analyzer.analyze(&ctx).unwrap();

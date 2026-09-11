@@ -121,7 +121,7 @@ impl WasteFormatter {
             .filter(|node| !node.is_dir && node.size >= self.large_file_threshold)
             .collect();
 
-        large_files.sort_by(|a, b| b.size.cmp(&a.size));
+        large_files.sort_by_key(|a| std::cmp::Reverse(a.size));
         large_files
     }
 
@@ -313,8 +313,7 @@ impl Formatter for WasteFormatter {
         if !duplicates.is_empty() {
             writeln!(writer, "🔄 DUPLICATE FILES DETECTED:")?;
             let mut sorted_duplicates: Vec<_> = duplicates.iter().collect();
-            sorted_duplicates
-                .sort_by(|a, b| (b.1.len() * *b.0 as usize).cmp(&(a.1.len() * *a.0 as usize)));
+            sorted_duplicates.sort_by_key(|a| std::cmp::Reverse(a.1.len() * *a.0 as usize));
 
             for (size, files) in sorted_duplicates.iter().take(10) {
                 writeln!(

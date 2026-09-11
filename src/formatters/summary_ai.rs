@@ -186,7 +186,7 @@ impl Formatter for SummaryAiFormatter {
 
         write!(writer, "DIRS:")?;
         let mut dirs: Vec<_> = dir_sizes.iter().collect();
-        dirs.sort_by(|a, b| b.1 .1.cmp(&a.1 .1)); // Sort by size
+        dirs.sort_by_key(|a| std::cmp::Reverse(a.1 .1)); // Sort by size
         for (i, (name, (count, size))) in dirs.iter().take(10).enumerate() {
             if i > 0 {
                 write!(writer, ",")?;
@@ -197,7 +197,7 @@ impl Formatter for SummaryAiFormatter {
 
         // Largest files
         let mut files: Vec<_> = nodes.iter().filter(|n| !n.is_dir).collect();
-        files.sort_by(|a, b| b.size.cmp(&a.size));
+        files.sort_by_key(|a| std::cmp::Reverse(a.size));
 
         write!(writer, "LARGE:")?;
         for (i, file) in files.iter().take(5).enumerate() {
@@ -260,7 +260,7 @@ fn get_extension_counts(nodes: &[FileNode]) -> Vec<(String, usize)> {
     }
 
     let mut counts: Vec<_> = ext_counts.into_iter().collect();
-    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    counts.sort_by_key(|a| std::cmp::Reverse(a.1));
     counts.truncate(10); // Top 10 extensions
     counts
 }

@@ -37,6 +37,7 @@ impl std::fmt::Display for RiskLevel {
 /// A detected security pattern
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityFinding {
+    #[serde(with = "crate::mem8::path_serde")]
     pub file_path: PathBuf,
     pub line_number: usize,
     pub pattern_name: String,
@@ -203,7 +204,7 @@ impl SecurityScanner {
         }
 
         // Sort by risk level (critical first)
-        findings.sort_by(|a, b| b.risk_level.cmp(&a.risk_level));
+        findings.sort_by_key(|a| std::cmp::Reverse(a.risk_level));
 
         Ok(findings)
     }

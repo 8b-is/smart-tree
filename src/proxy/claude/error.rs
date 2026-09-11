@@ -17,11 +17,14 @@ use std::fmt;
 ///
 /// # Example
 /// ```rust,no_run
+/// use st::proxy::claude::ClaudeApiError;
+/// # fn handle_error(err: ClaudeApiError) {
 /// match err {
 ///     ClaudeApiError::RateLimited { message } => { /* back off and retry */ }
 ///     ClaudeApiError::InvalidRequest { message } => { /* fix request */ }
 ///     _ => { /* log and bail */ }
 /// }
+/// # }
 /// ```
 #[derive(Debug, thiserror::Error)]
 pub enum ClaudeApiError {

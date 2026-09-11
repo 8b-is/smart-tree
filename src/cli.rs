@@ -124,6 +124,10 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Daemon Control")]
     pub daemon_context: bool,
 
+    /// Recall indexed files and remembered context through the daemon (JSON)
+    #[arg(long, conflicts_with = "no_daemon", help_heading = "Daemon Control")]
+    pub recall: Option<String>,
+
     /// List projects tracked by the daemon
     #[arg(long, exclusive = true, help_heading = "Daemon Control")]
     pub daemon_projects: bool,
@@ -202,6 +206,11 @@ pub struct Cli {
     /// Deep integrity scan (exploit detection, hash memory, cert analysis)
     #[arg(long, value_name = "PATH", help_heading = "Security")]
     pub integrity_scan: Option<String>,
+
+    /// Inspect PEM/DER certificates embedded in files (supports --mode json)
+    #[arg(long, value_name = "PATH", default_missing_value = ".", num_args = 0..=1,
+        conflicts_with_all = ["integrity_scan", "security_scan", "cert_audit"], help_heading = "Security")]
+    pub cert_scan: Option<String>,
 
     /// Audit system CA certificate trust store
     #[arg(long, help_heading = "Security")]

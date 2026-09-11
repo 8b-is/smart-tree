@@ -240,6 +240,20 @@ impl DaemonClient {
             .context("Failed to parse context response")
     }
 
+    /// Search the daemon's saved index without initiating a filesystem scan.
+    pub async fn recall_context(&self, query: &str) -> Result<serde_json::Value> {
+        self.request(reqwest::Method::POST, "/context/recall")
+            .json(&serde_json::json!({ "query": query }))
+            .send()
+            .await
+            .context("Cannot reach context search; start the daemon with `st --http-daemon`")?
+            .error_for_status()
+            .context("Daemon context search failed")?
+            .json()
+            .await
+            .context("Invalid context search response")
+    }
+
     /// Get list of detected projects
     pub async fn get_projects(&self) -> Result<Vec<ProjectInfo>> {
         let resp = self
@@ -410,6 +424,47 @@ impl DaemonClient {
         resp.json::<crate::daemon_cli::CliScanResponse>()
             .await
             .context("Failed to parse CLI scan response")
+    }
+
+    /// Inspect embedded certificates and persist the scan in the daemon.
+    pub async fn scan_certificates(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<crate::magiscanner::certificate_scan::CertificateScanResult> {
+        self.scan_security_endpoint("/security/certs/scan", path)
+            .await
+    }
+
+    pub async fn scan_integrity(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<crate::magiscanner::http::SecurityScanResponse> {
+        self.scan_security_endpoint("/security/scan", path).await
+    }
+
+    async fn scan_security_endpoint<T: serde::de::DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        path: &std::path::Path,
+    ) -> Result<T> {
+        // The daemon may have a different working directory than the CLI.
+        let path = std::path::absolute(path)?;
+        let response = self
+            .request(reqwest::Method::POST, endpoint)
+            .timeout(Duration::from_secs(300))
+            .json(&serde_json::json!({ "path": path, "recursive": true }))
+            .send()
+            .await
+            .context("Failed to connect to daemon for security scan")?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("Daemon security scan failed ({status}): {body}");
+        }
+        response
+            .json()
+            .await
+            .context("Failed to decode daemon security scan")
     }
 
     /// Wait for the HTTP daemon to become healthy
@@ -770,5 +825,45 @@ mod tests {
             status,
             DaemonStatus::NotRunning | DaemonStatus::Error(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn certificate_client_sends_absolute_path_and_authentication() {
+        use axum::{
+            http::{HeaderMap, StatusCode},
+            routing::post,
+            Json, Router,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = Router::new().route("/security/certs/scan", post(
+            |headers: HeaderMap, Json(body): Json<serde_json::Value>| async move {
+                if headers.get("authorization").and_then(|value| value.to_str().ok()) != Some("Bearer fixture-token") {
+                    return Err(StatusCode::UNAUTHORIZED);
+                }
+                assert!(std::path::Path::new(body["path"].as_str().unwrap()).is_absolute());
+                assert_eq!(body["recursive"], true);
+                Ok(Json(serde_json::json!({"scanned_at": 42, "files_scanned": 1, "files": [], "skipped": []})))
+            }
+        ));
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let client = DaemonClient::new_remote(
+            &format!("http://{address}"),
+            Some("fixture-token".to_string()),
+        );
+        let result = client
+            .scan_certificates(std::path::Path::new("relative-certificate.pem"))
+            .await
+            .unwrap();
+        assert_eq!(result.scanned_at, 42);
+        assert_eq!(result.files_scanned, 1);
+        let unauthorized = DaemonClient::new_remote(&format!("http://{address}"), None);
+        assert!(unauthorized
+            .scan_certificates(std::path::Path::new("fixture"))
+            .await
+            .is_err());
+        server.abort();
     }
 }

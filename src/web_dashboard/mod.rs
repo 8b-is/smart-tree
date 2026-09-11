@@ -40,6 +40,12 @@ pub struct PromptManager {
     pub active_prompts: Arc<RwLock<HashMap<String, String>>>, // id -> question
 }
 
+impl Default for PromptManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PromptManager {
     pub fn new() -> Self {
         Self {

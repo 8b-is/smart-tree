@@ -167,10 +167,15 @@ impl StContextTracker {
             })
         } else if edit_count >= 2 && test_count >= 1 {
             // Edits + tests = active development
-            let language = Self::detect_language(&recent_ops[0].path);
+            let focus = recent_ops
+                .iter()
+                .find(|op| op.operation.contains("edit") || op.operation.contains("write"))
+                .copied()
+                .unwrap_or(recent_ops[0]);
+            let language = Self::detect_language(&focus.path);
             Ok(WorkContext::Coding {
                 language,
-                focus_file: recent_ops[0].path.clone(),
+                focus_file: focus.path.clone(),
             })
         } else if test_count >= 2 {
             // Lots of test activity
@@ -227,8 +232,8 @@ impl StContextTracker {
                     "🔍 Search for error: st --search \"{}\" --mode ai",
                     error_pattern
                 ),
-                format!("📈 Recent changes: st --newer-than 1 --sort newest"),
-                format!("🌳 Check dependencies: st --mode relations"),
+                "📈 Recent changes: st --newer-than 1 --sort newest".to_string(),
+                "🌳 Check dependencies: st --mode relations".to_string(),
             ],
 
             Some(WorkContext::Exploring {
@@ -237,7 +242,7 @@ impl StContextTracker {
             }) => {
                 let mut suggestions = vec![
                     format!("🗺️ Get overview: st --mode summary-ai --depth {}", depth),
-                    format!("🧭 Semantic map: st --mode semantic"),
+                    "🧭 Semantic map: st --mode semantic".to_string(),
                 ];
 
                 // Suggest unexplored areas
@@ -255,9 +260,9 @@ impl StContextTracker {
             }
 
             Some(WorkContext::Testing { .. }) => vec![
-                format!("🧪 Run all tests: st --search \"test_\" --type rs"),
-                format!("📊 Coverage gaps: st --mode waste tests/"),
-                format!("🔗 Test dependencies: st --mode relations --focus tests/"),
+                "🧪 Run all tests: st --search \"test_\" --type rs".to_string(),
+                "📊 Coverage gaps: st --mode waste tests/".to_string(),
+                "🔗 Test dependencies: st --mode relations --focus tests/".to_string(),
             ],
 
             Some(WorkContext::Hunting {
@@ -305,6 +310,7 @@ impl StContextTracker {
         if history.len() > 50 {
             history.pop_back();
         }
+        drop(history);
 
         // Update knowledge
         let mut knowledge = self.project_knowledge.write().unwrap();
@@ -321,7 +327,8 @@ impl StContextTracker {
             }
         }
 
-        // Update context based on new operation
+        // Context analysis reads history; release write guards before re-entering.
+        drop(knowledge);
         self.update_context()?;
 
         Ok(())
@@ -450,6 +457,13 @@ impl StContextTracker {
                     *self.project_knowledge.write().unwrap() = knowledge;
                 }
             }
+            if let Some(saved_history) = json.get("history") {
+                let mut history: VecDeque<ContextualOperation> =
+                    serde_json::from_value(saved_history.clone())
+                        .context("Failed to restore operation history")?;
+                history.truncate(50);
+                *self.operation_history.write().unwrap() = history;
+            }
         }
 
         Ok(())
@@ -508,7 +522,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore = "Hangs - needs investigation"]
     fn test_context_detection() {
         let tracker = StContextTracker::new();
 

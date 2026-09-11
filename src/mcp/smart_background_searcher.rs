@@ -283,7 +283,7 @@ impl SmartBackgroundSearcher {
         }
 
         // Sort by score
-        all_results.sort_by(|a, b| b.score.cmp(&a.score));
+        all_results.sort_by_key(|a| std::cmp::Reverse(a.score));
         all_results
     }
 

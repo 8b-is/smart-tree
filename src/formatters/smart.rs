@@ -213,7 +213,7 @@ impl SmartFormatter {
             }
         }
         // Sort by risk level (critical first)
-        findings.sort_by(|a, b| b.1.risk_level.cmp(&a.1.risk_level));
+        findings.sort_by_key(|a| std::cmp::Reverse(a.1.risk_level));
         findings
     }
 

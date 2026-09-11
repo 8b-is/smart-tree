@@ -388,7 +388,7 @@ impl GitMemory {
         }
 
         let mut hot_files: Vec<_> = file_frequency.into_iter().collect();
-        hot_files.sort_by(|a, b| b.1.cmp(&a.1));
+        hot_files.sort_by_key(|a| std::cmp::Reverse(a.1));
         hot_files.truncate(5);
 
         json!({

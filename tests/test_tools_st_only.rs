@@ -7,6 +7,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
+fn test_config() -> StToolsConfig {
+    StToolsConfig {
+        st_binary: PathBuf::from(env!("CARGO_BIN_EXE_st")),
+        ..StToolsConfig::default()
+    }
+}
+
+fn test_tools() -> StOnlyTools {
+    StOnlyTools::with_config(test_config())
+}
+
 fn create_complex_test_directory() -> Result<TempDir> {
     let temp_dir = TempDir::new()?;
 
@@ -98,7 +109,7 @@ fn test_config_custom() {
 fn test_list_basic() -> Result<()> {
     // Basic listing - the foundation of file exploration!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = ListOptions::default();
     let result = tools.list(temp_dir.path(), options)?;
@@ -120,7 +131,7 @@ fn test_list_basic() -> Result<()> {
 fn test_list_with_pattern() -> Result<()> {
     // Pattern filtering - where wildcards meet their match!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = ListOptions {
         pattern: Some("*.md".to_string()),
@@ -141,14 +152,14 @@ fn test_list_with_pattern() -> Result<()> {
 fn test_list_with_file_type() -> Result<()> {
     // File type filtering - segregation for better organization!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = ListOptions {
         file_type: Some("rs".to_string()),
         ..Default::default()
     };
 
-    let result = tools.list(temp_dir.path(), options)?;
+    let result = tools.list(&temp_dir.path().join("src"), options)?;
 
     // Should only show Rust files
     assert!(
@@ -163,7 +174,7 @@ fn test_list_with_file_type() -> Result<()> {
 fn test_list_with_sort() -> Result<()> {
     // Sorting - because chaos is not a feature!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let sort_options = vec!["name", "size", "date"];
 
@@ -184,7 +195,7 @@ fn test_list_with_sort() -> Result<()> {
 fn test_list_with_limit() -> Result<()> {
     // Limiting results - pagination's best friend!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = ListOptions {
         limit: Some(3),
@@ -203,7 +214,7 @@ fn test_list_with_limit() -> Result<()> {
 fn test_search_basic() -> Result<()> {
     // Search functionality - finding needles in haystacks!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = SearchOptions::default();
     let result = tools.search("TODO", temp_dir.path(), options)?;
@@ -220,7 +231,7 @@ fn test_search_basic() -> Result<()> {
 fn test_search_with_file_type() -> Result<()> {
     // Type-specific search - because context matters!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = SearchOptions {
         file_type: Some("md".to_string()),
@@ -244,7 +255,7 @@ fn test_search_case_sensitivity() -> Result<()> {
     let temp_dir = TempDir::new()?;
     fs::write(temp_dir.path().join("test.txt"), "TODO\ntodo\nToDo")?;
 
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = SearchOptions {
         case_sensitive: true,
@@ -263,7 +274,7 @@ fn test_search_case_sensitivity() -> Result<()> {
 fn test_overview() -> Result<()> {
     // Project overview - the bird's eye view!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let result = tools.overview(temp_dir.path(), None)?;
 
@@ -279,7 +290,7 @@ fn test_overview() -> Result<()> {
 fn test_overview_with_depth() -> Result<()> {
     // Depth control - how deep is your directory tree?
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let depths = vec![1, 3, 5, 10];
 
@@ -299,7 +310,7 @@ fn test_overview_with_depth() -> Result<()> {
 fn test_stats() -> Result<()> {
     // Statistics - numbers that tell stories!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let result = tools.stats(temp_dir.path())?;
 
@@ -319,7 +330,7 @@ fn test_stats() -> Result<()> {
 fn test_semantic() -> Result<()> {
     // Semantic analysis - understanding beyond syntax!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let result = tools.semantic(temp_dir.path())?;
 
@@ -353,13 +364,10 @@ fn test_run_st_error_handling() -> Result<()> {
 fn test_empty_directory_handling() -> Result<()> {
     // Empty directories - the void stares back!
     let temp_dir = TempDir::new()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let result = tools.list(temp_dir.path(), ListOptions::default())?;
-    assert!(
-        result.is_empty() || result.trim().is_empty(),
-        "Empty directory should produce minimal output"
-    );
+    assert_eq!(result.trim(), "No matching files or directories found");
 
     let result = tools.stats(temp_dir.path())?;
     assert!(
@@ -386,7 +394,7 @@ fn test_nested_directory_operations() -> Result<()> {
         )?;
     }
 
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
     let result = tools.overview(temp_dir.path(), Some(15))?;
 
     assert!(
@@ -401,7 +409,7 @@ fn test_nested_directory_operations() -> Result<()> {
 fn test_all_list_options_combined() -> Result<()> {
     // The ultimate combination test - when all options collide!
     let temp_dir = create_complex_test_directory()?;
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let options = ListOptions {
         pattern: Some("*.rs".to_string()),
@@ -441,7 +449,7 @@ fn test_special_characters_in_filenames() -> Result<()> {
         fs::write(temp_dir.path().join(name), "content")?;
     }
 
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
     let result = tools.list(temp_dir.path(), ListOptions::default())?;
 
     // Should handle all special characters gracefully
@@ -463,7 +471,7 @@ fn test_large_file_handling() -> Result<()> {
     let content = "x".repeat(1024 * 1024);
     fs::write(&large_file, content)?;
 
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
     let result = tools.stats(temp_dir.path())?;
 
     assert!(
@@ -487,7 +495,7 @@ fn test_concurrent_operations() -> Result<()> {
     for i in 0..5 {
         let temp_dir = Arc::clone(&temp_dir);
         let handle = thread::spawn(move || {
-            let tools = StOnlyTools::new();
+            let tools = test_tools();
 
             match i % 3 {
                 0 => tools.list(temp_dir.path(), ListOptions::default()),
@@ -511,7 +519,7 @@ fn test_concurrent_operations() -> Result<()> {
 #[test]
 fn test_invalid_path_handling() -> Result<()> {
     // Invalid paths - the universal constant of file systems!
-    let tools = StOnlyTools::new();
+    let tools = test_tools();
 
     let invalid_paths = vec![
         Path::new("/definitely/not/a/real/path"),
