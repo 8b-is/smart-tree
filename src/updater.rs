@@ -1,10 +1,11 @@
 // -----------------------------------------------------------------------------
 // Self-Update Module for Smart Tree
-// Checks for updates from GitHub releases and installs new versions
+// Checks the i1 release catalogue and installs verified Smart Tree builds.
 // -----------------------------------------------------------------------------
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -12,18 +13,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// GitHub repository for releases
-const GITHUB_REPO: &str = "8b-is/smart-tree";
-
-/// GitHub API endpoint for latest release
-const GITHUB_RELEASES_API: &str = "https://api.github.com/repos/8b-is/smart-tree/releases/latest";
+/// The installer and CLI use the same published build catalogue.
+const RELEASES_API: &str = "https://i1.is/releases/smart-tree/latest.json";
 
 /// Rate limit: check for updates at most once per 24 hours
 const UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
 
 /// Binaries included in the release tarball
 /// Note: "n8x" replaces "tree" to avoid shadowing the real tree command
-const BINARIES: &[&str] = &["st", "mq", "m8", "n8x"];
+const BINARIES: &[&str] = &["st", "std", "m8", "n8x"];
 
 /// Current version from Cargo.toml
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -39,6 +37,7 @@ struct GitHubRelease {
 struct GitHubAsset {
     name: String,
     browser_download_url: String,
+    digest: String,
 }
 
 /// Update check cache
@@ -95,7 +94,7 @@ pub fn should_check_update() -> bool {
 }
 
 /// Compare version strings (semver-like)
-fn is_newer_version(current: &str, latest: &str) -> bool {
+pub fn is_newer_version(current: &str, latest: &str) -> bool {
     // Strip 'v' prefix if present
     let current = current.strip_prefix('v').unwrap_or(current);
     let latest = latest.strip_prefix('v').unwrap_or(latest);
@@ -123,13 +122,14 @@ pub async fn check_for_update() -> Result<Option<String>> {
         .build()?;
 
     let response: GitHubRelease = client
-        .get(GITHUB_RELEASES_API)
+        .get(RELEASES_API)
         .send()
         .await
-        .context("Failed to connect to GitHub")?
+        .context("Failed to connect to the i1 release catalogue")?
+        .error_for_status()?
         .json()
         .await
-        .context("Failed to parse GitHub response")?;
+        .context("Failed to parse release metadata")?;
 
     // Update cache
     let mut cache = load_cache();
@@ -204,9 +204,17 @@ fn get_platform() -> Result<(&'static str, &'static str)> {
 /// Create a temporary directory for the update
 fn create_temp_dir() -> Result<PathBuf> {
     let base = env::temp_dir();
-    let unique_name = format!("st-update-{}", now_secs());
+    let unique_name = format!("st-update-{}", uuid::Uuid::new_v4());
     let temp_dir = base.join(unique_name);
-    fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder
+        .create(&temp_dir)
+        .context("Failed to create temp directory")?;
     Ok(temp_dir)
 }
 
@@ -293,11 +301,33 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     } else {
         "tar.gz"
     };
-    let archive_name = format!("st-{}-{}-{}.{}", version, arch, os, ext);
-    let download_url = format!(
-        "https://github.com/{}/releases/download/{}/{}",
-        GITHUB_REPO, version, archive_name
-    );
+    let archive_name = format!("st-{}-{}.{}", arch, os, ext);
+    let client = reqwest::Client::builder()
+        .user_agent("smart-tree-updater")
+        .timeout(Duration::from_secs(300))
+        .build()?;
+    let release: GitHubRelease = client
+        .get(RELEASES_API)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    if release.tag_name.trim_start_matches('v') != version.trim_start_matches('v') {
+        bail!("The current release changed. Run st --update again.");
+    }
+    let asset = release.assets.iter().find(|asset| asset.name == archive_name)
+        .context("No current binary for this platform. Compile with: curl -fsSL https://i1.is/tools/smart-tree | sh -s -- --compile")?;
+    let download_url = &asset.browser_download_url;
+    let url = reqwest::Url::parse(download_url)?;
+    if url.scheme() != "https"
+        || url.host_str() != Some("i1.is")
+        || !url.path().starts_with("/releases/smart-tree/")
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        bail!("Invalid release asset URL");
+    }
 
     println!("Downloading {}...", archive_name);
 
@@ -306,13 +336,8 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     let archive_path = temp_dir.join(&archive_name);
 
     // Download
-    let client = reqwest::Client::builder()
-        .user_agent("smart-tree-updater")
-        .timeout(Duration::from_secs(300))
-        .build()?;
-
     let response = client
-        .get(&download_url)
+        .get(download_url)
         .send()
         .await
         .context("Failed to download release")?;
@@ -322,6 +347,7 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     }
 
     let bytes = response.bytes().await?;
+    verify_asset_digest(&bytes, &asset.digest)?;
     fs::write(&archive_path, &bytes)?;
 
     println!("Extracting...");
@@ -508,6 +534,17 @@ pub fn current_version() -> &'static str {
     CURRENT_VERSION
 }
 
+fn verify_asset_digest(bytes: &[u8], digest: &str) -> Result<()> {
+    let expected = digest
+        .strip_prefix("sha256:")
+        .context("Missing SHA-256 release digest")?;
+    let expected = hex::decode(expected).context("Invalid release digest")?;
+    if expected.as_slice() != Sha256::digest(bytes).as_slice() {
+        bail!("Release checksum did not match; nothing was installed");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,5 +564,14 @@ mod tests {
     fn test_platform_detection() {
         let result = get_platform();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn release_checksum_rejects_modified_downloads() {
+        let digest = format!("sha256:{}", hex::encode(Sha256::digest(b"release")));
+        assert!(verify_asset_digest(b"release", &digest).is_ok());
+        assert!(verify_asset_digest(b"modified", &digest).is_err());
+        assert!(verify_asset_digest(b"release", "sha256:bad").is_err());
+        assert!(!is_newer_version("8.1.0", "6.5.2"));
     }
 }

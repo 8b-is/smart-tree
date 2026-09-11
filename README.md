@@ -16,7 +16,11 @@
 
 ```bash
 # Linux/macOS/WSL - One line install
-curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
+curl -fsSL https://i1.is/tools/smart-tree | sh
+
+# Choose explicitly for automation
+curl -fsSL https://i1.is/tools/smart-tree | sh -s -- --precompiled
+curl -fsSL https://i1.is/tools/smart-tree | sh -s -- --compile
 
 # Or with cargo (now on crates.io!)
 cargo install smart-tree
@@ -26,6 +30,14 @@ st --version
 ```
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
+
+### Repository hub
+
+[8s.is](https://8s.is) hosts Git archives, opt-in semantic recall with source
+citations, and Smart Tree feedback. [i1.is](https://i1.is) remains the quick universal
+installer. The hub keeps exact text in compressed token records and semantic memory
+in native MEM8, with persistent indexes across restarts. See the
+[public API](https://8s.is/docs) and [operator guide](docs/HUB_OPERATIONS.md).
 
 ### 🎯 Interactive Menu
 

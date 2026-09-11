@@ -132,7 +132,8 @@ class LocalDaemon:
 
 
 def exercise(binaries):
-    with tempfile.TemporaryDirectory(prefix="st-check-", dir="/tmp") as directory:
+    # /tmp is intentionally excluded by the Linux scanner's default rules.
+    with tempfile.TemporaryDirectory(prefix="st-check-", dir=Path.home()) as directory:
         daemon = LocalDaemon(binaries, Path(directory).resolve())
         try:
             document = daemon.docs / "moon-homework.md"

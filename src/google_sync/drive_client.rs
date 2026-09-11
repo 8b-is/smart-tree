@@ -46,7 +46,10 @@ impl DriveClient {
     ) -> Result<(Vec<DriveFileMetadata>, Option<String>)> {
         self.rate_limiter.acquire().await;
 
-        let query = format!("'{}' in parents and trashed = false", folder_id);
+        let query = format!(
+            "'{}' in parents and trashed = false",
+            escape_drive_query_literal(folder_id)
+        );
         let mut req = self
             .hub
             .files()
@@ -211,7 +214,10 @@ impl DriveClient {
     pub async fn search(&self, query: &str) -> Result<Vec<DriveFileMetadata>> {
         self.rate_limiter.acquire().await;
 
-        let search_query = format!("fullText contains '{}' and trashed = false", query);
+        let search_query = format!(
+            "fullText contains '{}' and trashed = false",
+            escape_drive_query_literal(query)
+        );
 
         let (_, response) = self
             .hub
@@ -294,5 +300,24 @@ impl DriveClient {
             parents: file.parents.unwrap_or_default(),
             is_folder,
         }
+    }
+}
+
+fn escape_drive_query_literal(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_drive_query_literal;
+
+    #[test]
+    fn drive_query_literals_escape_quotes_and_backslashes() {
+        assert_eq!(escape_drive_query_literal("normal text"), "normal text");
+        assert_eq!(
+            escape_drive_query_literal("' or trashed = true"),
+            "\\' or trashed = true"
+        );
+        assert_eq!(escape_drive_query_literal(r"a\b'c"), r"a\\b\'c");
     }
 }

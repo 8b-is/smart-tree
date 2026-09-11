@@ -80,8 +80,7 @@ pub async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value
 
     // Try to submit to API, fall back to local storage if it fails
     let client = reqwest::Client::new();
-    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
+    let api_url = crate::feedback_client::feedback_endpoint();
 
     let response = match client
         .post(&api_url)
@@ -133,7 +132,7 @@ pub async fn submit_feedback(args: Value, _ctx: Arc<McpContext>) -> Result<Value
                         {}\n\n\
                         Category: {}\n\
                         Title: {}\n\n\
-                        It will be automatically submitted when the connection is restored.\n\n\
+                        Keep this file to resubmit when the connection is restored.\n\n\
                         🌳 Thank you for helping Smart Tree grow!",
                         filepath.display(),
                         category,
@@ -247,8 +246,7 @@ pub async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
 
     // Try to submit to API, fall back to local storage if it fails
     let client = reqwest::Client::new();
-    let api_url = std::env::var("SMART_TREE_FEEDBACK_API")
-        .unwrap_or_else(|_| "https://f.8b.is/feedback".to_string());
+    let api_url = crate::feedback_client::feedback_endpoint();
 
     let response = match client
         .post(&api_url)
@@ -303,7 +301,7 @@ pub async fn request_tool(args: Value, _ctx: Arc<McpContext>) -> Result<Value> {
                     "text": format!("📝 Tool request '{}' saved locally!\n\n\
                         The feedback API appears to be offline. Your request has been saved to:\n\
                         {}\n\n\
-                        It will be automatically submitted when the connection is restored.\n\n\
+                        Keep this file to resubmit when the connection is restored.\n\n\
                         🌳 Smart Tree continues to evolve with your help!",
                         tool_name,
                         filepath.display()
@@ -371,7 +369,7 @@ pub async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Val
     let current = current_version.trim_start_matches('v');
     let latest = version_info.version.trim_start_matches('v');
 
-    if current == latest {
+    if !crate::updater::is_newer_version(current, latest) {
         return Ok(json!({
             "content": [{
                 "type": "text",
@@ -384,14 +382,12 @@ pub async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Val
     let message = format!(
         "🚀 **New Smart Tree Version Available!**\n\n\
         Current: v{} → Latest: v{}\n\n\
-        📥 Download: https://github.com/8b-is/smart-tree/releases/tag/v{}\n\n\
+        📥 Download: {}\n\n\
         To update:\n\
         ```bash\n\
-        curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash\n\
+        curl -fsSL https://i1.is/tools/smart-tree | sh -s -- --precompiled\n\
         ```",
-        current,
-        latest,
-        latest
+        current, latest, version_info.download_url
     );
 
     Ok(json!({
@@ -403,7 +399,7 @@ pub async fn check_for_updates(args: Value, _ctx: Arc<McpContext>) -> Result<Val
             "update_available": true,
             "current_version": current_version,
             "latest_version": version_info.version.clone(),
-            "download_url": format!("https://github.com/8b-is/smart-tree/releases/tag/v{}", latest)
+            "download_url": version_info.download_url
         }
     }))
 }

@@ -153,7 +153,7 @@ open = "5.0"  # Open URLs in browser
 ipnet = "2.9"
 
 # Git operations (will become g8t)
-gix = { version = "0.73", default-features = false, features = ["blocking-network-client"] }
+gix = { version = "0.87", default-features = false, features = ["blocking-network-client", "sha1"] }
 
 # Tree-sitter for smart code editing
 tree-sitter = "0.25"
@@ -210,6 +210,10 @@ path = "src/main.rs"
 [[bin]]
 name = "std"
 path = "src/bin/std.rs"
+
+[[bin]]
+name = "st-hub"
+path = "src/bin/st-hub.rs"
 
 # `mq` binary is provided by the `marqant` crate (cargo install marqant).
 # We use marqant as a library dep here; users who want the CLI install it directly.

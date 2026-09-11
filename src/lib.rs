@@ -24,6 +24,7 @@ pub mod dynamic_tokenizer;
 pub mod feature_flags; // Enterprise-friendly feature control and compliance
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
 pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
+pub mod hub;
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
 pub mod interest_calculator; // The scoring engine that determines what's interesting
 pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
@@ -52,7 +53,7 @@ pub mod mcp;
 // In-memory logger for API access
 pub mod in_memory_logger;
 
-// Feedback API client for sending feedback to f.8b.is
+// Feedback API client for Smart Tree Hub at 8s.is.
 pub mod feedback_client;
 
 // Claude integration initializer - auto-configures optimal .claude directory
