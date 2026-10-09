@@ -877,3 +877,16 @@ MIT License - see [LICENSE](LICENSE) for details
 [Website](https://8b.is) • [Issues](https://github.com/8b-is/smart-tree/issues) • [Discussions](https://github.com/8b-is/smart-tree/discussions)
 
 </div>
+
+## Checking and installing updates
+
+Normal CLI startup checks the i1 release catalogue at most once per 24 hours and
+prints a notice when a newer version is available. It does not install updates
+automatically; MCP mode skips this startup check. Use `st --no-update-check` to
+skip the startup check.
+
+Run `st --update` interactively to check the catalogue and, after confirmation,
+download and checksum-verify the binary archive for your platform. The release
+catalogue must contain matching published binaries; a Git push or version bump
+alone does not publish an installable update. An already-running daemon also
+needs to be restarted after its binary is updated.

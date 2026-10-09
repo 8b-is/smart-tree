@@ -191,16 +191,7 @@ async fn main() -> Result<()> {
         return show_version_with_updates().await;
     }
     if cli.update {
-        match check_for_updates_cli().await {
-            Ok(msg) => {
-                println!("{}", msg);
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("❌ Update check failed: {}", e);
-                std::process::exit(1);
-            }
-        }
+        return st::updater::run_update(false).await;
     }
     if cli.mcp {
         // Check if MCP server is enabled via feature flags

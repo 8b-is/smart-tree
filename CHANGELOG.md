@@ -5,6 +5,12 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.1] - Unreleased
+
+- Connect `st --update` to the verified-download installer instead of only checking for updates.
+- Refuse update confirmation on closed input, require the primary executable, and report privileged copy/permission failures.
+- Include the daemon MCP bearer-authentication fix merged after 10.0.0.
+
 ## [6.6.0] - 2026-01-30
 
 ### 🎯 Major Changes
