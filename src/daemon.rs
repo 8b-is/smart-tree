@@ -439,14 +439,13 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             get(crate::magiscanner::http::scan_history_handler),
         )
         .with_state(Arc::clone(&state))
+        // Add MCP before the auth layer so its routes require the same token.
+        .nest_service("/mcp", mcp_router(mcp_context))
         // Bearer token auth on all routes (except /health, handled inside middleware)
         .layer(middleware::from_fn_with_state(
             load_all_tokens(),
             auth_middleware,
-        ))
-        // HTTP MCP - Full protocol over HTTP! 🧹 The Custodian watching
-        // (uses nest_service to allow different state type)
-        .nest_service("/mcp", mcp_router(mcp_context));
+        ));
 
     let bind_addr: [u8; 4] = if config.allow_external {
         [0, 0, 0, 0]
