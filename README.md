@@ -890,3 +890,50 @@ download and checksum-verify the binary archive for your platform. The release
 catalogue must contain matching published binaries; a Git push or version bump
 alone does not publish an installable update. An already-running daemon also
 needs to be restarted after its binary is updated.
+
+### Automatic daemon updates (opt-in, macOS and Linux)
+
+Smart Tree 10.1 adds a separate OS-managed updater. After installing all four
+binaries (`st`, `std`, `m8`, `n8x`) from a tested build, enable it with:
+
+```sh
+sudo bash scripts/install-auto-update.sh enable
+sudo bash scripts/install-auto-update.sh status
+sudo bash scripts/install-auto-update.sh disable
+```
+
+The script supports the managed macOS installation in
+`/Library/PrivilegedHelperTools/is.8b.smart-tree` with its existing daemon/token
+configuration, and Linux's `/usr/local/bin/st` managed daemon with a root-owned
+`/var/lib/smart-tree/daemon.token`. Other installation layouts fail closed.
+Linux DynamicUser token layouts and Windows are not supported by this installer.
+The network daemon does not gain an update endpoint or permission to accept
+remote update commands.
+
+A root-owned worker checks the stable i1 catalogue daily, including after boot.
+It never downgrades, installs prereleases, or builds code. Missing platform
+artifacts leave the current daemon alone. Downloads require HTTPS on i1.is,
+no redirects, and the catalogue's SHA-256 digest; this trusts the release server
+and is not independent signature verification. Both compressed and expanded
+bundles are bounded to 512 MiB. All four binaries must be regular archive files;
+links, duplicate names, traversal, and unexpected members are rejected.
+
+Before installing, the worker verifies the running authenticated local daemon,
+checks candidate executables, and saves a durable rollback journal. Each binary
+is replaced by rename, then the service is restarted and its authenticated
+`/info` version checked. A failed restart restores the previous bundle. An
+interrupted transaction is recovered on the next worker invocation. The bundle
+is not switched atomically as a whole; the independent worker and journal make
+partial replacement recoverable. Existing sessions may disconnect briefly on
+restart. Tokens, settings, memory, and watched directories are preserved.
+
+The worker is installed separately from `st`, so a failed update cannot replace
+the recovery controller. Re-run the installer after reviewing a new updater
+implementation to upgrade that controller. Concurrent scheduled workers are
+locked out; interactive `st --update` refuses while managed updates are enabled.
+Failed release digests are held in `.auto-update/rejected-digest` until a different
+release appears (an administrator can remove that marker after investigation).
+Status is recorded in `.auto-update/last-success`; macOS logs go to
+`/var/log/smart-tree-updater.log`, Linux logs to the service journal. Disabling
+updates leaves the daemon and its data in place. Future updates only become
+available when a validated, platform-compatible release is promoted to i1.

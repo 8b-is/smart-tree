@@ -4,7 +4,7 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "10.0.1"
+version = "10.1.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -111,6 +111,7 @@ bytes = "1"
 
 # Encoding/Compression
 flate2 = "1.0"
+tar = "0.4"
 hex = "0.4"
 base64 = "0.22"
 sha2 = "0.10"
