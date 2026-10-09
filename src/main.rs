@@ -63,6 +63,10 @@ async fn main() -> Result<()> {
         .with(in_memory_layer)
         .init();
 
+    if cli.auto_update {
+        return st::auto_update::run().await;
+    }
+
     // First-run signature verification banner
     // Shows trust status on initial run (official/community/unsigned build)
     if !cli.mcp {
