@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -262,6 +262,15 @@ fn needs_sudo(install_dir: &Path) -> bool {
     }
 }
 
+fn read_confirmation(input: &mut impl BufRead) -> Result<bool> {
+    let mut answer = String::new();
+    if input.read_line(&mut answer)? == 0 {
+        bail!("Update confirmation requires interactive input; nothing was installed");
+    }
+    let answer = answer.trim().to_lowercase();
+    Ok(answer.is_empty() || answer == "y" || answer == "yes")
+}
+
 /// Download and install the update - async version
 pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     let (arch, os) = get_platform()?;
@@ -279,11 +288,7 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         print!("Proceed with update? [Y/n] ");
         io::stdout().flush()?;
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim().to_lowercase();
-
-        if !input.is_empty() && input != "y" && input != "yes" {
+        if !read_confirmation(&mut io::stdin().lock())? {
             println!("Update cancelled.");
             return Ok(());
         }
@@ -392,6 +397,10 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         }
     }
 
+    // Require the primary executable before replacing any installed companion.
+    find_binary_in_dir(&temp_dir, if cfg!(windows) { "st.exe" } else { "st" })
+        .context("Release archive is missing the primary st executable")?;
+
     // Install binaries
     println!("Installing binaries...");
 
@@ -422,7 +431,7 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
                     .args(["rm", "-f", dest_path.to_str().unwrap()])
                     .status();
 
-                Command::new("sudo")
+                let copied = Command::new("sudo")
                     .args([
                         "cp",
                         src_path.to_str().unwrap(),
@@ -431,9 +440,19 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
                     .status()
                     .context(format!("Failed to install {}", binary))?;
 
-                Command::new("sudo")
+                if !copied.success() {
+                    bail!(
+                        "Failed to install {}: sudo cp exited with {}",
+                        binary,
+                        copied
+                    );
+                }
+                let permissions = Command::new("sudo")
                     .args(["chmod", "+x", dest_path.to_str().unwrap()])
                     .status()?;
+                if !permissions.success() {
+                    bail!("Failed to make {} executable: {}", binary, permissions);
+                }
             } else {
                 let _ = fs::remove_file(&dest_path);
                 fs::copy(&src_path, &dest_path).context(format!("Failed to install {}", binary))?;
@@ -548,6 +567,26 @@ fn verify_asset_digest(bytes: &[u8], digest: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_confirmation_rejects_closed_input() {
+        assert!(read_confirmation(&mut io::Cursor::new(b"")).is_err());
+        assert!(!read_confirmation(&mut io::Cursor::new(b"n\n")).unwrap());
+        assert!(read_confirmation(&mut io::Cursor::new(b"yes\n")).unwrap());
+        assert!(read_confirmation(&mut io::Cursor::new(b"\n")).unwrap());
+    }
+
+    #[test]
+    fn archive_companions_do_not_substitute_for_primary_executable() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("m8"), b"companion").unwrap();
+        assert!(find_binary_in_dir(dir.path(), "st").is_err());
+        fs::write(dir.path().join("st"), b"primary").unwrap();
+        assert_eq!(
+            find_binary_in_dir(dir.path(), "st").unwrap(),
+            dir.path().join("st")
+        );
+    }
 
     #[test]
     fn test_version_comparison() {
