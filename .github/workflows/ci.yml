@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "aye/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos is where the daemon update path was rehearsed by hand; ubuntu is
+        # the runtime that has not been validated yet.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # keyring's sync-secret-service pulls libdbus-sys on Linux, so the build
+      # needs pkg-config and the D-Bus headers. docs/HUB_OPERATIONS.md has always
+      # said so; nothing enforced it until now. OpenSSL 3 per the same document.
+      - name: System dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libdbus-1-dev libssl-dev
+
+      # Actions are pinned to full commit SHAs. The runners ship a current
+      # stable Rust; only the two components need adding.
+      - name: Toolchain
+        run: |
+          rustc --version
+          cargo --version
+          rustup component add rustfmt clippy
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lints
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Tests
+        # Serial on purpose: two magiscanner memory tests take a process-wide
+        # lock, so the default parallel harness collides and reports
+        # "lock acquisition failed because the operation would block".
+        # Serial is green on main and on feature branches; parallel is red on both.
+        # Restore the default threads only once that shared lock is gone.
+        run: cargo test --workspace -- --test-threads=1
