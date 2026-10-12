@@ -124,7 +124,7 @@ fn escalate_privileges(args: &[&str]) -> Result<bool> {
         if !status.success() {
             anyhow::bail!("Elevated command failed (exit code: {:?})", status.code());
         }
-        return Ok(true);
+        Ok(true)
     }
 
     #[cfg(target_os = "macos")]
