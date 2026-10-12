@@ -275,6 +275,9 @@ fn read_confirmation(input: &mut impl BufRead) -> Result<bool> {
 pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     let (arch, os) = get_platform()?;
     let install_dir = find_install_dir()?;
+    if install_dir.join(".auto-update/enabled").exists() {
+        bail!("Managed automatic updates are enabled. Run the updater service, or disable it before a manual update.");
+    }
 
     println!("\x1b[36m🌳 Smart Tree Updater\x1b[0m");
     println!();

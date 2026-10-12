@@ -88,6 +88,7 @@ pub mod std_client; // Binary protocol client for std daemon (Unix socket)
 pub mod service_manager;
 
 // Self-update mechanism - check and install updates from GitHub releases
+pub mod auto_update;
 pub mod updater;
 
 // Project tags management - tag and categorize projects

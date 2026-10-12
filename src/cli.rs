@@ -46,6 +46,10 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Getting Started")]
     pub update: bool,
 
+    /// Install a stable release and restart the managed daemon (root, opt-in service only)
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub auto_update: bool,
+
     /// Skip the automatic update check on startup
     #[arg(long, help_heading = "Getting Started")]
     pub no_update_check: bool,

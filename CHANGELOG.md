@@ -5,6 +5,13 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 10.1.0 — Automatic daemon updates
+
+- Add opt-in daily macOS/Linux updater services with a separate recovery worker.
+- Verify stable versions and bounded SHA-256 archives; reject unsafe members.
+- Preserve rollback backups, recover interrupted replacements, and verify the restarted daemon.
+- Keep manual updates from racing an enabled managed updater.
+
 ## [10.0.1] - Unreleased
 
 - Connect `st --update` to the verified-download installer instead of only checking for updates.
