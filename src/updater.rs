@@ -426,45 +426,40 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         };
         let dest_path = install_dir.join(&binary_name);
 
-        // IMPORTANT: Remove old binary first to avoid macOS zombie process issue
+        // IMPORTANT: Replace binary atomically (avoid unlinking before copy completes
+        // and avoid macOS Mach-O code-signature / zombie process issues, FR-ST-02).
         #[cfg(unix)]
         {
             if use_sudo {
-                let _ = Command::new("sudo")
-                    .args(["rm", "-f", dest_path.to_str().unwrap()])
-                    .status();
-
-                let copied = Command::new("sudo")
+                let installed = Command::new("sudo")
                     .args([
-                        "cp",
+                        "install",
+                        "-m",
+                        "0755",
                         src_path.to_str().unwrap(),
                         dest_path.to_str().unwrap(),
                     ])
                     .status()
                     .context(format!("Failed to install {}", binary))?;
 
-                if !copied.success() {
+                if !installed.success() {
                     bail!(
-                        "Failed to install {}: sudo cp exited with {}",
+                        "Failed to install {}: sudo install exited with {}",
                         binary,
-                        copied
+                        installed
                     );
                 }
-                let permissions = Command::new("sudo")
-                    .args(["chmod", "+x", dest_path.to_str().unwrap()])
-                    .status()?;
-                if !permissions.success() {
-                    bail!("Failed to make {} executable: {}", binary, permissions);
-                }
             } else {
-                let _ = fs::remove_file(&dest_path);
-                fs::copy(&src_path, &dest_path).context(format!("Failed to install {}", binary))?;
-
-                // Set executable permission
                 use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&dest_path)?.permissions();
+                let tmp_dest = install_dir.join(format!(".{}.new", binary_name));
+                let _ = fs::remove_file(&tmp_dest);
+                fs::copy(&src_path, &tmp_dest)
+                    .context(format!("Failed to stage {}", binary))?;
+                let mut perms = fs::metadata(&tmp_dest)?.permissions();
                 perms.set_mode(0o755);
-                fs::set_permissions(&dest_path, perms)?;
+                fs::set_permissions(&tmp_dest, perms)?;
+                fs::rename(&tmp_dest, &dest_path)
+                    .context(format!("Failed to atomically replace {}", binary))?;
             }
         }
 

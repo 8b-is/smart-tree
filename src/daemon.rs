@@ -147,6 +147,19 @@ pub fn load_all_tokens() -> Vec<String> {
     tokens
 }
 
+/// Constant-time token comparison using SHA-256 digests so remote probes
+/// cannot infer token prefixes via response-time side channels (FR-ST-01).
+fn ct_token_matches(expected: &str, provided: &str) -> bool {
+    use sha2::{Digest, Sha256};
+    let ha = Sha256::digest(expected.as_bytes());
+    let hb = Sha256::digest(provided.as_bytes());
+    let mut diff = 0u8;
+    for (x, y) in ha.iter().zip(hb.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0 && expected.len() == provided.len()
+}
+
 /// Auth middleware: validates Bearer token on all routes except /health
 async fn auth_middleware(
     State(expected_tokens): State<Vec<String>>,
@@ -167,7 +180,10 @@ async fn auth_middleware(
     match auth_header {
         Some(header) if header.starts_with("Bearer ") => {
             let provided = &header[7..];
-            if expected_tokens.iter().any(|t| t == provided) {
+            if expected_tokens
+                .iter()
+                .fold(false, |acc, t| acc | ct_token_matches(t, provided))
+            {
                 next.run(req).await
             } else {
                 (StatusCode::UNAUTHORIZED, "Invalid token").into_response()
@@ -1995,6 +2011,60 @@ mod memory_api_tests {
             "query": "homework", "after": "2026-10-01T00:00:00Z", "before": "2026-09-01T00:00:00Z",
         })).send().await.unwrap();
         assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+        drop(client);
+        server.abort();
+        let _ = server.await;
+    }
+
+    #[tokio::test]
+    async fn ct_token_matches_and_mcp_auth_middleware_enforced() {
+        assert!(ct_token_matches("st_secret_token_123", "st_secret_token_123"));
+        assert!(!ct_token_matches("st_secret_token_123", "st_secret_token_124"));
+        assert!(!ct_token_matches("st_secret_token_123", "st_secret"));
+        assert!(!ct_token_matches("st_secret_token_123", ""));
+
+        let mcp_sub = Router::new().route("/", get(|| async { "mcp-ok" }));
+        let app = Router::new()
+            .route("/health", get(health))
+            .nest_service("/mcp", mcp_sub)
+            .layer(middleware::from_fn_with_state(
+                vec!["st_valid_token".to_string()],
+                auth_middleware,
+            ));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let client = reqwest::Client::new();
+
+        // /health is public
+        let h = client.get(format!("{base}/health")).send().await.unwrap();
+        assert_eq!(h.status(), StatusCode::OK);
+
+        // /mcp without token -> 401
+        let unauth = client.get(format!("{base}/mcp")).send().await.unwrap();
+        assert_eq!(unauth.status(), StatusCode::UNAUTHORIZED);
+
+        // /mcp with wrong token -> 401
+        let bad = client
+            .get(format!("{base}/mcp"))
+            .header("Authorization", "Bearer st_wrong_token")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(bad.status(), StatusCode::UNAUTHORIZED);
+
+        // /mcp with valid token -> 200
+        let ok = client
+            .get(format!("{base}/mcp"))
+            .header("Authorization", "Bearer st_valid_token")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(ok.status(), StatusCode::OK);
+
         drop(client);
         server.abort();
         let _ = server.await;
