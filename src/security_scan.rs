@@ -375,11 +375,7 @@ impl SecurityScanner {
                     for (i, finding) in pattern_findings.iter().take(5).enumerate() {
                         let short_path = finding.file_path.to_string_lossy();
                         // Truncate long paths
-                        let display_path = if short_path.len() > 60 {
-                            format!("...{}", &short_path[short_path.len() - 57..])
-                        } else {
-                            short_path.to_string()
-                        };
+                        let display_path = truncate_start(&short_path, 60);
                         report.push_str(&format!(
                             "     {}. {}:{}\n",
                             i + 1,
@@ -430,11 +426,31 @@ impl Default for SecurityScanner {
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len - 3])
-    } else {
-        s.to_string()
+    if s.len() <= max_len {
+        return s.to_string();
     }
+    if max_len < 3 {
+        return ".".repeat(max_len);
+    }
+    let mut end = max_len - 3;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &s[..end])
+}
+
+fn truncate_start(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        return s.to_string();
+    }
+    if max_len < 3 {
+        return ".".repeat(max_len);
+    }
+    let mut start = s.len() - (max_len - 3);
+    while !s.is_char_boundary(start) {
+        start += 1;
+    }
+    format!("...{}", &s[start..])
 }
 
 #[cfg(test)]
@@ -585,5 +601,57 @@ mod tests {
         let mut findings = Vec::new();
         scanner.scan_content(Path::new("settings.json"), content, &mut findings);
         assert!(findings.iter().any(|f| f.pattern_name == "Auto Hook"));
+    }
+
+    fn report_finding(path: &str, matched_text: &str) -> SecurityFinding {
+        SecurityFinding {
+            file_path: PathBuf::from(path),
+            line_number: 7,
+            pattern_name: "Synthetic formatting fixture".to_string(),
+            matched_text: matched_text.to_string(),
+            risk_level: RiskLevel::Low,
+            description: "Formatting only".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_report_truncates_unicode_path() {
+        let path = format!("{}a", "日".repeat(20));
+        let report = SecurityScanner::new().generate_report(&[report_finding(&path, "match")]);
+        assert!(report.contains(&format!("...{}a:7", "日".repeat(18))));
+    }
+
+    #[test]
+    fn test_report_truncates_unicode_match() {
+        let report =
+            SecurityScanner::new().generate_report(&[report_finding("test.js", &"日".repeat(18))]);
+        assert!(report.contains(&format!("Match: {}...", "日".repeat(15))));
+    }
+
+    #[test]
+    fn test_report_preserves_ascii_truncation() {
+        let report = SecurityScanner::new()
+            .generate_report(&[report_finding(&"a".repeat(61), &"b".repeat(51))]);
+        assert!(report.contains(&format!("...{}:7", "a".repeat(57))));
+        assert!(report.contains(&format!("Match: {}...", "b".repeat(47))));
+    }
+
+    #[test]
+    fn test_truncation_respects_byte_budgets() {
+        for input in [String::new(), "abc".to_string(), "é日🦀".repeat(10)] {
+            for limit in 0..=input.len() + 1 {
+                let prefix = truncate(&input, limit);
+                let suffix = truncate_start(&input, limit);
+                assert!(prefix.len() <= limit);
+                assert!(suffix.len() <= limit);
+                if input.len() <= limit {
+                    assert_eq!(prefix, input);
+                    assert_eq!(suffix, input);
+                } else if limit >= 3 {
+                    assert!(input.starts_with(prefix.strip_suffix("...").unwrap()));
+                    assert!(input.ends_with(suffix.strip_prefix("...").unwrap()));
+                }
+            }
+        }
     }
 }
