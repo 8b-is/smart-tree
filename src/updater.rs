@@ -453,8 +453,7 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
                 use std::os::unix::fs::PermissionsExt;
                 let tmp_dest = install_dir.join(format!(".{}.new", binary_name));
                 let _ = fs::remove_file(&tmp_dest);
-                fs::copy(&src_path, &tmp_dest)
-                    .context(format!("Failed to stage {}", binary))?;
+                fs::copy(&src_path, &tmp_dest).context(format!("Failed to stage {}", binary))?;
                 let mut perms = fs::metadata(&tmp_dest)?.permissions();
                 perms.set_mode(0o755);
                 fs::set_permissions(&tmp_dest, perms)?;
