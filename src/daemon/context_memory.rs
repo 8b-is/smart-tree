@@ -590,13 +590,32 @@ mod tests {
     }
 
     #[test]
+    fn checkpoints_without_native_events_preserve_storage_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("documents");
+        std::fs::create_dir(&root).unwrap();
+        let storage = temp.path().join("memory");
+        let mut memory = ContextMemory::open(&storage).unwrap();
+        let root = memory.watch(&root).unwrap();
+        memory.watcher.disconnect_native_events_for_test();
+        assert!(memory.watcher.snapshot(&root).is_some());
+        let path = storage.join("directory_context.m8");
+        let before = std::fs::read(&path).unwrap();
+        for reconcile in [false, true, false, true] {
+            memory.maintain(reconcile, true).unwrap();
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+        }
+    }
+
+    #[test]
     fn idle_checkpoints_do_not_rewrite_memory() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("documents");
         std::fs::create_dir(&root).unwrap();
         let storage = temp.path().join("memory");
         let mut memory = ContextMemory::open(&storage).unwrap();
-        memory.watch(&root).unwrap();
+        let root = memory.watch(&root).unwrap();
+        let initial_watch = memory.watcher.snapshot(&root);
         let before = std::fs::metadata(storage.join("directory_context.m8"))
             .unwrap()
             .len();
@@ -605,7 +624,10 @@ mod tests {
             std::fs::metadata(storage.join("directory_context.m8"))
                 .unwrap()
                 .len(),
-            before
+            before,
+            "idle checkpoint changed storage: initial_watch={initial_watch:?}, final_watch={:?}, pending_context={:?}",
+            memory.watcher.snapshot(&root),
+            memory.index.pending_context(),
         );
     }
 }
