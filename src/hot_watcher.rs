@@ -424,6 +424,15 @@ impl HotWatcher {
         std::mem::take(&mut self.changed_paths)
     }
 
+    /// Keep watch snapshots while isolating persistence tests from native events.
+    #[cfg(test)]
+    pub(crate) fn disconnect_native_events_for_test(&mut self) {
+        self.watcher = None;
+        self.event_rx = None;
+        self.events_dropped.store(false, Ordering::Relaxed);
+        self.changed_paths.clear();
+    }
+
     pub fn restore(&mut self, snapshot: &WatchSnapshot) -> Result<()> {
         let directory = snapshot.restore(SystemTime::now())?;
         self.watch(&snapshot.path)?;
