@@ -59,6 +59,16 @@ pub struct RecordStore {
     native: bool,
 }
 
+impl Drop for RecordStore {
+    fn drop(&mut self) {
+        // A forked child can retain the open-file description until exec.
+        // Release ownership explicitly instead of waiting for every handle to close.
+        if let Err(error) = self._lock.unlock() {
+            tracing::warn!(%error, "Could not explicitly release MEM8 writer lock");
+        }
+    }
+}
+
 impl RecordStore {
     pub fn open(path: &Path) -> Result<Self> {
         Self::open_format(path, false)
@@ -500,6 +510,24 @@ fn sync_parent(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn dropping_store_releases_lock_with_a_duplicated_descriptor() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("records.m8");
+        let store = RecordStore::open_memory(&path).unwrap();
+        // Model the shared open-file description inherited by a forked child.
+        let inherited = store._lock.try_clone().unwrap();
+        assert!(RecordStore::open_memory(&path).is_err());
+        drop(store);
+        let reopened = RecordStore::open_memory(&path).unwrap();
+        drop(inherited);
+        // Closing the inherited handle must not release the new writer's lock.
+        assert!(RecordStore::open_memory(&path).is_err());
+        drop(reopened);
+        assert!(RecordStore::open_memory(&path).is_ok());
+    }
 
     #[test]
     fn native_memory_roundtrip_compaction_and_partial_append_recovery() {

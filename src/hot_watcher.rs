@@ -326,36 +326,7 @@ impl HotWatcher {
             let events_dropped = Arc::clone(&self.events_dropped);
 
             let watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
-                if let Ok(event) = res {
-                    let kind = match event.kind {
-                        EventKind::Create(CreateKind::File | CreateKind::Folder) => {
-                            Some(WatchEventKind::Created)
-                        }
-                        EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Name(_)) => {
-                            Some(WatchEventKind::Modified)
-                        }
-                        EventKind::Remove(RemoveKind::File | RemoveKind::Folder) => {
-                            Some(WatchEventKind::Deleted)
-                        }
-                        _ => None,
-                    };
-
-                    if let Some(kind) = kind {
-                        for path in event.paths {
-                            // Never block notify while the bounded queue is full.
-                            if tx
-                                .try_send(WatchEvent {
-                                    path,
-                                    kind,
-                                    timestamp: Instant::now(),
-                                })
-                                .is_err()
-                            {
-                                events_dropped.store(true, Ordering::Relaxed);
-                            }
-                        }
-                    }
-                }
+                queue_notify_event(res, &tx, &events_dropped);
             })?;
 
             self.watcher = Some(watcher);
@@ -569,9 +540,74 @@ impl std::fmt::Display for HotWatcherSummary {
     }
 }
 
+fn queue_notify_event(
+    res: notify::Result<Event>,
+    tx: &mpsc::Sender<WatchEvent>,
+    events_dropped: &AtomicBool,
+) {
+    if let Ok(event) = res {
+        // Backend loss notifications may carry no paths; reconcile every watched root.
+        if event.need_rescan() {
+            events_dropped.store(true, Ordering::Relaxed);
+        }
+        let kind = match event.kind {
+            EventKind::Create(CreateKind::File | CreateKind::Folder) => {
+                Some(WatchEventKind::Created)
+            }
+            EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Name(_)) => {
+                Some(WatchEventKind::Modified)
+            }
+            EventKind::Remove(RemoveKind::File | RemoveKind::Folder) => {
+                Some(WatchEventKind::Deleted)
+            }
+            _ => None,
+        };
+
+        if let Some(kind) = kind {
+            for path in event.paths {
+                // Never block notify while the bounded queue is full.
+                if tx
+                    .try_send(WatchEvent {
+                        path,
+                        kind,
+                        timestamp: Instant::now(),
+                    })
+                    .is_err()
+                {
+                    events_dropped.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backend_rescan_refreshes_all_roots_without_event_paths() {
+        let mut watcher = HotWatcher::new();
+        for path in [PathBuf::from("/fixture/one"), PathBuf::from("/fixture/two")] {
+            watcher
+                .directories
+                .write()
+                .unwrap()
+                .insert(path.clone(), WatchedDirectory::new(path));
+        }
+        queue_notify_event(
+            Ok(Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan)),
+            &watcher.event_tx,
+            &watcher.events_dropped,
+        );
+        watcher.process_pending_events();
+        assert_eq!(
+            watcher.take_changed_paths(),
+            BTreeSet::from([PathBuf::from("/fixture/one"), PathBuf::from("/fixture/two"),])
+        );
+        watcher.process_pending_events();
+        assert!(watcher.take_changed_paths().is_empty());
+    }
 
     #[test]
     fn restored_watch_applies_downtime_and_expires_bursts() {
