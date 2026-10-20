@@ -2018,8 +2018,14 @@ mod memory_api_tests {
 
     #[tokio::test]
     async fn ct_token_matches_and_mcp_auth_middleware_enforced() {
-        assert!(ct_token_matches("st_secret_token_123", "st_secret_token_123"));
-        assert!(!ct_token_matches("st_secret_token_123", "st_secret_token_124"));
+        assert!(ct_token_matches(
+            "st_secret_token_123",
+            "st_secret_token_123"
+        ));
+        assert!(!ct_token_matches(
+            "st_secret_token_123",
+            "st_secret_token_124"
+        ));
         assert!(!ct_token_matches("st_secret_token_123", "st_secret"));
         assert!(!ct_token_matches("st_secret_token_123", ""));
 
