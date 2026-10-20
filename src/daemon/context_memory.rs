@@ -596,7 +596,8 @@ mod tests {
         std::fs::create_dir(&root).unwrap();
         let storage = temp.path().join("memory");
         let mut memory = ContextMemory::open(&storage).unwrap();
-        memory.watch(&root).unwrap();
+        let root = memory.watch(&root).unwrap();
+        let initial_watch = memory.watcher.snapshot(&root);
         let before = std::fs::metadata(storage.join("directory_context.m8"))
             .unwrap()
             .len();
@@ -605,7 +606,10 @@ mod tests {
             std::fs::metadata(storage.join("directory_context.m8"))
                 .unwrap()
                 .len(),
-            before
+            before,
+            "idle checkpoint changed storage: initial_watch={initial_watch:?}, final_watch={:?}, pending_context={:?}",
+            memory.watcher.snapshot(&root),
+            memory.index.pending_context(),
         );
     }
 }
