@@ -384,6 +384,7 @@ RuntimeDirectory=smart-tree
 RuntimeDirectoryMode=0755
 
 Environment=RUST_LOG=info
+Environment=HOME=/var/lib/smart-tree
 Environment=ST_TOKEN_PATH=/var/lib/smart-tree/daemon.token
 
 Restart=always

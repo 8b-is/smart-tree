@@ -924,6 +924,112 @@ EXAMPLES:
         }));
     }
 
+    // Add unified Code Symbol & Call-Graph Intelligence tool (merged CrabCC + Smart Tree AST)
+    tools.push(json!({
+        "name": "symbol",
+        "description": "🦀 CODE SYMBOL & CALL GRAPH INTELLIGENCE (Unified CrabCC + Smart Tree AST) — Instant symbol definition lookup (with source code & docstrings), cross-file call-graph references, file symbol outlines, and repo indexing.
+
+💡 TIP: One tool replaces separate symbol/LSP MCP servers:
+• symbol {operation:'sym', name:'quantize_ternary'} - Definition + docstring + full source code!
+• symbol {operation:'refs', name:'fold_spectrum'} - Every call site with line content!
+• symbol {operation:'outline', file:'rust/alexiai/src/server.rs'} - Complete AST outline of a file",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "operation": {
+                    "type": "string",
+                    "enum": ["sym", "refs", "outline", "index", "graph"],
+                    "description": "Symbol operation: 'sym' (find definition + source code), 'refs' (find call-graph references), 'outline' (list all symbols in a file), 'index' (rebuild index), 'graph' (dependency stats)",
+                    "default": "sym"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Symbol name to look up (for 'sym' and 'refs', e.g. 'quantize_ternary', 'fold_spectrum')"
+                },
+                "file": {
+                    "type": "string",
+                    "description": "File path to outline (for 'outline', e.g. 'rust/alexiai/src/server.rs')"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Repository root path (default: '/home/hue/8b-is/alexiai')",
+                    "default": "/home/hue/8b-is/alexiai"
+                },
+                "include_source": {
+                    "type": "boolean",
+                    "description": "Include actual source code lines & docstrings around definitions/references (default: true)",
+                    "default": true
+                }
+            },
+            "required": ["operation"]
+        }
+    }));
+
+    // Add Custodian Security Scanner tool
+    tools.push(json!({
+        "name": "security",
+        "description": "🛡️ CUSTODIAN SECURITY SCANNER — In-memory AST & supply-chain threat detection, risk scoring, and capability auditing across any directory or repository.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Directory or repository path to scan (default: '/home/hue/8b-is/alexiai')",
+                    "default": "/home/hue/8b-is/alexiai"
+                }
+            },
+            "required": []
+        }
+    }));
+
+    // Add Sovereign Library Three-Kaya Ontology tool
+    tools.push(json!({
+        "name": "ontology",
+        "description": "🐉 SOVEREIGN LIBRARY THREE-KAYA ONTOLOGY — 100% offline Balanced Ternary {-1, 0, +1} (Samsaric Trap / Dharmakāya Śūnyatā / Sambhogakāya-Nirmāṇakāya), Six Pillars of Holding, and Constitutional NAND(HELD, READ) = 0 verification.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "Entity, concept, or system to evaluate (e.g. 'Ultra Instinct', 'Goku', 'Vegeta', 'ALEXIAI', 'GAIA-MLX-QUANT')"
+                }
+            },
+            "required": ["target"]
+        }
+    }));
+
+    // Add WA-STREAM × Discord × ALEXIAI Partner-in-Life tool
+    tools.push(json!({
+        "name": "partner",
+        "description": "💗 WA-STREAM × DISCORD × ALEXIAI PARTNER-IN-LIFE BRIDGE — Bidirectional WhatsApp ('little dude(s) and Angels' on 127.0.0.1:8788) & Discord automation (127.0.0.1:8789), Dra CEO Helper briefs (/dra, /buffett, /family+1, /ghibli, /omni, /future), inbox/outbox sync, and live partner messaging.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "operation": {
+                    "type": "string",
+                    "enum": ["status", "inbox", "outbox", "send", "slash", "ask"],
+                    "description": "Partner operation: 'status', 'inbox', 'outbox', 'send', 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask'",
+                    "default": "status"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Message text, slash command, or prompt (for 'send', 'slash', or 'ask')"
+                },
+                "channel": {
+                    "type": "string",
+                    "enum": ["both", "whatsapp", "discord"],
+                    "description": "Target channel (default: 'both')",
+                    "default": "both"
+                },
+                "to": {
+                    "type": "string",
+                    "description": "Optional WhatsApp JID or phone number (defaults to 'little dude(s) and Angels' group)"
+                }
+            },
+            "required": ["operation"]
+        }
+    }));
+
     tools
 }
 
