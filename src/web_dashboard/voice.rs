@@ -393,7 +393,7 @@ mod tests {
         assert!(!samples.is_empty());
         assert!(samples.len() > 100);
         for s in samples {
-            assert!(s >= -1.0 && s <= 1.0);
+            assert!((-1.0..=1.0).contains(&s));
         }
     }
 }

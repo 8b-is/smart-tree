@@ -405,7 +405,7 @@ mod tests {
             }
         }
         let _restore = RestoreAccess(private.clone());
-        std::fs::set_permissions(&private, std::fs::Permissions::from_mode(0)).unwrap();
+        std::fs::set_permissions(&private, std::fs::Permissions::from_mode(0o000)).unwrap();
         if std::fs::read_dir(&private).is_ok() {
             return;
         } // Privileged test runners bypass file permissions.

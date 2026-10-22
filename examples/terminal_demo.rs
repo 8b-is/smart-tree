@@ -2,17 +2,14 @@
 //!
 //! Shows how the terminal can anticipate developer needs!
 //!
-//! Requires the `tui` feature:
+//! Run with:
 //! ```bash
-//! cargo run --example terminal_demo --features tui
+//! cargo run --example terminal_demo
 //! ```
 
-#[cfg(feature = "tui")]
 use anyhow::Result;
-#[cfg(feature = "tui")]
 use st::terminal::SmartTreeTerminal;
 
-#[cfg(feature = "tui")]
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("🌳 Smart Tree Terminal Interface Demo");
@@ -27,12 +24,6 @@ async fn main() -> Result<()> {
     terminal.run().await?;
 
     Ok(())
-}
-
-#[cfg(not(feature = "tui"))]
-fn main() {
-    eprintln!("This example requires the 'tui' feature.");
-    eprintln!("Run with: cargo run --example terminal_demo --features tui");
 }
 
 // Trisha says: "It's like having an assistant who files your taxes while you sleep!" 💤
