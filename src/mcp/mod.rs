@@ -93,6 +93,7 @@ pub mod smart_edit;
 mod smart_edit_diff_viewer;
 pub mod smart_project_detector;
 mod sse;
+pub mod symbol;
 mod theme_tools;
 mod tools;
 mod tools_consolidated;

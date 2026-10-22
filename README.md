@@ -31,6 +31,30 @@ st --version
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
 
+### Built-in code intelligence
+
+Smart Tree embeds CrabCC's Rust indexing/query engine. The `st` binary provides
+symbol definitions, references, file outlines, and graph statistics without a
+separate `crabcc` installation or a running daemon:
+
+```bash
+st symbol index --path ./my-project
+st symbol sym handle_request --path ./my-project
+st symbol refs handle_request --path ./my-project
+st symbol outline src/main.rs --path ./my-project
+st symbol graph --path ./my-project
+```
+
+These commands return JSON. `--no-source` omits source snippets. The MCP `symbol`
+tool uses the same native engine and defaults to the current session directory;
+its existing `sym`, `refs`, `outline`, `index`, and `graph` operations remain
+available. Both interfaces enforce the MCP path policy.
+
+The cache lives in `<project>/.st/symbols/`; standalone CrabCC databases are left
+alone. Queries refresh this cache incrementally, and `index` rebuilds it. CrabCC
+is pinned to commit `12e7763f2f30fd995608b2ea4cd91e82a3be88fe` for reproducible
+source builds. No models, cloud service, or message delivery is involved.
+
 ### Repository hub
 
 [8s.is](https://8s.is) hosts Git archives, opt-in semantic recall with source
