@@ -918,17 +918,17 @@ pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
 
 /// CrabCC runs inside Smart Tree; no separate executable is required.
 pub async fn handle_symbol(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
+    let mut params = params.unwrap_or(json!({}));
+    super::helpers::normalize_path_args(&mut params, &ctx);
     let cwd = ctx
         .cwd
         .lock()
         .map_err(|_| anyhow::anyhow!("Session path lock poisoned"))?
         .clone();
     let config = ctx.config.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        super::symbol::execute(params.unwrap_or(json!({})), &cwd, &config)
-    })
-    .await
-    .context("Symbol worker failed")??;
+    let result = tokio::task::spawn_blocking(move || super::symbol::execute(params, &cwd, &config))
+        .await
+        .context("Symbol worker failed")??;
     Ok(json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&result)?}]}))
 }
 

@@ -258,6 +258,45 @@ fn run(
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn mcp_remembers_the_project_between_symbol_calls() -> Result<()> {
+        let workspace = tempfile::tempdir()?;
+        let project = workspace.path().join("project");
+        std::fs::create_dir(&project)?;
+        std::fs::write(project.join("hello.rs"), "pub fn greet() -> u8 { 7 }\n")?;
+        let server = super::super::McpServer::new(McpConfig {
+            allowed_paths: vec![workspace.path().to_path_buf()],
+            ..McpConfig::default()
+        });
+        *server.context.cwd.lock().unwrap() = workspace.path().to_path_buf();
+        let request = |id, args| {
+            json!({"jsonrpc":"2.0","id":id,"method":"tools/call",
+                "params":{"name":"symbol","arguments":args}})
+            .to_string()
+        };
+        let indexed: Value = serde_json::from_str(
+            &server
+                .handle_request(&request(1, json!({"operation":"index","path":"project"})))
+                .await?,
+        )?;
+        assert!(indexed.get("error").is_none(), "{indexed}");
+        let response: Value = serde_json::from_str(
+            &server
+                .handle_request(&request(2, json!({"operation":"sym","name":"greet"})))
+                .await?,
+        )?;
+        let symbols: Value = serde_json::from_str(
+            response["result"]["content"][0]["text"]
+                .as_str()
+                .context("MCP symbol response")?,
+        )?;
+        assert_eq!(symbols[0]["name"], "greet");
+        assert_eq!(symbols[0]["file"], "hello.rs");
+        assert!(!workspace.path().join(".st").exists());
+        assert!(project.join(".st/symbols/index.db").exists());
+        Ok(())
+    }
+
     #[test]
     fn native_index_lookup_references_outline_and_graph() -> Result<()> {
         let repo = tempfile::tempdir()?;
