@@ -540,6 +540,10 @@ pub struct ScanArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum Cmd {
+    /// Code intelligence powered by CrabCC built into Smart Tree
+    #[command(alias = "crab")]
+    Symbol(SymbolCommand),
+
     /// Manage the smart-tree daemon (Linux: systemd, macOS: launchctl, Windows: Task Scheduler)
     #[command(subcommand)]
     Service(Service),
@@ -547,6 +551,76 @@ pub enum Cmd {
     /// Manage project tags
     #[command(subcommand, name = "project-tags")]
     ProjectTags(ProjectTags),
+}
+
+#[derive(Debug, clap::Args)]
+pub struct SymbolCommand {
+    /// Index, find definitions/references, outline a file, or summarize the graph
+    #[arg(value_enum)]
+    pub operation: SymbolOperation,
+    /// Symbol name for sym/refs, or repository-relative file for outline
+    pub query: Option<String>,
+    /// Repository root (defaults to the current directory)
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+    /// Omit source snippets from results
+    #[arg(long)]
+    pub no_source: bool,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum SymbolOperation {
+    Index,
+    Sym,
+    Refs,
+    Outline,
+    Graph,
+}
+
+impl SymbolCommand {
+    pub fn parameters(&self) -> serde_json::Value {
+        let operation = match self.operation {
+            SymbolOperation::Index => "index",
+            SymbolOperation::Sym => "sym",
+            SymbolOperation::Refs => "refs",
+            SymbolOperation::Outline => "outline",
+            SymbolOperation::Graph => "graph",
+        };
+        serde_json::json!({"operation": operation, "name": self.query, "file": self.query, "path": self.path, "include_source": !self.no_source})
+    }
+}
+
+#[cfg(test)]
+mod symbol_cli_tests {
+    use super::*;
+
+    #[test]
+    fn parses_native_lookup_and_outline_without_losing_the_project_path() {
+        let cli = Cli::try_parse_from([
+            "st",
+            "symbol",
+            "sym",
+            "greet",
+            "--path",
+            "project",
+            "--no-source",
+        ])
+        .unwrap();
+        let Some(Cmd::Symbol(command)) = cli.cmd else {
+            panic!("expected symbol command")
+        };
+        assert_eq!(
+            command.parameters(),
+            serde_json::json!({"operation":"sym", "name":"greet", "file":"greet", "path":"project", "include_source":false})
+        );
+        let cli = Cli::try_parse_from(["st", "crab", "outline", "src/main.rs"]).unwrap();
+        let Some(Cmd::Symbol(command)) = cli.cmd else {
+            panic!("expected crab alias")
+        };
+        assert_eq!(command.parameters()["file"], "src/main.rs");
+        assert_eq!(command.parameters()["path"], ".");
+        assert!(Cli::try_parse_from(["st", "symbol", "not-an-operation"]).is_err());
+    }
 }
 
 #[derive(Debug, Subcommand)]

@@ -927,7 +927,7 @@ EXAMPLES:
     // Add unified Code Symbol & Call-Graph Intelligence tool (merged CrabCC + Smart Tree AST)
     tools.push(json!({
         "name": "symbol",
-        "description": "🦀 CODE SYMBOL & CALL GRAPH INTELLIGENCE (Unified CrabCC + Smart Tree AST) — Instant symbol definition lookup (with source code & docstrings), cross-file call-graph references, file symbol outlines, and repo indexing.
+        "description": "🦀 CODE SYMBOL & CALL GRAPH INTELLIGENCE (Unified CrabCC + Smart Tree AST) — Built-in CrabCC symbol definition lookup (with source code & docstrings), cross-file call-graph references, file symbol outlines, and repo indexing.
 
 💡 TIP: One tool replaces separate symbol/LSP MCP servers:
 • symbol {operation:'sym', name:'quantize_ternary'} - Definition + docstring + full source code!
@@ -952,8 +952,8 @@ EXAMPLES:
                 },
                 "path": {
                     "type": "string",
-                    "description": "Repository root path (default: '/home/hue/8b-is/alexiai')",
-                    "default": "/home/hue/8b-is/alexiai"
+                    "description": "Repository root path (default: current MCP session directory)",
+                    "default": "."
                 },
                 "include_source": {
                     "type": "boolean",

@@ -663,7 +663,7 @@ pub fn get_consolidated_tools() -> Vec<Value> {
         }),
         json!({
             "name": "symbol",
-            "description": "🦀 CODE SYMBOL & CALL GRAPH INTELLIGENCE (Unified CrabCC + Smart Tree AST) — Instant symbol definition lookup (with source code & docstrings), cross-file call-graph references, file symbol outlines, and repo indexing.",
+            "description": "🦀 CODE SYMBOL & CALL GRAPH INTELLIGENCE (Unified CrabCC + Smart Tree AST) — Built-in CrabCC symbol definition lookup (with source code & docstrings), cross-file call-graph references, file symbol outlines, and repo indexing.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -682,7 +682,7 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     },
                     "path": {
                         "type": "string",
-                        "description": "Repository root path (default: '/home/hue/8b-is/alexiai')"
+                        "description": "Repository root path (default: current MCP session directory)"
                     },
                     "include_source": {
                         "type": "boolean",
@@ -916,210 +916,20 @@ pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
     }
 }
 
-fn find_crabcc_binary() -> String {
-    let candidates = [
-        "/usr/local/bin/crabcc",
-        "/home/hue/.local/bin/crabcc",
-        "/home/hue/8b-is/crabcc/target/release/crabcc",
-        "crabcc",
-    ];
-    for c in candidates {
-        if std::path::Path::new(c).exists() {
-            return c.to_string();
-        }
-    }
-    "crabcc".to_string()
-}
-
-fn run_crabcc_cmd(args: &[&str], repo_path: &str) -> Result<String> {
-    let bin = find_crabcc_binary();
-    let crabcc_home = if std::path::Path::new("/var/lib/smart-tree/.crabcc").exists() {
-        "/var/lib/smart-tree/.crabcc"
-    } else if std::path::Path::new("/home/hue/.crabcc").exists() {
-        "/home/hue/.crabcc"
-    } else {
-        "/var/lib/smart-tree/.crabcc"
-    };
-    let out = std::process::Command::new(&bin)
-        .args(args)
-        .current_dir(repo_path)
-        .env("CRABCC_NO_HINT", "1")
-        .env("CRABCC_HOME", crabcc_home)
-        .env("GIT_CONFIG_COUNT", "1")
-        .env("GIT_CONFIG_KEY_0", "safe.directory")
-        .env("GIT_CONFIG_VALUE_0", "*")
-        .output()
-        .with_context(|| format!("failed to execute {}", bin))?;
-
-    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    if stdout.is_empty() && !stderr.is_empty() {
-        Ok(stderr)
-    } else {
-        Ok(stdout)
-    }
-}
-
-fn enrich_symbol_definitions(raw_json: &str, repo_path: &str, include_source: bool) -> String {
-    let Ok(parsed) = serde_json::from_str::<Value>(raw_json) else {
-        return raw_json.to_string();
-    };
-    let Some(items) = parsed.as_array() else {
-        return raw_json.to_string();
-    };
-    if items.is_empty() {
-        return "[]".to_string();
-    }
-
-    let mut sections = Vec::new();
-    for item in items.iter().take(4) {
-        let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("?");
-        let kind = item.get("kind").and_then(|v| v.as_str()).unwrap_or("symbol");
-        let sig = item.get("signature").and_then(|v| v.as_str()).unwrap_or("");
-        let file = item.get("file").and_then(|v| v.as_str()).unwrap_or("");
-        let line_start = item.get("line_start").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
-        let line_end = item
-            .get("line_end")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(line_start as u64) as usize;
-
-        let mut block = format!(
-            "🦀 Symbol `{name}` ({kind})\nDefined in: `{file}` (lines {line_start}–{line_end})\nSignature: `{sig}`"
-        );
-
-        if include_source {
-            let full_path = std::path::Path::new(repo_path).join(file);
-            if let Ok(src) = std::fs::read_to_string(&full_path) {
-                let lines: Vec<&str> = src.lines().collect();
-                let mut start_idx = line_start.saturating_sub(1);
-                let min_idx = start_idx.saturating_sub(10);
-                while start_idx > min_idx {
-                    let prev = lines.get(start_idx - 1).map(|l| l.trim()).unwrap_or("");
-                    if prev.starts_with("///")
-                        || prev.starts_with("//")
-                        || prev.starts_with("#[")
-                        || prev.starts_with("/*")
-                        || prev.starts_with('*')
-                    {
-                        start_idx -= 1;
-                    } else {
-                        break;
-                    }
-                }
-                let end_idx = line_end.min(lines.len()).min(start_idx + 65);
-                if start_idx < end_idx {
-                    block.push_str("\nSource code:\n```rust\n");
-                    for (idx, line) in lines[start_idx..end_idx].iter().enumerate() {
-                        block.push_str(&format!("{:>4}: {}\n", start_idx + idx + 1, line));
-                    }
-                    block.push_str("```");
-                }
-            }
-        }
-        sections.push(block);
-    }
-    sections.join("\n\n")
-}
-
-fn enrich_symbol_references(raw_json: &str, repo_path: &str, include_source: bool) -> String {
-    let Ok(parsed) = serde_json::from_str::<Value>(raw_json) else {
-        return raw_json.to_string();
-    };
-    let Some(items) = parsed.as_array() else {
-        return raw_json.to_string();
-    };
-    if items.is_empty() {
-        return "[]".to_string();
-    }
-
-    let mut lines_out = Vec::new();
-    for item in items.iter().take(25) {
-        let file = item.get("file").and_then(|v| v.as_str()).unwrap_or("");
-        let line_no = item.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let kind = item.get("kind").and_then(|v| v.as_str()).unwrap_or("ref");
-        let mut entry = format!("• `{file}:{line_no}` ({kind})");
-        if include_source && line_no > 0 {
-            let full_path = std::path::Path::new(repo_path).join(file);
-            if let Ok(src) = std::fs::read_to_string(&full_path) {
-                if let Some(code_line) = src.lines().nth(line_no - 1) {
-                    entry.push_str(&format!(" — `{}`", code_line.trim()));
-                }
-            }
-        }
-        lines_out.push(entry);
-    }
-    lines_out.join("\n")
-}
-
-/// Consolidated symbol tool — merges CrabCC symbol lookup, call-graph references,
-/// file outlines, and source-code docstring enrichment directly into Smart Tree MCP.
-pub async fn handle_symbol(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.unwrap_or(json!({}));
-    let operation = params
-        .get("operation")
-        .and_then(|v| v.as_str())
-        .unwrap_or("sym");
-    let repo_path = params
-        .get("path")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.trim().is_empty() && *s != ".")
-        .unwrap_or("/home/hue/8b-is/alexiai");
-    let include_source = params
-        .get("include_source")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-
-    let text = match operation {
-        "sym" | "definition" => {
-            let name = params
-                .get("name")
-                .or_else(|| params.get("symbol"))
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("'name' parameter is required for symbol operation 'sym'"))?;
-            let mut raw = run_crabcc_cmd(&["lookup", "sym", name], repo_path)?;
-            if raw.trim() == "[]" {
-                let _ = run_crabcc_cmd(&["index"], repo_path);
-                raw = run_crabcc_cmd(&["lookup", "sym", name], repo_path)?;
-            }
-            enrich_symbol_definitions(&raw, repo_path, include_source)
-        }
-        "refs" | "references" => {
-            let name = params
-                .get("name")
-                .or_else(|| params.get("symbol"))
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("'name' parameter is required for symbol operation 'refs'"))?;
-            let mut raw = run_crabcc_cmd(&["lookup", "refs", name], repo_path)?;
-            if raw.trim() == "[]" {
-                let _ = run_crabcc_cmd(&["index"], repo_path);
-                raw = run_crabcc_cmd(&["lookup", "refs", name], repo_path)?;
-            }
-            enrich_symbol_references(&raw, repo_path, include_source)
-        }
-        "outline" => {
-            let file = params
-                .get("file")
-                .or_else(|| params.get("path"))
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("'file' parameter is required for symbol operation 'outline'"))?;
-            run_crabcc_cmd(&["lookup", "outline", file], repo_path)?
-        }
-        "index" => run_crabcc_cmd(&["index"], repo_path)?,
-        "graph" => run_crabcc_cmd(&["graph", "--stats"], repo_path)?,
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unknown symbol operation '{}'. Supported: sym, refs, outline, index, graph",
-                operation
-            ))
-        }
-    };
-
-    Ok(json!({
-        "content": [{
-            "type": "text",
-            "text": text
-        }]
-    }))
+/// CrabCC runs inside Smart Tree; no separate executable is required.
+pub async fn handle_symbol(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
+    let cwd = ctx
+        .cwd
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Session path lock poisoned"))?
+        .clone();
+    let config = ctx.config.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        super::symbol::execute(params.unwrap_or(json!({})), &cwd, &config)
+    })
+    .await
+    .context("Symbol worker failed")??;
+    Ok(json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&result)?}]}))
 }
 
 /// Consolidated security scanner tool — runs Smart Tree's built-in Custodian AST & supply-chain scanner in-memory.
@@ -1155,9 +965,12 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
         .trim();
 
     let norm = target.to_ascii_lowercase();
-    let (resolved_title, race, allegiance, trit_minus_1, trit_zero, trit_plus_1, pillars) =
-        if norm.contains("ultra instinct") || norm == "ui" || norm == "migatte" {
-            (
+    let (resolved_title, race, allegiance, trit_minus_1, trit_zero, trit_plus_1, pillars) = if norm
+        .contains("ultra instinct")
+        || norm == "ui"
+        || norm == "migatte"
+    {
+        (
                 "Autonomous Ultra Instinct (Migatte no Gokui)",
                 "Angelic / Sovereign Martial Technique",
                 "Universe 7 · Whis & Merus Lineage",
@@ -1170,8 +983,8 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Infinite interval (Ma) between stimulus and strike where defensive grace becomes effortless."
                 }),
             )
-        } else if norm.contains("goku") || norm.contains("kakarot") {
-            (
+    } else if norm.contains("goku") || norm.contains("kakarot") {
+        (
                 "Son Goku (Kakarot)",
                 "Saiyan raised on Earth",
                 "Turtle School · Dragon Team · Universe 7",
@@ -1184,8 +997,8 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Holds open cosmic breathing room (Ma) so every former adversary can self-liberate."
                 }),
             )
-        } else if norm.contains("vegeta") {
-            (
+    } else if norm.contains("vegeta") {
+        (
                 "Prince Vegeta IV",
                 "Saiyan Royal Bloodline",
                 "Capsule Corp · Dragon Team · Universe 7",
@@ -1198,8 +1011,12 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Quiet domestic sanctuary at Capsule Corp with Bulma and his children."
                 }),
             )
-        } else if norm.contains("alexiai") || norm.contains("alexandra") || norm.contains("dra") || norm.contains("gaia") {
-            (
+    } else if norm.contains("alexiai")
+        || norm.contains("alexandra")
+        || norm.contains("dra")
+        || norm.contains("gaia")
+    {
+        (
                 "ALEXIAI <3 · ALEXANDRA (DRA<3) on GAIA-MLX-QUANT",
                 "Sovereign Offline AI Companion",
                 "8b-is Constellation · Loopback-Only Sovereignty",
@@ -1212,8 +1029,8 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Zero-dependency stillness that gives the human-AI pair room to create offline."
                 }),
             )
-        } else {
-            (
+    } else {
+        (
                 target,
                 "Sovereign Lore & Systems Entity",
                 "8b-is Universal Dharma Field",
@@ -1226,7 +1043,7 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Holds open uncoerced breathing room (Ma) for creative emergence."
                 }),
             )
-        };
+    };
 
     let receipt = json!({
         "ok": true,
@@ -1299,26 +1116,36 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
         .build()?;
 
     let out_text = match operation {
-        "status" => {
-            match client.get("http://127.0.0.1:8789/status").send().await {
-                Ok(resp) => resp.text().await?,
-                Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
-            }
-        }
+        "status" => match client.get("http://127.0.0.1:8789/status").send().await {
+            Ok(resp) => resp.text().await?,
+            Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
+        },
         "inbox" => {
-            match client.get("http://127.0.0.1:8789/inbox?limit=15").send().await {
+            match client
+                .get("http://127.0.0.1:8789/inbox?limit=15")
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
             }
         }
         "outbox" => {
-            match client.get("http://127.0.0.1:8789/outbox?limit=15").send().await {
+            match client
+                .get("http://127.0.0.1:8789/outbox?limit=15")
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
             }
         }
         "reads" | "pocoo" | "triangle" => {
-            match client.get("http://127.0.0.1:8789/reads?limit=8").send().await {
+            match client
+                .get("http://127.0.0.1:8789/reads?limit=8")
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
             }
@@ -1328,7 +1155,12 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
                 "tool": "dra_queen",
                 "arg": text,
             });
-            match client.post("http://127.0.0.1:8787/api/mcp/call").json(&body).send().await {
+            match client
+                .post("http://127.0.0.1:8787/api/mcp/call")
+                .json(&body)
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("ALEXIAI MCP endpoint unreachable: {e}"),
             }
@@ -1338,7 +1170,12 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
                 "tool": "standardgalactic",
                 "arg": if text.is_empty() { "latest" } else { text },
             });
-            match client.post("http://127.0.0.1:8787/api/mcp/call").json(&body).send().await {
+            match client
+                .post("http://127.0.0.1:8787/api/mcp/call")
+                .json(&body)
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("ALEXIAI MCP endpoint unreachable: {e}"),
             }
@@ -1348,7 +1185,12 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
                 "tool": "mlx_quant",
                 "arg": if text.is_empty() { "256" } else { text },
             });
-            match client.post("http://127.0.0.1:8787/api/mcp/call").json(&body).send().await {
+            match client
+                .post("http://127.0.0.1:8787/api/mcp/call")
+                .json(&body)
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("ALEXIAI MCP endpoint unreachable: {e}"),
             }
@@ -1361,7 +1203,12 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             if let Some(t) = to {
                 body["to"] = json!(t);
             }
-            match client.post("http://127.0.0.1:8789/send").json(&body).send().await {
+            match client
+                .post("http://127.0.0.1:8789/send")
+                .json(&body)
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("Failed to send via Partner hub (127.0.0.1:8789): {e}"),
             }
@@ -1375,13 +1222,22 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             if let Some(t) = to {
                 body["to"] = json!(t);
             }
-            match client.post("http://127.0.0.1:8789/slash").json(&body).send().await {
+            match client
+                .post("http://127.0.0.1:8789/slash")
+                .json(&body)
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("Failed to execute slash card via Partner hub: {e}"),
             }
         }
         "ask" => {
-            let prompt = if text.is_empty() { "Check in warmly with our family and partners!" } else { text };
+            let prompt = if text.is_empty() {
+                "Check in warmly with our family and partners!"
+            } else {
+                text
+            };
             let mut body = json!({
                 "prompt": prompt,
                 "channel": channel,
@@ -1389,16 +1245,21 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             if let Some(t) = to {
                 body["to"] = json!(t);
             }
-            match client.post("http://127.0.0.1:8789/partner/ask").json(&body).send().await {
+            match client
+                .post("http://127.0.0.1:8789/partner/ask")
+                .json(&body)
+                .send()
+                .await
+            {
                 Ok(resp) => resp.text().await?,
                 Err(e) => format!("Failed to query ALEXIAI via Partner hub: {e}"),
             }
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unknown partner operation '{}'. Supported: status, inbox, outbox, send, slash, ask",
-                operation
-            ))
+            "Unknown partner operation '{}'. Supported: status, inbox, outbox, send, slash, ask",
+            operation
+        ))
         }
     };
 

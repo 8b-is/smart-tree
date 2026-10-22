@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Build CrabCC's code intelligence into Smart Tree 10.3.0. The MCP `symbol` tool and `st symbol` (alias `st crab`) share native indexing, definitions, references, outlines, and call-graph statistics; no standalone CrabCC executable is required.
+- Keep derived symbol indexes in each project's `.st/symbols/`, enforce MCP path restrictions, and refresh edited or deleted files, including edits that preserve timestamps.
+
 ### Fixed
 
 - Avoid panics when security reports shorten paths or matched text containing Unicode characters, while preserving the existing byte limits and ASCII formatting.

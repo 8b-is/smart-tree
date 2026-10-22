@@ -37,6 +37,18 @@ async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
 
+    // Code intelligence is entirely local and in-process. It needs neither a
+    // running daemon nor startup network checks, and stdout stays valid JSON.
+    if let Some(st::cli::Cmd::Symbol(command)) = &cli.cmd {
+        let result = st::mcp::symbol::execute(
+            command.parameters(),
+            &std::env::current_dir()?,
+            &st::mcp::load_config()?,
+        )?;
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        return Ok(());
+    }
+
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {
         match level {
@@ -219,6 +231,7 @@ async fn main() -> Result<()> {
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
+            st::cli::Cmd::Symbol(_) => unreachable!("symbol commands return before daemon startup"),
             st::cli::Cmd::Service(service_command) => {
                 let result = match service_command {
                     st::cli::Service::Install => service_manager::install(),

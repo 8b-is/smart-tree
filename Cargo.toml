@@ -4,7 +4,7 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "10.2.0"
+version = "10.3.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -116,7 +116,7 @@ hex = "0.4"
 base64 = "0.22"
 sha2 = "0.10"
 x509-parser = "0.16"
-rusqlite = { version = "0.35", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled", "fallible_uint"] }
 argon2 = "0.5"
 crc32fast = "1.4"
 
@@ -157,13 +157,14 @@ ipnet = "2.9"
 gix = { version = "0.87", default-features = false, features = ["blocking-network-client", "sha1"] }
 
 # Tree-sitter for smart code editing
-tree-sitter = "0.25"
+crabcc-core = { git = "https://github.com/8b-is/crabcc.git", rev = "12e7763f2f30fd995608b2ea4cd91e82a3be88fe" }
+tree-sitter = "0.26"
 tree-sitter-language = "0.1"
-tree-sitter-rust = "0.23"
-tree-sitter-python = "0.23"
-tree-sitter-javascript = "0.23"
+tree-sitter-rust = "0.24"
+tree-sitter-python = "0.25"
+tree-sitter-javascript = "0.25"
 tree-sitter-typescript = "0.23"
-tree-sitter-go = "0.23"
+tree-sitter-go = "0.25"
 tree-sitter-java = "0.23"
 tree-sitter-c-sharp = "0.23"
 tree-sitter-cpp = "0.23"
