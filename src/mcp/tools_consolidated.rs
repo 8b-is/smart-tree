@@ -878,7 +878,30 @@ pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
             let voice = params
                 .get("voice")
                 .and_then(|v| v.as_str())
-                .unwrap_or("aye");
+                .unwrap_or("af_heart");
+            let mapped_voice = match voice {
+                "aye" | "heart" | "alexandra" => "af_heart",
+                "sky" | "omnimom" => "af_sky",
+                "bella" => "af_bella",
+                "nicole" => "af_nicole",
+                "adam" | "claude" => "am_adam",
+                "michael" => "am_michael",
+                other => other,
+            };
+            if std::path::Path::new("/usr/local/bin/qwave").exists() {
+                if let Ok(out) = std::process::Command::new("/usr/local/bin/qwave")
+                    .args(["--voice", mapped_voice, "--speak", text])
+                    .output()
+                {
+                    let qwave_out = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    return Ok(json!({
+                        "content": [{
+                            "type": "text",
+                            "text": format!("🔊 Qwave Sovereign Voice + MEM|8 Salience: {}", qwave_out)
+                        }]
+                    }));
+                }
+            }
             let wav_bytes = crate::web_dashboard::voice::generate_speech_wav(text, voice);
             Ok(json!({
                 "content": [{
@@ -887,6 +910,44 @@ pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
                         "🔊 Synthesized speech audio for persona '{}' ({} chars, {} bytes WAV audio PCM 16kHz mono)",
                         voice, text.len(), wav_bytes.len()
                     )
+                }]
+            }))
+        }
+        "listen" => {
+            let target = params
+                .get("wav_path")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    params
+                        .get("duration_secs")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(5)
+                        .to_string()
+                });
+            let out = std::process::Command::new("/usr/local/bin/qwave")
+                .args(["--listen", &target])
+                .output()?;
+            Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": String::from_utf8_lossy(&out.stdout).trim().to_string()
+                }]
+            }))
+        }
+        "surf" | "show_markdown" => {
+            let target = params
+                .get("url")
+                .or_else(|| params.get("path"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("/home/hue/8b-is/qwave/README.md");
+            let out = std::process::Command::new("/usr/local/bin/qwave")
+                .args(["--surf", target])
+                .output()?;
+            Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": String::from_utf8_lossy(&out.stdout).trim().to_string()
                 }]
             }))
         }
