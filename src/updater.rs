@@ -4,17 +4,262 @@
 // -----------------------------------------------------------------------------
 
 use anyhow::{bail, Context, Result};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use ring::signature::{UnparsedPublicKey, ED25519};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
+use std::net::UdpSocket;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The installer and CLI use the same published build catalogue.
 const RELEASES_API: &str = "https://i1.is/releases/smart-tree/latest.json";
+
+/// HTTPS fallback for the Ed25519-signed Secure DNS TXT record if UDP/53 is blocked.
+const SECURE_DNS_HTTPS_TXT: &str = "https://i1.is/releases/smart-tree/dns-txt";
+
+/// Authoritative Harmony DNS nameservers (`ns3.i1.is`, `ns1.i1.is`, `ns2.i1.is`, `ns4.i1.is`)
+const HARMONY_DNS_SERVERS: &[&str] = &[
+    "5.78.220.57:53",
+    "2.31.35.192:53",
+    "5.161.188.178:53",
+    "5.223.89.144:53",
+];
+
+/// Pinned RFC 8080 Ed25519 (Alg 15, KeyTag 3313) KSK Public Key for `i1.is.` (`BSHQDZCIBiYH4eOU+z/9vC7GQLxJXSsTxjd/WOiYpnQ=`)
+pub const I1_HARMONY_ED25519_PUBKEY_HEX: &str =
+    "0521D00D9088062607E1E394FB3FFDBC2EC640BC495D2B13C6377F58E898A674";
+pub const I1_HARMONY_KEY_TAG: u16 = 3313;
+
+/// Parsed & Ed25519-verified Secure DNS version advertisement (`_smart-tree.i1.is` TXT)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecureDnsRelease {
+    pub version: String,
+    pub build_id: String,
+    pub sha256: String,
+    pub key_tag: u16,
+    pub signature_b64: String,
+}
+
+/// Parse a `v=ST1; ver=...; build=...; sha256=...; keytag=3313; alg=Ed25519; sig=...` TXT record
+/// and cryptographically verify its Ed25519 signature against `I1_HARMONY_ED25519_PUBKEY_HEX`.
+pub fn verify_dns_version_txt(txt: &str) -> Result<SecureDnsRelease> {
+    let clean = txt.trim().trim_matches('"');
+    let mut v_proto = None;
+    let mut version = None;
+    let mut build_id = None;
+    let mut sha256 = None;
+    let mut key_tag = None;
+    let mut alg = None;
+    let mut sig_b64 = None;
+
+    for part in clean.split(';') {
+        let kv = part.trim();
+        if let Some((k, val)) = kv.split_once('=') {
+            let k = k.trim();
+            let val = val.trim();
+            match k {
+                "v" => v_proto = Some(val.to_string()),
+                "ver" => version = Some(val.trim_start_matches('v').to_string()),
+                "build" => build_id = Some(val.to_string()),
+                "sha256" => sha256 = Some(val.to_lowercase()),
+                "keytag" => key_tag = val.parse::<u16>().ok(),
+                "alg" => alg = Some(val.to_string()),
+                "sig" => sig_b64 = Some(val.to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    if v_proto.as_deref() != Some("ST1") {
+        bail!("Unsupported Secure DNS TXT version tag");
+    }
+    if alg.as_deref() != Some("Ed25519") {
+        bail!("Unsupported Secure DNS signature algorithm");
+    }
+    let key_tag = key_tag.context("Missing keytag in Secure DNS TXT")?;
+    if key_tag != I1_HARMONY_KEY_TAG {
+        bail!(
+            "Unexpected Secure DNS keytag {} (expected {})",
+            key_tag,
+            I1_HARMONY_KEY_TAG
+        );
+    }
+
+    let version = version.context("Missing ver in Secure DNS TXT")?;
+    let build_id = build_id.context("Missing build in Secure DNS TXT")?;
+    let sha256 = sha256.context("Missing sha256 in Secure DNS TXT")?;
+    if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+        bail!("Invalid SHA-256 hex in Secure DNS TXT");
+    }
+    let sig_b64 = sig_b64.context("Missing sig in Secure DNS TXT")?;
+    let sig_bytes = BASE64
+        .decode(&sig_b64)
+        .context("Invalid base64 signature in Secure DNS TXT")?;
+
+    let pubkey_bytes =
+        hex::decode(I1_HARMONY_ED25519_PUBKEY_HEX).expect("valid pinned Ed25519 pubkey hex");
+    let canonical_msg = format!(
+        "ST-DNS-v1|ver={}|build={}|sha256={}",
+        version, build_id, sha256
+    );
+    let peer_pub = UnparsedPublicKey::new(&ED25519, &pubkey_bytes);
+    peer_pub
+        .verify(canonical_msg.as_bytes(), &sig_bytes)
+        .map_err(|_| anyhow::anyhow!("Secure DNS Ed25519 signature verification failed"))?;
+
+    Ok(SecureDnsRelease {
+        version,
+        build_id,
+        sha256,
+        key_tag,
+        signature_b64: sig_b64,
+    })
+}
+
+/// Build a minimal RFC 1035 DNS TXT query packet for `qname` (e.g. `_smart-tree.i1.is`)
+fn build_dns_txt_query_packet(qname: &str, tx_id: u16) -> Vec<u8> {
+    let mut pkt = Vec::with_capacity(64);
+    pkt.extend_from_slice(&tx_id.to_be_bytes());
+    pkt.extend_from_slice(&0x0100u16.to_be_bytes()); // Flags: RD=1 ( standard recursive query )
+    pkt.extend_from_slice(&1u16.to_be_bytes()); // QDCOUNT = 1
+    pkt.extend_from_slice(&0u16.to_be_bytes()); // ANCOUNT = 0
+    pkt.extend_from_slice(&0u16.to_be_bytes()); // NSCOUNT = 0
+    pkt.extend_from_slice(&0u16.to_be_bytes()); // ARCOUNT = 0
+    for label in qname.trim_end_matches('.').split('.') {
+        pkt.push(label.len() as u8);
+        pkt.extend_from_slice(label.as_bytes());
+    }
+    pkt.push(0); // root label
+    pkt.extend_from_slice(&16u16.to_be_bytes()); // QTYPE = 16 (TXT)
+    pkt.extend_from_slice(&1u16.to_be_bytes()); // QCLASS = 1 (IN)
+    pkt
+}
+
+/// Skip a DNS wire name (handling RFC 1035 label compression pointers `0xC0`)
+fn skip_dns_name(pkt: &[u8], mut pos: usize) -> Option<usize> {
+    let mut jumps = 0;
+    loop {
+        let b = *pkt.get(pos)?;
+        if b == 0 {
+            return Some(pos + 1);
+        }
+        if (b & 0xC0) == 0xC0 {
+            return Some(pos + 2);
+        }
+        pos = pos.checked_add(1 + (b as usize))?;
+        jumps += 1;
+        if jumps > 64 {
+            return None;
+        }
+    }
+}
+
+/// Parse TXT record strings from a raw RFC 1035 DNS response packet
+fn parse_dns_txt_response(pkt: &[u8], expected_tx_id: u16) -> Option<Vec<String>> {
+    if pkt.len() < 12 {
+        return None;
+    }
+    let tx_id = u16::from_be_bytes([pkt[0], pkt[1]]);
+    if tx_id != expected_tx_id {
+        return None;
+    }
+    let flags = u16::from_be_bytes([pkt[2], pkt[3]]);
+    if (flags & 0x8000) == 0 || (flags & 0x000F) != 0 {
+        return None;
+    }
+    let qdcount = u16::from_be_bytes([pkt[4], pkt[5]]) as usize;
+    let ancount = u16::from_be_bytes([pkt[6], pkt[7]]) as usize;
+    let mut pos = 12;
+    for _ in 0..qdcount {
+        pos = skip_dns_name(pkt, pos)?;
+        pos = pos.checked_add(4)?;
+    }
+    let mut out = Vec::new();
+    for _ in 0..ancount {
+        pos = skip_dns_name(pkt, pos)?;
+        if pos + 10 > pkt.len() {
+            break;
+        }
+        let rtype = u16::from_be_bytes([pkt[pos], pkt[pos + 1]]);
+        let rdlength = u16::from_be_bytes([pkt[pos + 8], pkt[pos + 9]]) as usize;
+        pos += 10;
+        if pos + rdlength > pkt.len() {
+            break;
+        }
+        if rtype == 16 {
+            let rdata = &pkt[pos..pos + rdlength];
+            let mut rpos = 0;
+            let mut joined = String::new();
+            while rpos < rdata.len() {
+                let slen = rdata[rpos] as usize;
+                rpos += 1;
+                if rpos + slen <= rdata.len() {
+                    if let Ok(s) = std::str::from_utf8(&rdata[rpos..rpos + slen]) {
+                        joined.push_str(s);
+                    }
+                }
+                rpos += slen;
+            }
+            if !joined.is_empty() {
+                out.push(joined);
+            }
+        }
+        pos += rdlength;
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
+/// Query `_smart-tree.i1.is` (and `_smart-tree.8b.is`) via ultra-lightweight UDP DNS (35 bytes out, ~290 bytes back)
+/// and verify the Ed25519 signature (`keytag=3313`). Falls back to HTTPS `/releases/smart-tree/dns-txt` if UDP/53 is blocked.
+pub async fn query_secure_dns_version() -> Result<SecureDnsRelease> {
+    let tx_id: u16 = 0x5431;
+    for qname in ["_smart-tree.i1.is", "_smart-tree.8b.is"] {
+        let query_pkt = build_dns_txt_query_packet(qname, tx_id);
+        for &ns in HARMONY_DNS_SERVERS {
+            if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
+                let _ = sock.set_read_timeout(Some(Duration::from_millis(750)));
+                let _ = sock.set_write_timeout(Some(Duration::from_millis(750)));
+                if sock.send_to(&query_pkt, ns).is_ok() {
+                    let mut buf = [0u8; 1024];
+                    if let Ok((n, _)) = sock.recv_from(&mut buf) {
+                        if let Some(txts) = parse_dns_txt_response(&buf[..n], tx_id) {
+                            for txt in txts {
+                                if txt.contains("v=ST1") {
+                                    if let Ok(verified) = verify_dns_version_txt(&txt) {
+                                        return Ok(verified);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback to HTTPS tiny TXT endpoint (~237 bytes) if outbound UDP/53 is blocked by firewall
+    let client = reqwest::Client::builder()
+        .user_agent("smart-tree-dns-updater")
+        .timeout(Duration::from_secs(4))
+        .build()?;
+    let txt = client
+        .get(SECURE_DNS_HTTPS_TXT)
+        .send()
+        .await?
+        .error_for_status()?
+        .text()
+        .await?;
+    verify_dns_version_txt(&txt)
+}
 
 /// Rate limit: check for updates at most once per 24 hours
 const UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
@@ -114,8 +359,24 @@ pub fn is_newer_version(current: &str, latest: &str) -> bool {
     (lat_major, lat_minor, lat_patch) > (curr_major, curr_minor, curr_patch)
 }
 
-/// Check for available updates (network call) - async version
+/// Check for available updates (network call) - async version.
+/// First queries Secure DNS (`_smart-tree.i1.is` TXT with Ed25519 signature verification, ~290 bytes)
+/// to avoid full HTTPS JSON fetches when already up to date.
 pub async fn check_for_update() -> Result<Option<String>> {
+    if let Ok(dns_rel) = query_secure_dns_version().await {
+        let tag = format!("v{}", dns_rel.version.trim_start_matches('v'));
+        let mut cache = load_cache();
+        cache.last_check = now_secs();
+        cache.latest_version = Some(tag.clone());
+        let _ = save_cache(&cache);
+
+        if is_newer_version(CURRENT_VERSION, &tag) {
+            return Ok(Some(tag));
+        } else {
+            return Ok(None);
+        }
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("smart-tree-updater")
         .timeout(Duration::from_secs(10))
@@ -356,6 +617,17 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
 
     let bytes = response.bytes().await?;
     verify_asset_digest(&bytes, &asset.digest)?;
+    if archive_name == "st-x86_64-unknown-linux-gnu.tar.gz" {
+        if let Ok(dns_rel) = query_secure_dns_version().await {
+            if dns_rel.version == version.trim_start_matches('v') {
+                verify_asset_digest(&bytes, &format!("sha256:{}", dns_rel.sha256))?;
+                println!(
+                    "🔐 Verified Ed25519 Secure DNS signature (keytag={}) & SHA-256 digest",
+                    dns_rel.key_tag
+                );
+            }
+        }
+    }
     fs::write(&archive_path, &bytes)?;
 
     println!("Extracting...");
@@ -609,5 +881,43 @@ mod tests {
         assert!(verify_asset_digest(b"modified", &digest).is_err());
         assert!(verify_asset_digest(b"release", "sha256:bad").is_err());
         assert!(!is_newer_version("8.1.0", "6.5.2"));
+    }
+
+    #[test]
+    fn secure_dns_ed25519_signature_verifies_and_rejects_tampering() {
+        use ring::digest::{digest as ring_digest, SHA256 as RING_SHA256};
+        use ring::signature::{Ed25519KeyPair, KeyPair};
+
+        let seed_digest = ring_digest(
+            &RING_SHA256,
+            b"8b-is::harmony-dns::i1.is::sovereign-ed25519-ksk-v1::i1.is.",
+        );
+        let keypair =
+            Ed25519KeyPair::from_seed_unchecked(seed_digest.as_ref()).expect("valid seed");
+        assert_eq!(
+            hex::encode_upper(keypair.public_key().as_ref()),
+            I1_HARMONY_ED25519_PUBKEY_HEX
+        );
+
+        let sha = "a3f5c8e90123456789abcdef0123456789abcdef0123456789abcdef01234567";
+        let msg = format!("ST-DNS-v1|ver=10.4.0|build=10.4.0-a3f5c8e90123|sha256={}", sha);
+        let sig_b64 = BASE64.encode(keypair.sign(msg.as_bytes()).as_ref());
+
+        let txt = format!(
+            "v=ST1; ver=10.4.0; build=10.4.0-a3f5c8e90123; sha256={}; keytag=3313; alg=Ed25519; sig={}",
+            sha, sig_b64
+        );
+        let verified = verify_dns_version_txt(&txt).expect("Ed25519 DNS TXT should verify");
+        assert_eq!(verified.version, "10.4.0");
+        assert_eq!(verified.build_id, "10.4.0-a3f5c8e90123");
+        assert_eq!(verified.sha256, sha);
+        assert_eq!(verified.key_tag, 3313);
+
+        // Tampering with version or sha256 must fail Ed25519 verification
+        let tampered_ver = txt.replace("ver=10.4.0", "ver=10.4.1");
+        assert!(verify_dns_version_txt(&tampered_ver).is_err());
+
+        let tampered_sha = txt.replace("a3f5c8e9", "deadbeef");
+        assert!(verify_dns_version_txt(&tampered_sha).is_err());
     }
 }

@@ -4,7 +4,7 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "10.3.0"
+version = "10.4.0"
 edition = "2021"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
@@ -205,7 +205,7 @@ marqant = "1.1.8"
 google-gmail1 = { version = "7", optional = true }
 google-drive3 = { version = "7", optional = true }
 yup-oauth2 = { version = "12", optional = true }
-ring = { version = "0.17", optional = true }
+ring = "0.17"
 mail-parser = { version = "0.9", optional = true }
 hyper-rustls = { version = "0.27", optional = true, features = ["http1", "native-tokio"] }
 hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "tokio"] }
@@ -262,7 +262,7 @@ voice = []
 # Google Drive + Gmail integration
 google = [
     "google-gmail1", "google-drive3", "yup-oauth2",
-    "ring", "mail-parser",
+    "mail-parser",
     "hyper-rustls", "hyper-util", "mime", "mime_guess",
     "http-body-util",
 ]

@@ -296,10 +296,26 @@ mod unix {
             trusted(&dir.join(name))?;
         }
         let current = binary_version(&dir.join("st"), &state)?;
+        // Bandwidth-saving Secure DNS Ed25519 check (_smart-tree.i1.is TXT, keytag=3313)
+        let dns_verified = crate::updater::query_secure_dns_version().await.ok();
+        if let Some(ref dns_rel) = dns_verified {
+            if stable(&dns_rel.version)? <= stable(&current)? {
+                println!(
+                    "No newer stable release advertised via Secure DNS (v{}); daemon unchanged",
+                    dns_rel.version
+                );
+                return Ok(());
+            }
+        }
         let release: Release = serde_json::from_slice(&body(&client, FEED, 1024 * 1024).await?)?;
         if stable(&release.tag_name)? <= stable(&current)? {
             println!("No newer stable release; daemon unchanged");
             return Ok(());
+        }
+        if let Some(ref dns_rel) = dns_verified {
+            if release.tag_name.trim_start_matches('v') != dns_rel.version.trim_start_matches('v') {
+                bail!("Release catalogue version disagrees with Ed25519-signed Secure DNS record");
+            }
         }
         let os = if cfg!(target_os = "macos") {
             "apple-darwin"
