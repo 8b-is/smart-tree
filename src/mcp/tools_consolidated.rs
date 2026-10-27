@@ -12,7 +12,7 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
     let find_type = params["type"].as_str().context("type parameter required")?;
 
     // Transform parameters to match original tool format and dispatch
-    let transformed_params = match find_type {
+    let mut transformed_params = match find_type {
         "files" => params.clone(),
         "code" => {
             // Transform to find_code_files format
@@ -47,6 +47,13 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
         }
         _ => return Err(anyhow::anyhow!("Unknown find type: {}", find_type)),
     };
+
+    // Keep pagination through both the consolidated and specialized handlers.
+    for key in ["limit", "offset"] {
+        if let Some(value) = params.get(key) {
+            transformed_params[key] = value.clone();
+        }
+    }
 
     // Call the appropriate original tool
     let tool_name = match find_type {

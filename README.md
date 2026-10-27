@@ -89,6 +89,24 @@ Smart Tree now includes an interactive menu for easy access to all features:
 
 The menu makes it easy to explore Smart Tree's features without memorizing commands!
 
+### MCP discovery paths and pagination
+
+Use a real directory path with `overview`; missing paths and regular files return
+an error rather than an empty project summary. A missing or disallowed path does
+not replace the session's remembered directory. Relative paths on the next call
+still resolve against the last valid directory. File-creation targets may still
+refer to paths that do not exist yet.
+
+`find` forwards `limit` and `offset` through its code, config, documentation,
+tests, build, large, recent, and timespan searches, as well as ordinary file and
+project discovery. For example, request `{"type":"code","path":"/my/project",
+"limit":20,"offset":0}`, then advance the offset by the returned `found` count.
+File-search responses retain `total_count`, `offset`, and `limit_applied`; counts
+follow the server's decimal/hexadecimal setting. Pagination counts returned
+entries, including parent directories retained by the scanner, not only files.
+An offset beyond the last entry returns an empty page. Keep pages small enough
+for the response-size cap and use an unchanged tree when paging.
+
 ---
 
 ## 🛡️ Security: Audit Your MCP Integrations

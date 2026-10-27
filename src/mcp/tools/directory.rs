@@ -14,7 +14,8 @@ use crate::formatters::{
     PathDisplayMode,
 };
 use crate::mcp::helpers::{
-    scan_with_config, should_use_default_ignores, validate_and_convert_path, ScannerConfigBuilder,
+    scan_with_config, should_use_default_ignores, validate_and_convert_path, validate_directory,
+    ScannerConfigBuilder,
 };
 use crate::mcp::McpContext;
 use anyhow::Result;
@@ -25,6 +26,8 @@ use std::sync::Arc;
 pub async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
     let args: AnalyzeDirectoryArgs = serde_json::from_value(args)?;
     let path = validate_and_convert_path(&args.path, &ctx)?;
+    // Check before cache lookup: a removed root must not return a stale success.
+    validate_directory(&path)?;
 
     // Check cache if enabled
     let cache_key = format!(
