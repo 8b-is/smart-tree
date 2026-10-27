@@ -193,8 +193,13 @@ pub async fn find_config_files(args: Value, ctx: Arc<McpContext>) -> Result<Valu
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
 
-    let pattern =
+    let default_pattern =
         r"\.(json|yaml|yml|toml|ini|cfg|conf|config|env|properties|xml)$|^\..*rc$|^.*config.*$";
+    let pattern = args
+        .get("pattern")
+        .and_then(|p| p.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_pattern);
     find_files(
         json!({
             "path": path,
@@ -316,7 +321,12 @@ pub async fn find_documentation(args: Value, ctx: Arc<McpContext>) -> Result<Val
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
 
-    let pattern = r"(README|readme|CHANGELOG|changelog|LICENSE|license|CONTRIBUTING|contributing|TODO|todo|INSTALL|install|AUTHORS|authors|NOTICE|notice|HISTORY|history)(\.(md|markdown|rst|txt|adoc|org))?$|\.(md|markdown|rst|txt|adoc|org)$";
+    let default_pattern = r"(README|readme|CHANGELOG|changelog|LICENSE|license|CONTRIBUTING|contributing|TODO|todo|INSTALL|install|AUTHORS|authors|NOTICE|notice|HISTORY|history)(\.(md|markdown|rst|txt|adoc|org))?$|\.(md|markdown|rst|txt|adoc|org)$";
+    let pattern = args
+        .get("pattern")
+        .and_then(|p| p.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_pattern);
     find_files(
         json!({
             "path": path,
@@ -531,7 +541,13 @@ pub async fn find_tests(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
 
-    let pattern = r"(test_|_test\.|\.test\.|tests?\.|spec\.|\.spec\.|_spec\.)|(/tests?/|/specs?/)";
+    let default_pattern =
+        r"(test_|_test\.|\.test\.|tests?\.|spec\.|\.spec\.|_spec\.)|(/tests?/|/specs?/)";
+    let pattern = args
+        .get("pattern")
+        .and_then(|p| p.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_pattern);
     find_files(
         json!({
             "path": path,
@@ -552,7 +568,12 @@ pub async fn find_build_files(args: Value, ctx: Arc<McpContext>) -> Result<Value
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
 
     // The scanner matches full paths, so anchor at a path component boundary.
-    let pattern = r"(^|[/\\])(Makefile|makefile|CMakeLists\.txt|Cargo\.toml|package\.json|pom\.xml|build\.gradle|build\.sbt|setup\.py|requirements\.txt|Gemfile|go\.mod|composer\.json|Dockerfile|docker-compose\.yml)$";
+    let default_pattern = r"(^|[/\\])(Makefile|makefile|CMakeLists\.txt|Cargo\.toml|package\.json|pom\.xml|build\.gradle|build\.sbt|setup\.py|requirements\.txt|Gemfile|go\.mod|composer\.json|Dockerfile|docker-compose\.yml)$";
+    let pattern = args
+        .get("pattern")
+        .and_then(|p| p.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_pattern);
     find_files(
         json!({
             "path": path,

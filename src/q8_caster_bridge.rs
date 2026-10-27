@@ -14,12 +14,25 @@ pub struct Q8CasterBridge {
 }
 
 impl Q8CasterBridge {
-    pub fn new() -> Result<Self> {
-        // Check if q8-caster is available
-        let q8_path = PathBuf::from("/aidata/ayeverse/q8-caster");
-        if !q8_path.exists() {
-            anyhow::bail!("q8-caster not found at {:?}", q8_path);
+    /// Locate the q8-caster directory via `Q8_CASTER_PATH`, home directory, or workspace roots.
+    pub fn resolve_q8_caster_path() -> Option<PathBuf> {
+        let mut candidates = Vec::new();
+        if let Ok(env_path) = std::env::var("Q8_CASTER_PATH") {
+            candidates.push(PathBuf::from(env_path));
         }
+        if let Some(home) = dirs::home_dir() {
+            candidates.push(home.join("8b-is/q8-caster"));
+            candidates.push(home.join("q8-caster"));
+        }
+        candidates.push(PathBuf::from("/data/8b-is/q8-caster"));
+
+        candidates.into_iter().find(|p| p.exists())
+    }
+
+    pub fn new() -> Result<Self> {
+        let q8_path = Self::resolve_q8_caster_path().ok_or_else(|| {
+            anyhow::anyhow!("q8-caster installation not found (set Q8_CASTER_PATH)")
+        })?;
 
         Ok(Self {
             q8_caster_path: q8_path,
@@ -277,7 +290,7 @@ mod tests {
     #[tokio::test]
     async fn test_q8_bridge_creation() {
         // This test will only pass if q8-caster is available
-        if PathBuf::from("/aidata/ayeverse/q8-caster").exists() {
+        if Q8CasterBridge::resolve_q8_caster_path().is_some() {
             let bridge = Q8CasterBridge::new();
             assert!(bridge.is_ok());
         }

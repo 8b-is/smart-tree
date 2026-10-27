@@ -11,47 +11,24 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
     let params = params.context("Parameters required")?;
     let find_type = params["type"].as_str().context("type parameter required")?;
 
-    // Transform parameters to match original tool format and dispatch
-    let mut transformed_params = match find_type {
-        "files" => params.clone(),
-        "code" => {
-            // Transform to find_code_files format
-            params.clone()
-        }
-        "config" | "documentation" | "tests" | "build" => {
-            // These just need path
-            json!({ "path": params.get("path").unwrap_or(&json!(".")) })
-        }
-        "large" => {
-            json!({
-                "path": params.get("path").unwrap_or(&json!(".")),
-                "min_size": params.get("min_size").unwrap_or(&json!("10M"))
-            })
-        }
-        "recent" => {
-            json!({
-                "path": params.get("path").unwrap_or(&json!(".")),
-                "days": params.get("days").unwrap_or(&json!(7))
-            })
-        }
-        "timespan" => params.clone(),
-        "duplicates" | "empty_dirs" => {
-            json!({ "path": params.get("path").unwrap_or(&json!(".")) })
-        }
-        "projects" => {
-            // Projects discovery - finds forgotten 3am coding gems!
-            json!({
-                "path": params.get("path").unwrap_or(&json!(".")),
-                "depth": params.get("depth").unwrap_or(&json!(10))
-            })
-        }
-        _ => return Err(anyhow::anyhow!("Unknown find type: {}", find_type)),
-    };
-
-    // Keep pagination through both the consolidated and specialized handlers.
-    for key in ["limit", "offset"] {
-        if let Some(value) = params.get(key) {
-            transformed_params[key] = value.clone();
+    // Preserve all caller arguments (pattern, limit, offset, languages, etc.)
+    // while applying sensible defaults for specialized find modes.
+    let mut transformed_params = params.clone();
+    if let Some(obj) = transformed_params.as_object_mut() {
+        obj.entry("path").or_insert_with(|| json!("."));
+        match find_type {
+            "files" | "code" | "config" | "documentation" | "tests" | "build" | "timespan"
+            | "duplicates" | "empty_dirs" => {}
+            "large" => {
+                obj.entry("min_size").or_insert_with(|| json!("10M"));
+            }
+            "recent" => {
+                obj.entry("days").or_insert_with(|| json!(7));
+            }
+            "projects" => {
+                obj.entry("depth").or_insert_with(|| json!(10));
+            }
+            _ => return Err(anyhow::anyhow!("Unknown find type: {}", find_type)),
         }
     }
 
@@ -88,14 +65,15 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
     // Transform parameters based on the tool
     let (tool_name, transformed_params) = match mode {
         "directory" => {
-            // analyze_directory expects 'mode' not 'format', but we rename 'format' to 'mode'
+            // analyze_directory expects its output format in 'mode'; remove the consolidated
+            // 'mode': 'directory' selector first, then rename 'format' -> 'mode' if present.
             let mut p = params.clone();
-            if let Some(format) = p.get("format") {
-                p["mode"] = format.clone();
-                p.as_object_mut().unwrap().remove("format");
+            if let Some(obj) = p.as_object_mut() {
+                obj.remove("mode");
+                if let Some(format) = obj.remove("format") {
+                    obj.insert("mode".to_string(), format);
+                }
             }
-            // Remove the consolidated 'mode' field as analyze_directory doesn't expect it
-            p.as_object_mut().unwrap().remove("mode");
             ("analyze_directory", p)
         }
         "workspace" => ("analyze_workspace", params.clone()),
@@ -797,46 +775,67 @@ async fn handle_hooks(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Va
     }))
 }
 
+/// Ensure any tool response is wrapped in the standard MCP `{"content": [{"type": "text", "text": ...}]}` envelope.
+pub fn ensure_mcp_content_envelope(val: Value) -> Result<Value> {
+    if val.get("content").and_then(|c| c.as_array()).is_some() {
+        Ok(val)
+    } else if let Some(s) = val.as_str() {
+        Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": s
+            }]
+        }))
+    } else {
+        Ok(json!({
+            "content": [{
+                "type": "text",
+                "text": serde_json::to_string_pretty(&val)?
+            }]
+        }))
+    }
+}
+
 /// Tool dispatcher for consolidated tools
 pub async fn dispatch_consolidated_tool(
     name: &str,
     params: Option<Value>,
     ctx: Arc<McpContext>,
 ) -> Result<Value> {
-    match name {
-        "find" => handle_find(params, ctx).await,
-        "analyze" => handle_analyze(params, ctx).await,
-        "search" => handle_search(params, ctx).await,
-        "overview" => handle_overview(params, ctx).await,
-        "edit" => handle_edit(params, ctx).await,
-        "history" => handle_history(params, ctx).await,
-        "context" => handle_context(params, ctx).await,
-        "memory" => handle_memory(params, ctx).await,
-        "compare" => handle_compare(params, ctx).await,
-        "sse" => handle_sse(params, ctx).await,
-        "feedback" => handle_feedback(params, ctx).await,
+    let raw = match name {
+        "find" => handle_find(params, ctx).await?,
+        "analyze" => handle_analyze(params, ctx).await?,
+        "search" => handle_search(params, ctx).await?,
+        "overview" => handle_overview(params, ctx).await?,
+        "edit" => handle_edit(params, ctx).await?,
+        "history" => handle_history(params, ctx).await?,
+        "context" => handle_context(params, ctx).await?,
+        "memory" => handle_memory(params, ctx).await?,
+        "compare" => handle_compare(params, ctx).await?,
+        "sse" => handle_sse(params, ctx).await?,
+        "feedback" => handle_feedback(params, ctx).await?,
         "server_info" => {
             super::tools::handle_tools_call(
                 json!({ "name": "server_info", "arguments": params }),
                 ctx,
             )
-            .await
+            .await?
         }
         "verify_permissions" => {
             super::tools::handle_tools_call(
                 json!({ "name": "verify_permissions", "arguments": params }),
                 ctx,
             )
-            .await
+            .await?
         }
-        "hooks" => handle_hooks(params, ctx).await,
+        "hooks" => handle_hooks(params, ctx).await?,
         "unified_watcher" => {
-            super::unified_watcher::handle_unified_watcher(params.unwrap_or(json!({})), ctx).await
+            super::unified_watcher::handle_unified_watcher(params.unwrap_or(json!({})), ctx).await?
         }
         // 📖 Smart read tool with AST-aware compression
         "read" => {
             super::tools::handle_tools_call(json!({ "name": "read", "arguments": params }), ctx)
-                .await
+                .await?
         }
         // 📦 Full project context dump for AI assistants
         "project_context_dump" => {
@@ -844,22 +843,23 @@ pub async fn dispatch_consolidated_tool(
                 json!({ "name": "project_context_dump", "arguments": params }),
                 ctx,
             )
-            .await
+            .await?
         }
         "ask_user" => {
             super::tools::handle_tools_call(json!({ "name": "ask_user", "arguments": params }), ctx)
-                .await
+                .await?
         }
-        "symbol" | "crabcc" => handle_symbol(params, ctx).await,
-        "security" | "custodian" => handle_security(params, ctx).await,
-        "ontology" | "sovereign_ontology" => handle_ontology(params, ctx).await,
-        "partner" | "wa" | "wastream" | "discord" => handle_partner(params, ctx).await,
+        "symbol" | "crabcc" => handle_symbol(params, ctx).await?,
+        "security" | "custodian" => handle_security(params, ctx).await?,
+        "ontology" | "sovereign_ontology" => handle_ontology(params, ctx).await?,
+        "partner" | "wa" | "wastream" | "discord" => handle_partner(params, ctx).await?,
         #[cfg(feature = "google")]
-        "google" => super::google::handle_google(params, ctx).await,
+        "google" => super::google::handle_google(params, ctx).await?,
         #[cfg(feature = "voice")]
-        "voice" => handle_voice(params, ctx).await,
-        _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
-    }
+        "voice" => handle_voice(params, ctx).await?,
+        _ => return Err(anyhow::anyhow!("Unknown tool: {}", name)),
+    };
+    ensure_mcp_content_envelope(raw)
 }
 
 /// Consolidated voice tool - VAD metrics, audio synthesis, and speaker management
@@ -969,7 +969,7 @@ pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
                 .get("url")
                 .or_else(|| params.get("path"))
                 .and_then(|v| v.as_str())
-                .unwrap_or("/home/hue/8b-is/qwave/README.md");
+                .unwrap_or("README.md");
             let out = std::process::Command::new("/usr/local/bin/qwave")
                 .args(["--surf", target])
                 .output()?;
@@ -1023,17 +1023,25 @@ pub async fn handle_symbol(params: Option<Value>, ctx: Arc<McpContext>) -> Resul
 }
 
 /// Consolidated security scanner tool — runs Smart Tree's built-in Custodian AST & supply-chain scanner in-memory.
-pub async fn handle_security(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.unwrap_or(json!({}));
-    let path_str = params
+pub async fn handle_security(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
+    let mut params = params.unwrap_or(json!({}));
+    super::helpers::normalize_path_args(&mut params, &ctx);
+    let default_cwd = ctx
+        .cwd
+        .lock()
+        .ok()
+        .map(|p| p.clone())
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let scan_path = params
         .get("path")
         .and_then(|v| v.as_str())
         .filter(|s| !s.trim().is_empty() && *s != ".")
-        .unwrap_or("/home/hue/8b-is/alexiai");
+        .map(std::path::PathBuf::from)
+        .unwrap_or(default_cwd);
 
     let scanner = crate::security_scan::SecurityScanner::new();
-    let scan_path = std::path::Path::new(path_str);
-    let findings = scanner.scan_directory(scan_path)?;
+    let findings = scanner.scan_directory(&scan_path)?;
     let report = scanner.generate_report(&findings);
 
     Ok(json!({

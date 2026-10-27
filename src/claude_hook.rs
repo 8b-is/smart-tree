@@ -354,7 +354,7 @@ fn provide_topic_context(prompt: &str) -> Result<()> {
         || lower.contains("rust") && lower.contains("file")
     {
         println!("### 🦀 Termust - File Oxidation");
-        println!("- **Main**: `/aidata/ayeverse/termust/`");
+        println!("- **Main**: `termust/`");
         println!("- **Oxidation engine**: `termust/src/oxidation.rs`");
         println!("- **Horse apples**: `termust/src/horse_apples.rs`");
         println!("- **Jerry Maguire mode**: SHOW ME THE MONEY!");

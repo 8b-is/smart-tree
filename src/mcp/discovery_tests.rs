@@ -1,5 +1,7 @@
 //! Regression coverage through the public consolidated discovery handlers.
-use super::tools_consolidated::{handle_find, handle_overview};
+use super::tools_consolidated::{
+    dispatch_consolidated_tool, handle_analyze, handle_find, handle_overview,
+};
 use super::{McpConfig, McpContext, McpServer};
 use serde_json::{json, Value};
 use std::path::Path;
@@ -141,5 +143,67 @@ async fn specialized_find_pagination_survives_both_dispatch_layers() {
         let mut invalid = args;
         invalid["limit"] = json!(-1);
         assert!(handle_find(Some(invalid), ctx.clone()).await.is_err());
+    }
+}
+
+#[tokio::test]
+async fn consolidated_dispatch_preserves_format_pattern_and_mcp_envelope() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::write(temp.path().join("test_alpha.py"), "def test_a(): pass\n").unwrap();
+    std::fs::write(temp.path().join("test_beta.rs"), "fn test_b() {}\n").unwrap();
+    let ctx = context(temp.path());
+
+    // 1. `find` with `type: "tests"` and custom `pattern` preserves `pattern`
+    let filtered = payload(
+        handle_find(
+            Some(json!({
+                "path": temp.path(),
+                "type": "tests",
+                "pattern": r"test_alpha\.py$"
+            })),
+            ctx.clone(),
+        )
+        .await
+        .unwrap(),
+    );
+    let files = filtered["files"].as_array().unwrap();
+    assert!(
+        files.iter().any(|f| f["name"] == "test_alpha.py"),
+        "expected test_alpha.py in filtered results"
+    );
+    assert!(
+        !files.iter().any(|f| f["name"] == "test_beta.rs"),
+        "expected test_beta.rs to be excluded by custom pattern"
+    );
+
+    // 2. `analyze` with `mode: "directory"` and `format: "json"` preserves `format` -> `mode`
+    let dir_json = handle_analyze(
+        Some(json!({
+            "path": temp.path(),
+            "mode": "directory",
+            "format": "json"
+        })),
+        ctx.clone(),
+    )
+    .await
+    .unwrap();
+    let dir_text = dir_json["content"][0]["text"].as_str().unwrap();
+    assert!(
+        serde_json::from_str::<Value>(dir_text).is_ok(),
+        "directory analyze with format='json' should produce JSON output, got: {dir_text}"
+    );
+
+    // 3. `dispatch_consolidated_tool` guarantees MCP `content` envelope on `unified_watcher` and `hooks`
+    for (tool, args) in [
+        ("unified_watcher", json!({"action": "status"})),
+        ("hooks", json!({"operation": "get_commands"})),
+    ] {
+        let resp = dispatch_consolidated_tool(tool, Some(args), ctx.clone())
+            .await
+            .unwrap();
+        let text = resp["content"][0]["text"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{tool} response missing MCP content[0].text"));
+        assert!(!text.is_empty(), "{tool} MCP text should not be empty");
     }
 }

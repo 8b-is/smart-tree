@@ -275,7 +275,7 @@ pub async fn get_hook_commands(_params: Value) -> Result<Value> {
 // Helper functions
 
 fn get_hook_path() -> String {
-    // Look for st-hook wrapper script first
+    // Look for st-hook wrapper script in current directory first
     if let Ok(current_dir) = env::current_dir() {
         let st_hook = current_dir.join("st-hook");
         if st_hook.exists() {
@@ -283,17 +283,9 @@ fn get_hook_path() -> String {
         }
     }
 
-    // Check in smart-tree directory
-    let smart_tree_hook = PathBuf::from("/aidata/ayeverse/smart-tree/st-hook");
-    if smart_tree_hook.exists() {
-        return smart_tree_hook.display().to_string();
-    }
-
-    // Try installed location
-    if let Ok(output) = Command::new("which").arg("st-hook").output() {
-        if output.status.success() {
-            return String::from_utf8_lossy(&output.stdout).trim().to_string();
-        }
+    // Try installed st-hook location via which
+    if let Ok(path) = which::which("st-hook") {
+        return path.display().to_string();
     }
 
     // Fall back to st binary
@@ -301,32 +293,40 @@ fn get_hook_path() -> String {
 }
 
 fn get_st_path() -> String {
-    // For now, use a dedicated hook binary path
-    // In the future this should be integrated into st itself
-    // Try to find st-hook binary first
-    if let Ok(output) = Command::new("which").arg("st-hook").output() {
-        if output.status.success() {
-            return String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // 1. Prefer the currently running `st` executable if invoked as `st` or `st-hook`
+    if let Ok(exe) = env::current_exe() {
+        if let Some(name) = exe.file_name().and_then(|n| n.to_str()) {
+            if (name == "st" || name == "st-hook") && exe.exists() {
+                return exe.display().to_string();
+            }
         }
     }
 
-    // Try regular st in PATH
-    if let Ok(output) = Command::new("which").arg("st").output() {
-        if output.status.success() {
-            return String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // 2. Try `st` or `st-hook` in PATH via `which`
+    for candidate in ["st", "st-hook"] {
+        if let Ok(path) = which::which(candidate) {
+            return path.display().to_string();
         }
     }
 
-    // Otherwise use the full path
+    // 3. Check standard system binary locations
+    for system_path in ["/usr/local/bin/st", "/opt/homebrew/bin/st"] {
+        if std::path::Path::new(system_path).exists() {
+            return system_path.to_string();
+        }
+    }
+
+    // 4. Check workspace build output relative to current directory
     if let Ok(current_dir) = env::current_dir() {
-        let st_release = current_dir.join("target/release/st");
-        if st_release.exists() {
-            return st_release.display().to_string();
+        for rel in ["target/release/st", "target/debug/st"] {
+            let bin = current_dir.join(rel);
+            if bin.exists() {
+                return bin.display().to_string();
+            }
         }
     }
 
-    // Fallback to ayeverse location
-    "/aidata/ayeverse/smart-tree/target/release/st".to_string()
+    "st".to_string()
 }
 
 fn get_hooks_file_path() -> PathBuf {

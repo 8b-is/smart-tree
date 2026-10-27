@@ -974,8 +974,8 @@ EXAMPLES:
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Directory or repository path to scan (default: '/home/hue/8b-is/alexiai')",
-                    "default": "/home/hue/8b-is/alexiai"
+                    "description": "Directory or repository path to scan (default: '.')",
+                    "default": "."
                 }
             },
             "required": []
