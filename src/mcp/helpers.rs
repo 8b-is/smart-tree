@@ -3,7 +3,7 @@
 use super::{is_path_allowed, McpContext};
 use crate::scanner::{FileNode, TreeStats};
 use crate::{Scanner, ScannerConfig};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use regex::Regex;
 use serde_json::Value;
 use std::path::{Component, Path, PathBuf};
@@ -140,8 +140,10 @@ pub fn normalize_path_args(args: &mut Value, ctx: &McpContext) {
         } else {
             dir
         };
-        if let Ok(mut guard) = ctx.cwd.lock() {
-            *guard = dir;
+        if dir.is_dir() && is_path_allowed(&dir, &ctx.config) {
+            if let Ok(mut guard) = ctx.cwd.lock() {
+                *guard = dir;
+            }
         }
     }
 }
@@ -336,8 +338,19 @@ impl Default for ScannerConfigBuilder {
 /// Scan a directory with the given configuration
 /// Returns (nodes, stats) tuple
 pub fn scan_with_config(path: &Path, config: ScannerConfig) -> Result<(Vec<FileNode>, TreeStats)> {
+    validate_directory(path)?;
     let scanner = Scanner::new(path, config)?;
     scanner.scan()
+}
+
+/// Directory discovery must not turn a missing root into an empty tree.
+pub fn validate_directory(path: &Path) -> Result<()> {
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("Cannot access directory {}", path.display()))?;
+    if !metadata.is_dir() {
+        return Err(anyhow!("Not a directory: {}", path.display()));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

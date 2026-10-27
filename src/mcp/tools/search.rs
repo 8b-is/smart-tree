@@ -178,6 +178,8 @@ pub async fn find_code_files(args: Value, ctx: Arc<McpContext>) -> Result<Value>
         json!({
             "path": path,
             "pattern": pattern,
+            "limit": args.get("limit"),
+            "offset": args.get("offset"),
             "max_depth": 20
         }),
         ctx,
@@ -197,6 +199,8 @@ pub async fn find_config_files(args: Value, ctx: Arc<McpContext>) -> Result<Valu
         json!({
             "path": path,
             "pattern": pattern,
+            "limit": args.get("limit"),
+            "offset": args.get("offset"),
             "max_depth": 10
         }),
         ctx,
@@ -317,6 +321,8 @@ pub async fn find_documentation(args: Value, ctx: Arc<McpContext>) -> Result<Val
         json!({
             "path": path,
             "pattern": pattern,
+            "limit": args.get("limit"),
+            "offset": args.get("offset"),
             "max_depth": 10
         }),
         ctx,
@@ -408,6 +414,8 @@ pub async fn find_large_files(args: Value, ctx: Arc<McpContext>) -> Result<Value
         json!({
             "path": path,
             "min_size": min_size,
+            "limit": args.get("limit"),
+            "offset": args.get("offset"),
             "max_depth": 20
         }),
         ctx,
@@ -431,6 +439,8 @@ pub async fn find_recent_changes(args: Value, ctx: Arc<McpContext>) -> Result<Va
         json!({
             "path": path,
             "newer_than": date_str,
+            "limit": args.get("limit"),
+            "offset": args.get("offset"),
             "max_depth": 20
         }),
         ctx,
@@ -451,6 +461,8 @@ pub async fn find_in_timespan(args: Value, ctx: Arc<McpContext>) -> Result<Value
     let mut find_args = json!({
         "path": path,
         "newer_than": start_date,
+        "limit": args.get("limit"),
+        "offset": args.get("offset"),
         "max_depth": 20
     });
 
@@ -524,6 +536,8 @@ pub async fn find_tests(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
         json!({
             "path": path,
             "pattern": pattern,
+            "limit": args.get("limit"),
+            "offset": args.get("offset"),
             "max_depth": 20
         }),
         ctx,
@@ -537,11 +551,14 @@ pub async fn find_build_files(args: Value, ctx: Arc<McpContext>) -> Result<Value
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
 
-    let pattern = r"^(Makefile|makefile|CMakeLists\.txt|Cargo\.toml|package\.json|pom\.xml|build\.gradle|build\.sbt|setup\.py|requirements\.txt|Gemfile|go\.mod|composer\.json|Dockerfile|docker-compose\.yml)$";
+    // The scanner matches full paths, so anchor at a path component boundary.
+    let pattern = r"(^|[/\\])(Makefile|makefile|CMakeLists\.txt|Cargo\.toml|package\.json|pom\.xml|build\.gradle|build\.sbt|setup\.py|requirements\.txt|Gemfile|go\.mod|composer\.json|Dockerfile|docker-compose\.yml)$";
     find_files(
         json!({
             "path": path,
             "pattern": pattern,
+            "limit": args.get("limit"),
+            "offset": args.get("offset"),
             "max_depth": 10
         }),
         ctx,

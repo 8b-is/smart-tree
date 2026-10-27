@@ -750,26 +750,24 @@ async fn check_for_updates_cli() -> Result<String> {
     if std::env::var("SMART_TREE_NO_UPDATE_CHECK").is_ok() {
         return Ok(String::new());
     }
-    if let Ok(dns_rel) = tokio::time::timeout(
+    if let Ok(Ok(rel)) = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         st::updater::query_secure_dns_version(),
     )
     .await
     {
-        if let Ok(rel) = dns_rel {
-            println!(
-                "🔐 Secure DNS (_smart-tree.i1.is): v{} · Ed25519 keytag={} verified",
-                rel.version, rel.key_tag
-            );
-            if !st::updater::is_newer_version(env!("CARGO_PKG_VERSION"), &rel.version) {
-                return Ok(String::new());
-            }
-            return Ok(format!(
-                "Smart Tree v{} is available (installed: v{}).\nRun st --update or visit https://i1.is/#smart-tree",
-                rel.version,
-                env!("CARGO_PKG_VERSION")
-            ));
+        println!(
+            "🔐 Secure DNS (_smart-tree.i1.is): v{} · Ed25519 keytag={} verified",
+            rel.version, rel.key_tag
+        );
+        if !st::updater::is_newer_version(env!("CARGO_PKG_VERSION"), &rel.version) {
+            return Ok(String::new());
         }
+        return Ok(format!(
+            "Smart Tree v{} is available (installed: v{}).\nRun st --update or visit https://i1.is/#smart-tree",
+            rel.version,
+            env!("CARGO_PKG_VERSION")
+        ));
     }
     let client = st::feedback_client::FeedbackClient::new()?;
     let info = tokio::time::timeout(

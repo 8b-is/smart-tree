@@ -148,6 +148,9 @@ fn should_show_startup_messages() -> bool {
     false
 }
 
+#[cfg(test)]
+mod discovery_tests;
+
 /// MCP server implementation
 pub struct McpServer {
     context: Arc<McpContext>,
