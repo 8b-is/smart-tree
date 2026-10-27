@@ -140,7 +140,17 @@ pub fn normalize_path_args(args: &mut Value, ctx: &McpContext) {
         } else {
             dir
         };
-        if dir.is_dir() && is_path_allowed(&dir, &ctx.config) {
+        let target_allowed = PATH_KEYS
+            .iter()
+            .find_map(|key| {
+                if SESSION_DIR_KEYS.contains(key) || *key == "file_path" {
+                    obj.get(*key).and_then(Value::as_str)
+                } else {
+                    None
+                }
+            })
+            .is_some_and(|target| is_path_allowed(Path::new(target), &ctx.config));
+        if target_allowed && dir.is_dir() && is_path_allowed(&dir, &ctx.config) {
             if let Ok(mut guard) = ctx.cwd.lock() {
                 *guard = dir;
             }
