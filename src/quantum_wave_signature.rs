@@ -13,7 +13,7 @@ pub struct QuantumWaveSignature {
 
 impl QuantumWaveSignature {
     /// Create from individual components
-    pub fn new(frequency: u8, phase: u8, amplitude: u8, torsion: u8) -> Self {
+    pub const fn new(frequency: u8, phase: u8, amplitude: u8, torsion: u8) -> Self {
         let signature = ((torsion as u32) << 24)
             | ((amplitude as u32) << 16)
             | ((phase as u32) << 8)
@@ -22,28 +22,50 @@ impl QuantumWaveSignature {
     }
 
     /// Create from raw 32-bit value
-    pub fn from_raw(signature: u32) -> Self {
+    pub const fn from_raw(signature: u32) -> Self {
         Self { signature }
     }
 
     /// Extract frequency component (Hz mapping: 0-255 → 0-200Hz)
-    pub fn frequency(&self) -> u8 {
+    pub const fn frequency(&self) -> u8 {
         (self.signature & 0xFF) as u8
     }
 
     /// Extract phase relationships (0-255 → 0-2π radians)
-    pub fn phase(&self) -> u8 {
+    pub const fn phase(&self) -> u8 {
         ((self.signature >> 8) & 0xFF) as u8
     }
 
     /// Extract amplitude modulation (0-255 → 0-100% intensity)
-    pub fn amplitude(&self) -> u8 {
+    pub const fn amplitude(&self) -> u8 {
         ((self.signature >> 16) & 0xFF) as u8
     }
 
     /// Extract torsion/interference patterns (Nate's knot types)
-    pub fn torsion(&self) -> u8 {
+    pub const fn torsion(&self) -> u8 {
         ((self.signature >> 24) & 0xFF) as u8
+    }
+
+    /// Deterministic `p/q` Hz value (`(frequency * 200, 255)`).
+    pub const fn to_hz_pq(&self) -> (u32, u32) {
+        (self.frequency() as u32 * 200, 255)
+    }
+
+    /// Deterministic `p/q` amplitude percentage (`(amplitude * 100, 255)`).
+    pub const fn amplitude_pq(&self) -> (u32, u32) {
+        (self.amplitude() as u32 * 100, 255)
+    }
+
+    /// Deterministic `p/q` interference score over `Q = 1000` (zero IEEE-754 floats).
+    pub const fn interference_pq(&self, other: &Self) -> (u32, u32) {
+        let freq_diff = (self.frequency() as i32 - other.frequency() as i32).unsigned_abs();
+        let phase_diff = (self.phase() as i32 - other.phase() as i32).unsigned_abs();
+        let harmonic_mul: u64 = if freq_diff.is_multiple_of(12) { 2 } else { 1 };
+        let phase_num: u64 = 255u64.saturating_sub(phase_diff as u64);
+        let amp_sum: u64 = self.amplitude() as u64 + other.amplitude() as u64;
+        // Scale to Q = 1000: harmonic_mul * (phase_num / 255) * (amp_sum / 510) * 1000
+        let p = (harmonic_mul * phase_num * amp_sum * 1000) / (255 * 510);
+        (p as u32, 1000)
     }
 
     /// Convert to Hz frequency value
@@ -63,16 +85,8 @@ impl QuantumWaveSignature {
 
     /// Calculate interference with another signature
     pub fn interference(&self, other: &Self) -> f32 {
-        let freq_diff = (self.frequency() as i16 - other.frequency() as i16).abs() as f32;
-        let phase_diff = (self.phase() as i16 - other.phase() as i16).abs() as f32;
-
-        // Constructive interference when frequencies are harmonic
-        // and phases are aligned
-        let harmonic_factor = if freq_diff as i32 % 12 == 0 { 2.0 } else { 1.0 };
-        let phase_factor = 1.0 - (phase_diff / 255.0);
-
-        harmonic_factor * phase_factor * (self.amplitude_percent() + other.amplitude_percent())
-            / 200.0
+        let (p, q) = self.interference_pq(other);
+        p as f32 / q as f32
     }
 
     /// Check if this is a "horse apple" signature (Andy wouldn't approve)

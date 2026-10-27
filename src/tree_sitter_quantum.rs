@@ -4,6 +4,9 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
+/// Integer denominator `q` for `p/q` ("Counting Divided") quantum AST node importance.
+pub const QUANTUM_PQ_Q: u32 = 1000;
+
 // For now, we'll create a trait that can be implemented with tree-sitter later
 pub trait LanguageQuantumParser {
     /// Extract semantically important nodes from source code
@@ -11,6 +14,11 @@ pub trait LanguageQuantumParser {
 
     /// Score the importance of a node (0.0 to 1.0)
     fn score_importance(&self, node: &QuantumNode) -> f32;
+
+    /// Deterministic zero-float `p/q` importance score (`p / 1000`).
+    fn score_importance_pq(&self, node: &QuantumNode) -> (u32, u32) {
+        (node.importance_p, QUANTUM_PQ_Q)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +28,7 @@ pub struct QuantumNode {
     pub content: String,
     pub byte_range: (usize, usize),
     pub importance: f32,
+    pub importance_p: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,15 +121,16 @@ impl LanguageQuantumParser for RustQuantumParser {
             regex::Regex::new(r"(?m)^[\s]*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)[^{]+").unwrap();
         for cap in fn_regex.captures_iter(source) {
             if let (Some(full_match), Some(name)) = (cap.get(0), cap.get(1)) {
-                let importance = if full_match.as_str().contains("pub") {
-                    0.9
+                let importance_p: u32 = if full_match.as_str().contains("pub") {
+                    900
                 } else if name.as_str() == "main" {
-                    1.0
+                    1000
                 } else if name.as_str().starts_with("test_") {
-                    0.3
+                    300
                 } else {
-                    0.6
+                    600
                 };
+                let importance = importance_p as f32 / QUANTUM_PQ_Q as f32;
 
                 nodes.push(QuantumNode {
                     kind: NodeKind::Function,
@@ -128,12 +138,13 @@ impl LanguageQuantumParser for RustQuantumParser {
                     content: full_match.as_str().to_string(),
                     byte_range: (full_match.start(), full_match.end()),
                     importance,
+                    importance_p,
                 });
             }
         }
 
-        // Sort by importance
-        nodes.sort_by(|a, b| b.importance.partial_cmp(&a.importance).unwrap());
+        // Deterministic integer p/q sort (zero IEEE-754 NaN / float drift)
+        nodes.sort_by_key(|a| std::cmp::Reverse(a.importance_p));
 
         Ok(nodes)
     }
@@ -172,6 +183,7 @@ impl LanguageQuantumParser for PythonQuantumParser {
                     content: full_match.as_str().to_string(),
                     byte_range: (full_match.start(), full_match.end()),
                     importance: 0.8,
+                    importance_p: 800,
                 });
             }
         }
@@ -180,15 +192,16 @@ impl LanguageQuantumParser for PythonQuantumParser {
         let fn_regex = regex::Regex::new(r"(?m)^def\s+(\w+)").unwrap();
         for cap in fn_regex.captures_iter(source) {
             if let (Some(full_match), Some(name)) = (cap.get(0), cap.get(1)) {
-                let importance = if name.as_str() == "__init__" {
-                    0.9
+                let importance_p: u32 = if name.as_str() == "__init__" {
+                    900
                 } else if name.as_str().starts_with("_") {
-                    0.4
+                    400
                 } else if name.as_str() == "main" {
-                    1.0
+                    1000
                 } else {
-                    0.6
+                    600
                 };
+                let importance = importance_p as f32 / QUANTUM_PQ_Q as f32;
 
                 nodes.push(QuantumNode {
                     kind: NodeKind::Function,
@@ -196,11 +209,12 @@ impl LanguageQuantumParser for PythonQuantumParser {
                     content: full_match.as_str().to_string(),
                     byte_range: (full_match.start(), full_match.end()),
                     importance,
+                    importance_p,
                 });
             }
         }
 
-        nodes.sort_by(|a, b| b.importance.partial_cmp(&a.importance).unwrap());
+        nodes.sort_by_key(|a| std::cmp::Reverse(a.importance_p));
         Ok(nodes)
     }
 

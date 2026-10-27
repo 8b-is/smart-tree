@@ -65,6 +65,7 @@ impl SupportedLanguage {
 #[serde(tag = "operation")]
 pub enum SmartEdit {
     /// Insert a function at the appropriate location
+    #[serde(alias = "insert_function")]
     InsertFunction {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,18 +78,21 @@ pub enum SmartEdit {
         #[serde(skip_serializing_if = "Option::is_none")]
         before: Option<String>,
         #[serde(default)]
-        visibility: String, // public, private, protected
+        visibility: String, // public, pub, private, protected
     },
 
-    /// Replace a function body (keeps signature)
+    /// Replace a function body (keeps signature or updates params+body)
+    #[serde(alias = "replace_function")]
     ReplaceFunction {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         class_name: Option<String>,
+        #[serde(alias = "body")]
         new_body: String,
     },
 
     /// Add imports/use statements intelligently
+    #[serde(alias = "add_import")]
     AddImport {
         import: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,6 +100,7 @@ pub enum SmartEdit {
     },
 
     /// Insert a class/struct
+    #[serde(alias = "insert_class")]
     InsertClass {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -108,6 +113,7 @@ pub enum SmartEdit {
     },
 
     /// Add a method to a class
+    #[serde(alias = "add_method")]
     AddMethod {
         class_name: String,
         method_name: String,
@@ -117,6 +123,7 @@ pub enum SmartEdit {
     },
 
     /// Wrap code in a construct (try-catch, if statement, etc)
+    #[serde(alias = "wrap_code")]
     WrapCode {
         start_line: usize,
         end_line: usize,
@@ -126,7 +133,9 @@ pub enum SmartEdit {
     },
 
     /// Delete a named element
+    #[serde(alias = "delete_element")]
     DeleteElement {
+        #[serde(default = "default_function_element_type")]
         element_type: String, // "function", "class", "method"
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -134,6 +143,7 @@ pub enum SmartEdit {
     },
 
     /// Rename across the file
+    #[serde(alias = "rename")]
     Rename {
         old_name: String,
         new_name: String,
@@ -142,6 +152,7 @@ pub enum SmartEdit {
     },
 
     /// Add documentation comment
+    #[serde(alias = "add_documentation")]
     AddDocumentation {
         target_type: String, // "function", "class", "method"
         target_name: String,
@@ -149,12 +160,18 @@ pub enum SmartEdit {
     },
 
     /// Smart append - adds to the end of a logical section
+    #[serde(alias = "smart_append")]
     SmartAppend {
         section: String, // "imports", "functions", "classes", "main"
         content: String,
     },
 
     /// Remove a function with dependency awareness
+    #[serde(
+        alias = "remove_function",
+        alias = "DeleteFunction",
+        alias = "delete_function"
+    )]
     RemoveFunction {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -164,6 +181,10 @@ pub enum SmartEdit {
         #[serde(default)]
         cascade: bool, // Also remove functions that only this one calls
     },
+}
+
+fn default_function_element_type() -> String {
+    "function".to_string()
 }
 
 /// Function information for the function tree
@@ -469,6 +490,20 @@ impl SmartEditor {
             } => {
                 self.remove_function(name, class_name.as_deref(), *force, *cascade)?;
             }
+            SmartEdit::DeleteElement {
+                element_type,
+                name,
+                parent,
+            } => {
+                if matches!(element_type.as_str(), "function" | "method" | "fn" | "") {
+                    self.remove_function(name, parent.as_deref(), true, false)?;
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "DeleteElement for '{}' not yet implemented",
+                        element_type
+                    ));
+                }
+            }
             _ => {
                 return Err(anyhow::anyhow!("Operation not yet implemented"));
             }
@@ -491,71 +526,95 @@ impl SmartEditor {
         visibility: &str,
     ) -> Result<()> {
         let structure = self.structure.as_ref().context("No structure analyzed")?;
+        let lines: Vec<&str> = self.content.lines().collect();
 
-        // Find insertion point
-        let insert_line = if let Some(after_name) = after {
-            // Insert after specified function
-            structure
+        enum InsertPos {
+            AfterLine(usize),
+            BeforeLine(usize),
+            EndOfFile,
+        }
+
+        let pos = if let Some(after_name) = after {
+            let end_line = structure
                 .functions
                 .iter()
                 .find(|f| f.name == after_name && f.class_name.as_deref() == class_name)
-                .map(|f| f.end_line + 1)
-                .with_context(|| format!("Function not found: {}", after_name))?
+                .map(|f| f.end_line)
+                .with_context(|| format!("Function not found: {}", after_name))?;
+            InsertPos::AfterLine(end_line)
         } else if let Some(before_name) = before {
-            // Insert before specified function
-            structure
+            let mut start_line = structure
                 .functions
                 .iter()
                 .find(|f| f.name == before_name && f.class_name.as_deref() == class_name)
-                .map(|f| f.start_line.saturating_sub(1))
-                .with_context(|| format!("Function not found: {}", before_name))?
+                .map(|f| f.start_line)
+                .with_context(|| format!("Function not found: {}", before_name))?;
+            // Walk backwards over contiguous preceding attributes/doc-comments (`#[...]`, `///`)
+            while start_line > 1 {
+                let prev_trimmed = lines[start_line - 2].trim();
+                if prev_trimmed.starts_with("#[") || prev_trimmed.starts_with("///") {
+                    start_line -= 1;
+                } else {
+                    break;
+                }
+            }
+            InsertPos::BeforeLine(start_line)
         } else if let Some(class) = class_name {
-            // Insert at end of class
-            structure
+            let after_line = structure
                 .classes
                 .iter()
                 .find(|c| c.name == class)
                 .map(|c| {
-                    // Find last method or class end
                     c.methods
                         .iter()
                         .map(|m| m.end_line)
                         .max()
                         .unwrap_or(c.start_line)
-                        + 1
                 })
-                .context("Class not found: {class}")?
+                .with_context(|| format!("Class not found: {}", class))?;
+            InsertPos::AfterLine(after_line)
+        } else if let Some(last_fn_end) = structure
+            .functions
+            .iter()
+            .filter(|f| f.class_name.is_none())
+            .map(|f| f.end_line)
+            .max()
+        {
+            InsertPos::AfterLine(last_fn_end)
         } else {
-            // Insert at end of file functions
-            structure
-                .functions
-                .iter()
-                .filter(|f| f.class_name.is_none())
-                .map(|f| f.end_line)
-                .max()
-                .unwrap_or(structure.imports.len() + 1)
-                + 1
+            InsertPos::EndOfFile
         };
 
         // Format function based on language
         let formatted_function =
             self.format_function(name, body, visibility, class_name.is_some())?;
 
-        // Insert at the calculated position
-        let lines: Vec<&str> = self.content.lines().collect();
         let mut new_lines: Vec<String> = Vec::new();
+        let mut inserted = false;
 
         for (i, line) in lines.iter().enumerate() {
+            let line_num = i + 1;
+            if let InsertPos::BeforeLine(target) = pos {
+                if line_num == target && !inserted {
+                    new_lines.push(formatted_function.clone());
+                    new_lines.push(String::new());
+                    inserted = true;
+                }
+            }
             new_lines.push(line.to_string());
-            if i + 1 == insert_line {
-                new_lines.push(String::new());
-                new_lines.push(formatted_function.clone());
+            if let InsertPos::AfterLine(target) = pos {
+                if line_num == target && !inserted {
+                    new_lines.push(String::new());
+                    new_lines.push(formatted_function.clone());
+                    inserted = true;
+                }
             }
         }
 
-        // Handle case where we want to insert at the very end
-        if insert_line > lines.len() {
-            new_lines.push(String::new());
+        if !inserted {
+            if !new_lines.is_empty() && !new_lines.last().unwrap_or(&String::new()).is_empty() {
+                new_lines.push(String::new());
+            }
             new_lines.push(formatted_function);
         }
 
@@ -570,20 +629,47 @@ impl SmartEditor {
         visibility: &str,
         is_method: bool,
     ) -> Result<String> {
+        let trimmed_body = body.trim_start();
         // Format based on language
         let formatted = match self.language {
             SupportedLanguage::Rust => {
-                let vis = if visibility == "public" { "pub " } else { "" };
                 let indent = if is_method { "    " } else { "" };
-                format!("{indent}{vis}fn {name}{body}")
+                if trimmed_body.starts_with("pub fn ")
+                    || trimmed_body.starts_with("fn ")
+                    || trimmed_body.starts_with("pub const fn ")
+                    || trimmed_body.starts_with("const fn ")
+                    || trimmed_body.starts_with("pub async fn ")
+                    || trimmed_body.starts_with("async fn ")
+                    || trimmed_body.starts_with("#[")
+                {
+                    format!("{indent}{trimmed_body}")
+                } else {
+                    let vis = match visibility {
+                        "public" | "pub" => "pub ",
+                        "pub(crate)" => "pub(crate) ",
+                        "pub(super)" => "pub(super) ",
+                        _ => "",
+                    };
+                    format!("{indent}{vis}fn {name}{body}")
+                }
             }
             SupportedLanguage::Python => {
                 let indent = if is_method { "    " } else { "" };
-                format!("{indent}def {name}{body}")
+                if trimmed_body.starts_with("def ") || trimmed_body.starts_with("async def ") {
+                    format!("{indent}{trimmed_body}")
+                } else {
+                    format!("{indent}def {name}{body}")
+                }
             }
             SupportedLanguage::JavaScript | SupportedLanguage::TypeScript => {
                 let indent = if is_method { "  " } else { "" };
-                format!("{indent}function {name}{body}")
+                if trimmed_body.starts_with("function ")
+                    || trimmed_body.starts_with("async function ")
+                {
+                    format!("{indent}{trimmed_body}")
+                } else {
+                    format!("{indent}function {name}{body}")
+                }
             }
             _ => {
                 format!("{visibility} function {name}{body}")
@@ -591,6 +677,44 @@ impl SmartEditor {
         };
 
         Ok(formatted)
+    }
+
+    fn find_function_ast_node<'a>(
+        &self,
+        node: Node<'a>,
+        name: &str,
+        class_name: Option<&str>,
+        current_class: Option<&str>,
+    ) -> Option<Node<'a>> {
+        if matches!(
+            node.kind(),
+            "function_item" | "method_definition" | "function_definition" | "function_declaration"
+        ) {
+            let fn_name = self
+                .find_child_by_kind(&node, "identifier")
+                .or_else(|| self.find_child_by_kind(&node, "property_identifier"))
+                .and_then(|n| self.node_text(&n));
+            if fn_name.as_deref() == Some(name) && current_class == class_name {
+                return Some(node);
+            }
+        }
+
+        let detected_class = match node.kind() {
+            "class_definition" | "class_declaration" | "struct_item" | "impl_item" => self
+                .find_child_by_kind(&node, "identifier")
+                .or_else(|| self.find_child_by_kind(&node, "type_identifier"))
+                .and_then(|n| self.node_text(&n)),
+            _ => None,
+        };
+        let next_class = detected_class.as_deref().or(current_class);
+
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if let Some(found) = self.find_function_ast_node(child, name, class_name, next_class) {
+                return Some(found);
+            }
+        }
+        None
     }
 
     fn replace_function(
@@ -601,21 +725,106 @@ impl SmartEditor {
     ) -> Result<()> {
         let structure = self.structure.as_ref().context("No structure analyzed")?;
 
+        let _function = structure
+            .functions
+            .iter()
+            .find(|f| f.name == name && f.class_name.as_deref() == class_name)
+            .with_context(|| format!("Function not found: {}", name))?;
+
+        if let Some(tree) = self.tree.as_ref() {
+            if let Some(fn_node) =
+                self.find_function_ast_node(tree.root_node(), name, class_name, None)
+            {
+                let trimmed = new_body.trim();
+                let is_full_fn = trimmed.starts_with("pub fn ")
+                    || trimmed.starts_with("fn ")
+                    || trimmed.starts_with("pub const fn ")
+                    || trimmed.starts_with("const fn ")
+                    || trimmed.starts_with("pub async fn ")
+                    || trimmed.starts_with("async fn ")
+                    || trimmed.starts_with("def ")
+                    || trimmed.starts_with("function ");
+
+                let (replace_start, replace_end, replacement_str) = if is_full_fn {
+                    (
+                        fn_node.start_byte(),
+                        fn_node.end_byte(),
+                        trimmed.to_string(),
+                    )
+                } else if trimmed.starts_with('(') {
+                    // Caller provided `(params) -> Ret { ... }` (same format as InsertFunction `body`)
+                    let params_start = self
+                        .find_child_by_kind(&fn_node, "parameters")
+                        .or_else(|| self.find_child_by_kind(&fn_node, "formal_parameters"))
+                        .map(|n| n.start_byte())
+                        .or_else(|| {
+                            self.find_child_by_kind(&fn_node, "identifier")
+                                .or_else(|| {
+                                    self.find_child_by_kind(&fn_node, "property_identifier")
+                                })
+                                .map(|n| n.end_byte())
+                        })
+                        .unwrap_or(fn_node.start_byte());
+                    (params_start, fn_node.end_byte(), trimmed.to_string())
+                } else if let Some(block_node) = self
+                    .find_child_by_kind(&fn_node, "block")
+                    .or_else(|| self.find_child_by_kind(&fn_node, "statement_block"))
+                    .or_else(|| self.find_child_by_kind(&fn_node, "compound_statement"))
+                    .or_else(|| self.find_child_by_kind(&fn_node, "body"))
+                {
+                    if trimmed.starts_with('{') && trimmed.ends_with('}') {
+                        (
+                            block_node.start_byte(),
+                            block_node.end_byte(),
+                            trimmed.to_string(),
+                        )
+                    } else if matches!(
+                        self.language,
+                        SupportedLanguage::Python | SupportedLanguage::Ruby
+                    ) {
+                        (
+                            block_node.start_byte(),
+                            block_node.end_byte(),
+                            new_body.trim_matches('\n').to_string(),
+                        )
+                    } else {
+                        (
+                            block_node.start_byte(),
+                            block_node.end_byte(),
+                            format!("{{\n{}\n}}", new_body.trim_matches('\n')),
+                        )
+                    }
+                } else {
+                    (
+                        fn_node.start_byte(),
+                        fn_node.end_byte(),
+                        trimmed.to_string(),
+                    )
+                };
+
+                if replace_start <= replace_end && replace_end <= self.content.len() {
+                    let mut updated =
+                        String::with_capacity(self.content.len() + replacement_str.len());
+                    updated.push_str(&self.content[..replace_start]);
+                    updated.push_str(&replacement_str);
+                    updated.push_str(&self.content[replace_end..]);
+                    self.content = updated;
+                    return Ok(());
+                }
+            }
+        }
+
+        // Fallback line-based replacement if AST node was unavailable
         let function = structure
             .functions
             .iter()
             .find(|f| f.name == name && f.class_name.as_deref() == class_name)
             .context("Function not found")?;
-
-        // Find the function body start (after signature)
         let lines: Vec<&str> = self.content.lines().collect();
         let signature_line = function.start_line - 1;
-
-        // TODO: More robust body detection
         let body_start_line = signature_line + 1;
         let body_end_line = function.end_line - 1;
 
-        // Replace the body
         let mut new_lines: Vec<String> = Vec::new();
         for (i, line) in lines.iter().enumerate() {
             if i < body_start_line || i > body_end_line {
@@ -762,7 +971,7 @@ impl SmartEditor {
                 .functions
                 .iter()
                 .find(|f| f.name == name && f.class_name.as_deref() == class_name)
-                .context("Function not found")?;
+                .with_context(|| format!("Function not found: {}", name))?;
 
             // Check dependencies unless force is set
             if !force {
@@ -801,15 +1010,26 @@ impl SmartEditor {
             (function.start_line, function.end_line, functions_to_cascade)
         };
 
-        // Remove the function lines
+        // Also include contiguous preceding attribute (`#[...]`) or doc-comment (`///`) lines
         let lines: Vec<&str> = self.content.lines().collect();
+        let mut actual_start = function_start;
+        while actual_start > 1 {
+            let prev_trimmed = lines[actual_start - 2].trim();
+            if prev_trimmed.starts_with("#[") || prev_trimmed.starts_with("///") {
+                actual_start -= 1;
+            } else {
+                break;
+            }
+        }
+
+        // Remove the function lines
         let mut new_lines: Vec<String> = Vec::new();
         let mut skip_lines = false;
 
         for (i, line) in lines.iter().enumerate() {
             let line_num = i + 1;
 
-            if line_num == function_start {
+            if line_num == actual_start {
                 skip_lines = true;
             }
 
@@ -1010,6 +1230,33 @@ pub async fn handle_insert_function(params: Option<Value>) -> Result<Value> {
             .as_str()
             .unwrap_or("private")
             .to_string(),
+    };
+
+    handle_smart_edit(Some(json!({
+        "file_path": params["file_path"],
+        "edits": [edit],
+    })))
+    .await
+}
+
+/// Replace a single function body or signature+body using minimal tokens
+pub async fn handle_replace_function(params: Option<Value>) -> Result<Value> {
+    let params = params.context("Parameters required")?;
+
+    let new_body = params
+        .get("new_body")
+        .or_else(|| params.get("body"))
+        .and_then(|v| v.as_str())
+        .context("new_body (or body) required")?
+        .to_string();
+
+    let edit = SmartEdit::ReplaceFunction {
+        name: params["name"]
+            .as_str()
+            .context("name required")?
+            .to_string(),
+        class_name: params["class_name"].as_str().map(String::from),
+        new_body,
     };
 
     handle_smart_edit(Some(json!({
@@ -1586,5 +1833,118 @@ class MyClass:
         assert!(test_file.exists());
         let content = std::fs::read_to_string(&test_file).unwrap();
         assert_eq!(content, "");
+    }
+
+    #[tokio::test]
+    async fn test_insert_replace_delete_smart_edit_full_lifecycle() {
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let test_file = dir.path().join("lifecycle.rs");
+        let seed_code = "#![forbid(unsafe_code)]\n\npub fn alpha(x: i64) -> i64 {\n    x + 1\n}\n\n#[inline]\npub fn obsolete_helper(x: i64) -> i64 { x - 1 }\n\n#[test]\nfn test_lifecycle() {\n    assert_eq!(alpha(10), 432);\n    assert_eq!(beta(20), 60);\n    assert_eq!(gamma(7), 49);\n}\n";
+        std::fs::write(&test_file, seed_code).unwrap();
+        let path_str = test_file.to_str().unwrap();
+
+        // 1. Insert `beta` after `alpha` using `visibility: "pub"`
+        handle_insert_function(Some(json!({
+            "file_path": path_str,
+            "name": "beta",
+            "body": "(x: i64) -> i64 {\n    x * 3\n}",
+            "after": "alpha",
+            "visibility": "pub"
+        })))
+        .await
+        .unwrap();
+
+        // 2. Insert `gamma` before `test_lifecycle` (which has `#[test]` attribute!)
+        handle_insert_function(Some(json!({
+            "file_path": path_str,
+            "name": "gamma",
+            "body": "(x: i64) -> i64 { x * x }",
+            "before": "test_lifecycle",
+            "visibility": "public"
+        })))
+        .await
+        .unwrap();
+
+        // 3. Replace `alpha` using `(params) -> Ret { ... }` convention
+        handle_replace_function(Some(json!({
+            "file_path": path_str,
+            "name": "alpha",
+            "new_body": "(x: i64) -> i64 {\n    x + 422\n}"
+        })))
+        .await
+        .unwrap();
+
+        // 4. Delete `obsolete_helper` (single-line function with `#[inline]` attribute)
+        handle_remove_function(Some(json!({
+            "file_path": path_str,
+            "name": "obsolete_helper",
+            "force": true
+        })))
+        .await
+        .unwrap();
+
+        // 5. Batch `smart_edit`: insert `delta`, replace `delta` with inner statements, then delete `delta`
+        handle_smart_edit(Some(json!({
+            "file_path": path_str,
+            "edits": [
+                {
+                    "operation": "insert_function",
+                    "name": "delta",
+                    "body": "(v: i64) -> i64 {\n    v\n}",
+                    "visibility": "pub"
+                },
+                {
+                    "operation": "replace_function",
+                    "name": "delta",
+                    "body": "    v + 100"
+                },
+                {
+                    "operation": "delete_function",
+                    "name": "delta",
+                    "force": true
+                }
+            ]
+        })))
+        .await
+        .unwrap();
+
+        // 6. Verify `get_function_tree` lists `alpha`, `beta`, `gamma`, `test_lifecycle` and NOT `obsolete_helper` or `delta`
+        let tree_res = handle_get_function_tree(Some(json!({
+            "file_path": path_str
+        })))
+        .await
+        .unwrap();
+        let tree_text = tree_res["content"][0]["text"].as_str().unwrap();
+        assert!(tree_text.contains("\"alpha\""));
+        assert!(tree_text.contains("\"beta\""));
+        assert!(tree_text.contains("\"gamma\""));
+        assert!(tree_text.contains("\"test_lifecycle\""));
+        assert!(!tree_text.contains("obsolete_helper"));
+        assert!(!tree_text.contains("\"delta\""));
+
+        let final_code = std::fs::read_to_string(&test_file).unwrap();
+        assert!(
+            !final_code.contains("#[inline]"),
+            "Preceding #[inline] attribute of deleted function must be removed: {}",
+            final_code
+        );
+
+        // 7. Compile and run with `rustc --test` to prove 100% syntactic & semantic validity
+        let bin_path = dir.path().join("lifecycle_test_bin");
+        let comp = std::process::Command::new("rustc")
+            .args(["--test", path_str, "-o", bin_path.to_str().unwrap()])
+            .output()
+            .expect("rustc must be available");
+        assert!(
+            comp.status.success(),
+            "rustc --test compilation failed:\nstdout: {}\nstderr: {}\ncode:\n{}",
+            String::from_utf8_lossy(&comp.stdout),
+            String::from_utf8_lossy(&comp.stderr),
+            final_code
+        );
+        let run = std::process::Command::new(&bin_path).output().unwrap();
+        assert!(run.status.success(), "Compiled test binary failed");
     }
 }

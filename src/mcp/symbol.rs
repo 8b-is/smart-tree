@@ -7,6 +7,140 @@ use crabcc_core::{graph::CallGraph, index, outline, query, store::Store};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
+/// WUPZ ABI v1 magic bytes (`"WUPZ"` = `0x57, 0x55, 0x50, 0x5A`).
+pub const WUPZ_MAGIC_V1: [u8; 4] = *b"WUPZ";
+/// WUPZ ABI version 1 for 32-byte metadata witness sealing.
+pub const WUPZ_ABI_V1: u8 = 1;
+/// Default integer denominator `q` for `p/q` ("Counting Divided") graph kernels.
+pub const GRAPH_PQ_Q: u64 = 1000;
+
+/// Exact deterministic integer square root `floor(sqrt(n))` with zero IEEE-754 floats.
+#[inline]
+pub const fn isqrt_pq(n: u128) -> u64 {
+    if n == 0 {
+        return 0;
+    }
+    let mut x = 1u128 << ((128 - n.leading_zeros()).div_ceil(2));
+    loop {
+        let y = (x + n / x) >> 1;
+        if y >= x {
+            return x as u64;
+        }
+        x = y;
+    }
+}
+
+/// Fold a byte slice with a 64-bit golden-ratio XOR rotation (`wupz_xor_fold`).
+#[inline]
+pub fn wupz_xor_fold_bytes(bytes: &[u8]) -> u64 {
+    let mut acc: u64 = 0x9E37_79B9_7F4A_7C15;
+    for (idx, &b) in bytes.iter().enumerate() {
+        let lane = (b as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        acc ^= lane.rotate_left(((idx & 7) * 8) as u32);
+        acc = acc.rotate_left(11).wrapping_add(0x94D0_49BB_1331_11EB);
+    }
+    acc
+}
+
+/// Seal a Smart Tree / CrabCC metadata frame with a 32-byte `WUPZ` ABI v1 witness (`[u8; 32]`).
+///
+/// Layout (`32` bytes total):
+/// - `0..4`:   `"WUPZ"` magic (`0x57, 0x55, 0x50, 0x5A`)
+/// - `4`:      ABI version (`1`)
+/// - `5`:      balanced-ternary `AND` gate (`{-1, 0, +1}` encoded as `i8 as u8`)
+/// - `6`:      balanced-ternary `NAND` gate (`{-1, 0, +1}` encoded as `i8 as u8`)
+/// - `7`:      `QuantTern` gate byte (`0x55` + trit offset)
+/// - `8..16`:  64-bit `xor_fold` (little-endian)
+/// - `16..20`: bitplane `popcount` (`u32`, little-endian)
+/// - `20..24`: payload byte length (`u32`, little-endian)
+/// - `24..32`: 64-bit golden witness tag (`u64`, little-endian)
+pub fn seal_wupz_metadata_frame_v1(payload: &[u8]) -> ([u8; 32], String) {
+    let xor_fold = wupz_xor_fold_bytes(payload);
+    let popcount: u32 = payload.iter().map(|b| b.count_ones()).sum();
+    let len_u32 = payload.len() as u32;
+    let t0: i8 = match xor_fold % 3 {
+        0 => -1,
+        1 => 0,
+        _ => 1,
+    };
+    let t1: i8 = match (xor_fold >> 8) % 3 {
+        0 => -1,
+        1 => 0,
+        _ => 1,
+    };
+    let and_gate: i8 = t0.min(t1);
+    let nand_gate: i8 = -and_gate;
+    let qt_byte: u8 = (85i16 + (t0 as i16) * 9 + (t1 as i16) * 3 + (and_gate as i16)) as u8;
+    let witness_tag =
+        xor_fold.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ ((popcount as u64) << 32) ^ (len_u32 as u64);
+
+    let mut seal = [0u8; 32];
+    seal[0..4].copy_from_slice(&WUPZ_MAGIC_V1);
+    seal[4] = WUPZ_ABI_V1;
+    seal[5] = and_gate as u8;
+    seal[6] = nand_gate as u8;
+    seal[7] = qt_byte;
+    seal[8..16].copy_from_slice(&xor_fold.to_le_bytes());
+    seal[16..20].copy_from_slice(&popcount.to_le_bytes());
+    seal[20..24].copy_from_slice(&len_u32.to_le_bytes());
+    seal[24..32].copy_from_slice(&witness_tag.to_le_bytes());
+
+    let mut hex_out = String::with_capacity(66);
+    hex_out.push_str("0x");
+    for b in &seal {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex_out, "{b:02x}");
+    }
+    (seal, hex_out)
+}
+
+/// Verify a 32-byte `WUPZ` ABI v1 witness seal against `payload`.
+#[inline]
+pub fn verify_wupz_metadata_frame_v1(payload: &[u8], seal: &[u8; 32]) -> bool {
+    let (expected, _) = seal_wupz_metadata_frame_v1(payload);
+    let mut diff = 0u8;
+    for i in 0..32 {
+        diff |= expected[i] ^ seal[i];
+    }
+    diff == 0
+}
+
+/// Compute deterministic zero-float `p/q` graph & index metrics + 32-byte `WUPZ` ABI v1 witness seal.
+pub fn compute_graph_stats_pq(files: usize, symbols: usize, edges: usize, root_tag: &str) -> Value {
+    let files_q = (files as u64).max(1);
+    let symbols_q = (symbols as u64).max(1);
+    let sym_per_file_p = (symbols as u64).saturating_mul(GRAPH_PQ_Q) / files_q;
+    let edges_per_sym_p = (edges as u64).saturating_mul(GRAPH_PQ_Q) / symbols_q;
+    // Spectral complexity = isqrt(symbols * edges * Q^2) / Q
+    let spectral_p = isqrt_pq(
+        (symbols as u128)
+            .saturating_mul(edges as u128)
+            .saturating_mul((GRAPH_PQ_Q as u128) * (GRAPH_PQ_Q as u128)),
+    );
+    let frame_descriptor = format!(
+        "crabcc:v1:root={root_tag}:files={files}:symbols={symbols}:edges={edges}:spf={sym_per_file_p}/{GRAPH_PQ_Q}:eps={edges_per_sym_p}/{GRAPH_PQ_Q}:spec={spectral_p}/{GRAPH_PQ_Q}"
+    );
+    let (seal_bytes, seal_hex) = seal_wupz_metadata_frame_v1(frame_descriptor.as_bytes());
+    let verified = verify_wupz_metadata_frame_v1(frame_descriptor.as_bytes(), &seal_bytes);
+    let xor_fold = u64::from_le_bytes(seal_bytes[8..16].try_into().unwrap_or([0u8; 8]));
+    let popcount = u32::from_le_bytes(seal_bytes[16..20].try_into().unwrap_or([0u8; 4]));
+
+    json!({
+        "symbols_per_file_pq": format!("{sym_per_file_p}/{GRAPH_PQ_Q}"),
+        "edges_per_symbol_pq": format!("{edges_per_sym_p}/{GRAPH_PQ_Q}"),
+        "spectral_complexity_pq": format!("{spectral_p}/{GRAPH_PQ_Q}"),
+        "no_float_law": true,
+        "wupz_abi_version": WUPZ_ABI_V1,
+        "wupz_seal_32b": seal_hex,
+        "wupz_xor_fold": format!("0x{xor_fold:016x}"),
+        "wupz_and_gate": seal_bytes[5] as i8,
+        "wupz_nand_gate": seal_bytes[6] as i8,
+        "wupz_quant_tern": format!("qt:{:02x}", seal_bytes[7]),
+        "wupz_popcount": popcount,
+        "wupz_verified": verified,
+    })
+}
+
 fn canonical_policy_path(path: &Path) -> PathBuf {
     // A blocked directory need not exist yet. Resolve its existing ancestor
     // as well, so aliases such as macOS /var -> /private/var still match.
@@ -163,12 +297,27 @@ fn run(
     config: &McpConfig,
 ) -> Result<Value> {
     let store = open_store(root, config)?;
+    let root_tag = root
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "repo".to_string());
     if operation == "index" || store.needs_reindex || store.meta_get("edges_populated")?.is_none() {
         store.clear_all()?;
         let stats = index::build_index(root, &store)?;
         store.meta_set("edges_populated", "1")?;
+        let files_cnt = store.list_files()?.len();
+        let syms_cnt = store.iter_all_symbols()?.len();
+        let pq_meta = compute_graph_stats_pq(files_cnt, syms_cnt, 0, &root_tag);
+        if let Some(seal_hex) = pq_meta["wupz_seal_32b"].as_str() {
+            let _ = store.meta_set("wupz_seal_v1", seal_hex);
+        }
         if operation == "index" {
-            return Ok(json!({"engine": "crabcc-core", "built_in": true, "stats": stats}));
+            return Ok(json!({
+                "engine": "crabcc-core",
+                "built_in": true,
+                "stats": stats,
+                "pq_kernel": pq_meta,
+            }));
         }
     } else {
         // CrabCC's mtime shortcut uses whole seconds. Editors can save twice
@@ -246,9 +395,20 @@ fn run(
         )?)?),
         "graph" => {
             let graph = CallGraph::build(&store, root)?;
-            Ok(
-                json!({"engine": "crabcc-core", "built_in": true, "files": store.list_files()?.len(), "symbols": store.iter_all_symbols()?.len(), "edges": graph.edge_count}),
-            )
+            let files_cnt = store.list_files()?.len();
+            let syms_cnt = store.iter_all_symbols()?.len();
+            let pq_meta = compute_graph_stats_pq(files_cnt, syms_cnt, graph.edge_count, &root_tag);
+            if let Some(seal_hex) = pq_meta["wupz_seal_32b"].as_str() {
+                let _ = store.meta_set("wupz_seal_v1", seal_hex);
+            }
+            Ok(json!({
+                "engine": "crabcc-core",
+                "built_in": true,
+                "files": files_cnt,
+                "symbols": syms_cnt,
+                "edges": graph.edge_count,
+                "pq_kernel": pq_meta,
+            }))
         }
         _ => unreachable!("operation validated before opening the store"),
     }
@@ -257,6 +417,29 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pq_graph_kernel_and_wupz_32b_seal_verify() {
+        assert_eq!(isqrt_pq(0), 0);
+        assert_eq!(isqrt_pq(10_000), 100);
+        assert_eq!(isqrt_pq(2_000_000), 1414);
+
+        let payload = b"smart-tree:crabcc:wupz-v1:test-frame";
+        let (seal, seal_hex) = seal_wupz_metadata_frame_v1(payload);
+        assert_eq!(&seal[0..4], b"WUPZ");
+        assert_eq!(seal[4], 1);
+        assert_eq!(seal_hex.len(), 66); // "0x" + 64 hex chars (32 bytes)
+        assert!(verify_wupz_metadata_frame_v1(payload, &seal));
+        let mut tampered = seal;
+        tampered[31] ^= 0x01;
+        assert!(!verify_wupz_metadata_frame_v1(payload, &tampered));
+
+        let stats = compute_graph_stats_pq(10, 45, 90, "smart-tree");
+        assert_eq!(stats["symbols_per_file_pq"], "4500/1000");
+        assert_eq!(stats["edges_per_symbol_pq"], "2000/1000");
+        assert_eq!(stats["wupz_verified"], true);
+        assert_eq!(stats["wupz_abi_version"], 1);
+    }
 
     #[tokio::test]
     async fn mcp_remembers_the_project_between_symbol_calls() -> Result<()> {

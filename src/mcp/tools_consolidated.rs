@@ -147,11 +147,14 @@ pub async fn handle_edit(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
     let operation = params["operation"].as_str().context("operation required")?;
 
     let tool_name = match operation {
-        "smart_edit" => "smart_edit",
-        "get_functions" => "get_function_tree",
-        "insert_function" => "insert_function",
-        "remove_function" => "remove_function",
-        "create_file" => "create_file",
+        "smart_edit" | "SmartEdit" => "smart_edit",
+        "get_functions" | "get_function_tree" | "GetFunctions" => "get_function_tree",
+        "insert_function" | "InsertFunction" => "insert_function",
+        "replace_function" | "ReplaceFunction" => "replace_function",
+        "remove_function" | "RemoveFunction" | "delete_function" | "DeleteFunction" => {
+            "remove_function"
+        }
+        "create_file" | "CreateFile" => "create_file",
         _ => return Err(anyhow::anyhow!("Unknown edit operation: {}", operation)),
     };
 
@@ -391,7 +394,15 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["smart_edit", "get_functions", "insert_function", "remove_function"],
+                        "enum": [
+                            "smart_edit",
+                            "get_functions",
+                            "insert_function",
+                            "replace_function",
+                            "remove_function",
+                            "delete_function",
+                            "create_file"
+                        ],
                         "description": "Edit operation"
                     },
                     "file_path": {
@@ -412,7 +423,11 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     },
                     "body": {
                         "type": "string",
-                        "description": "Function body"
+                        "description": "Function body or replacement body"
+                    },
+                    "new_body": {
+                        "type": "string",
+                        "description": "New function body (for replace_function)"
                     }
                 },
                 "required": ["operation", "file_path"]
@@ -758,14 +773,21 @@ async fn handle_hooks(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Va
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing operation parameter"))?;
 
-    match operation {
-        "list" => super::hook_tools::list_hooks(params).await,
-        "set" => super::hook_tools::set_hook(params).await,
-        "remove" => super::hook_tools::remove_hook(params).await,
-        "test" => super::hook_tools::test_hook(params).await,
-        "get_commands" => super::hook_tools::get_hook_commands(params).await,
-        _ => Err(anyhow::anyhow!("Unknown hooks operation: {}", operation)),
-    }
+    let result = match operation {
+        "list" => super::hook_tools::list_hooks(params).await?,
+        "set" => super::hook_tools::set_hook(params).await?,
+        "remove" => super::hook_tools::remove_hook(params).await?,
+        "test" => super::hook_tools::test_hook(params).await?,
+        "get_commands" => super::hook_tools::get_hook_commands(params).await?,
+        _ => return Err(anyhow::anyhow!("Unknown hooks operation: {}", operation)),
+    };
+
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&result)?
+        }]
+    }))
 }
 
 /// Tool dispatcher for consolidated tools

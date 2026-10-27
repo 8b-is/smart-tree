@@ -93,15 +93,15 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp: bool,
 
-    /// Install Smart Tree as MCP server in Claude Desktop
+    /// Install Smart Tree as MCP server in AI agents (Claude Desktop, Antigravity/agy, Gemini)
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp_install: bool,
 
-    /// Uninstall Smart Tree MCP server from Claude Desktop
+    /// Uninstall Smart Tree MCP server from AI agents
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp_uninstall: bool,
 
-    /// Check MCP installation status in Claude Desktop
+    /// Check MCP installation status across AI agents
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp_status: bool,
 
@@ -152,15 +152,30 @@ pub struct Cli {
     // CONSCIOUSNESS & MEMORY
     // =========================================================================
     /// Save agent consciousness state to .aye_consciousness.m8
-    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    #[arg(
+        long,
+        alias = "claude-save",
+        exclusive = true,
+        help_heading = "Consciousness & Memory"
+    )]
     pub agent_save: bool,
 
     /// Restore agent consciousness from .aye_consciousness.m8
-    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    #[arg(
+        long,
+        alias = "claude-restore",
+        exclusive = true,
+        help_heading = "Consciousness & Memory"
+    )]
     pub agent_restore: bool,
 
     /// Show agent consciousness status and summary
-    #[arg(long, exclusive = true, help_heading = "Consciousness & Memory")]
+    #[arg(
+        long,
+        alias = "claude-context",
+        exclusive = true,
+        help_heading = "Consciousness & Memory"
+    )]
     pub agent_context: bool,
 
     /// Ultra-compressed consciousness restoration format
@@ -242,13 +257,33 @@ pub struct Cli {
     // =========================================================================
     // HOOKS
     // =========================================================================
-    /// Install Smart Tree hooks to AI Agent settings
+    /// Install Smart Tree hooks to AI Agent settings (Antigravity/agy & Claude)
     #[arg(long, exclusive = true, help_heading = "Hooks")]
     pub hooks_install: bool,
 
     /// Manage hooks: enable, disable, status
     #[arg(long, value_name = "ACTION", value_parser = ["enable", "disable", "status"], help_heading = "Hooks")]
     pub hooks_config: Option<String>,
+
+    /// Execute an Antigravity (agy) lifecycle hook handler (stdin JSON -> stdout JSON)
+    #[arg(
+        long,
+        value_name = "EVENT",
+        value_parser = [
+            "session-start",
+            "pre-invocation",
+            "pre-tool-use",
+            "post-tool-use",
+            "stop",
+            "SessionStart",
+            "PreInvocation",
+            "PreToolUse",
+            "PostToolUse",
+            "Stop"
+        ],
+        help_heading = "Hooks"
+    )]
+    pub agy_hook: Option<String>,
 
     // =========================================================================
     // MEGA SESSIONS

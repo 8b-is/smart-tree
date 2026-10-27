@@ -900,7 +900,10 @@ mod tests {
         );
 
         let sha = "a3f5c8e90123456789abcdef0123456789abcdef0123456789abcdef01234567";
-        let msg = format!("ST-DNS-v1|ver=10.4.0|build=10.4.0-a3f5c8e90123|sha256={}", sha);
+        let msg = format!(
+            "ST-DNS-v1|ver=10.4.0|build=10.4.0-a3f5c8e90123|sha256={}",
+            sha
+        );
         let sig_b64 = BASE64.encode(keypair.sign(msg.as_bytes()).as_ref());
 
         let txt = format!(

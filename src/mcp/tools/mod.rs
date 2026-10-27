@@ -1703,9 +1703,14 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
 
         // Smart edit tools (delegated to smart_edit module)
         "smart_edit" => crate::mcp::smart_edit::handle_smart_edit(Some(args)).await,
-        "get_function_tree" => crate::mcp::smart_edit::handle_get_function_tree(Some(args)).await,
+        "get_function_tree" | "get_functions" => {
+            crate::mcp::smart_edit::handle_get_function_tree(Some(args)).await
+        }
         "insert_function" => crate::mcp::smart_edit::handle_insert_function(Some(args)).await,
-        "remove_function" => crate::mcp::smart_edit::handle_remove_function(Some(args)).await,
+        "replace_function" => crate::mcp::smart_edit::handle_replace_function(Some(args)).await,
+        "remove_function" | "delete_function" => {
+            crate::mcp::smart_edit::handle_remove_function(Some(args)).await
+        }
         "create_file" => crate::mcp::smart_edit::handle_create_file(Some(args)).await,
 
         // Context gathering tools (delegated to context_tools module)

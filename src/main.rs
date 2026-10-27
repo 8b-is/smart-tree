@@ -49,6 +49,12 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Antigravity (agy) lifecycle hooks must output strict JSON on stdout with
+    // zero startup banners, update checks, or daemon auto-start delays.
+    if let Some(event) = &cli.agy_hook {
+        return st::claude_hook::handle_agy_hook(event).await;
+    }
+
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {
         match level {
@@ -750,26 +756,24 @@ async fn check_for_updates_cli() -> Result<String> {
     if std::env::var("SMART_TREE_NO_UPDATE_CHECK").is_ok() {
         return Ok(String::new());
     }
-    if let Ok(dns_rel) = tokio::time::timeout(
+    if let Ok(Ok(rel)) = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         st::updater::query_secure_dns_version(),
     )
     .await
     {
-        if let Ok(rel) = dns_rel {
-            println!(
-                "🔐 Secure DNS (_smart-tree.i1.is): v{} · Ed25519 keytag={} verified",
-                rel.version, rel.key_tag
-            );
-            if !st::updater::is_newer_version(env!("CARGO_PKG_VERSION"), &rel.version) {
-                return Ok(String::new());
-            }
-            return Ok(format!(
-                "Smart Tree v{} is available (installed: v{}).\nRun st --update or visit https://i1.is/#smart-tree",
-                rel.version,
-                env!("CARGO_PKG_VERSION")
-            ));
+        println!(
+            "🔐 Secure DNS (_smart-tree.i1.is): v{} · Ed25519 keytag={} verified",
+            rel.version, rel.key_tag
+        );
+        if !st::updater::is_newer_version(env!("CARGO_PKG_VERSION"), &rel.version) {
+            return Ok(String::new());
         }
+        return Ok(format!(
+            "Smart Tree v{} is available (installed: v{}).\nRun st --update or visit https://i1.is/#smart-tree",
+            rel.version,
+            env!("CARGO_PKG_VERSION")
+        ));
     }
     let client = st::feedback_client::FeedbackClient::new()?;
     let info = tokio::time::timeout(
@@ -1520,19 +1524,21 @@ async fn handle_memory_stats() -> Result<()> {
     Ok(())
 }
 
-/// Handle hooks configuration for Claude Code
+/// Handle hooks configuration for AI Agents (Antigravity/agy & Claude Code)
 async fn handle_hooks_config(action: &str) -> Result<()> {
     use serde_json::Value;
     use std::fs;
 
     let config_path = get_agent_config_path()?;
+    let agy_hooks_path = get_agy_hooks_path()?;
 
     match action {
         "enable" => {
-            println!("🎣 Enabling Smart Tree hooks for Claude Code...");
+            println!("🎣 Enabling Smart Tree hooks for AI Agents...");
             update_agent_hooks(&config_path, true)?;
-            println!("✅ Hooks enabled! Smart Tree will provide context to Claude Code.");
-            println!("📝 Hook command: st --agent-context");
+            println!("✅ Hooks enabled for Antigravity (agy) and Claude Code!");
+            println!("📝 Antigravity config: {}", agy_hooks_path.display());
+            println!("📝 Claude config: {}", config_path.display());
         }
         "disable" => {
             println!("🎣 Disabling Smart Tree hooks...");
@@ -1540,12 +1546,42 @@ async fn handle_hooks_config(action: &str) -> Result<()> {
             println!("✅ Hooks disabled.");
         }
         "status" => {
-            println!("🎣 Claude Code Hooks Status");
+            println!("🎣 AI Agent Hooks Status");
             println!("━━━━━━━━━━━━━━━━━━━━━━━━");
 
+            // 1. Check Antigravity (agy) hooks
+            println!("\n[Antigravity (agy)] ({})", agy_hooks_path.display());
+            if let Ok(content) = fs::read_to_string(&agy_hooks_path) {
+                if let Ok(config) = serde_json::from_str::<Value>(&content) {
+                    if let Some(st_hook) = config.get("smart-tree") {
+                        let enabled = st_hook
+                            .get("enabled")
+                            .and_then(|e| e.as_bool())
+                            .unwrap_or(true);
+                        if enabled {
+                            println!("  ✅ Smart Tree hooks are ENABLED");
+                        } else {
+                            println!("  ⏸️  Smart Tree hooks are DISABLED");
+                        }
+                        if let Some(obj) = st_hook.as_object() {
+                            for (event, _) in obj.iter().filter(|(k, _)| *k != "enabled") {
+                                println!("    • {}", event);
+                            }
+                        }
+                    } else {
+                        println!("  ❌ No 'smart-tree' hook entry found");
+                    }
+                } else {
+                    println!("  ⚠️  Invalid JSON in {}", agy_hooks_path.display());
+                }
+            } else {
+                println!("  ❌ Not configured yet (run `st --hooks-install`)");
+            }
+
+            // 2. Check Claude Code hooks
+            println!("\n[Claude Code] ({})", config_path.display());
             if let Ok(content) = fs::read_to_string(&config_path) {
                 if let Ok(config) = serde_json::from_str::<Value>(&content) {
-                    // Check for hooks in the config
                     let has_hooks = config
                         .get("hooks")
                         .and_then(|h| h.as_object())
@@ -1553,26 +1589,20 @@ async fn handle_hooks_config(action: &str) -> Result<()> {
                         .unwrap_or(false);
 
                     if has_hooks {
-                        println!("✅ Hooks are configured");
+                        println!("  ✅ Hooks are configured");
                         if let Some(hooks) = config.get("hooks") {
-                            println!("\nConfigured hooks:");
                             if let Some(obj) = hooks.as_object() {
                                 for (hook_type, command) in obj {
-                                    println!("  • {}: {}", hook_type, command);
+                                    println!("    • {}: {}", hook_type, command);
                                 }
                             }
                         }
                     } else {
-                        println!("❌ No hooks configured");
-                        println!("\nTo enable: st --hooks-config enable");
+                        println!("  ❌ No hooks configured");
                     }
                 }
             } else {
-                println!(
-                    "⚠️  AI Agent config not found at: {}",
-                    config_path.display()
-                );
-                println!("\nMake sure your AI Agent is installed.");
+                println!("  ℹ️  Config not found at {}", config_path.display());
             }
         }
         _ => {
@@ -1585,47 +1615,92 @@ async fn handle_hooks_config(action: &str) -> Result<()> {
     Ok(())
 }
 
-/// Install Smart Tree hooks directly into Claude Code settings
+/// Install Smart Tree hooks directly into AI Agent settings (Antigravity/agy & Claude Code)
 async fn install_hooks_to_agent() -> Result<()> {
     println!("🎣 Installing Smart Tree hooks for AI Agents...");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     let config_path = get_agent_config_path()?;
+    let agy_hooks_path = get_agy_hooks_path()?;
 
     // Create or update the hooks configuration
     update_agent_hooks(&config_path, true)?;
 
     println!("\n✅ Hooks installed successfully!");
-    println!("\n📝 What's been configured:");
-    println!("  • UserPromptSubmit: Adds project context to your prompts");
-    println!("  • Command: st --agent-context");
+    println!(
+        "\n📝 Configured for Antigravity (agy) ({}):",
+        agy_hooks_path.display()
+    );
+    println!("  • SessionStart  -> st --agy-hook session-start");
+    println!("  • PreInvocation -> st --agy-hook pre-invocation");
+    println!("  • PreToolUse    -> st --agy-hook pre-tool-use");
+    println!("  • PostToolUse   -> st --agy-hook post-tool-use");
+    println!("  • Stop          -> st --agy-hook stop");
+    println!(
+        "\n📝 Configured for Claude Code ({}):",
+        config_path.display()
+    );
+    println!("  • UserPromptSubmit -> st --agent-context");
     println!("\n🚀 Smart Tree will now automatically provide context to your AI agents!");
 
     Ok(())
 }
 
-/// Get the Claude Code configuration path
-fn get_agent_config_path() -> Result<PathBuf> {
-    let home = std::env::var("HOME")?;
-    let config_path = PathBuf::from(home)
-        .join("Library")
-        .join("Application Support")
-        .join("Claude")
-        .join("config.json");
-    Ok(config_path)
+/// Get the Antigravity (agy) global hooks.json path
+fn get_agy_hooks_path() -> Result<PathBuf> {
+    let home = dirs::home_dir()
+        .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
+        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    Ok(home.join(".gemini").join("config").join("hooks.json"))
 }
 
-/// Update Claude Code hooks configuration
+/// Get the Claude Code configuration path
+fn get_agent_config_path() -> Result<PathBuf> {
+    let home = dirs::home_dir()
+        .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
+        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    #[cfg(target_os = "macos")]
+    {
+        let mac_path = home
+            .join("Library")
+            .join("Application Support")
+            .join("Claude")
+            .join("config.json");
+        if mac_path.parent().map(|p| p.exists()).unwrap_or(false) {
+            return Ok(mac_path);
+        }
+    }
+    Ok(home.join(".claude").join("settings.json"))
+}
+
+/// Update AI Agent hooks configuration (both Antigravity/agy and Claude Code)
 fn update_agent_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
     use serde_json::{json, Value};
     use std::fs;
 
-    // Read existing config or create new one
+    // Resolve the st binary path - prefer the installed version
+    let st_path = which::which("st")
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| {
+            if std::path::Path::new("/usr/local/bin/st").exists() {
+                "/usr/local/bin/st".to_string()
+            } else if std::path::Path::new("/opt/homebrew/bin/st").exists() {
+                "/opt/homebrew/bin/st".to_string()
+            } else {
+                "st".to_string()
+            }
+        });
+
+    // 1. Update Antigravity (agy) hooks at ~/.gemini/config/hooks.json
+    if let Ok(agy_hooks_path) = get_agy_hooks_path() {
+        st::claude_init::update_agy_hooks_file(&agy_hooks_path, &st_path, enable)?;
+    }
+
+    // 2. Read existing Claude config or create new one
     let mut config: Value = if config_path.exists() {
         let content = fs::read_to_string(config_path)?;
         serde_json::from_str(&content).unwrap_or_else(|_| json!({}))
     } else {
-        // Create the directory if it doesn't exist
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -1633,43 +1708,20 @@ fn update_agent_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
     };
 
     if enable {
-        // Get the st binary path - prefer the installed version
-        let st_path = which::which("st")
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| {
-                // Fallback to common installation paths
-                if std::path::Path::new("/usr/local/bin/st").exists() {
-                    "/usr/local/bin/st".to_string()
-                } else if std::path::Path::new("/opt/homebrew/bin/st").exists() {
-                    "/opt/homebrew/bin/st".to_string()
-                } else {
-                    "st".to_string() // Hope it's in PATH
-                }
-            });
-
-        // Ensure hooks object exists
         if config.get("hooks").is_none() {
             config["hooks"] = json!({});
         }
-
-        // Update or add the UserPromptSubmit hook (not duplicate!)
         config["hooks"]["UserPromptSubmit"] = json!(format!("{} --agent-context", st_path));
-
         println!("📍 Using st binary at: {}", st_path);
-    } else {
-        // Remove hooks
-        if let Some(hooks) = config.get_mut("hooks") {
-            if let Some(obj) = hooks.as_object_mut() {
-                obj.remove("UserPromptSubmit");
-                // If no hooks left, remove the hooks object entirely
-                if obj.is_empty() {
-                    config.as_object_mut().unwrap().remove("hooks");
-                }
+    } else if let Some(hooks) = config.get_mut("hooks") {
+        if let Some(obj) = hooks.as_object_mut() {
+            obj.remove("UserPromptSubmit");
+            if obj.is_empty() {
+                config.as_object_mut().unwrap().remove("hooks");
             }
         }
     }
 
-    // Write back the config with pretty formatting
     let pretty_json = serde_json::to_string_pretty(&config)?;
     fs::write(config_path, pretty_json)?;
 

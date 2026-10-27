@@ -57,8 +57,21 @@ pub async fn list_hooks(_params: Value) -> Result<Value> {
         }));
     }
 
+    let agy_hooks_file = get_agy_hooks_file_path();
+    let agy_hooks = if agy_hooks_file.exists() {
+        fs::read_to_string(&agy_hooks_file)
+            .ok()
+            .and_then(|c| serde_json::from_str::<Value>(&c).ok())
+            .and_then(|v| v.get("smart-tree").cloned())
+            .unwrap_or(Value::Null)
+    } else {
+        Value::Null
+    };
+
     Ok(json!({
         "hooks": result,
+        "agy_hooks": agy_hooks,
+        "agy_hooks_file": agy_hooks_file.display().to_string(),
         "hook_path": get_hook_path(),
         "hooks_file": get_hooks_file_path().display().to_string(),
     }))
@@ -237,6 +250,7 @@ pub async fn test_hook(params: Value) -> Result<Value> {
 /// Get hook commands for easy copying
 pub async fn get_hook_commands(_params: Value) -> Result<Value> {
     let hook_path = get_hook_path();
+    let st_path = get_st_path();
 
     Ok(json!({
         "commands": {
@@ -246,7 +260,14 @@ pub async fn get_hook_commands(_params: Value) -> Result<Value> {
             "SessionStart": format!("{} --agent-restore", hook_path),
             "SessionEnd": format!("{} --agent-save", hook_path),
         },
-        "instructions": "Copy the command for the hook you want and paste it in your AI Agent's /hooks command",
+        "agy_commands": {
+            "SessionStart": format!("{} --agy-hook session-start", st_path),
+            "PreInvocation": format!("{} --agy-hook pre-invocation", st_path),
+            "PreToolUse": format!("{} --agy-hook pre-tool-use", st_path),
+            "PostToolUse": format!("{} --agy-hook post-tool-use", st_path),
+            "Stop": format!("{} --agy-hook stop", st_path),
+        },
+        "instructions": "Run `st --hooks-install` to configure hooks automatically for Antigravity (agy) and Claude Code.",
         "hook_path": hook_path,
     }))
 }
@@ -312,6 +333,14 @@ fn get_hooks_file_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".claude")
+        .join("hooks.json")
+}
+
+fn get_agy_hooks_file_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".gemini")
+        .join("config")
         .join("hooks.json")
 }
 

@@ -747,6 +747,10 @@ impl McpInstaller {
 
         // 2. Gemini / Antigravity
         if let Some(h) = dirs::home_dir() {
+            paths.push((
+                "Antigravity (agy)",
+                h.join(".gemini/config/mcp_config.json"),
+            ));
             paths.push(("Antigravity", h.join(".gemini/antigravity/mcp_config.json")));
             paths.push(("Gemini", h.join(".gemini/mcp_config.json")));
         }
@@ -1032,4 +1036,89 @@ pub fn check_mcp_installation_status() -> Result<String> {
             config_paths
         ))
     }
+}
+
+/// Build the Smart Tree hook spec for Antigravity (`hooks.json`)
+pub fn build_agy_hook_spec(st_bin: &str, enabled: bool) -> Value {
+    json!({
+        "enabled": enabled,
+        "SessionStart": [
+            {
+                "type": "command",
+                "command": format!("{} --agy-hook session-start", st_bin),
+                "timeout": 15
+            }
+        ],
+        "PreInvocation": [
+            {
+                "type": "command",
+                "command": format!("{} --agy-hook pre-invocation", st_bin),
+                "timeout": 15
+            }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": format!("{} --agy-hook pre-tool-use", st_bin),
+                        "timeout": 15
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": format!("{} --agy-hook post-tool-use", st_bin),
+                        "timeout": 15
+                    }
+                ]
+            }
+        ],
+        "Stop": [
+            {
+                "type": "command",
+                "command": format!("{} --agy-hook stop", st_bin),
+                "timeout": 15
+            }
+        ]
+    })
+}
+
+/// Create or update an Antigravity `hooks.json` file (e.g. `~/.gemini/config/hooks.json` or `.agents/hooks.json`)
+pub fn update_agy_hooks_file(hooks_path: &Path, st_bin: &str, enable: bool) -> Result<()> {
+    let mut config: Value = if hooks_path.exists() {
+        let content = fs::read_to_string(hooks_path).unwrap_or_default();
+        if content.trim().is_empty() {
+            json!({})
+        } else {
+            serde_json::from_str(&content).unwrap_or_else(|_| json!({}))
+        }
+    } else {
+        if let Some(parent) = hooks_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        json!({})
+    };
+
+    if !config.is_object() {
+        config = json!({});
+    }
+
+    if enable {
+        config["smart-tree"] = build_agy_hook_spec(st_bin, true);
+    } else if let Some(st_hook) = config.get_mut("smart-tree").and_then(|v| v.as_object_mut()) {
+        st_hook.insert("enabled".to_string(), json!(false));
+    } else {
+        config["smart-tree"] = build_agy_hook_spec(st_bin, false);
+    }
+
+    let pretty = serde_json::to_string_pretty(&config)?;
+    fs::write(hooks_path, pretty)?;
+    Ok(())
 }

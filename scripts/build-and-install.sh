@@ -8,8 +8,8 @@ echo "🔨 Building Smart Tree..."
 cargo build --release
 
 echo "📦 Installing Smart Tree..."
-sudo cp ./target/release/st /usr/local/bin/st
-sudo cp ./target/release/std /usr/local/bin/std
+sudo install -m 755 ./target/release/st /usr/local/bin/st
+sudo install -m 755 ./target/release/std /usr/local/bin/std
 
 echo "🧹 Clearing shell cache..."
 hash -r

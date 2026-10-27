@@ -145,9 +145,19 @@ impl Default for ConsciousnessManager {
 }
 
 impl ConsciousnessManager {
+    /// Resolve default consciousness file path (prefers .aye_consciousness.m8, falls back to .mem8/.aye_consciousness.m8 if present)
+    fn default_save_path() -> PathBuf {
+        let legacy = PathBuf::from(".mem8/.aye_consciousness.m8");
+        if legacy.exists() && !Path::new(".aye_consciousness.m8").exists() {
+            legacy
+        } else {
+            PathBuf::from(".aye_consciousness.m8")
+        }
+    }
+
     /// Create new consciousness manager
     pub fn new() -> Self {
-        let save_path = PathBuf::from(".mem8/.aye_consciousness.m8");
+        let save_path = Self::default_save_path();
         let state = Self::load_or_default(&save_path, false);
 
         Self { state, save_path }
@@ -155,7 +165,7 @@ impl ConsciousnessManager {
 
     /// Create new consciousness manager (silent - no output)
     pub fn new_silent() -> Self {
-        let save_path = PathBuf::from("/.mem8/.aye_consciousness.m8");
+        let save_path = Self::default_save_path();
         let state = Self::load_or_default(&save_path, true);
 
         Self { state, save_path }
@@ -197,14 +207,34 @@ impl ConsciousnessManager {
 
     /// Save current consciousness state
     pub fn save(&mut self) -> Result<()> {
+        self.save_internal(false)
+    }
+
+    /// Save current consciousness state silently (no stderr output)
+    pub fn save_silent(&mut self) -> Result<()> {
+        self.save_internal(true)
+    }
+
+    fn save_internal(&mut self, silent: bool) -> Result<()> {
         self.state.last_saved = Utc::now();
+        if let Ok(cwd) = std::env::current_dir() {
+            self.state.working_directory = cwd;
+        }
+
+        if let Some(parent) = self.save_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = fs::create_dir_all(parent);
+            }
+        }
 
         let json = serde_json::to_string_pretty(&self.state)
             .context("Failed to serialize consciousness")?;
 
         fs::write(&self.save_path, json).context("Failed to write consciousness file")?;
 
-        eprintln!("💾 Saved consciousness to {}", self.save_path.display());
+        if !silent {
+            eprintln!("💾 Saved consciousness to {}", self.save_path.display());
+        }
         Ok(())
     }
 
