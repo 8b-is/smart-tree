@@ -75,9 +75,10 @@ EXAMPLES:
                 "properties": {
                     "type": {
                         "type": "string",
-                        "enum": ["files", "code", "config", "documentation", "tests", "build",
+                        "enum": ["files", "all", "code", "config", "documentation", "docs", "tests", "build",
                                  "large", "recent", "timespan", "duplicates", "empty_dirs", "projects"],
-                        "description": "What to find (code/tests/config/docs/etc)"
+                        "description": "What to find (default: 'files'; also accepts 'all', 'code', 'tests', 'config', 'docs', 'large', 'recent', 'projects')",
+                        "default": "files"
                     },
                     "path": {
                         "type": "string",
@@ -112,7 +113,7 @@ EXAMPLES:
                         "description": "Number of results to skip (for pagination)"
                     }
                 },
-                "required": ["type"]
+                "required": []
             }
         }));
     }
@@ -196,8 +197,9 @@ EXAMPLES:
                     "mode": {
                         "type": "string",
                         "enum": ["directory", "workspace", "statistics", "git_status",
-                                 "digest", "semantic", "size_breakdown", "ai_tools"],
-                        "description": "Analysis type"
+                                 "digest", "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
+                        "description": "Analysis type (default: 'directory')",
+                        "default": "directory"
                     },
                     "path": {
                         "type": "string",
@@ -220,7 +222,7 @@ EXAMPLES:
                         "default": false
                     }
                 },
-                "required": ["mode"]
+                "required": []
             }
         }));
     }

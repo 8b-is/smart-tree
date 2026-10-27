@@ -206,4 +206,26 @@ async fn consolidated_dispatch_preserves_format_pattern_and_mcp_envelope() {
             .unwrap_or_else(|| panic!("{tool} response missing MCP content[0].text"));
         assert!(!text.is_empty(), "{tool} MCP text should not be empty");
     }
+
+    // 4. `find` works without `type` (defaults to "files") and accepts `type: "all"` alias
+    for args in [
+        json!({ "path": temp.path() }),
+        json!({ "path": temp.path(), "type": "all" }),
+    ] {
+        let found = payload(handle_find(Some(args), ctx.clone()).await.unwrap());
+        let found_files = found["files"].as_array().unwrap();
+        assert!(
+            found_files.iter().any(|f| f["name"] == "test_alpha.py"),
+            "expected default/all find to return test_alpha.py"
+        );
+    }
+
+    // 5. `analyze` works without `mode` (defaults to "directory")
+    let default_analyze = handle_analyze(Some(json!({ "path": temp.path() })), ctx)
+        .await
+        .unwrap();
+    assert!(
+        default_analyze["content"][0]["text"].as_str().is_some(),
+        "default analyze without mode should succeed"
+    );
 }

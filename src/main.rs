@@ -114,7 +114,11 @@ async fn main() -> Result<()> {
         || cli.daemon_install
         || cli.no_daemon
         || cli.recall.is_some()
-        || matches!(cli.cmd, Some(st::cli::Cmd::Service(_)));
+        || cli.scan_opts.sync_user.is_some()
+        || matches!(
+            cli.cmd,
+            Some(st::cli::Cmd::Service(_) | st::cli::Cmd::Sync(_))
+        );
     if !skip_autostart {
         let client = DaemonClient::default_port();
         if let Err(e) = client.ensure_running().await {
@@ -235,10 +239,25 @@ async fn main() -> Result<()> {
     if cli.mcp_status {
         return handle_mcp_status().await;
     }
+    if let Some(user) = &cli.scan_opts.sync_user {
+        let sync_cmd = st::cli::SyncUserCommand {
+            user: user.clone(),
+            dir: cli.scan_opts.sync_dir.clone(),
+            limit: cli.scan_opts.sync_limit,
+            jobs: 4,
+            refresh_all: cli.scan_opts.refresh_all,
+            no_forks: false,
+            no_archived: false,
+        };
+        return handle_sync_user(&sync_cmd).await;
+    }
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
             st::cli::Cmd::Symbol(_) => unreachable!("symbol commands return before daemon startup"),
+            st::cli::Cmd::Sync(sync_cmd) => {
+                return handle_sync_user(&sync_cmd).await;
+            }
             st::cli::Cmd::Service(service_command) => {
                 let result = match service_command {
                     st::cli::Service::Install => service_manager::install(),

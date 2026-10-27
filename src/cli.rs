@@ -571,6 +571,37 @@ pub struct ScanArgs {
     /// Clean up old diffs, keep last N per file
     #[arg(long, value_name = "N", help_heading = "Advanced")]
     pub cleanup_diffs: Option<usize>,
+
+    /// Sync all GitHub repositories for a user/org into <dir>/<user>/<repo> (clone new, refresh updated)
+    #[arg(
+        long,
+        alias = "gh-sync",
+        value_name = "USER",
+        help_heading = "GitHub Sync"
+    )]
+    pub sync_user: Option<String>,
+
+    /// Base directory for --sync-user (creates <DIR>/<USER>/<repo>, default: current directory)
+    #[arg(
+        long,
+        value_name = "DIR",
+        default_value = ".",
+        help_heading = "GitHub Sync"
+    )]
+    pub sync_dir: PathBuf,
+
+    /// Maximum repositories to list with `gh repo list -L <LIMIT>` (default: 10000)
+    #[arg(
+        long,
+        value_name = "LIMIT",
+        default_value_t = 10000,
+        help_heading = "GitHub Sync"
+    )]
+    pub sync_limit: usize,
+
+    /// Force git pull refresh on all existing repositories even if pushedAt/updatedAt has not changed
+    #[arg(long, help_heading = "GitHub Sync")]
+    pub refresh_all: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -579,6 +610,10 @@ pub enum Cmd {
     #[command(alias = "crab")]
     Symbol(SymbolCommand),
 
+    /// Sync all GitHub repositories for a user/org into <dir>/<user>/<repo> (clone new, refresh updated)
+    #[command(alias = "gh-sync", alias = "sync-user", alias = "sync-github")]
+    Sync(SyncUserCommand),
+
     /// Manage the smart-tree daemon (Linux: systemd, macOS: launchctl, Windows: Task Scheduler)
     #[command(subcommand)]
     Service(Service),
@@ -586,6 +621,30 @@ pub enum Cmd {
     /// Manage project tags
     #[command(subcommand, name = "project-tags")]
     ProjectTags(ProjectTags),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct SyncUserCommand {
+    /// GitHub username or organization (e.g. standardgalactic, 8b-is)
+    pub user: String,
+    /// Base directory where <user>/<repo> will be synced (default: current directory)
+    #[arg(short = 'd', long = "dir", default_value = ".")]
+    pub dir: PathBuf,
+    /// Maximum repositories to fetch via `gh repo list -L <LIMIT>` (default: 10000)
+    #[arg(short = 'L', long = "limit", default_value_t = 10000)]
+    pub limit: usize,
+    /// Number of parallel clone/refresh workers (default: 4)
+    #[arg(short = 'j', long = "jobs", default_value_t = 4)]
+    pub jobs: usize,
+    /// Force git pull refresh on all existing repositories even if pushedAt/updatedAt has not changed
+    #[arg(long)]
+    pub refresh_all: bool,
+    /// Skip forked repositories (`gh repo list --source`)
+    #[arg(long)]
+    pub no_forks: bool,
+    /// Skip archived repositories (`gh repo list --no-archived`)
+    #[arg(long)]
+    pub no_archived: bool,
 }
 
 #[derive(Debug, clap::Args)]

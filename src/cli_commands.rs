@@ -5,7 +5,7 @@
 //! mega-session, guardian, Google Drive, and voice CLI handlers here.
 
 use crate::daemon_client::DaemonClient;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 
 /// Prints the JSON configuration snippet for adding `st` as an MCP server
@@ -1514,6 +1514,394 @@ pub async fn handle_voice_command(action: &str) -> Result<()> {
                 action
             );
             std::process::exit(1);
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+struct RepoSyncRecord {
+    pushed_at: String,
+    updated_at: String,
+    last_synced_at: String,
+    head_sha: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct GhRepoEntry {
+    name: String,
+    #[serde(rename = "pushedAt", default)]
+    pushed_at: Option<String>,
+    #[serde(rename = "updatedAt", default)]
+    updated_at: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+}
+
+/// Sync all GitHub repositories for a user/organization into `<dir>/<user>/<repo>`:
+/// - Uses `gh repo list -L <limit> <user>` to discover repositories and their latest `pushedAt`/`updatedAt` timestamps.
+/// - Clones missing repositories with standard `git clone`.
+/// - Refreshes existing repositories whose `pushedAt`/`updatedAt` changed since last sync (or all when `--refresh-all` is set).
+pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
+    let raw_user = cmd
+        .user
+        .trim()
+        .trim_start_matches('@')
+        .trim_start_matches("https://github.com/")
+        .trim_end_matches('/');
+    let user: String = raw_user
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
+        .collect();
+    if user.is_empty() {
+        anyhow::bail!("Invalid GitHub username/organization: '{}'", cmd.user);
+    }
+
+    let user_dir = cmd.dir.join(&user);
+    std::fs::create_dir_all(&user_dir)
+        .with_context(|| format!("Failed to create target directory {}", user_dir.display()))?;
+
+    let state_path = user_dir.join(".st-sync-state.json");
+    let initial_state: std::collections::BTreeMap<String, RepoSyncRecord> = if state_path.exists() {
+        std::fs::read_to_string(&state_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        std::collections::BTreeMap::new()
+    };
+
+    println!(
+        "🌳 Smart Tree GitHub Sync: fetching up to {} repositories for '{}' → {} ...",
+        cmd.limit,
+        user,
+        user_dir.display()
+    );
+
+    let mut gh_args = vec![
+        "repo".to_string(),
+        "list".to_string(),
+        user.clone(),
+        "-L".to_string(),
+        cmd.limit.to_string(),
+    ];
+    if cmd.no_forks {
+        gh_args.push("--source".to_string());
+    }
+    if cmd.no_archived {
+        gh_args.push("--no-archived".to_string());
+    }
+    gh_args.push("--json".to_string());
+    gh_args.push("name,pushedAt,updatedAt,url".to_string());
+
+    let gh_output = std::process::Command::new("gh")
+        .args(&gh_args)
+        .output()
+        .context("Failed to execute `gh repo list`. Ensure GitHub CLI (`gh`) is installed and authenticated.")?;
+
+    let repos: Vec<GhRepoEntry> = if gh_output.status.success() {
+        serde_json::from_slice(&gh_output.stdout)
+            .context("Failed to parse JSON output from `gh repo list`")?
+    } else {
+        // Fallback to plain `gh repo list <user> -L <limit>` TSV parsing
+        let mut fallback_args = vec![
+            "repo".to_string(),
+            "list".to_string(),
+            user.clone(),
+            "-L".to_string(),
+            cmd.limit.to_string(),
+        ];
+        if cmd.no_forks {
+            fallback_args.push("--source".to_string());
+        }
+        if cmd.no_archived {
+            fallback_args.push("--no-archived".to_string());
+        }
+        let fb = std::process::Command::new("gh")
+            .args(&fallback_args)
+            .output()
+            .context("Failed to execute fallback `gh repo list`")?;
+        if !fb.status.success() {
+            let err = String::from_utf8_lossy(&gh_output.stderr);
+            anyhow::bail!("`gh repo list` failed: {}", err.trim());
+        }
+        let text = String::from_utf8_lossy(&fb.stdout);
+        text.lines()
+            .filter_map(|line| {
+                let cols: Vec<&str> = line.split('\t').collect();
+                let full = cols.first()?.trim();
+                let name = full.split('/').next_back()?.trim();
+                if name.is_empty() {
+                    return None;
+                }
+                let updated = cols.get(3).map(|s| s.trim().to_string());
+                Some(GhRepoEntry {
+                    name: name.to_string(),
+                    pushed_at: updated.clone(),
+                    updated_at: updated,
+                    url: Some(format!("https://github.com/{}/{}", user, name)),
+                })
+            })
+            .collect()
+    };
+
+    let total = repos.len();
+    if total == 0 {
+        println!("No repositories found for '{}'.", user);
+        return Ok(());
+    }
+    println!(
+        "📋 Found {} repositories for '{}'. Starting sync ({} workers)...",
+        total,
+        user,
+        cmd.jobs.clamp(1, 16)
+    );
+
+    let state = std::sync::Arc::new(std::sync::Mutex::new(initial_state));
+    let queue = std::sync::Arc::new(std::sync::Mutex::new(
+        repos
+            .into_iter()
+            .enumerate()
+            .collect::<std::collections::VecDeque<(usize, GhRepoEntry)>>(),
+    ));
+    let cloned = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let refreshed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let up_to_date = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let failed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+    let num_workers = cmd.jobs.clamp(1, 16);
+    let refresh_all = cmd.refresh_all;
+    let mut handles = Vec::with_capacity(num_workers);
+
+    for _ in 0..num_workers {
+        let queue = std::sync::Arc::clone(&queue);
+        let state = std::sync::Arc::clone(&state);
+        let cloned = std::sync::Arc::clone(&cloned);
+        let refreshed = std::sync::Arc::clone(&refreshed);
+        let up_to_date = std::sync::Arc::clone(&up_to_date);
+        let failed = std::sync::Arc::clone(&failed);
+        let user = user.clone();
+        let user_dir = user_dir.clone();
+        let state_path = state_path.clone();
+
+        handles.push(std::thread::spawn(move || loop {
+            let item = {
+                let mut q = queue.lock().unwrap();
+                q.pop_front()
+            };
+            let Some((idx, repo)) = item else {
+                break;
+            };
+            if repo.name.is_empty()
+                || repo.name.contains('/')
+                || repo.name == "."
+                || repo.name == ".."
+            {
+                continue;
+            }
+
+            let repo_dir = user_dir.join(&repo.name);
+            let git_dir = repo_dir.join(".git");
+            let clone_url = repo
+                .url
+                .as_deref()
+                .map(|u| {
+                    if u.ends_with(".git") {
+                        u.to_string()
+                    } else {
+                        format!("{}.git", u)
+                    }
+                })
+                .unwrap_or_else(|| format!("https://github.com/{}/{}.git", user, repo.name));
+
+            let pushed_at = repo.pushed_at.unwrap_or_default();
+            let updated_at = repo.updated_at.unwrap_or_default();
+
+            if !git_dir.exists() {
+                println!(
+                    "[{}/{}] 📥 Cloning {}/{} ...",
+                    idx + 1,
+                    total,
+                    user,
+                    repo.name
+                );
+                let ok = std::process::Command::new("git")
+                    .env("GIT_TERMINAL_PROMPT", "0")
+                    .args(["clone", "--quiet", &clone_url, &repo_dir.to_string_lossy()])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+
+                if ok {
+                    cloned.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let head_sha = git_rev_parse_head(&repo_dir);
+                    save_repo_sync_record(
+                        &state,
+                        &state_path,
+                        &repo.name,
+                        &pushed_at,
+                        &updated_at,
+                        &head_sha,
+                    );
+                } else {
+                    failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    eprintln!(
+                        "[{}/{}] ⚠️  Failed to clone {}/{}",
+                        idx + 1,
+                        total,
+                        user,
+                        repo.name
+                    );
+                }
+            } else {
+                let needs_refresh = if refresh_all {
+                    true
+                } else {
+                    let guard = state.lock().unwrap();
+                    match guard.get(&repo.name) {
+                        None => true,
+                        Some(rec) => {
+                            (!pushed_at.is_empty() && rec.pushed_at != pushed_at)
+                                || (!updated_at.is_empty() && rec.updated_at != updated_at)
+                        }
+                    }
+                };
+
+                if !needs_refresh {
+                    up_to_date.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    continue;
+                }
+
+                let before_sha = git_rev_parse_head(&repo_dir);
+                let pull_ok = std::process::Command::new("git")
+                    .env("GIT_TERMINAL_PROMPT", "0")
+                    .args([
+                        "-C",
+                        &repo_dir.to_string_lossy(),
+                        "pull",
+                        "--ff-only",
+                        "--quiet",
+                    ])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+
+                let refresh_ok = if pull_ok {
+                    true
+                } else {
+                    // Fallback to fetch if working tree or branch diverged
+                    std::process::Command::new("git")
+                        .env("GIT_TERMINAL_PROMPT", "0")
+                        .args([
+                            "-C",
+                            &repo_dir.to_string_lossy(),
+                            "fetch",
+                            "--all",
+                            "--prune",
+                            "--quiet",
+                        ])
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false)
+                };
+
+                if refresh_ok {
+                    let after_sha = git_rev_parse_head(&repo_dir);
+                    if !before_sha.is_empty() && !after_sha.is_empty() && before_sha != after_sha {
+                        refreshed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        println!(
+                            "[{}/{}] 🔄 Refreshed {}/{} ({}..{})",
+                            idx + 1,
+                            total,
+                            user,
+                            repo.name,
+                            &before_sha[..before_sha.len().min(7)],
+                            &after_sha[..after_sha.len().min(7)]
+                        );
+                    } else {
+                        up_to_date.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    save_repo_sync_record(
+                        &state,
+                        &state_path,
+                        &repo.name,
+                        &pushed_at,
+                        &updated_at,
+                        &after_sha,
+                    );
+                } else {
+                    failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    eprintln!(
+                        "[{}/{}] ⚠️  Failed to refresh {}/{}",
+                        idx + 1,
+                        total,
+                        user,
+                        repo.name
+                    );
+                }
+            }
+        }));
+    }
+
+    for h in handles {
+        let _ = h.join();
+    }
+
+    // Final state flush
+    if let Ok(guard) = state.lock() {
+        if let Ok(json_str) = serde_json::to_string_pretty(&*guard) {
+            let _ = std::fs::write(&state_path, json_str);
+        }
+    }
+
+    let c = cloned.load(std::sync::atomic::Ordering::Relaxed);
+    let r = refreshed.load(std::sync::atomic::Ordering::Relaxed);
+    let u = up_to_date.load(std::sync::atomic::Ordering::Relaxed);
+    let f = failed.load(std::sync::atomic::Ordering::Relaxed);
+
+    println!(
+        "\n✅ GitHub Sync Complete for '{}' ({}):\n   📥 Cloned:     {}\n   🔄 Refreshed:  {}\n   ✓  Up-to-date: {}\n   ⚠️  Failed:     {}\n   💾 State file: {}",
+        user,
+        user_dir.display(),
+        c,
+        r,
+        u,
+        f,
+        state_path.display()
+    );
+    Ok(())
+}
+
+fn git_rev_parse_head(repo_dir: &std::path::Path) -> String {
+    std::process::Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+fn save_repo_sync_record(
+    state: &std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, RepoSyncRecord>>>,
+    state_path: &std::path::Path,
+    repo_name: &str,
+    pushed_at: &str,
+    updated_at: &str,
+    head_sha: &str,
+) {
+    if let Ok(mut guard) = state.lock() {
+        guard.insert(
+            repo_name.to_string(),
+            RepoSyncRecord {
+                pushed_at: pushed_at.to_string(),
+                updated_at: updated_at.to_string(),
+                last_synced_at: chrono::Utc::now().to_rfc3339(),
+                head_sha: head_sha.to_string(),
+            },
+        );
+        if guard.len().is_multiple_of(10) {
+            if let Ok(json_str) = serde_json::to_string_pretty(&*guard) {
+                let _ = std::fs::write(state_path, json_str);
+            }
         }
     }
 }

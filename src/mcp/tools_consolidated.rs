@@ -8,13 +8,37 @@ use std::sync::Arc;
 
 /// Consolidated find tool - combines all find_* operations
 pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let find_type = params["type"].as_str().context("type parameter required")?;
+    let params = params.unwrap_or_else(|| json!({}));
+    let raw_type = params
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("files");
+    let find_type = match raw_type {
+        "files" | "file" | "all" | "any" => "files",
+        "code" | "code_files" | "source" => "code",
+        "config" | "configs" | "configuration" => "config",
+        "documentation" | "docs" | "doc" => "documentation",
+        "tests" | "test" => "tests",
+        "build" | "build_files" => "build",
+        "large" | "large_files" => "large",
+        "recent" | "recent_changes" => "recent",
+        "timespan" | "in_timespan" => "timespan",
+        "duplicates" | "duplicate" => "duplicates",
+        "empty_dirs" | "empty_directories" | "empty" => "empty_dirs",
+        "projects" | "project" => "projects",
+        other => {
+            return Err(anyhow::anyhow!(
+                "Unknown find type '{}'. Valid types: files (or all), code, config, documentation (or docs), tests, build, large, recent, timespan, duplicates, empty_dirs, projects",
+                other
+            ))
+        }
+    };
 
     // Preserve all caller arguments (pattern, limit, offset, languages, etc.)
     // while applying sensible defaults for specialized find modes.
     let mut transformed_params = params.clone();
     if let Some(obj) = transformed_params.as_object_mut() {
+        obj.insert("type".to_string(), json!(find_type));
         obj.entry("path").or_insert_with(|| json!("."));
         match find_type {
             "files" | "code" | "config" | "documentation" | "tests" | "build" | "timespan"
@@ -28,7 +52,7 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
             "projects" => {
                 obj.entry("depth").or_insert_with(|| json!(10));
             }
-            _ => return Err(anyhow::anyhow!("Unknown find type: {}", find_type)),
+            _ => unreachable!(),
         }
     }
 
@@ -46,7 +70,7 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
         "duplicates" => "find_duplicates",
         "empty_dirs" => "find_empty_directories",
         "projects" => "find_projects",
-        _ => return Err(anyhow::anyhow!("Unknown find type: {}", find_type)),
+        _ => unreachable!(),
     };
 
     // Call through the regular tools handler
@@ -59,8 +83,29 @@ pub async fn handle_find(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
 
 /// Consolidated analyze tool - combines analysis operations
 pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let mode = params["mode"].as_str().context("mode parameter required")?;
+    let params = params.unwrap_or_else(|| json!({}));
+    let raw_mode = params
+        .get("mode")
+        .and_then(|v| v.as_str())
+        .unwrap_or("directory");
+    let mode = match raw_mode {
+        "directory" | "dir" | "tree" => "directory",
+        "workspace" | "project" => "workspace",
+        "statistics" | "stats" | "stat" => "statistics",
+        "git_status" | "git" | "status" => "git_status",
+        "digest" | "hash" => "digest",
+        "semantic" | "semantics" => "semantic",
+        "quantum-semantic" | "quantum_semantic" | "quantum" => "quantum-semantic",
+        "size_breakdown" | "size" | "sizes" => "size_breakdown",
+        "ai_tools" | "ai" => "ai_tools",
+        "security" | "custodian" => return handle_security(Some(params), ctx).await,
+        other => {
+            return Err(anyhow::anyhow!(
+                "Unknown analyze mode '{}'. Valid modes: directory, workspace, statistics, git_status, digest, semantic, quantum-semantic, size_breakdown, ai_tools, security",
+                other
+            ))
+        }
+    };
 
     // Transform parameters based on the tool
     let (tool_name, transformed_params) = match mode {
@@ -69,6 +114,7 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
             // 'mode': 'directory' selector first, then rename 'format' -> 'mode' if present.
             let mut p = params.clone();
             if let Some(obj) = p.as_object_mut() {
+                obj.entry("path").or_insert_with(|| json!("."));
                 obj.remove("mode");
                 if let Some(format) = obj.remove("format") {
                     obj.insert("mode".to_string(), format);
@@ -89,8 +135,7 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         }
         "size_breakdown" => ("directory_size_breakdown", params.clone()),
         "ai_tools" => ("analyze_ai_tool_usage", params.clone()),
-        "security" | "custodian" => return handle_security(Some(params), ctx).await,
-        _ => return Err(anyhow::anyhow!("Unknown analyze mode: {}", mode)),
+        _ => unreachable!(),
     };
 
     super::tools::handle_tools_call(
@@ -102,6 +147,15 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
 
 /// Consolidated search tool
 pub async fn handle_search(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
+    let mut params = params.unwrap_or_else(|| json!({}));
+    if let Some(obj) = params.as_object_mut() {
+        obj.entry("path").or_insert_with(|| json!("."));
+        if !obj.contains_key("keyword") {
+            if let Some(q) = obj.get("query").or_else(|| obj.get("pattern")).cloned() {
+                obj.insert("keyword".to_string(), q);
+            }
+        }
+    }
     super::tools::handle_tools_call(
         json!({ "name": "search_in_files", "arguments": params }),
         ctx,
@@ -111,16 +165,24 @@ pub async fn handle_search(params: Option<Value>, ctx: Arc<McpContext>) -> Resul
 
 /// Consolidated overview tool - quick_tree and project_overview
 pub async fn handle_overview(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let mode = params
+    let mut params = params.unwrap_or_else(|| json!({}));
+    if let Some(obj) = params.as_object_mut() {
+        obj.entry("path").or_insert_with(|| json!("."));
+    }
+    let raw_mode = params
         .get("mode")
         .and_then(|m| m.as_str())
         .unwrap_or("quick");
 
-    let tool_name = match mode {
-        "quick" => "quick_tree",
-        "project" => "project_overview",
-        _ => return Err(anyhow::anyhow!("Unknown overview mode: {}", mode)),
+    let tool_name = match raw_mode {
+        "quick" | "tree" | "fast" => "quick_tree",
+        "project" | "full" | "comprehensive" | "all" => "project_overview",
+        other => {
+            return Err(anyhow::anyhow!(
+                "Unknown overview mode '{}'. Valid modes: quick, project",
+                other
+            ))
+        }
     };
 
     super::tools::handle_tools_call(json!({ "name": tool_name, "arguments": params }), ctx).await
@@ -128,12 +190,22 @@ pub async fn handle_overview(params: Option<Value>, ctx: Arc<McpContext>) -> Res
 
 /// Consolidated edit tool - combines all Smart Edit operations
 pub async fn handle_edit(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let operation = params["operation"].as_str().context("operation required")?;
+    let mut params = params.context("Parameters required")?;
+    if let Some(obj) = params.as_object_mut() {
+        if !obj.contains_key("file_path") {
+            if let Some(p) = obj.get("path").or_else(|| obj.get("file")).cloned() {
+                obj.insert("file_path".to_string(), p);
+            }
+        }
+    }
+    let operation = params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("get_functions");
 
     let tool_name = match operation {
         "smart_edit" | "SmartEdit" => "smart_edit",
-        "get_functions" | "get_function_tree" | "GetFunctions" => "get_function_tree",
+        "get_functions" | "get_function_tree" | "GetFunctions" | "outline" => "get_function_tree",
         "insert_function" | "InsertFunction" => "insert_function",
         "replace_function" | "ReplaceFunction" => "replace_function",
         "remove_function" | "RemoveFunction" | "delete_function" | "DeleteFunction" => {
@@ -148,13 +220,30 @@ pub async fn handle_edit(params: Option<Value>, ctx: Arc<McpContext>) -> Result<
 
 /// Consolidated history tool - file tracking and history
 pub async fn handle_history(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let operation = params["operation"].as_str().context("operation required")?;
+    let mut params = params.unwrap_or_else(|| json!({}));
+    if let Some(obj) = params.as_object_mut() {
+        if !obj.contains_key("project_path") {
+            if let Some(p) = obj.get("path").cloned() {
+                obj.insert("project_path".to_string(), p);
+            } else {
+                obj.insert("project_path".to_string(), json!("."));
+            }
+        }
+    }
+    let default_op = if params.get("file_path").is_some() {
+        "get_file"
+    } else {
+        "get_project"
+    };
+    let operation = params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or(default_op);
 
     let tool_name = match operation {
         "track" => "track_file_operation",
-        "get_file" => "get_file_history",
-        "get_project" => "get_project_history_summary",
+        "get_file" | "file" => "get_file_history",
+        "get_project" | "project" | "summary" => "get_project_history_summary",
         _ => return Err(anyhow::anyhow!("Unknown history operation: {}", operation)),
     };
 
@@ -163,15 +252,27 @@ pub async fn handle_history(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
 
 /// Consolidated context tool - project context and collaboration
 pub async fn handle_context(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let operation = params["operation"].as_str().context("operation required")?;
+    let mut params = params.unwrap_or_else(|| json!({}));
+    if let Some(obj) = params.as_object_mut() {
+        if !obj.contains_key("project_path") {
+            if let Some(p) = obj.get("path").cloned() {
+                obj.insert("project_path".to_string(), p);
+            } else {
+                obj.insert("project_path".to_string(), json!("."));
+            }
+        }
+    }
+    let operation = params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("gather_project");
 
     let tool_name = match operation {
-        "gather_project" => "gather_project_context",
-        "collaboration_rapport" => "get_collaboration_rapport",
-        "engagement_heatmap" => "get_co_engagement_heatmap",
-        "cross_domain_patterns" => "get_cross_domain_patterns",
-        "suggest_insights" => "suggest_cross_session_insights",
+        "gather_project" | "gather" | "project" => "gather_project_context",
+        "collaboration_rapport" | "rapport" => "get_collaboration_rapport",
+        "engagement_heatmap" | "heatmap" => "get_co_engagement_heatmap",
+        "cross_domain_patterns" | "patterns" => "get_cross_domain_patterns",
+        "suggest_insights" | "insights" => "suggest_cross_session_insights",
         _ => return Err(anyhow::anyhow!("Unknown context operation: {}", operation)),
     };
 
@@ -180,12 +281,15 @@ pub async fn handle_context(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
 
 /// Consolidated memory tool - collaborative memories
 pub async fn handle_memory(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let operation = params["operation"].as_str().context("operation required")?;
+    let params = params.unwrap_or_else(|| json!({}));
+    let operation = params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("find");
 
     let tool_name = match operation {
-        "anchor" => "anchor_collaborative_memory",
-        "find" => "find_collaborative_memories",
+        "anchor" | "save" | "store" => "anchor_collaborative_memory",
+        "find" | "search" | "get" => "find_collaborative_memories",
         _ => return Err(anyhow::anyhow!("Unknown memory operation: {}", operation)),
     };
 
@@ -212,13 +316,16 @@ pub async fn handle_sse(params: Option<Value>, ctx: Arc<McpContext>) -> Result<V
 
 /// Consolidated feedback tool
 pub async fn handle_feedback(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
-    let operation = params["operation"].as_str().context("operation required")?;
+    let params = params.unwrap_or_else(|| json!({}));
+    let operation = params
+        .get("operation")
+        .and_then(|v| v.as_str())
+        .unwrap_or("check_updates");
 
     let tool_name = match operation {
         "submit" => "submit_feedback",
         "request_tool" => "request_tool",
-        "check_updates" => "check_for_updates",
+        "check_updates" | "updates" => "check_for_updates",
         _ => return Err(anyhow::anyhow!("Unknown feedback operation: {}", operation)),
     };
 
@@ -237,13 +344,15 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "type": {
                         "type": "string",
-                        "enum": ["files", "code", "config", "documentation", "tests", "build",
-                                 "large", "recent", "timespan", "duplicates", "empty_dirs"],
-                        "description": "Type of items to find"
+                        "enum": ["files", "all", "code", "config", "documentation", "docs", "tests", "build",
+                                 "large", "recent", "timespan", "duplicates", "empty_dirs", "projects"],
+                        "description": "Type of items to find (default: 'files')",
+                        "default": "files"
                     },
                     "path": {
                         "type": "string",
-                        "description": "Path to search in"
+                        "description": "Path to search in (default: '.')",
+                        "default": "."
                     },
                     "pattern": {
                         "type": "string",
@@ -279,7 +388,7 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                         "description": "Number of results to skip (for pagination)"
                     }
                 },
-                "required": ["type"]
+                "required": []
             }
         }),
         json!({
@@ -291,12 +400,14 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     "mode": {
                         "type": "string",
                         "enum": ["directory", "workspace", "statistics", "git_status",
-                                 "digest", "semantic", "size_breakdown", "ai_tools"],
-                        "description": "Analysis mode"
+                                 "digest", "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
+                        "description": "Analysis mode (default: 'directory')",
+                        "default": "directory"
                     },
                     "path": {
                         "type": "string",
-                        "description": "Path to analyze"
+                        "description": "Path to analyze (default: '.')",
+                        "default": "."
                     },
                     "format": {
                         "type": "string",
@@ -311,7 +422,7 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                         "description": "Show hidden files"
                     }
                 },
-                "required": ["mode"]
+                "required": []
             }
         }),
         json!({
