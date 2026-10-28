@@ -524,6 +524,7 @@ mod tests {
         ];
 
         let stats = TreeStats {
+            truncation_reason: None,
             total_files: 2,
             total_dirs: 1,
             total_size: 2000,

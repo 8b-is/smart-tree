@@ -355,6 +355,10 @@ pub enum FileCategory {
 /// (largest files), and more. It's the answer to "So, how was the show?"
 #[derive(Debug, Default)]
 pub struct TreeStats {
+    /// Safety stop reason for partial scans; `None` means no safety limit stopped
+    /// traversal. Counts below describe collected/filtered nodes before top-N
+    /// selection, not the unvisited tree.
+    pub truncation_reason: Option<String>,
     /// Total number of files encountered (excluding directories).
     pub total_files: u64,
     /// Total number of directories encountered.
@@ -1048,7 +1052,7 @@ impl Scanner {
         }
 
         // Initialize safety tracker for streaming mode
-        let safety_tracker = ScannerSafetyTracker::new(self.safety_limits.clone());
+        let mut safety_tracker = ScannerSafetyTracker::new(self.safety_limits.clone());
 
         // Original streaming logic for non-search cases
         let mut walker = WalkDir::new(&self.root)
@@ -1060,8 +1064,7 @@ impl Scanner {
         while let Some(entry_result) = walker.next() {
             // Check safety limits
             if let Err(safety_error) = safety_tracker.should_continue() {
-                eprintln!("⚠️  {}", safety_error);
-                eprintln!("   Use --max-depth or scan a more specific directory");
+                stats.truncation_reason = Some(safety_error);
                 break;
             }
 
@@ -1087,9 +1090,10 @@ impl Scanner {
                                 }
 
                                 // Track node for safety limits
-                                safety_tracker.add_file(estimate_node_size(
-                                    node.path.to_string_lossy().len(),
-                                ));
+                                if let Err(reason) = Self::admit_node(&mut safety_tracker, &node) {
+                                    stats.truncation_reason = Some(reason);
+                                    break;
+                                }
 
                                 // Send the (ignored) node through the channel.
                                 if sender.send(node.clone()).is_err() {
@@ -1140,9 +1144,10 @@ impl Scanner {
 
                             if node.is_dir || should_include_file {
                                 // Track node for safety limits
-                                safety_tracker.add_file(estimate_node_size(
-                                    node.path.to_string_lossy().len(),
-                                ));
+                                if let Err(reason) = Self::admit_node(&mut safety_tracker, &node) {
+                                    stats.truncation_reason = Some(reason);
+                                    break;
+                                }
 
                                 // Send the processed node through the channel.
                                 if sender.send(node.clone()).is_err() {
@@ -1179,8 +1184,10 @@ impl Scanner {
                         if !is_contents_error {
                             // Create a special node representing the permission-denied entry.
                             let node = self.create_permission_denied_node(path, depth);
-                            safety_tracker
-                                .add_file(estimate_node_size(node.path.to_string_lossy().len()));
+                            if let Err(reason) = Self::admit_node(&mut safety_tracker, &node) {
+                                stats.truncation_reason = Some(reason);
+                                break;
+                            }
 
                             if sender.send(node.clone()).is_err() {
                                 break; // Receiver disconnected.
@@ -1198,7 +1205,20 @@ impl Scanner {
             }
         }
         // Scan complete, return the accumulated statistics.
+        Self::report_truncation(stats.truncation_reason.as_deref());
         Ok(stats)
+    }
+
+    /// All retained nodes use the same checked admission, including placeholders.
+    fn admit_node(tracker: &mut ScannerSafetyTracker, node: &FileNode) -> Result<(), String> {
+        tracker.add_file(estimate_node_size(node.path.to_string_lossy().len())?)
+    }
+
+    fn report_truncation(reason: Option<&str>) {
+        if let Some(reason) = reason {
+            eprintln!("⚠️  {}", reason);
+            eprintln!("   Use --max-depth, --stream mode, or scan a more specific directory");
+        }
     }
 
     /// ## `should_search_file`
@@ -1442,11 +1462,10 @@ impl Scanner {
     ///    It's thorough and great for when you need the whole picture before making decisions.
     pub fn scan(&self) -> Result<(Vec<FileNode>, TreeStats)> {
         let mut all_nodes_collected = Vec::new(); // Stores all nodes initially encountered.
-                                                  // `ignored_dirs` was here, but its primary use with `skip_current_dir` is within the loop.
-                                                  // If we need to track them for other reasons post-loop, it could be reinstated.
+        let mut truncation_reason = None;
 
         // Initialize safety tracker
-        let safety_tracker = ScannerSafetyTracker::new(self.safety_limits.clone());
+        let mut safety_tracker = ScannerSafetyTracker::new(self.safety_limits.clone());
 
         let mut walker = WalkDir::new(&self.root)
             .max_depth(self.config.max_depth)
@@ -1456,78 +1475,64 @@ impl Scanner {
         while let Some(entry_result) = walker.next() {
             // Check safety limits
             if let Err(safety_error) = safety_tracker.should_continue() {
-                eprintln!("⚠️  {}", safety_error);
-                eprintln!("   Use --max-depth, --stream mode, or scan a more specific directory");
+                truncation_reason = Some(safety_error);
                 break;
             }
 
-            match entry_result {
+            let (node, enrich) = match entry_result {
                 Ok(entry) => {
                     let depth = entry.depth();
                     let path = entry.path();
                     let is_ignored_by_rules = self.should_ignore(path)?;
 
-                    if is_ignored_by_rules {
-                        if self.config.show_ignored {
-                            // Process and add the ignored entry.
-                            if let Some(mut node) = self.process_entry(&entry, depth, true)? {
-                                if !node.is_dir && self.should_search_file(&node) {
-                                    node.search_matches = self.search_in_file(&node.path);
-                                }
-                                // Smart scanning even for ignored files (they might have security issues!)
-                                self.enrich_with_smart_scanning(&mut node);
-                                safety_tracker.add_file(estimate_node_size(
-                                    node.path.to_string_lossy().len(),
-                                ));
-                                all_nodes_collected.push(node);
-                            }
-                            if entry.file_type().is_dir() {
-                                walker.skip_current_dir(); // Don't descend into ignored dirs if showing them.
-                            }
-                        } else {
-                            // Not showing ignored, and it's a directory: skip its contents.
-                            if entry.file_type().is_dir() {
-                                walker.skip_current_dir();
-                            }
-                            // If it's a file, it's simply skipped by not adding to `all_nodes_collected`.
-                        }
+                    let node = if is_ignored_by_rules && !self.config.show_ignored {
+                        None
                     } else {
-                        // Not ignored by rules, process normally.
-                        if let Some(mut node) = self.process_entry(&entry, depth, false)? {
-                            if !node.is_dir && self.should_search_file(&node) {
-                                node.search_matches = self.search_in_file(&node.path);
-                            }
-                            // Smart scanning: add security findings and interest scores
-                            self.enrich_with_smart_scanning(&mut node);
-                            all_nodes_collected.push(node);
-                        } else {
-                            // process_entry returned None, which means this is a hidden entry and show_hidden is false
-                            // If it's a directory, we need to skip its contents
-                            if entry.file_type().is_dir() {
-                                walker.skip_current_dir();
-                            }
-                        }
+                        self.process_entry(&entry, depth, is_ignored_by_rules)?
+                    };
+                    // Preserve pruning of ignored directories (even when shown)
+                    // and hidden directories that process_entry omitted.
+                    if entry.file_type().is_dir() && (is_ignored_by_rules || node.is_none()) {
+                        walker.skip_current_dir();
                     }
+                    (node, true)
                 }
                 Err(e) => {
                     // Handle errors like permission denied.
-                    if let Some(path) = e.path() {
+                    let node = if let Some(path) = e.path() {
                         let depth = e.depth();
-                        all_nodes_collected.push(self.create_permission_denied_node(path, depth));
                         if e.io_error().is_some_and(|io_err| {
                             io_err.kind() == std::io::ErrorKind::PermissionDenied
                         }) {
                             walker.skip_current_dir(); // Skip unreadable directory.
                         }
-                    }
+                        Some(self.create_permission_denied_node(path, depth))
+                    } else {
+                        None
+                    };
+                    (node, false)
                 }
+            };
+
+            if let Some(mut node) = node {
+                if let Err(reason) = Self::admit_node(&mut safety_tracker, &node) {
+                    truncation_reason = Some(reason);
+                    break;
+                }
+                if enrich {
+                    if !node.is_dir && self.should_search_file(&node) {
+                        node.search_matches = self.search_in_file(&node.path);
+                    }
+                    self.enrich_with_smart_scanning(&mut node);
+                }
+                all_nodes_collected.push(node);
             }
         }
 
         // If filters are active, we need a second pass to ensure directories are only included
         // if they contain (or lead to) matching files.
         // Also, calculate stats based on the *final* list of nodes.
-        let (final_nodes, final_stats) = if self.has_active_filters() {
+        let (final_nodes, mut final_stats) = if self.has_active_filters() {
             self.filter_nodes_and_calculate_stats(all_nodes_collected)
         } else {
             // No filters, so all collected nodes are final. Calculate stats on them.
@@ -1541,12 +1546,16 @@ impl Scanner {
             }
             (all_nodes_collected, stats)
         };
+        Self::report_truncation(truncation_reason.as_deref());
+        final_stats.truncation_reason = truncation_reason;
 
         // Apply sorting and top-N filtering if requested
         let sorted_nodes = self.apply_sorting_and_limit(final_nodes);
 
         // Save scan state for future change detection (if smart mode enabled)
-        if self.config.smart_mode || self.config.compute_interest {
+        if final_stats.truncation_reason.is_none()
+            && (self.config.smart_mode || self.config.compute_interest)
+        {
             self.save_scan_state(&sorted_nodes);
         }
 
@@ -2456,6 +2465,218 @@ pub fn parse_size(size_str: &str) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*; // Import everything from the parent module (scanner.rs).
+
+    fn budget_scanner(root: &Path, max_files: usize, config: ScannerConfig) -> Scanner {
+        let mut scanner = Scanner::new(root, config).unwrap();
+        scanner.safety_limits = ScannerSafetyLimits {
+            max_files,
+            ..ScannerSafetyLimits::unlimited()
+        };
+        scanner
+    }
+
+    fn scan_for_budget_test(scanner: &Scanner, stream: bool) -> (Vec<FileNode>, TreeStats) {
+        if stream {
+            let (sender, receiver) = mpsc::channel();
+            let stats = scanner.scan_stream(sender).unwrap();
+            (receiver.into_iter().collect(), stats)
+        } else {
+            scanner.scan().unwrap()
+        }
+    }
+
+    #[test]
+    fn scanner_node_budget_visible_entries() {
+        // Keep fixtures off tmpfs, which the scanner intentionally ignores.
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        for name in ["one.rs", "two.rs", "three.rs"] {
+            fs::write(temp.path().join(name), "content").unwrap();
+        }
+        let scanner = budget_scanner(
+            temp.path(),
+            3,
+            ScannerConfig {
+                max_depth: 2,
+                ..Default::default()
+            },
+        );
+
+        for stream in [false, true] {
+            let (nodes, stats) = scan_for_budget_test(&scanner, stream);
+            // Four eligible nodes: root + three files. Only two files fit.
+            assert_eq!(nodes.len(), 3);
+            assert_eq!(stats.total_dirs, 1);
+            assert_eq!(stats.total_files, 2);
+            assert!(stats.truncation_reason.unwrap().contains("node limit of 3"));
+        }
+    }
+
+    #[test]
+    fn scanner_node_budget_exact_cap_and_zero_unlimited() {
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        for name in ["one.rs", "two.rs"] {
+            fs::write(temp.path().join(name), "content").unwrap();
+        }
+        for cap in [0, 3] {
+            let scanner = budget_scanner(
+                temp.path(),
+                cap,
+                ScannerConfig {
+                    max_depth: 2,
+                    ..Default::default()
+                },
+            );
+            for stream in [false, true] {
+                let (nodes, stats) = scan_for_budget_test(&scanner, stream);
+                assert_eq!(nodes.len(), 3);
+                assert_eq!((stats.total_files, stats.total_dirs), (2, 1));
+                assert!(stats.truncation_reason.is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn scanner_node_budget_preserves_hidden_and_ignored_pruning_at_cap() {
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        for dir in ["target", ".hidden"] {
+            fs::create_dir(temp.path().join(dir)).unwrap();
+            fs::write(temp.path().join(dir).join("nested.rs"), "content").unwrap();
+        }
+        fs::write(temp.path().join("visible.rs"), "content").unwrap();
+        fs::write(temp.path().join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(temp.path().join("ignored.txt"), "content").unwrap();
+        let scanner = budget_scanner(
+            temp.path(),
+            2,
+            ScannerConfig {
+                max_depth: 4,
+                use_default_ignores: true,
+                respect_gitignore: true,
+                ..Default::default()
+            },
+        );
+        for stream in [false, true] {
+            let (nodes, stats) = scan_for_budget_test(&scanner, stream);
+            assert_eq!(nodes.len(), 2);
+            assert!(nodes.iter().any(|node| node.path.ends_with("visible.rs")));
+            assert_eq!((stats.total_files, stats.total_dirs), (1, 1));
+            assert!(stats.truncation_reason.is_none());
+        }
+    }
+
+    #[test]
+    fn scanner_node_budget_shown_ignored_entries_count_without_descending() {
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        fs::create_dir(temp.path().join("target")).unwrap();
+        fs::write(temp.path().join("target/nested.rs"), "content").unwrap();
+        fs::write(temp.path().join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(temp.path().join("ignored.txt"), "content").unwrap();
+        for cap in [2, 3] {
+            let scanner = budget_scanner(
+                temp.path(),
+                cap,
+                ScannerConfig {
+                    max_depth: 4,
+                    show_ignored: true,
+                    respect_gitignore: true,
+                    use_default_ignores: true,
+                    ..Default::default()
+                },
+            );
+            for stream in [false, true] {
+                let (nodes, stats) = scan_for_budget_test(&scanner, stream);
+                assert_eq!(nodes.len(), cap);
+                assert_eq!(stats.truncation_reason.is_some(), cap == 2);
+                assert!(nodes.iter().filter(|node| node.depth > 0).all(|node| {
+                    node.is_ignored
+                        && (node.path.ends_with("target") || node.path.ends_with("ignored.txt"))
+                }));
+                if cap == 3 {
+                    assert_eq!((stats.total_files, stats.total_dirs), (1, 2));
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn scanner_node_budget_walk_errors_count() {
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        // A dangling followed link produces a walk error even when tests run as root.
+        std::os::unix::fs::symlink("missing", temp.path().join("dangling")).unwrap();
+        for cap in [1, 2] {
+            let scanner = budget_scanner(
+                temp.path(),
+                cap,
+                ScannerConfig {
+                    max_depth: 2,
+                    follow_symlinks: true,
+                    ..Default::default()
+                },
+            );
+            for stream in [false, true] {
+                let (nodes, stats) = scan_for_budget_test(&scanner, stream);
+                assert_eq!(nodes.len(), cap);
+                assert_eq!(stats.truncation_reason.is_some(), cap == 1);
+                assert_eq!(
+                    nodes.iter().filter(|node| node.permission_denied).count(),
+                    cap - 1
+                );
+                if cap == 2 {
+                    assert!(nodes.iter().any(|node| node.path.ends_with("dangling")));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn scanner_node_budget_checks_prospective_bytes_even_without_count_cap() {
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        fs::write(temp.path().join("visible.rs"), "content").unwrap();
+        let mut scanner = budget_scanner(
+            temp.path(),
+            0,
+            ScannerConfig {
+                max_depth: 2,
+                ..Default::default()
+            },
+        );
+        let root_bytes = estimate_node_size(scanner.root.to_string_lossy().len()).unwrap();
+        for (budget, expected) in [(0, 0), (root_bytes, 1)] {
+            scanner.safety_limits.max_memory_bytes = budget;
+            for stream in [false, true] {
+                let (nodes, stats) = scan_for_budget_test(&scanner, stream);
+                assert_eq!(nodes.len(), expected);
+                assert!(stats
+                    .truncation_reason
+                    .unwrap()
+                    .contains("Estimated node bytes"));
+            }
+        }
+    }
+
+    #[test]
+    fn scanner_node_budget_truncation_survives_search_filtering() {
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        for name in ["one.rs", "two.rs"] {
+            fs::write(temp.path().join(name), "no match").unwrap();
+        }
+        let scanner = budget_scanner(
+            temp.path(),
+            2,
+            ScannerConfig {
+                max_depth: 2,
+                search_keyword: Some("absent".to_string()),
+                ..Default::default()
+            },
+        );
+        for stream in [false, true] {
+            let (nodes, stats) = scan_for_budget_test(&scanner, stream);
+            assert!(nodes.is_empty());
+            assert_eq!((stats.total_files, stats.total_dirs), (0, 0));
+            assert!(stats.truncation_reason.is_some());
+        }
+    }
 
     #[test]
     fn explicitly_selected_hidden_root_still_scans_visible_children() {
