@@ -46,7 +46,7 @@ package-lock.json
 
 # --- Rust ---
 target/
-Cargo.lock
+# Root application lockfile is tracked for reproducible release bundles.
 
 # --- Build artifacts ---
 dist/
@@ -98,7 +98,7 @@ htmlcov/
 
 # Rust
 target/
-Cargo.lock
+!/Cargo.lock
 
 # Node/JavaScript
 node_modules/

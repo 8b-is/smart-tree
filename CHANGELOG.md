@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.5.0] - 2026-10-28
+
+### Added
+
+- Opt-in `batch_mode: "atomic"` for Smart Edit: operation failures discard all
+  staged edits before writing the target or diff history. Sequential edits remain
+  supported; the default is still `best_effort`.
+
+### Fixed
+
+- Enforce checked scanner node/byte admission for ordinary, ignored and error
+  nodes, report truncation, and preserve saved scan state after partial scans.
+- Reconcile GitHub sync only for clean, attached, non-diverged branches; report
+  cached, blocked and fetched-only outcomes distinctly and serialize writers.
+- Isolate cwd-changing hook tests in subprocesses, keep scan fixtures off tmpfs,
+  and give Git timeline import a deterministic committed fixture.
+
+### Release note
+
+- Automatic upgrades require an enabled managed updater and a matching platform
+  asset in the i1.is catalogue. This release does not enable updates remotely.
+- Dad joke: These trees know their limits—and their edits stick together.
+
+## Earlier unreleased notes
+
 ### Added
 
 - Build CrabCC's code intelligence into Smart Tree 10.3.0. The MCP `symbol` tool and `st symbol` (alias `st crab`) share native indexing, definitions, references, outlines, and call-graph statistics; no standalone CrabCC executable is required.
@@ -559,4 +584,4 @@ Special thanks to:
 - Multiple output formats (classic, hex, json, csv, tsv, ai)
 - Advanced filtering options
 - MCP server integration
-- Cross-platform support 
+- Cross-platform support
