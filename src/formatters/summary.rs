@@ -765,6 +765,7 @@ mod tests {
         let formatter = SummaryFormatter::new(false);
         let nodes = create_test_nodes();
         let stats = TreeStats {
+            truncation_reason: None,
             total_files: 2,
             total_dirs: 1,
             total_size: 1500,
@@ -818,6 +819,7 @@ mod tests {
         }
 
         let stats = TreeStats {
+            truncation_reason: None,
             total_files: 0,
             total_dirs: 25,
             total_size: 0,

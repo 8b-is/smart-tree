@@ -277,6 +277,12 @@ EXAMPLES:
                         "type": "string",
                         "description": "Path to the file to edit (REQUIRED for all operations)"
                     },
+                    "batch_mode": {
+                        "type": "string",
+                        "enum": ["best_effort", "atomic"],
+                        "default": "best_effort",
+                        "description": "For smart_edit: atomic aborts before persistence on any operation error. Not crash-safe disk persistence."
+                    },
                     "edits": {
                         "type": "array",
                         "description": "Array of edit operations (REQUIRED for 'smart_edit' operation only). Each edit must have 'operation' field and additional fields based on operation type.",

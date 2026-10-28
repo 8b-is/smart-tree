@@ -505,6 +505,12 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                         "type": "string",
                         "description": "File to edit"
                     },
+                    "batch_mode": {
+                        "type": "string",
+                        "enum": ["best_effort", "atomic"],
+                        "default": "best_effort",
+                        "description": "For smart_edit: atomic aborts before persistence on any operation error. Not crash-safe disk persistence."
+                    },
                     "edits": {
                         "type": "array",
                         "description": "Array of edit operations (for smart_edit)",

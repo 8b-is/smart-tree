@@ -928,6 +928,12 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
                         "type": "string",
                         "description": "Path to the file to edit (REQUIRED)"
                     },
+                    "batch_mode": {
+                        "type": "string",
+                        "enum": ["best_effort", "atomic"],
+                        "default": "best_effort",
+                        "description": "atomic aborts the whole batch before persistence on any operation error; best_effort retains successful edits. Not crash-safe disk persistence."
+                    },
                     "edits": {
                         "type": "array",
                         "description": "Array of smart edit operations (REQUIRED). Each operation has different required fields - see operation-specific requirements in tool description.",

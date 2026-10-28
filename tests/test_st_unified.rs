@@ -9,7 +9,7 @@ use std::path::Path;
 use tempfile::TempDir;
 
 fn create_test_directory() -> Result<TempDir> {
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
 
     // Create test structure
     fs::create_dir(temp_dir.path().join("src"))?;
@@ -99,7 +99,7 @@ fn test_ls_with_pattern() -> Result<()> {
 #[test]
 fn test_ls_empty_directory() -> Result<()> {
     // Edge case alert! Empty directories are tomorrow's NullPointerExceptions!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
 
     let result = st.ls(temp_dir.path(), None)?;
@@ -131,7 +131,7 @@ fn test_read_basic() -> Result<()> {
 #[test]
 fn test_read_with_offset_and_limit() -> Result<()> {
     // Offset and limit - the dynamic duo of pagination bugs!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let test_file = temp_dir.path().join("test.txt");
 
     let mut file = fs::File::create(&test_file)?;
@@ -167,7 +167,7 @@ fn test_read_nonexistent_file() -> Result<()> {
 #[test]
 fn test_read_offset_beyond_file() -> Result<()> {
     // What happens when we read past the end? Let's find out!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let test_file = temp_dir.path().join("small.txt");
     fs::write(&test_file, "Line 1\nLine 2\nLine 3")?;
 
@@ -370,7 +370,7 @@ fn test_understand_project() -> Result<()> {
 
 #[test]
 fn test_binary_not_found() -> Result<()> {
-    let temp = TempDir::new()?;
+    let temp = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     assert!(StUnified::with_binary(temp.path().join("missing-st")).is_err());
     Ok(())
 }
@@ -378,7 +378,7 @@ fn test_binary_not_found() -> Result<()> {
 #[test]
 fn test_failed_command_reports_error() -> Result<()> {
     let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
-    let temp = TempDir::new()?;
+    let temp = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     assert!(st.analyze(temp.path(), "invalid-output-mode", 1).is_err());
     assert!(st.glob("[", temp.path()).is_err());
     Ok(())
@@ -387,7 +387,7 @@ fn test_failed_command_reports_error() -> Result<()> {
 #[test]
 fn test_glob_unicode_and_absolute_paths() -> Result<()> {
     let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
-    let temp = TempDir::new()?;
+    let temp = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let file = temp.path().join("測試7.md");
     fs::write(&file, "Lunar notes")?;
     fs::write(temp.path().join("other.txt"), "Unrelated")?;
@@ -402,7 +402,7 @@ fn test_glob_unicode_and_absolute_paths() -> Result<()> {
 #[test]
 fn test_read_extreme_offset_and_limit() -> Result<()> {
     let st = StUnified::with_binary(env!("CARGO_BIN_EXE_st"))?;
-    let temp = TempDir::new()?;
+    let temp = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let file = temp.path().join("lines.txt");
     fs::write(&file, "first\nsecond")?;
     assert!(st
@@ -417,7 +417,7 @@ fn test_read_extreme_offset_and_limit() -> Result<()> {
 #[test]
 fn test_unicode_filenames() -> Result<()> {
     // Unicode - because bugs speak all languages! 🌍
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
 
     // Create files with unicode names
     fs::write(temp_dir.path().join("测试.txt"), "Chinese test")?;
@@ -462,7 +462,7 @@ fn test_permission_denied() -> Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
 
-        let temp_dir = TempDir::new()?;
+        let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
         let restricted = temp_dir.path().join("restricted.txt");
         fs::write(&restricted, "secret")?;
 

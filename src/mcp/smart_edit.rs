@@ -1100,34 +1100,35 @@ impl SmartEditor {
     }
 }
 
-/// MCP tool handler for smart edit operations
-pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
-    let params = params.context("Parameters required")?;
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum BatchMode {
+    #[default]
+    BestEffort,
+    Atomic,
+}
 
-    let file_path = params["file_path"].as_str().context("file_path required")?;
+struct StagedEdits {
+    content: String,
+    results: Vec<Value>,
+    initial_structure: Value,
+    final_structure: Value,
+}
 
-    let edits = params["edits"].as_array().context("edits array required")?;
-
-    // Read file
-    let content = std::fs::read_to_string(file_path)?;
-    let original_content = content.clone(); // Clone for diff storage
-    let extension = Path::new(file_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .context("Could not determine file extension")?;
-
-    let language = SupportedLanguage::from_extension(extension).context("Unsupported language")?;
-
-    // Create smart editor
+/// Own all intermediate edits: operation errors in atomic mode discard the
+/// entire editor before any diff storage or target-file writes can occur.
+fn stage_edits(
+    content: String,
+    language: SupportedLanguage,
+    edits: &[Value],
+    mode: BatchMode,
+) -> Result<StagedEdits> {
     let mut editor = SmartEditor::new(content, language)?;
-
-    // Get initial structure
     let initial_structure = editor.get_function_tree()?;
-
-    // Apply edits
     let mut results = Vec::new();
-    for edit in edits {
-        let smart_edit: SmartEdit = serde_json::from_value(edit.clone())?;
+    for (index, edit) in edits.iter().enumerate() {
+        let smart_edit: SmartEdit = serde_json::from_value(edit.clone())
+            .with_context(|| format!("Invalid edit at index {index}"))?;
         match editor.apply_edit(&smart_edit) {
             Ok(_) => {
                 results.push(json!({
@@ -1136,6 +1137,14 @@ pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
                 }));
             }
             Err(e) => {
+                if matches!(mode, BatchMode::Atomic) {
+                    return Err(e).with_context(|| {
+                        format!(
+                            "Atomic batch aborted at edit index {index} ({})",
+                            edit["operation"]
+                        )
+                    });
+                }
                 results.push(json!({
                     "status": "error",
                     "operation": edit["operation"],
@@ -1145,8 +1154,31 @@ pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
         }
     }
 
-    // Get final structure
     let final_structure = editor.get_function_tree()?;
+    Ok(StagedEdits {
+        content: editor.content,
+        results,
+        initial_structure,
+        final_structure,
+    })
+}
+
+/// MCP tool handler for smart edit operations
+pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
+    let params = params.context("Parameters required")?;
+    let file_path = params["file_path"].as_str().context("file_path required")?;
+    let edits = params["edits"].as_array().context("edits array required")?;
+    let mode: BatchMode = match params.get("batch_mode") {
+        Some(value) => serde_json::from_value(value.clone()).context("Invalid batch_mode")?,
+        None => BatchMode::default(),
+    };
+    let original_content = std::fs::read_to_string(file_path)?;
+    let extension = Path::new(file_path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .context("Could not determine file extension")?;
+    let language = SupportedLanguage::from_extension(extension).context("Unsupported language")?;
+    let staged = stage_edits(original_content.clone(), language, edits, mode)?;
 
     // Store diff before writing
     if let Ok(project_root) = std::env::current_dir() {
@@ -1155,7 +1187,7 @@ pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
             let _ = storage.store_diff(
                 Path::new(file_path),
                 &original_content, // original content
-                &editor.content,   // new content
+                &staged.content,   // new content
             );
 
             // Also store original if this is the first edit
@@ -1164,15 +1196,16 @@ pub async fn handle_smart_edit(params: Option<Value>) -> Result<Value> {
     }
 
     // Write back to file
-    std::fs::write(file_path, &editor.content)?;
+    std::fs::write(file_path, &staged.content)?;
 
     let result = json!({
         "file_path": file_path,
         "language": format!("{:?}", language),
-        "edits_applied": results,
-        "initial_structure": initial_structure,
-        "final_structure": final_structure,
-        "content_preview": editor.content.lines().take(20).collect::<Vec<_>>().join("\n"),
+        "batch_mode": mode,
+        "edits_applied": staged.results,
+        "initial_structure": staged.initial_structure,
+        "final_structure": staged.final_structure,
+        "content_preview": staged.content.lines().take(20).collect::<Vec<_>>().join("\n"),
     });
 
     // Wrap in MCP content format

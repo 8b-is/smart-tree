@@ -599,7 +599,7 @@ pub struct ScanArgs {
     )]
     pub sync_limit: usize,
 
-    /// Force git pull refresh on all existing repositories even if pushedAt/updatedAt has not changed
+    /// Bypass timestamp cache and refresh eligible clean branches (blocked branches stay untouched)
     #[arg(long, help_heading = "GitHub Sync")]
     pub refresh_all: bool,
 }
@@ -636,7 +636,7 @@ pub struct SyncUserCommand {
     /// Number of parallel clone/refresh workers (default: 4)
     #[arg(short = 'j', long = "jobs", default_value_t = 4)]
     pub jobs: usize,
-    /// Force git pull refresh on all existing repositories even if pushedAt/updatedAt has not changed
+    /// Bypass timestamp cache and refresh eligible clean branches (blocked branches stay untouched)
     #[arg(long)]
     pub refresh_all: bool,
     /// Skip forked repositories (`gh repo list --source`)

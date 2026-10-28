@@ -394,16 +394,38 @@ pub fn create_temporal_grooves(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     #[test]
     fn test_git_timeline_import() {
-        if env::var("CI").is_err() {
-            // Only run locally, not in CI
-            let mut mem8 = SmartTreeMem8::new();
-            if let Ok(()) = mem8.import_git_timeline(".") {
-                assert!(mem8.active_memory_count() > 0);
-            }
-        }
+        let dir = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| {
+            let output = Command::new("git")
+                .current_dir(dir.path())
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .args([
+                    "-c",
+                    "user.name=Timeline Fixture",
+                    "-c",
+                    "user.email=timeline@example.invalid",
+                    "-c",
+                    "commit.gpgsign=false",
+                ])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        git(&["init"]);
+        std::fs::write(dir.path().join("note.md"), "timeline fixture\n").unwrap();
+        git(&["add", "note.md"]);
+        git(&["commit", "-m", "Record a fixture memory"]);
+        let mut mem8 = SmartTreeMem8::new();
+        mem8.import_git_timeline(dir.path()).unwrap();
+        assert!(mem8.active_memory_count() > 0);
     }
 }

@@ -315,6 +315,12 @@ NO MORE:
                         "type": "string",
                         "description": "Code content"
                     },
+                    "batch_mode": {
+                        "type": "string",
+                        "enum": ["best_effort", "atomic"],
+                        "default": "best_effort",
+                        "description": "For smart_edit: atomic aborts before persistence on any operation error. Not crash-safe disk persistence."
+                    },
                     "edits": {
                         "type": "array",
                         "description": "Multiple edit operations"

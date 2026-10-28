@@ -180,6 +180,12 @@ release the CLI to distribute the changed default to existing installations.
 
 ### Publishing a current CLI build
 
+The live publisher must be identified from the public catalogue and DNS before
+promotion; an older release directory on another host is not evidence that it
+serves `i1.is`. The authoritative DNS service reads the current manifest and signs
+the Smart Tree version record dynamically. After promotion, verify both
+`https://i1.is/releases/smart-tree/latest.json` and `/releases/smart-tree/dns-txt`.
+
 Run the pre-commit checks and `python3 scripts/test_i1_release.py` first.
 `scripts/package_i1_release.py snapshot --output
 /path/to/releases` creates an allowlisted source archive, includes `Cargo.lock`,
@@ -214,6 +220,35 @@ it refuses to change an existing immutable build. It atomically switches the
 `current` symlink after installing the complete bundle. Keep old build directories
 for pinned installs and rollback. Bump the Cargo package version for subsequent
 functional releases: CLI update notifications compare semantic versions.
+
+For native macOS bundles, attach the exact `source.tar.gz` and initial
+`manifest.json` to a GitHub prerelease, then dispatch **Release binaries** with its
+tag. The workflow verifies the source checksum, builds the extracted snapshot,
+smoke-tests all four binaries, and uploads separate ARM/Intel artifacts. Combine
+their asset records and sidecars with the Linux bundle before invoking the
+immutable publisher. A GitHub release alone does not promote the i1 catalogue.
+
+The application `Cargo.lock` is tracked so CI and release snapshots resolve the
+same dependency versions. Build each snapshot with `--locked` and record its
+build ID, toolchain, target and native smoke results.
+
+#### Confirm automatic updates on an installed machine
+
+Automatic updates are opt-in. Run `scripts/install-auto-update.sh status` as root
+to inspect enrollment. Before enabling, all four regular executables must exist
+in the managed directory, which must have root-owned, non-group/world-writable
+ancestors. The updater's protected token must authenticate to the existing
+daemon; preserve its value and restrict its file permissions. See
+`scripts/install-auto-update.sh` for the platform-specific service/token paths.
+
+On Linux, run `sudo systemctl start smart-tree-updater.service` and inspect its
+journal. For a release transition, verify `last-success`, all installed binary
+digests against the downloaded archive, and authenticated daemon `/info` version
+plus `/health`. A repeat run should report no newer release and preserve the
+daemon PID. Confirm `smart-tree-updater.timer` is enabled for subsequent daily
+checks. Keep the updater's old transaction binaries and prior release directory
+for recovery. A passing no-op alone does not demonstrate an installed upgrade.
+
 Caddy serves release files directly, with uncached current/version pointers and
 immutable caching for successful build-specific downloads. The hub's public
 `/api/smart-tree/latest` route serves the same manifest without restarting indexing.

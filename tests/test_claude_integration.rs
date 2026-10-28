@@ -9,7 +9,7 @@ use tempfile::TempDir;
 #[test]
 fn test_claude_init_rust_project() {
     // Create temporary directory
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR")).unwrap();
     let project_path = temp_dir.path().to_path_buf();
 
     // Create Rust project markers
@@ -41,7 +41,7 @@ fn test_claude_init_rust_project() {
 /// Test Claude init for Python project
 #[test]
 fn test_claude_init_python_project() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR")).unwrap();
     let project_path = temp_dir.path().to_path_buf();
 
     // Create Python project markers
@@ -71,7 +71,7 @@ fn test_claude_init_python_project() {
 /// Test update behavior on existing .claude directory
 #[test]
 fn test_claude_update_existing() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR")).unwrap();
     let project_path = temp_dir.path().to_path_buf();
 
     // Create initial .claude directory
@@ -93,7 +93,7 @@ fn test_claude_update_existing() {
 /// Test manual configuration protection
 #[test]
 fn test_claude_preserves_manual_config() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR")).unwrap();
     let project_path = temp_dir.path().to_path_buf();
 
     // Create manual configuration (no auto_configured flag)
@@ -183,6 +183,7 @@ fn test_context_mode_output() {
     ];
 
     let stats = TreeStats {
+        truncation_reason: None,
         total_files: 2,
         total_dirs: 1,
         total_size: 1280,
@@ -240,7 +241,7 @@ fn test_tool_advertisement() {
 /// Integration test for full Claude setup flow
 #[test]
 fn test_full_claude_integration_flow() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR")).unwrap();
     let project_path = temp_dir.path().to_path_buf();
 
     // Create a mixed project

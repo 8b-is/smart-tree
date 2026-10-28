@@ -1540,7 +1540,8 @@ struct GhRepoEntry {
 /// Sync all GitHub repositories for a user/organization into `<dir>/<user>/<repo>`:
 /// - Uses `gh repo list -L <limit> <user>` to discover repositories and their latest `pushedAt`/`updatedAt` timestamps.
 /// - Clones missing repositories with standard `git clone`.
-/// - Refreshes existing repositories whose `pushedAt`/`updatedAt` changed since last sync (or all when `--refresh-all` is set).
+/// - Only fast-forwards clean, attached branches with an upstream and no local commits.
+/// - Timestamp cache hits are skipped, never reported as verified up-to-date.
 pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let raw_user = cmd
         .user
@@ -1552,23 +1553,33 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
         .collect();
-    if user.is_empty() {
+    if user.is_empty() || user == "." || user == ".." {
         anyhow::bail!("Invalid GitHub username/organization: '{}'", cmd.user);
     }
 
     let user_dir = cmd.dir.join(&user);
     std::fs::create_dir_all(&user_dir)
         .with_context(|| format!("Failed to create target directory {}", user_dir.display()))?;
+    let user_dir = std::fs::canonicalize(user_dir)?;
+    let _sync_lock = lock_sync_destination(&user_dir)?;
 
     let state_path = user_dir.join(".st-sync-state.json");
-    let initial_state: std::collections::BTreeMap<String, RepoSyncRecord> = if state_path.exists() {
-        std::fs::read_to_string(&state_path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    } else {
-        std::collections::BTreeMap::new()
-    };
+    let initial_state: std::collections::BTreeMap<String, RepoSyncRecord> =
+        match std::fs::read(&state_path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).with_context(|| {
+                format!(
+                    "Invalid sync cache {}; preserve it and review manually",
+                    state_path.display()
+                )
+            })?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::collections::BTreeMap::new()
+            }
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("Cannot read sync cache {}", state_path.display()))
+            }
+        };
 
     println!(
         "🌳 Smart Tree GitHub Sync: fetching up to {} repositories for '{}' → {} ...",
@@ -1594,6 +1605,7 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     gh_args.push("name,pushedAt,updatedAt,url".to_string());
 
     let gh_output = std::process::Command::new("gh")
+        .current_dir(&user_dir)
         .args(&gh_args)
         .output()
         .context("Failed to execute `gh repo list`. Ensure GitHub CLI (`gh`) is installed and authenticated.")?;
@@ -1617,6 +1629,7 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
             fallback_args.push("--no-archived".to_string());
         }
         let fb = std::process::Command::new("gh")
+            .current_dir(&user_dir)
             .args(&fallback_args)
             .output()
             .context("Failed to execute fallback `gh repo list`")?;
@@ -1667,6 +1680,9 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let refreshed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let up_to_date = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let failed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let skipped = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let blocked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let fetched_only = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
     let num_workers = cmd.jobs.clamp(1, 16);
     let refresh_all = cmd.refresh_all;
@@ -1679,9 +1695,11 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         let refreshed = std::sync::Arc::clone(&refreshed);
         let up_to_date = std::sync::Arc::clone(&up_to_date);
         let failed = std::sync::Arc::clone(&failed);
+        let skipped = std::sync::Arc::clone(&skipped);
+        let blocked = std::sync::Arc::clone(&blocked);
+        let fetched_only = std::sync::Arc::clone(&fetched_only);
         let user = user.clone();
         let user_dir = user_dir.clone();
-        let state_path = state_path.clone();
 
         handles.push(std::thread::spawn(move || loop {
             let item = {
@@ -1693,14 +1711,17 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
             };
             if repo.name.is_empty()
                 || repo.name.contains('/')
+                || repo.name.contains('\\')
                 || repo.name == "."
                 || repo.name == ".."
+                || repo.name.starts_with(".st-sync-")
             {
+                failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                eprintln!("Invalid repository name: {:?}", repo.name);
                 continue;
             }
 
             let repo_dir = user_dir.join(&repo.name);
-            let git_dir = repo_dir.join(".git");
             let clone_url = repo
                 .url
                 .as_deref()
@@ -1716,122 +1737,52 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
             let pushed_at = repo.pushed_at.unwrap_or_default();
             let updated_at = repo.updated_at.unwrap_or_default();
 
-            if !git_dir.exists() {
-                println!(
-                    "[{}/{}] 📥 Cloning {}/{} ...",
-                    idx + 1,
-                    total,
-                    user,
-                    repo.name
-                );
-                let ok = std::process::Command::new("git")
-                    .env("GIT_TERMINAL_PROMPT", "0")
-                    .args(["clone", "--quiet", &clone_url, &repo_dir.to_string_lossy()])
-                    .status()
-                    .map(|s| s.success())
-                    .unwrap_or(false);
-
-                if ok {
-                    cloned.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let head_sha = git_rev_parse_head(&repo_dir);
-                    save_repo_sync_record(
-                        &state,
-                        &state_path,
-                        &repo.name,
-                        &pushed_at,
-                        &updated_at,
-                        &head_sha,
-                    );
-                } else {
-                    failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    eprintln!(
-                        "[{}/{}] ⚠️  Failed to clone {}/{}",
+            let cached = state.lock().unwrap().get(&repo.name).cloned();
+            let result = sync_repository(
+                &repo_dir,
+                &clone_url,
+                cached.as_ref(),
+                &pushed_at,
+                &updated_at,
+                refresh_all,
+            );
+            let mut guard = state.lock().unwrap();
+            match result {
+                Ok(outcome) => {
+                    match &outcome {
+                        RepoSyncOutcome::Cloned(_) => &cloned,
+                        RepoSyncOutcome::Updated(_) => &refreshed,
+                        RepoSyncOutcome::UpToDate(_) => &up_to_date,
+                        RepoSyncOutcome::Skipped => &skipped,
+                        RepoSyncOutcome::Blocked { fetched, .. } => {
+                            if *fetched {
+                                fetched_only.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            }
+                            &blocked
+                        }
+                    }
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    println!(
+                        "[{}/{}] {}/{}: {:?}",
                         idx + 1,
                         total,
                         user,
-                        repo.name
+                        repo.name,
+                        outcome
                     );
-                }
-            } else {
-                let needs_refresh = if refresh_all {
-                    true
-                } else {
-                    let guard = state.lock().unwrap();
-                    match guard.get(&repo.name) {
-                        None => true,
-                        Some(rec) => {
-                            (!pushed_at.is_empty() && rec.pushed_at != pushed_at)
-                                || (!updated_at.is_empty() && rec.updated_at != updated_at)
-                        }
-                    }
-                };
-
-                if !needs_refresh {
-                    up_to_date.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    continue;
-                }
-
-                let before_sha = git_rev_parse_head(&repo_dir);
-                let pull_ok = std::process::Command::new("git")
-                    .env("GIT_TERMINAL_PROMPT", "0")
-                    .args([
-                        "-C",
-                        &repo_dir.to_string_lossy(),
-                        "pull",
-                        "--ff-only",
-                        "--quiet",
-                    ])
-                    .status()
-                    .map(|s| s.success())
-                    .unwrap_or(false);
-
-                let refresh_ok = if pull_ok {
-                    true
-                } else {
-                    // Fallback to fetch if working tree or branch diverged
-                    std::process::Command::new("git")
-                        .env("GIT_TERMINAL_PROMPT", "0")
-                        .args([
-                            "-C",
-                            &repo_dir.to_string_lossy(),
-                            "fetch",
-                            "--all",
-                            "--prune",
-                            "--quiet",
-                        ])
-                        .status()
-                        .map(|s| s.success())
-                        .unwrap_or(false)
-                };
-
-                if refresh_ok {
-                    let after_sha = git_rev_parse_head(&repo_dir);
-                    if !before_sha.is_empty() && !after_sha.is_empty() && before_sha != after_sha {
-                        refreshed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        println!(
-                            "[{}/{}] 🔄 Refreshed {}/{} ({}..{})",
-                            idx + 1,
-                            total,
-                            user,
-                            repo.name,
-                            &before_sha[..before_sha.len().min(7)],
-                            &after_sha[..after_sha.len().min(7)]
-                        );
-                    } else {
-                        up_to_date.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    save_repo_sync_record(
-                        &state,
-                        &state_path,
+                    update_repo_sync_record(
+                        &mut guard,
                         &repo.name,
                         &pushed_at,
                         &updated_at,
-                        &after_sha,
+                        &outcome,
                     );
-                } else {
+                }
+                Err(error) => {
+                    guard.remove(&repo.name);
                     failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     eprintln!(
-                        "[{}/{}] ⚠️  Failed to refresh {}/{}",
+                        "[{}/{}] Failed {}/{}: {error:#}",
                         idx + 1,
                         total,
                         user,
@@ -1842,16 +1793,19 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         }));
     }
 
+    let mut worker_panicked = false;
     for h in handles {
-        let _ = h.join();
+        worker_panicked |= h.join().is_err();
     }
+    anyhow::ensure!(!worker_panicked, "A GitHub sync worker panicked");
 
-    // Final state flush
-    if let Ok(guard) = state.lock() {
-        if let Ok(json_str) = serde_json::to_string_pretty(&*guard) {
-            let _ = std::fs::write(&state_path, json_str);
-        }
-    }
+    // The destination lock covers both repository operations and atomic cache replacement.
+    let guard = state
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Sync state lock poisoned"))?;
+    let pending = state_path.with_extension("json.tmp");
+    std::fs::write(&pending, serde_json::to_vec_pretty(&*guard)?)?;
+    std::fs::rename(&pending, &state_path)?;
 
     let c = cloned.load(std::sync::atomic::Ordering::Relaxed);
     let r = refreshed.load(std::sync::atomic::Ordering::Relaxed);
@@ -1859,49 +1813,776 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let f = failed.load(std::sync::atomic::Ordering::Relaxed);
 
     println!(
-        "\n✅ GitHub Sync Complete for '{}' ({}):\n   📥 Cloned:     {}\n   🔄 Refreshed:  {}\n   ✓  Up-to-date: {}\n   ⚠️  Failed:     {}\n   💾 State file: {}",
+        "\nGitHub Sync Complete for '{}' ({}):\n   Cloned: {}\n   Updated: {}\n   Up-to-date (verified): {}\n   Failed: {}\n   Skipped (cached): {}\n   Blocked: {}\n   Fetched-only (subset of blocked): {}\n   State file: {}",
         user,
         user_dir.display(),
         c,
         r,
         u,
         f,
+        skipped.load(std::sync::atomic::Ordering::Relaxed),
+        blocked.load(std::sync::atomic::Ordering::Relaxed),
+        fetched_only.load(std::sync::atomic::Ordering::Relaxed),
         state_path.display()
     );
+    anyhow::ensure!(f == 0, "GitHub sync failed for {f} repositories");
     Ok(())
 }
 
-fn git_rev_parse_head(repo_dir: &std::path::Path) -> String {
-    std::process::Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", "HEAD"])
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default()
+struct SyncDestinationLock(std::fs::File);
+
+impl Drop for SyncDestinationLock {
+    fn drop(&mut self) {
+        // Explicitly release ownership even if a concurrently forked child briefly
+        // retains the descriptor before exec closes it.
+        if let Err(error) = self.0.unlock() {
+            tracing::warn!(%error, "Could not release sync destination lock");
+        }
+    }
 }
 
-fn save_repo_sync_record(
-    state: &std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, RepoSyncRecord>>>,
-    state_path: &std::path::Path,
+fn lock_sync_destination(dir: &std::path::Path) -> Result<SyncDestinationLock> {
+    // Keep the inode in place: removing a lock file could allow two owners.
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(dir.join(".st-sync-lock"))?;
+    lock.try_lock()
+        .with_context(|| format!("Sync destination {} is already in use", dir.display()))?;
+    Ok(SyncDestinationLock(lock))
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RepoSyncOutcome {
+    Cloned(String),
+    Updated(String),
+    UpToDate(String),
+    Skipped,
+    Blocked { reason: String, fetched: bool },
+}
+
+fn update_repo_sync_record(
+    state: &mut std::collections::BTreeMap<String, RepoSyncRecord>,
     repo_name: &str,
     pushed_at: &str,
     updated_at: &str,
-    head_sha: &str,
+    outcome: &RepoSyncOutcome,
 ) {
-    if let Ok(mut guard) = state.lock() {
-        guard.insert(
-            repo_name.to_string(),
-            RepoSyncRecord {
-                pushed_at: pushed_at.to_string(),
-                updated_at: updated_at.to_string(),
-                last_synced_at: chrono::Utc::now().to_rfc3339(),
-                head_sha: head_sha.to_string(),
-            },
+    match outcome {
+        RepoSyncOutcome::Cloned(head_sha)
+        | RepoSyncOutcome::Updated(head_sha)
+        | RepoSyncOutcome::UpToDate(head_sha) => {
+            state.insert(
+                repo_name.to_string(),
+                RepoSyncRecord {
+                    pushed_at: pushed_at.to_string(),
+                    updated_at: updated_at.to_string(),
+                    last_synced_at: chrono::Utc::now().to_rfc3339(),
+                    head_sha: head_sha.to_string(),
+                },
+            );
+        }
+        RepoSyncOutcome::Blocked { .. } => {
+            state.remove(repo_name);
+        }
+        RepoSyncOutcome::Skipped => {}
+    }
+}
+
+fn sync_git(dir: &std::path::Path, args: &[&str]) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .current_dir(dir)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .context("Failed to execute git")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "git {}: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
+}
+
+// An error here is a blocked reconciliation, never permission to try a pull.
+fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
+    let root = sync_git(dir, &["rev-parse", "--show-toplevel"])?;
+    anyhow::ensure!(
+        std::fs::canonicalize(root)? == std::fs::canonicalize(dir)?,
+        "Not a repository root"
+    );
+    anyhow::ensure!(
+        sync_git(
+            dir,
+            &[
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--ignore-submodules=none"
+            ]
+        )?
+        .is_empty(),
+        "Dirty working tree or index"
+    );
+    sync_git(dir, &["symbolic-ref", "--quiet", "HEAD"]).context("Detached HEAD")?;
+    for marker in [
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "rebase-merge",
+        "rebase-apply",
+        "sequencer",
+        "BISECT_LOG",
+    ] {
+        let path = sync_git(dir, &["rev-parse", "--git-path", marker])?;
+        anyhow::ensure!(
+            !dir.join(path).exists(),
+            "Git operation in progress: {marker}"
         );
-        if guard.len().is_multiple_of(10) {
-            if let Ok(json_str) = serde_json::to_string_pretty(&*guard) {
-                let _ = std::fs::write(state_path, json_str);
+    }
+    let head = sync_git(dir, &["rev-parse", "--verify", "HEAD"])?;
+    let upstream =
+        sync_git(dir, &["rev-parse", "--verify", "@{upstream}"]).context("No usable upstream")?;
+    let ahead = sync_git(
+        dir,
+        &["rev-list", "--count", &format!("{upstream}..{head}")],
+    )?
+    .parse::<u64>()?;
+    anyhow::ensure!(
+        ahead == 0,
+        "Branch is ahead of or diverged from upstream ({ahead} local commits)"
+    );
+    Ok((head, upstream))
+}
+
+fn sync_repository(
+    dir: &std::path::Path,
+    clone_url: &str,
+    cached: Option<&RepoSyncRecord>,
+    pushed_at: &str,
+    updated_at: &str,
+    refresh_all: bool,
+) -> Result<RepoSyncOutcome> {
+    let absolute = std::path::absolute(dir)?;
+    let dir = absolute.as_path();
+    if !dir.join(".git").exists() {
+        if dir.exists() {
+            anyhow::ensure!(dir.is_dir() && std::fs::read_dir(dir)?.next().is_none(),
+                "Existing path {} is not an empty Git clone destination; review or move its contents manually", dir.display());
+        }
+        let output = std::process::Command::new("git")
+            .current_dir(dir.parent().context("Clone destination has no parent")?)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .args(["clone", "--quiet", "--"])
+            .arg(clone_url)
+            .arg(dir)
+            .output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "Clone failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        // Empty remotes may clone successfully but have no branch to reconcile.
+        return Ok(match sync_ready_branch(dir) {
+            Ok((head, upstream)) if head == upstream => RepoSyncOutcome::Cloned(head),
+            result => RepoSyncOutcome::Blocked {
+                reason: format!("Clone has no reconciled branch: {result:?}"),
+                fetched: false,
+            },
+        });
+    }
+    let (head, upstream) = match sync_ready_branch(dir) {
+        Ok(state) => state,
+        Err(error) => {
+            return Ok(RepoSyncOutcome::Blocked {
+                reason: format!("{error:#}"),
+                fetched: false,
+            })
+        }
+    };
+    // Timestamps are only an optimization, not evidence of remote equality.
+    if !refresh_all
+        && head == upstream
+        && !pushed_at.is_empty()
+        && !updated_at.is_empty()
+        && cached.is_some_and(|rec| {
+            rec.head_sha == head && rec.pushed_at == pushed_at && rec.updated_at == updated_at
+        })
+    {
+        return Ok(RepoSyncOutcome::Skipped);
+    }
+    let branch = sync_git(dir, &["symbolic-ref", "--short", "HEAD"])?;
+    let remote = sync_git(
+        dir,
+        &["config", "--get", &format!("branch.{branch}.remote")],
+    )?;
+    // Fetch the actual upstream remote even if it opts out of `fetch --all`.
+    sync_git(dir, &["fetch", "--prune", "--quiet", "--", &remote])?;
+    let (before, target) = match sync_ready_branch(dir) {
+        Ok(state) => state,
+        Err(error) => {
+            return Ok(RepoSyncOutcome::Blocked {
+                reason: format!("{error:#}"),
+                fetched: true,
+            })
+        }
+    };
+    if before != head {
+        return Ok(RepoSyncOutcome::Blocked {
+            reason: "HEAD changed during fetch".into(),
+            fetched: true,
+        });
+    }
+    if before != target {
+        // Merge the inspected commit, avoiding a second implicit fetch by `pull`.
+        sync_git(
+            dir,
+            &[
+                "-c",
+                "merge.autostash=false",
+                "merge",
+                "--ff-only",
+                "--quiet",
+                &target,
+            ],
+        )?;
+    }
+    let (after, upstream) = sync_ready_branch(dir)?;
+    anyhow::ensure!(
+        after == target && after == upstream,
+        "Branch changed during reconciliation"
+    );
+    Ok(if before == after {
+        RepoSyncOutcome::UpToDate(after)
+    } else {
+        RepoSyncOutcome::Updated(after)
+    })
+}
+
+#[cfg(test)]
+mod sync_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let output = std::process::Command::new("git")
+            .current_dir(dir)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "user.name=Sync Fixture",
+                "-c",
+                "user.email=sync@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    }
+
+    fn temp_dir() -> tempfile::TempDir {
+        let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/sync-fixtures");
+        std::fs::create_dir_all(&target).unwrap();
+        tempfile::tempdir_in(target).unwrap()
+    }
+
+    struct Fixture {
+        _temp: tempfile::TempDir,
+        remote: PathBuf,
+        publisher: PathBuf,
+        local: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let temp = temp_dir();
+            let remote = temp.path().join("remote.git");
+            let publisher = temp.path().join("publisher");
+            let local = temp.path().join("local");
+            git(
+                temp.path(),
+                &["init", "--bare", "-b", "main", remote.to_str().unwrap()],
+            );
+            git(
+                temp.path(),
+                &[
+                    "clone",
+                    remote.to_str().unwrap(),
+                    publisher.to_str().unwrap(),
+                ],
+            );
+            Self::commit(&publisher, "base");
+            git(&publisher, &["push", "-u", "origin", "main"]);
+            git(
+                temp.path(),
+                &["clone", remote.to_str().unwrap(), local.to_str().unwrap()],
+            );
+            Self {
+                _temp: temp,
+                remote,
+                publisher,
+                local,
             }
         }
+
+        fn commit(dir: &Path, name: &str) {
+            std::fs::write(dir.join(name), name).unwrap();
+            git(dir, &["add", name]);
+            git(dir, &["commit", "-m", name]);
+        }
+
+        fn advance(&self) {
+            Self::commit(&self.publisher, "remote-change");
+            git(&self.publisher, &["push"]);
+        }
+
+        fn sync(&self, cached: Option<&RepoSyncRecord>, refresh: bool) -> Result<RepoSyncOutcome> {
+            sync_repository(
+                &self.local,
+                self.remote.to_str().unwrap(),
+                cached,
+                "pushed",
+                "updated",
+                refresh,
+            )
+        }
+
+        fn record(&self) -> RepoSyncRecord {
+            RepoSyncRecord {
+                pushed_at: "pushed".into(),
+                updated_at: "updated".into(),
+                head_sha: git(&self.local, &["rev-parse", "HEAD"]),
+                last_synced_at: "old-receipt".into(),
+            }
+        }
+    }
+
+    #[test]
+    fn clean_clone_fast_forward_and_verified_equal() {
+        let f = Fixture::new();
+        let destination = f._temp.path().join("new-clone");
+        assert!(matches!(
+            sync_repository(
+                &destination,
+                f.remote.to_str().unwrap(),
+                None,
+                "p",
+                "u",
+                false
+            )
+            .unwrap(),
+            RepoSyncOutcome::Cloned(_)
+        ));
+        f.advance();
+        let target = git(&f.publisher, &["rev-parse", "HEAD"]);
+        assert_eq!(
+            f.sync(None, false).unwrap(),
+            RepoSyncOutcome::Updated(target.clone())
+        );
+        assert_eq!(git(&f.local, &["rev-parse", "HEAD"]), target);
+        assert_eq!(
+            f.sync(None, false).unwrap(),
+            RepoSyncOutcome::UpToDate(target)
+        );
+    }
+
+    #[test]
+    fn dirty_staged_and_untracked_work_survives_even_with_matching_cache() {
+        for mode in ["modified", "staged", "untracked"] {
+            let f = Fixture::new();
+            let record = f.record();
+            f.advance();
+            let file = if mode == "untracked" {
+                "private"
+            } else {
+                "base"
+            };
+            std::fs::write(f.local.join(file), "preserve me").unwrap();
+            if mode == "staged" {
+                git(&f.local, &["add", file]);
+            }
+            let status = git(&f.local, &["status", "--porcelain"]);
+            assert!(matches!(
+                f.sync(Some(&record), false).unwrap(),
+                RepoSyncOutcome::Blocked { fetched: false, .. }
+            ));
+            assert_eq!(git(&f.local, &["rev-parse", "HEAD"]), record.head_sha);
+            assert_eq!(git(&f.local, &["status", "--porcelain"]), status);
+            assert_eq!(
+                std::fs::read_to_string(f.local.join(file)).unwrap(),
+                "preserve me"
+            );
+        }
+    }
+
+    #[test]
+    fn detached_missing_upstream_ahead_and_diverged_are_blocked() {
+        for mode in ["detached", "no-upstream", "ahead", "diverged"] {
+            let f = Fixture::new();
+            match mode {
+                "detached" => {
+                    git(&f.local, &["checkout", "--detach"]);
+                }
+                "no-upstream" => {
+                    git(&f.local, &["branch", "--unset-upstream"]);
+                }
+                _ => {
+                    Fixture::commit(&f.local, "local-change");
+                }
+            }
+            f.advance();
+            if mode == "diverged" {
+                git(&f.local, &["fetch"]);
+            }
+            let head = git(&f.local, &["rev-parse", "HEAD"]);
+            let outcome = f.sync(None, true).unwrap();
+            assert!(
+                matches!(outcome, RepoSyncOutcome::Blocked { fetched: false, .. }),
+                "{mode}: {outcome:?}"
+            );
+            assert_eq!(git(&f.local, &["rev-parse", "HEAD"]), head);
+        }
+    }
+
+    #[test]
+    fn remote_rewrite_is_fetched_only_and_invalidates_success_cache() {
+        let f = Fixture::new();
+        let record = f.record();
+        git(&f.publisher, &["checkout", "--orphan", "rewritten"]);
+        Fixture::commit(&f.publisher, "rewrite");
+        git(&f.publisher, &["push", "--force", "origin", "HEAD:main"]);
+        let outcome = f.sync(Some(&record), true).unwrap();
+        assert!(matches!(
+            outcome,
+            RepoSyncOutcome::Blocked { fetched: true, .. }
+        ));
+        assert_eq!(git(&f.local, &["rev-parse", "HEAD"]), record.head_sha);
+        assert_eq!(
+            git(&f.local, &["rev-parse", "origin/main"]),
+            git(&f.publisher, &["rev-parse", "HEAD"])
+        );
+        let mut state = std::collections::BTreeMap::from([("local".into(), record)]);
+        update_repo_sync_record(&mut state, "local", "new-pushed", "new-updated", &outcome);
+        assert!(state.is_empty());
+    }
+
+    #[test]
+    fn cache_hits_are_skips_and_local_reset_is_reconciled() {
+        let f = Fixture::new();
+        let record = f.record();
+        f.advance();
+        assert_eq!(
+            f.sync(Some(&record), false).unwrap(),
+            RepoSyncOutcome::Skipped
+        );
+        let mut state = std::collections::BTreeMap::from([("local".into(), record.clone())]);
+        update_repo_sync_record(
+            &mut state,
+            "local",
+            "pushed",
+            "updated",
+            &RepoSyncOutcome::Skipped,
+        );
+        assert_eq!(state["local"].last_synced_at, "old-receipt");
+        assert!(matches!(
+            f.sync(Some(&record), true).unwrap(),
+            RepoSyncOutcome::Updated(_)
+        ));
+        let newer = f.record();
+        git(&f.local, &["reset", "--hard", &record.head_sha]);
+        assert_eq!(
+            f.sync(Some(&newer), false).unwrap(),
+            RepoSyncOutcome::Updated(newer.head_sha)
+        );
+    }
+
+    #[test]
+    fn missing_timestamps_and_fetch_failures_do_not_claim_success() {
+        let f = Fixture::new();
+        f.advance();
+        let record = f.record();
+        assert!(matches!(
+            sync_repository(&f.local, "unused", Some(&record), "", "", false).unwrap(),
+            RepoSyncOutcome::Updated(_)
+        ));
+        let head = git(&f.local, &["rev-parse", "HEAD"]);
+        git(
+            &f.local,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                f._temp.path().join("missing.git").to_str().unwrap(),
+            ],
+        );
+        assert!(f.sync(None, true).is_err());
+        assert_eq!(git(&f.local, &["rev-parse", "HEAD"]), head);
+    }
+
+    #[test]
+    fn upstream_remote_is_fetched_even_when_excluded_from_fetch_all() {
+        let f = Fixture::new();
+        git(&f.local, &["config", "remote.origin.skipFetchAll", "true"]);
+        f.advance();
+        assert_eq!(
+            f.sync(None, true).unwrap(),
+            RepoSyncOutcome::Updated(git(&f.publisher, &["rev-parse", "HEAD"]))
+        );
+    }
+
+    #[test]
+    fn in_progress_operation_and_empty_clone_do_not_get_success_receipts() {
+        let f = Fixture::new();
+        std::fs::create_dir(f.local.join(".git/rebase-merge")).unwrap();
+        assert!(matches!(
+            f.sync(None, true).unwrap(),
+            RepoSyncOutcome::Blocked { fetched: false, .. }
+        ));
+        let empty = f._temp.path().join("empty.git");
+        git(
+            f._temp.path(),
+            &["init", "--bare", "-b", "main", empty.to_str().unwrap()],
+        );
+        assert!(matches!(
+            sync_repository(
+                &f._temp.path().join("empty-clone"),
+                empty.to_str().unwrap(),
+                None,
+                "p",
+                "u",
+                false
+            )
+            .unwrap(),
+            RepoSyncOutcome::Blocked { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn corrupt_cache_is_preserved_and_lock_released_on_error() {
+        let temp = temp_dir();
+        let owner = temp.path().join("owner");
+        std::fs::create_dir(&owner).unwrap();
+        let cache = owner.join(".st-sync-state.json");
+        std::fs::write(&cache, "broken cache").unwrap();
+        let cmd = crate::cli::SyncUserCommand {
+            user: "owner".into(),
+            dir: temp.path().to_path_buf(),
+            limit: 1,
+            jobs: 1,
+            refresh_all: false,
+            no_forks: false,
+            no_archived: false,
+        };
+        assert!(handle_sync_user(&cmd)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid sync cache"));
+        assert_eq!(std::fs::read_to_string(cache).unwrap(), "broken cache");
+        assert!(lock_sync_destination(&owner).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "subprocess probe used by summary_and_persisted_receipts_match_actual_results"]
+    fn sync_handler_child() {
+        let base = std::env::var_os("ST_SYNC_TEST_BASE").unwrap();
+        let cmd = crate::cli::SyncUserCommand {
+            user: "fixture-owner".into(),
+            dir: PathBuf::from(base),
+            limit: 100,
+            jobs: 4,
+            refresh_all: false,
+            no_forks: false,
+            no_archived: false,
+        };
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(handle_sync_user(&cmd));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("failed for 1 repositories"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn summary_and_persisted_receipts_match_actual_results() {
+        use std::os::unix::fs::PermissionsExt;
+        let f = Fixture::new();
+        let base = f._temp.path().join("destination");
+        let owner = base.join("fixture-owner");
+        std::fs::create_dir_all(&owner).unwrap();
+        let mut cache = std::collections::BTreeMap::new();
+        for name in ["updated", "skipped", "dirty"] {
+            git(&owner, &["clone", f.remote.to_str().unwrap(), name]);
+            cache.insert(name.to_owned(), f.record());
+        }
+        // Updated must be fetched; skipped deliberately retains matching timestamps.
+        cache.get_mut("updated").unwrap().pushed_at = "older".into();
+        std::fs::write(owner.join("dirty/private"), "keep").unwrap();
+        f.advance();
+        git(&owner, &["clone", f.remote.to_str().unwrap(), "equal"]);
+        std::fs::create_dir(owner.join("not-git")).unwrap();
+        std::fs::write(owner.join("not-git/precious"), "keep").unwrap();
+        let rewritten = Fixture::new();
+        git(
+            &owner,
+            &["clone", rewritten.remote.to_str().unwrap(), "rewritten"],
+        );
+        cache.insert("rewritten".into(), rewritten.record());
+        cache.get_mut("rewritten").unwrap().pushed_at = "older".into();
+        git(&rewritten.publisher, &["checkout", "--orphan", "rewrite"]);
+        Fixture::commit(&rewritten.publisher, "rewrite");
+        git(
+            &rewritten.publisher,
+            &["push", "--force", "origin", "HEAD:main"],
+        );
+        std::fs::write(
+            owner.join(".st-sync-state.json"),
+            serde_json::to_vec(&cache).unwrap(),
+        )
+        .unwrap();
+        let entries: Vec<_> = ["updated", "skipped", "dirty", "equal", "not-git", "rewritten", "cloned"].into_iter()
+            .map(|name| serde_json::json!({"name": name, "pushedAt": "pushed", "updatedAt": "updated", "url": f.remote.to_str().unwrap()})).collect();
+        let json = f._temp.path().join("repos.json");
+        std::fs::write(&json, serde_json::to_vec(&entries).unwrap()).unwrap();
+        let bin = f._temp.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        std::fs::write(bin.join("gh"), "#!/bin/sh\ncat \"$ST_SYNC_TEST_JSON\"\n").unwrap();
+        std::fs::set_permissions(bin.join("gh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = std::env::join_paths(
+            std::iter::once(bin).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
+        )
+        .unwrap();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .current_dir(f._temp.path())
+            .args([
+                "--exact",
+                "cli_commands::sync_tests::sync_handler_child",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("ST_SYNC_TEST_BASE", &base)
+            .env("ST_SYNC_TEST_JSON", json)
+            .env("PATH", path)
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            output.status.success(),
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        for expected in [
+            "Cloned: 1",
+            "Updated: 1",
+            "Up-to-date (verified): 1",
+            "Failed: 1",
+            "Skipped (cached): 1",
+            "Blocked: 2",
+            "Fetched-only (subset of blocked): 1",
+        ] {
+            assert!(stdout.contains(expected), "Missing {expected}: {stdout}");
+        }
+        let saved: std::collections::BTreeMap<String, RepoSyncRecord> =
+            serde_json::from_slice(&std::fs::read(owner.join(".st-sync-state.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            saved.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["cloned", "equal", "skipped", "updated"]
+        );
+        assert_eq!(saved["skipped"].last_synced_at, "old-receipt");
+        assert_eq!(
+            std::fs::read_to_string(owner.join("dirty/private")).unwrap(),
+            "keep"
+        );
+        assert_eq!(
+            std::fs::read_to_string(owner.join("not-git/precious")).unwrap(),
+            "keep"
+        );
+    }
+
+    #[test]
+    fn existing_non_git_contents_are_preserved() {
+        let temp = temp_dir();
+        let file = temp.path().join("precious");
+        std::fs::write(&file, "keep").unwrap();
+        let error = sync_repository(temp.path(), "unused", None, "p", "u", false).unwrap_err();
+        assert!(error.to_string().contains("review or move"));
+        assert_eq!(std::fs::read_to_string(file).unwrap(), "keep");
+        assert!(!temp.path().join(".git").exists());
+    }
+
+    #[test]
+    fn linked_worktree_is_supported() {
+        let f = Fixture::new();
+        let linked = f._temp.path().join("linked");
+        git(
+            &f.local,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "linked",
+                linked.to_str().unwrap(),
+                "origin/main",
+            ],
+        );
+        f.advance();
+        assert!(linked.join(".git").is_file());
+        assert!(matches!(
+            sync_repository(&linked, "unused", None, "p", "u", true).unwrap(),
+            RepoSyncOutcome::Updated(_)
+        ));
+    }
+
+    #[test]
+    #[ignore = "subprocess probe used by destination_lock_excludes_other_processes"]
+    fn lock_child() {
+        let dir = std::env::var_os("ST_SYNC_LOCK_TEST_DIR").unwrap();
+        let should_lock = std::env::var_os("ST_SYNC_LOCK_TEST_AVAILABLE").is_some();
+        assert_eq!(lock_sync_destination(Path::new(&dir)).is_ok(), should_lock);
+    }
+
+    #[test]
+    fn destination_lock_excludes_other_processes() {
+        let temp = temp_dir();
+        let lock = lock_sync_destination(temp.path()).unwrap();
+        let probe = |available: bool| {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .current_dir(temp.path())
+                .args([
+                    "--exact",
+                    "cli_commands::sync_tests::lock_child",
+                    "--ignored",
+                ])
+                .env("ST_SYNC_LOCK_TEST_DIR", temp.path())
+                .env_remove("ST_SYNC_LOCK_TEST_AVAILABLE");
+            if available {
+                command.env("ST_SYNC_LOCK_TEST_AVAILABLE", "1");
+            }
+            assert!(command.status().unwrap().success());
+        };
+        probe(false);
+        drop(lock);
+        probe(true);
     }
 }

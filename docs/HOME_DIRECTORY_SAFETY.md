@@ -10,7 +10,7 @@ Scanning home directories (`~`) can cause crashes due to:
 
 ## Solution
 
-Smart Tree now implements comprehensive safety limits to prevent crashes:
+Smart Tree uses node, elapsed-time and estimated-byte budgets to limit scan work:
 
 ### 1. Safety Limits
 
@@ -39,16 +39,28 @@ Different limits based on directory type:
 ### 2. Real-time Monitoring
 
 During scanning, Smart Tree now:
-- Tracks file count and estimated memory usage
-- Checks limits before processing each file
+- Counts every admitted node, including the root, directories, shown ignored entries
+  and error placeholders. Hidden/pruned entries do not consume the node budget.
+- Checks prospective node count and estimated bytes before collection or sending;
+  checked arithmetic rejects overflow without changing either counter.
 - Shows warnings when approaching limits
-- Gracefully aborts if limits exceeded
+- Returns partial results with `TreeStats::truncation_reason` when a safety limit
+  stops the walk, and prints the reason to stderr. A scan with exactly the allowed
+  number of nodes is complete unless another eligible node is rejected (or time
+  expires). `max_files = 0` removes the node-count cap, not the other limits.
+
+Non-streaming admission happens before search/enrichment and before post-scan
+filters, sorting or top-N selection. Truncated scans do not replace saved scan
+state. The byte estimate is struct size + path length + 64 bytes per node: it
+does not include all enrichment data, walker state, vector capacity, sorting
+copies or channel queues. It is **not a hard RSS bound**. Streaming byte
+accounting is cumulative admitted bytes, not current queue occupancy.
 
 ### 3. User Feedback
 
 When limits are hit:
 ```
-⚠️  Scan aborted: Reached maximum file limit of 500000 files
+⚠️  Scan truncated: Reached maximum node limit of 500000 nodes
    Use --max-depth, --stream mode, or scan a more specific directory
 ```
 
@@ -100,12 +112,15 @@ The MCP server automatically uses conservative limits:
 3. **Node tracking**: Estimates memory usage
 4. **MCP tools**: Uses most conservative limits
 
-## Performance Impact
+## Design provenance
 
-Minimal overhead:
-- Safety checks: ~1μs per file
-- Memory tracking: Simple counter increments
-- No impact on small/medium directories
+The central admission/accounting follow-up is an independent Rust design
+adaptation prompted by the `bfs` resource-budget review (Tavian Barnes,
+`tavianator/bfs`; inspected fork revision
+`695ea13d191c903b86b0d5795a2686a8c6e18015`, 0BSD). No `bfs` code or walker was
+copied. Its descriptor budget inspired explicit admission, not a claim about
+heap bounds or scan performance. Review/implementation attribution:
+GPT-6 Astra (`openai/gpt-6-astra`), 2026-10-28, research shard 14 follow-up.
 
 ## Future Enhancements
 
