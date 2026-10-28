@@ -290,6 +290,17 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             st::cli::Cmd::Remember(remember_cmd) => {
+                if remember_cmd.check {
+                    if let Err(e) = st::salient::check_learned(
+                        &remember_cmd.target,
+                        remember_cmd.out.as_deref(),
+                        remember_cmd.query.as_deref(),
+                    ) {
+                        eprintln!("Remember check failed: {}", e);
+                        std::process::exit(1);
+                    }
+                    return Ok(());
+                }
                 let report = st::salient::remember(
                     &remember_cmd.target,
                     &remember_cmd.level,

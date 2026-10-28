@@ -673,6 +673,14 @@ pub struct RememberCommand {
     /// Force full re-ingest even if we have prior MEM8 state (otherwise does smart diffs of known points).
     #[arg(long)]
     pub force: bool,
+
+    /// Read back and summarize what has been learned so far in the MEM8 store without re-ingesting.
+    #[arg(long, alias = "status", alias = "recall")]
+    pub check: bool,
+
+    /// Filter recalled repositories by substring or query when using `--check` (e.g. `--query spherepop`).
+    #[arg(long, short = 'q')]
+    pub query: Option<String>,
 }
 
 #[derive(Debug, clap::Args)]

@@ -159,12 +159,28 @@ impl RecordStore {
     }
 
     pub fn put_with_wave<T: Serialize>(&mut self, key: &str, value: &T, wave: &Wave) -> Result<()> {
-        self.put_record(key, value, wave, false)
+        self.put_record(key, value, wave, false, true)
+    }
+
+    /// Append a record without forcing a per-record `fdatasync` (caller must call `flush_sync()` before acknowledging).
+    pub fn put_with_wave_buffered<T: Serialize>(
+        &mut self,
+        key: &str,
+        value: &T,
+        wave: &Wave,
+    ) -> Result<()> {
+        self.put_record(key, value, wave, false, false)
+    }
+
+    pub fn flush_sync(&mut self) -> Result<()> {
+        self.file
+            .sync_data()
+            .context("Failed to sync MEM8 record store")
     }
 
     /// Persist a logical deletion and mark its native wave as tombstoned.
     pub fn forget<T: Serialize>(&mut self, key: &str) -> Result<()> {
-        self.put_record(key, &None::<T>, &Wave::default(), true)
+        self.put_record(key, &None::<T>, &Wave::default(), true, true)
     }
 
     fn put_record<T: Serialize>(
@@ -173,6 +189,7 @@ impl RecordStore {
         value: &T,
         wave: &Wave,
         tombstoned: bool,
+        sync_immediately: bool,
     ) -> Result<()> {
         ensure!(
             !self.poisoned,
@@ -214,7 +231,11 @@ impl RecordStore {
         let result = (|| -> std::io::Result<()> {
             self.file.seek(SeekFrom::Start(self.length))?;
             self.file.write_all(&frame)?;
-            self.file.sync_data()
+            if sync_immediately {
+                self.file.sync_data()
+            } else {
+                Ok(())
+            }
         })();
         if let Err(error) = result {
             self.poisoned = true;
