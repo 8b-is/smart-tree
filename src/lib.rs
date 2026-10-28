@@ -198,6 +198,11 @@ pub mod registry;
 // Security Scanner - Detect supply chain attack patterns
 pub mod security_scan;
 
+// Salient MEM8 Ingestion Engine for GitHub users (or collection mirrors).
+// Remembers code + thoughts (READMEs, comments, review decisions), persists
+// in MEM8, and provides family-style Rust conversions (exact arithmetic).
+pub mod salient;
+
 // Collaboration - Humans + AIs working together
 pub mod collab;
 
