@@ -427,24 +427,7 @@ release() {
     
     print_success "Standard artifact created: ${standard_artifact_path}"
 
-    # Note: We only create one set of artifacts since MCP is a default feature
-    
-    # --- Build DXT package ---
-    print_info "Building DXT package..."
-    if [[ -f "dxt/build-dxt.sh" ]]; then
-        (cd dxt && ./build-dxt.sh)
-        if [[ -f "dxt/smart-tree.dxt" ]]; then
-            cp "dxt/smart-tree.dxt" "${artifact_dir}/"
-            local dxt_artifact_path="${artifact_dir}/smart-tree.dxt"
-            print_success "DXT package created: ${dxt_artifact_path}"
-        else
-            print_warning "DXT build completed but smart-tree.dxt not found"
-            local dxt_artifact_path=""
-        fi
-    else
-        print_warning "DXT build script not found, skipping DXT package"
-        local dxt_artifact_path=""
-    fi
+    # MCP is built into st. The old Claude Desktop DXT wrapper is not packaged.
 
     # --- Create GitHub Release ---
     local release_title="Smart Tree ${version}"
@@ -464,11 +447,7 @@ release() {
         print_info "Creating GitHub release and uploading artifacts..."
         # Note: This will only upload the artifact for the current platform
         # For multi-platform releases, you'll need to build on each platform or use CI/CD
-        if [[ -n "$dxt_artifact_path" ]]; then
-            gh release create "$version" "$standard_artifact_path" "$dxt_artifact_path" --title "$release_title" --notes "$release_notes"
-        else
-            gh release create "$version" "$standard_artifact_path" --title "$release_title" --notes "$release_notes"
-        fi
+        gh release create "$version" "$standard_artifact_path" --title "$release_title" --notes "$release_notes"
     else
         echo -e "\n${YELLOW}Ready to create release. Review details above.${NC}"
         read -p "Do you want to proceed? (y/N) " -n 1 -r
@@ -488,11 +467,7 @@ release() {
         print_info "Creating GitHub release and uploading artifacts..."
         # Note: This will only upload the artifact for the current platform
         # For multi-platform releases, you'll need to build on each platform or use CI/CD
-        if [[ -n "$dxt_artifact_path" ]]; then
-            gh release create "$version" "$standard_artifact_path" "$dxt_artifact_path" --title "$release_title" --notes "$release_notes"
-        else
-            gh release create "$version" "$standard_artifact_path" --title "$release_title" --notes "$release_notes"
-        fi
+        gh release create "$version" "$standard_artifact_path" --title "$release_title" --notes "$release_notes"
     fi
 
     print_success "Release ${version} created successfully! ${TREE} ${SPARKLE}"
