@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-10.1.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-10.6.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -54,6 +54,18 @@ The cache lives in `<project>/.st/symbols/`; standalone CrabCC databases are lef
 alone. Queries refresh this cache incrementally, and `index` rebuilds it. CrabCC
 is pinned to commit `12e7763f2f30fd995608b2ea4cd91e82a3be88fe` for reproducible
 source builds. No models, cloud service, or message delivery is involved.
+
+### Remember a forge into MEM8
+
+`st remember` ingests a local checkout or a GitHub/GitLab/Forgejo-style URL into a native MEM8 store. It keeps code excerpts and thoughts (READMEs, comments, and attached review notes) with provenance. `--level` is `extreme`, `professor`, `expert`, `high`, `medium`, `low`, or `bullshitter`. StandardGalactic is the full-nexus exception; other extreme requests fall back rather than swallowing an unbounded source.
+
+```bash
+st remember /data/standardgalactic --level extreme
+st remember 'https://github.com/standardgalactic' --check
+st remember /data/standardgalactic --check -q spherepop
+```
+
+`--check` (aliases `--status` and `--recall`) reads the existing store and does not walk the collection again. Repeated remembers skip unchanged git HEAD identities unless `--force` is set. Writes are buffered and flushed once before the run is acknowledged.
 
 ### Repository hub
 

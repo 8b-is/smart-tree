@@ -5,6 +5,14 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.6.0] - 2026-10-28
+
+### Added
+
+- `st remember` ingests a local checkout or git-forge URL into native MEM8, with salience levels, provenance, and family-heart wiring.
+- `st remember --check` (aliases `--status`, `--recall`) and `-q` inspect an existing store without re-walking the collection.
+- Unchanged git HEAD identities are skipped unless `--force` is set. Record writes can be buffered and are flushed once before acknowledgement.
+
 ## [Unreleased]
 
 ## [10.5.0] - 2026-10-28
