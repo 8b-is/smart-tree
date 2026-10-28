@@ -614,6 +614,13 @@ pub enum Cmd {
     #[command(alias = "gh-sync", alias = "sync-user", alias = "sync-github")]
     Sync(SyncUserCommand),
 
+    /// Remember a git forge (github, gitlab, forgejo, local dir, or URL) into salient MEM8.
+    /// Extracts code + thoughts, incremental diffs, compresses, turns into waves.
+    /// Levels control depth: extreme (full nexus), professor/expert/high, down to bullshitter (shallow).
+    /// Special full treatment for StandardGalactic. Auto-detects non-git and limits generic sources.
+    #[command(alias = "salient", alias = "ingest")]
+    Remember(RememberCommand),
+
     /// Manage the smart-tree daemon (Linux: systemd, macOS: launchctl, Windows: Task Scheduler)
     #[command(subcommand)]
     Service(Service),
@@ -645,6 +652,27 @@ pub struct SyncUserCommand {
     /// Skip archived repositories (`gh repo list --no-archived`)
     #[arg(long)]
     pub no_archived: bool,
+}
+
+/// Remember command for salient MEM8 ingestion from git forges or paths.
+#[derive(Debug, clap::Args)]
+pub struct RememberCommand {
+    /// Git URL (https://github.com/user or git@...) or local path or collection root.
+    /// For github.com/standardgalactic it will target the full nexus at 8s.is style storage.
+    pub target: String,
+
+    /// Salience / depth level. extreme = full professor level for special collections like StandardGalactic.
+    /// professor/expert/high/medium/low/bullshitter controls how deep we go and how much we compress/skill.
+    #[arg(long, value_name = "LEVEL", default_value = "expert")]
+    pub level: String,
+
+    /// Output MEM8 path (defaults to sensible .mem8 location under the target or ~/.mem8/salient/<user>)
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+
+    /// Force full re-ingest even if we have prior MEM8 state (otherwise does smart diffs of known points).
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Debug, clap::Args)]

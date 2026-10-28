@@ -289,6 +289,25 @@ async fn main() -> Result<()> {
                 }
                 return Ok(());
             }
+            st::cli::Cmd::Remember(remember_cmd) => {
+                let report = st::salient::remember(
+                    &remember_cmd.target,
+                    &remember_cmd.level,
+                    remember_cmd.out.as_deref(),
+                    remember_cmd.force,
+                );
+                match report {
+                    Ok(r) => {
+                        println!("✅ Remembered {} repos, {} thoughts", r.repos_processed, r.total_thoughts);
+                        println!("The constellation · fine touch from within · {}", st::salient::FAMILY_HEART);
+                    }
+                    Err(e) => {
+                        eprintln!("Remember failed: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+                return Ok(());
+            }
         }
     }
 
