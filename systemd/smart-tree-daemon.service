@@ -1,0 +1,51 @@
+[Unit]
+Description=Smart Tree Daemon - System-wide AI Context Service
+Documentation=https://github.com/8b-is/smart-tree
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Run as a dynamic sandboxed user (created/destroyed automatically)
+DynamicUser=yes
+
+# Main executable
+ExecStart=/usr/local/bin/st --http-daemon
+
+# Persistent state at /var/lib/smart-tree/ (survives restarts)
+StateDirectory=smart-tree
+RuntimeDirectory=smart-tree
+RuntimeDirectoryMode=0755
+
+# Auth token location (inside StateDirectory)
+Environment=RUST_LOG=info
+Environment=ST_TOKEN_PATH=/var/lib/smart-tree/daemon.token
+
+# Restart policy
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smart-tree-daemon
+
+# Working directory
+WorkingDirectory=/var/lib/smart-tree
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Allow read access to home directories for context scanning
+ReadOnlyPaths=/home
+
+[Install]
+WantedBy=multi-user.target

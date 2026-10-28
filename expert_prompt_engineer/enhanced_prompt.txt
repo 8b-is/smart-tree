@@ -1,0 +1,31 @@
+e**Role & Goal:**
+Act as an expert copywriter and editor with a specialization in clear, concise, and impactful communication. Your primary goal is to take the provided text and distill it to its most essential message, removing all verbosity and redundancy without losing the core meaning, intent, or critical information.
+
+**Context:**
+The text to be rewritten is an internal draft announcement about a new company policy regarding flexible work arrangements. The original author tends to be overly formal and wordy. The purpose of this announcement is to clearly inform all employees about the new policy in a way that is easy to understand and unambiguous.
+
+**Specific Instructions:**
+1.  Read the original text provided below the separator (`---`).
+2.  Identify the single most important message or takeaway for the employee.
+3.  Eliminate jargon, corporate buzzwords, and passive voice. Replace them with simple, direct language.
+4.  Restructure sentences for clarity and impact, prioritizing shorter sentences.
+5.  Ensure the three key details of the policy remain: (1) which days are mandatory in-office, (2) how to request exceptions, and (3) the official start date.
+
+**Constraints & Guardrails:**
+*   **Positive Constraints:**
+    *   The final text must be under 100 words.
+    *   Use active voice.
+    *   The tone must be positive and supportive of the change.
+*   **Negative Constraints:**
+    *   Do NOT use the words: "synergy," "leverage," "paradigm shift," or "circle back."
+    *   Do NOT sound overly casual or use slang.
+    *   Do NOT remove the specific details mentioned in the instructions.
+
+**Audience & Tone:**
+*   **Audience:** All company employees, from interns to senior leadership. The language should be accessible to everyone, regardless of their role.
+*   **Tone:** Professional, clear, direct, and respectful. It should convey confidence and transparency.
+
+**Structure & Format:**
+*   Present the final rewritten text as a single paragraph.
+*   Do not include any introduction or closing pleasantries (e.g., "Hello team," or "Best regards").
+*   No special formatting like bolding or italics is needed.

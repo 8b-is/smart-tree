@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../../mem8-proxy"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../mem8-ha"
+		},
+		{
+			"path": "../../mem8-library"
+		}
+	],
+	"settings": {}
+}

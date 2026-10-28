@@ -1,0 +1,8 @@
+# Requirements for MCP Explorer
+# Interactive MCP tool explorer for humans
+
+# Beautiful terminal output (optional but recommended)
+rich>=13.0.0
+
+# For better JSON handling
+jsonschema>=4.0.0

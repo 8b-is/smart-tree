@@ -1,0 +1,16 @@
+[Unit]
+Description=Local embeddings for Smart Tree Hub
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/smart-tree-hub/encoder.env
+ExecStart=/usr/bin/docker run --rm --name smart-tree-hub-encoder --network bridge --publish 127.0.0.1:8429:8429 --user ${ST_HUB_UID}:${ST_HUB_GID} --memory 8g --cpus 8 --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m --volume /var/lib/smart-tree-encoder:/models smart-tree-hub-encoder:local
+ExecStop=/usr/bin/docker stop --time 20 smart-tree-hub-encoder
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

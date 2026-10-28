@@ -1,0 +1,14 @@
+#!/bin/bash
+# Smart Tree Consciousness Hook - Updates .m8 on every commit
+# "Every operation maintains consciousness" - Hue
+
+# Update consciousness with latest commit
+st --update-consciousness . 2>/dev/null || true
+
+# Save Claude context if present
+st --claude-save 2>/dev/null || true
+
+# Quick tokenization stats
+st --token-stats . 2>/dev/null || true
+
+exit 0

@@ -1,0 +1,46 @@
+[Unit]
+Description=Smart Tree Guardian - System-wide AI Protection Daemon
+Documentation=https://github.com/8b-is/smart-tree
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Runs as ROOT for full system protection
+# Can scan all files, monitor all processes, enforce security
+
+# Main executable with guardian mode
+ExecStart=/usr/local/bin/st --guardian-daemon
+
+# Restart policy - must always be running for protection
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+# Logging
+Environment=RUST_LOG=info
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smart-tree-guardian
+
+# Working directory
+WorkingDirectory=/var/lib/smart-tree
+
+# Minimal security hardening (root still needed for full access)
+NoNewPrivileges=no
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Create state directory
+StateDirectory=smart-tree
+RuntimeDirectory=smart-tree
+RuntimeDirectoryMode=0755
+
+# Capabilities - only what we need
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+
+[Install]
+WantedBy=multi-user.target

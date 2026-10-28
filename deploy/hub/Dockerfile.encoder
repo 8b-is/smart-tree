@@ -1,0 +1,6 @@
+FROM python@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+RUN pip install --no-cache-dir fastembed==0.8.0
+COPY encoder.py /app/encoder.py
+ENV HF_HUB_DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 TOKENIZERS_PARALLELISM=false HF_HOME=/models/hf HF_XET_CACHE=/models/xet HF_HUB_DISABLE_XET=1
+EXPOSE 8429
+CMD ["python", "/app/encoder.py"]

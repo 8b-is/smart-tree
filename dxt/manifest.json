@@ -1,0 +1,139 @@
+{
+  "dxt_version": "0.1",
+  "id": "is.8b.smart-tree",
+  "name": "smart-tree",
+  "display_name": "Smart Tree",
+  "version": "3.3.5",
+  "description": "🌳 Installation helper for Smart Tree - the world's smartest directory tree tool! This extension helps you install and configure Smart Tree for use with Claude Desktop.",
+  "long_description": "Smart Tree Installation Helper v3.3.5\n\nThis extension guides you through installing Smart Tree on your system and configuring it for use with Claude Desktop.\n\n**Why install Smart Tree separately?**\n• Full system permissions for file access\n• Faster performance\n• Works in terminal and with Claude Desktop\n• Automatic updates via the installer\n\n**After installation, you'll get:**\n- **MEM|8 Quantum Format**: 99% size reduction\n- **AI-Optimized Output**: Save 98% on token costs\n- **20+ MCP Tools**: Comprehensive directory analysis\n- **Semantic Analysis**: Group files by conceptual waves\n- **Cross-Platform**: Works on Windows, macOS, and Linux\n\nThe installation process is simple:\n• macOS/Linux: One-line installer\n• Windows: Download and add to PATH\n• Then restart Claude Desktop!",
+  "author": {
+    "name": "8b-is",
+    "email": "st@8b.is",
+    "url": "https://8b.is/?r=st"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/8b-is/smart-tree"
+  },
+  "homepage": "https://8b.is/#free-tools?r=st",
+  "documentation": "https://github.com/8b-is/smart-tree/blob/main/README.md",
+  "support": "https://github.com/8b-is/smart-tree/issues",
+  "icon": "icon.png",
+  "files": [
+    "manifest.json",
+    "icon.png",
+    "server/index.js",
+    "README.md"
+  ],
+  "tools": [
+    {
+      "name": "check_installation",
+      "description": "Check if Smart Tree is installed and provide installation instructions"
+    },
+    {
+      "note": "After installation, Smart Tree provides 20+ powerful MCP tools for directory analysis!"
+  ],
+  "prompts": [
+    {
+      "name": "install_smart_tree",
+      "description": "Help me install Smart Tree",
+      "arguments": [],
+      "text": "Please help me install Smart Tree on my system. Use the check_installation tool to see if it's already installed and provide platform-specific installation instructions if needed."
+    },
+    {
+      "name": "find_recent_document",
+      "description": "Help find a document worked on recently",
+      "arguments": ["timeframe", "document_type"],
+      "text": "Please help me find ${arguments.document_type} documents I was working on ${arguments.timeframe}. Use find_recent_changes to search for recently modified files, then filter by document types like .doc, .docx, .txt, .md, or .pdf."
+    },
+    {
+      "name": "analyze_disk_usage",
+      "description": "Find what files are using disk space",
+      "arguments": [],
+      "text": "What files are eating up my hard drive space? Please use directory_size_breakdown to analyze the current directory and subdirectories, then use find_large_files to identify the biggest space consumers. Provide a summary of where space is being used."
+    },
+    {
+      "name": "compare_duplicate_folders",
+      "description": "Compare duplicate folders to find the most recent",
+      "arguments": ["folder_type"],
+      "text": "Could you see which of these duplicate ${arguments.folder_type} folders have the latest files? First use find_duplicates to identify potential duplicate directories, then use compare_directories and find_recent_changes to determine which has the most recent updates."
+    },
+    {
+      "name": "organize_project",
+      "description": "Analyze and organize a project directory",
+      "arguments": ["project_path"],
+      "text": "Please analyze the project at ${arguments.project_path} using analyze_workspace. Identify the project type, find all code files, configuration files, and documentation. Suggest an organization structure based on best practices."
+    },
+    {
+      "name": "cleanup_empty_dirs",
+      "description": "Find and suggest removal of empty directories",
+      "arguments": [],
+      "text": "Can you help me clean up empty directories? Use find_empty_directories to identify all empty folders, then provide a list organized by location. Suggest which ones are safe to remove."
+    },
+    {
+      "name": "find_all_code",
+      "description": "Find all code files in a directory",
+      "arguments": ["languages"],
+      "text": "Find all ${arguments.languages} code files in the current directory. Use find_code_files with the specified languages and provide a summary organized by file type and location."
+    },
+    {
+      "name": "search_content",
+      "description": "Search for specific content in files",
+      "arguments": ["search_term", "file_types"],
+      "text": "Search for '${arguments.search_term}' in ${arguments.file_types} files. Use search_in_files to find all occurrences and show me which files contain this term with line numbers."
+    },
+    {
+      "name": "project_health_check",
+      "description": "Comprehensive project health analysis",
+      "arguments": [],
+      "text": "Perform a comprehensive health check on this project. Use project_overview for the structure, find_tests to check test coverage, find_documentation to verify docs, and get_statistics for overall metrics. Provide insights and recommendations."
+    }
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/index.js"
+      ],
+      "env": {
+        "ST_MCP_ALLOWED_PATHS": "${user_config.allowed_directories}",
+        "ST_MCP_BLOCKED_PATHS": ""
+      }
+    }
+  },
+  "tools_generated": true,
+  "keywords": [
+    "filesystem",
+    "directory",
+    "tree",
+    "visualization",
+    "ai",
+    "mcp",
+    "file-search",
+    "disk-usage",
+    "project-analysis",
+    "code-search",
+    "duplicate-finder",
+    "workspace-analyzer"
+  ],
+  "license": "MIT",
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=16.0.0"
+    }
+  },
+  "user_config": {
+    "allowed_directories": {
+      "type": "directory",
+      "title": "Allowed Directories",
+      "description": "Select directories that Smart Tree can analyze",
+      "multiple": true,
+      "required": true,
+      "default": ["${HOME}/Desktop"]
+    }
+  }
+} 

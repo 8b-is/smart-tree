@@ -1,0 +1,282 @@
+[workspace]
+members = ["expert_prompt_engineer", "st-protocol"]
+exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
+
+[package]
+name = "smart-tree"
+version = "10.6.0"
+edition = "2021"
+authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
+description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
+repository = "https://github.com/8b-is/smart-tree"
+license = "MIT"
+readme = "README.md"
+keywords = ["tree", "directory", "visualization", "ai", "cli"]
+categories = ["command-line-utilities", "filesystem"]
+default-run = "st"
+autobins = false  # Only ship binaries explicitly listed in [[bin]] sections below
+exclude = [
+    "test_files/",
+    "test-dirs/",
+    "test/",
+    "tests/",
+    "tmp/",
+    "web/",
+    "docs/",
+    "examples/",
+    "api/",
+    ".gemini/",
+    ".cursorignore",
+    ".mcp.json",
+    "demo.sh",
+    "save_consciousness.sh",
+    "import_claude_memories.sh",
+    "build_output.log",
+    "exportit.txt",
+    "Context.md",
+    "CONTEXT_SUMMARY.md",
+    "PR_SUMMARY.md",
+    "RELEASE_*.md",
+    "SMART_*.md",
+    "SMART-*.md",
+    "SMARTPASTCODE-*.md",
+    "MCP_*.md",
+    "TERMINAL_EXAMPLES.md",
+    "AI_ENHANCEMENTS.md",
+    "FEATURE_FLAGS.md",
+    "g.md",
+    "test",
+    "test_*",
+    "*.png",
+    "*.mq",
+    "Aye101/",
+    "aye-md/",
+    "engine/",
+    "Formula/",
+    "dxt/",
+    "hooks/",
+    "st-hook",
+    "st-hook/",
+    "/tools/",
+    "test_rename_project/",
+    "src/bin/mq.rs",
+    "src/bin/debug_mcp.rs",
+]
+
+[dependencies]
+# Core CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
+clap_mangen = "0.2"
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Filesystem
+walkdir = "2.5"
+globset = "0.4"
+glob = "0.3"
+notify = { version = "6.1", features = ["serde"] }
+dirs = "5.0"
+shellexpand = "3.1"
+which = "7.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+csv = "1.3"
+bincode = "1.3"
+
+# Async runtime
+tokio = { version = "1.42", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+futures-util = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+# HTTP/Networking
+axum = { version = "0.7", features = ["ws", "multipart", "macros"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }
+hyper = "1.7"
+http = "1.3"
+tower-http = { version = "0.5", features = ["cors"] }
+
+# Text processing
+regex = "1.10"
+similar = "2.4"
+
+# Byte buffers (reqwest streaming)
+bytes = "1"
+
+# Encoding/Compression
+flate2 = "1.0"
+tar = "0.4"
+hex = "0.4"
+base64 = "0.22"
+sha2 = "0.10"
+x509-parser = "0.16"
+rusqlite = { version = "0.40", features = ["bundled", "fallible_uint"] }
+argon2 = "0.5"
+crc32fast = "1.4"
+
+# Secure token storage for proxy OAuth (macOS Keychain / Secret Service / Windows Credential Manager)
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# Terminal output
+colored = "2.1"
+termimad = "0.26"
+terminal_size = "0.3"
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde", "clock"] }
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+humansize = "2.1"
+rayon = "1.10"
+once_cell = "1.19"
+rand = "0.8"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+whoami = "1.5"
+dashmap = "6.1"
+libc = "0.2"
+fuzzy-matcher = "0.3"  # Used by MCP smart_background_searcher
+
+# PTY support for web dashboard terminal (always included)
+portable-pty = "0.8"
+open = "5.0"  # Open URLs in browser
+
+# Network CIDR parsing for --allow flag
+ipnet = "2.9"
+
+# Git operations (will become g8t)
+gix = { version = "0.87", default-features = false, features = ["blocking-network-client", "sha1"] }
+
+# Tree-sitter for smart code editing
+crabcc-core = { git = "https://github.com/8b-is/crabcc.git", rev = "12e7763f2f30fd995608b2ea4cd91e82a3be88fe" }
+tree-sitter = "0.26"
+tree-sitter-language = "0.1"
+tree-sitter-rust = "0.24"
+tree-sitter-python = "0.25"
+tree-sitter-javascript = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-go = "0.25"
+tree-sitter-java = "0.23"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-cpp = "0.23"
+tree-sitter-ruby = "0.23"
+
+# Proc macro support (for tree-sitter)
+syn = { version = "2.0", features = ["full", "parsing"] }
+quote = "1.0"
+cc = "1.2"
+shlex = "1.3"
+
+# ST Protocol for daemon communication
+st-protocol = { path = "st-protocol", version = "0.1.0" }
+
+# === TERMINAL UI (built-in) ===
+ratatui = "0.25"
+crossterm = "0.27"
+syntect = "5.0"
+artem = "2.0"
+
+# Dashboard GUI - REMOVED (replaced by web-dashboard)
+# egui, eframe, egui_extras, winit removed - use web-dashboard instead
+
+# Local LLM support (candle)
+candle-core = { version = "0.8", optional = true }
+candle-transformers = { version = "0.8", optional = true }
+candle-nn = { version = "0.8", optional = true }
+hf-hub = { version = "0.4", optional = true }
+tokenizers = { version = "0.21", optional = true }
+marqant = "1.1.8"
+
+# Voice transcription/TTS (liquid-rust)
+# Note: Requires liquid-rust to be properly set up with its dependencies
+# Uncomment when liquid-rust is ready:
+# liquid-rust = { path = "../liquid-rust", optional = true }
+
+# Google Drive + Gmail integration
+google-gmail1 = { version = "7", optional = true }
+google-drive3 = { version = "7", optional = true }
+yup-oauth2 = { version = "12", optional = true }
+ring = "0.17"
+mail-parser = { version = "0.9", optional = true }
+hyper-rustls = { version = "0.27", optional = true, features = ["http1", "native-tokio"] }
+hyper-util = { version = "0.1", optional = true, features = ["client-legacy", "tokio"] }
+mime = { version = "0.3", optional = true }
+mime_guess = { version = "2.0", optional = true }
+http-body-util = { version = "0.1", optional = true }
+
+[lib]
+name = "st"
+path = "src/lib.rs"
+
+[[bin]]
+name = "st"
+path = "src/main.rs"
+
+[[bin]]
+name = "std"
+path = "src/bin/std.rs"
+
+[[bin]]
+name = "st-hub"
+path = "src/bin/st-hub.rs"
+
+# `mq` binary is provided by the `marqant` crate (cargo install marqant).
+# We use marqant as a library dep here; users who want the CLI install it directly.
+
+[[bin]]
+name = "n8x"
+path = "src/bin/n8x.rs"
+
+[[bin]]
+name = "m8"
+path = "src/bin/m8.rs"
+
+[[bin]]
+name = "import-claude-memories"
+path = "src/bin/import_claude_memories.rs"
+
+[dev-dependencies]
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[features]
+default = ["full"]
+
+# Local LLM inference
+candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
+
+# Voice transcription/TTS via liquid-rust (requires models)
+# Note: Enable when liquid-rust dependency is uncommented above
+voice = []
+
+# Google Drive + Gmail integration
+google = [
+    "google-gmail1", "google-drive3", "yup-oauth2",
+    "mail-parser",
+    "hyper-rustls", "hyper-util", "mime", "mime_guess",
+    "http-body-util",
+]
+
+# Terminal UI (tui) and Web dashboard are now always built-in
+
+# Full features (includes candle for local LLM, google drive & gmail sync, and voice)
+full = ["candle", "google", "voice"]
+
+# Full with voice alias
+full-voice = ["full"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3
