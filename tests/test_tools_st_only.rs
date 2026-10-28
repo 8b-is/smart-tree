@@ -19,7 +19,7 @@ fn test_tools() -> StOnlyTools {
 }
 
 fn create_complex_test_directory() -> Result<TempDir> {
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
 
     // Create a more complex structure for thorough testing
     fs::create_dir_all(temp_dir.path().join("src/modules/core"))?;
@@ -252,7 +252,7 @@ fn test_search_with_file_type() -> Result<()> {
 #[test]
 fn test_search_case_sensitivity() -> Result<()> {
     // Case sensitivity - the eternal debate!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     fs::write(temp_dir.path().join("test.txt"), "TODO\ntodo\nToDo")?;
 
     let tools = test_tools();
@@ -363,7 +363,7 @@ fn test_run_st_error_handling() -> Result<()> {
 #[test]
 fn test_empty_directory_handling() -> Result<()> {
     // Empty directories - the void stares back!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let tools = test_tools();
 
     let result = tools.list(temp_dir.path(), ListOptions::default())?;
@@ -381,7 +381,7 @@ fn test_empty_directory_handling() -> Result<()> {
 #[test]
 fn test_nested_directory_operations() -> Result<()> {
     // Deep nesting - testing the depths of recursion!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let mut path = temp_dir.path().to_path_buf();
 
     // Create deeply nested structure
@@ -431,7 +431,7 @@ fn test_all_list_options_combined() -> Result<()> {
 #[test]
 fn test_special_characters_in_filenames() -> Result<()> {
     // Special characters - the parser's nightmare!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
 
     // Create files with special characters
     let special_names = vec![
@@ -464,7 +464,7 @@ fn test_special_characters_in_filenames() -> Result<()> {
 #[test]
 fn test_large_file_handling() -> Result<()> {
     // Large files - testing memory limits!
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
     let large_file = temp_dir.path().join("large.txt");
 
     // Create a 1MB file

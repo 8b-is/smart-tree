@@ -2682,7 +2682,7 @@ mod tests {
     fn explicitly_selected_hidden_root_still_scans_visible_children() {
         let temp = tempfile::Builder::new()
             .prefix(".st-scan-")
-            .tempdir()
+            .tempdir_in(env!("CARGO_MANIFEST_DIR"))
             .unwrap();
         std::fs::write(temp.path().join("visible.rs"), "fn main() {}").unwrap();
         std::fs::write(temp.path().join(".hidden"), "hidden").unwrap();

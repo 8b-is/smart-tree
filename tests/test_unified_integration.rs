@@ -22,7 +22,7 @@ fn test_tools() -> StOnlyTools {
 }
 
 fn create_realistic_project() -> Result<TempDir> {
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new_in(env!("CARGO_MANIFEST_DIR"))?;
 
     // Create a realistic Rust project structure
     fs::create_dir_all(temp_dir.path().join("src/core/engine"))?;

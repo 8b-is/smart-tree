@@ -502,7 +502,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn symlinked_roots_render_their_children() {
-        let temp = tempfile::tempdir().unwrap();
+        // Scanner intentionally prunes tmpfs; use the checkout filesystem.
+        let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
         let actual = temp.path().join("actual");
         std::fs::create_dir(&actual).unwrap();
         std::fs::write(actual.join("notes.md"), "Lunar geology").unwrap();

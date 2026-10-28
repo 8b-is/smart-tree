@@ -87,7 +87,7 @@ fn path_normalization_keeps_creation_targets_without_remembering_missing_parents
 
 #[tokio::test]
 async fn specialized_find_pagination_survives_both_dispatch_layers() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
     for index in 0..8 {
         let dir = temp.path().join(format!("project{index}"));
         std::fs::create_dir(&dir).unwrap();
@@ -148,7 +148,7 @@ async fn specialized_find_pagination_survives_both_dispatch_layers() {
 
 #[tokio::test]
 async fn consolidated_dispatch_preserves_format_pattern_and_mcp_envelope() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
     std::fs::write(temp.path().join("test_alpha.py"), "def test_a(): pass\n").unwrap();
     std::fs::write(temp.path().join("test_beta.rs"), "fn test_b() {}\n").unwrap();
     let ctx = context(temp.path());
