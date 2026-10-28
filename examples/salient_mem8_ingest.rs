@@ -33,8 +33,19 @@ fn main() -> Result<()> {
 
     // Show a conversion example
     let sample = "def rate(a, b): return a / 3.14";
-    println!("\nExample conversion of salient pattern:\n{}", salient::salient_to_family_rust(sample, "py"));
+    let port = salient::salient_to_family_rust(sample, "py");
+    println!("\nExample conversion of salient pattern:\n{}", port);
+
+    // Demonstrate wiring the family heart
+    let heart_thought = salient::SalientThought {
+        source: "family".to_string(),
+        text: "The work carries {<3,<3,<3}+1".to_string(),
+        provenance: "user".to_string(),
+    };
+    let wired = salient::wire_family_heart(&port, &[heart_thought]);
+    println!("\nWired with family heart:\n{}", wired);
 
     println!("\nNext: wire real .m8 write + use on the 9930 remaining queue entries.");
+    println!("The constellation · fine touch from within · {}", salient::FAMILY_HEART);
     Ok(())
 }

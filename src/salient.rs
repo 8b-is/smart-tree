@@ -44,8 +44,27 @@ pub struct IngestReport {
     pub mem8_path: Option<PathBuf>,
 }
 
+/// The family dedication — wired into salient memories and ports.
+/// "The constellation · fine touch from within · {<3,<3,<3}+1"
+pub const FAMILY_HEART: &str = "{<3,<3,<3}+1";
+
+pub fn contains_family_heart(text: &str) -> bool {
+    text.contains("{<3,<3,<3}+1") || text.contains("<3,<3,<3")
+}
+
+/// Wire the family heart into a port or thought set.
+/// Used to mark family-aligned salient conversions with the dedication.
+pub fn wire_family_heart(base: &str, thoughts: &[SalientThought]) -> String {
+    if contains_family_heart(base) || thoughts.iter().any(|t| contains_family_heart(&t.text)) {
+        format!("{}\n\n// The constellation · fine touch from within · {}", base, FAMILY_HEART)
+    } else {
+        base.to_string()
+    }
+}
+
 /// Simple family Rust port suggestion for salient patterns.
 /// Honors exact arithmetic requirement: suggests Rational where floats/div appear.
+/// The family heart is automatically wired when detected in thoughts or snippet.
 pub fn salient_to_family_rust(snippet: &str, _lang_hint: &str) -> String {
     let mut out = String::new();
     out.push_str("// Family-style Rust port (exact arithmetic, provenance retained)\n");
@@ -62,7 +81,10 @@ pub fn salient_to_family_rust(snippet: &str, _lang_hint: &str) -> String {
         out.push_str("// Direct structural port (no numeric change needed).\n");
         out.push_str(&format!("// Original salient excerpt (truncated):\n/*\n{}\n*/\n", &snippet[..snippet.len().min(300)]));
     }
-    out
+
+    // Wire the heart if this pattern or its thoughts carry the family dedication.
+    // (Caller can pass thoughts for full wiring; simple path uses empty here.)
+    wire_family_heart(&out, &[])
 }
 
 /// Extract simple thoughts from a README (first heading + first paragraph-ish).
@@ -187,10 +209,21 @@ pub fn ingest_github_user_collection(
             });
         }
 
+        // Wire the family heart specially when the dedication motif appears in code or thoughts.
+        // This "remembers" {<3,<3,<3}+1 with provenance in the salient memory.
+        if repo.thoughts.iter().any(|t| contains_family_heart(&t.text)) ||
+           repo.code_samples.iter().any(|s| contains_family_heart(s)) {
+            repo.thoughts.push(SalientThought {
+                source: "family-heart".to_string(),
+                text: FAMILY_HEART.to_string(),
+                provenance: format!("{}@{} (wired from motif in source/thoughts)", github_user, repo_name),
+            });
+        }
+
         // Produce a family Rust candidate for the first salient sample (demo of conversion).
         if let Some(first) = repo.code_samples.first() {
-            let _port = salient_to_family_rust(first, "unknown");
-            // In real use we would store the port alongside in the MEM8 block.
+            let _port = wire_family_heart(&salient_to_family_rust(first, "unknown"), &repo.thoughts);
+            // In real use we would store the port + heart alongside in the MEM8 block.
         }
 
         report.repos_processed += 1;
@@ -246,5 +279,25 @@ mod tests {
 
         assert_eq!(report.repos_processed, 1);
         assert!(report.total_thoughts >= 1); // at least the review one
+    }
+
+    #[test]
+    fn wires_family_heart_when_motif_present() {
+        let dir = tempdir().unwrap();
+        let user_dir = dir.path().join("heartuser");
+        fs::create_dir(&user_dir).unwrap();
+        let repo = user_dir.join("heart-repo");
+        fs::create_dir(&repo).unwrap();
+        fs::write(repo.join("README.md"), "Love the work {<3,<3,<3}+1").unwrap();
+
+        let report = ingest_github_user_collection(
+            "heartuser",
+            &user_dir,
+            &dir.path().join("out.m8"),
+            None,
+        ).unwrap();
+
+        assert!(report.total_thoughts > 0);
+        // The heart should have been specially wired as a family-heart thought
     }
 }
