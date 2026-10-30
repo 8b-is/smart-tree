@@ -237,6 +237,23 @@ fn open_store(root: &Path, config: &McpConfig) -> Result<Store> {
 /// Run a native symbol operation using an explicit project context and MCP policy.
 pub fn execute(params: Value, cwd: &Path, config: &McpConfig) -> Result<Value> {
     let operation = params["operation"].as_str().unwrap_or("sym");
+    if matches!(operation, "suggest" | "best" | "g8t") {
+        let query = params
+            .get("name")
+            .or_else(|| params.get("query"))
+            .or_else(|| params.get("symbol"))
+            .and_then(Value::as_str)
+            .unwrap_or("*");
+        let yolo = params.get("yolo").and_then(Value::as_bool).unwrap_or(false);
+        let top_n = params
+            .get("top_n")
+            .and_then(Value::as_u64)
+            .map(|n| n as usize)
+            .unwrap_or(3);
+        let arch = params.get("arch").and_then(Value::as_str);
+        let report = crate::g8t_integration::query_best_functions(query, top_n, yolo, arch)?;
+        return Ok(serde_json::to_value(report)?);
+    }
     if !matches!(
         operation,
         "sym" | "definition" | "refs" | "references" | "outline" | "index" | "graph"

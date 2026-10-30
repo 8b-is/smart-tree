@@ -1038,6 +1038,63 @@ EXAMPLES:
         }
     }));
 
+    // Add G8T.IS × Smart-Tree Rust Function Recommender, YOLO Fastest-Pick, Benchmark Submitter & Foken Scoreboard tool
+    tools.push(json!({
+        "name": "g8t",
+        "description": "⚡ G8T.IS × SMART-TREE RUST FUNCTION RECOMMENDER, YOLO FASTEST-PICK, ARCH BENCHMARK SUBMITTER & FOKEN SCOREBOARD — Natively connects Smart Tree to https://g8t.is/g8t/leaderboard using 100% integer/rational `p/q` arithmetic (zero floats):
+• `g8t {action:'best', query:'binary search'}` — Returns Top 1-3 fastest verified Rust functions sorted by exact rational `cycles_per_op` (`a.num * b.den < b.num * a.den`)
+• `g8t {action:'yolo', query:'(u64,u64)->u64'}` (or `yolo:true`) — Returns ONLY the #1 fastest verified Rust function (raw drop-in `source_code` + 1-line receipt)!
+• `g8t {action:'submit', domain:'search', partner:'Hue + Gemini (0+1)', source_code:'pub fn ...'}` — Auto-detects CPU architecture (`x86_64`/`aarch64` + `/proc/cpuinfo`), measures local `_rdtsc`/`cntvct_el0` cycles, signs Aye BLAKE3 attestation, and publishes + votes on https://g8t.is!
+• `g8t {action:'leaderboard'}` — Computes the live G8T × Smart-Tree Speed & Foken (`FKN`) Scoreboard across partnerships and equivalence classes!",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["best", "yolo", "submit", "leaderboard"],
+                    "description": "Action: 'best' (Top 1-3 fastest functions), 'yolo' (#1 fastest drop-in code only), 'submit' (publish + benchmark Rust function), 'leaderboard' (live Foken FKN scoreboard)",
+                    "default": "best"
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Keyword, domain, or signature to search (e.g. 'binary search', 'wupz', 'crc', '(u64,u64)->u64')"
+                },
+                "yolo": {
+                    "type": "boolean",
+                    "description": "Return ONLY the #1 fastest verified Rust function (raw drop-in source_code + 1-line receipt)",
+                    "default": false
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Number of top results to return (default: 3 for best, 15 for leaderboard)",
+                    "default": 3
+                },
+                "arch": {
+                    "type": "string",
+                    "description": "Optional architecture filter (e.g. 'x86_64', 'aarch64')"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Function name (for 'submit' when providing a raw expression body)"
+                },
+                "domain": {
+                    "type": "string",
+                    "description": "Domain tag for 'submit' (e.g. 'search', 'sort', 'crypto', 'smart-tree')"
+                },
+                "source_code": {
+                    "type": "string",
+                    "description": "Standalone pure-Rust function source code (`pub fn ...`) or file path for 'submit'"
+                },
+                "partner": {
+                    "type": "string",
+                    "description": "Partnership attribution for 'submit' (default: 'Hue + Gemini (0+1)')",
+                    "default": "Hue + Gemini (0+1)"
+                }
+            },
+            "required": []
+        }
+    }));
+
     tools
 }
 

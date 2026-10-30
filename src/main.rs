@@ -56,6 +56,86 @@ async fn main() -> Result<()> {
         return st::claude_hook::handle_agy_hook(event).await;
     }
 
+    // Handle g8t.is Rust Function Recommender, YOLO Fastest-Pick, Submitter & Foken Scoreboard
+    // directly with clean stdout and zero daemon startup overhead.
+    if let Some(query) = &cli.g8t_best {
+        let top_n = cli.g8t_top.unwrap_or(3);
+        let report = st::g8t_integration::query_best_functions(
+            query,
+            top_n,
+            cli.yolo,
+            cli.g8t_arch.as_deref(),
+        )?;
+        if matches!(cli.scan_opts.mode, OutputMode::Json) && !cli.yolo {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        } else {
+            println!("{}", st::g8t_integration::format_best_functions_output(&report));
+        }
+        return Ok(());
+    }
+    if cli.g8t_leaderboard {
+        let top_n = cli.g8t_top.unwrap_or(15);
+        let report = st::g8t_integration::get_foken_scoreboard(top_n)?;
+        if matches!(cli.scan_opts.mode, OutputMode::Json) {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        } else {
+            println!("{}", st::g8t_integration::format_foken_scoreboard(&report));
+        }
+        return Ok(());
+    }
+    if let Some(file_or_code) = &cli.g8t_submit {
+        let fn_name = cli.g8t_name.as_deref().unwrap_or("st_g8t_capsule");
+        let domain = cli.g8t_domain.as_deref().unwrap_or("");
+        let receipt = st::g8t_integration::submit_rust_function(
+            fn_name,
+            domain,
+            file_or_code,
+            &[],
+            "u64",
+            &cli.partner,
+        )?;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
+    if let Some(st::cli::Cmd::G8t(g8t_cmd)) = &cli.cmd {
+        let action = g8t_cmd.action.to_ascii_lowercase();
+        let is_yolo = g8t_cmd.yolo || cli.yolo || action == "yolo";
+        match action.as_str() {
+            "best" | "suggest" | "recommend" | "query" | "yolo" => {
+                let q = g8t_cmd.target.as_deref().unwrap_or("*");
+                let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(3);
+                let report = st::g8t_integration::query_best_functions(
+                    q,
+                    top_n,
+                    is_yolo,
+                    g8t_cmd.arch.as_deref().or(cli.g8t_arch.as_deref()),
+                )?;
+                println!("{}", st::g8t_integration::format_best_functions_output(&report));
+            }
+            "submit" | "publish" => {
+                let code = g8t_cmd
+                    .target
+                    .as_deref()
+                    .context("Missing <FILE_OR_CODE> for `st g8t submit`")?;
+                let receipt = st::g8t_integration::submit_rust_function(
+                    cli.g8t_name.as_deref().unwrap_or("st_g8t_capsule"),
+                    &g8t_cmd.domain,
+                    code,
+                    &[],
+                    "u64",
+                    &g8t_cmd.partner,
+                )?;
+                println!("{}", serde_json::to_string_pretty(&receipt)?);
+            }
+            _ => {
+                let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(15);
+                let report = st::g8t_integration::get_foken_scoreboard(top_n)?;
+                println!("{}", st::g8t_integration::format_foken_scoreboard(&report));
+            }
+        }
+        return Ok(());
+    }
+
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {
         match level {
@@ -254,7 +334,9 @@ async fn main() -> Result<()> {
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
-            st::cli::Cmd::Symbol(_) => unreachable!("symbol commands return before daemon startup"),
+            st::cli::Cmd::Symbol(_) | st::cli::Cmd::G8t(_) => {
+                unreachable!("symbol and g8t commands return before daemon startup")
+            }
             st::cli::Cmd::Sync(sync_cmd) => {
                 return handle_sync_user(&sync_cmd).await;
             }

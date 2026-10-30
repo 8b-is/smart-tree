@@ -316,6 +316,58 @@ pub struct Cli {
     pub get_frequency: Option<String>,
 
     // =========================================================================
+    // G8T.IS RUST FUNCTION CAPSULES, YOLO FASTEST-PICK & FOKEN SCOREBOARD
+    // =========================================================================
+    /// Query g8t.is for the fastest verified Rust functions by keyword, domain, or signature (e.g. "binary search", "(u64,u64)->u64")
+    #[arg(long, value_name = "QUERY", help_heading = "g8t.is Rust Capsules & Fokens")]
+    pub g8t_best: Option<String>,
+
+    /// YOLO fastest-pick mode: return ONLY the #1 fastest verified Rust function (raw drop-in code + 1-line receipt)
+    #[arg(long, help_heading = "g8t.is Rust Capsules & Fokens")]
+    pub yolo: bool,
+
+    /// Show the live G8T × Smart-Tree Speed & Foken Scoreboard (https://g8t.is/g8t/leaderboard)
+    #[arg(
+        long,
+        alias = "g8t-scoreboard",
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
+    pub g8t_leaderboard: bool,
+
+    /// Submit a pure-Rust function file or snippet to https://g8t.is/g8t/capsules/publish with local hardware cycle measurement
+    #[arg(
+        long,
+        value_name = "FILE_OR_CODE",
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
+    pub g8t_submit: Option<String>,
+
+    /// Partnership attribution for --g8t-submit (encoded into author_aye, e.g. "Hue + Gemini (0+1)")
+    #[arg(
+        long,
+        value_name = "PARTNER",
+        default_value = "Hue + Gemini (0+1)",
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
+    pub partner: String,
+
+    /// Domain tag for --g8t-submit (default: "smart-tree-<arch>")
+    #[arg(long, value_name = "DOMAIN", help_heading = "g8t.is Rust Capsules & Fokens")]
+    pub g8t_domain: Option<String>,
+
+    /// Function name when --g8t-submit is given a raw expression body
+    #[arg(long, value_name = "NAME", help_heading = "g8t.is Rust Capsules & Fokens")]
+    pub g8t_name: Option<String>,
+
+    /// Filter g8t.is capsules by hardware architecture (e.g. "x86_64", "aarch64")
+    #[arg(long, value_name = "ARCH", help_heading = "g8t.is Rust Capsules & Fokens")]
+    pub g8t_arch: Option<String>,
+
+    /// Number of top g8t.is functions or scoreboard rows to return (default: 3 for best, 15 for leaderboard)
+    #[arg(long, value_name = "N", help_heading = "g8t.is Rust Capsules & Fokens")]
+    pub g8t_top: Option<usize>,
+
+    // =========================================================================
     // LOGGING & TRANSPARENCY
     // =========================================================================
     /// Enable activity logging to JSONL file
@@ -628,6 +680,34 @@ pub enum Cmd {
     /// Manage project tags
     #[command(subcommand, name = "project-tags")]
     ProjectTags(ProjectTags),
+
+    /// Query, YOLO-pick, submit, and rank pure-Rust function capsules on https://g8t.is
+    #[command(alias = "capsela", alias = "foken")]
+    G8t(G8tCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct G8tCommand {
+    /// Action: best (or suggest), yolo, submit (or publish), leaderboard (or scoreboard)
+    #[arg(default_value = "leaderboard")]
+    pub action: String,
+    /// Query string for best/yolo, or file/source_code for submit
+    pub target: Option<String>,
+    /// Return ONLY the #1 fastest verified Rust function (raw drop-in source + 1-line receipt)
+    #[arg(long)]
+    pub yolo: bool,
+    /// Partnership attribution for submit (e.g. "Hue + Gemini (0+1)")
+    #[arg(long, default_value = "Hue + Gemini (0+1)")]
+    pub partner: String,
+    /// Domain tag for submit
+    #[arg(long, default_value = "smart-tree")]
+    pub domain: String,
+    /// Optional architecture filter (e.g. "x86_64", "aarch64")
+    #[arg(long)]
+    pub arch: Option<String>,
+    /// Number of top results to display
+    #[arg(long)]
+    pub top: Option<usize>,
 }
 
 #[derive(Debug, Clone, clap::Args)]

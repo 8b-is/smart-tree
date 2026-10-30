@@ -865,6 +865,56 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "required": ["operation"]
             }
         }),
+        json!({
+            "name": "g8t",
+            "description": "⚡ G8T.IS × SMART-TREE RUST FUNCTION RECOMMENDER, YOLO FASTEST-PICK, BENCHMARK SUBMITTER & FOKEN SCOREBOARD — Query https://g8t.is/g8t/leaderboard for the Top 1-3 fastest verified zero-float Rust functions (or `yolo: true` for ONLY the #1 fastest raw drop-in function), submit new benchmarked Rust functions with hardware cycle measurement & partnership attribution (`author_aye`), or view the live Foken (`FKN`) scoreboard!",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["best", "yolo", "submit", "leaderboard"],
+                        "description": "Action: 'best' (Top 1-3 fastest Rust functions by exact rational p/q cycles/op), 'yolo' (ONLY the #1 fastest raw drop-in Rust function + 1-line receipt), 'submit' (publish + hardware-benchmark a Rust function with partnership attribution), 'leaderboard' (live Speed & Foken FKN scoreboard)",
+                        "default": "best"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Keyword, domain, function name, or signature to search (e.g. 'binary search', 'wupz', 'crc', '(u64,u64)->u64')"
+                    },
+                    "yolo": {
+                        "type": "boolean",
+                        "description": "When true, returns ONLY the #1 fastest verified Rust function (raw drop-in source_code + 1-line receipt)",
+                        "default": false
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "Number of top functions (default: 3) or scoreboard rows (default: 15)",
+                        "default": 3
+                    },
+                    "arch": {
+                        "type": "string",
+                        "description": "Optional architecture filter (e.g. 'x86_64', 'aarch64')"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Function name (for 'submit' when providing a raw body expression)"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "description": "Domain tag for 'submit' (e.g. 'search', 'sort', 'crypto', 'smart-tree')"
+                    },
+                    "source_code": {
+                        "type": "string",
+                        "description": "Standalone pure-Rust function source code (`pub fn ...`) or file path for 'submit'"
+                    },
+                    "partner": {
+                        "type": "string",
+                        "description": "Partnership attribution for 'submit' (e.g. 'Hue + Gemini (0+1)')"
+                    }
+                },
+                "required": []
+            }
+        }),
     ]
 }
 
@@ -970,6 +1020,10 @@ pub async fn dispatch_consolidated_tool(
         "security" | "custodian" => handle_security(params, ctx).await?,
         "ontology" | "sovereign_ontology" => handle_ontology(params, ctx).await?,
         "partner" | "wa" | "wastream" | "discord" => handle_partner(params, ctx).await?,
+        "g8t" | "capsela" | "foken" | "g8t_capsela" => {
+            let p = params.unwrap_or_else(|| json!({}));
+            crate::g8t_integration::handle_g8t_mcp_action(&p)?
+        }
         #[cfg(feature = "google")]
         "google" => super::google::handle_google(params, ctx).await?,
         #[cfg(feature = "voice")]
