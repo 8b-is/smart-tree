@@ -337,11 +337,16 @@ fn get_hooks_file_path() -> PathBuf {
 }
 
 fn get_agy_hooks_file_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".gemini")
-        .join("config")
-        .join("hooks.json")
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let primary = home.join(".agents").join("hooks.json");
+    if primary.exists() {
+        return primary;
+    }
+    let legacy = home.join(".gemini").join("config").join("hooks.json");
+    if legacy.exists() {
+        return legacy;
+    }
+    primary
 }
 
 fn check_hook_enabled(hook_type: &str) -> bool {

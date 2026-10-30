@@ -822,8 +822,16 @@ pub async fn install_hooks_to_agent() -> Result<()> {
     Ok(())
 }
 
-/// Get the Antigravity (agy) global `hooks.json` path
+/// Get the Antigravity (agy) global `hooks.json` path (`~/.agents/hooks.json`)
 pub fn get_agy_hooks_path() -> Result<PathBuf> {
+    let home = dirs::home_dir()
+        .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
+        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
+    Ok(home.join(".agents").join("hooks.json"))
+}
+
+/// Get the legacy Antigravity `hooks.json` path (`~/.gemini/config/hooks.json`)
+pub fn get_agy_legacy_hooks_path() -> Result<PathBuf> {
     let home = dirs::home_dir()
         .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
         .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
@@ -868,6 +876,9 @@ pub fn update_agent_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
 
     if let Ok(agy_hooks_path) = get_agy_hooks_path() {
         crate::claude_init::update_agy_hooks_file(&agy_hooks_path, &st_path, enable)?;
+    }
+    if let Ok(agy_legacy_path) = get_agy_legacy_hooks_path() {
+        let _ = crate::claude_init::update_agy_hooks_file(&agy_legacy_path, &st_path, enable);
     }
 
     let mut config: Value = if config_path.exists() {

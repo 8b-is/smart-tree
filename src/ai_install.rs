@@ -442,17 +442,19 @@ impl AiInstaller {
     /// Install hooks
     fn install_hooks(&self) -> Result<()> {
         if matches!(self.target, AiTarget::Gemini | AiTarget::Universal) {
-            let agy_hooks_file = match self.scope {
-                InstallScope::Project => self.project_path.join(".agents").join("hooks.json"),
-                InstallScope::User => dirs::home_dir()
-                    .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?
-                    .join(".gemini")
-                    .join("config")
-                    .join("hooks.json"),
-            };
             let st_bin = which::which("st")
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| "/usr/local/bin/st".to_string());
+            let agy_hooks_file = match self.scope {
+                InstallScope::Project => self.project_path.join(".agents").join("hooks.json"),
+                InstallScope::User => {
+                    let home = dirs::home_dir()
+                        .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+                    let legacy = home.join(".gemini").join("config").join("hooks.json");
+                    let _ = crate::claude_init::update_agy_hooks_file(&legacy, &st_bin, true);
+                    home.join(".agents").join("hooks.json")
+                }
+            };
             crate::claude_init::update_agy_hooks_file(&agy_hooks_file, &st_bin, true)?;
             println!(
                 "  ✅ Antigravity (agy) hooks configured at {}",
