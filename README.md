@@ -564,6 +564,11 @@ brew install --HEAD --formula https://raw.githubusercontent.com/8b-is/smart-tree
 ```
 
 ### Linux/macOS/WSL (Install Script)
+Requires `curl` and `jq`. Installs only a matching archive published in the latest
+GitHub release; platform availability varies by release. Set `VERSION=vX.Y.Z`
+to select an exact release. Missing targets fail without falling back to older
+versions; use the source installation below if needed.
+
 ```bash
 # One-line installer
 curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash

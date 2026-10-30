@@ -5,7 +5,7 @@
 # This script installs the 'st' binary on Linux and macOS.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/user/repo/main/scripts/install.sh | bash
+#   curl -sSL https://raw.githubusercontent.com/8b-is/smart-tree/main/scripts/install.sh | bash
 #
 # You can customize the installation by setting environment variables:
 #   - INSTALL_DIR: The directory to install the binary to (default: /usr/local/bin)
@@ -56,64 +56,6 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to check if a release has assets
-check_release_assets() {
-    local version="$1"
-    local assets_count
-    assets_count=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$version" | jq -r '.assets | length')
-    
-    if [[ "$assets_count" -gt 0 ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Function to get releases with assets
-get_releases_with_assets() {
-    curl -s "https://api.github.com/repos/$GITHUB_REPO/releases" | \
-    jq -r '.[] | select(.assets | length > 0) | .tag_name' | \
-    head -10
-}
-
-# Function to select version interactively
-select_version() {
-    print_warning "The latest version ($1) doesn't have any release binaries yet."
-    print_info "Fetching other available versions with binaries..."
-    
-    local versions=()
-    while IFS= read -r version; do
-        versions+=("$version")
-    done < <(get_releases_with_assets)
-    
-    if [[ ${#versions[@]} -eq 0 ]]; then
-        print_error "No releases with binaries found!"
-    fi
-    
-    print_info "Available versions with binaries:"
-    for i in "${!versions[@]}"; do
-        echo "  $((i+1)). ${versions[$i]}"
-    done
-    
-    local selection
-    while true; do
-        read -p "Select a version (1-${#versions[@]}) or 'q' to quit: " selection
-        
-        if [[ "$selection" == "q" ]]; then
-            print_info "Installation cancelled."
-            exit 0
-        fi
-        
-        if [[ "$selection" =~ ^[0-9]+$ ]] && (( selection >= 1 && selection <= ${#versions[@]} )); then
-            VERSION="${versions[$((selection-1))]}"
-            print_info "Selected version: $VERSION"
-            break
-        else
-            print_error "Invalid selection. Please try again."
-        fi
-    done
-}
-
 # --- Main Installation Logic ---
 
 # Check for required tools
@@ -122,8 +64,7 @@ if ! command_exists curl; then
 fi
 
 if ! command_exists jq; then
-    print_warning "jq is not installed. Some features may not work properly."
-    print_info "Consider installing jq for better release detection."
+    print_error "jq is required to select a published release asset. Please install jq first."
 fi
 
 # 1. Detect OS and Architecture
@@ -162,42 +103,54 @@ if [[ "$os" == "apple-darwin" && "$arch" == "aarch64" && -d "/opt/homebrew/bin" 
     fi
 fi
 
-# 2. Determine Version to Install
-if [[ -z "${VERSION:-}" ]]; then
-    print_info "Fetching the latest version number..."
-    # Use GitHub API to get the latest release tag
-    latest_version_tag=$(curl --silent "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    if [[ -z "$latest_version_tag" ]]; then
-        print_error "Could not fetch the latest version. Please check the repository path and your network connection."
-    fi
-    
-    # Check if latest version has assets
-    if command_exists jq && ! check_release_assets "$latest_version_tag"; then
-        select_version "$latest_version_tag"
-    else
-        VERSION="$latest_version_tag"
-        print_info "Latest version is $VERSION"
-    fi
+# 2. Fetch exactly the requested release; never fall back to an older release.
+release_endpoint="https://api.github.com/repos/$GITHUB_REPO/releases"
+requested_version="${VERSION:-}"
+if [[ -z "$requested_version" ]]; then
+    release_endpoint+="/latest"
 else
-    print_info "Installing specified version: $VERSION"
-    
-    # Check if specified version has assets
-    if command_exists jq && ! check_release_assets "$VERSION"; then
-        print_warning "Version $VERSION doesn't have any release binaries."
-        read -p "Would you like to select another version? (y/n): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            select_version "$VERSION"
-        else
-            print_error "Cannot install version without binaries."
-        fi
-    fi
+    [[ "$requested_version" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || \
+        print_error "Invalid VERSION: $requested_version"
+    release_endpoint+="/tags/$requested_version"
 fi
 
-# 3. Construct Download URL
-# Note: Artifacts include version in filename
-archive_name="${BINARY_NAME}-${VERSION}-${arch}-${os}.tar.gz"
-download_url="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$archive_name"
+if ! release_json=$(curl --fail --silent --show-error --location "$release_endpoint"); then
+    print_error "Could not fetch GitHub release metadata for ${requested_version:-latest} (HTTP or network failure)."
+fi
+# Reject API error objects, malformed JSON, and incomplete metadata before download.
+if ! VERSION=$(jq -ers '
+    if length == 1 then .[0] else error("Expected one release") end |
+    select(type == "object") |
+    select(.tag_name | type == "string" and test("^[a-zA-Z0-9][a-zA-Z0-9._-]*$")) |
+    select(.assets | type == "array") |
+    select(all(.assets[]; type == "object" and
+        (.name | type == "string") and (.browser_download_url | type == "string"))) |
+    .tag_name' <<< "$release_json"); then
+    print_error "Invalid GitHub release metadata for ${requested_version:-latest}."
+fi
+if [[ -n "$requested_version" && "$VERSION" != "$requested_version" ]]; then
+    print_error "Requested $requested_version but GitHub returned $VERSION; refusing to install another version."
+fi
+print_info "Selected release: $VERSION"
+
+# 3. Match exact target filenames in the inventory, including historical names.
+target="${arch}-${os}"
+download_url=""
+for archive_name in \
+    "${BINARY_NAME}-${VERSION}-${target}.tar.gz" \
+    "${BINARY_NAME}-${VERSION#v}-${target}.tar.gz" \
+    "${BINARY_NAME}-${target}.tar.gz"; do
+    expected_url="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$archive_name"
+    if download_url=$(jq -er --arg name "$archive_name" --arg url "$expected_url" '
+        [.assets[] | select(.name == $name)] |
+        select(length == 1) | .[0].browser_download_url | select(. == $url)
+        ' <<< "$release_json"); then
+        break
+    fi
+done
+if [[ -z "$download_url" ]]; then
+    print_error "Release $VERSION has no supported published asset for $target. No installation performed. Build from source or explicitly choose another VERSION."
+fi
 
 # 4. Download and Extract
 tmp_dir=$(mktemp -d)
@@ -231,11 +184,7 @@ else
 fi
 
 # 6. Verify Installation
-if ! command_exists "$BINARY_NAME"; then
-    print_error "Installation failed. The '$BINARY_NAME' command is not available in your PATH."
-fi
-
-version_output=$($BINARY_NAME --version)
+version_output=$("$INSTALL_DIR/$BINARY_NAME" --version)
 print_success "Successfully installed $BINARY_NAME to $INSTALL_DIR/$BINARY_NAME"
 print_info "Version: $version_output"
 print_info "You can now use the '$BINARY_NAME' command."
