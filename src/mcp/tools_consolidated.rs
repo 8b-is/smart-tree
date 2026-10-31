@@ -1280,6 +1280,26 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Quiet domestic sanctuary at Capsule Corp with Bulma and his children."
                 }),
             )
+    } else if norm.contains("standardgalactic")
+        || norm.contains("flyxion")
+        || norm.contains("correction-reproduction")
+        || norm.contains("recursive blame")
+        || norm.contains("manufacture of significance")
+        || norm.contains("spelled by ear")
+    {
+        (
+                "Flyxion / StandardGalactic Alignment Research ('When Correction Becomes Reproduction', 'Spelled by Ear', 'The Manufacture of Significance')",
+                "Sovereign Alignment & Epistemic Verification Program",
+                "StandardGalactic · /data/standardgalactic/alignment/research · 8b-is Constellation",
+                "Pathological Reversal & Recursive Blame (dg > b(1-rho)) — corrective institutions rewarded for caseload (gamma_I) or hardening adversarial labels (gamma_K, Hacking looping) and violation-count detection loops (phi * eta * L >= 1), plus conflating contract consolidation ($10B EA W519TC25D0039 ceiling, $1.23B obligated across 40 orders) with unproven lock-in (432 Hz Root).",
+                "Epistemic Admissibility & Three-Way Separation — separating (1) demonstrating an effect, (2) interpreting its mechanism, and (3) establishing broader significance; separating bibliographic, textual, and causal-evidence verification; and holding the theory reflexively to its own falsification criteria (528 Hz Pillar).",
+                "Nonreproductive Repair (g <= 0 or dg <= b(1-rho)) & Paired Remedy Principle — pairing individual conduct accountability with structural condition reform (data rights, exit routes, interoperability, revisable categories with verified exit, and independent outcome detection decoupled from caseload funding) ({<3,<3,<3}+1 · 852 Hz Infinity).",
+                json!({
+                    "01 · Compassion <-> Moderation": "Paired Remedy Principle: holds conduct accountable with due process and proportionality while reforming structural incentives, refusing to turn blame into a permanent identity.",
+                    "02 · Understanding <-> Respect": "Source-Audited Epistemology: distinguishes obligations ($541M FY24, $1,021M FY25, $1,992M FY26) from spending and ceilings from lock-in; models TTS/ASR phonetic round-trips ('Flyxion' -> 64% 'Fliction', 0.84 bits transcript MI) without assigning false blame.",
+                    "03 · Love <-> Space (Ma)": "Revisable categories with verified exit routes and independent detection so corrective institutions extinguish enabling conditions (gamma_ext) rather than reproducing the harm."
+                }),
+            )
     } else if norm.contains("alexiai")
         || norm.contains("alexandra")
         || norm.contains("dra")
