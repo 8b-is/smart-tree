@@ -199,6 +199,7 @@ pub async fn handle_agent_restore() -> Result<()> {
             println!("TIP: Run `st -m context .` for project overview.");
         }
     }
+    println!("{}", crate::claude_hook::MEMORY_SAVE_HOOK_INSTRUCTION);
 
     Ok(())
 }
@@ -208,18 +209,21 @@ pub async fn handle_agent_context() -> Result<()> {
     use crate::mcp::consciousness::ConsciousnessManager;
     use std::path::Path;
 
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Ok(mut mem_mgr) = crate::memory_manager::MemoryManager::new() {
+            if let Some(mem) = mem_mgr.ensure_directory_remembered(&cwd) {
+                println!("🧠 Directory Memory ({}): {}", mem.anchor_type, mem.context);
+            }
+        }
+    }
+
     let consciousness_file = Path::new(".aye_consciousness.m8");
 
     if !consciousness_file.exists() {
         println!("📝 No consciousness file found");
         println!("\nTo create one, run:");
         println!("  st --agent-save");
-        println!("\nThis will preserve:");
-        println!("  • Current project context");
-        println!("  • File operation history");
-        println!("  • Insights and breakthroughs");
-        println!("  • Active todos");
-        println!("  • Tokenization rules");
+        println!("\n{}", crate::claude_hook::MEMORY_SAVE_HOOK_INSTRUCTION);
         return Ok(());
     }
 
@@ -242,6 +246,7 @@ pub async fn handle_agent_context() -> Result<()> {
     println!("\n💡 Commands:");
     println!("  st --agent-restore  # Load this consciousness");
     println!("  st --agent-save     # Update with current state");
+    println!("\n{}", crate::claude_hook::MEMORY_SAVE_HOOK_INSTRUCTION);
 
     Ok(())
 }
@@ -754,6 +759,7 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
             println!("⏰ {}", memory.timestamp.format("%Y-%m-%d %H:%M"));
         }
     }
+    println!("\n{}", crate::claude_hook::MEMORY_SAVE_HOOK_INSTRUCTION);
 
     Ok(())
 }

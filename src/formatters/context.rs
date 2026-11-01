@@ -211,6 +211,7 @@ impl Formatter for ContextFormatter {
             writeln!(writer, "\n{}", memories)?;
         }
 
+        writeln!(writer, "\n{}", crate::claude_hook::MEMORY_SAVE_HOOK_INSTRUCTION)?;
         writeln!(writer, "\n=== End Context ===")?;
 
         Ok(())

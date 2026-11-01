@@ -11,6 +11,10 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Shared hook instruction encouraging models to persist discoveries to MEM8.
+pub const MEMORY_SAVE_HOOK_INSTRUCTION: &str =
+    "💾 Memory Hook: Proactively save important insights, architectural decisions, patterns, gotchas, and todos to MEM8 — call MCP `memory` (`operation: \"anchor\"`, `anchor_type: \"insight|decision|pattern|gotcha|todo\"`, `keywords: [...]`, `context: \"...\"`) or run `st --memory-anchor <type> \"<keywords>\" \"<context>\"`.";
+
 /// Main hook handler for user prompt submission
 pub async fn handle_user_prompt_submit() -> Result<()> {
     // Read JSON input from stdin
@@ -55,6 +59,11 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
     // 5. If code-related, show recent git changes
     if detect_code_intent(user_prompt) {
         show_recent_changes()?;
+    }
+
+    if project_keywords.is_empty() {
+        println!("{}", MEMORY_SAVE_HOOK_INSTRUCTION);
+        println!();
     }
 
     println!("=== End Context ===");
@@ -258,12 +267,28 @@ fn search_mem8_context(keywords: &[String]) -> Result<()> {
                 }
             }
         }
+        // Also check MemoryManager (~/.st/memories.m8)
+        if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+            if let Ok(cwd) = env::current_dir() {
+                let _ = mgr.ensure_directory_remembered(&cwd);
+            }
+            if let Ok(mems) = mgr.find(keywords) {
+                if !mems.is_empty() {
+                    println!("\n**MEM8 memories:**");
+                    for m in mems.iter().take(3) {
+                        let preview: String = m.context.chars().take(100).collect();
+                        println!("  • [{}] {}: {}", m.keywords.join(","), m.anchor_type, preview);
+                        found_any = true;
+                    }
+                }
+            }
+        }
     }
 
     if !found_any {
-        println!("\nNo specific memories found. Consider anchoring important context with:");
-        println!("`st --memory-anchor <type> <keywords> <context>`");
+        println!("\nNo specific memories found for these keywords yet.");
     }
+    println!("\n{}", MEMORY_SAVE_HOOK_INSTRUCTION);
 
     println!();
     Ok(())
@@ -615,6 +640,7 @@ fn handle_agy_session_start(_payload: &Value) -> Result<Value> {
     }
 
     sections.push("🔧 Smart Tree MCP (`smart-tree`) & lifecycle hooks are active.".to_string());
+    sections.push(MEMORY_SAVE_HOOK_INSTRUCTION.to_string());
 
     let message = format!("🌳 **Smart Tree Session Context**\n{}", sections.join("\n"));
 
@@ -717,6 +743,8 @@ fn handle_agy_pre_invocation(payload: &Value) -> Result<Value> {
     if sections.is_empty() {
         return Ok(json!({}));
     }
+
+    sections.push(MEMORY_SAVE_HOOK_INSTRUCTION.to_string());
 
     let ephemeral = format!(
         "=== Smart Tree Context Intelligence ===\n{}\n=== End Context ===",
@@ -924,30 +952,48 @@ fn detect_workspace_project_type(cwd: &std::path::Path) -> &'static str {
 /// Collect MEM8 memories matching keywords without printing to stdout
 fn collect_mem8_context(keywords: &[String]) -> Vec<String> {
     let mut lines = Vec::new();
-    if let Some(home) = dirs::home_dir() {
-        let anchors_path = home.join(".mem8").join("memory_anchors.json");
-        if anchors_path.exists() {
-            if let Ok(contents) = fs::read_to_string(&anchors_path) {
-                if let Ok(json) = serde_json::from_str::<Value>(&contents) {
-                    if let Some(anchors) = json.as_array() {
-                        for anchor in anchors {
-                            if let Some(context) = anchor["context"].as_str() {
-                                let context_lower = context.to_lowercase();
-                                for keyword in keywords {
-                                    if context_lower.contains(&keyword.to_lowercase()) {
-                                        let anchor_type =
-                                            anchor["anchor_type"].as_str().unwrap_or("insight");
-                                        let preview: String = context.chars().take(100).collect();
-                                        lines.push(format!(
-                                            "- [{}] {}: {}",
-                                            keyword, anchor_type, preview
-                                        ));
-                                        break;
+    if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+        if let Ok(cwd) = env::current_dir() {
+            let _ = mgr.ensure_directory_remembered(&cwd);
+        }
+        if let Ok(mems) = mgr.find(keywords) {
+            for m in mems.into_iter().take(4) {
+                let preview: String = m.context.chars().take(120).collect();
+                lines.push(format!(
+                    "- [{}] {}: {}",
+                    m.keywords.join(","),
+                    m.anchor_type,
+                    preview
+                ));
+            }
+        }
+    }
+    if lines.len() < 4 {
+        if let Some(home) = dirs::home_dir() {
+            let anchors_path = home.join(".mem8").join("memory_anchors.json");
+            if anchors_path.exists() {
+                if let Ok(contents) = fs::read_to_string(&anchors_path) {
+                    if let Ok(json) = serde_json::from_str::<Value>(&contents) {
+                        if let Some(anchors) = json.as_array() {
+                            for anchor in anchors {
+                                if let Some(context) = anchor["context"].as_str() {
+                                    let context_lower = context.to_lowercase();
+                                    for keyword in keywords {
+                                        if context_lower.contains(&keyword.to_lowercase()) {
+                                            let anchor_type =
+                                                anchor["anchor_type"].as_str().unwrap_or("insight");
+                                            let preview: String = context.chars().take(100).collect();
+                                            lines.push(format!(
+                                                "- [{}] {}: {}",
+                                                keyword, anchor_type, preview
+                                            ));
+                                            break;
+                                        }
                                     }
                                 }
-                            }
-                            if lines.len() >= 4 {
-                                break;
+                                if lines.len() >= 4 {
+                                    break;
+                                }
                             }
                         }
                     }

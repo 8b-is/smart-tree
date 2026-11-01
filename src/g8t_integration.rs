@@ -1158,6 +1158,11 @@ pub fn match_capsule_query_score(entry: &LeaderboardCapsuleEntry, query: &str) -
 
     let q_lower = trimmed.to_ascii_lowercase();
     let q_nospace: String = q_lower.chars().filter(|c| !c.is_whitespace()).collect();
+    let tokens: Vec<&str> = q_lower
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .collect();
+    let q_snake = tokens.join("_");
 
     // Direct signature match (e.g. "(u64,u64)->u64")
     let sig_lower = entry.capsule.signature_key.to_ascii_lowercase();
@@ -1177,33 +1182,28 @@ pub fn match_capsule_query_score(entry: &LeaderboardCapsuleEntry, query: &str) -
     let author_lower = entry.capsule.author_aye.to_ascii_lowercase();
     let src_lower = entry.capsule.source_code.to_ascii_lowercase();
 
-    // Exact substring checks
-    if name_lower == q_lower {
+    // Exact and normalized snake_case substring checks
+    if name_lower == q_lower || (!q_snake.is_empty() && name_lower == q_snake) {
         return 200;
     }
     let mut score: u64 = 0;
-    if name_lower.contains(&q_lower) {
+    if name_lower.contains(&q_lower) || (!q_snake.is_empty() && name_lower.contains(&q_snake)) {
         score += 80;
     }
-    if domain_lower.contains(&q_lower) {
+    if domain_lower.contains(&q_lower) || (!q_snake.is_empty() && domain_lower.contains(&q_snake)) {
         score += 60;
     }
-    if author_lower.contains(&q_lower) {
+    if author_lower.contains(&q_lower) || (!q_snake.is_empty() && author_lower.contains(&q_snake)) {
         score += 50;
     }
     if sig_lower.contains(&q_nospace) {
         score += 40;
     }
-    if src_lower.contains(&q_lower) {
+    if src_lower.contains(&q_lower) || (!q_snake.is_empty() && src_lower.contains(&q_snake)) {
         score += 25;
     }
 
-    // Tokenized matching (e.g. "binary search" -> ["binary", "search"])
-    let tokens: Vec<&str> = q_lower
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|t| !t.is_empty())
-        .collect();
-
+    // Tokenized matching (e.g. "binary search" / "binary_search" -> ["binary", "search"])
     if tokens.len() > 1 {
         let mut matched_tokens: u64 = 0;
         let mut token_points: u64 = 0;
@@ -2229,6 +2229,14 @@ mod tests {
         };
 
         let entries = vec![slow_entry, fast_entry];
+
+        // Verify query normalization aligns "binary search", "binary_search", and "binary-search"
+        let score_space = match_capsule_query_score(&entries[1], "binary search");
+        let score_snake = match_capsule_query_score(&entries[1], "binary_search");
+        let score_kebab = match_capsule_query_score(&entries[1], "binary-search");
+        assert_eq!(score_space, score_snake);
+        assert_eq!(score_snake, score_kebab);
+        assert!(score_space > 0);
 
         // Verify YOLO mode picks ONLY #1 fastest (`binary_search_eytzinger_u64`)
         let yolo_rep = rank_best_functions_from_entries(
