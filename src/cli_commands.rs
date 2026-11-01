@@ -628,7 +628,9 @@ pub async fn handle_memory_anchor(
 
 /// Find memories by keywords
 pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
-    use crate::memory_manager::MemoryManager;
+    use crate::daemon_client::DaemonStatus;
+    use crate::mcp::wave_memory::WaveMemoryManager;
+    use crate::memory_manager::{Memory, MemoryManager};
     use crate::std_client;
 
     let mut manager = MemoryManager::new()?;
@@ -640,12 +642,14 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
 
     let memories = manager.find(&keywords)?;
 
-    let cwd = std::env::current_dir()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
-    let daemon_running = std_client::is_daemon_running().await;
+    let cwd_path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = cwd_path.to_string_lossy().to_string();
+    let daemon_running = matches!(
+        DaemonClient::default_port().check_status().await,
+        DaemonStatus::Running(_)
+    ) || std_client::is_daemon_running().await;
 
-    let filtered: Vec<_> = if daemon_running {
+    let mut filtered: Vec<Memory> = if daemon_running {
         memories
     } else {
         memories
@@ -653,6 +657,31 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
             .filter(|m| m.origin.starts_with(&cwd) || cwd.starts_with(&m.origin))
             .collect()
     };
+
+    // Also include native MEM8 wave memories (from current directory and, when daemon is running, ~/.st/mem8)
+    let mut wave_dirs = vec![cwd_path.clone()];
+    if daemon_running {
+        if let Some(home) = dirs::home_dir() {
+            if home != cwd_path {
+                wave_dirs.push(home);
+            }
+        }
+    }
+    for dir in wave_dirs {
+        let wave_mgr = WaveMemoryManager::new(Some(&dir));
+        for wm in wave_mgr.find_by_keywords(&keywords, 10) {
+            if !filtered.iter().any(|m| m.context == wm.content) {
+                filtered.push(Memory {
+                    timestamp: wm.created_at,
+                    anchor_type: format!("{:?}", wm.memory_type).to_lowercase(),
+                    keywords: wm.keywords.clone(),
+                    context: wm.content.clone(),
+                    origin: dir.to_string_lossy().to_string(),
+                    frequency: wm.wave.frequency(),
+                });
+            }
+        }
+    }
 
     if filtered.is_empty() {
         if daemon_running {
@@ -917,8 +946,18 @@ pub fn update_agent_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
 // =============================================================================
 
 /// Start the Smart Tree daemon in the background
-pub async fn handle_daemon_start(_port: u16) -> Result<()> {
+pub async fn handle_daemon_start(port: u16) -> Result<()> {
+    use crate::daemon_client::DaemonStatus;
     use crate::std_client;
+
+    let client = DaemonClient::new(port);
+    if let DaemonStatus::Running(info) = client.check_status().await {
+        println!(
+            "🌳 Smart Tree Daemon (v{}) is already running on http://127.0.0.1:{}!",
+            info.version, port
+        );
+        return Ok(());
+    }
 
     if std_client::is_daemon_running().await {
         println!("🌳 Smart Tree Daemon is already running!");
@@ -927,16 +966,12 @@ pub async fn handle_daemon_start(_port: u16) -> Result<()> {
     }
 
     println!("🌳 Starting Smart Tree Daemon...");
-    match std_client::start_daemon().await {
+    match client.start_daemon().await {
         Ok(true) => {
-            println!("✅ Daemon started successfully!");
-            println!("   Socket: {}", std_client::socket_path().display());
-
-            if let Some(mut client) = std_client::StdClient::connect().await {
-                if client.ping().await.unwrap_or(false) {
-                    println!("   Status: responding to PING");
-                }
-            }
+            println!(
+                "✅ Daemon started successfully on http://127.0.0.1:{}!",
+                port
+            );
         }
         Ok(false) => {
             println!("⚠️  Daemon was already running.");
@@ -951,23 +986,38 @@ pub async fn handle_daemon_start(_port: u16) -> Result<()> {
 }
 
 /// Stop a running Smart Tree daemon
-pub async fn handle_daemon_stop(_port: u16) -> Result<()> {
+pub async fn handle_daemon_stop(port: u16) -> Result<()> {
+    use crate::daemon_client::DaemonStatus;
     use crate::std_client;
 
-    if !std_client::is_daemon_running().await {
+    let client = DaemonClient::new(port);
+    let http_running = matches!(client.check_status().await, DaemonStatus::Running(_));
+    let std_running = std_client::is_daemon_running().await;
+
+    if !http_running && !std_running {
         println!("⚠️  No daemon running");
         return Ok(());
     }
 
     println!("🌳 Stopping Smart Tree Daemon...");
 
-    let socket = std_client::socket_path();
-    if socket.exists() {
-        if let Err(e) = std::fs::remove_file(&socket) {
-            eprintln!("⚠️  Could not remove socket: {}", e);
-        } else {
-            println!("✅ Daemon socket removed");
-            println!("   Note: Daemon process may still be running - use 'pkill std' if needed");
+    if http_running {
+        match client.stop_daemon().await {
+            Ok(_) => println!(
+                "✅ HTTP daemon stopped (note: if managed by systemd, use 'st service stop')"
+            ),
+            Err(e) => eprintln!("⚠️  Could not stop HTTP daemon: {}", e),
+        }
+    }
+
+    if std_running {
+        let socket = std_client::socket_path();
+        if socket.exists() {
+            if let Err(e) = std::fs::remove_file(&socket) {
+                eprintln!("⚠️  Could not remove socket: {}", e);
+            } else {
+                println!("✅ Daemon socket removed");
+            }
         }
     }
 
