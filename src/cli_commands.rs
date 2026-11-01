@@ -668,7 +668,7 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
         }
     }
     for dir in wave_dirs {
-        let wave_mgr = WaveMemoryManager::new(Some(&dir));
+        let mut wave_mgr = WaveMemoryManager::new(Some(&dir));
         for wm in wave_mgr.find_by_keywords(&keywords, 10) {
             if !filtered.iter().any(|m| m.context == wm.content) {
                 filtered.push(Memory {
@@ -677,7 +677,7 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
                     keywords: wm.keywords.clone(),
                     context: wm.content.clone(),
                     origin: dir.to_string_lossy().to_string(),
-                    frequency: wm.wave.frequency(),
+                    frequency: wm.memory_type.frequency() as f64,
                 });
             }
         }
