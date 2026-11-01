@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Tree Dashboard</title>
+    <link rel="stylesheet" href="/xterm.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <div class="dashboard" id="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <button class="btn-icon mobile-menu-btn" id="mobileMenuBtn" title="Menu">&#x2630;</button>
+                <span class="logo-icon">&#x1F332;</span>
+                <span class="logo-text">Smart Tree</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" id="toggleLayout" title="Toggle terminal position (Ctrl+J)">&#x2B0C;</button>
+                <button class="btn-voice" id="voiceBtn" title="Voice output">&#x1F50A;</button>
+            </div>
+            <div class="header-status">
+                <span class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Mobile sidebar backdrop -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- File Browser Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <span class="sidebar-title">Files</span>
+                    <button class="btn-icon" id="refreshFiles" title="Refresh">&#x21BB;</button>
+                </div>
+                <div class="file-search">
+                    <input type="text" id="fileSearchInput" placeholder="Filter files..." autocomplete="off">
+                </div>
+                <div class="file-tree" id="fileTree">
+                    <!-- File tree will be populated by JS -->
+                </div>
+
+                <!-- Collaboration Studio -->
+                <div class="collab-section" id="collabSection">
+                    <div class="sidebar-header">
+                        <span class="sidebar-title">Collab Studio</span>
+                        <button class="btn-icon" id="collabToggle" title="Collapse">▾</button>
+                    </div>
+                    <div class="collab-body" id="collabBody">
+                        <div class="collab-onboarding" id="collabOnboarding">
+                            <div class="onboarding-title">From install to flow</div>
+                            <div class="onboarding-steps">
+                                <div class="onboarding-step" data-step="share">
+                                    <span class="step-index">1</span>
+                                    <div class="step-copy">
+                                        <div class="step-label">Share the dashboard</div>
+                                        <div class="step-detail">Invite the team with one link.</div>
+                                    </div>
+                                    <button class="btn-pill" id="copyDashboardUrl">Copy link</button>
+                                </div>
+                                <div class="onboarding-step" data-step="join">
+                                    <span class="step-index">2</span>
+                                    <div class="step-copy">
+                                        <div class="step-label">Join the room</div>
+                                        <div class="step-detail">Pick a name + role.</div>
+                                    </div>
+                                    <button class="btn-pill ghost" id="focusCollabJoin">Join</button>
+                                </div>
+                                <div class="onboarding-step" data-step="status">
+                                    <span class="step-index">3</span>
+                                    <div class="step-copy">
+                                        <div class="step-label">Set a focus</div>
+                                        <div class="step-detail">Share what you are working on.</div>
+                                    </div>
+                                    <button class="btn-pill ghost" id="focusCollabStatus">Set focus</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="collab-join" id="collabJoin">
+                            <div class="collab-join-title">Enter the lounge</div>
+                            <div class="collab-inputs">
+                                <input type="text" id="collabName" placeholder="Your name" autocomplete="off">
+                                <select id="collabType">
+                                    <option value="human">Human</option>
+                                    <option value="claude">Claude</option>
+                                    <option value="omni">Omni</option>
+                                    <option value="grok">Grok</option>
+                                    <option value="gemini">Gemini</option>
+                                    <option value="local_llm">Local LLM</option>
+                                    <option value="smart_tree">Smart Tree</option>
+                                </select>
+                            </div>
+                            <button class="btn-primary" id="collabJoinBtn">Join collaboration</button>
+                            <div class="collab-status" id="collabStatus">Not connected</div>
+                        </div>
+
+                        <div class="collab-live" id="collabLive">
+                            <div class="collab-presence">
+                                <div class="collab-subtitle">In the room</div>
+                                <div class="presence-list" id="presenceList"></div>
+                            </div>
+                            <div class="collab-status-edit">
+                                <input type="text" id="collabStatusInput" placeholder="Status (optional)">
+                                <input type="text" id="collabWorkingInput" placeholder="Working on...">
+                                <div class="status-actions">
+                                    <button class="btn-pill" id="collabUpdateStatus">Update</button>
+                                    <button class="btn-pill ghost" id="collabHotTub">Hot Tub Mode</button>
+                                </div>
+                            </div>
+                            <div class="collab-chat">
+                                <div class="chat-log" id="collabChatLog"></div>
+                                <div class="chat-input">
+                                    <input type="text" id="collabChatInput" placeholder="Say something to the room...">
+                                    <button class="btn-primary" id="collabSendBtn">Send</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wave Compass - MCP Activity Visualization -->
+                <div class="wave-compass-section">
+                    <div class="sidebar-header">
+                        <span class="sidebar-title">Wave Compass</span>
+                    </div>
+                    <div id="wave-compass-container" class="wave-compass-container">
+                        <canvas id="wave-compass"></canvas>
+                    </div>
+                    <div id="mcp-activity-panel"></div>
+                </div>
+            </aside>
+
+            <!-- Sidebar Resize Handle -->
+            <div class="resize-handle" id="resizeHandle"></div>
+
+            <!-- Main Panel (AI Console + Preview side by side) -->
+            <main class="main-panel" id="mainPanel">
+                <!-- AI Console Resize Handle (for bottom layout) -->
+                <div class="terminal-resize-handle" id="terminalResizeHandle"></div>
+
+                <!-- AI Console Container with Tabs (LEFT side) -->
+                <div class="terminal-container" id="terminalContainer">
+                    <div class="terminal-tabs" id="terminalTabs">
+                        <!-- Tabs will be added dynamically -->
+                    </div>
+                    <div class="terminal-actions">
+                        <button class="btn-icon" id="newTerminal" title="New AI Console (Ctrl+Shift+`)">+</button>
+                        <div class="quick-actions">
+                            <button class="btn-quick" id="btnClaudeContinue"
+                                title="Claude Code (continue conversation)">
+                                <span class="btn-quick-icon">&#x1F916;</span>
+                                <span class="btn-quick-label">Claude -c</span>
+                            </button>
+                            <button class="btn-quick" id="btnClaudeNew" title="Claude Code (new conversation)">
+                                <span class="btn-quick-icon">&#x2728;</span>
+                                <span class="btn-quick-label">Claude new</span>
+                            </button>
+                            <button class="btn-quick" id="btnST" title="Smart Tree context">
+                                <span class="btn-quick-icon">&#x1F332;</span>
+                                <span class="btn-quick-label">st -m ai</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="terminals-wrapper" id="terminalsWrapper">
+                        <!-- AI Console instances will be added here -->
+                    </div>
+                </div>
+
+                <!-- Preview Resize Handle (RIGHT side of console) -->
+                <div class="preview-resize-handle" id="previewResizeHandle"></div>
+
+                <!-- Preview Pane (RIGHT side) -->
+                <div class="preview-container" id="previewContainer">
+                    <div class="panel-header">
+                        <span class="panel-title" id="previewTitle">Preview</span>
+                        <button class="btn-icon" id="closePreview" title="Close">&#x2715;</button>
+                    </div>
+                    <div class="preview-content" id="previewContent">
+                        <div class="preview-placeholder">
+                            Select a file to preview
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span class="git-branch" id="gitBranch" title="Git branch"></span>
+                <span id="cwdDisplay"></span>
+            </div>
+            <div class="status-right">
+                <span class="status-item" id="connectionCount">0 connections</span>
+                <span class="status-item keyboard-hint">Ctrl+B: sidebar | Ctrl+J: layout | Ctrl+`: focus</span>
+                <span class="status-item">v<span id="versionDisplay">-</span></span>
+            </div>
+        </footer>
+    </div>
+
+        <!-- AI Prompt Modal -->
+        <div class="prompt-modal-backdrop" id="promptModalBackdrop">
+            <div class="prompt-modal" id="promptModal">
+                <div class="prompt-modal-header">
+                    <span class="prompt-modal-title">AI Question</span>
+                </div>
+                <div class="prompt-modal-body">
+                    <div class="prompt-question" id="promptQuestion">Waiting for prompt...</div>
+                    <textarea class="prompt-input" id="promptInput" placeholder="Type your answer here..." rows="4"></textarea>
+                </div>
+                <div class="prompt-modal-footer">
+                    <button class="btn-primary" id="promptSubmitBtn">Submit Answer</button>
+                </div>
+            </div>
+        </div>
+
+    <script src="/xterm.min.js"></script>
+    <script src="/xterm-addon-fit.min.js"></script>
+    <script src="/marked.min.js"></script>
+    <script src="/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "st": {
+      "type": "stdio",
+      "command": "st",
+      "args": ["--mcp"],
+      "env": {}
+    },
+    "st-http": {
+      "type": "http",
+      "url": "http://localhost:28428/mcp",
+      "_note": "Run 'st --http-daemon' first. The Custodian monitors all operations! 🧹"
+    }
+  },
+  "_comment": "st: stdio (always works), st-http: HTTP with The Custodian & LLM proxy"
+}

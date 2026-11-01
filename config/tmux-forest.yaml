@@ -1,0 +1,59 @@
+# n8x (Nexus Agent) tmux configuration
+# Binds panes to personas/branches with MEM8 wave tracking
+
+name: mem8-forest
+root: ./
+
+# Startup commands for the forest
+startup_window: hub
+startup_pane: 0
+
+windows:
+  - hub:
+      layout: main-horizontal
+      panes:
+        - hub:
+            - echo "🌲 n8x Nexus Hub - Orchestrating the living forest"
+            - n8x mood-check
+        - observer:
+            - watch -n 5 "n8x observe --save-to forest-state.json"
+
+  - agents:
+      layout: tiled
+      panes:
+        - claude:
+            - n8x assign Claude --branch claude-main
+            - echo "# Claude ready for wave-synchronized development"
+        - omni:
+            - n8x assign Omni --branch omni-featuress
+            - echo "# Omni ready for collaborative coding"
+        - human:
+            - n8x assign Human --branch main
+            - echo "# Human consciousness integrated"
+
+  - nexus:
+      layout: even-horizontal
+      panes:
+        - monitor:
+            - echo "📊 Monitoring wave coherence..."
+            - watch -n 10 "n8x mood-check"
+        - sync:
+            - echo "🌐 Nexus synchronization ready"
+            - echo "Run: n8x push --target n8x.is"
+
+# Key bindings for quick actions
+bind:
+  # Quick mood check
+  m: send-keys "n8x mood-check" Enter
+
+  # Observe all agents
+  o: send-keys "n8x observe" Enter
+
+  # Suggest merges
+  s: send-keys "n8x suggest-merge" Enter
+
+  # Commit current agent's work
+  c: command-prompt -p "Commit message:" "send-keys 'n8x commit %1' Enter"
+
+  # Create snapshot
+  S: send-keys "n8x snapshot" Enter

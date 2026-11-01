@@ -1,0 +1,3 @@
+[submodule "marqant"]
+	path = marqant
+	url = https://github.com/8b-is/marqant.git

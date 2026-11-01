@@ -1,0 +1,25 @@
+[package]
+name = "st-protocol"
+version = "0.1.0"
+edition = "2021"
+authors = ["8bit-wraith", "Claude", "Hue"]
+description = "Binary wire protocol for smart-tree daemon communication"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/8b-is/smart-tree"
+
+[features]
+default = ["std"]
+std = []
+alloc = []
+
+[dependencies]
+# Minimal dependencies for no_std compatibility
+thiserror = { version = "2.0", default-features = false }
+
+# Optional std features
+bytes = { version = "1.5", optional = true }
+tokio = { version = "1.42", features = ["io-util"], optional = true }
+
+[dev-dependencies]
+proptest = "1.4"
