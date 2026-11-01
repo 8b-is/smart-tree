@@ -1,0 +1,92 @@
+# Add the on_demand_tls block inside the existing global options:
+# on_demand_tls {
+#     ask http://127.0.0.1:8428/internal/tls-allow
+# }
+
+(smart_tree_hub) {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+    @internal path /internal/*
+    handle @internal {
+        respond "Not found" 404
+    }
+    @current_release {
+        method GET HEAD
+        path /api/smart-tree/latest
+    }
+    handle @current_release {
+        header Cache-Control "no-store"
+        root * /srv/i1-releases
+        rewrite * /smart-tree/current/manifest.json
+        file_server
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8428
+    }
+}
+
+8s.is, www.8s.is, api.8s.is, feedback.8s.is, f.8s.is, git.8s.is {
+    import smart_tree_hub
+}
+
+# Wildcard DNS is already configured. Issue individual certificates only for
+# valid single-label *.8s.is hosts, subject to the hub's persisted issuance budget.
+https:// {
+    tls {
+        on_demand
+    }
+    @hub host *.8s.is
+    handle @hub {
+        import smart_tree_hub
+    }
+    respond "Unknown host" 421
+}
+
+i1.is, www.i1.is {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+    }
+    @smart_tree_page path /smart-tree /smart-tree/
+    redir @smart_tree_page /#smart-tree 302
+    @releases {
+        method GET HEAD
+        path /releases/smart-tree/*
+    }
+    handle @releases {
+        route {
+            header Cache-Control "no-store"
+            @immutable not path /releases/smart-tree/latest.json /releases/smart-tree/latest.txt /releases/smart-tree/current/* /releases/smart-tree/versions/*
+            header @immutable Cache-Control "public, max-age=31536000, immutable" {
+                match status 200 206 304
+            }
+            uri strip_prefix /releases
+            rewrite /smart-tree/latest.json /smart-tree/current/manifest.json
+            rewrite /smart-tree/latest.txt /smart-tree/current/build-id.txt
+            root * /srv/i1-releases
+            file_server
+        }
+    }
+    handle_errors {
+        header Cache-Control "no-store"
+        respond "{err.status_code} {err.status_text}" {err.status_code}
+    }
+    # Keep the installer and resource pages available; unrelated administrative
+    # and telemetry APIs from the larger i1 application are not published here.
+    @installer {
+        method GET HEAD
+        path / /health /detect /install /tools/* /audit /server /bench /features /security /scan /cheet /cheet/* /menus /menus/* /k/*
+    }
+    handle @installer {
+        reverse_proxy 127.0.0.1:8431
+    }
+    respond "Not found" 404
+}

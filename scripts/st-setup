@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# Smart Tree Setup Launcher
+# This gets installed to /usr/local/bin for easy access
+
+# Find the Smart Tree installation
+if [[ -f "/usr/local/bin/st" ]]; then
+    # Try to find the original installation directory
+    if [[ -d "/aidata/ayeverse/smart-tree" ]]; then
+        SMART_TREE_DIR="/aidata/ayeverse/smart-tree"
+    elif [[ -d "$HOME/smart-tree" ]]; then
+        SMART_TREE_DIR="$HOME/smart-tree"
+    elif [[ -d "$HOME/.smart-tree" ]]; then
+        SMART_TREE_DIR="$HOME/.smart-tree"
+    else
+        echo "🌳 Smart Tree Setup 🌳"
+        echo ""
+        echo "⚠️  Cannot find Smart Tree installation directory!"
+        echo "Please run this from the Smart Tree source directory."
+        exit 1
+    fi
+
+    # Launch the interactive setup
+    if [[ -f "$SMART_TREE_DIR/scripts/interactive_setup.sh" ]]; then
+        cd "$SMART_TREE_DIR" && ./scripts/interactive_setup.sh
+    else
+        echo "⚠️  Setup script not found at $SMART_TREE_DIR/scripts/interactive_setup.sh"
+        echo "Please reinstall Smart Tree or run from source directory."
+        exit 1
+    fi
+else
+    echo "⚠️  Smart Tree (st) is not installed!"
+    echo "Please install Smart Tree first: cargo install --path ."
+    exit 1
+fi
