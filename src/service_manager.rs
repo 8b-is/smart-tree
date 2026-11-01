@@ -106,20 +106,22 @@ fn escalate_privileges(args: &[&str]) -> Result<bool> {
 
     #[cfg(target_os = "linux")]
     {
-        // Try pkexec first (graphical prompt), fall back to sudo
-        let cmd = if which_binary("pkexec").is_some() {
-            println!("Requesting permission via pkexec...");
-            let mut c = Command::new("pkexec");
-            c.arg(&exe);
-            c.args(args);
-            c
-        } else {
-            println!("Requesting permission via sudo...");
-            let mut c = Command::new("sudo");
-            c.arg(&exe);
-            c.args(args);
-            c
-        };
+        let has_gui = env::var_os("DISPLAY").is_some() || env::var_os("WAYLAND_DISPLAY").is_some();
+        // Prefer sudo in CLI/SSH sessions; only use pkexec when a GUI session is active or sudo is absent
+        let cmd =
+            if (!has_gui && which_binary("sudo").is_some()) || which_binary("pkexec").is_none() {
+                println!("Requesting permission via sudo...");
+                let mut c = Command::new("sudo");
+                c.arg(&exe);
+                c.args(args);
+                c
+            } else {
+                println!("Requesting permission via pkexec...");
+                let mut c = Command::new("pkexec");
+                c.arg(&exe);
+                c.args(args);
+                c
+            };
         let status = run_elevated(cmd)?;
         if !status.success() {
             anyhow::bail!("Elevated command failed (exit code: {:?})", status.code());
@@ -290,6 +292,19 @@ fn linux_install() -> Result<()> {
     // 3. Store integrity hash
     let hash = compute_file_hash(&install_path)?;
     fs::write("/var/lib/smart-tree/daemon.sha256", &hash)?;
+    if Path::new("/var/lib/smart-tree/guardian.sha256").exists() {
+        fs::write("/var/lib/smart-tree/guardian.sha256", &hash)?;
+    }
+
+    // Ensure existing system token is readable by local CLI clients
+    #[cfg(unix)]
+    {
+        let token_file = Path::new("/var/lib/smart-tree/daemon.token");
+        if token_file.exists() {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(token_file, fs::Permissions::from_mode(0o644));
+        }
+    }
 
     // 4. Write the systemd service file
     let service_dest = PathBuf::from(SYSTEMD_SYSTEM_PATH).join(SYSTEMD_DAEMON_SERVICE);
@@ -297,9 +312,27 @@ fn linux_install() -> Result<()> {
     fs::write(&service_dest, &service_content)
         .with_context(|| format!("Failed to write {}", service_dest.display()))?;
 
-    // 5. Reload and enable
+    // 5. Reload, enable, and restart so upgrades replace any running daemon instance
     run_command("systemctl", &["daemon-reload"])?;
-    run_command("systemctl", &["enable", "--now", SYSTEMD_DAEMON_SERVICE])?;
+    run_command("systemctl", &["enable", SYSTEMD_DAEMON_SERVICE])?;
+    run_command("systemctl", &["restart", SYSTEMD_DAEMON_SERVICE])?;
+
+    // If guardian service is active, restart it to pick up the updated binary
+    if Command::new("systemctl")
+        .args(["is-active", "--quiet", "smart-tree-guardian.service"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
+        let _ = run_command("systemctl", &["restart", "smart-tree-guardian.service"]);
+    }
+
+    // Reset any failed smart-tree-updater unit state after manual upgrade
+    let _ = Command::new("systemctl")
+        .args(["reset-failed", "smart-tree-updater.service"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 
     print_install_success(
         "systemctl status smart-tree-daemon",
@@ -859,6 +892,62 @@ fn windows_logs() -> Result<()> {
 // SHARED UTILITIES
 // =============================================================================
 
+/// Atomically stage and replace an executable so upgrading a running binary
+/// on Linux never fails with ETXTBSY ("Text file busy").
+/// Returns `Ok(true)` if the binary was copied, `Ok(false)` if `src` and `dst` are already the same file.
+fn atomic_install_executable(src: &Path, dst: &Path) -> Result<bool> {
+    let src_canon = src.canonicalize().unwrap_or_else(|_| src.to_path_buf());
+    if let Ok(dst_canon) = dst.canonicalize() {
+        if src_canon == dst_canon {
+            return Ok(false);
+        }
+    }
+
+    let parent = dst
+        .parent()
+        .context("Destination path has no parent directory")?;
+    fs::create_dir_all(parent)
+        .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+
+    let file_name = dst.file_name().and_then(|n| n.to_str()).unwrap_or("st");
+    let stage_path = parent.join(format!(".{}.install.{}.tmp", file_name, std::process::id()));
+
+    let copy_result = (|| -> Result<()> {
+        fs::copy(&src_canon, &stage_path).with_context(|| {
+            format!(
+                "Failed to stage binary from {} to {}",
+                src_canon.display(),
+                stage_path.display()
+            )
+        })?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&stage_path, fs::Permissions::from_mode(0o755))?;
+        }
+
+        if let Ok(f) = fs::File::open(&stage_path) {
+            let _ = f.sync_all();
+        }
+
+        fs::rename(&stage_path, dst).with_context(|| {
+            format!(
+                "Failed to atomically replace {} with {}",
+                dst.display(),
+                stage_path.display()
+            )
+        })?;
+        Ok(())
+    })();
+
+    if copy_result.is_err() {
+        let _ = fs::remove_file(&stage_path);
+    }
+    copy_result?;
+    Ok(true)
+}
+
 /// Copy the current binary to the system install path.
 /// Returns the path where the binary was installed.
 fn install_binary() -> Result<PathBuf> {
@@ -875,18 +964,30 @@ fn install_binary() -> Result<PathBuf> {
         dir.join("st.exe")
     };
 
-    if current_exe != install_path {
-        println!("  Copying binary to {}...", install_path.display());
-        fs::copy(&current_exe, &install_path)
-            .with_context(|| format!("Failed to copy binary to {}", install_path.display()))?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&install_path, fs::Permissions::from_mode(0o755))?;
-        }
+    if atomic_install_executable(&current_exe, &install_path)? {
+        println!("  Installed binary to {}.", install_path.display());
     } else {
         println!("  Binary already at {}.", install_path.display());
+    }
+
+    // Keep .auto-update worker synchronized and clear any stale rollback state on manual install
+    #[cfg(unix)]
+    if let Some(parent) = install_path.parent() {
+        let auto_update_dir = parent.join(".auto-update");
+        if auto_update_dir.is_dir() {
+            let worker_path = auto_update_dir.join("worker");
+            if worker_path.is_file() {
+                let _ = atomic_install_executable(&install_path, &worker_path);
+            }
+            let txn_dir = auto_update_dir.join("transaction");
+            if txn_dir.exists() {
+                let _ = fs::remove_dir_all(&txn_dir);
+            }
+            let rejected = auto_update_dir.join("rejected-digest");
+            if rejected.exists() {
+                let _ = fs::remove_file(&rejected);
+            }
+        }
     }
 
     Ok(install_path)
@@ -1114,7 +1215,7 @@ pub fn guardian_install() -> Result<()> {
             fs::write(&service_path, service_content)?;
             run_command("systemctl", &["daemon-reload"])?;
             run_command("systemctl", &["enable", "smart-tree-guardian.service"])?;
-            run_command("systemctl", &["start", "smart-tree-guardian.service"])?;
+            run_command("systemctl", &["restart", "smart-tree-guardian.service"])?;
         }
         Platform::MacOS => {
             let plist = format!(
@@ -1244,4 +1345,45 @@ pub fn guardian_status() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_atomic_install_executable_replaces_existing_file() -> Result<()> {
+        let dir = TempDir::new()?;
+        let src = dir.path().join("st-new");
+        let dst = dir.path().join("st");
+
+        fs::write(&src, b"new-binary-v10.7.0")?;
+        fs::write(&dst, b"old-binary-v10.5.0")?;
+
+        let copied = atomic_install_executable(&src, &dst)?;
+        assert!(copied);
+        assert_eq!(fs::read(&dst)?, b"new-binary-v10.7.0");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&dst)?.permissions().mode() & 0o777;
+            assert_eq!(mode, 0o755);
+        }
+
+        // Installing the same file onto itself is a no-op
+        let copied_again = atomic_install_executable(&dst, &dst)?;
+        assert!(!copied_again);
+        Ok(())
+    }
+
+    #[test]
+    fn test_generate_systemd_unit_uses_isolated_state_dir() {
+        let unit = generate_systemd_unit(Path::new("/usr/local/bin/st"));
+        assert!(unit.contains("ExecStart=/usr/local/bin/st --http-daemon"));
+        assert!(unit.contains("Environment=HOME=/var/lib/smart-tree"));
+        assert!(unit.contains("Environment=ST_TOKEN_PATH=/var/lib/smart-tree/daemon.token"));
+        assert!(unit.contains("WorkingDirectory=/var/lib/smart-tree"));
+    }
 }

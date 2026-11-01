@@ -82,6 +82,11 @@ pub fn load_or_create_token() -> Result<String> {
     if path.exists() {
         let token = std::fs::read_to_string(&path)?.trim().to_string();
         if !token.is_empty() {
+            #[cfg(unix)]
+            if path.starts_with("/var/lib") {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644));
+            }
             return Ok(token);
         }
     }

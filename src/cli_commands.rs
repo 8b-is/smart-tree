@@ -975,14 +975,21 @@ pub async fn handle_daemon_stop(_port: u16) -> Result<()> {
 }
 
 /// Show the status of the Smart Tree daemon
-pub async fn handle_daemon_status(_port: u16) -> Result<()> {
+pub async fn handle_daemon_status(port: u16) -> Result<()> {
+    use crate::daemon_client::{print_daemon_status, DaemonStatus};
     use crate::std_client;
+
+    let client = DaemonClient::new(port);
+    let http_status = client.check_status().await;
+    if matches!(http_status, DaemonStatus::Running(_)) {
+        print_daemon_status(&http_status);
+        return Ok(());
+    }
 
     let socket = std_client::socket_path();
 
-    println!("╔═══════════════════════════════════════════════════════════╗");
-
     if std_client::is_daemon_running().await {
+        println!("╔═══════════════════════════════════════════════════════════╗");
         println!("║        🌳 SMART TREE DAEMON STATUS: RUNNING 🌳           ║");
         println!("╠═══════════════════════════════════════════════════════════╣");
         println!("║  Socket: {:<48} ║", socket.display());
@@ -1003,14 +1010,10 @@ pub async fn handle_daemon_status(_port: u16) -> Result<()> {
                 println!("║  Keywords: {:<46} ║", keywords);
             }
         }
+        println!("╚═══════════════════════════════════════════════════════════╝");
     } else {
-        println!("║        🌳 SMART TREE DAEMON STATUS: STOPPED 🛑            ║");
-        println!("╠═══════════════════════════════════════════════════════════╣");
-        println!("║  The daemon is not running.                               ║");
-        println!("║  Start with: st --daemon-start                            ║");
+        print_daemon_status(&http_status);
     }
-
-    println!("╚═══════════════════════════════════════════════════════════╝");
 
     Ok(())
 }
