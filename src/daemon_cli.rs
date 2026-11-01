@@ -202,6 +202,11 @@ pub fn execute_cli_scan(req: &CliScanRequest) -> Result<CliScanResponse> {
         .canonicalize()
         .with_context(|| format!("Cannot resolve scan path {}", req.path))?;
 
+    // Automatically remember the scanned directory without requiring explicit memory initialization.
+    if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+        let _ = mgr.ensure_directory_remembered(&path);
+    }
+
     let scanner = Scanner::new(&path, config).context("Failed to create scanner")?;
 
     let scan_start = Instant::now();

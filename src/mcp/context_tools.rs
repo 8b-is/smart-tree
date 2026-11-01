@@ -397,6 +397,25 @@ pub async fn anchor_collaborative_memory(
 
     match result {
         Ok(anchor_id) => {
+            // Also persist in ~/.st/memories.m8 so CLI `st --memory-find` and prompt hooks see it immediately
+            if let Ok(mut cli_mem) = crate::memory_manager::MemoryManager::new() {
+                let origin_str = project_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .or_else(|| {
+                        std::env::current_dir()
+                            .ok()
+                            .map(|p| p.to_string_lossy().to_string())
+                    })
+                    .unwrap_or_else(|| req.origin.clone());
+                let _ = cli_mem.anchor_silent(
+                    &req.anchor_type,
+                    req.keywords.clone(),
+                    &req.context,
+                    &origin_str,
+                );
+            }
+
             // Also store in legacy system for backward compatibility
             if let Some(ref path) = project_path {
                 let config = GatherConfig::default();
@@ -609,7 +628,7 @@ pub async fn find_collaborative_memories(
         // Keyword search: fast lookup
         let results = manager.find_by_keywords(&req.keywords, max_results);
 
-        let memories: Vec<_> = results
+        let mut memories: Vec<_> = results
             .iter()
             .map(|mem| {
                 json!({
@@ -626,12 +645,34 @@ pub async fn find_collaborative_memories(
             })
             .collect();
 
-        // Also check legacy storage for backward compatibility
+        // Also check legacy storage and ~/.st/memories.m8 (with automatic directory memory)
         let project_path = req
             .project_path
             .as_ref()
             .map(PathBuf::from)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+        if let Ok(mut cli_mem) = crate::memory_manager::MemoryManager::new() {
+            let _ = cli_mem.ensure_directory_remembered(&project_path);
+            if let Ok(found) = cli_mem.find(&req.keywords) {
+                for m in found.into_iter().take(max_results) {
+                    let already_present = memories.iter().any(|existing| {
+                        existing.get("content").and_then(|v| v.as_str()) == Some(m.context.as_str())
+                    });
+                    if !already_present && memories.len() < max_results {
+                        memories.push(json!({
+                            "id": format!("m8-{}", m.timestamp.timestamp()),
+                            "content": m.context,
+                            "keywords": m.keywords,
+                            "memory_type": m.anchor_type,
+                            "frequency_hz": m.frequency,
+                            "created_at": m.timestamp.to_rfc3339(),
+                            "origin": m.origin,
+                        }));
+                    }
+                }
+            }
+        }
 
         let config = GatherConfig::default();
         let gatherer = ContextGatherer::new(project_path, config);

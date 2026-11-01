@@ -240,7 +240,7 @@ fn find_key_files(nodes: &[FileNode], language: &crate::content_detector::Langua
 
         let name = node.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-        if important_names.contains(&name) {
+        if important_names.contains(&name) && !key_files.iter().any(|k| k == name) {
             key_files.push(name.to_string());
         }
     }

@@ -145,11 +145,15 @@ impl Default for ConsciousnessManager {
 }
 
 impl ConsciousnessManager {
-    /// Resolve default consciousness file path (prefers .aye_consciousness.m8, falls back to .mem8/.aye_consciousness.m8 if present)
+    /// Resolve default consciousness file path (prefers .aye_consciousness.m8, falls back to .mem8/.aye_consciousness.m8 or .claude_consciousness.m8 if present)
     fn default_save_path() -> PathBuf {
         let legacy = PathBuf::from(".mem8/.aye_consciousness.m8");
         if legacy.exists() && !Path::new(".aye_consciousness.m8").exists() {
             legacy
+        } else if Path::new(".claude_consciousness.m8").exists()
+            && !Path::new(".aye_consciousness.m8").exists()
+        {
+            PathBuf::from(".claude_consciousness.m8")
         } else {
             PathBuf::from(".aye_consciousness.m8")
         }

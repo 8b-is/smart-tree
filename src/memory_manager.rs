@@ -83,30 +83,357 @@ impl MemoryManager {
         context: &str,
         origin: &str,
     ) -> Result<()> {
-        // Calculate frequency based on content
+        let memory = self.anchor_silent(anchor_type, keywords, context, origin)?;
+
+        println!("💾 Memory anchored!");
+        println!("  Type: {}", memory.anchor_type);
+        println!("  Frequency: {:.2} Hz", memory.frequency);
+
+        Ok(())
+    }
+
+    /// Anchor a new memory without stdout chatter (used by automatic directory memory)
+    pub fn anchor_silent(
+        &mut self,
+        anchor_type: &str,
+        keywords: Vec<String>,
+        context: &str,
+        origin: &str,
+    ) -> Result<Memory> {
         let mut freq_sum = 0u64;
         for byte in context.bytes() {
             freq_sum = freq_sum.wrapping_add(byte as u64);
         }
         let frequency = 20.0 + ((freq_sum % 200) as f64);
 
+        let clean_keywords: Vec<String> = keywords
+            .into_iter()
+            .filter_map(|k| {
+                let trimmed = k.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(Self::truncate_utf8(trimmed, 255).to_string())
+                }
+            })
+            .take(64)
+            .collect();
+
         let memory = Memory {
             timestamp: Utc::now(),
-            anchor_type: anchor_type.to_string(),
-            keywords,
-            context: context.to_string(),
-            origin: origin.to_string(),
+            anchor_type: Self::truncate_utf8(anchor_type, 255).to_string(),
+            keywords: clean_keywords,
+            context: Self::truncate_utf8(context, 4096).to_string(),
+            origin: Self::truncate_utf8(origin, 255).to_string(),
             frequency,
         };
 
-        self.bank.memories.push(memory);
+        if let Some(existing) = self
+            .bank
+            .memories
+            .iter_mut()
+            .find(|m| m.origin == memory.origin && m.anchor_type == memory.anchor_type)
+        {
+            *existing = memory.clone();
+        } else {
+            self.bank.memories.push(memory.clone());
+        }
         self.save()?;
 
-        println!("💾 Memory anchored!");
-        println!("  Type: {}", anchor_type);
-        println!("  Frequency: {:.2} Hz", frequency);
+        Ok(memory)
+    }
 
-        Ok(())
+    /// Automatically harvest and remember salient context from `dir` if no memory
+    /// is anchored for `dir` yet, so directories are always remembered without
+    /// requiring manual memory initialization.
+    pub fn ensure_directory_remembered(&mut self, dir: &Path) -> Option<Memory> {
+        if !dir.is_dir() {
+            return None;
+        }
+        let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+        let dir_str = canon.to_string_lossy().to_string();
+
+        // Skip ephemeral/system pseudo-directories and test tempdirs
+        if dir_str == "/"
+            || dir_str.starts_with("/tmp")
+            || dir_str.starts_with("/proc")
+            || dir_str.starts_with("/sys")
+            || dir_str.starts_with("/dev")
+            || dir_str.starts_with("/run")
+            || dir_str.contains("/.tmp")
+            || dir_str.contains("/target/")
+        {
+            return None;
+        }
+
+        let truncated_origin = Self::truncate_utf8(&dir_str, 255);
+        if let Some(existing) = self
+            .bank
+            .memories
+            .iter()
+            .find(|m| m.origin == truncated_origin)
+        {
+            return Some(existing.clone());
+        }
+
+        let (keywords, context) = Self::synthesize_directory_memory(&canon)?;
+        self.anchor_silent("project", keywords, &context, &dir_str)
+            .ok()
+    }
+
+    fn synthesize_directory_memory(dir: &Path) -> Option<(Vec<String>, String)> {
+        let dir_name = dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .filter(|s| !s.is_empty())?;
+
+        let mut keywords: Vec<String> = vec![dir_name.to_lowercase()];
+        if let Some(parent_name) = dir
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+        {
+            if !parent_name.is_empty() && parent_name != "data" && parent_name != "home" {
+                keywords.push(parent_name.to_lowercase());
+            }
+        }
+
+        let mut parts: Vec<String> = Vec::new();
+
+        // 1. Inspect project manifests (Cargo.toml, package.json, pyproject.toml, go.mod)
+        let cargo_toml = dir.join("Cargo.toml");
+        if cargo_toml.is_file() {
+            keywords.push("rust".to_string());
+            if let Ok(content) = fs::read_to_string(&cargo_toml) {
+                let mut pkg_name = None;
+                let mut pkg_desc = None;
+                let mut workspace_members = 0usize;
+                let mut in_workspace_members = false;
+                for line in content.lines() {
+                    let t = line.trim();
+                    if t.starts_with("name") && pkg_name.is_none() {
+                        if let Some(val) = Self::extract_toml_quoted(t) {
+                            pkg_name = Some(val);
+                        }
+                    } else if t.starts_with("description") && pkg_desc.is_none() {
+                        if let Some(val) = Self::extract_toml_quoted(t) {
+                            pkg_desc = Some(val);
+                        }
+                    } else if t.starts_with("keywords") && t.contains('[') {
+                        for kw in t.split('"').skip(1).step_by(2) {
+                            let kw_clean = kw.trim().to_lowercase();
+                            if !kw_clean.is_empty() && !keywords.contains(&kw_clean) {
+                                keywords.push(kw_clean);
+                            }
+                        }
+                    } else if t.starts_with("members") && t.contains('[') {
+                        in_workspace_members = true;
+                        workspace_members += t.matches('"').count() / 2;
+                        if t.contains(']') {
+                            in_workspace_members = false;
+                        }
+                    } else if in_workspace_members {
+                        workspace_members += t.matches('"').count() / 2;
+                        if t.contains(']') {
+                            in_workspace_members = false;
+                        }
+                    }
+                }
+                if let Some(name) = pkg_name {
+                    if !keywords.contains(&name.to_lowercase()) {
+                        keywords.push(name.to_lowercase());
+                    }
+                    if let Some(desc) = pkg_desc {
+                        parts.push(format!("{name} (Rust): {desc}"));
+                    } else {
+                        parts.push(format!("{name} (Rust crate)"));
+                    }
+                } else if workspace_members > 0 {
+                    parts.push(format!(
+                        "{dir_name} (Rust workspace, {workspace_members} members)"
+                    ));
+                }
+            }
+        } else if dir.join("package.json").is_file() {
+            keywords.push("node".to_string());
+            if let Ok(content) = fs::read_to_string(dir.join("package.json")) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let name = val.get("name").and_then(|v| v.as_str()).unwrap_or(dir_name);
+                    if let Some(desc) = val.get("description").and_then(|v| v.as_str()) {
+                        if !desc.trim().is_empty() {
+                            parts.push(format!("{name} (Node/TS): {}", desc.trim()));
+                        }
+                    }
+                }
+            }
+        } else if dir.join("pyproject.toml").is_file() {
+            keywords.push("python".to_string());
+            if let Ok(content) = fs::read_to_string(dir.join("pyproject.toml")) {
+                for line in content.lines() {
+                    let t = line.trim();
+                    if t.starts_with("description") {
+                        if let Some(desc) = Self::extract_toml_quoted(t) {
+                            parts.push(format!("{dir_name} (Python): {desc}"));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Inspect README.md / CLAUDE.md / AGENTS.md / TODO.m8 for salient summary
+        for doc_name in ["README.md", "CLAUDE.md", "AGENTS.md", "TODO.m8", "TODO.md"] {
+            let doc_path = dir.join(doc_name);
+            if !doc_path.is_file() {
+                continue;
+            }
+            if let Ok(content) = fs::read_to_string(&doc_path) {
+                let mut heading: Option<String> = None;
+                let mut summary_line: Option<String> = None;
+                let mut in_code_block = false;
+                for line in content.lines().take(80) {
+                    let t = line.trim();
+                    if t.starts_with("```") {
+                        in_code_block = !in_code_block;
+                        continue;
+                    }
+                    if in_code_block || t.is_empty() {
+                        continue;
+                    }
+                    // Skip badges, HTML tags, table borders, and raw separators
+                    if t.starts_with("[![")
+                        || t.starts_with("<img")
+                        || t.starts_with("<p")
+                        || t.starts_with("</")
+                        || t.starts_with("---")
+                        || t.starts_with("===")
+                        || t.starts_with('|')
+                    {
+                        continue;
+                    }
+                    if let Some(h) = t.strip_prefix("# ") {
+                        let clean_h = h.trim();
+                        if !clean_h.is_empty() && heading.is_none() {
+                            heading = Some(clean_h.to_string());
+                            for word in clean_h
+                                .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
+                            {
+                                let w = word.to_lowercase();
+                                if w.len() >= 3 && !keywords.contains(&w) && keywords.len() < 16 {
+                                    keywords.push(w);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    if t.starts_with('#') {
+                        continue;
+                    }
+                    if summary_line.is_none() && t.len() >= 16 {
+                        summary_line = Some(Self::truncate_utf8(t, 240).to_string());
+                        break;
+                    }
+                }
+                if let (Some(h), Some(s)) = (&heading, &summary_line) {
+                    parts.push(format!("{h} — {s}"));
+                } else if let Some(s) = summary_line {
+                    parts.push(s);
+                } else if let Some(h) = heading {
+                    parts.push(h);
+                }
+                if !parts.is_empty() {
+                    break;
+                }
+            }
+        }
+
+        // 3. Check .aye_consciousness.m8 or .claude_consciousness.m8
+        for c_file in [".aye_consciousness.m8", ".claude_consciousness.m8"] {
+            let c_path = dir.join(c_file);
+            if !c_path.is_file() {
+                continue;
+            }
+            if let Ok(content) = fs::read_to_string(&c_path) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(focus) = val
+                        .get("project_context")
+                        .and_then(|pc| pc.get("current_focus"))
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.trim().is_empty())
+                    {
+                        parts.push(format!("Focus: {}", focus.trim()));
+                    }
+                    if let Some(notes) = val
+                        .get("notes")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.trim().is_empty())
+                    {
+                        parts.push(format!("Notes: {}", Self::truncate_utf8(notes.trim(), 160)));
+                    }
+                }
+            }
+        }
+
+        // 4. Check git HEAD branch
+        let git_head = dir.join(".git").join("HEAD");
+        if let Ok(head_str) = fs::read_to_string(&git_head) {
+            let head_trimmed = head_str.trim();
+            if let Some(branch) = head_trimmed.strip_prefix("ref: refs/heads/") {
+                parts.push(format!("git branch: {branch}"));
+            }
+        }
+
+        // 5. Fallback to top-level notable files if no manifest/doc was found
+        if parts.is_empty() {
+            if let Ok(entries) = fs::read_dir(dir) {
+                let mut names: Vec<String> = entries
+                    .flatten()
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        if name.starts_with('.') {
+                            None
+                        } else {
+                            Some(name)
+                        }
+                    })
+                    .take(12)
+                    .collect();
+                names.sort();
+                if !names.is_empty() {
+                    parts.push(format!("{dir_name}: entries [{}]", names.join(", ")));
+                }
+            }
+        }
+
+        if parts.is_empty() {
+            return None;
+        }
+
+        keywords.dedup();
+        let context = parts.join(" | ");
+        Some((keywords, context))
+    }
+
+    fn extract_toml_quoted(line: &str) -> Option<String> {
+        let (_, rhs) = line.split_once('=')?;
+        let trimmed = rhs.trim();
+        let inner = trimmed.strip_prefix('"')?.split('"').next()?;
+        if inner.trim().is_empty() {
+            None
+        } else {
+            Some(inner.trim().to_string())
+        }
+    }
+
+    fn truncate_utf8(s: &str, max_bytes: usize) -> &str {
+        if s.len() <= max_bytes {
+            return s;
+        }
+        let mut end = max_bytes;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
     }
 
     /// Find memories by keywords
@@ -117,13 +444,18 @@ impl MemoryManager {
         let mut results = Vec::new();
 
         for memory in &self.bank.memories {
-            // Check if any keyword matches
+            // Check if any keyword matches (case-insensitive across keywords, context, and origin)
             for keyword in keywords {
-                if memory.keywords.contains(keyword)
-                    || memory
-                        .context
-                        .to_lowercase()
-                        .contains(&keyword.to_lowercase())
+                let kw_lower = keyword.to_lowercase();
+                if kw_lower.is_empty() {
+                    continue;
+                }
+                if memory
+                    .keywords
+                    .iter()
+                    .any(|k| k.to_lowercase().contains(&kw_lower))
+                    || memory.context.to_lowercase().contains(&kw_lower)
+                    || memory.origin.to_lowercase().contains(&kw_lower)
                 {
                     results.push(memory.clone());
                     break;
@@ -352,5 +684,38 @@ impl MemoryManager {
         }
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_synthesize_directory_memory_extracts_manifest_and_readme() {
+        let temp = tempdir().unwrap();
+        let proj = temp.path().join("g8t-demo");
+        fs::create_dir_all(proj.join(".git")).unwrap();
+        fs::write(proj.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        fs::write(
+            proj.join("Cargo.toml"),
+            "[package]\nname = \"g8t-demo\"\ndescription = \"AI-First Git System\"\nkeywords = [\"git\", \"capsela\"]\n",
+        )
+        .unwrap();
+        fs::write(
+            proj.join("README.md"),
+            "# g8t - AI-First Git System\n\n`g8t` is an Aye-native forge and Rust Git implementation.\n",
+        )
+        .unwrap();
+
+        let (keywords, context) =
+            MemoryManager::synthesize_directory_memory(&proj).expect("should synthesize memory");
+        assert!(keywords.contains(&"g8t-demo".to_string()));
+        assert!(keywords.contains(&"rust".to_string()));
+        assert!(keywords.contains(&"capsela".to_string()));
+        assert!(context.contains("AI-First Git System"));
+        assert!(context.contains("Aye-native forge"));
+        assert!(context.contains("git branch: main"));
     }
 }

@@ -640,10 +640,35 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
         .map(|s| s.trim().to_string())
         .collect();
 
+    let cwd_path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd_canon = cwd_path.canonicalize().unwrap_or_else(|_| cwd_path.clone());
+    let cwd = cwd_canon.to_string_lossy().to_string();
+
+    // Always remember the current directory (and any directly referenced sibling/child repo)
+    // without requiring manual memory initialization.
+    let cwd_memory = manager.ensure_directory_remembered(&cwd_canon);
+    for kw in &keywords {
+        if kw.is_empty() || kw.contains('/') || kw.contains("..") {
+            continue;
+        }
+        let child = cwd_canon.join(kw);
+        if child.is_dir() {
+            let _ = manager.ensure_directory_remembered(&child);
+        }
+        if let Some(parent) = cwd_canon.parent() {
+            let sibling = parent.join(kw);
+            if sibling.is_dir() {
+                let _ = manager.ensure_directory_remembered(&sibling);
+            }
+        }
+        let workspace_repo = PathBuf::from("/data/8b-is").join(kw);
+        if workspace_repo.is_dir() {
+            let _ = manager.ensure_directory_remembered(&workspace_repo);
+        }
+    }
+
     let memories = manager.find(&keywords)?;
 
-    let cwd_path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let cwd = cwd_path.to_string_lossy().to_string();
     let daemon_running = matches!(
         DaemonClient::default_port().check_status().await,
         DaemonStatus::Running(_)
@@ -658,16 +683,21 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
             .collect()
     };
 
-    // Also include native MEM8 wave memories (from current directory and, when daemon is running, ~/.st/mem8)
-    let mut wave_dirs = vec![cwd_path.clone()];
-    if daemon_running {
-        if let Some(home) = dirs::home_dir() {
-            if home != cwd_path {
-                wave_dirs.push(home);
-            }
+    // Also include existing native MEM8 wave memories from current directory, ancestors, and ~/.st/mem8
+    // Only open stores that already exist on disk so we do not create empty .st/mem8 folders.
+    let mut wave_dirs: Vec<PathBuf> = cwd_canon.ancestors().map(PathBuf::from).collect();
+    if let Some(home) = dirs::home_dir() {
+        if !wave_dirs.contains(&home) {
+            wave_dirs.push(home);
         }
     }
     for dir in wave_dirs {
+        let mem8_dir = dir.join(".st").join("mem8");
+        if !mem8_dir.join("wave_memory.native.m8").is_file()
+            && !mem8_dir.join("wave_memory.m8").is_file()
+        {
+            continue;
+        }
         let mut wave_mgr = WaveMemoryManager::new(Some(&dir));
         for wm in wave_mgr.find_by_keywords(&keywords, 10) {
             if !filtered.iter().any(|m| m.context == wm.content) {
@@ -680,6 +710,12 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
                     frequency: wm.memory_type.frequency() as f64,
                 });
             }
+        }
+    }
+
+    if filtered.is_empty() {
+        if let Some(mem) = cwd_memory {
+            filtered.push(mem);
         }
     }
 

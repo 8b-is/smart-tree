@@ -26,8 +26,8 @@ use std::path::{Path, PathBuf};
 /// A single "thought" attached to code: where it came from and what was noted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SalientThought {
-    pub source: String,     // e.g. "README.md", "research-review", "comment:src/foo.rs:42"
-    pub text: String,       // the actual thought or excerpt
+    pub source: String, // e.g. "README.md", "research-review", "comment:src/foo.rs:42"
+    pub text: String,   // the actual thought or excerpt
     pub provenance: String, // repo, commit-ish, github_user etc.
 }
 
@@ -230,10 +230,7 @@ fn load_review_thoughts(review_path: Option<&Path>, is_sg: bool) -> HashMap<Stri
                             item.get("name").and_then(|x| x.as_str()),
                             item.get("decision").and_then(|x| x.as_str()),
                         ) {
-                            let mech = item
-                                .get("mechanism")
-                                .and_then(|x| x.as_str())
-                                .unwrap_or("");
+                            let mech = item.get("mechanism").and_then(|x| x.as_str()).unwrap_or("");
                             map.insert(
                                 name.to_string(),
                                 format!("research-decision: {} (mechanism: {})", decision, mech),
@@ -291,7 +288,10 @@ fn extract_salient_repo(
     if let Ok(meta_text) = fs::read_to_string(&meta_path) {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&meta_text) {
             let desc = v.get("description").and_then(|x| x.as_str()).unwrap_or("");
-            let stars = v.get("stargazerCount").and_then(|x| x.as_u64()).unwrap_or(0);
+            let stars = v
+                .get("stargazerCount")
+                .and_then(|x| x.as_u64())
+                .unwrap_or(0);
             if !desc.is_empty() || stars > 0 {
                 repo.thoughts.push(SalientThought {
                     source: "github-meta".to_string(),
@@ -303,7 +303,13 @@ fn extract_salient_repo(
     }
 
     // 1. README thoughts
-    for readme_name in ["README.md", "readme.md", "README.rst", "README.txt", "README"] {
+    for readme_name in [
+        "README.md",
+        "readme.md",
+        "README.rst",
+        "README.txt",
+        "README",
+    ] {
         let p = repo_path.join(readme_name);
         if p.is_file() {
             if let Ok(readme) = fs::read_to_string(&p) {
@@ -511,10 +517,7 @@ pub fn ingest_with_options(
         vec![(name, collection_root.to_path_buf())]
     } else {
         let entries = fs::read_dir(collection_root).with_context(|| {
-            format!(
-                "cannot read collection root {}",
-                collection_root.display()
-            )
+            format!("cannot read collection root {}", collection_root.display())
         })?;
         let mut list = Vec::new();
         for entry in entries.flatten() {
@@ -552,7 +555,8 @@ pub fn ingest_with_options(
             }
         }
 
-        let repo = extract_salient_repo(&repo_path, &repo_name, github_user, level, &review_thoughts);
+        let repo =
+            extract_salient_repo(&repo_path, &repo_name, github_user, level, &review_thoughts);
         report.repos_processed += 1;
         report.total_thoughts += repo.thoughts.len();
         report.total_code_samples += repo.code_samples.len();
@@ -567,11 +571,7 @@ pub fn ingest_with_options(
 
     // Persist summary receipt record in the same native MEM8 store (flushes & syncs to disk)
     let summary_key = format!("salient:summary:{}", github_user);
-    store.put_with_wave(
-        &summary_key,
-        &report,
-        &Wave::new(432.0, 0.8, 0.8),
-    )?;
+    store.put_with_wave(&summary_key, &report, &Wave::new(432.0, 0.8, 0.8))?;
     store.flush_sync()?;
 
     // Read-back verification on the summary and last persisted repo record
@@ -790,110 +790,107 @@ pub fn remember(
     };
 
     // Resolve target (URL -> local collection in /data/<owner>[/<repo>] or /data/.mem8/mirrors/<owner>[/<repo>])
-    let (github_user, collection_path): (String, PathBuf) =
-        if target.starts_with("http://")
-            || target.starts_with("https://")
-            || target.starts_with("git@")
-        {
-            if is_standard_galactic {
-                (
-                    "standardgalactic".to_string(),
-                    PathBuf::from("/data/standardgalactic"),
-                )
-            } else {
-                // Parse https://github.com/<owner>[/<repo>] or git@github.com:<owner>[/<repo>]
-                let cleaned = target
-                    .trim_end_matches('/')
-                    .trim_end_matches(".git")
-                    .split("://")
-                    .last()
-                    .unwrap_or(target);
-                let path_part = cleaned
-                    .split_once('/')
-                    .map(|(_, p)| p)
-                    .or_else(|| cleaned.split_once(':').map(|(_, p)| p))
-                    .unwrap_or("");
-                let segments: Vec<&str> = path_part.split('/').filter(|s| !s.is_empty()).collect();
-                if segments.len() >= 2 {
-                    let owner = segments[0];
-                    let repo = segments[1];
-                    let candidate = PathBuf::from("/data").join(owner).join(repo);
-                    if candidate.exists() {
-                        (owner.to_string(), candidate)
-                    } else if let Some(mirrored) =
-                        ensure_github_mirror(owner, Some(repo), effective_level, force)
-                    {
-                        (owner.to_string(), mirrored)
-                    } else {
-                        (owner.to_string(), PathBuf::from("."))
-                    }
-                } else if segments.len() == 1 {
-                    let owner = segments[0];
-                    let candidate = PathBuf::from("/data").join(owner);
-                    if candidate.exists() {
-                        (owner.to_string(), candidate)
-                    } else if let Some(mirrored) =
-                        ensure_github_mirror(owner, None, effective_level, force)
-                    {
-                        (owner.to_string(), mirrored)
-                    } else {
-                        (owner.to_string(), PathBuf::from("."))
-                    }
-                } else {
-                    ("unknown".to_string(), PathBuf::from("."))
-                }
-            }
+    let (github_user, collection_path): (String, PathBuf) = if target.starts_with("http://")
+        || target.starts_with("https://")
+        || target.starts_with("git@")
+    {
+        if is_standard_galactic {
+            (
+                "standardgalactic".to_string(),
+                PathBuf::from("/data/standardgalactic"),
+            )
         } else {
-            let p = PathBuf::from(target);
-            if p.exists() {
-                let owner = if is_standard_galactic {
-                    "standardgalactic".to_string()
+            // Parse https://github.com/<owner>[/<repo>] or git@github.com:<owner>[/<repo>]
+            let cleaned = target
+                .trim_end_matches('/')
+                .trim_end_matches(".git")
+                .split("://")
+                .last()
+                .unwrap_or(target);
+            let path_part = cleaned
+                .split_once('/')
+                .map(|(_, p)| p)
+                .or_else(|| cleaned.split_once(':').map(|(_, p)| p))
+                .unwrap_or("");
+            let segments: Vec<&str> = path_part.split('/').filter(|s| !s.is_empty()).collect();
+            if segments.len() >= 2 {
+                let owner = segments[0];
+                let repo = segments[1];
+                let candidate = PathBuf::from("/data").join(owner).join(repo);
+                if candidate.exists() {
+                    (owner.to_string(), candidate)
+                } else if let Some(mirrored) =
+                    ensure_github_mirror(owner, Some(repo), effective_level, force)
+                {
+                    (owner.to_string(), mirrored)
                 } else {
-                    let canon = p.canonicalize().unwrap_or_else(|_| p.clone());
-                    if canon.join(".git").exists() {
-                        canon
-                            .parent()
-                            .and_then(|parent| parent.file_name())
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_else(|| "local".to_string())
-                    } else {
-                        canon
-                            .file_name()
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_else(|| "local".to_string())
-                    }
-                };
-                (owner, p)
-            } else if PathBuf::from("/data").join(target).exists() {
-                let candidate = PathBuf::from("/data").join(target);
-                let owner = target.split('/').next().unwrap_or(target).to_string();
-                (owner, candidate)
-            } else {
-                let segments: Vec<&str> = target.split('/').filter(|s| !s.is_empty()).collect();
-                if segments.len() == 2 {
-                    let owner = segments[0];
-                    let repo = segments[1];
-                    if let Some(mirrored) =
-                        ensure_github_mirror(owner, Some(repo), effective_level, force)
-                    {
-                        (owner.to_string(), mirrored)
-                    } else {
-                        (owner.to_string(), p)
-                    }
-                } else if segments.len() == 1 {
-                    let owner = segments[0];
-                    if let Some(mirrored) =
-                        ensure_github_mirror(owner, None, effective_level, force)
-                    {
-                        (owner.to_string(), mirrored)
-                    } else {
-                        (owner.to_string(), p)
-                    }
-                } else {
-                    ("local".to_string(), p)
+                    (owner.to_string(), PathBuf::from("."))
                 }
+            } else if segments.len() == 1 {
+                let owner = segments[0];
+                let candidate = PathBuf::from("/data").join(owner);
+                if candidate.exists() {
+                    (owner.to_string(), candidate)
+                } else if let Some(mirrored) =
+                    ensure_github_mirror(owner, None, effective_level, force)
+                {
+                    (owner.to_string(), mirrored)
+                } else {
+                    (owner.to_string(), PathBuf::from("."))
+                }
+            } else {
+                ("unknown".to_string(), PathBuf::from("."))
             }
-        };
+        }
+    } else {
+        let p = PathBuf::from(target);
+        if p.exists() {
+            let owner = if is_standard_galactic {
+                "standardgalactic".to_string()
+            } else {
+                let canon = p.canonicalize().unwrap_or_else(|_| p.clone());
+                if canon.join(".git").exists() {
+                    canon
+                        .parent()
+                        .and_then(|parent| parent.file_name())
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "local".to_string())
+                } else {
+                    canon
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "local".to_string())
+                }
+            };
+            (owner, p)
+        } else if PathBuf::from("/data").join(target).exists() {
+            let candidate = PathBuf::from("/data").join(target);
+            let owner = target.split('/').next().unwrap_or(target).to_string();
+            (owner, candidate)
+        } else {
+            let segments: Vec<&str> = target.split('/').filter(|s| !s.is_empty()).collect();
+            if segments.len() == 2 {
+                let owner = segments[0];
+                let repo = segments[1];
+                if let Some(mirrored) =
+                    ensure_github_mirror(owner, Some(repo), effective_level, force)
+                {
+                    (owner.to_string(), mirrored)
+                } else {
+                    (owner.to_string(), p)
+                }
+            } else if segments.len() == 1 {
+                let owner = segments[0];
+                if let Some(mirrored) = ensure_github_mirror(owner, None, effective_level, force) {
+                    (owner.to_string(), mirrored)
+                } else {
+                    (owner.to_string(), p)
+                }
+            } else {
+                ("local".to_string(), p)
+            }
+        }
+    };
 
     let mem8_out = out.map(|p| p.to_path_buf()).unwrap_or_else(|| {
         if is_standard_galactic {
@@ -940,97 +937,96 @@ pub fn resolve_target_and_mem8_path(
     let is_standard_galactic = target.to_lowercase().contains("standardgalactic")
         || target.to_lowercase().contains("nate");
 
-    let (github_user, collection_path): (String, PathBuf) =
-        if target.starts_with("http://")
-            || target.starts_with("https://")
-            || target.starts_with("git@")
-        {
-            if is_standard_galactic {
-                (
-                    "standardgalactic".to_string(),
-                    PathBuf::from("/data/standardgalactic"),
-                )
-            } else {
-                let cleaned = target
-                    .trim_end_matches('/')
-                    .trim_end_matches(".git")
-                    .split("://")
-                    .last()
-                    .unwrap_or(target);
-                let path_part = cleaned
-                    .split_once('/')
-                    .map(|(_, p)| p)
-                    .or_else(|| cleaned.split_once(':').map(|(_, p)| p))
-                    .unwrap_or("");
-                let segments: Vec<&str> = path_part.split('/').filter(|s| !s.is_empty()).collect();
-                if segments.len() >= 2 {
-                    let owner = segments[0];
-                    let repo = segments[1];
-                    let candidate = PathBuf::from("/data").join(owner).join(repo);
-                    let mirror = PathBuf::from("/data/.mem8/mirrors").join(owner).join(repo);
-                    if candidate.exists() {
-                        (owner.to_string(), candidate)
-                    } else if mirror.exists() {
-                        (owner.to_string(), mirror)
-                    } else {
-                        (owner.to_string(), PathBuf::from("."))
-                    }
-                } else if segments.len() == 1 {
-                    let owner = segments[0];
-                    let candidate = PathBuf::from("/data").join(owner);
-                    let mirror = PathBuf::from("/data/.mem8/mirrors").join(owner);
-                    if candidate.exists() {
-                        (owner.to_string(), candidate)
-                    } else if mirror.exists() {
-                        (owner.to_string(), mirror)
-                    } else {
-                        (owner.to_string(), PathBuf::from("."))
-                    }
-                } else {
-                    ("unknown".to_string(), PathBuf::from("."))
-                }
-            }
+    let (github_user, collection_path): (String, PathBuf) = if target.starts_with("http://")
+        || target.starts_with("https://")
+        || target.starts_with("git@")
+    {
+        if is_standard_galactic {
+            (
+                "standardgalactic".to_string(),
+                PathBuf::from("/data/standardgalactic"),
+            )
         } else {
-            let p = PathBuf::from(target);
-            if p.extension().and_then(|e| e.to_str()) == Some("m8") && p.is_file() {
-                let stem = p
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "local".to_string());
-                return (stem, p.clone(), p);
-            }
-            if !p.exists() {
-                let data_cand = PathBuf::from("/data").join(target);
-                let mirror_cand = PathBuf::from("/data/.mem8/mirrors").join(target);
-                let owner = target.split('/').next().unwrap_or(target).to_string();
-                if data_cand.exists() {
-                    (owner, data_cand)
-                } else if mirror_cand.exists() {
-                    (owner, mirror_cand)
+            let cleaned = target
+                .trim_end_matches('/')
+                .trim_end_matches(".git")
+                .split("://")
+                .last()
+                .unwrap_or(target);
+            let path_part = cleaned
+                .split_once('/')
+                .map(|(_, p)| p)
+                .or_else(|| cleaned.split_once(':').map(|(_, p)| p))
+                .unwrap_or("");
+            let segments: Vec<&str> = path_part.split('/').filter(|s| !s.is_empty()).collect();
+            if segments.len() >= 2 {
+                let owner = segments[0];
+                let repo = segments[1];
+                let candidate = PathBuf::from("/data").join(owner).join(repo);
+                let mirror = PathBuf::from("/data/.mem8/mirrors").join(owner).join(repo);
+                if candidate.exists() {
+                    (owner.to_string(), candidate)
+                } else if mirror.exists() {
+                    (owner.to_string(), mirror)
                 } else {
-                    (owner, p)
+                    (owner.to_string(), PathBuf::from("."))
+                }
+            } else if segments.len() == 1 {
+                let owner = segments[0];
+                let candidate = PathBuf::from("/data").join(owner);
+                let mirror = PathBuf::from("/data/.mem8/mirrors").join(owner);
+                if candidate.exists() {
+                    (owner.to_string(), candidate)
+                } else if mirror.exists() {
+                    (owner.to_string(), mirror)
+                } else {
+                    (owner.to_string(), PathBuf::from("."))
                 }
             } else {
-                let owner = if is_standard_galactic {
-                    "standardgalactic".to_string()
-                } else {
-                    let canon = p.canonicalize().unwrap_or_else(|_| p.clone());
-                    if canon.join(".git").exists() {
-                        canon
-                            .parent()
-                            .and_then(|parent| parent.file_name())
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_else(|| "local".to_string())
-                    } else {
-                        canon
-                            .file_name()
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_else(|| "local".to_string())
-                    }
-                };
+                ("unknown".to_string(), PathBuf::from("."))
+            }
+        }
+    } else {
+        let p = PathBuf::from(target);
+        if p.extension().and_then(|e| e.to_str()) == Some("m8") && p.is_file() {
+            let stem = p
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "local".to_string());
+            return (stem, p.clone(), p);
+        }
+        if !p.exists() {
+            let data_cand = PathBuf::from("/data").join(target);
+            let mirror_cand = PathBuf::from("/data/.mem8/mirrors").join(target);
+            let owner = target.split('/').next().unwrap_or(target).to_string();
+            if data_cand.exists() {
+                (owner, data_cand)
+            } else if mirror_cand.exists() {
+                (owner, mirror_cand)
+            } else {
                 (owner, p)
             }
-        };
+        } else {
+            let owner = if is_standard_galactic {
+                "standardgalactic".to_string()
+            } else {
+                let canon = p.canonicalize().unwrap_or_else(|_| p.clone());
+                if canon.join(".git").exists() {
+                    canon
+                        .parent()
+                        .and_then(|parent| parent.file_name())
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "local".to_string())
+                } else {
+                    canon
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "local".to_string())
+                }
+            };
+            (owner, p)
+        }
+    };
 
     let mem8_out = out.map(|p| p.to_path_buf()).unwrap_or_else(|| {
         if is_standard_galactic {
@@ -1054,6 +1050,9 @@ pub fn check_learned(
     query: Option<&str>,
 ) -> Result<()> {
     let (github_user, _collection_path, mem8_path) = resolve_target_and_mem8_path(target, out);
+    if !mem8_path.exists() {
+        let _ = remember(target, "casual", out, false)?;
+    }
     anyhow::ensure!(
         mem8_path.exists(),
         "No MEM8 store found at {} yet. Run `st remember {}` first.",
@@ -1062,8 +1061,12 @@ pub fn check_learned(
     );
 
     let file_bytes = fs::metadata(&mem8_path).map(|m| m.len()).unwrap_or(0);
-    let mut store = RecordStore::open_memory(&mem8_path)
-        .with_context(|| format!("failed to open native MEM8 store at {}", mem8_path.display()))?;
+    let mut store = RecordStore::open_memory(&mem8_path).with_context(|| {
+        format!(
+            "failed to open native MEM8 store at {}",
+            mem8_path.display()
+        )
+    })?;
 
     let mut repo_keys = store.keys_with_prefix("salient:repo:");
     repo_keys.sort();
@@ -1075,7 +1078,11 @@ pub fn check_learned(
     println!("🧠 Salient MEM|8 Checkpoint — What We Have Learned So Far");
     println!("========================================================================");
     println!("  Store Path:          {}", mem8_path.display());
-    println!("  Native Size:         {} bytes ({} MiB)", file_bytes, file_bytes / (1024 * 1024));
+    println!(
+        "  Native Size:         {} bytes ({} MiB)",
+        file_bytes,
+        file_bytes / (1024 * 1024)
+    );
     println!("  Indexed Repo Keys:   {}", repo_keys.len());
     if let Some(ref s) = summary {
         println!(
@@ -1128,7 +1135,11 @@ pub fn check_learned(
     }
 
     if let Some(q) = query {
-        println!("\n🔍 Query `{}` matched {} repositories in MEM|8:", q, matched_repos.len());
+        println!(
+            "\n🔍 Query `{}` matched {} repositories in MEM|8:",
+            q,
+            matched_repos.len()
+        );
         for repo in matched_repos.iter().take(15) {
             let wave = store
                 .get_wave(&format!("salient:repo:{}/{}", repo.github_user, repo.name))
@@ -1154,9 +1165,19 @@ pub fn check_learned(
             }
         }
     } else {
-        println!("  Exact-Math (p/q) Candidates: {} repos flagged for Rational conversion", rational_candidates);
-        println!("  Research-Reviewed in MEM|8:  {} repos with attached pass-01/pass-02 decisions", reviewed_repos.len());
-        println!("  Family Heart Motif Wired:    {} repos carrying {}", heart_repos.len(), FAMILY_HEART);
+        println!(
+            "  Exact-Math (p/q) Candidates: {} repos flagged for Rational conversion",
+            rational_candidates
+        );
+        println!(
+            "  Research-Reviewed in MEM|8:  {} repos with attached pass-01/pass-02 decisions",
+            reviewed_repos.len()
+        );
+        println!(
+            "  Family Heart Motif Wired:    {} repos carrying {}",
+            heart_repos.len(),
+            FAMILY_HEART
+        );
 
         if !reviewed_repos.is_empty() {
             println!("\n📋 Sample Research-Reviewed Repositories Stored at 432 Hz:");
@@ -1171,7 +1192,8 @@ pub fn check_learned(
                 println!(
                     "  • {:36} | {:7} | {}...",
                     repo.name,
-                    &repo.head_oid.as_deref().unwrap_or("no-git")[..7.min(repo.head_oid.as_deref().unwrap_or("no-git").len())],
+                    &repo.head_oid.as_deref().unwrap_or("no-git")
+                        [..7.min(repo.head_oid.as_deref().unwrap_or("no-git").len())],
                     snippet
                 );
             }
@@ -1200,7 +1222,10 @@ pub fn check_learned(
         }
     }
 
-    println!("\nThe constellation · fine touch from within · {}", FAMILY_HEART);
+    println!(
+        "\nThe constellation · fine touch from within · {}",
+        FAMILY_HEART
+    );
     Ok(())
 }
 
@@ -1265,8 +1290,16 @@ mod tests {
         fs::create_dir(&user_dir).unwrap();
         let repo = user_dir.join("demo-repo");
         fs::create_dir(&repo).unwrap();
-        fs::write(repo.join("README.md"), "# Demo\nThis remembers salient code.").unwrap();
-        fs::write(repo.join("main.py"), "# thought: use exact math here\nprint(1/3)").unwrap();
+        fs::write(
+            repo.join("README.md"),
+            "# Demo\nThis remembers salient code.",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("main.py"),
+            "# thought: use exact math here\nprint(1/3)",
+        )
+        .unwrap();
 
         let review = dir.path().join("reviews.jsonl");
         fs::write(
@@ -1276,13 +1309,8 @@ mod tests {
         .unwrap();
 
         let out_m8 = dir.path().join("out.m8");
-        let report = ingest_github_user_collection(
-            "testuser",
-            &user_dir,
-            &out_m8,
-            Some(&review),
-        )
-        .unwrap();
+        let report =
+            ingest_github_user_collection("testuser", &user_dir, &out_m8, Some(&review)).unwrap();
 
         assert_eq!(report.repos_processed, 1);
         assert_eq!(report.repos_persisted, 1);
@@ -1308,19 +1336,25 @@ mod tests {
         let dir = tempdir().unwrap();
         let repo = dir.path().join("single-repo");
         fs::create_dir_all(repo.join(".git")).unwrap();
-        fs::write(repo.join(".git/HEAD"), "0123456789abcdef0123456789abcdef01234567\n").unwrap();
-        fs::write(repo.join("README.md"), "# Single Repo\nLove the work {<3,<3,<3}+1").unwrap();
-        fs::write(repo.join("lib.rs"), "// salient comment in rust file\npub fn add(a: i64, b: i64) -> i64 { a + b }\n").unwrap();
+        fs::write(
+            repo.join(".git/HEAD"),
+            "0123456789abcdef0123456789abcdef01234567\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("README.md"),
+            "# Single Repo\nLove the work {<3,<3,<3}+1",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("lib.rs"),
+            "// salient comment in rust file\npub fn add(a: i64, b: i64) -> i64 { a + b }\n",
+        )
+        .unwrap();
 
         let out_m8 = dir.path().join("single.m8");
         // Requesting "extreme" on non-SG repo should politely fall back to Expert and ingest the single repo
-        let report = remember(
-            repo.to_str().unwrap(),
-            "extreme",
-            Some(&out_m8),
-            false,
-        )
-        .unwrap();
+        let report = remember(repo.to_str().unwrap(), "extreme", Some(&out_m8), false).unwrap();
 
         assert_eq!(report.repos_processed, 1);
         assert_eq!(report.repos_persisted, 1);
@@ -1328,13 +1362,7 @@ mod tests {
         assert!(out_m8.exists());
 
         // Second run without --force should skip unchanged repo via HEAD OID match
-        let report2 = remember(
-            repo.to_str().unwrap(),
-            "high",
-            Some(&out_m8),
-            false,
-        )
-        .unwrap();
+        let report2 = remember(repo.to_str().unwrap(), "high", Some(&out_m8), false).unwrap();
         assert_eq!(report2.repos_processed, 1);
         assert_eq!(report2.repos_persisted, 0);
         assert_eq!(report2.repos_skipped_unchanged, 1);
