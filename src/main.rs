@@ -166,40 +166,33 @@ async fn main() -> Result<()> {
         return st::auto_update::run().await;
     }
 
+    // Detect interactive terminal vs. non-TTY / agent / subprocess context (e.g. HFMac, ayeosd, pipes).
+    // In non-TTY contexts, never block on network update checks or spawn background daemon children
+    // that could inherit open pipe FDs / process groups and hang the caller.
+    let is_interactive_tty = io::stdout().is_terminal()
+        && std::env::var_os("ST_NO_DAEMON").is_none()
+        && std::env::var_os("CI").is_none();
+
     // First-run signature verification banner
     // Shows trust status on initial run (official/community/unsigned build)
-    if !cli.mcp {
+    if !cli.mcp && is_interactive_tty {
         service_manager::print_signature_banner();
     }
 
     // Check for updates on startup (rate-limited, non-blocking)
-    // Skip if --no-update-check is set or if this is an exclusive command
-    if !cli.no_update_check && !cli.version && !cli.update && !cli.mcp {
+    // Skip if --no-update-check is set, non-TTY, or if this is an exclusive command
+    if is_interactive_tty && !cli.no_update_check && !cli.version && !cli.update && !cli.mcp {
         if let Some(latest) = st::updater::check_for_update_cached().await {
             st::updater::print_update_banner(&latest);
         }
     }
 
-    // Auto-start daemon for any command that might need it.
-    // Skip for modes that run their own servers or are purely informational.
-    let skip_autostart = cli.mcp
-        || cli.http_daemon
-        || cli.guardian_daemon
-        || cli.version
-        || cli.update
-        || cli.cheet
-        || cli.man
-        || cli.completions.is_some()
-        || cli.daemon_start
-        || cli.daemon_install
-        || cli.no_daemon
-        || cli.recall.is_some()
-        || cli.scan_opts.sync_user.is_some()
-        || matches!(
-            cli.cmd,
-            Some(st::cli::Cmd::Service(_) | st::cli::Cmd::Sync(_))
-        );
-    if !skip_autostart {
+    // Only auto-start daemon when explicitly running a daemon-dependent subcommand
+    // (`--daemon-context`, `--daemon-projects`, `--daemon-credits`). Normal directory scans
+    // run in-process when the daemon is not already running so `st` never hangs subshells.
+    let needs_daemon_autostart =
+        (cli.daemon_context || cli.daemon_projects || cli.daemon_credits) && !cli.no_daemon;
+    if needs_daemon_autostart {
         let client = DaemonClient::default_port();
         if let Err(e) = client.ensure_running().await {
             eprintln!("⚠️  Daemon auto-start failed: {}", e);
@@ -541,26 +534,27 @@ async fn main() -> Result<()> {
     }
 
     // =========================================================================
-    // THIN CLIENT - Prefer daemon, fall back to local scan when needed
+    // THIN CLIENT / IN-PROCESS FAST PATH
+    // In non-TTY / agent contexts (HFMac, ayeosd, pipes) or when the daemon is
+    // not already running, execute the scan directly in-process with zero
+    // background process spawning or HTTP round-trip latency.
     // =========================================================================
     let request = build_cli_request(&cli)?;
 
-    let response = if cli.no_daemon {
+    let response = if cli.no_daemon || !is_interactive_tty {
         st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?
     } else {
         let client = DaemonClient::default_port();
-        match client.ensure_running().await {
-            Ok(_) => client
-                .cli_scan(request.clone())
-                .await
-                .context("Scan failed")?,
-            Err(e) => {
-                eprintln!("⚠️  Daemon unavailable ({})", e);
-                eprintln!(
-                    "   Falling back to standalone scan. Use --no-daemon to skip this warning."
-                );
-                st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?
+        if matches!(
+            client.check_status().await,
+            st::daemon_client::DaemonStatus::Running(_)
+        ) {
+            match client.cli_scan(request.clone()).await {
+                Ok(resp) => resp,
+                Err(_) => st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?,
             }
+        } else {
+            st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?
         }
     };
 
@@ -636,8 +630,19 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
         ColorMode::Auto => std::io::stdout().is_terminal(),
     };
 
-    // Smart mode defaults to depth 5 for comprehensive but focused scanning
-    let depth = if args.depth == 0 && is_smart_mode {
+    // Detect if target path is a multi-repo parent workspace root (e.g. /Users/wraith/source/8b-is
+    // with ~247 repos or /data/8b-is with ~309 repos) that is not itself a single git repo.
+    let multi_repo_root = args.depth == 0 && is_multi_repo_workspace_root(std::path::Path::new(&path));
+
+    // Smart mode defaults to depth 5 for single repos, or depth 1/2 for massive multi-repo roots
+    // so `st /Users/wraith/source/8b-is` returns in <200ms instead of walking 250+ repos at depth 5.
+    let depth = if args.depth == 0 && multi_repo_root {
+        if std::io::stdout().is_terminal() {
+            2
+        } else {
+            1
+        }
+    } else if args.depth == 0 && is_smart_mode {
         5
     } else {
         args.depth
@@ -672,8 +677,39 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
         smart: args.smart || is_smart_mode,
         changes_only: args.changes_only,
         min_interest: args.min_interest,
-        security: !args.no_security,
+        security: !args.no_security && !multi_repo_root,
     })
+}
+
+/// Returns true if `path` is a parent directory containing many child repositories or subdirectories
+/// (e.g. `/Users/wraith/source/8b-is` or `/data/8b-is`) rather than a single git repository.
+fn is_multi_repo_workspace_root(path: &std::path::Path) -> bool {
+    if path.join(".git").exists() {
+        return false;
+    }
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return false;
+    };
+    let mut subdir_count = 0usize;
+    let mut child_git_repos = 0usize;
+    for entry in entries.flatten().take(128) {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if ft.is_dir() {
+            subdir_count += 1;
+            if entry.path().join(".git").exists() {
+                child_git_repos += 1;
+                if child_git_repos >= 4 {
+                    return true;
+                }
+            }
+            if subdir_count >= 32 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 // =========================================================================

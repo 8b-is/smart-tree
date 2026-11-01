@@ -485,14 +485,23 @@ impl DaemonClient {
 
         #[cfg(unix)]
         {
-            Command::new(&exe_path)
-                .args(["--http-daemon", "--sse-port", &port])
+            use std::os::unix::process::CommandExt;
+
+            let mut cmd = Command::new(&exe_path);
+            cmd.args(["--http-daemon", "--sse-port", &port])
                 .env("ST_DAEMON_PORT", &port)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .context("Failed to start HTTP daemon process")?;
+                .stderr(Stdio::null());
+
+            unsafe {
+                cmd.pre_exec(|| {
+                    libc::setsid();
+                    Ok(())
+                });
+            }
+
+            cmd.spawn().context("Failed to start HTTP daemon process")?;
         }
 
         #[cfg(windows)]
