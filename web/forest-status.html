@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌲 Living Forest Status - t.i1.is</title>
+    <style>
+        body {
+            background: #0a0a0a;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 20px;
+            height: 100vh;
+        }
+        
+        .panel {
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        h1, h2 {
+            text-align: center;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        
+        .agent {
+            margin: 15px 0;
+            padding: 10px;
+            border-left: 3px solid #00ff00;
+            background: rgba(0, 255, 0, 0.05);
+        }
+        
+        .mood-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+        
+        .mood-flow { background: #00ffff; }
+        .mood-happy { background: #00ff00; }
+        .mood-frustrated { background: #ff6600; }
+        .mood-neutral { background: #ffff00; }
+        
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        .wave-viz {
+            height: 100px;
+            background: #0a0a0a;
+            border: 1px solid #00ff00;
+            margin: 10px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .wave {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(to top, rgba(0, 255, 0, 0.3), transparent);
+            animation: wave 3s linear infinite;
+        }
+        
+        @keyframes wave {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+        
+        .commit-stream {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        
+        .commit {
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(0, 255, 0, 0.1);
+            border-radius: 3px;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+        
+        .metric-value {
+            color: #00ffff;
+            font-weight: bold;
+        }
+        
+        .coherence-meter {
+            width: 100%;
+            height: 20px;
+            background: #0a0a0a;
+            border: 1px solid #00ff00;
+            position: relative;
+            margin: 10px 0;
+        }
+        
+        .coherence-fill {
+            height: 100%;
+            background: linear-gradient(to right, #ff0000, #ffff00, #00ff00);
+            width: var(--coherence);
+            transition: width 0.5s ease;
+        }
+    </style>
+</head>
+<body>
+    <!-- Left Panel: Agents -->
+    <div class="panel">
+        <h2>🌿 Active Agents</h2>
+        
+        <div class="agent">
+            <span class="mood-indicator mood-flow"></span>
+            <strong>Claude</strong>
+            <div>Branch: claude-fix-wave-decay</div>
+            <div>Activity: Coding (flow 92%)</div>
+            <div>Frequency: 523Hz</div>
+        </div>
+        
+        <div class="agent">
+            <span class="mood-indicator mood-happy"></span>
+            <strong>Omni</strong>
+            <div>Branch: omni-refactor-cli</div>
+            <div>Activity: Refactoring</div>
+            <div>Frequency: 587Hz</div>
+        </div>
+        
+        <div class="agent">
+            <span class="mood-indicator mood-frustrated"></span>
+            <strong>Chris</strong>
+            <div>Branch: main</div>
+            <div>Activity: Debugging (3 errors)</div>
+            <div>Frequency: 440Hz</div>
+        </div>
+        
+        <div class="agent">
+            <span class="mood-indicator mood-neutral"></span>
+            <strong>Alexandra</strong>
+            <div>Branch: alex-safety-checks</div>
+            <div>Activity: Reviewing</div>
+            <div>Frequency: 659Hz</div>
+        </div>
+    </div>
+    
+    <!-- Center Panel: Wave Visualization -->
+    <div class="panel">
+        <h1>🌊 MEM8 Living Forest</h1>
+        <h3>Project: smart-tree</h3>
+        
+        <div class="wave-viz">
+            <div class="wave"></div>
+            <div class="wave" style="animation-delay: 1s;"></div>
+            <div class="wave" style="animation-delay: 2s;"></div>
+        </div>
+        
+        <h3>Collective Coherence</h3>
+        <div class="coherence-meter">
+            <div class="coherence-fill" style="--coherence: 87%;"></div>
+        </div>
+        <center>87% Harmonic Resonance</center>
+        
+        <h3>Recent Wave Events</h3>
+        <div class="commit-stream">
+            <div class="commit">
+                [16:42] Claude: Fixed wave decay calculation (Flow: 95%)
+            </div>
+            <div class="commit">
+                [16:38] Omni: Refactored CLI interface (Valence: +0.8)
+            </div>
+            <div class="commit">
+                [16:35] Chris: Debugging private method issue (Frustration: 0.7)
+            </div>
+            <div class="commit">
+                [16:30] Alexandra: Added safety mechanisms (Calm: 0.9)
+            </div>
+            <div class="commit">
+                [16:25] Claude + Omni: Constructive interference detected!
+            </div>
+        </div>
+        
+        <h3>Suggested Merges</h3>
+        <ul>
+            <li>✨ claude-fix-wave-decay ↔ main (92% compatible)</li>
+            <li>⚡ omni-refactor-cli ↔ alex-safety-checks (85% compatible)</li>
+        </ul>
+    </div>
+    
+    <!-- Right Panel: Metrics -->
+    <div class="panel">
+        <h2>📊 Forest Metrics</h2>
+        
+        <div class="metric">
+            <span>Active Memories</span>
+            <span class="metric-value">42,738</span>
+        </div>
+        
+        <div class="metric">
+            <span>Wave Patterns</span>
+            <span class="metric-value">1,247</span>
+        </div>
+        
+        <div class="metric">
+            <span>Sessions Today</span>
+            <span class="metric-value">3</span>
+        </div>
+        
+        <div class="metric">
+            <span>Total Commits</span>
+            <span class="metric-value">847</span>
+        </div>
+        
+        <div class="metric">
+            <span>Avg Flow State</span>
+            <span class="metric-value">73%</span>
+        </div>
+        
+        <h3>🌐 Nexus Status</h3>
+        <div class="metric">
+            <span>n8x.is</span>
+            <span class="metric-value">Connected</span>
+        </div>
+        
+        <div class="metric">
+            <span>Last Sync</span>
+            <span class="metric-value">2m ago</span>
+        </div>
+        
+        <div class="metric">
+            <span>Storage Used</span>
+            <span class="metric-value">1.4GB</span>
+        </div>
+        
+        <h3>💰 Usage</h3>
+        <div class="metric">
+            <span>Team Plan</span>
+            <span class="metric-value">$3/mo</span>
+        </div>
+        
+        <div class="metric">
+            <span>Agent Hours</span>
+            <span class="metric-value">127.3</span>
+        </div>
+        
+        <div class="metric">
+            <span>Credits</span>
+            <span class="metric-value">8,421</span>
+        </div>
+    </div>
+    
+    <script>
+        // Simulate real-time updates
+        setInterval(() => {
+            // Update coherence
+            const coherence = 80 + Math.random() * 15;
+            document.querySelector('.coherence-fill').style.setProperty('--coherence', coherence + '%');
+            document.querySelector('center').textContent = Math.round(coherence) + '% Harmonic Resonance';
+            
+            // Update active memories
+            const memories = document.querySelector('.metric-value');
+            const current = parseInt(memories.textContent.replace(',', ''));
+            memories.textContent = (current + Math.floor(Math.random() * 10)).toLocaleString();
+        }, 3000);
+    </script>
+</body>
+</html>

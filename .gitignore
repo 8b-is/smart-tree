@@ -1,0 +1,133 @@
+# --- General ---
+.DS_Store
+.vscode/
+*.swp
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.env
+VENV/
+
+
+pip-wheel-metadata/
+*.egg-info/
+
+# --- Claude Keys ---
+.claude
+
+# --- Aye Consciousness ---
+.aye_consciousness.m8
+*.aye_consciousness.m8
+
+# --- Mem8 - Memories ---
+.mem8/
+.st_bumpers
+*.m8
+*.t8
+proxy_memory.lock
+directory_context.lock
+file_index.lock
+wave_memory*.lock
+*.scans.lock
+.st/mem8/
+.m8
+
+# --- Node ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# --- Rust ---
+target/
+# Root application lockfile is tracked for reproducible release bundles.
+
+# --- Build artifacts ---
+dist/
+build/
+release_artifacts/
+.st_bumpers/
+
+# --- Logs ---
+
+
+# Miscellaneous
+.mem8/
+code-workspaces/
+!tmp/testignore.txt
+*.db
+
+
+
+# --- tmp - Keep the tmp directory for testing ---
+!tmp/
+!tmp/testignore.txt
+
+._*
+
+a_gentleman_and_a_scholar.txt
+
+
+# === CommonIgnores Added by Hue & Aye ===
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.key
+*.key
+*.pem
+credentials.json
+secrets.json
+
+# Python
+.venv
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Rust
+target/
+!/Cargo.lock
+
+# Node/JavaScript
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+2026*
+2025*
+
+codex-session*
+
+
+# Native CrabCC index (Smart Tree owns this cache).
+.st/symbols/
