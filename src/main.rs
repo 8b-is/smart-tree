@@ -321,6 +321,7 @@ async fn main() -> Result<()> {
             refresh_all: cli.scan_opts.refresh_all,
             no_forks: false,
             no_archived: false,
+            quarantine: cli.scan_opts.quarantine,
         };
         return handle_sync_user(&sync_cmd).await;
     }

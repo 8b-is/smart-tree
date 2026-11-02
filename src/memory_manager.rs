@@ -167,6 +167,8 @@ impl MemoryManager {
         }
 
         let truncated_origin = Self::truncate_utf8(&dir_str, 255);
+        let _ = self.ensure_ssh_connections_remembered();
+
         if let Some(existing) = self
             .bank
             .memories
@@ -179,6 +181,154 @@ impl MemoryManager {
         let (keywords, context) = Self::synthesize_directory_memory(&canon)?;
         self.anchor_silent("project", keywords, &context, &dir_str)
             .ok()
+    }
+
+    /// Automatically remember non-secret SSH host aliases and endpoints from `~/.ssh/config`
+    /// (Host, HostName, User, Port, ProxyJump — never private keys).
+    pub fn ensure_ssh_connections_remembered(&mut self) -> Option<Memory> {
+        let home = dirs::home_dir()?;
+        let ssh_config_path = home.join(".ssh").join("config");
+        if !ssh_config_path.is_file() {
+            return None;
+        }
+        let origin = ssh_config_path.to_string_lossy().to_string();
+        let content = fs::read_to_string(&ssh_config_path).ok()?;
+        let (keywords, summary) = Self::parse_ssh_config_summary(&content)?;
+
+        if let Some(existing) = self.bank.memories.iter().find(|m| m.origin == origin) {
+            if existing.context == summary {
+                return Some(existing.clone());
+            }
+        }
+        self.anchor_silent("infrastructure", keywords, &summary, &origin)
+            .ok()
+    }
+
+    pub fn parse_ssh_config_summary(content: &str) -> Option<(Vec<String>, String)> {
+        #[derive(Default)]
+        struct SshHostEntry {
+            aliases: Vec<String>,
+            hostname: Option<String>,
+            user: Option<String>,
+            port: Option<String>,
+            proxy_jump: Option<String>,
+        }
+
+        let mut hosts: Vec<SshHostEntry> = Vec::new();
+        let mut current: Option<SshHostEntry> = None;
+
+        for raw in content.lines() {
+            let line = raw.split('#').next().unwrap_or("").trim();
+            if line.is_empty() {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            let Some(key) = parts.next() else {
+                continue;
+            };
+            let rest: Vec<&str> = parts.collect();
+            if rest.is_empty() {
+                continue;
+            }
+            match key.to_ascii_lowercase().as_str() {
+                "host" => {
+                    if let Some(entry) = current.take() {
+                        if !entry.aliases.is_empty() {
+                            hosts.push(entry);
+                        }
+                    }
+                    let aliases: Vec<String> = rest
+                        .into_iter()
+                        .filter(|a| *a != "*" && !a.contains('?'))
+                        .map(str::to_string)
+                        .collect();
+                    current = Some(SshHostEntry {
+                        aliases,
+                        ..Default::default()
+                    });
+                }
+                "hostname" => {
+                    if let Some(entry) = current.as_mut() {
+                        entry.hostname = Some(rest.join(" "));
+                    }
+                }
+                "user" => {
+                    if let Some(entry) = current.as_mut() {
+                        entry.user = Some(rest.join(" "));
+                    }
+                }
+                "port" => {
+                    if let Some(entry) = current.as_mut() {
+                        entry.port = Some(rest.join(" "));
+                    }
+                }
+                "proxyjump" => {
+                    if let Some(entry) = current.as_mut() {
+                        entry.proxy_jump = Some(rest.join(" "));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(entry) = current.take() {
+            if !entry.aliases.is_empty() {
+                hosts.push(entry);
+            }
+        }
+        if hosts.is_empty() {
+            return None;
+        }
+
+        let mut keywords = vec![
+            "ssh".to_string(),
+            "connections".to_string(),
+            "hosts".to_string(),
+            "servers".to_string(),
+            "config".to_string(),
+        ];
+        let mut descriptions = Vec::new();
+        for h in hosts {
+            let alias_str = h.aliases.join("/");
+            for a in &h.aliases {
+                let low = a.to_ascii_lowercase();
+                if !keywords.contains(&low) {
+                    keywords.push(low);
+                }
+            }
+            let target = h
+                .hostname
+                .clone()
+                .unwrap_or_else(|| h.aliases.first().cloned().unwrap_or_default());
+            if !target.is_empty() {
+                let low = target.to_ascii_lowercase();
+                if !keywords.contains(&low) {
+                    keywords.push(low);
+                }
+            }
+            let user_prefix = h
+                .user
+                .as_deref()
+                .map(|u| format!("{u}@"))
+                .unwrap_or_default();
+            let port_suffix = h
+                .port
+                .as_deref()
+                .filter(|p| *p != "22")
+                .map(|p| format!(":{p}"))
+                .unwrap_or_default();
+            let jump_suffix = h
+                .proxy_jump
+                .as_deref()
+                .map(|j| format!(" via {j}"))
+                .unwrap_or_default();
+            descriptions.push(format!(
+                "{} -> {}{}{}{}",
+                alias_str, user_prefix, target, port_suffix, jump_suffix
+            ));
+        }
+
+        let summary = format!("SSH Connections (~/.ssh/config): {}", descriptions.join(" | "));
+        Some((keywords, summary))
     }
 
     fn synthesize_directory_memory(dir: &Path) -> Option<(Vec<String>, String)> {
@@ -347,7 +497,17 @@ impl MemoryManager {
             }
         }
 
-        // 3. Check .aye_consciousness.m8 or .claude_consciousness.m8
+        // 3. Check .m8 hierarchical consciousness file if present
+        let m8_file = dir.join(".m8");
+        if m8_file.is_file() {
+            if let Ok(c) = crate::m8_consciousness::DirectoryConsciousness::load(dir) {
+                if !c.essence.is_empty() && !parts.iter().any(|p| p.contains(&c.essence)) {
+                    parts.push(Self::truncate_utf8(&c.essence, 240).to_string());
+                }
+            }
+        }
+
+        // 4. Check .aye_consciousness.m8 or .claude_consciousness.m8
         for c_file in [".aye_consciousness.m8", ".claude_consciousness.m8"] {
             let c_path = dir.join(c_file);
             if !c_path.is_file() {
@@ -717,5 +877,29 @@ mod tests {
         assert!(context.contains("AI-First Git System"));
         assert!(context.contains("Aye-native forge"));
         assert!(context.contains("git branch: main"));
+    }
+
+    #[test]
+    fn test_parse_ssh_config_summary_extracts_hosts_without_secrets() {
+        let cfg = r#"
+# SSH configuration
+Host 8s.is 8s
+  HostName 188.40.209.186
+  User root
+  IdentityFile ~/.ssh/id_ed25519
+
+Host i1.is i1
+  HostName 5.78.220.57
+  User root
+  Port 2222
+"#;
+        let (keywords, summary) =
+            MemoryManager::parse_ssh_config_summary(cfg).expect("should parse ssh config");
+        assert!(keywords.contains(&"ssh".to_string()));
+        assert!(keywords.contains(&"8s.is".to_string()));
+        assert!(keywords.contains(&"188.40.209.186".to_string()));
+        assert!(summary.contains("8s.is/8s -> root@188.40.209.186"));
+        assert!(summary.contains("i1.is/i1 -> root@5.78.220.57:2222"));
+        assert!(!summary.contains("id_ed25519"));
     }
 }

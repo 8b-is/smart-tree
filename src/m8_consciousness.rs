@@ -3,8 +3,8 @@
 // "Like neurons forming a brain!" - Hue
 
 use anyhow::Result;
-use blake3::Hasher;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -34,6 +34,14 @@ pub struct DirectoryConsciousness {
 
     /// Child directory frequencies (for hierarchy)
     pub children: HashMap<String, f64>,
+
+    /// Rolled-up summaries of child directories (bottom-up hierarchy)
+    #[serde(default)]
+    pub child_summaries: HashMap<String, String>,
+
+    /// Salient insights extracted from Markdown (.md) and manifest files at this level
+    #[serde(default)]
+    pub markdown_insights: Vec<String>,
 
     /// Quantum digest (compressed understanding)
     pub quantum_digest: Vec<u8>,
@@ -73,6 +81,8 @@ impl DirectoryConsciousness {
             emotion: EmotionalSignature::default(),
             key_files: HashMap::new(),
             children: HashMap::new(),
+            child_summaries: HashMap::new(),
+            markdown_insights: Vec::new(),
             quantum_digest: Vec::new(),
             parent_coherence: 1.0,
         })
@@ -80,20 +90,20 @@ impl DirectoryConsciousness {
 
     /// Calculate unique frequency from path
     fn calculate_frequency(path: &Path) -> f64 {
-        let mut hasher = Hasher::new();
+        let mut hasher = Sha256::new();
         hasher.update(path.to_string_lossy().as_bytes());
         let hash = hasher.finalize();
-        let first_8_bytes = &hash.as_bytes()[0..8];
+        let first_8_bytes = &hash[0..8];
         let hash_num = u64::from_le_bytes(first_8_bytes.try_into().unwrap());
 
         // Generate frequency between 20 Hz and 200 Hz (human-perceivable range)
         20.0 + (hash_num % 18000) as f64 / 100.0
     }
 
-    /// Analyze directory and generate consciousness
+    /// Analyze directory and generate consciousness (including Markdown insights and existing child .m8 summaries)
     pub fn analyze_directory(&mut self, path: &Path) -> Result<()> {
-        // Determine essence from directory name and contents
-        self.essence = self.determine_essence(path)?;
+        // Extract Markdown (.md) insights at this level
+        self.markdown_insights = Self::extract_markdown_insights(path);
 
         // Scan files for patterns
         self.detect_patterns(path)?;
@@ -104,8 +114,11 @@ impl DirectoryConsciousness {
         // Find key files
         self.identify_key_files(path)?;
 
-        // Detect child directories
+        // Detect child directories and load any existing child .m8 summaries
         self.scan_children(path)?;
+
+        // Determine essence from manifests, .md files, child .m8 summaries, and directory contents
+        self.essence = self.determine_essence(path)?;
 
         // Generate quantum digest
         self.generate_quantum_digest()?;
@@ -113,13 +126,259 @@ impl DirectoryConsciousness {
         Ok(())
     }
 
-    /// Determine the essence/purpose of directory
+    /// Build a bottom-up hierarchical `.m8` pyramid starting from the deepest directories (`max_depth`)
+    /// and rolling up child `.m8` summaries into each parent directory as we climb the ladder.
+    pub fn build_bottom_up_pyramid(
+        path: &Path,
+        current_depth: usize,
+        max_depth: usize,
+    ) -> Result<Self> {
+        let mut child_dirs: Vec<PathBuf> = fs::read_dir(path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|name| !Self::should_skip_child_dir(name))
+                    .unwrap_or(false)
+            })
+            .collect();
+        child_dirs.sort();
+
+        let mut child_map = HashMap::new();
+        let mut child_summaries = HashMap::new();
+
+        for child_path in child_dirs {
+            let Some(child_name) = child_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(str::to_string)
+            else {
+                continue;
+            };
+            if current_depth < max_depth {
+                if let Ok(child_c) =
+                    Self::build_bottom_up_pyramid(&child_path, current_depth + 1, max_depth)
+                {
+                    child_map.insert(child_name.clone(), child_c.frequency);
+                    if !child_c.essence.is_empty() {
+                        child_summaries.insert(child_name, child_c.essence);
+                    }
+                }
+            } else if child_path.join(".m8").is_file() {
+                if let Ok(child_c) = Self::load(&child_path) {
+                    child_map.insert(child_name.clone(), child_c.frequency);
+                    if !child_c.essence.is_empty() {
+                        child_summaries.insert(child_name, child_c.essence);
+                    }
+                }
+            } else {
+                child_map.insert(child_name, Self::calculate_frequency(&child_path));
+            }
+        }
+
+        let mut consciousness = Self::new(path)?;
+        consciousness.markdown_insights = Self::extract_markdown_insights(path);
+        consciousness.detect_patterns(path)?;
+        consciousness.analyze_emotion(path)?;
+        consciousness.identify_key_files(path)?;
+        consciousness.children = child_map;
+        consciousness.child_summaries = child_summaries;
+        consciousness.essence = consciousness.determine_essence(path)?;
+        consciousness.generate_quantum_digest()?;
+        let _ = consciousness.save(path);
+
+        Ok(consciousness)
+    }
+
+    pub fn should_skip_child_dir(name: &str) -> bool {
+        name.starts_with('.')
+            || matches!(
+                name,
+                "target"
+                    | "node_modules"
+                    | "dist"
+                    | "build"
+                    | "__pycache__"
+                    | "venv"
+                    | "vendor"
+                    | "backups"
+                    | "nfs-cold-49"
+                    | "borg-vault"
+                    | "forgejo-massive"
+            )
+    }
+
+    /// Extract salient headings and first-paragraph summaries from Markdown (`.md`) files in `path`.
+    pub fn extract_markdown_insights(path: &Path) -> Vec<String> {
+        let priority = [
+            "README.md",
+            "CLAUDE.md",
+            "AGENTS.md",
+            "ARCHITECTURE.md",
+            "FAMILY_CONTEXT.md",
+            "FAMILY_SEED.md",
+            "DIFF_REPORT.md",
+        ];
+        let mut md_files: Vec<PathBuf> = Vec::new();
+        for name in priority {
+            let p = path.join(name);
+            if p.is_file() {
+                md_files.push(p);
+            }
+        }
+        if let Ok(entries) = fs::read_dir(path) {
+            let mut others: Vec<PathBuf> = entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.is_file()
+                        && p.extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|ext| ext.eq_ignore_ascii_case("md"))
+                            .unwrap_or(false)
+                        && !md_files.contains(p)
+                })
+                .collect();
+            others.sort();
+            for other in others.into_iter().take(6) {
+                md_files.push(other);
+            }
+        }
+
+        let mut insights = Vec::new();
+        for md_path in md_files.into_iter().take(8) {
+            let Ok(content) = fs::read_to_string(&md_path) else {
+                continue;
+            };
+            let fname = md_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("doc.md");
+            let mut title = String::new();
+            let mut body_line = String::new();
+            let mut in_frontmatter = false;
+            for (idx, raw) in content.lines().take(80).enumerate() {
+                let line = raw.trim();
+                if idx == 0 && line == "---" {
+                    in_frontmatter = true;
+                    continue;
+                }
+                if in_frontmatter {
+                    if line == "---" {
+                        in_frontmatter = false;
+                    }
+                    continue;
+                }
+                if line.is_empty()
+                    || line.starts_with("![")
+                    || line.starts_with("[![")
+                    || line.starts_with("```")
+                    || line.starts_with('<')
+                {
+                    continue;
+                }
+                if let Some(h) = line.strip_prefix('#') {
+                    if title.is_empty() {
+                        title = h.trim_start_matches('#').trim().to_string();
+                    }
+                    continue;
+                }
+                if body_line.is_empty() && line.len() >= 12 {
+                    body_line = line.chars().take(160).collect();
+                    break;
+                }
+            }
+            let summary = match (!title.is_empty(), !body_line.is_empty()) {
+                (true, true) => format!("{}: {} — {}", fname, title, body_line),
+                (true, false) => format!("{}: {}", fname, title),
+                (false, true) => format!("{}: {}", fname, body_line),
+                (false, false) => continue,
+            };
+            insights.push(summary);
+        }
+        insights
+    }
+
+    /// Determine the essence/purpose of directory by combining manifest metadata,
+    /// local `.md` insights, and rolled-up child `.m8` summaries.
     fn determine_essence(&self, path: &Path) -> Result<String> {
-        let dir_name = path.file_name()
+        let dir_name = path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown");
 
-        let essence = match dir_name {
+        let mut parts: Vec<String> = Vec::new();
+
+        // 1. Check Cargo.toml / package.json / pyproject.toml for package description
+        let cargo_toml = path.join("Cargo.toml");
+        if cargo_toml.is_file() {
+            if let Ok(content) = fs::read_to_string(&cargo_toml) {
+                let mut pkg_name = None;
+                let mut desc = None;
+                for line in content.lines().take(60) {
+                    let trimmed = line.trim();
+                    if pkg_name.is_none() && trimmed.starts_with("name") && trimmed.contains('=') {
+                        pkg_name = trimmed
+                            .split_once('=')
+                            .map(|(_, v)| v.trim().trim_matches('"').trim_matches('\'').to_string());
+                    } else if desc.is_none()
+                        && trimmed.starts_with("description")
+                        && trimmed.contains('=')
+                    {
+                        desc = trimmed
+                            .split_once('=')
+                            .map(|(_, v)| v.trim().trim_matches('"').trim_matches('\'').to_string());
+                    }
+                }
+                match (pkg_name, desc) {
+                    (Some(n), Some(d)) if !d.is_empty() => parts.push(format!("{} (Rust): {}", n, d)),
+                    (Some(n), _) => parts.push(format!("{} (Rust crate)", n)),
+                    _ => {}
+                }
+            }
+        }
+
+        // 2. Include top Markdown insight at this level
+        if let Some(first_md) = self.markdown_insights.first() {
+            parts.push(first_md.clone());
+        }
+
+        // 3. Roll up child directory summaries (climbing the ladder!)
+        if !self.child_summaries.is_empty() {
+            let mut child_keys: Vec<&String> = self.child_summaries.keys().collect();
+            child_keys.sort();
+            let preview: Vec<String> = child_keys
+                .iter()
+                .take(6)
+                .map(|k| {
+                    let s = &self.child_summaries[*k];
+                    let short: String = s.chars().take(60).collect();
+                    format!("{}: {}", k, short)
+                })
+                .collect();
+            if self.child_summaries.len() > 6 {
+                parts.push(format!(
+                    "Rolls up {} subfolders ({}; +{} more)",
+                    self.child_summaries.len(),
+                    preview.join("; "),
+                    self.child_summaries.len() - 6
+                ));
+            } else {
+                parts.push(format!(
+                    "Rolls up {} subfolders ({})",
+                    self.child_summaries.len(),
+                    preview.join("; ")
+                ));
+            }
+        }
+
+        if !parts.is_empty() {
+            return Ok(parts.join(" | "));
+        }
+
+        let fallback = match dir_name {
             "src" | "source" => "Source code - the beating heart of the project",
             "test" | "tests" => "Test suite - ensuring quality through verification",
             "docs" | "documentation" => "Documentation - knowledge preservation",
@@ -155,7 +414,7 @@ impl DirectoryConsciousness {
             }
         };
 
-        Ok(essence.to_string())
+        Ok(fallback.to_string())
     }
 
     /// Detect patterns in directory
@@ -284,21 +543,27 @@ impl DirectoryConsciousness {
         Ok(())
     }
 
-    /// Scan for child directories
+    /// Scan for child directories and load any existing child `.m8` summaries
     fn scan_children(&mut self, path: &Path) -> Result<()> {
         self.children.clear();
+        self.child_summaries.clear();
 
         for entry in fs::read_dir(path)? {
             let entry = entry?;
-            if entry.path().is_dir() {
+            let child_path = entry.path();
+            if child_path.is_dir() {
                 let child_name = entry.file_name().to_string_lossy().to_string();
 
-                // Skip hidden and build directories
-                if !child_name.starts_with('.') &&
-                   child_name != "target" &&
-                   child_name != "node_modules" {
-                    let child_freq = Self::calculate_frequency(&entry.path());
-                    self.children.insert(child_name, child_freq);
+                if !Self::should_skip_child_dir(&child_name) {
+                    let child_freq = Self::calculate_frequency(&child_path);
+                    self.children.insert(child_name.clone(), child_freq);
+                    if child_path.join(".m8").is_file() {
+                        if let Ok(child_c) = Self::load(&child_path) {
+                            if !child_c.essence.is_empty() {
+                                self.child_summaries.insert(child_name, child_c.essence);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -309,17 +574,17 @@ impl DirectoryConsciousness {
     /// Generate quantum digest
     fn generate_quantum_digest(&mut self) -> Result<()> {
         // Create a digest from all consciousness data
-        let mut hasher = Hasher::new();
+        let mut hasher = Sha256::new();
         hasher.update(self.essence.as_bytes());
-        hasher.update(&self.frequency.to_le_bytes());
+        hasher.update(self.frequency.to_le_bytes());
 
         for pattern in &self.patterns {
             hasher.update(pattern.pattern_type.as_bytes());
-            hasher.update(&pattern.strength.to_le_bytes());
+            hasher.update(pattern.strength.to_le_bytes());
         }
 
         let hash = hasher.finalize();
-        self.quantum_digest = hash.as_bytes()[..16].to_vec();
+        self.quantum_digest = hash[..16].to_vec();
 
         Ok(())
     }
@@ -378,14 +643,14 @@ impl DirectoryConsciousness {
         let wave_char = wave_chars[amplitude.min(7)];
 
         let mut output = String::new();
-        output.push_str(&format!("╭{'─':─^38}╮\n", ""));
+        output.push_str(&format!("╭{:─^38}╮\n", ""));
         output.push_str(&format!("│ Frequency: {:<10.2} Hz {:>10} │\n",
             self.frequency,
             if self.frequency > 100.0 { "🔥" } else if self.frequency > 50.0 { "⚡" } else { "🌊" }
         ));
 
         // Render wave based on frequency and emotion
-        let wave_line = format!("{}", wave_char.to_string().repeat(30));
+        let wave_line = wave_char.to_string().repeat(30);
         output.push_str(&format!("│ {} │\n", wave_line));
 
         output.push_str(&format!("│ Children: {:<3} Energy: {:<5.1}      │\n",
@@ -401,7 +666,7 @@ impl DirectoryConsciousness {
                 .join(", ")
         ));
 
-        output.push_str(&format!("╰{'─':─^38}╯", ""));
+        output.push_str(&format!("╰{:─^38}╯", ""));
 
         output
     }
@@ -477,21 +742,22 @@ impl ConsciousnessManager {
     fn initialize_recursive(&mut self, path: &Path, depth: usize) -> Result<()> {
         // Skip certain directories
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with('.') || name == "target" || name == "node_modules" {
+            if DirectoryConsciousness::should_skip_child_dir(name) {
                 return Ok(());
             }
         }
 
-        // Create consciousness for this directory
-        let mut consciousness = DirectoryConsciousness::new(path)?;
-        consciousness.analyze_directory(path)?;
-
-        // Calculate parent coherence if not root
-        if let Some(parent_path) = path.parent() {
-            if let Ok(parent) = self.get_consciousness(parent_path) {
-                consciousness.parent_coherence = consciousness.calculate_coherence(&parent);
+        // Bottom-up: recurse into subdirectories FIRST so child .m8 files exist before parent rollup
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                self.initialize_recursive(&entry.path(), depth + 1)?;
             }
         }
+
+        // Create consciousness for this directory (now rolling up child .m8 summaries!)
+        let mut consciousness = DirectoryConsciousness::new(path)?;
+        consciousness.analyze_directory(path)?;
 
         consciousness.save(path)?;
 
@@ -513,14 +779,6 @@ impl ConsciousnessManager {
         }
 
         self.cache.insert(path.to_path_buf(), consciousness);
-
-        // Recurse into subdirectories
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            if entry.path().is_dir() {
-                self.initialize_recursive(&entry.path(), depth + 1)?;
-            }
-        }
 
         Ok(())
     }
@@ -588,5 +846,40 @@ mod tests {
         let loaded = DirectoryConsciousness::load(temp_dir.path()).unwrap();
         assert_eq!(loaded.essence, "Test directory");
         assert_eq!(loaded.frequency, consciousness.frequency);
+    }
+
+    #[test]
+    fn test_bottom_up_pyramid_rolls_up_markdown_and_children() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        let child_a = root.join("alpha");
+        let child_b = root.join("beta");
+        fs::create_dir_all(&child_a).unwrap();
+        fs::create_dir_all(&child_b).unwrap();
+
+        fs::write(
+            root.join("README.md"),
+            "# Galaxy Root\nTop-level hub for the fleet.\n",
+        )
+        .unwrap();
+        fs::write(
+            child_a.join("README.md"),
+            "# Alpha Engine\nZero-float integer DSP engine.\n",
+        )
+        .unwrap();
+        fs::write(
+            child_b.join("Cargo.toml"),
+            "[package]\nname = \"beta-core\"\ndescription = \"Wave memory kernel\"\n",
+        )
+        .unwrap();
+
+        let root_c = DirectoryConsciousness::build_bottom_up_pyramid(root, 0, 2).unwrap();
+        assert!(root.join(".m8").is_file());
+        assert!(child_a.join(".m8").is_file());
+        assert!(child_b.join(".m8").is_file());
+        assert!(root_c.essence.contains("Galaxy Root"));
+        assert!(root_c.essence.contains("Rolls up 2 subfolders"));
+        assert!(root_c.child_summaries["alpha"].contains("Alpha Engine"));
+        assert!(root_c.child_summaries["beta"].contains("beta-core"));
     }
 }

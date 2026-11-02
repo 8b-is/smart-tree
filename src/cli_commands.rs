@@ -251,24 +251,47 @@ pub async fn handle_agent_context() -> Result<()> {
     Ok(())
 }
 
-/// Update `.m8` consciousness files for directory
+/// Update `.m8` consciousness files for directory (bottom-up hierarchical pyramid)
 pub async fn handle_update_consciousness(path: &str) -> Result<()> {
     use std::path::Path;
 
-    println!("🌊 Updating consciousness for {}...", path);
+    let root = Path::new(path);
+    println!("🌊 Building bottom-up .m8 consciousness pyramid for {}...", path);
 
-    let m8_path = Path::new(path).join(".m8");
-    let content = format!(
-        "🧠 Directory Consciousness\n\
-         Frequency: 42.73 Hz\n\
-         Updated: {}\n\
-         Path: {}\n",
-        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-        path
-    );
+    match crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(root, 0, 2) {
+        Ok(c) => {
+            println!("✅ Consciousness updated: {}", root.join(".m8").display());
+            println!("   Frequency: {:.2} Hz", c.frequency);
+            println!("   Essence:   {}", c.essence);
+            if !c.child_summaries.is_empty() {
+                println!(
+                    "   Rolled up: {} child directory consciousness file(s)",
+                    c.child_summaries.len()
+                );
+            }
+        }
+        Err(err) => {
+            let m8_path = root.join(".m8");
+            let content = format!(
+                "🧠 Directory Consciousness\n\
+                 Frequency: 42.73 Hz\n\
+                 Updated: {}\n\
+                 Path: {}\n",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                path
+            );
+            std::fs::write(&m8_path, content)?;
+            println!(
+                "✅ Consciousness fallback written ({}): {}",
+                err,
+                m8_path.display()
+            );
+        }
+    }
 
-    std::fs::write(&m8_path, content)?;
-    println!("✅ Consciousness updated: {}", m8_path.display());
+    if let Ok(mut mem_mgr) = crate::memory_manager::MemoryManager::new() {
+        let _ = mem_mgr.ensure_directory_remembered(root);
+    }
 
     Ok(())
 }
@@ -1789,9 +1812,11 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let skipped = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let blocked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let fetched_only = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let quarantined = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
     let num_workers = cmd.jobs.clamp(1, 16);
     let refresh_all = cmd.refresh_all;
+    let quarantine_enabled = cmd.quarantine;
     let mut handles = Vec::with_capacity(num_workers);
 
     for _ in 0..num_workers {
@@ -1804,6 +1829,7 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         let skipped = std::sync::Arc::clone(&skipped);
         let blocked = std::sync::Arc::clone(&blocked);
         let fetched_only = std::sync::Arc::clone(&fetched_only);
+        let quarantined = std::sync::Arc::clone(&quarantined);
         let user = user.clone();
         let user_dir = user_dir.clone();
 
@@ -1844,7 +1870,7 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
             let updated_at = repo.updated_at.unwrap_or_default();
 
             let cached = state.lock().unwrap().get(&repo.name).cloned();
-            let result = sync_repository(
+            let mut result = sync_repository(
                 &repo_dir,
                 &clone_url,
                 cached.as_ref(),
@@ -1852,6 +1878,100 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
                 &updated_at,
                 refresh_all,
             );
+            if quarantine_enabled {
+                match &result {
+                    Ok(RepoSyncOutcome::Blocked { reason, .. })
+                        if !is_empty_unborn_repo(&repo_dir) =>
+                    {
+                        let reason_owned = reason.clone();
+                        match quarantine_and_reclone(
+                            &user_dir,
+                            &repo.name,
+                            &repo_dir,
+                            &clone_url,
+                            &pushed_at,
+                            &updated_at,
+                            &reason_owned,
+                        ) {
+                            Ok((q_path, new_outcome)) => {
+                                quarantined.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                println!(
+                                    "📦 [{}/{}] Quarantined {}/{} -> {} ({})",
+                                    idx + 1,
+                                    total,
+                                    user,
+                                    repo.name,
+                                    q_path.display(),
+                                    reason_owned
+                                );
+                                result = Ok(new_outcome);
+                            }
+                            Err(q_err) => {
+                                eprintln!(
+                                    "⚠️ [{}/{}] Quarantine failed for {}/{}: {q_err:#}",
+                                    idx + 1,
+                                    total,
+                                    user,
+                                    repo.name
+                                );
+                            }
+                        }
+                    }
+                    Err(err) if repo_dir.exists() && !repo_dir.join(".git").exists() => {
+                        let reason_owned = format!("{err:#}");
+                        match quarantine_and_reclone(
+                            &user_dir,
+                            &repo.name,
+                            &repo_dir,
+                            &clone_url,
+                            &pushed_at,
+                            &updated_at,
+                            &reason_owned,
+                        ) {
+                            Ok((q_path, new_outcome)) => {
+                                quarantined.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                println!(
+                                    "📦 [{}/{}] Quarantined non-git {}/{} -> {}",
+                                    idx + 1,
+                                    total,
+                                    user,
+                                    repo.name,
+                                    q_path.display()
+                                );
+                                result = Ok(new_outcome);
+                            }
+                            Err(q_err) => {
+                                eprintln!(
+                                    "⚠️ [{}/{}] Quarantine failed for {}/{}: {q_err:#}",
+                                    idx + 1,
+                                    total,
+                                    user,
+                                    repo.name
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Ok(ref outcome) = result {
+                let should_build_m8 = matches!(
+                    outcome,
+                    RepoSyncOutcome::Cloned(_)
+                        | RepoSyncOutcome::Updated(_)
+                        | RepoSyncOutcome::UpToDate(_)
+                ) || (matches!(outcome, RepoSyncOutcome::Skipped)
+                    && repo_dir.is_dir()
+                    && !repo_dir.join(".m8").is_file());
+                if should_build_m8 {
+                    let _ =
+                        crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(
+                            &repo_dir, 0, 2,
+                        );
+                }
+            }
+
             let mut guard = state.lock().unwrap();
             match result {
                 Ok(outcome) => {
@@ -1905,6 +2025,14 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     }
     anyhow::ensure!(!worker_panicked, "A GitHub sync worker panicked");
 
+    // Roll up all child repository .m8 consciousness files into <user_dir>/.m8
+    let _ = crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(
+        &user_dir, 0, 0,
+    );
+    if let Ok(mut mem_mgr) = crate::memory_manager::MemoryManager::new() {
+        let _ = mem_mgr.ensure_directory_remembered(&user_dir);
+    }
+
     // The destination lock covers both repository operations and atomic cache replacement.
     let guard = state
         .lock()
@@ -1917,9 +2045,10 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let r = refreshed.load(std::sync::atomic::Ordering::Relaxed);
     let u = up_to_date.load(std::sync::atomic::Ordering::Relaxed);
     let f = failed.load(std::sync::atomic::Ordering::Relaxed);
+    let q = quarantined.load(std::sync::atomic::Ordering::Relaxed);
 
     println!(
-        "\nGitHub Sync Complete for '{}' ({}):\n   Cloned: {}\n   Updated: {}\n   Up-to-date (verified): {}\n   Failed: {}\n   Skipped (cached): {}\n   Blocked: {}\n   Fetched-only (subset of blocked): {}\n   State file: {}",
+        "\nGitHub Sync Complete for '{}' ({}):\n   Cloned: {}\n   Updated: {}\n   Up-to-date (verified): {}\n   Failed: {}\n   Skipped (cached): {}\n   Blocked: {}\n   Fetched-only (subset of blocked): {}\n   Quarantined & recloned: {}\n   State file: {}",
         user,
         user_dir.display(),
         c,
@@ -1929,6 +2058,7 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         skipped.load(std::sync::atomic::Ordering::Relaxed),
         blocked.load(std::sync::atomic::Ordering::Relaxed),
         fetched_only.load(std::sync::atomic::Ordering::Relaxed),
+        q,
         state_path.display()
     );
     anyhow::ensure!(f == 0, "GitHub sync failed for {f} repositories");
@@ -2016,6 +2146,50 @@ fn sync_git(dir: &std::path::Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
+fn is_ignorable_untracked_smart_tree_status_line(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix("?? ") else {
+        return false;
+    };
+    let rel = rest.trim().trim_matches('"');
+    rel == ".st"
+        || rel.starts_with(".st/")
+        || rel == ".m8"
+        || rel.ends_with("/.m8")
+        || rel == ".aye_consciousness.m8"
+        || rel.ends_with("/.aye_consciousness.m8")
+        || rel == ".claude_consciousness.m8"
+        || rel.ends_with("/.claude_consciousness.m8")
+}
+
+fn non_ignorable_porcelain_status(dir: &std::path::Path) -> Result<String> {
+    let raw = sync_git(
+        dir,
+        &[
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ],
+    )?;
+    let filtered: Vec<&str> = raw
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !is_ignorable_untracked_smart_tree_status_line(line))
+        .collect();
+    Ok(filtered.join("\n"))
+}
+
+fn is_empty_unborn_repo(dir: &std::path::Path) -> bool {
+    if !dir.join(".git").exists() {
+        return false;
+    }
+    if sync_git(dir, &["rev-parse", "--verify", "HEAD"]).is_ok() {
+        return false;
+    }
+    non_ignorable_porcelain_status(dir)
+        .map(|s| s.is_empty())
+        .unwrap_or(false)
+}
+
 // An error here is a blocked reconciliation, never permission to try a pull.
 fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
     let root = sync_git(dir, &["rev-parse", "--show-toplevel"])?;
@@ -2024,16 +2198,7 @@ fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
         "Not a repository root"
     );
     anyhow::ensure!(
-        sync_git(
-            dir,
-            &[
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--ignore-submodules=none"
-            ]
-        )?
-        .is_empty(),
+        non_ignorable_porcelain_status(dir)?.is_empty(),
         "Dirty working tree or index"
     );
     sync_git(dir, &["symbolic-ref", "--quiet", "HEAD"]).context("Detached HEAD")?;
@@ -2065,6 +2230,268 @@ fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
         "Branch is ahead of or diverged from upstream ({ahead} local commits)"
     );
     Ok((head, upstream))
+}
+
+fn quarantine_and_reclone(
+    user_dir: &std::path::Path,
+    repo_name: &str,
+    dir: &std::path::Path,
+    clone_url: &str,
+    pushed_at: &str,
+    updated_at: &str,
+    reason: &str,
+) -> Result<(PathBuf, RepoSyncOutcome)> {
+    let is_git = dir.join(".git").exists();
+    let has_head = is_git && sync_git(dir, &["rev-parse", "--verify", "HEAD"]).is_ok();
+    let is_diverged = is_git
+        && (reason.contains("ahead of or diverged")
+            || reason.contains("Git operation in progress")
+            || (reason.contains("No usable upstream") && has_head));
+
+    let base_quarantine = if is_diverged {
+        user_dir.join(".diverged")
+    } else {
+        let kind = if !is_git {
+            "non-git"
+        } else if reason.contains("Dirty working tree") {
+            "dirty-worktree"
+        } else if reason.contains("Detached HEAD") {
+            "detached-head"
+        } else {
+            "other"
+        };
+        user_dir.join(".sync-issues").join(kind)
+    };
+    std::fs::create_dir_all(&base_quarantine)?;
+
+    let mut quarantine_dir = base_quarantine.join(repo_name);
+    if quarantine_dir.exists() {
+        let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+        quarantine_dir = base_quarantine.join(format!("{repo_name}-{ts}"));
+    }
+
+    std::fs::rename(dir, &quarantine_dir).with_context(|| {
+        format!(
+            "Failed to move {} to quarantine {}",
+            dir.display(),
+            quarantine_dir.display()
+        )
+    })?;
+
+    let reclone_outcome = sync_repository(dir, clone_url, None, pushed_at, updated_at, true);
+
+    if let Err(report_err) = write_quarantine_diff_report(
+        repo_name,
+        dir,
+        &quarantine_dir,
+        clone_url,
+        reason,
+        is_diverged,
+    ) {
+        eprintln!(
+            "⚠️ Failed to write DIFF_REPORT.md in {}: {report_err:#}",
+            quarantine_dir.display()
+        );
+    }
+
+    let outcome = reclone_outcome?;
+    Ok((quarantine_dir, outcome))
+}
+
+fn write_quarantine_diff_report(
+    repo_name: &str,
+    fresh_dir: &std::path::Path,
+    quarantine_dir: &std::path::Path,
+    clone_url: &str,
+    reason: &str,
+    is_diverged: bool,
+) -> Result<()> {
+    let mut report = String::new();
+    let now = chrono::Utc::now().to_rfc3339();
+    let category = if is_diverged {
+        "Diverged / Local Commits (.diverged)"
+    } else {
+        "Sync Issue (.sync-issues)"
+    };
+
+    report.push_str(&format!("# Sync Quarantine & Diff Report: `{repo_name}`\n\n"));
+    report.push_str(&format!("- **Repository**: `{repo_name}`\n"));
+    report.push_str(&format!("- **Remote URL**: `{clone_url}`\n"));
+    report.push_str(&format!("- **Category**: {category}\n"));
+    report.push_str(&format!("- **Quarantined At**: `{now}`\n"));
+    report.push_str(&format!(
+        "- **Quarantined Path**: `{}`\n",
+        quarantine_dir.display()
+    ));
+    report.push_str(&format!(
+        "- **Fresh Reclone Path**: `{}`\n",
+        fresh_dir.display()
+    ));
+    report.push_str(&format!("- **Reason**: `{reason}`\n\n"));
+
+    if quarantine_dir.join(".git").exists() {
+        let status_sb =
+            sync_git(quarantine_dir, &["status", "-sb"]).unwrap_or_else(|e| e.to_string());
+        let branches =
+            sync_git(quarantine_dir, &["branch", "-vv", "-a"]).unwrap_or_else(|e| e.to_string());
+        let remotes =
+            sync_git(quarantine_dir, &["remote", "-v"]).unwrap_or_else(|e| e.to_string());
+
+        report.push_str("## Git Branch & Status Summary\n\n```text\n");
+        report.push_str(&status_sb);
+        report.push_str("\n```\n\n### Branches (`git branch -vv -a`)\n\n```text\n");
+        report.push_str(&branches);
+        report.push_str("\n```\n\n### Remotes (`git remote -v`)\n\n```text\n");
+        report.push_str(&remotes);
+        report.push_str("\n```\n\n");
+
+        // Determine upstream/remote comparison ref
+        let base_ref = ["@{upstream}", "origin/HEAD", "origin/main", "origin/master"]
+            .into_iter()
+            .find(|r| sync_git(quarantine_dir, &["rev-parse", "--verify", r]).is_ok());
+
+        if let Some(base) = base_ref {
+            let local_commits = sync_git(
+                quarantine_dir,
+                &["log", "--stat", "--oneline", &format!("{base}..HEAD")],
+            )
+            .unwrap_or_default();
+            let remote_commits = sync_git(
+                quarantine_dir,
+                &["log", "--stat", "--oneline", &format!("HEAD..{base}")],
+            )
+            .unwrap_or_default();
+
+            report.push_str(&format!(
+                "## Local Commits Not in `{base}` (`{base}..HEAD`)\n\n```text\n{}\n```\n\n",
+                if local_commits.is_empty() {
+                    "(none)"
+                } else {
+                    &local_commits
+                }
+            ));
+            report.push_str(&format!(
+                "## Upstream Commits Not in Local (`HEAD..{base}`)\n\n```text\n{}\n```\n\n",
+                if remote_commits.is_empty() {
+                    "(none)"
+                } else {
+                    &remote_commits
+                }
+            ));
+
+            if let Ok(patch) =
+                sync_git(quarantine_dir, &["log", "-p", &format!("{base}..HEAD")])
+            {
+                if !patch.is_empty() {
+                    let patch_path = quarantine_dir.join("local-commits.patch");
+                    let _ = std::fs::write(&patch_path, &patch);
+                    report.push_str(&format!(
+                        "- Saved full local commit patch ({} bytes) to [`local-commits.patch`](file://{})\n\n",
+                        patch.len(),
+                        patch_path.display()
+                    ));
+                }
+            }
+        } else if sync_git(quarantine_dir, &["rev-parse", "--verify", "HEAD"]).is_ok() {
+            let local_log =
+                sync_git(quarantine_dir, &["log", "--stat", "--oneline", "-n", "30", "HEAD"])
+                    .unwrap_or_default();
+            report.push_str("## Local Commit History (No Upstream Tracking Ref)\n\n```text\n");
+            report.push_str(&local_log);
+            report.push_str("\n```\n\n");
+            if let Ok(patch) = sync_git(quarantine_dir, &["log", "-p", "-n", "20", "HEAD"]) {
+                if !patch.is_empty() {
+                    let patch_path = quarantine_dir.join("local-commits.patch");
+                    let _ = std::fs::write(&patch_path, &patch);
+                    report.push_str(&format!(
+                        "- Saved local commit patch ({} bytes) to [`local-commits.patch`](file://{})\n\n",
+                        patch.len(),
+                        patch_path.display()
+                    ));
+                }
+            }
+        }
+
+        // Working tree diff
+        let diff_stat =
+            sync_git(quarantine_dir, &["diff", "--stat", "HEAD"]).unwrap_or_default();
+        let porcelain = non_ignorable_porcelain_status(quarantine_dir).unwrap_or_default();
+        let porcelain_lines: Vec<&str> = porcelain.lines().collect();
+
+        report.push_str("## Working Tree Changes (`git diff --stat HEAD`)\n\n```text\n");
+        report.push_str(if diff_stat.is_empty() {
+            "(clean tracked working tree)"
+        } else {
+            &diff_stat
+        });
+        report.push_str("\n```\n\n");
+
+        if !porcelain_lines.is_empty() {
+            report.push_str(&format!(
+                "### Porcelain Status ({} entries)\n\n```text\n",
+                porcelain_lines.len()
+            ));
+            for line in porcelain_lines.iter().take(150) {
+                report.push_str(line);
+                report.push('\n');
+            }
+            if porcelain_lines.len() > 150 {
+                report.push_str(&format!(
+                    "... ({} additional lines omitted)\n",
+                    porcelain_lines.len() - 150
+                ));
+            }
+            report.push_str("```\n\n");
+        }
+
+        if let Ok(wt_diff) = sync_git(quarantine_dir, &["diff", "HEAD"]) {
+            if !wt_diff.is_empty() && wt_diff.len() <= 2 * 1024 * 1024 {
+                let wt_path = quarantine_dir.join("working-tree.diff");
+                let _ = std::fs::write(&wt_path, &wt_diff);
+                report.push_str(&format!(
+                    "- Saved working-tree diff ({} bytes) to [`working-tree.diff`](file://{})\n\n",
+                    wt_diff.len(),
+                    wt_path.display()
+                ));
+            }
+        }
+    } else {
+        report.push_str("## Non-Git Directory Contents\n\n```text\n");
+        if let Ok(entries) = std::fs::read_dir(quarantine_dir) {
+            for entry in entries.flatten() {
+                if let Ok(meta) = entry.metadata() {
+                    report.push_str(&format!(
+                        "{} ({} bytes)\n",
+                        entry.file_name().to_string_lossy(),
+                        meta.len()
+                    ));
+                }
+            }
+        }
+        report.push_str("```\n\n");
+
+        if fresh_dir.exists() {
+            if let Ok(diff_out) = std::process::Command::new("diff")
+                .args(["-ru", "--exclude=.git", "--exclude=.m8", "--exclude=DIFF_REPORT.md"])
+                .arg(fresh_dir)
+                .arg(quarantine_dir)
+                .output()
+            {
+                let diff_txt = String::from_utf8_lossy(&diff_out.stdout);
+                if !diff_txt.trim().is_empty() {
+                    let wt_path = quarantine_dir.join("working-tree.diff");
+                    let _ = std::fs::write(&wt_path, diff_txt.as_bytes());
+                    report.push_str(&format!(
+                        "## Diff Against Fresh Clone (`diff -ru`)\n\n```diff\n{}\n```\n\n",
+                        diff_txt.chars().take(8000).collect::<String>()
+                    ));
+                }
+            }
+        }
+    }
+
+    std::fs::write(quarantine_dir.join("DIFF_REPORT.md"), report)?;
+    Ok(())
 }
 
 fn sync_repository(
@@ -2494,6 +2921,7 @@ mod sync_tests {
             refresh_all: false,
             no_forks: false,
             no_archived: false,
+            quarantine: false,
         };
         assert!(handle_sync_user(&cmd)
             .await
@@ -2517,6 +2945,7 @@ mod sync_tests {
             refresh_all: false,
             no_forks: false,
             no_archived: false,
+            quarantine: false,
         };
         let result = tokio::runtime::Runtime::new()
             .unwrap()
@@ -2690,5 +3119,97 @@ mod sync_tests {
         probe(false);
         drop(lock);
         probe(true);
+    }
+
+    #[test]
+    fn untracked_smart_tree_metadata_does_not_block_sync() {
+        let f = Fixture::new();
+        std::fs::create_dir_all(f.local.join(".st")).unwrap();
+        std::fs::write(f.local.join(".st/alexiai_version.txt"), "1.0").unwrap();
+        std::fs::write(f.local.join(".m8"), "consciousness").unwrap();
+        f.advance();
+        let target = git(&f.publisher, &["rev-parse", "HEAD"]);
+        assert_eq!(
+            f.sync(None, true).unwrap(),
+            RepoSyncOutcome::Updated(target)
+        );
+    }
+
+    #[test]
+    fn quarantine_moves_diverged_and_dirty_writes_diff_report_and_reclones() {
+        let f = Fixture::new();
+        let user_dir = f._temp.path().join("org");
+        std::fs::create_dir_all(&user_dir).unwrap();
+
+        // 1. Diverged repository -> .diverged/<repo>
+        let div_dir = user_dir.join("diverged-repo");
+        git(
+            &user_dir,
+            &["clone", f.remote.to_str().unwrap(), div_dir.to_str().unwrap()],
+        );
+        Fixture::commit(&div_dir, "local-diverged-work");
+        f.advance();
+        let target = git(&f.publisher, &["rev-parse", "HEAD"]);
+
+        let blocked = sync_repository(&div_dir, f.remote.to_str().unwrap(), None, "p", "u", true)
+            .unwrap();
+        let RepoSyncOutcome::Blocked { reason, .. } = blocked else {
+            panic!("expected blocked outcome");
+        };
+        let (q_path, new_outcome) = quarantine_and_reclone(
+            &user_dir,
+            "diverged-repo",
+            &div_dir,
+            f.remote.to_str().unwrap(),
+            "p",
+            "u",
+            &reason,
+        )
+        .unwrap();
+        assert_eq!(q_path, user_dir.join(".diverged/diverged-repo"));
+        assert_eq!(new_outcome, RepoSyncOutcome::Cloned(target.clone()));
+        assert!(q_path.join("DIFF_REPORT.md").is_file());
+        assert!(q_path.join("local-commits.patch").is_file());
+        assert!(q_path.join("local-diverged-work").is_file());
+        assert!(!div_dir.join("local-diverged-work").exists());
+        assert_eq!(git(&div_dir, &["rev-parse", "HEAD"]), target);
+
+        // 2. Dirty working tree repository -> .sync-issues/dirty-worktree/<repo>
+        let dirty_dir = user_dir.join("dirty-repo");
+        git(
+            &user_dir,
+            &["clone", f.remote.to_str().unwrap(), dirty_dir.to_str().unwrap()],
+        );
+        std::fs::write(dirty_dir.join("base"), "modified-locally").unwrap();
+        let blocked_dirty =
+            sync_repository(&dirty_dir, f.remote.to_str().unwrap(), None, "p", "u", true).unwrap();
+        let RepoSyncOutcome::Blocked {
+            reason: dirty_reason,
+            ..
+        } = blocked_dirty
+        else {
+            panic!("expected blocked dirty outcome");
+        };
+        let (q_dirty_path, dirty_outcome) = quarantine_and_reclone(
+            &user_dir,
+            "dirty-repo",
+            &dirty_dir,
+            f.remote.to_str().unwrap(),
+            "p",
+            "u",
+            &dirty_reason,
+        )
+        .unwrap();
+        assert_eq!(
+            q_dirty_path,
+            user_dir.join(".sync-issues/dirty-worktree/dirty-repo")
+        );
+        assert_eq!(dirty_outcome, RepoSyncOutcome::Cloned(target));
+        assert!(q_dirty_path.join("DIFF_REPORT.md").is_file());
+        assert!(q_dirty_path.join("working-tree.diff").is_file());
+        assert_eq!(
+            std::fs::read_to_string(dirty_dir.join("base")).unwrap(),
+            "base"
+        );
     }
 }

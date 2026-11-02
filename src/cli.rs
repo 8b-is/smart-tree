@@ -654,6 +654,10 @@ pub struct ScanArgs {
     /// Bypass timestamp cache and refresh eligible clean branches (blocked branches stay untouched)
     #[arg(long, help_heading = "GitHub Sync")]
     pub refresh_all: bool,
+
+    /// Quarantine diverged/broken repos into .diverged/ or .sync-issues/ with a DIFF_REPORT.md and reclone clean copies
+    #[arg(long, alias = "quarantine-blocked", help_heading = "GitHub Sync")]
+    pub quarantine: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -732,6 +736,9 @@ pub struct SyncUserCommand {
     /// Skip archived repositories (`gh repo list --no-archived`)
     #[arg(long)]
     pub no_archived: bool,
+    /// Quarantine diverged/broken repos into .diverged/ or .sync-issues/ with a DIFF_REPORT.md and reclone clean copies
+    #[arg(long, alias = "quarantine-blocked")]
+    pub quarantine: bool,
 }
 
 /// Remember command for salient MEM8 ingestion from git forges or paths.
