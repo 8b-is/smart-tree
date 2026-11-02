@@ -71,15 +71,21 @@ impl Drop for RecordStore {
 
 impl RecordStore {
     pub fn open(path: &Path) -> Result<Self> {
-        Self::open_format(path, false)
+        Self::open_format(path, false, true)
     }
 
     /// Native MEM8 wave blocks paired with tokenized, exact RAW8 source data.
     pub fn open_memory(path: &Path) -> Result<Self> {
-        Self::open_format(path, true)
+        Self::open_format(path, true, true)
     }
 
-    fn open_format(path: &Path, native: bool) -> Result<Self> {
+    /// Open native memory without truncating incomplete data during replay.
+    /// Validation and preservation run under the same lock as ordinary opens.
+    pub fn open_memory_preserving(path: &Path) -> Result<Self> {
+        Self::open_format(path, true, false)
+    }
+
+    fn open_format(path: &Path, native: bool, recover_tail: bool) -> Result<Self> {
         let parent = path
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -124,7 +130,7 @@ impl RecordStore {
             poisoned: false,
             native,
         };
-        store.replay()?;
+        store.replay(recover_tail)?;
         Ok(store)
     }
 
@@ -342,7 +348,7 @@ impl RecordStore {
         Ok(())
     }
 
-    fn replay(&mut self) -> Result<()> {
+    fn replay(&mut self, recover_tail: bool) -> Result<()> {
         let file_length = self.file.metadata()?.len();
         while self.length < file_length {
             let minimum = if self.native {
@@ -384,6 +390,10 @@ impl RecordStore {
             self.length += length;
         }
         if self.length != file_length {
+            ensure!(
+                recover_tail,
+                "Incomplete MEM8 journal; existing bytes preserved"
+            );
             self.file.set_len(self.length)?;
             self.file.sync_all()?;
             tracing::warn!(

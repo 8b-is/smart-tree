@@ -87,6 +87,7 @@ mod proactive_assistant;
 mod prompts;
 mod prompts_enhanced;
 mod resources;
+mod rink;
 pub mod session;
 pub mod smart_background_searcher;
 pub mod smart_edit;
