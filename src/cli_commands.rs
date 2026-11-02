@@ -258,6 +258,7 @@ pub async fn handle_update_consciousness(path: &str) -> Result<()> {
     let root = Path::new(path);
     println!("🌊 Building bottom-up .m8 consciousness pyramid for {}...", path);
 
+    let mut child_names: Vec<String> = Vec::new();
     match crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(root, 0, 2) {
         Ok(c) => {
             println!("✅ Consciousness updated: {}", root.join(".m8").display());
@@ -269,6 +270,7 @@ pub async fn handle_update_consciousness(path: &str) -> Result<()> {
                     c.child_summaries.len()
                 );
             }
+            child_names.extend(c.children.keys().cloned());
         }
         Err(err) => {
             let m8_path = root.join(".m8");
@@ -290,6 +292,12 @@ pub async fn handle_update_consciousness(path: &str) -> Result<()> {
     }
 
     if let Ok(mut mem_mgr) = crate::memory_manager::MemoryManager::new() {
+        for child_name in &child_names {
+            let child_dir = root.join(child_name);
+            if child_dir.is_dir() {
+                let _ = mem_mgr.ensure_directory_remembered(&child_dir);
+            }
+        }
         let _ = mem_mgr.ensure_directory_remembered(root);
     }
 
@@ -689,9 +697,11 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
                 let _ = manager.ensure_directory_remembered(&sibling);
             }
         }
-        let workspace_repo = PathBuf::from("/data/8b-is").join(kw);
-        if workspace_repo.is_dir() {
-            let _ = manager.ensure_directory_remembered(&workspace_repo);
+        for base in ["/data/8b-is", "/data", "/opt"] {
+            let candidate = PathBuf::from(base).join(kw);
+            if candidate.is_dir() {
+                let _ = manager.ensure_directory_remembered(&candidate);
+            }
         }
     }
 
@@ -702,14 +712,16 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
         DaemonStatus::Running(_)
     ) || std_client::is_daemon_running().await;
 
-    let mut filtered: Vec<Memory> = if daemon_running {
-        memories
-    } else {
-        memories
-            .into_iter()
-            .filter(|m| m.origin.starts_with(&cwd) || cwd.starts_with(&m.origin))
-            .collect()
-    };
+    let mut filtered: Vec<Memory> = memories;
+    filtered.sort_by_key(|m| {
+        if m.origin == cwd {
+            0usize
+        } else if m.origin.starts_with(&cwd) || cwd.starts_with(&m.origin) {
+            1usize
+        } else {
+            2usize
+        }
+    });
 
     // Also include existing native MEM8 wave memories from current directory, ancestors, and ~/.st/mem8
     // Only open stores that already exist on disk so we do not create empty .st/mem8 folders.

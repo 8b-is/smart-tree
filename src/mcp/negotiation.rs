@@ -89,7 +89,7 @@ pub async fn handle_session_aware_initialize(
                 "project_context": session.project_path.to_string_lossy(),
             },
         },
-        "instructions": "Smart Tree MCP server with session-aware compression. Call 'negotiate_session' to configure compression preferences.",
+        "instructions": crate::mcp::MCP_SERVER_INSTRUCTIONS,
     }))
 }
 

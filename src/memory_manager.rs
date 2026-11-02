@@ -128,12 +128,13 @@ impl MemoryManager {
             frequency,
         };
 
-        if let Some(existing) = self
-            .bank
-            .memories
-            .iter_mut()
-            .find(|m| m.origin == memory.origin && m.anchor_type == memory.anchor_type)
-        {
+        if let Some(existing) = self.bank.memories.iter_mut().find(|m| {
+            m.origin == memory.origin
+                && m.anchor_type == memory.anchor_type
+                && (m.anchor_type == "project"
+                    || m.origin.ends_with("/.ssh/config")
+                    || m.keywords == memory.keywords)
+        }) {
             *existing = memory.clone();
         } else {
             self.bank.memories.push(memory.clone());
@@ -169,16 +170,20 @@ impl MemoryManager {
         let truncated_origin = Self::truncate_utf8(&dir_str, 255);
         let _ = self.ensure_ssh_connections_remembered();
 
+        let (keywords, context) = Self::synthesize_directory_memory(&canon)?;
+        let truncated_context = Self::truncate_utf8(&context, 4096);
+
         if let Some(existing) = self
             .bank
             .memories
             .iter()
-            .find(|m| m.origin == truncated_origin)
+            .find(|m| m.origin == truncated_origin && m.anchor_type == "project")
         {
-            return Some(existing.clone());
+            if existing.context == truncated_context {
+                return Some(existing.clone());
+            }
         }
 
-        let (keywords, context) = Self::synthesize_directory_memory(&canon)?;
         self.anchor_silent("project", keywords, &context, &dir_str)
             .ok()
     }
@@ -431,8 +436,30 @@ impl MemoryManager {
             }
         }
 
-        // 2. Inspect README.md / CLAUDE.md / AGENTS.md / TODO.m8 for salient summary
-        for doc_name in ["README.md", "CLAUDE.md", "AGENTS.md", "TODO.m8", "TODO.md"] {
+        // 1b. Detect NVIDIA CUDA Toolkit or Ollama model directories
+        if dir.join("bin").join("nvcc").is_file() || dir.join("nvvm").is_dir() {
+            for kw in ["cuda", "nvidia", "nvcc", "gpu"] {
+                if !keywords.contains(&kw.to_string()) {
+                    keywords.push(kw.to_string());
+                }
+            }
+            parts.push(format!("{dir_name} (NVIDIA CUDA Toolkit: nvcc, nvml, gds, targets)"));
+        }
+
+        // 2. Inspect README.md / CLAUDE.md / AGENTS.md / README / TODO.m8 for salient summary
+        for doc_name in [
+            "README.md",
+            "CLAUDE.md",
+            "AGENTS.md",
+            "ARCHITECTURE.md",
+            "FAMILY_CONTEXT.md",
+            "FAMILY_SEED.md",
+            "DIFF_REPORT.md",
+            "TODO.m8",
+            "TODO.md",
+            "README",
+            "README.txt",
+        ] {
             let doc_path = dir.join(doc_name);
             if !doc_path.is_file() {
                 continue;
@@ -501,6 +528,12 @@ impl MemoryManager {
         let m8_file = dir.join(".m8");
         if m8_file.is_file() {
             if let Ok(c) = crate::m8_consciousness::DirectoryConsciousness::load(dir) {
+                for child_name in c.children.keys() {
+                    let cn = child_name.to_lowercase();
+                    if cn.len() >= 2 && !keywords.contains(&cn) && keywords.len() < 20 {
+                        keywords.push(cn);
+                    }
+                }
                 if !c.essence.is_empty() && !parts.iter().any(|p| p.contains(&c.essence)) {
                     parts.push(Self::truncate_utf8(&c.essence, 240).to_string());
                 }
