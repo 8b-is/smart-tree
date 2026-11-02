@@ -336,6 +336,7 @@ pub async fn handle_feedback(params: Option<Value>, ctx: Arc<McpContext>) -> Res
 #[allow(dead_code)]
 pub fn get_consolidated_tools() -> Vec<Value> {
     vec![
+        super::rink::definition(),
         json!({
             "name": "find",
             "description": "Find files, code, config, tests, documentation, duplicates, etc.",
@@ -970,6 +971,7 @@ pub async fn dispatch_consolidated_tool(
     ctx: Arc<McpContext>,
 ) -> Result<Value> {
     let raw = match name {
+        "rink" => super::rink::handle(params.unwrap_or_else(|| json!({}))).await?,
         "find" => handle_find(params, ctx).await?,
         "analyze" => handle_analyze(params, ctx).await?,
         "search" => handle_search(params, ctx).await?,

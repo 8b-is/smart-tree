@@ -11,7 +11,7 @@ pub use super::tools_consolidated::dispatch_consolidated_tool;
 pub fn get_enhanced_consolidated_tools() -> Vec<Value> {
     // Get feature flags to filter tools
     let flags = feature_flags::features();
-    let mut tools = Vec::new();
+    let mut tools = vec![super::rink::definition()];
 
     // Always include overview (basic tool)
     tools.push(

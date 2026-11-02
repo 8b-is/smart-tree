@@ -1610,6 +1610,8 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         },
     ];
 
+    tools.push(serde_json::from_value(super::rink::definition())?);
+
     #[cfg(feature = "google")]
     {
         let flags = crate::feature_flags::features();
@@ -1638,7 +1640,10 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
     // relative paths against the session's current directory, and remember the
     // resulting location for follow-up calls. This is the single choke point —
     // all tools (consolidated or not) route through here.
-    crate::mcp::helpers::normalize_path_args(&mut args, &ctx);
+    // Rink is pathless and rejects unknown fields; do not inject a session path.
+    if tool_name != "rink" {
+        crate::mcp::helpers::normalize_path_args(&mut args, &ctx);
+    }
 
     // Record this tool call for learning
     ctx.assistant.record_call(tool_name).await;
@@ -1647,6 +1652,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
     let ctx_clone = ctx.clone();
 
     let result = match tool_name {
+        "rink" => super::rink::handle(args).await,
         // Server tools
         "verify_permissions" => verify_permissions(args, ctx_clone.clone()).await,
         "server_info" => server_info(args, ctx_clone.clone()).await,

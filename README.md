@@ -55,6 +55,13 @@ alone. Queries refresh this cache incrementally, and `index` rebuilds it. CrabCC
 is pinned to commit `12e7763f2f30fd995608b2ea4cd91e82a3be88fe` for reproducible
 source builds. No models, cloud service, or message delivery is involved.
 
+### Opt-in Rink quantities and wave math
+
+The `rink` MCP tool provides bounded offline external-Rink quantity conversions,
+classical period/wavelength/beat calculations, and explicitly opted-in durable
+MEM8 provenance. No Rink binary or unit database is bundled. See the
+[operator setup, license boundary, and limitations](docs/RINK_INTEGRATION.md).
+
 ### Remember a forge into MEM8
 
 `st remember` ingests a local checkout or a GitHub/GitLab/Forgejo-style URL into a native MEM8 store. It keeps code excerpts and thoughts (READMEs, comments, and attached review notes) with provenance. `--level` is `extreme`, `professor`, `expert`, `high`, `medium`, `low`, or `bullshitter`. StandardGalactic is the full-nexus exception; other extreme requests fall back rather than swallowing an unbounded source.
