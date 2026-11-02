@@ -1,0 +1,18 @@
+#!/bin/bash
+# Smart Tree Branch Consciousness - Update .m8 on branch switch
+# "Each branch has its own wave frequency" - Hue
+
+PREV_HEAD=$1
+NEW_HEAD=$2
+BRANCH_SWITCH=$3
+
+if [ "$BRANCH_SWITCH" = "1" ]; then
+    # Branch switched - update consciousness
+    echo "🌊 Updating consciousness for new branch..."
+    st --update-consciousness . --quick 2>/dev/null || true
+
+    # Show current context
+    st --claude-context 2>/dev/null || true
+fi
+
+exit 0
