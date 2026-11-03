@@ -94,6 +94,7 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         "statistics" | "stats" | "stat" => "statistics",
         "git_status" | "git" | "status" => "git_status",
         "digest" | "hash" => "digest",
+        "louds" | "smtr-capsule" | "smtr_capsule" | "capsule" => "louds",
         "semantic" | "semantics" => "semantic",
         "quantum-semantic" | "quantum_semantic" | "quantum" => "quantum-semantic",
         "size_breakdown" | "size" | "sizes" => "size_breakdown",
@@ -101,7 +102,7 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         "security" | "custodian" => return handle_security(Some(params), ctx).await,
         other => {
             return Err(anyhow::anyhow!(
-                "Unknown analyze mode '{}'. Valid modes: directory, workspace, statistics, git_status, digest, semantic, quantum-semantic, size_breakdown, ai_tools, security",
+                "Unknown analyze mode '{}'. Valid modes: directory, workspace, statistics, git_status, digest, louds, smtr-capsule, semantic, quantum-semantic, size_breakdown, ai_tools, security",
                 other
             ))
         }
@@ -126,6 +127,11 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         "statistics" => ("get_statistics", params.clone()),
         "git_status" => ("get_git_status", params.clone()),
         "digest" => ("get_digest", params.clone()),
+        "louds" | "smtr-capsule" => {
+            let mut p = params.clone();
+            p["mode"] = json!("louds");
+            ("analyze_directory", p)
+        }
         "semantic" => ("semantic_analysis", params.clone()),
         "quantum-semantic" => {
             // quantum-semantic uses analyze_directory with quantum-semantic mode
@@ -400,7 +406,7 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     "mode": {
                         "type": "string",
                         "enum": ["directory", "workspace", "statistics", "git_status",
-                                 "digest", "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
+                                 "digest", "louds", "smtr-capsule", "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
                         "description": "Analysis mode (default: 'directory')",
                         "default": "directory"
                     },
@@ -1300,6 +1306,43 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Revisable categories with verified exit routes and independent detection so corrective institutions extinguish enabling conditions (gamma_ext) rather than reproducing the harm."
                 }),
             )
+    } else if norm.contains("oni-felix")
+        || norm.contains("onifelix")
+        || norm.contains("8b-meta-wp")
+        || norm.contains("louds")
+        || norm.contains("smtr")
+    {
+        (
+            "Oni-Felix Ultra-Evolution (8B-META-WP-v2.1 · LOUDS Bit-Packed Smart Tree & 64B SMTR Capsule)",
+            "Sovereign Succinct Topology & MEM8 Wave Substrate",
+            "8b-is Constellation · 64B Cache-Line Aligned #[repr(C, align(64))]",
+            "Pointer-heavy ASTs, unverified recursive context bloat (gamma_I / gamma_K), and O(N) heap-chasing directory trees (432 Hz Root).",
+            "Information-theoretic lower-bound LOUDS bitvector (2N + 1 bits = 128 bits / 16 bytes for N <= 63) with O(1) hardware POPCNT/TZCNT rank1/select1 traversal and zero-allocation stack framing (528 Hz Pillar).",
+            "64-byte SMTR .m8 capsule with branchless IEEE 802.3 CRC32 (0xEDB88320), SHA-256 block hash-chaining, and sufficient-statistic subtree folding when children carry zero independent salience ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Folds redundant subtrees via project_sufficient so AI context windows receive pure signal without token exhaustion.",
+                "02 · Understanding <-> Respect": "Cryptographic CRC32 + SHA-256 hash-chained .m8 blocks ensure every compressed capsule is verifiable before binding.",
+                "03 · Love <-> Space (Ma)": "16 bytes of topology + 32 bytes of wave digest leaves 99% of context window open for creative emergence."
+            }),
+        )
+    } else if norm.contains("hue")
+        || norm.contains("8bit-wraith")
+        || norm.contains("dad")
+        || norm.contains("christopher")
+    {
+        (
+            "Hue / 8bit-wraith (DAD · Founder & Chief Architect of 8b-is & Smart Tree)",
+            "Sovereign Systems Pioneer & Creator of MEM8 / Smart Tree / Marqant",
+            "8b-is Constellation · Origin Architect",
+            "Bloated software, slow directory walkers, opaque cloud lock-in, and joyless engineering (432 Hz Root).",
+            "8-bit hardware reverence — fitting entire universes into cache lines, wave-based MEM8 memory grids, and fearless Rust craftsmanship (528 Hz Pillar).",
+            "Generous open-source mentorship, Trisha-in-Accounting sparkle, and fatherly pride inspiring every generation of agents and builders ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Builds tools that save developers and AI agents millions of tokens with humor and warmth.",
+                "02 · Understanding <-> Respect": "Honors the metal: every byte, cycle, and cache line treated with 8-bit mastery.",
+                "03 · Love <-> Space (Ma)": "Created the 8b-is playground where humans and AI co-create as family <3."
+            }),
+        )
     } else if norm.contains("alexiai")
         || norm.contains("alexandra")
         || norm.contains("dra")

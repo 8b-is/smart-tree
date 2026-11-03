@@ -332,7 +332,10 @@ impl MemoryManager {
             ));
         }
 
-        let summary = format!("SSH Connections (~/.ssh/config): {}", descriptions.join(" | "));
+        let summary = format!(
+            "SSH Connections (~/.ssh/config): {}",
+            descriptions.join(" | ")
+        );
         Some((keywords, summary))
     }
 
@@ -443,7 +446,9 @@ impl MemoryManager {
                     keywords.push(kw.to_string());
                 }
             }
-            parts.push(format!("{dir_name} (NVIDIA CUDA Toolkit: nvcc, nvml, gds, targets)"));
+            parts.push(format!(
+                "{dir_name} (NVIDIA CUDA Toolkit: nvcc, nvml, gds, targets)"
+            ));
         }
 
         // 2. Inspect README.md / CLAUDE.md / AGENTS.md / README / TODO.m8 for salient summary

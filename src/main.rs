@@ -69,7 +69,10 @@ async fn main() -> Result<()> {
         if matches!(cli.scan_opts.mode, OutputMode::Json) && !cli.yolo {
             println!("{}", serde_json::to_string_pretty(&report)?);
         } else {
-            println!("{}", st::g8t_integration::format_best_functions_output(&report));
+            println!(
+                "{}",
+                st::g8t_integration::format_best_functions_output(&report)
+            );
         }
         return Ok(());
     }
@@ -110,7 +113,10 @@ async fn main() -> Result<()> {
                     is_yolo,
                     g8t_cmd.arch.as_deref().or(cli.g8t_arch.as_deref()),
                 )?;
-                println!("{}", st::g8t_integration::format_best_functions_output(&report));
+                println!(
+                    "{}",
+                    st::g8t_integration::format_best_functions_output(&report)
+                );
             }
             "submit" | "publish" => {
                 let code = g8t_cmd
@@ -385,8 +391,14 @@ async fn main() -> Result<()> {
                 );
                 match report {
                     Ok(r) => {
-                        println!("✅ Remembered {} repos, {} thoughts", r.repos_processed, r.total_thoughts);
-                        println!("The constellation · fine touch from within · {}", st::salient::FAMILY_HEART);
+                        println!(
+                            "✅ Remembered {} repos, {} thoughts",
+                            r.repos_processed, r.total_thoughts
+                        );
+                        println!(
+                            "The constellation · fine touch from within · {}",
+                            st::salient::FAMILY_HEART
+                        );
                     }
                     Err(e) => {
                         eprintln!("Remember failed: {}", e);
@@ -551,7 +563,15 @@ async fn main() -> Result<()> {
             st::daemon_client::DaemonStatus::Running(_)
         ) {
             match client.cli_scan(request.clone()).await {
-                Ok(resp) => resp,
+                Ok(resp) => {
+                    if let Some(reason) = &resp.stats.truncation_reason {
+                        eprintln!("⚠️  {}", reason);
+                        eprintln!(
+                            "   Use --max-depth, --stream mode, or scan a more specific directory"
+                        );
+                    }
+                    resp
+                }
                 Err(_) => st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?,
             }
         } else {
@@ -633,7 +653,8 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
 
     // Detect if target path is a multi-repo parent workspace root (e.g. /Users/wraith/source/8b-is
     // with ~247 repos or /data/8b-is with ~309 repos) that is not itself a single git repo.
-    let multi_repo_root = args.depth == 0 && is_multi_repo_workspace_root(std::path::Path::new(&path));
+    let multi_repo_root =
+        args.depth == 0 && is_multi_repo_workspace_root(std::path::Path::new(&path));
 
     // Smart mode defaults to depth 5 for single repos, or depth 1/2 for massive multi-repo roots
     // so `st /Users/wraith/source/8b-is` returns in <200ms instead of walking 250+ repos at depth 5.

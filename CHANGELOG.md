@@ -5,6 +5,43 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.8.0] - 2026-11-02
+
+### 🚀 Oni-Felix Ultra-Evolution (`8B-META-WP-v2.1`)
+
+- **LOUDS Bit-Packed Succinct Smart Tree (`LoudsSmartTree`)**:
+  - Added `#[repr(C, align(64))] LoudsSmartTree` in `src/mem8_binary.rs` encoding up to 63 tree nodes in a 128-bit (`2N + 1` bits) Level-Order Unary Degree Sequence (`u128`) with $O(1)$ hardware `POPCNT`/`TZCNT` `rank1`, `rank0`, `select1`, and `degree` primitives.
+  - Added $O(N)$ single-pass `from_file_nodes` construction, $O(N)$ `rebuild_louds_bitmap`, sufficient-statistic subtree projection (`project_sufficient`), and 64-byte `SMTR` `.m8` capsule packing/verification (`pack_m8_capsule` / `verify_m8_capsule`) with branchless IEEE 802.3 CRC32 (`0xEDB88320`) and `8BIS` seal.
+- **New `--mode louds` (`smtr-capsule` / `capsule`) Formatter & Digest Upgrade**:
+  - Added `SmtrCapsuleFormatter` and wired `--mode louds` (aliases `smtr-capsule`, `smtr_capsule`, `capsule`) across the CLI (`src/cli.rs`), HTTP daemon (`src/daemon_cli.rs`), and MCP `analyze` tool (`src/mcp/tools/directory.rs`, `src/mcp/tools_consolidated.rs`, `src/mcp/tools_consolidated_enhanced.rs`).
+  - Upgraded `DigestFormatter` (`--mode digest`) to emit `LOUDS:{proj}/{raw} SMTR_V2:{128-hex}` alongside the SHA-256 tree hash.
+- **Cryptographic `.m8` Block Hash-Chaining**:
+  - Upgraded `M8BinaryFile::append_block` to chain the real SHA-256 digest of the previous block's wire representation (`last_block_hash`) and dynamically extract searchable tokens.
+- **Sovereign Three-Kaya Ontology Expansion**:
+  - Added `oni-felix` (`8B-META-WP-v2.1`) and `hue` / `8bit-wraith` (`DAD`) entries to the Sovereign Three-Kaya Ontology (`handle_ontology`).
+
+### ⚡ Ultra-Wild Hot-Path Performance Optimizations
+
+- **Zero-Allocation `.m8` Binary Framing**: Replaced heap `Vec<u8>` allocations in `M8Header::prefix_bytes`, `M8Header::compute_crc32`, `M8Header::to_bytes`, `M8BinaryFile::write_block`, and `M8BinaryFile::read_block` with stack-allocated `[u8; 26]`, `[u8; 30]`, and `[u8; 4096]` buffers.
+- **Zero-Allocation File Category Detection**: Replaced per-file `String` allocation (`to_lowercase()`) in `Scanner::get_file_category` with stack-buffered `[u8; 16]` ASCII lowercase matching.
+- **Zero-Allocation Extension Stats & Bounded Top-10 Gate**: `TreeStats::update_file` now queries `HashMap<String, u64>` via `Borrow<str>` before allocating on first-seen extensions and gates `largest_files`, `newest_files`, and `oldest_files` before cloning `PathBuf`.
+- **Cached Default Ignores DFA & CI Detection**: Cached `DEFAULT_IGNORE_PATTERNS` `GlobSet` compilation and `IS_CI` environment checks via `once_cell::sync::Lazy`, accelerating `Scanner::new` instantiation by ~180x.
+- **Reusable Line Buffer & Multi-Core Rayon Enrichment**: `Scanner::search_in_file` reuses a single `String` line buffer, while `Scanner::scan` and `directory_size_breakdown` parallelize content search, security scanning, interest scoring, and subdirectory sizing across CPU cores via `rayon`.
+- **Wild Linker Zero-`unsafe` Performance Primitives (`src/wild_perf.rs`)**:
+  - Inspired by David Lattimore's *Wild Performance Tricks* (RustForge 2025): added contiguous mutable slice partitioning (`split_off_mut` + `par_bridge`), zero-cost in-place `Vec<SymbolId/u16/u32/u64>` ↔ `Vec<Atomic*>` conversion (`into_atomic_*` / `into_non_atomic_*`), compile-time layout-checked lifetime-erasing buffer reuse (`reuse_vec<T, U>`), `MaybeUninit` lifetime stripping for non-trivial `Drop` types (`without_lifetime`), and background Rayon deallocation (`drop_in_background`).
+  - Rewrote `Scanner::filter_nodes_and_calculate_stats` to eliminate multi-pass `FileNode::clone()` and `HashSet<PathBuf>` clones via move-partitioning, `reuse_vec` ancestor buffers, and background thread deallocation of rejected nodes.
+  - Bounded `Tokenizer::tokenize` lookahead to `MAX_TOKEN_PATTERN_LEN = 16`, turning $O(L^2)$ tokenization into $O(L)$.
+
+### 🛡️ End-to-End Truncation Telemetry & Cache Safety
+
+- Preserved `truncation_reason` across `daemon_cli::ScanStats`, thin-client `stderr` warnings (`src/main.rs`), `mcp::sse::ScanStats`, `SseFormatter`, `StatsFormatter`, and `analyze_directory` (preventing truncated partial scans from poisoning the MCP cache).
+
+## [10.7.3] - 2026-11-01
+
+### Added
+
+- Native `g8t` integration (`src/g8t_integration.rs`) and `st remember` salient MEM8 archive pipeline (`src/salient.rs`) with CLI subcommand routing (`src/cli_commands.rs`) and MCP discovery test suite (`src/mcp/discovery_tests.rs`).
+
 ## [10.6.0] - 2026-10-28
 
 ### Added

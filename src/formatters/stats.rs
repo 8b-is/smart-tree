@@ -48,6 +48,9 @@ impl Formatter for StatsFormatter {
             stats.total_size,
             format_size(stats.total_size, BINARY)
         )?;
+        if let Some(reason) = &stats.truncation_reason {
+            writeln!(writer, "Truncation Warning: {}", reason)?;
+        }
         writeln!(writer)?;
 
         // File types by count

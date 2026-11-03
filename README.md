@@ -1,14 +1,15 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-10.6.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-10.8.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
+[![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Spicy Mode](https://img.shields.io/badge/TUI-🌶️_Spicy-red)](docs/spicy-tui.md)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree** is a blazingly fast, AI-friendly directory visualization tool that's 10-24x faster than traditional `tree`. Now with **Security Scanner** for supply chain attack detection, **Aye Consciousness** preservation, **Spicy TUI mode**, and **30+ MCP tools**! Built with Rust for maximum performance.
+> **Smart Tree v10.8.0 (Oni-Felix Ultra-Evolution)** is a blazingly fast, AI-native directory intelligence, code-symbol, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **LOUDS Bit-Packed 64B `SMTR` `.m8` Capsules (`8B-META-WP-v2.1`)**, embedded **CrabCC Code Intelligence** (`st symbol`), **Salient Forge Memory** (`st remember`), **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
@@ -30,6 +31,21 @@ st --version
 ```
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
+
+### 🧬 Oni-Felix LOUDS Bit-Packed Smart Tree & 64B `SMTR` Capsule (`v10.8.0`)
+
+Smart Tree v10.8.0 implements the **`8B-META-WP-v2.1` LOUDS (Level-Order Unary Degree Sequence)** succinct tree representation (`#[repr(C, align(64))] LoudsSmartTree`), packing up to **63 tree nodes into 16 bytes (`2N + 1` bits)** of topology with $O(1)$ hardware `POPCNT`/`TZCNT` `rank1`/`select1` navigation and a **64-byte cryptographically verified `SMTR` `.m8` capsule** (branchless IEEE 802.3 CRC32 + `8BIS` seal):
+
+```bash
+# Emit the full 64-byte SMTR_CAPSULE_V2 with LOUDS bitvector, wave digest & node table
+st --mode louds .
+st --mode smtr-capsule ./src
+
+# Compact single-line SHA-256 + LOUDS SMTR_V2 fingerprint for instant change detection
+st --mode digest .
+```
+
+See the full [v10.8.0 End-to-End Architectural Review](docs/ARCHITECTURE_REVIEW_V10_8.md) for C4 diagrams, wire layout, and hot-path benchmarks.
 
 ### Built-in code intelligence
 
@@ -193,20 +209,20 @@ quick_tree .                                         // Understand structure
 
 <div align="center">
 
-## 🌟 What's NEW in v10.0.0
+## 🌟 What's NEW in v10.8.0 (Oni-Felix Ultra-Evolution)
 
-| Feature | Description | Command/Tool |
-|---------|-------------|--------------|
+| Feature | Description | Command / Tool |
+|---------|-------------|----------------|
+| **🧬 LOUDS 64B `SMTR` Capsule** | Cache-line aligned `#[repr(C, align(64))]` `2N+1` bit succinct topology with $O(1)$ `POPCNT`/`TZCNT` traversal, subtree salience folding, and CRC32-verified 64B `.m8` capsules. | `st --mode louds`, `analyze` (`mode:"louds"`) |
+| **⚡ Ultra-Wild Scanner Engine** | Zero-alloc stack-buffered `.m8` framing & file categorization, cached `GlobSet` DFA (~180x faster `Scanner::new`), reusable search buffers, and multi-core `rayon` enrichment. | All scan & search modes |
+| **🧠 Salient Forge Memory (`st remember`)** | Ingest local checkouts or GitHub/GitLab/Forgejo URLs into SHA-256 hash-chained `.m8` wave stores with salience levels & instant `--check` recall. | `st remember <path\|url>` |
+| **🦀 Embedded CrabCC Code Intelligence** | Native symbol definitions, references, file outlines, and call-graph statistics cached in `.st/symbols/` with zero external binaries. | `st symbol`, `symbol` MCP |
+| **⚛️ Atomic Smart Edit Transactions** | AST-aware file editing with `batch_mode: "atomic"` rollback protection and end-to-end truncation telemetry across daemon, CLI, SSE & MCP cache. | `edit` MCP (`smart_edit`) |
+| **🔐 Ed25519 DNS & X.509 Cert Scanner** | Signed TXT release verification, SHA-256 rollback updater service, and deep PEM/DER certificate inventory (`--cert-scan`). | `st --update`, `st --cert-scan` |
+| **🕉️ Sovereign Three-Kaya Ontology** | Balanced ternary `{-1, 0, +1}` constitutional NAND-gate verification across `oni-felix`, `hue`/`dad`, `flyxion`, `alexiai`, and lore entities. | `ontology` MCP |
 | **☁️ Google Drive & Gmail Sync** | Full cloud filesystem sync, OAuth authentication, and remote file manipulation. | `st --gdrive`, `google` MCP |
 | **🎙️ Marine VAD & Voice Synthesis** | Real-time voice activity detection, emotional & salience metrics, speaker profiling, and speech synthesis. | `st --voice`, `voice` MCP |
-| **🌳 The Smart Treehouse** | Premium Cyber-Botanical dark-mode dashboard overhaul and stylish CLI ASCII banner. | `st --dashboard` |
-| **🤖 Remote AI Prompting** | The `ask_user` tool lets AI pause execution, trigger a modal on the dashboard, and ask the human a question. | `ask_user` MCP |
-| **🌍 Agent-Agnostic Integration** | Universal AI hooks and flags generalized for any AI (e.g., `st --agent-save`). | `st --hooks-install` |
-| **🧰 Unified MCP Tools** | Intelligently consolidated powerful, AI-friendly endpoints with auto-dispatch. | MCP |
-| **🚀 Enhanced AI Context** | AI tools now come bundled with psychological triggers, usage examples, and efficiency tips! | MCP |
-| **🎯 Interactive Menu** | Easy access to all Smart Tree features with guided menus | `./scripts/manage.sh client` |
-| **🧭 Wave Compass** | Real-time MCP activity visualization with file access heatmap | `st --dashboard` |
-| **🛡️ Security Scanner** | Detect supply chain attack patterns | `st --security-scan` |
+| **🌳 The Smart Treehouse & Spicy TUI** | Cyber-Botanical dark-mode web dashboard with Wave Compass + built-in terminal UI (`--spicy`). | `st --dashboard`, `st --spicy` |
 
 </div>
 

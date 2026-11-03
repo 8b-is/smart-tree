@@ -57,14 +57,18 @@ impl Formatter for SseFormatter {
         let mut formatter = SseFormatter::new();
 
         // Send initial scan event
+        let mut scan_stats = serde_json::json!({
+            "total_files": stats.total_files,
+            "total_dirs": stats.total_dirs,
+            "total_size": stats.total_size,
+        });
+        if let Some(reason) = &stats.truncation_reason {
+            scan_stats["truncation_reason"] = serde_json::json!(reason);
+        }
         let scan_event = serde_json::json!({
             "type": "scan_complete",
             "path": root_path.display().to_string(),
-            "stats": {
-                "total_files": stats.total_files,
-                "total_dirs": stats.total_dirs,
-                "total_size": stats.total_size,
-            }
+            "stats": scan_stats
         });
         let id = formatter.next_event_id();
         formatter.write_event(writer, "scan", &scan_event, id)?;

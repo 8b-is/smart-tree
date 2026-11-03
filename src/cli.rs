@@ -319,7 +319,11 @@ pub struct Cli {
     // G8T.IS RUST FUNCTION CAPSULES, YOLO FASTEST-PICK & FOKEN SCOREBOARD
     // =========================================================================
     /// Query g8t.is for the fastest verified Rust functions by keyword, domain, or signature (e.g. "binary search", "(u64,u64)->u64")
-    #[arg(long, value_name = "QUERY", help_heading = "g8t.is Rust Capsules & Fokens")]
+    #[arg(
+        long,
+        value_name = "QUERY",
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
     pub g8t_best: Option<String>,
 
     /// YOLO fastest-pick mode: return ONLY the #1 fastest verified Rust function (raw drop-in code + 1-line receipt)
@@ -352,15 +356,27 @@ pub struct Cli {
     pub partner: String,
 
     /// Domain tag for --g8t-submit (default: "smart-tree-<arch>")
-    #[arg(long, value_name = "DOMAIN", help_heading = "g8t.is Rust Capsules & Fokens")]
+    #[arg(
+        long,
+        value_name = "DOMAIN",
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
     pub g8t_domain: Option<String>,
 
     /// Function name when --g8t-submit is given a raw expression body
-    #[arg(long, value_name = "NAME", help_heading = "g8t.is Rust Capsules & Fokens")]
+    #[arg(
+        long,
+        value_name = "NAME",
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
     pub g8t_name: Option<String>,
 
     /// Filter g8t.is capsules by hardware architecture (e.g. "x86_64", "aarch64")
-    #[arg(long, value_name = "ARCH", help_heading = "g8t.is Rust Capsules & Fokens")]
+    #[arg(
+        long,
+        value_name = "ARCH",
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
     pub g8t_arch: Option<String>,
 
     /// Number of top g8t.is functions or scoreboard rows to return (default: 3 for best, 15 for leaderboard)
@@ -965,6 +981,9 @@ pub enum OutputMode {
     Tsv,
     /// Super compact digest format
     Digest,
+    /// LOUDS bit-packed sufficient tree & 64B SMTR .m8 capsule (8B-META-WP-v2.1)
+    #[value(alias = "smtr-capsule", alias = "smtr_capsule", alias = "capsule")]
+    Louds,
     /// Emotional tree - files with feelings!
     Emotional,
     /// MEM|8 Quantum format - ultimate compression
@@ -1005,7 +1024,7 @@ pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
         OutputMode::Classic => 3,
         OutputMode::Ai | OutputMode::Hex => 5,
         OutputMode::Stats => 10,
-        OutputMode::Digest => 10,
+        OutputMode::Digest | OutputMode::Louds => 10,
         OutputMode::Emotional => 5,
         OutputMode::Quantum | OutputMode::QuantumSemantic | OutputMode::HexTree => 5,
         OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4,

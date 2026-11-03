@@ -15,8 +15,12 @@ pub struct DynamicTokenizer {
     /// Common prefixes/suffixes
     prefixes: HashMap<String, usize>,
     suffixes: HashMap<String, usize>,
-    /// Generated token mappings
+    /// Generated token mappings (`pattern -> hex_id`)
     tokens: HashMap<String, String>,
+    /// Reverse token mappings (`hex_id -> pattern`) for lossless decompression
+    reverse_tokens: HashMap<String, String>,
+    /// Pre-sorted `(pattern, hex_id)` ordered by descending pattern length for O(N) single-pass compression
+    sorted_patterns: Vec<(String, String)>,
 }
 
 impl Default for DynamicTokenizer {
@@ -34,17 +38,18 @@ impl DynamicTokenizer {
             prefixes: HashMap::new(),
             suffixes: HashMap::new(),
             tokens: HashMap::new(),
+            reverse_tokens: HashMap::new(),
+            sorted_patterns: Vec::new(),
         }
     }
 
     /// Analyze nodes to learn patterns
     pub fn analyze(&mut self, nodes: &[FileNode]) {
         for node in nodes {
-            // Analyze path components
+            // Analyze path components (supporting both Unix '/' and Windows '\\')
             let path_str = node.path.to_string_lossy();
 
-            // Split path into components
-            for component in path_str.split('/').filter(|c| !c.is_empty()) {
+            for component in path_str.split(['/', '\\']).filter(|c| !c.is_empty()) {
                 *self
                     .path_components
                     .entry(component.to_string())
@@ -123,63 +128,121 @@ impl DynamicTokenizer {
         }
     }
 
-    /// Generate optimal token assignments
+    /// Generate optimal token assignments without duplicate overwrites or `0xF0..=0xFF` collisions.
     fn generate_tokens(&mut self) {
-        let mut token_id = 0x80; // Start from 128
+        self.tokens.clear();
+        self.reverse_tokens.clear();
+        self.sorted_patterns.clear();
 
-        // Sort all patterns by frequency
-        let mut all_patterns: Vec<(String, usize)> = Vec::new();
+        // Deduplicate patterns across path_components, file_names, and extensions
+        // keeping the maximum observed frequency for each unique pattern.
+        let mut deduplicated: HashMap<String, usize> = HashMap::new();
 
-        // Collect all patterns with their frequencies
-        for (pattern, count) in &self.path_components {
-            if *count > 2 {
-                // Only tokenize if it appears more than twice
-                all_patterns.push((pattern.clone(), *count));
+        for (pattern, &count) in &self.path_components {
+            if count > 2 {
+                let entry = deduplicated.entry(pattern.clone()).or_insert(0);
+                *entry = (*entry).max(count);
             }
         }
 
-        for (pattern, count) in &self.file_names {
-            if *count > 2 {
-                all_patterns.push((pattern.clone(), *count));
+        for (pattern, &count) in &self.file_names {
+            if count > 2 {
+                let entry = deduplicated.entry(pattern.clone()).or_insert(0);
+                *entry = (*entry).max(count);
             }
         }
 
-        for (pattern, count) in &self.extensions {
-            if *count > 5 {
-                // Extensions need higher frequency
-                all_patterns.push((format!(".{}", pattern), *count));
+        for (pattern, &count) in &self.extensions {
+            if count > 5 {
+                let dot_ext = format!(".{}", pattern);
+                let entry = deduplicated.entry(dot_ext).or_insert(0);
+                *entry = (*entry).max(count);
             }
         }
 
-        // Sort by frequency (descending) and pattern length (descending for same frequency)
-        all_patterns.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.0.len().cmp(&a.0.len())));
+        let mut all_patterns: Vec<(String, usize)> = deduplicated.into_iter().collect();
 
-        // Assign tokens to most frequent patterns
-        for (pattern, _count) in all_patterns.iter().take(127) {
-            // Max 127 tokens
-            self.tokens
-                .insert(pattern.clone(), format!("{:02X}", token_id));
-            token_id += 1;
-            if token_id > 0xFE {
-                // Reserve 0xFF
-                break;
-            }
+        // Sort by frequency (descending), then pattern length (descending), then lexicographically for determinism
+        all_patterns.sort_by(|a, b| {
+            b.1.cmp(&a.1)
+                .then_with(|| b.0.len().cmp(&a.0.len()))
+                .then_with(|| a.0.cmp(&b.0))
+        });
+
+        // Assign tokens in 0x80..=0xEF (reserving 0xF0..=0xFF for semantic AST tokens F0..F8 and escape markers)
+        for (token_id, (pattern, _count)) in (0x80u8..=0xEF).zip(all_patterns) {
+            let hex_id = format!("{:02X}", token_id);
+            self.tokens.insert(pattern.clone(), hex_id.clone());
+            self.reverse_tokens.insert(hex_id.clone(), pattern.clone());
+            self.sorted_patterns.push((pattern, hex_id));
         }
+
+        // Pre-sort `sorted_patterns` by descending pattern length so `compress_path`
+        // performs a single left-to-right greedy pass without re-sorting or corrupting `{XX}` markers.
+        self.sorted_patterns
+            .sort_by(|a, b| b.0.len().cmp(&a.0.len()).then_with(|| a.1.cmp(&b.1)));
     }
 
-    /// Compress a path using learned tokens
+    /// Compress a path using learned tokens in a single left-to-right non-overlapping scan.
+    ///
+    /// Unlike repeated `String::replace`, this never re-scans emitted `{XX}` markers
+    /// (preventing corruption when a learned pattern contains hex characters) and
+    /// avoids $O(K)$ intermediate `String` allocations per path.
     pub fn compress_path(&self, path: &str) -> String {
-        let mut compressed = path.to_string();
-
-        // Apply tokens from longest to shortest to avoid substring issues
-        let mut tokens_by_length: Vec<(&String, &String)> = self.tokens.iter().collect();
-        tokens_by_length.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
-
-        for (pattern, token) in tokens_by_length {
-            compressed = compressed.replace(pattern, &format!("{{{}}}", token));
+        if self.sorted_patterns.is_empty() || path.is_empty() {
+            return path.to_string();
         }
 
-        compressed
+        let mut out = String::with_capacity(path.len());
+        let mut remaining = path;
+
+        while !remaining.is_empty() {
+            let mut matched = false;
+            for (pattern, token) in &self.sorted_patterns {
+                if remaining.starts_with(pattern.as_str()) {
+                    out.push('{');
+                    out.push_str(token);
+                    out.push('}');
+                    remaining = &remaining[pattern.len()..];
+                    matched = true;
+                    break;
+                }
+            }
+
+            if !matched {
+                if let Some(ch) = remaining.chars().next() {
+                    out.push(ch);
+                    remaining = &remaining[ch.len_utf8()..];
+                }
+            }
+        }
+
+        out
+    }
+
+    /// Decompress a `{XX}` tokenized path back into its original string.
+    pub fn decompress_path(&self, compressed: &str) -> String {
+        let mut out = String::with_capacity(compressed.len() * 2);
+        let mut remaining = compressed;
+
+        while !remaining.is_empty() {
+            if remaining.starts_with('{') && remaining.len() >= 4 && remaining.as_bytes()[3] == b'}'
+            {
+                if let Some(hex_id) = remaining.get(1..3) {
+                    if let Some(pattern) = self.reverse_tokens.get(hex_id) {
+                        out.push_str(pattern);
+                        remaining = &remaining[4..];
+                        continue;
+                    }
+                }
+            }
+            if let Some(ch) = remaining.chars().next() {
+                out.push(ch);
+                remaining = &remaining[ch.len_utf8()..];
+            }
+        }
+
+        out
     }
 
     /// Get the token dictionary header
@@ -200,7 +263,7 @@ impl DynamicTokenizer {
     /// Get compression statistics
     pub fn get_stats(&self) -> TokenizerStats {
         let total_pattern_bytes: usize = self.tokens.keys().map(|k| k.len()).sum();
-        let total_token_bytes = self.tokens.len() * 3; // {XX} format
+        let total_token_bytes = self.tokens.len() * 4; // "{XX}" is 4 bytes
 
         TokenizerStats {
             patterns_found: self.path_components.len()
@@ -219,17 +282,18 @@ pub struct TokenizerStats {
     pub estimated_savings: usize,
 }
 
-/// Split CamelCase into components
+/// Split CamelCase into components without per-character String allocations.
 fn split_camel_case(s: &str) -> Vec<String> {
     let mut result = Vec::new();
-    let mut current = String::new();
+    let mut current = String::with_capacity(s.len());
 
     for (i, ch) in s.chars().enumerate() {
         if i > 0 && ch.is_uppercase() && !current.is_empty() {
-            result.push(current.clone());
-            current.clear();
+            result.push(std::mem::take(&mut current));
         }
-        current.push(ch.to_lowercase().to_string().chars().next().unwrap());
+        for lower in ch.to_lowercase() {
+            current.push(lower);
+        }
     }
 
     if !current.is_empty() {
@@ -296,10 +360,10 @@ mod tests {
     }
 
     #[test]
-    fn test_compression() {
+    fn test_compression_and_roundtrip_without_marker_corruption() {
         let mut tokenizer = DynamicTokenizer::new();
 
-        // Add patterns
+        // Add patterns including hex-like substrings ("80", "bad") that previously corrupted "{80}" markers
         for _ in 0..10 {
             *tokenizer
                 .path_components
@@ -309,29 +373,36 @@ mod tests {
                 .path_components
                 .entry("components".to_string())
                 .or_insert(0) += 1;
+            *tokenizer
+                .path_components
+                .entry("80".to_string())
+                .or_insert(0) += 1;
         }
 
         tokenizer.generate_tokens();
 
-        // Test compression
-        let original = "src/components/Button.tsx";
+        // Test compression and lossless decompression
+        let original = "src/components/80/Button.tsx";
         let compressed = tokenizer.compress_path(original);
 
-        // Should be shorter
         assert!(compressed.len() < original.len());
-        // Should contain token markers
-        assert!(compressed.contains("{"));
-        assert!(compressed.contains("}"));
+        assert!(compressed.contains('{'));
+        assert!(compressed.contains('}'));
+        assert_eq!(tokenizer.decompress_path(&compressed), original);
     }
 
     #[test]
-    fn test_token_assignment_order() {
+    fn test_deduplication_and_token_assignment_order() {
         let mut tokenizer = DynamicTokenizer::new();
 
-        // Add patterns with different frequencies
+        // Same pattern in both path_components and file_names must not waste a token ID
         *tokenizer
             .path_components
-            .entry("very_frequent".to_string())
+            .entry("README.md".to_string())
+            .or_insert(0) = 100;
+        *tokenizer
+            .file_names
+            .entry("README.md".to_string())
             .or_insert(0) = 100;
         *tokenizer
             .path_components
@@ -348,13 +419,9 @@ mod tests {
 
         tokenizer.generate_tokens();
 
-        // Most frequent should get lower token IDs
-        let very_frequent_token = tokenizer.tokens.get("very_frequent").unwrap();
-        let less_frequent_token = tokenizer.tokens.get("less_frequent").unwrap();
-
-        assert!(very_frequent_token < less_frequent_token);
-
-        // Too rare shouldn't be tokenized
+        // README.md must retain 80 (not overwritten by 81!) and less_frequent gets 81
+        assert_eq!(tokenizer.tokens.get("README.md").unwrap(), "80");
+        assert_eq!(tokenizer.tokens.get("less_frequent").unwrap(), "81");
         assert!(!tokenizer.tokens.contains_key("too_rare"));
     }
 }

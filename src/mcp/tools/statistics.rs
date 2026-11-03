@@ -86,11 +86,12 @@ pub async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Resu
 
     let (nodes, _) = scan_with_config(&path, config)?;
 
-    // Calculate size for each subdirectory
-    let mut dir_sizes = Vec::new();
-    for node in &nodes {
-        if node.is_dir && node.path != path {
-            // Get size of this directory
+    // Calculate size for each subdirectory in parallel across cores
+    use rayon::prelude::*;
+    let dir_sizes_res: Result<Vec<(String, String, u64, u64)>> = nodes
+        .par_iter()
+        .filter(|node| node.is_dir && node.path != path)
+        .map(|node| {
             let subconfig = ScannerConfigBuilder::new()
                 .respect_gitignore(false)
                 .show_hidden(true)
@@ -99,8 +100,7 @@ pub async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Resu
                 .build();
             let (_, substats) = scan_with_config(&node.path, subconfig)?;
 
-            // Store raw data for sorting, then convert to hex later
-            dir_sizes.push((
+            Ok((
                 node.path
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -109,9 +109,10 @@ pub async fn directory_size_breakdown(args: Value, ctx: Arc<McpContext>) -> Resu
                 node.path.display().to_string(),
                 substats.total_size,
                 substats.total_files,
-            ));
-        }
-    }
+            ))
+        })
+        .collect();
+    let mut dir_sizes = dir_sizes_res?;
 
     // Sort by size (raw u64) descending
     dir_sizes.sort_by_key(|(_, _, size, _)| std::cmp::Reverse(*size));

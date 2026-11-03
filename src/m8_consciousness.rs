@@ -59,19 +59,17 @@ pub struct WavePattern {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmotionalSignature {
-    pub energy: f64,      // High activity vs calm
-    pub complexity: f64,  // Simple vs complex
-    pub stability: f64,   // Stable vs changing
-    pub focus: f64,       // Focused vs scattered
+    pub energy: f64,     // High activity vs calm
+    pub complexity: f64, // Simple vs complex
+    pub stability: f64,  // Stable vs changing
+    pub focus: f64,      // Focused vs scattered
 }
 
 impl DirectoryConsciousness {
     /// Create new consciousness for a directory
     pub fn new(path: &Path) -> Result<Self> {
         let frequency = Self::calculate_frequency(path);
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs();
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
         Ok(Self {
             frequency,
@@ -320,20 +318,22 @@ impl DirectoryConsciousness {
                 for line in content.lines().take(60) {
                     let trimmed = line.trim();
                     if pkg_name.is_none() && trimmed.starts_with("name") && trimmed.contains('=') {
-                        pkg_name = trimmed
-                            .split_once('=')
-                            .map(|(_, v)| v.trim().trim_matches('"').trim_matches('\'').to_string());
+                        pkg_name = trimmed.split_once('=').map(|(_, v)| {
+                            v.trim().trim_matches('"').trim_matches('\'').to_string()
+                        });
                     } else if desc.is_none()
                         && trimmed.starts_with("description")
                         && trimmed.contains('=')
                     {
-                        desc = trimmed
-                            .split_once('=')
-                            .map(|(_, v)| v.trim().trim_matches('"').trim_matches('\'').to_string());
+                        desc = trimmed.split_once('=').map(|(_, v)| {
+                            v.trim().trim_matches('"').trim_matches('\'').to_string()
+                        });
                     }
                 }
                 match (pkg_name, desc) {
-                    (Some(n), Some(d)) if !d.is_empty() => parts.push(format!("{} (Rust): {}", n, d)),
+                    (Some(n), Some(d)) if !d.is_empty() => {
+                        parts.push(format!("{} (Rust): {}", n, d))
+                    }
                     (Some(n), _) => parts.push(format!("{} (Rust crate)", n)),
                     _ => {}
                 }
@@ -400,13 +400,25 @@ impl DirectoryConsciousness {
                     .take(10)
                     .collect();
 
-                if files.iter().any(|f| f.path().extension() == Some("rs".as_ref())) {
+                if files
+                    .iter()
+                    .any(|f| f.path().extension() == Some("rs".as_ref()))
+                {
                     "Rust code directory - systems programming space"
-                } else if files.iter().any(|f| f.path().extension() == Some("js".as_ref())) {
+                } else if files
+                    .iter()
+                    .any(|f| f.path().extension() == Some("js".as_ref()))
+                {
                     "JavaScript directory - web consciousness"
-                } else if files.iter().any(|f| f.path().extension() == Some("py".as_ref())) {
+                } else if files
+                    .iter()
+                    .any(|f| f.path().extension() == Some("py".as_ref()))
+                {
                     "Python directory - scripting and data space"
-                } else if files.iter().any(|f| f.path().extension() == Some("md".as_ref())) {
+                } else if files
+                    .iter()
+                    .any(|f| f.path().extension() == Some("md".as_ref()))
+                {
                     "Markdown directory - documentation space"
                 } else {
                     "General purpose directory - mixed consciousness"
@@ -421,14 +433,12 @@ impl DirectoryConsciousness {
     fn detect_patterns(&mut self, path: &Path) -> Result<()> {
         self.patterns.clear();
 
-        let entries: Vec<_> = fs::read_dir(path)?
-            .filter_map(|e| e.ok())
-            .collect();
+        let entries: Vec<_> = fs::read_dir(path)?.filter_map(|e| e.ok()).collect();
 
         // Check for test patterns
         if entries.iter().any(|e| {
-            e.file_name().to_string_lossy().contains("test") ||
-            e.file_name().to_string_lossy().contains("spec")
+            e.file_name().to_string_lossy().contains("test")
+                || e.file_name().to_string_lossy().contains("spec")
         }) {
             self.patterns.push(WavePattern {
                 pattern_type: "testing".to_string(),
@@ -439,8 +449,8 @@ impl DirectoryConsciousness {
 
         // Check for async patterns
         if entries.iter().any(|e| {
-            e.file_name().to_string_lossy().contains("async") ||
-            e.file_name().to_string_lossy().contains("future")
+            e.file_name().to_string_lossy().contains("async")
+                || e.file_name().to_string_lossy().contains("future")
         }) {
             self.patterns.push(WavePattern {
                 pattern_type: "async".to_string(),
@@ -459,7 +469,8 @@ impl DirectoryConsciousness {
         }
 
         // Check for documentation patterns
-        let doc_count = entries.iter()
+        let doc_count = entries
+            .iter()
             .filter(|e| e.path().extension() == Some("md".as_ref()))
             .count();
 
@@ -476,9 +487,7 @@ impl DirectoryConsciousness {
 
     /// Analyze emotional signature of directory
     fn analyze_emotion(&mut self, path: &Path) -> Result<()> {
-        let entries: Vec<_> = fs::read_dir(path)?
-            .filter_map(|e| e.ok())
-            .collect();
+        let entries: Vec<_> = fs::read_dir(path)?.filter_map(|e| e.ok()).collect();
 
         // Energy: based on file count and recent modifications
         let file_count = entries.len();
@@ -486,19 +495,25 @@ impl DirectoryConsciousness {
 
         // Complexity: based on directory depth and variety
         let subdirs = entries.iter().filter(|e| e.path().is_dir()).count();
-        let file_types: std::collections::HashSet<_> = entries.iter()
+        let file_types: std::collections::HashSet<_> = entries
+            .iter()
             .filter_map(|e| e.path().extension()?.to_str().map(String::from))
             .collect();
 
         self.emotion.complexity = ((subdirs + file_types.len()) as f64 / 10.0).min(1.0);
 
         // Stability: check for recent changes
-        let recent_changes = entries.iter()
+        let recent_changes = entries
+            .iter()
             .filter_map(|e| e.metadata().ok())
             .filter_map(|m| m.modified().ok())
             .filter(|t| {
-                t.duration_since(UNIX_EPOCH).unwrap().as_secs() >
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 86400
+                t.duration_since(UNIX_EPOCH).unwrap().as_secs()
+                    > SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                        - 86400
             })
             .count();
 
@@ -524,10 +539,11 @@ impl DirectoryConsciousness {
             // Check if it's an important file
             for important in &important_names {
                 if file_name.contains(important) {
-                    let wave_sig = format!("wave_{:x}",
-                        file_name.bytes().fold(0u64, |acc, b|
-                            acc.wrapping_mul(31).wrapping_add(b as u64)
-                        )
+                    let wave_sig = format!(
+                        "wave_{:x}",
+                        file_name
+                            .bytes()
+                            .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64))
                     );
                     self.key_files.insert(file_name.clone(), wave_sig);
                     break;
@@ -625,12 +641,12 @@ impl DirectoryConsciousness {
         let freq_coherence = 1.0 - (freq_diff / 200.0).min(1.0);
 
         // Compare emotional signatures
-        let emotion_coherence = 1.0 - (
-            (self.emotion.energy - parent.emotion.energy).abs() +
-            (self.emotion.complexity - parent.emotion.complexity).abs() +
-            (self.emotion.stability - parent.emotion.stability).abs() +
-            (self.emotion.focus - parent.emotion.focus).abs()
-        ) / 4.0;
+        let emotion_coherence = 1.0
+            - ((self.emotion.energy - parent.emotion.energy).abs()
+                + (self.emotion.complexity - parent.emotion.complexity).abs()
+                + (self.emotion.stability - parent.emotion.stability).abs()
+                + (self.emotion.focus - parent.emotion.focus).abs())
+                / 4.0;
 
         // Average coherence
         (freq_coherence + emotion_coherence) / 2.0
@@ -644,22 +660,32 @@ impl DirectoryConsciousness {
 
         let mut output = String::new();
         output.push_str(&format!("╭{:─^38}╮\n", ""));
-        output.push_str(&format!("│ Frequency: {:<10.2} Hz {:>10} │\n",
+        output.push_str(&format!(
+            "│ Frequency: {:<10.2} Hz {:>10} │\n",
             self.frequency,
-            if self.frequency > 100.0 { "🔥" } else if self.frequency > 50.0 { "⚡" } else { "🌊" }
+            if self.frequency > 100.0 {
+                "🔥"
+            } else if self.frequency > 50.0 {
+                "⚡"
+            } else {
+                "🌊"
+            }
         ));
 
         // Render wave based on frequency and emotion
         let wave_line = wave_char.to_string().repeat(30);
         output.push_str(&format!("│ {} │\n", wave_line));
 
-        output.push_str(&format!("│ Children: {:<3} Energy: {:<5.1}      │\n",
+        output.push_str(&format!(
+            "│ Children: {:<3} Energy: {:<5.1}      │\n",
             self.children.len(),
             self.emotion.energy
         ));
 
-        output.push_str(&format!("│ Patterns: {:<25} │\n",
-            self.patterns.iter()
+        output.push_str(&format!(
+            "│ Patterns: {:<25} │\n",
+            self.patterns
+                .iter()
                 .take(3)
                 .map(|p| &p.pattern_type[..p.pattern_type.len().min(8)])
                 .collect::<Vec<_>>()
@@ -763,7 +789,8 @@ impl ConsciousnessManager {
 
         // Print progress
         let indent = "  ".repeat(depth);
-        println!("{}✓ Created {}/.m8 ({:.1} Hz) - {}",
+        println!(
+            "{}✓ Created {}/.m8 ({:.1} Hz) - {}",
             indent,
             path.display(),
             consciousness.frequency,
@@ -785,7 +812,8 @@ impl ConsciousnessManager {
 
     /// Find directories with similar consciousness
     pub fn find_resonant(&self, frequency: f64, tolerance: f64) -> Vec<PathBuf> {
-        self.cache.iter()
+        self.cache
+            .iter()
             .filter(|(_, c)| (c.frequency - frequency).abs() <= tolerance)
             .map(|(p, _)| p.clone())
             .collect()
@@ -821,8 +849,8 @@ mod tests {
         let freq1 = DirectoryConsciousness::calculate_frequency(Path::new("/test/path1"));
         let freq2 = DirectoryConsciousness::calculate_frequency(Path::new("/test/path2"));
 
-        assert!(freq1 >= 20.0 && freq1 <= 200.0);
-        assert!(freq2 >= 20.0 && freq2 <= 200.0);
+        assert!((20.0..=200.0).contains(&freq1));
+        assert!((20.0..=200.0).contains(&freq2));
         assert_ne!(freq1, freq2); // Different paths = different frequencies
     }
 
