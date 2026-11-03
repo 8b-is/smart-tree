@@ -52,7 +52,7 @@ pub fn definition() -> Value {
                 "speed": {"type": "string", "maxLength": 128, "description": "Propagation speed, e.g. 343 m/s"},
                 "remember": {"type": "boolean", "default": false, "description": "Explicitly consent to durable provenance storage; requires ST_RINK_MEMORY_DIR"},
                 "interpret": {"type": "boolean", "default": false, "description": "Show Rink's input interpretation. Default false keeps the answer compact."},
-                "definitions": {"type": "string", "maxLength": 4096, "description": "Optional unit definitions for this query only. They are not read from the home directory. Shadowing a built-in requires a Rink build that keeps duplicate definitions as warnings."},
+                "definitions": {"type": "string", "maxLength": 4096, "description": "Optional unit definitions for this query only, including ! directives, quantities, docs, and substances. They are not read from the home directory. Shadowing a built-in requires a Rink build that keeps duplicate definitions as warnings."},
                 "memory_id": {"type": "string", "description": "UUID from a prior remembered result"}
             }
         }
@@ -64,7 +64,7 @@ fn validate_definitions(text: &str) -> Result<()> {
     ensure!(text.len() <= 4096, "Rink definitions exceed 4096 bytes");
     for byte in text.bytes() {
         ensure!(
-            byte.is_ascii_alphanumeric() || b" \t\n+-*/^().>;#,:_".contains(&byte),
+            byte.is_ascii_alphanumeric() || b" \t\n+-*/^().>;#,:_!?\"{}|".contains(&byte),
             "Rink definitions contain an unsupported character"
         );
     }

@@ -59,7 +59,14 @@ fn rink_interpretation_is_opt_in_and_currency_stays_disabled() {
 #[test]
 fn rink_definitions_are_explicit_and_do_not_read_home() {
     assert!(validate_definitions("stack 64\n").is_ok());
+    assert!(validate_definitions(
+        "!category localwood \"Local wood\"\n?? note\nstack 7\n!endcategory\n"
+    )
+    .is_ok());
+    assert!(validate_definitions("widget {\n}\n").is_ok());
+    assert!(validate_definitions("1|2 cord\n").is_ok());
     assert!(validate_definitions("stack $(id)\n").is_err());
+    assert!(validate_definitions("stack `id`\n").is_err());
     assert!(validate_definitions(&"x".repeat(4097)).is_err());
     let with_defs = QueryDir::create(false, Some("stack 64\n")).unwrap();
     assert_eq!(
