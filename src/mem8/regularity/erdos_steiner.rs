@@ -3,10 +3,11 @@
 //!
 //! Computes exact Erdős Numbers $E_{\mathcal{T}}(v) = \min_{t \in \mathcal{T}} \text{dist}(t, v)$
 //! and the 2-Approximation Minimum Steiner Tree $T_{\text{Steiner}}$ connecting focal symbols
-//! directly over the zero-copy `ZeroCopyMem8Book` slices.
+//! directly over the zero-copy `ZeroCopyMem8Book` slices + T8R virtual bridges.
 
 use super::mmap_view::ZeroCopyMem8Book;
 use super::types::{ClusterId, SymbolId};
+use super::wire::decode_t8r_exceptions_leb128;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
@@ -160,6 +161,20 @@ pub fn prune_context_erdos_steiner(
         }
     }
 
+    // Inject virtual T8R exception bridges (Outlier V_0 & Architectural Leaks) into R
+    let t8r_bridges = extract_t8r_virtual_bridges(book, max_cid);
+    for &(cu, cv, bridge_sym) in &t8r_bridges {
+        if (cu as usize) <= max_cid
+            && (cv as usize) <= max_cid
+            && cid_to_idx[cu as usize] != usize::MAX
+            && cid_to_idx[cv as usize] != usize::MAX
+        {
+            adj[cu as usize].push((cv, 0.85));
+            adj[cv as usize].push((cu, 0.85));
+            let _ = bridge_sym;
+        }
+    }
+
     // 2. Multi-Source Voronoi Dijkstra from all terminal clusters simultaneously
     let mut dist = vec![f32::INFINITY; max_cid + 1];
     let mut erdos_hops = vec![u32::MAX; max_cid + 1];
@@ -267,7 +282,6 @@ pub fn prune_context_erdos_steiner(
         let root_b = uf_find(&mut uf_parent, bridge.reg_b);
         if root_a != root_b {
             uf_parent[root_a as usize] = root_b;
-            // Trace shortest paths back from bridge.u -> reg_a and bridge.v -> reg_b
             for start_node in [bridge.u, bridge.v] {
                 let mut curr = start_node;
                 while curr != 0 && !in_steiner_tree[curr as usize] {
@@ -275,6 +289,18 @@ pub fn prune_context_erdos_steiner(
                     curr = parent_cluster[curr as usize];
                 }
             }
+        }
+    }
+
+    // Record exact T8R bridge symbols that connect Steiner backbone clusters
+    for &(cu, cv, bridge_sym) in &t8r_bridges {
+        if (cu as usize) <= max_cid
+            && (cv as usize) <= max_cid
+            && in_steiner_tree[cu as usize]
+            && in_steiner_tree[cv as usize]
+            && !exact_bridge_symbols.iter().any(|&(s, _)| s == bridge_sym)
+        {
+            exact_bridge_symbols.push((bridge_sym, 1));
         }
     }
 
@@ -336,4 +362,81 @@ pub fn prune_context_erdos_steiner(
         exact_bridge_symbols,
         estimated_tokens: tokens_used,
     }
+}
+
+/// Scans the LEB128-compressed T8R exception stream to discover virtual bridges between
+/// regular clusters `(ClusterA, ClusterB, BridgeSymbolId)` via $V_0$ outliers or architectural leaks.
+pub fn extract_t8r_virtual_bridges(
+    book: &ZeroCopyMem8Book,
+    max_cid: usize,
+) -> Vec<(ClusterId, ClusterId, SymbolId)> {
+    let lut = book.symbol_to_cluster();
+    let Some(exceptions) = decode_t8r_exceptions_leb128(book.t8r_raw_bytes()) else {
+        return Vec::new();
+    };
+
+    let mut bridges = Vec::new();
+    let mut outlier_neighbors: std::collections::HashMap<SymbolId, Vec<ClusterId>> =
+        std::collections::HashMap::new();
+
+    for edge in exceptions {
+        let su = edge.src_symbol as usize;
+        let sv = edge.dst_symbol as usize;
+        if su >= lut.len() || sv >= lut.len() {
+            continue;
+        }
+        let cu = lut[su];
+        let cv = lut[sv];
+
+        if cu > 0 && cv > 0 && cu != cv && (cu as usize) <= max_cid && (cv as usize) <= max_cid {
+            bridges.push((cu, cv, edge.src_symbol));
+        } else if cu == 0 && cv > 0 && (cv as usize) <= max_cid {
+            outlier_neighbors
+                .entry(edge.src_symbol)
+                .or_default()
+                .push(cv);
+        } else if cv == 0 && cu > 0 && (cu as usize) <= max_cid {
+            outlier_neighbors
+                .entry(edge.dst_symbol)
+                .or_default()
+                .push(cu);
+        }
+    }
+
+    // Connect clusters that share a common V_0 outlier hub (capped to avoid quadratic blowup)
+    for (outlier_sym, mut clusters) in outlier_neighbors {
+        clusters.sort_unstable();
+        clusters.dedup();
+        if clusters.len() >= 2 && clusters.len() <= 8 {
+            for i in 0..clusters.len() {
+                for j in (i + 1)..clusters.len() {
+                    bridges.push((clusters[i], clusters[j], outlier_sym));
+                }
+            }
+        }
+    }
+
+    bridges
+}
+
+/// Software IEEE-754 half-precision (`fp16`) to `f32` decoder (`O(1)` bit manipulation).
+#[inline(always)]
+pub fn decode_fp16(bits: u16) -> f32 {
+    let sign = ((bits & 0x8000) as u32) << 16;
+    let exp = ((bits >> 10) & 0x1F) as u32;
+    let mant = (bits & 0x03FF) as u32;
+
+    if exp == 0 {
+        if mant == 0 {
+            return f32::from_bits(sign);
+        }
+        // Subnormal fp16
+        return (if sign != 0 { -1.0 } else { 1.0 }) * (mant as f32) * 5.960_464_5e-8;
+    } else if exp == 0x1F {
+        return f32::from_bits(sign | 0x7F80_0000 | (mant << 13));
+    }
+
+    let f32_exp = (exp + 112) << 23;
+    let f32_mant = mant << 13;
+    f32::from_bits(sign | f32_exp | f32_mant)
 }

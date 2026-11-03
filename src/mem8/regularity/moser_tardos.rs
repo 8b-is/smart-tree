@@ -3,7 +3,8 @@
 //!
 //! Partitions $U$ refactoring tasks or Steiner subgraphs across $C$ parallel git worktrees
 //! (or isolated agent waves) using the Moser–Tardos Constructive LLL Resampling Algorithm
-//! with Maximal Independent Set (MIS) parallel resampling and Moser Witness Tree certificates.
+//! with Maximal Independent Set (MIS) parallel resampling, symmetric LLL criterion verification
+//! ($e \cdot p(B) \cdot (d(B) + 1) \le 1$), auto-scaling worktree counts, and Moser Witness Tree certificates.
 
 use super::erdos_steiner::ErdosSteinerSlice;
 use super::mmap_view::ZeroCopyMem8Book;
@@ -51,12 +52,18 @@ pub struct LllHypergraph {
 pub struct MoserTardosSchedule {
     /// Final conflict-free assignment: `unit_id -> worktree_color (0..C)`
     pub unit_to_worktree: Vec<WorktreeColor>,
-    /// Number of parallel worktrees $C$ used
+    /// Grouped worktree buckets: `worktree_buckets[c]` lists all `WorkUnitId`s assigned to worktree `c`
+    pub worktree_buckets: Vec<Vec<WorkUnitId>>,
+    /// Number of parallel worktrees $C$ used (after optional LLL auto-scaling)
     pub num_worktrees: u16,
     /// Total Moser–Tardos resampling steps taken (guaranteed $O(|\mathcal{U}|)$ under Shearer's condition)
     pub total_resamples: usize,
     /// Number of parallel MIS resampling rounds
     pub parallel_rounds: usize,
+    /// Maximum Moser Witness Tree depth observed during resampling
+    pub max_witness_tree_depth: u32,
+    /// Whether the symmetric Lovász Local Lemma criterion $e \cdot p(B) \cdot (d(B) + 1) \le 1$ held a priori
+    pub lll_guaranteed_a_priori: bool,
     /// True if all bad events were eliminated ($0$ conflicts); false if LLL phase threshold was exceeded
     /// and a minimal witness-tree bottleneck was isolated
     pub is_conflict_free: bool,
@@ -137,6 +144,62 @@ impl LllHypergraph {
         &self.unit_events[start..end]
     }
 
+    /// Computes the prior probability $p(B_e) = \mathbb{P}[B_e]$ under uniform $C$-coloring.
+    #[inline]
+    pub fn event_probability(&self, ev: BadEventId, num_colors: u16) -> f64 {
+        let c = (num_colors.max(2)) as f64;
+        let r = self.event_scope(ev).len();
+        if r <= 1 {
+            return 0.0;
+        }
+        match self.event_kinds[ev as usize] {
+            BadEventKind::PairwiseExclusive => 1.0 / c,
+            BadEventKind::MonochromaticHyperedge => c.powi(1 - (r as i32)),
+            BadEventKind::CongestionThreshold { max_same_color } => {
+                // Upper bound probability that > max_same_color vertices share a color in scope
+                let k = (max_same_color as i32) + 1;
+                (1.0 / c).powi((k - 1).max(1))
+            }
+        }
+    }
+
+    /// Evaluates the symmetric Lovász Local Lemma criterion:
+    /// $\forall B \in \mathcal{B}, \quad e \cdot p(B) \cdot (d(B) + 1) \le 1$
+    /// Returns `(satisfied, max_dependency_degree)`.
+    pub fn check_lll_criterion(&self, num_colors: u16) -> (bool, usize) {
+        let mut seen_mark = vec![u32::MAX; self.num_events];
+        let mut all_satisfied = true;
+        let mut max_dep_degree = 0usize;
+
+        for b in 0..self.num_events {
+            let ev = b as BadEventId;
+            seen_mark[b] = b as u32;
+            let mut dep_degree = 0usize;
+
+            for &u in self.event_scope(ev) {
+                for &other_ev in self.unit_incident_events(u) {
+                    let ob = other_ev as usize;
+                    if seen_mark[ob] != b as u32 {
+                        seen_mark[ob] = b as u32;
+                        dep_degree += 1;
+                    }
+                }
+            }
+
+            if dep_degree > max_dep_degree {
+                max_dep_degree = dep_degree;
+            }
+
+            let p_b = self.event_probability(ev, num_colors);
+            let lll_lhs = std::f64::consts::E * p_b * ((dep_degree + 1) as f64);
+            if lll_lhs > 1.0 {
+                all_satisfied = false;
+            }
+        }
+
+        (all_satisfied, max_dep_degree)
+    }
+
     /// Evaluates whether bad event `ev` is currently violated under `coloring`
     #[inline]
     pub fn is_event_violated(&self, ev: BadEventId, coloring: &[WorktreeColor]) -> bool {
@@ -170,6 +233,19 @@ impl LllHypergraph {
     }
 }
 
+/// Derives a deterministic 64-bit SplitMix64 seed from a 32-byte `.m8b` `model_digest` and `git_oid`.
+#[inline]
+pub fn seed_from_mem8_header(model_digest: &[u8; 32], git_oid: u64) -> u64 {
+    let lo = u64::from_le_bytes(model_digest[0..8].try_into().unwrap_or([0; 8]));
+    let hi = u64::from_le_bytes(model_digest[8..16].try_into().unwrap_or([0; 8]));
+    let s = lo ^ hi.rotate_left(31) ^ git_oid ^ 0x9E37_79B9_7F4A_7C15;
+    if s == 0 {
+        0xCAFE_BABE_DEAD_BEEF
+    } else {
+        s
+    }
+}
+
 /// Executes the Parallel Moser–Tardos Constructive Lovász Local Lemma solver.
 /// Uses deterministic SplitMix64 PRNG so `--erdos-split` is 100% reproducible across runs.
 pub fn solve_moser_tardos_worktrees(
@@ -178,39 +254,55 @@ pub fn solve_moser_tardos_worktrees(
     seed: u64,
     max_resamples: usize,
 ) -> MoserTardosSchedule {
+    solve_moser_tardos_auto_scale(hg, num_worktrees, false, seed, max_resamples)
+}
+
+/// Executes the Parallel Moser–Tardos Constructive LLL solver with optional auto-scaling of worktree
+/// count $C$ when the symmetric LLL condition $e \cdot p(B) \cdot (d(B) + 1) \le 1$ is violated.
+pub fn solve_moser_tardos_auto_scale(
+    hg: &LllHypergraph,
+    initial_worktrees: u16,
+    auto_scale_colors: bool,
+    seed: u64,
+    max_resamples: usize,
+) -> MoserTardosSchedule {
     let n = hg.num_units;
     let m = hg.num_events;
-    let c = num_worktrees.max(2);
+    let mut c = initial_worktrees.max(2);
+
+    // 1. Check LLL sufficient criterion & optionally scale worktree count C until e * p * (d + 1) <= 1
+    let (mut lll_ok, max_dep_degree) = hg.check_lll_criterion(c);
+    while !lll_ok && auto_scale_colors && c < 16 {
+        c += 1;
+        let (ok, _) = hg.check_lll_criterion(c);
+        lll_ok = ok;
+    }
 
     let mut rng = SplitMix64::new(seed ^ 0x9E37_79B9_7F4A_7C15);
 
-    // 1. Initial independent uniform product distribution X_u ~ Uniform(0..C)
+    // 2. Initial independent uniform product distribution X_u ~ Uniform(0..C)
     let mut coloring: Vec<WorktreeColor> = (0..n).map(|_| rng.next_color(c)).collect();
 
     if m == 0 || n == 0 {
+        let mut worktree_buckets = vec![Vec::new(); c as usize];
+        for (u, &col) in coloring.iter().enumerate() {
+            worktree_buckets[col as usize].push(u as WorkUnitId);
+        }
         return MoserTardosSchedule {
             unit_to_worktree: coloring,
+            worktree_buckets,
             num_worktrees: c,
             total_resamples: 0,
             parallel_rounds: 0,
+            max_witness_tree_depth: 0,
+            lll_guaranteed_a_priori: true,
             is_conflict_free: true,
             witness_bottleneck_events: Vec::new(),
             max_dependency_degree: 0,
         };
     }
 
-    // Compute maximum dependency degree Delta_max in Gamma(B)
-    let mut max_dep_degree = 0usize;
-    for ev in 0..m {
-        let deg: usize = hg
-            .event_scope(ev as BadEventId)
-            .iter()
-            .map(|&u| hg.unit_incident_events(u).len().saturating_sub(1))
-            .sum();
-        max_dep_degree = max_dep_degree.max(deg);
-    }
-
-    // 2. Initialize violated event queue + O(1) membership bitset
+    // 3. Initialize violated event queue + O(1) membership bitset
     let mut in_violated_queue = vec![false; m];
     let mut violated_queue: Vec<BadEventId> = Vec::with_capacity(m);
 
@@ -224,6 +316,7 @@ pub fn solve_moser_tardos_worktrees(
     // Track Moser Witness Tree depth per unit & event to detect LLL phase boundary
     let mut unit_resample_depth = vec![0u32; n];
     let mut event_witness_height = vec![0u32; m];
+    let mut max_witness_tree_depth = 0u32;
     let witness_height_cap = ((n as f64).ln().ceil() as u32 * 6).max(32);
 
     let mut unit_locked_in_round = vec![false; n];
@@ -233,7 +326,7 @@ pub fn solve_moser_tardos_worktrees(
     let mut total_resamples = 0usize;
     let mut parallel_rounds = 0usize;
 
-    // 3. Moser–Tardos Parallel MIS Resampling Loop
+    // 4. Moser–Tardos Parallel MIS Resampling Loop
     while !violated_queue.is_empty() && total_resamples < max_resamples {
         parallel_rounds += 1;
         independent_batch.clear();
@@ -280,6 +373,9 @@ pub fn solve_moser_tardos_worktrees(
                 .unwrap_or(0);
             let new_height = max_u_depth + 1;
             event_witness_height[ev as usize] = new_height;
+            if new_height > max_witness_tree_depth {
+                max_witness_tree_depth = new_height;
+            }
 
             if new_height > witness_height_cap {
                 exceeded_witness_cap = true;
@@ -323,11 +419,21 @@ pub fn solve_moser_tardos_worktrees(
         remaining_conflicts.truncate(8);
     }
 
+    let mut worktree_buckets = vec![Vec::new(); c as usize];
+    for (u, &col) in coloring.iter().enumerate() {
+        if (col as usize) < worktree_buckets.len() {
+            worktree_buckets[col as usize].push(u as WorkUnitId);
+        }
+    }
+
     MoserTardosSchedule {
         unit_to_worktree: coloring,
+        worktree_buckets,
         num_worktrees: c,
         total_resamples,
         parallel_rounds,
+        max_witness_tree_depth,
+        lll_guaranteed_a_priori: lll_ok,
         is_conflict_free: remaining_conflicts.is_empty(),
         witness_bottleneck_events: remaining_conflicts,
         max_dependency_degree: max_dep_degree,

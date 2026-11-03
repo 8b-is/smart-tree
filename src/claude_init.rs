@@ -745,7 +745,7 @@ impl McpInstaller {
             ));
         }
 
-        // 2. Gemini / Antigravity
+        // 2. Gemini / Antigravity (agy)
         if let Some(h) = dirs::home_dir() {
             paths.push((
                 "Antigravity (agy)",
@@ -753,6 +753,13 @@ impl McpInstaller {
             ));
             paths.push(("Antigravity", h.join(".gemini/antigravity/mcp_config.json")));
             paths.push(("Gemini", h.join(".gemini/mcp_config.json")));
+
+            // 3. OpenCode (opencode) & Crush (crush)
+            paths.push((
+                "OpenCode (opencode)",
+                h.join(".config/opencode/opencode.json"),
+            ));
+            paths.push(("Crush (crush)", h.join(".config/crush/crush.json")));
         }
 
         paths

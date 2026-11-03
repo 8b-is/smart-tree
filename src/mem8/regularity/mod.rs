@@ -25,17 +25,19 @@ pub mod wire;
 
 pub use compressor::{compress_symbol_graph_to_mem8, RegularityConfig};
 pub use erdos_renyi::{
-    scan_erdos_renyi_supply_chain, scan_ramsey_monochromatic_cliques, ComponentAnomaly,
-    ErdosRenyiSecurityReport, MonochromaticClique, PhaseRegime, RamseyCliqueReport,
-    RamseyEdgeColor, SymbolHazardFlags,
+    scan_erdos_renyi_shadow_graph, scan_erdos_renyi_supply_chain,
+    scan_ramsey_monochromatic_cliques, ComponentAnomaly, ErdosRenyiSecurityReport,
+    MonochromaticClique, PhaseRegime, RamseyCliqueReport, RamseyEdgeColor, SymbolHazardFlags,
 };
 pub use erdos_steiner::{
-    prune_context_erdos_steiner, ErdosSteinerConfig, ErdosSteinerSlice, SteinerClusterNode,
+    decode_fp16, extract_t8r_virtual_bridges, prune_context_erdos_steiner, ErdosSteinerConfig,
+    ErdosSteinerSlice, SteinerClusterNode,
 };
 pub use mmap_view::ZeroCopyMem8Book;
 pub use moser_tardos::{
-    build_hypergraph_from_steiner_slices, solve_moser_tardos_worktrees, BadEventId, BadEventKind,
-    LllHypergraph, MoserTardosSchedule, WorkUnitId, WorktreeColor,
+    build_hypergraph_from_steiner_slices, seed_from_mem8_header, solve_moser_tardos_auto_scale,
+    solve_moser_tardos_worktrees, BadEventId, BadEventKind, LllHypergraph, MoserTardosSchedule,
+    WorkUnitId, WorktreeColor,
 };
 pub use oracle::{check_bipartite_regularity, RegularityCheck};
 pub use types::{
@@ -101,7 +103,8 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         std::slice::from_ref(&steiner_slice),
         0.35,
     );
-    let worktree_schedule = solve_moser_tardos_worktrees(&hg, 4, 0xE2D0_5B00, 1024);
+    let mt_seed = seed_from_mem8_header(&archive.model_digest, 0xE2D0_5B00);
+    let worktree_schedule = solve_moser_tardos_auto_scale(&hg, 4, true, mt_seed, 1024);
 
     // Derive static hazard flags per node from category & path heuristics
     let hazards: Vec<SymbolHazardFlags> = nodes
@@ -126,7 +129,8 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         })
         .collect();
 
-    let security_report = scan_erdos_renyi_supply_chain(&graph, &hazards, 10.0);
+    let security_report =
+        scan_erdos_renyi_shadow_graph(&graph, zero_copy_book.symbol_to_cluster(), &hazards, 10.0);
     let ramsey_report = scan_ramsey_monochromatic_cliques(&graph);
 
     // Classify every node using Paul Erdős's vocabulary
@@ -307,9 +311,14 @@ mod tests {
             ),
         ];
         let hg = LllHypergraph::from_constraints(6, &constraints);
-        let schedule = solve_moser_tardos_worktrees(&hg, 4, 42, 500);
+        let schedule = solve_moser_tardos_auto_scale(&hg, 2, true, 42, 500);
 
         assert!(schedule.is_conflict_free);
+        assert!(schedule.num_worktrees >= 2);
+        assert_eq!(
+            schedule.worktree_buckets.len(),
+            schedule.num_worktrees as usize
+        );
         assert!(schedule.witness_bottleneck_events.is_empty());
         assert_ne!(schedule.unit_to_worktree[1], schedule.unit_to_worktree[2]);
         assert_ne!(schedule.unit_to_worktree[2], schedule.unit_to_worktree[3]);
@@ -335,14 +344,23 @@ mod tests {
 
         let graph = CsrSymbolGraph::from_edges(n, &edges, Vec::new());
         let mut hazards = vec![SymbolHazardFlags::NONE; n];
-        hazards[25] = SymbolHazardFlags::NET_SOCKET;
+        hazards[25] = SymbolHazardFlags::NET_IPFS_EGRESS;
         hazards[26] = SymbolHazardFlags::PROC_EXEC;
-        hazards[27] = SymbolHazardFlags::ENV_SECRET;
-        hazards[28] = SymbolHazardFlags::MCP_HOOK;
+        hazards[27] = SymbolHazardFlags::SECRET_ENV_READ;
+        hazards[28] = SymbolHazardFlags::MCP_HOOK_MUTATE;
+        hazards[29] = SymbolHazardFlags::HIGH_ENTROPY_OBFUSCATED;
 
         let report = scan_erdos_renyi_supply_chain(&graph, &hazards, 4.0);
         assert_eq!(report.regime, PhaseRegime::AnomalousC2Clique);
+        assert!(report.critical_scale_n_two_thirds > 1.0);
+        assert!(report.spectral_radius_lambda1 > 0.0);
         assert!(!report.anomalies.is_empty());
+        assert!(!report.anomalies[0].pivot_symbols.is_empty());
+        assert!(report.anomalies[0].directed_scc_cycles >= 1);
+
+        // Verify IEEE-754 fp16 software decoder
+        let one_fp16 = decode_fp16(0x3C00);
+        assert!((one_fp16 - 1.0).abs() < 1e-5);
 
         let ramsey = scan_ramsey_monochromatic_cliques(&graph);
         assert!(ramsey.red_cliques > 0);

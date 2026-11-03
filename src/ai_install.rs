@@ -20,17 +20,25 @@ pub enum InstallScope {
     User,
 }
 
-/// Target AI platform for configuration
+/// Target AI platform or agent harness for configuration
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum AiTarget {
-    /// Claude (Anthropic) - default, most features
+    /// Claude (Anthropic) - default
     #[default]
     Claude,
-    /// ChatGPT (OpenAI)
+    /// ChatGPT / Codex (OpenAI)
     Chatgpt,
     /// Gemini (Google)
     Gemini,
-    /// Universal - generic config for any AI
+    /// DeepSeek (DeepSeek-R1 / DeepSeek-V3)
+    Deepseek,
+    /// Antigravity (`agy` CLI / IDE)
+    Antigravity,
+    /// OpenCode (`opencode` CLI)
+    OpenCode,
+    /// Crush (`crush` CLI by Charmbracelet)
+    Crush,
+    /// Universal - generic config for any AI model & harness
     Universal,
 }
 use serde_json::{json, Value};
@@ -101,6 +109,14 @@ impl AiInstaller {
             AiTarget::Claude => "🤖 Smart Tree AI Integration - Claude Setup".to_string(),
             AiTarget::Chatgpt => "🤖 Smart Tree AI Integration - ChatGPT Setup".to_string(),
             AiTarget::Gemini => "🤖 Smart Tree AI Integration - Gemini Setup".to_string(),
+            AiTarget::Deepseek => "🤖 Smart Tree AI Integration - DeepSeek Setup".to_string(),
+            AiTarget::Antigravity => {
+                "🤖 Smart Tree AI Integration - Antigravity (agy) Setup".to_string()
+            }
+            AiTarget::OpenCode => {
+                "🤖 Smart Tree AI Integration - OpenCode (opencode) Setup".to_string()
+            }
+            AiTarget::Crush => "🤖 Smart Tree AI Integration - Crush (crush) Setup".to_string(),
             AiTarget::Universal => "🤖 Smart Tree AI Integration - Universal Setup".to_string(),
         }
     }
@@ -228,18 +244,12 @@ impl AiInstaller {
                 options.create_settings = true;
                 options.install_hooks = true;
 
-                // MCP is user-level only for Claude Desktop
-                options.install_mcp = matches!(
-                    self.target,
-                    AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini
-                );
+                // MCP is supported across Claude, Gemini, Antigravity, OpenCode, Crush, DeepSeek, ChatGPT, and Universal
+                options.install_mcp = true;
             }
             InstallScope::User => {
                 // User-level installations
-                options.install_mcp = matches!(
-                    self.target,
-                    AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini
-                );
+                options.install_mcp = true;
                 options.install_hooks = true;
                 options.install_claude_md = false; // No project to add CLAUDE.md to
                 options.create_settings = true;
@@ -348,8 +358,15 @@ impl AiInstaller {
     /// Install MCP server
     fn install_mcp(&self) -> Result<()> {
         match self.target {
-            AiTarget::Claude | AiTarget::Universal | AiTarget::Gemini => {
-                // 1. Install to Desktop configs
+            AiTarget::Claude
+            | AiTarget::Universal
+            | AiTarget::Gemini
+            | AiTarget::Antigravity
+            | AiTarget::OpenCode
+            | AiTarget::Crush
+            | AiTarget::Deepseek
+            | AiTarget::Chatgpt => {
+                // 1. Install to Desktop & CLI harness configs
                 let installer = McpInstaller::new()?;
                 let results = installer.install_all()?;
                 for result in results {
@@ -361,13 +378,9 @@ impl AiInstaller {
                     }
                 }
 
-                // 2. Also create/update project's .mcp.json so Claude Code can find it
+                // 2. Also create/update project's .mcp.json so Claude Code / OpenCode / Crush can find it
                 self.ensure_project_mcp_json()?;
 
-                Ok(())
-            }
-            _ => {
-                println!("  ℹ️  MCP not supported for {} yet", self.target_name());
                 Ok(())
             }
         }
@@ -441,7 +454,10 @@ impl AiInstaller {
 
     /// Install hooks
     fn install_hooks(&self) -> Result<()> {
-        if matches!(self.target, AiTarget::Gemini | AiTarget::Universal) {
+        if matches!(
+            self.target,
+            AiTarget::Gemini | AiTarget::Antigravity | AiTarget::Universal
+        ) {
             let st_bin = which::which("st")
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| "/usr/local/bin/st".to_string());
@@ -460,7 +476,7 @@ impl AiInstaller {
                 "  ✅ Antigravity (agy) hooks configured at {}",
                 agy_hooks_file.display()
             );
-            if matches!(self.target, AiTarget::Gemini) {
+            if matches!(self.target, AiTarget::Gemini | AiTarget::Antigravity) {
                 return Ok(());
             }
         }
@@ -478,6 +494,10 @@ impl AiInstaller {
             AiTarget::Claude => self.get_claude_hooks(),
             AiTarget::Chatgpt => self.get_generic_hooks("chatgpt"),
             AiTarget::Gemini => self.get_generic_hooks("gemini"),
+            AiTarget::Deepseek => self.get_generic_hooks("deepseek"),
+            AiTarget::Antigravity => self.get_generic_hooks("agy"),
+            AiTarget::OpenCode => self.get_generic_hooks("opencode"),
+            AiTarget::Crush => self.get_generic_hooks("crush"),
             AiTarget::Universal => self.get_generic_hooks("universal"),
         };
 
@@ -800,6 +820,10 @@ impl AiInstaller {
             AiTarget::Claude => "Claude",
             AiTarget::Chatgpt => "ChatGPT",
             AiTarget::Gemini => "Gemini",
+            AiTarget::Deepseek => "DeepSeek",
+            AiTarget::Antigravity => "Antigravity (agy)",
+            AiTarget::OpenCode => "OpenCode (opencode)",
+            AiTarget::Crush => "Crush (crush)",
             AiTarget::Universal => "Universal AI",
         }
     }
@@ -819,17 +843,24 @@ impl AiInstaller {
         match self.target {
             AiTarget::Claude => {
                 println!("  1. Restart Claude Desktop to load MCP tools");
-                println!("  2. Try: 'st -m context .' to see project context");
+                println!("  2. Try: 'st -m the-book .' for Paul Erdős graph-theoretic context");
                 println!("  3. Use '/hooks' in Claude Code to manage hooks");
             }
-            AiTarget::Chatgpt | AiTarget::Gemini => {
-                println!("  1. Run 'st -m context .' and paste the output");
-                println!("  2. The AI will understand your project structure");
+            AiTarget::Antigravity | AiTarget::OpenCode | AiTarget::Crush => {
+                println!(
+                    "  1. Launch {} to auto-load Smart Tree MCP tools",
+                    self.target_name()
+                );
+                println!("  2. Try: 'st -m the-book .' for Paul Erdős graph-theoretic context");
+            }
+            AiTarget::Chatgpt | AiTarget::Gemini | AiTarget::Deepseek => {
+                println!("  1. Run 'st -m the-book .' or 'st -m context .' and paste the output");
+                println!("  2. The AI will understand your project graph & Szemerédi clusters");
             }
             AiTarget::Universal => {
-                println!("  1. Use 'st -m ai' for AI-optimized output");
+                println!("  1. Use 'st -m the-book' for Erdős Szemerédi/Steiner/LLL/Ramsey graph analysis");
                 println!("  2. Use 'st -m quantum' for compressed context");
-                println!("  3. MCP integration available for Claude Desktop");
+                println!("  3. MCP integration installed for Claude, Antigravity (agy), OpenCode, and Crush");
             }
         }
 
