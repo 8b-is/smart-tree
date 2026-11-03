@@ -48,6 +48,8 @@ pub struct ScanStats {
     pub total_dirs: u64,
     pub total_size: u64,
     pub scan_time_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub truncation_reason: Option<String>,
 }
 
 /// SSE stream configuration
@@ -188,6 +190,7 @@ async fn watch_directory(
             total_dirs: stats.total_dirs,
             total_size: stats.total_size,
             scan_time_ms,
+            truncation_reason: stats.truncation_reason.clone(),
         },
     })
     .await?;
@@ -349,6 +352,7 @@ async fn gather_stats(path: &Path) -> Result<ScanStats> {
         total_dirs: stats.total_dirs,
         total_size: stats.total_size,
         scan_time_ms,
+        truncation_reason: stats.truncation_reason,
     })
 }
 

@@ -10,7 +10,7 @@ use crate::formatters::{
     ai::AiFormatter,
     classic::ClassicFormatter,
     csv::CsvFormatter,
-    digest::DigestFormatter,
+    digest::{DigestFormatter, SmtrCapsuleFormatter},
     hex::HexFormatter,
     json::JsonFormatter,
     ls::LsFormatter,
@@ -184,6 +184,9 @@ pub struct ScanStats {
     pub total_size: u64,
     pub scan_time_ms: u64,
     pub format_time_ms: u64,
+    /// Safety stop reason for partial scans; `None` when scan completed without hitting limits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub truncation_reason: Option<String>,
 }
 
 /// Error response
@@ -246,6 +249,7 @@ pub fn execute_cli_scan(req: &CliScanRequest) -> Result<CliScanResponse> {
             total_size: tree_stats.total_size,
             scan_time_ms: scan_time.as_millis() as u64,
             format_time_ms: format_time.as_millis() as u64,
+            truncation_reason: tree_stats.truncation_reason,
         },
     })
 }
@@ -352,7 +356,7 @@ fn get_ideal_depth_for_mode(mode: &str) -> usize {
         "quantum" | "quantumsemantic" => 10,
         "summary" | "summaryai" | "context" => 4,
         "ai" | "semantic" | "smart" => 5,
-        "digest" | "stats" => 20,
+        "digest" | "stats" | "louds" | "smtrcapsule" | "capsule" => 20,
         "relations" => 3,
         "projects" => 5,
         _ => 3, // Default for classic, json, etc.
@@ -424,6 +428,10 @@ fn format_output(
             let formatter = DigestFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
         }
+        "louds" | "smtrcapsule" | "capsule" => {
+            let formatter = SmtrCapsuleFormatter::new();
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
         "quantum" => {
             let formatter = QuantumFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
@@ -492,15 +500,20 @@ mod tests {
             ("summary_ai", "SUMMARY_AI_V1:"),
             ("summaryai", "SUMMARY_AI_V1:"),
             ("quantum-semantic", "QUANTUM_SEMANTIC_V2:"),
+            ("louds", "\"spec\": \"8B-META-WP-v2.1\""),
+            ("smtr-capsule", "\"spec\": \"8B-META-WP-v2.1\""),
+            ("smtr_capsule", "\"spec\": \"8B-META-WP-v2.1\""),
+            ("capsule", "\"spec\": \"8B-META-WP-v2.1\""),
         ] {
             let request = serde_json::from_value(serde_json::json!({
                 "path": temp.path(), "mode": mode
             }))
             .unwrap();
-            assert!(execute_cli_scan(&request)
-                .unwrap()
-                .output
-                .starts_with(header));
+            let output = execute_cli_scan(&request).unwrap().output;
+            assert!(
+                output.starts_with(header) || output.contains(header),
+                "mode {mode} did not contain {header}: {output}"
+            );
         }
     }
 

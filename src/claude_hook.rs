@@ -277,7 +277,12 @@ fn search_mem8_context(keywords: &[String]) -> Result<()> {
                     println!("\n**MEM8 memories:**");
                     for m in mems.iter().take(3) {
                         let preview: String = m.context.chars().take(100).collect();
-                        println!("  • [{}] {}: {}", m.keywords.join(","), m.anchor_type, preview);
+                        println!(
+                            "  • [{}] {}: {}",
+                            m.keywords.join(","),
+                            m.anchor_type,
+                            preview
+                        );
                         found_any = true;
                     }
                 }
@@ -982,7 +987,8 @@ fn collect_mem8_context(keywords: &[String]) -> Vec<String> {
                                         if context_lower.contains(&keyword.to_lowercase()) {
                                             let anchor_type =
                                                 anchor["anchor_type"].as_str().unwrap_or("insight");
-                                            let preview: String = context.chars().take(100).collect();
+                                            let preview: String =
+                                                context.chars().take(100).collect();
                                             lines.push(format!(
                                                 "- [{}] {}: {}",
                                                 keyword, anchor_type, preview

@@ -11,8 +11,8 @@
 //! It directly supports continuing the standardgalactic research at scale.
 
 use anyhow::Result;
-use std::path::PathBuf;
 use st::salient;
+use std::path::PathBuf;
 
 fn main() -> Result<()> {
     // In real use parse args; here a tiny hardcoded demo using the engine.
@@ -28,8 +28,10 @@ fn main() -> Result<()> {
         None,
     )?;
 
-    println!("Ingested for demo-user: {} repos, {} thoughts, {} samples",
-             report.repos_processed, report.total_thoughts, report.total_code_samples);
+    println!(
+        "Ingested for demo-user: {} repos, {} thoughts, {} samples",
+        report.repos_processed, report.total_thoughts, report.total_code_samples
+    );
 
     // Show a conversion example
     let sample = "def rate(a, b): return a / 3.14";
@@ -46,6 +48,9 @@ fn main() -> Result<()> {
     println!("\nWired with family heart:\n{}", wired);
 
     println!("\nNext: wire real .m8 write + use on the 9930 remaining queue entries.");
-    println!("The constellation · fine touch from within · {}", salient::FAMILY_HEART);
+    println!(
+        "The constellation · fine touch from within · {}",
+        salient::FAMILY_HEART
+    );
     Ok(())
 }

@@ -233,8 +233,7 @@ const BLAKE3_IV: [u32; 8] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
-const BLAKE3_MSG_PERMUTATION: [usize; 16] =
-    [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
+const BLAKE3_MSG_PERMUTATION: [usize; 16] = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
 
 const BLAKE3_CHUNK_START: u32 = 1 << 0;
 const BLAKE3_CHUNK_END: u32 = 1 << 1;
@@ -1012,11 +1011,7 @@ pub fn compute_capsule_fokens(
         && entry.capsule.c64_report.zero_external_crates
         && entry.capsule.c64_report.code_bytes <= C64_RAM_CEILING_BYTES;
 
-    let base_c64_fkn = if c64_ok {
-        FOKEN_BASE_C64_COMPLIANT
-    } else {
-        0
-    };
+    let base_c64_fkn = if c64_ok { FOKEN_BASE_C64_COMPLIANT } else { 0 };
 
     let equivalence_crown_fkn = if is_equivalence_crown {
         FOKEN_EQUIVALENCE_CROWN_BONUS
@@ -1255,7 +1250,11 @@ pub fn rank_best_functions_from_entries(
         .filter(|e| {
             if let Some(ref want_arch) = arch_norm {
                 let det = e.detected_arch().to_ascii_lowercase();
-                let in_author = e.capsule.author_aye.to_ascii_lowercase().contains(want_arch);
+                let in_author = e
+                    .capsule
+                    .author_aye
+                    .to_ascii_lowercase()
+                    .contains(want_arch);
                 let in_domain = e.capsule.domain.to_ascii_lowercase().contains(want_arch);
                 det == *want_arch || in_author || in_domain
             } else {
@@ -1280,7 +1279,8 @@ pub fn rank_best_functions_from_entries(
     // Sort strictly by fastest `cycles_per_op` (`a.num * b.den < b.num * a.den`), tie-breaking by
     // `ns_per_op`, `compiled_text_bytes`, and `asm_instruction_count`.
     scored.sort_by(|(_, a), (_, b)| {
-        let cyc_ord = cmp_cycles_fastest_first(a.resolved_cycles_per_op(), b.resolved_cycles_per_op());
+        let cyc_ord =
+            cmp_cycles_fastest_first(a.resolved_cycles_per_op(), b.resolved_cycles_per_op());
         if cyc_ord != Ordering::Equal {
             return cyc_ord;
         }
@@ -1942,7 +1942,9 @@ pub fn format_foken_scoreboard(report: &FokenScoreboardReport) -> String {
         ));
     }
 
-    out.push_str("\n⚡ TOP FASTEST VERIFIED RUST CAPSULES (SORTED BY EXACT RATIONAL cycles_per_op p/q):\n");
+    out.push_str(
+        "\n⚡ TOP FASTEST VERIFIED RUST CAPSULES (SORTED BY EXACT RATIONAL cycles_per_op p/q):\n",
+    );
     out.push_str("Rank | Function Capsule                     | Signature        | cycles/op (p/q)   | .text | Insns | FKN | Author Aye\n");
     out.push_str("-----+--------------------------------------+------------------+-------------------+-------+-------+-----+--------------------------\n");
     for cap in &report.fastest_capsules {
@@ -1971,10 +1973,7 @@ pub fn handle_g8t_mcp_action(params: &Value) -> Result<Value> {
         .and_then(Value::as_str)
         .unwrap_or("best");
 
-    let yolo_flag = params
-        .get("yolo")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
+    let yolo_flag = params.get("yolo").and_then(Value::as_bool).unwrap_or(false)
         || raw_action.eq_ignore_ascii_case("yolo");
 
     let top_n = params
@@ -2262,7 +2261,10 @@ mod tests {
 
         // Verify scoreboard aggregation
         let board = build_foken_scoreboard_from_entries(&entries, "https://g8t.is", 10);
-        assert_eq!(board.partnership_rankings[0].author_aye, "aye::Hue+Gemini(0+1)::x86_64");
+        assert_eq!(
+            board.partnership_rankings[0].author_aye,
+            "aye::Hue+Gemini(0+1)::x86_64"
+        );
         assert_eq!(board.partnership_rankings[0].total_fokens_fkn, 550);
         // Second capsule gets: 100 base + 0 crown + 1*50 vote + 100 (<10 cycles) = 250 FKN
         assert_eq!(board.partnership_rankings[1].total_fokens_fkn, 250);

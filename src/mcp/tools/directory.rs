@@ -7,11 +7,20 @@ use super::definitions::{AnalyzeDirectoryArgs, ProjectContextDumpArgs};
 use super::git::get_git_context;
 use super::statistics::get_statistics;
 use crate::formatters::{
-    ai::AiFormatter, classic::ClassicFormatter, csv::CsvFormatter, digest::DigestFormatter,
-    hex::HexFormatter, json::JsonFormatter, quantum::QuantumFormatter,
-    quantum_semantic::QuantumSemanticFormatter, semantic::SemanticFormatter, stats::StatsFormatter,
-    summary::SummaryFormatter, summary_ai::SummaryAiFormatter, tsv::TsvFormatter, Formatter,
-    PathDisplayMode,
+    ai::AiFormatter,
+    classic::ClassicFormatter,
+    csv::CsvFormatter,
+    digest::{DigestFormatter, SmtrCapsuleFormatter},
+    hex::HexFormatter,
+    json::JsonFormatter,
+    quantum::QuantumFormatter,
+    quantum_semantic::QuantumSemanticFormatter,
+    semantic::SemanticFormatter,
+    stats::StatsFormatter,
+    summary::SummaryFormatter,
+    summary_ai::SummaryAiFormatter,
+    tsv::TsvFormatter,
+    Formatter, PathDisplayMode,
 };
 use crate::mcp::helpers::{
     scan_with_config, should_use_default_ignores, validate_and_convert_path, validate_directory,
@@ -121,6 +130,7 @@ pub async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Valu
             "csv" => Box::new(CsvFormatter::new()),
             "tsv" => Box::new(TsvFormatter::new()),
             "digest" => Box::new(DigestFormatter::new()),
+            "louds" | "smtr-capsule" => Box::new(SmtrCapsuleFormatter::new()),
             "quantum" => Box::new(QuantumFormatter::new()),
             "semantic" => Box::new(SemanticFormatter::new(path_display_mode, mcp_no_emoji)),
             "quantum-semantic" => Box::new(QuantumSemanticFormatter::new()),
@@ -172,16 +182,24 @@ pub async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Valu
         }
     };
 
-    // Cache result if enabled
-    if ctx.config.cache_enabled {
+    // Cache result if enabled and scan was not truncated by a safety budget
+    if ctx.config.cache_enabled && stats.truncation_reason.is_none() {
         ctx.cache.set(cache_key, final_output.clone()).await;
     }
 
-    Ok(json!({
-        "content": [{
+    let mut content = vec![json!({
+        "type": "text",
+        "text": final_output
+    })];
+    if let Some(reason) = &stats.truncation_reason {
+        content.push(json!({
             "type": "text",
-            "text": final_output
-        }]
+            "text": format!("⚠️ Scan truncated: {}", reason)
+        }));
+    }
+
+    Ok(json!({
+        "content": content
     }))
 }
 

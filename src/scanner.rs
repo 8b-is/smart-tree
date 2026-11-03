@@ -386,30 +386,36 @@ impl TreeStats {
             self.total_files += 1;
             self.total_size += node.size;
 
-            // Track file extensions for type distribution.
+            // Track file extensions for type distribution (zero-alloc on hit via Borrow<str>).
             if let Some(ext) = node.path.extension() {
                 if let Some(ext_str) = ext.to_str() {
-                    *self.file_types.entry(ext_str.to_string()).or_insert(0) += 1;
+                    if let Some(count) = self.file_types.get_mut(ext_str) {
+                        *count += 1;
+                    } else {
+                        self.file_types.insert(ext_str.to_string(), 1);
+                    }
                 }
             }
 
-            // --- Update Top N Lists ---
-            // These lists are kept sorted and truncated to maintain a fixed size (e.g., top 10).
+            // --- Update Top N Lists (Bounded O(1) Admission Gate) ---
+            // Only clone PathBuf and re-sort when the candidate qualifies for the top 10.
+            if self.largest_files.len() < 10 || node.size > self.largest_files[9].0 {
+                self.largest_files.push((node.size, node.path.clone()));
+                self.largest_files.sort_by_key(|a| std::cmp::Reverse(a.0)); // Largest first
+                self.largest_files.truncate(10); // Keep only the top 10
+            }
 
-            // Update largest files: Add, sort by size (desc), truncate.
-            self.largest_files.push((node.size, node.path.clone()));
-            self.largest_files.sort_by_key(|a| std::cmp::Reverse(a.0)); // Largest first
-            self.largest_files.truncate(10); // Keep only the top 10
+            if self.newest_files.len() < 10 || node.modified > self.newest_files[9].0 {
+                self.newest_files.push((node.modified, node.path.clone()));
+                self.newest_files.sort_by_key(|a| std::cmp::Reverse(a.0)); // Newest first
+                self.newest_files.truncate(10);
+            }
 
-            // Update newest files: Add, sort by modification time (desc), truncate.
-            self.newest_files.push((node.modified, node.path.clone()));
-            self.newest_files.sort_by_key(|a| std::cmp::Reverse(a.0)); // Newest first
-            self.newest_files.truncate(10);
-
-            // Update oldest files: Add, sort by modification time (asc), truncate.
-            self.oldest_files.push((node.modified, node.path.clone()));
-            self.oldest_files.sort_by_key(|a| a.0); // Oldest first
-            self.oldest_files.truncate(10);
+            if self.oldest_files.len() < 10 || node.modified < self.oldest_files[9].0 {
+                self.oldest_files.push((node.modified, node.path.clone()));
+                self.oldest_files.sort_by_key(|a| a.0); // Oldest first
+                self.oldest_files.truncate(10);
+            }
         }
     }
 }
@@ -726,9 +732,19 @@ impl Scanner {
             }
         }
 
-        // Primary categorization is by file extension.
+        // Primary categorization is by file extension (zero heap allocation via stack buffer).
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            match ext.to_lowercase().as_str() {
+            let ext_bytes = ext.as_bytes();
+            let mut lower_buf = [0u8; 16];
+            let ext_lower: &str = if ext_bytes.len() <= 16 && ext_bytes.is_ascii() {
+                for (dst, &src) in lower_buf[..ext_bytes.len()].iter_mut().zip(ext_bytes) {
+                    *dst = src.to_ascii_lowercase();
+                }
+                std::str::from_utf8(&lower_buf[..ext_bytes.len()]).unwrap_or(ext)
+            } else {
+                return FileCategory::Unknown;
+            };
+            match ext_lower {
                 // --- Programming Languages ---
                 "rs" => FileCategory::Rust,
                 "py" | "pyw" | "pyx" | "pyi" => FileCategory::Python,
@@ -964,27 +980,20 @@ impl Scanner {
 
     /// ## `build_default_ignores`
     ///
-    /// Compiles the `DEFAULT_IGNORE_PATTERNS` array into a `GlobSet` for efficient matching.
-    /// This `GlobSet` is used to quickly check if a file/directory name matches any of the
-    /// common patterns we want to ignore by default (like `node_modules`, `target/`).
-    /// Returns `Ok(Some(GlobSet))` on success, or `Ok(None)` if no patterns (should not happen),
-    /// or an `Err` if glob compilation fails (very unlikely for our hardcoded patterns).
+    /// Returns a cloned handle to the process-wide cached `GlobSet` DFA compiled from
+    /// `DEFAULT_IGNORE_PATTERNS` (`Arc`-backed `O(1)` clone instead of recompiling 75 globs).
     fn build_default_ignores() -> Result<Option<GlobSet>> {
-        let mut builder = GlobSetBuilder::new(); // Start with an empty builder.
-
-        // Add each default pattern to the builder.
-        for pattern_str in DEFAULT_IGNORE_PATTERNS {
-            // Glob::new can fail if the pattern is malformed, but ours should be fine.
-            if let Ok(glob) = Glob::new(pattern_str) {
-                builder.add(glob);
-            }
-            // Silently ignore malformed default patterns, though this shouldn't occur.
-        }
-
-        // Build the GlobSet from the accumulated patterns.
-        // This can fail if, for example, the set is empty or patterns are incompatible,
-        // but again, highly unlikely for our predefined set.
-        Ok(Some(builder.build()?))
+        static CACHED_DEFAULT_IGNORES: once_cell::sync::Lazy<Option<GlobSet>> =
+            once_cell::sync::Lazy::new(|| {
+                let mut builder = GlobSetBuilder::new();
+                for pattern_str in DEFAULT_IGNORE_PATTERNS {
+                    if let Ok(glob) = Glob::new(pattern_str) {
+                        builder.add(glob);
+                    }
+                }
+                builder.build().ok()
+            });
+        Ok(CACHED_DEFAULT_IGNORES.clone())
     }
 
     /// ## `load_gitignore`
@@ -1294,16 +1303,19 @@ impl Scanner {
 
         let mut positions = Vec::new();
         let mut line_content_vec = Vec::new();
-        let reader = BufReader::new(file);
+        let mut reader = BufReader::new(file);
+        let mut line_buf = String::with_capacity(256);
         let mut line_number = 1;
         let mut first_match: Option<(usize, usize)> = None;
         let mut total_count = 0;
 
-        // Read and process the file line by line.
-        for line_result in reader.lines() {
-            match line_result {
-                Ok(line_content) => {
-                    // Find all occurrences of the keyword in the current line.
+        // Read and process the file line by line using a single reusable buffer (zero per-line heap allocs).
+        loop {
+            line_buf.clear();
+            match reader.read_line(&mut line_buf) {
+                Ok(0) => break, // EOF
+                Ok(_) => {
+                    let line_content = line_buf.trim_end_matches(['\r', '\n']);
                     let mut line_has_match = false;
                     let mut first_column_in_line = None;
 
@@ -1352,7 +1364,7 @@ impl Scanner {
                     {
                         line_content_vec.push((
                             line_number,
-                            line_content.clone(),
+                            line_content.to_string(),
                             first_column_in_line.unwrap(),
                         ));
                     }
@@ -1479,7 +1491,7 @@ impl Scanner {
                 break;
             }
 
-            let (node, enrich) = match entry_result {
+            let node = match entry_result {
                 Ok(entry) => {
                     let depth = entry.depth();
                     let path = entry.path();
@@ -1495,11 +1507,11 @@ impl Scanner {
                     if entry.file_type().is_dir() && (is_ignored_by_rules || node.is_none()) {
                         walker.skip_current_dir();
                     }
-                    (node, true)
+                    node
                 }
                 Err(e) => {
                     // Handle errors like permission denied.
-                    let node = if let Some(path) = e.path() {
+                    if let Some(path) = e.path() {
                         let depth = e.depth();
                         if e.io_error().is_some_and(|io_err| {
                             io_err.kind() == std::io::ErrorKind::PermissionDenied
@@ -1509,23 +1521,38 @@ impl Scanner {
                         Some(self.create_permission_denied_node(path, depth))
                     } else {
                         None
-                    };
-                    (node, false)
+                    }
                 }
             };
 
-            if let Some(mut node) = node {
+            if let Some(node) = node {
                 if let Err(reason) = Self::admit_node(&mut safety_tracker, &node) {
                     truncation_reason = Some(reason);
                     break;
                 }
-                if enrich {
-                    if !node.is_dir && self.should_search_file(&node) {
+                all_nodes_collected.push(node);
+            }
+        }
+
+        // Parallelize content search, security scanning, and interest scoring across cores
+        // after deterministic safety-budget admission completes.
+        if self.config.search_keyword.is_some()
+            || self.security_scanner.is_some()
+            || self.interest_calculator.is_some()
+        {
+            let enrich_node = |node: &mut FileNode| {
+                if !node.permission_denied || node.is_dir {
+                    if !node.is_dir && self.should_search_file(node) {
                         node.search_matches = self.search_in_file(&node.path);
                     }
-                    self.enrich_with_smart_scanning(&mut node);
+                    self.enrich_with_smart_scanning(node);
                 }
-                all_nodes_collected.push(node);
+            };
+            if all_nodes_collected.len() >= 16 {
+                use rayon::prelude::*;
+                all_nodes_collected.par_iter_mut().for_each(enrich_node);
+            } else {
+                all_nodes_collected.iter_mut().for_each(enrich_node);
             }
         }
 
@@ -1903,13 +1930,22 @@ impl Scanner {
         }
     }
 
+    /// Cached CI environment flag so `get_filesystem_type` never locks the global process env mutex per file.
+    #[inline]
+    fn is_ci_environment() -> bool {
+        static IS_CI: once_cell::sync::Lazy<bool> = once_cell::sync::Lazy::new(|| {
+            std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
+        });
+        *IS_CI
+    }
+
     /// ## `get_filesystem_type`
     ///
     /// Detects the filesystem type for a given path
     #[cfg(unix)]
     fn get_filesystem_type(path: &Path) -> FilesystemType {
         // Skip filesystem detection in CI environments to avoid hangs
-        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+        if Self::is_ci_environment() {
             return FilesystemType::Unknown;
         }
 
@@ -1940,7 +1976,7 @@ impl Scanner {
     #[cfg(target_os = "linux")]
     fn get_filesystem_type_linux(path: &Path) -> FilesystemType {
         // Double-check for CI environment
-        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+        if Self::is_ci_environment() {
             return FilesystemType::Unknown;
         }
 
@@ -1989,8 +2025,9 @@ impl Scanner {
             return FilesystemType::Unknown;
         }
 
-        // Check for Mem8 filesystem by looking for .mem8 marker files
-        if path.join(".mem8").exists() || path.to_string_lossy().contains("mem8") {
+        // Check for Mem8 filesystem by looking for .mem8 marker files (only stat .mem8 on directories)
+        if path.to_string_lossy().contains("mem8") || (path.is_dir() && path.join(".mem8").exists())
+        {
             return FilesystemType::Mem8;
         }
 
@@ -2767,5 +2804,51 @@ mod tests {
         };
         let scanner_result = Scanner::new(temp_dir.path(), config);
         assert!(scanner_result.is_ok());
+    }
+
+    #[test]
+    fn test_zero_alloc_file_category_and_parallel_search() {
+        assert_eq!(
+            Scanner::get_file_category(Path::new("src/MAIN.RS"), FileType::RegularFile),
+            FileCategory::Rust
+        );
+        assert_eq!(
+            Scanner::get_file_category(Path::new("capsule.M8"), FileType::RegularFile),
+            FileCategory::Memory
+        );
+        assert_eq!(
+            Scanner::get_file_category(Path::new("doc.MQ"), FileType::RegularFile),
+            FileCategory::Memory
+        );
+        assert_eq!(
+            Scanner::get_file_category(Path::new("README.MD"), FileType::RegularFile),
+            FileCategory::Markdown
+        );
+
+        let temp_dir = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+        for i in 0..20 {
+            let p = temp_dir.path().join(format!("file_{i:02}.rs"));
+            let content = if i % 5 == 0 {
+                format!("fn item_{i}() {{ /* ONI_FELIX_SENTINEL */ }}\n")
+            } else {
+                format!("fn item_{i}() {{}}\n")
+            };
+            std::fs::write(&p, content).unwrap();
+        }
+
+        let config = ScannerConfig {
+            max_depth: 3,
+            search_keyword: Some("ONI_FELIX_SENTINEL".to_string()),
+            include_line_content: true,
+            ..Default::default()
+        };
+        let scanner = Scanner::new(temp_dir.path(), config).unwrap();
+        let (nodes, stats) = scanner.scan().unwrap();
+        let matched: Vec<_> = nodes
+            .iter()
+            .filter(|n| !n.is_dir && n.search_matches.is_some())
+            .collect();
+        assert_eq!(matched.len(), 4);
+        assert_eq!(stats.total_files, 4);
     }
 }
