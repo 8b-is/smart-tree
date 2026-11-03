@@ -1,15 +1,17 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-10.8.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-10.9.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
+[![Erdős Book Mode](https://img.shields.io/badge/Erd%C5%91s-The_Book_Szemer%C3%A9di-ff8800)](docs/ARCHITECTURE_REVIEW_V10_8.md)
+[![FELIX ASM](https://img.shields.io/badge/FELIX-ASM_%26_SIMD_Hot_Paths-ff0055)](src/felix_asm.rs)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Spicy Mode](https://img.shields.io/badge/TUI-🌶️_Spicy-red)](docs/spicy-tui.md)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v10.8.0 (Oni-Felix Ultra-Evolution)** is a blazingly fast, AI-native directory intelligence, code-symbol, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **LOUDS Bit-Packed 64B `SMTR` `.m8` Capsules (`8B-META-WP-v2.1`)**, embedded **CrabCC Code Intelligence** (`st symbol`), **Salient Forge Memory** (`st remember`), **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> **Smart Tree v10.9.0 (Oni-Felix + Paul Erdős "Straight from The Book" + FELIX Assembly Hot-Paths)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, code-symbol, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **LOUDS Bit-Packed 64B `SMTR` `.m8` Capsules (`8B-META-WP-v2.1`)**, embedded **CrabCC Code Intelligence** (`st symbol`), **Salient Forge Memory** (`st remember`), **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
@@ -43,6 +45,11 @@ st --mode smtr-capsule ./src
 
 # Compact single-line SHA-256 + LOUDS SMTR_V2 fingerprint for instant change detection
 st --mode digest .
+
+# Paul Erdős ("Straight from The Book") Szemerédi Regularity, Voronoi Steiner Pruner,
+# Moser-Tardos Constructive LLL Worktree Splitter, Erdős-Rényi Percolation & Ramsey Cliques
+st --mode the-book .
+st --mode erdos ./src
 ```
 
 See the full [v10.8.0 End-to-End Architectural Review](docs/ARCHITECTURE_REVIEW_V10_8.md) for C4 diagrams, wire layout, and hot-path benchmarks.

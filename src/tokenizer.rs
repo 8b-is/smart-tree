@@ -183,6 +183,18 @@ impl Tokenizer {
         let mut i = 0;
 
         while i < tokens.len() {
+            // Fast-path: use FELIX 16-byte SIMD high-bit scanner (`felix_find_high_byte`)
+            // to bulk-copy contiguous ASCII spans (`< 0x80`) in a single `push_str`!
+            if tokens[i] < 0x80 {
+                let rem = &tokens[i..];
+                let ascii_len = crate::felix_asm::felix_find_high_byte(rem).unwrap_or(rem.len());
+                if let Ok(ascii_str) = std::str::from_utf8(&rem[..ascii_len]) {
+                    result.push_str(ascii_str);
+                    i += ascii_len;
+                    continue;
+                }
+            }
+
             let token = tokens[i];
             if token == UTF8_ESCAPE_TOKEN {
                 if i + 1 < tokens.len() {
@@ -314,6 +326,16 @@ impl QuantumTokenizer {
         let mut i = 0;
 
         while i < tokens.len() {
+            // Fast-path: use FELIX 16-byte SIMD high-bit scanner (`felix_find_high_byte`)
+            // to bulk-copy contiguous ASCII spans (`< 0x80`) into `expanded`!
+            if tokens[i] < 0x80 {
+                let rem = &tokens[i..];
+                let ascii_len = crate::felix_asm::felix_find_high_byte(rem).unwrap_or(rem.len());
+                expanded.extend_from_slice(&rem[..ascii_len]);
+                i += ascii_len;
+                continue;
+            }
+
             let token = tokens[i];
             if token == UTF8_ESCAPE_TOKEN && i + 1 < tokens.len() {
                 let utf8_len = tokens[i + 1] as usize;

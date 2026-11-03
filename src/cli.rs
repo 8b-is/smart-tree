@@ -984,6 +984,15 @@ pub enum OutputMode {
     /// LOUDS bit-packed sufficient tree & 64B SMTR .m8 capsule (8B-META-WP-v2.1)
     #[value(alias = "smtr-capsule", alias = "smtr_capsule", alias = "capsule")]
     Louds,
+    /// Paul Erdős ("Straight from The Book") Szemerédi Regularity, Steiner Pruner, Moser-Tardos LLL & Erdős-Rényi Scanner
+    #[value(
+        name = "the-book",
+        alias = "erdos",
+        alias = "szemeredi",
+        alias = "mem8-regular",
+        alias = "book"
+    )]
+    TheBook,
     /// Emotional tree - files with feelings!
     Emotional,
     /// MEM|8 Quantum format - ultimate compression
@@ -1024,7 +1033,7 @@ pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
         OutputMode::Classic => 3,
         OutputMode::Ai | OutputMode::Hex => 5,
         OutputMode::Stats => 10,
-        OutputMode::Digest | OutputMode::Louds => 10,
+        OutputMode::Digest | OutputMode::Louds | OutputMode::TheBook => 10,
         OutputMode::Emotional => 5,
         OutputMode::Quantum | OutputMode::QuantumSemantic | OutputMode::HexTree => 5,
         OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4,

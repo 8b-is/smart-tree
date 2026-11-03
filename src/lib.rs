@@ -23,6 +23,7 @@ pub mod context;
 pub mod decoders; // Decoders to convert quantum format to other representations
 pub mod dynamic_tokenizer;
 pub mod feature_flags; // Enterprise-friendly feature control and compliance
+pub mod felix_asm; // FELIX Sovereign Assembly & SIMD Hot-Path Engine (AArch64 NEON + x86_64 AVX2/BMI2/POPCNT)
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
 pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod hub;

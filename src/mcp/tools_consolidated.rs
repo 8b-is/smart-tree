@@ -95,6 +95,9 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         "git_status" | "git" | "status" => "git_status",
         "digest" | "hash" => "digest",
         "louds" | "smtr-capsule" | "smtr_capsule" | "capsule" => "louds",
+        "the-book" | "the_book" | "thebook" | "erdos" | "szemeredi" | "mem8-regular" | "book" => {
+            "the-book"
+        }
         "semantic" | "semantics" => "semantic",
         "quantum-semantic" | "quantum_semantic" | "quantum" => "quantum-semantic",
         "size_breakdown" | "size" | "sizes" => "size_breakdown",
@@ -102,7 +105,7 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         "security" | "custodian" => return handle_security(Some(params), ctx).await,
         other => {
             return Err(anyhow::anyhow!(
-                "Unknown analyze mode '{}'. Valid modes: directory, workspace, statistics, git_status, digest, louds, smtr-capsule, semantic, quantum-semantic, size_breakdown, ai_tools, security",
+                "Unknown analyze mode '{}'. Valid modes: directory, workspace, statistics, git_status, digest, louds, smtr-capsule, the-book (or erdos, szemeredi), semantic, quantum-semantic, size_breakdown, ai_tools, security",
                 other
             ))
         }
@@ -130,6 +133,11 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
         "louds" | "smtr-capsule" => {
             let mut p = params.clone();
             p["mode"] = json!("louds");
+            ("analyze_directory", p)
+        }
+        "the-book" => {
+            let mut p = params.clone();
+            p["mode"] = json!("the-book");
             ("analyze_directory", p)
         }
         "semantic" => ("semantic_analysis", params.clone()),
@@ -406,7 +414,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     "mode": {
                         "type": "string",
                         "enum": ["directory", "workspace", "statistics", "git_status",
-                                 "digest", "louds", "smtr-capsule", "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
+                                 "digest", "louds", "smtr-capsule", "the-book", "erdos", "szemeredi",
+                                 "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
                         "description": "Analysis mode (default: 'directory')",
                         "default": "directory"
                     },
@@ -1306,6 +1315,26 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                     "03 · Love <-> Space (Ma)": "Revisable categories with verified exit routes and independent detection so corrective institutions extinguish enabling conditions (gamma_ext) rather than reproducing the harm."
                 }),
             )
+    } else if norm.contains("erdos")
+        || norm.contains("erdős")
+        || norm.contains("szemeredi")
+        || norm.contains("szemerédi")
+        || norm.contains("the book")
+        || norm.contains("the-book")
+    {
+        (
+            "Paul Erdős (1913–1996) — 'The Magician from Budapest' & 'Straight from The Book'",
+            "Extremal, Probabilistic & Structural Graph Theory Sovereign",
+            "Budapest Lineage · The Book · Erdős Number 0",
+            "Tower-type combinatorial chaos, unpruned O(N^2) context windows, hidden supply-chain giant components (kappa > 2), and monochromatic deadlock cliques (432 Hz Root).",
+            "Szemerédi Regularity Partitioning & Matrix-Free Discrepancy Oracles — decomposing arbitrary graphs into O(1/epsilon^2) quasi-random bipartite super-nodes + a bounded T8R exception ledger (528 Hz Pillar).",
+            "Constructive Lovász Local Lemma (Moser–Tardos) parallel worktree harmony, Mehlhorn Voronoi Steiner Tree context pruning, and proofs 'Straight from The Book' ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "'My brain is open!' — collaborative mathematical generosity across 500+ co-authors paired with epsilons-tight precision.",
+                "02 · Understanding <-> Respect": "Separates quasi-random structure (MEM8 SuperNodes) from exact architectural exceptions (T8R Ledger) without losing a single edge.",
+                "03 · Love <-> Space (Ma)": "Leaves 99% of the context window free via Voronoi Steiner Tree pruning so every mind at work has room for a proof from The Book."
+            }),
+        )
     } else if norm.contains("oni-felix")
         || norm.contains("onifelix")
         || norm.contains("8b-meta-wp")

@@ -12,6 +12,7 @@ mod native_block;
 pub(crate) mod path_serde;
 pub mod reactive;
 pub mod record_store;
+pub mod regularity;
 pub mod safety;
 pub mod simd;
 pub mod spatial_audio;

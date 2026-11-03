@@ -10,7 +10,7 @@ use crate::formatters::{
     ai::AiFormatter,
     classic::ClassicFormatter,
     csv::CsvFormatter,
-    digest::{DigestFormatter, SmtrCapsuleFormatter},
+    digest::{DigestFormatter, SmtrCapsuleFormatter, TheBookFormatter},
     hex::HexFormatter,
     json::JsonFormatter,
     ls::LsFormatter,
@@ -356,7 +356,8 @@ fn get_ideal_depth_for_mode(mode: &str) -> usize {
         "quantum" | "quantumsemantic" => 10,
         "summary" | "summaryai" | "context" => 4,
         "ai" | "semantic" | "smart" => 5,
-        "digest" | "stats" | "louds" | "smtrcapsule" | "capsule" => 20,
+        "digest" | "stats" | "louds" | "smtrcapsule" | "capsule" | "thebook" | "erdos"
+        | "szemeredi" | "mem8regular" | "book" => 20,
         "relations" => 3,
         "projects" => 5,
         _ => 3, // Default for classic, json, etc.
@@ -432,6 +433,10 @@ fn format_output(
             let formatter = SmtrCapsuleFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
         }
+        "thebook" | "erdos" | "szemeredi" | "mem8regular" | "book" => {
+            let formatter = TheBookFormatter::new();
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
         "quantum" => {
             let formatter = QuantumFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
@@ -504,6 +509,9 @@ mod tests {
             ("smtr-capsule", "\"spec\": \"8B-META-WP-v2.1\""),
             ("smtr_capsule", "\"spec\": \"8B-META-WP-v2.1\""),
             ("capsule", "\"spec\": \"8B-META-WP-v2.1\""),
+            ("the-book", "\"spec\": \"ERDOS-THE-BOOK-v1.0\""),
+            ("erdos", "\"spec\": \"ERDOS-THE-BOOK-v1.0\""),
+            ("szemeredi", "\"spec\": \"ERDOS-THE-BOOK-v1.0\""),
         ] {
             let request = serde_json::from_value(serde_json::json!({
                 "path": temp.path(), "mode": mode

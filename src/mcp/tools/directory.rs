@@ -10,7 +10,7 @@ use crate::formatters::{
     ai::AiFormatter,
     classic::ClassicFormatter,
     csv::CsvFormatter,
-    digest::{DigestFormatter, SmtrCapsuleFormatter},
+    digest::{DigestFormatter, SmtrCapsuleFormatter, TheBookFormatter},
     hex::HexFormatter,
     json::JsonFormatter,
     quantum::QuantumFormatter,
@@ -131,6 +131,9 @@ pub async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Valu
             "tsv" => Box::new(TsvFormatter::new()),
             "digest" => Box::new(DigestFormatter::new()),
             "louds" | "smtr-capsule" => Box::new(SmtrCapsuleFormatter::new()),
+            "the-book" | "thebook" | "erdos" | "szemeredi" | "mem8-regular" | "book" => {
+                Box::new(TheBookFormatter::new())
+            }
             "quantum" => Box::new(QuantumFormatter::new()),
             "semantic" => Box::new(SemanticFormatter::new(path_display_mode, mcp_no_emoji)),
             "quantum-semantic" => Box::new(QuantumSemanticFormatter::new()),

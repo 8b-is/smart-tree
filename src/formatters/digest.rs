@@ -1,4 +1,5 @@
 use super::Formatter;
+use crate::mem8::regularity::{analyze_the_book_pipeline, PhaseRegime};
 use crate::mem8_binary::LoudsSmartTree;
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
@@ -8,6 +9,7 @@ use std::path::Path;
 
 pub struct DigestFormatter;
 pub struct SmtrCapsuleFormatter;
+pub struct TheBookFormatter;
 
 impl Default for DigestFormatter {
     fn default() -> Self {
@@ -135,6 +137,110 @@ impl Formatter for SmtrCapsuleFormatter {
             "indra_net_root_hex": hex::encode(indra_root),
             "smtr_m8_capsule_64b_hex": hex::encode(capsule),
             "dharma_mudra_verified": LoudsSmartTree::verify_m8_capsule(&capsule, &key),
+        });
+        writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
+        Ok(())
+    }
+}
+
+impl Default for TheBookFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TheBookFormatter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Formatter for TheBookFormatter {
+    fn format(
+        &self,
+        writer: &mut dyn Write,
+        nodes: &[FileNode],
+        stats: &TreeStats,
+        root_path: &Path,
+    ) -> Result<()> {
+        let report = analyze_the_book_pipeline(nodes);
+        let regime_str = match report.security_report.regime {
+            PhaseRegime::SubcriticalForest => "SubcriticalForest (kappa < 2.0)",
+            PhaseRegime::CriticalWindow => "CriticalWindow (2.0 <= kappa <= 3.5)",
+            PhaseRegime::SupercriticalGiant => "SupercriticalGiant (kappa > 3.5)",
+            PhaseRegime::AnomalousC2Clique => "AnomalousC2Clique (Chernoff / Multi-Hazard Alert)",
+        };
+
+        let steiner_backbone: Vec<serde_json::Value> = report
+            .steiner_slice
+            .steiner_super_nodes
+            .iter()
+            .map(|n| {
+                serde_json::json!({
+                    "cluster_id": n.cluster_id,
+                    "erdos_number": n.erdos_number,
+                    "resistance_dist": (n.resistance_dist * 1000.0).round() / 1000.0,
+                    "anchor_symbols": n.anchor_symbols,
+                    "expand_full_symbols": n.expand_full_symbols,
+                })
+            })
+            .collect();
+
+        let payload = serde_json::json!({
+            "spec": "ERDOS-THE-BOOK-v1.0",
+            "mathematician": "Paul Erdős (1913–1996) — The Magician from Budapest",
+            "motto": "Another roof, another proof. Straight from The Book.",
+            "root_path": root_path.display().to_string(),
+            "total_files": stats.total_files,
+            "total_dirs": stats.total_dirs,
+            "szemeredi_regularity": {
+                "epsilon": report.archive.epsilon,
+                "kohayakawa_rodl_energy_q_p": (report.archive.final_energy * 10_000.0).round() / 10_000.0,
+                "compression_ratio": (report.archive.compression_ratio * 100.0).round() / 100.0,
+                "super_nodes_k": report.archive.super_nodes.len(),
+                "regular_super_edges": report.archive.reduced_edges.len(),
+                "outlier_v0_vertices": report.archive.outlier_vertices.len(),
+                "t8r_exception_edges": report.archive.exception_ledger.len(),
+                "m8b_zero_copy_bytes": report.m8b_wire_bytes,
+                "t8r_leb128_bytes": report.t8r_wire_bytes,
+                "digest_hex": hex::encode(report.archive.model_digest),
+            },
+            "erdos_steiner_context": {
+                "focal_terminals": report.steiner_slice.root_terminals,
+                "estimated_llm_tokens": report.steiner_slice.estimated_tokens,
+                "exact_v0_bridges": report.steiner_slice.exact_bridge_symbols,
+                "steiner_backbone": steiner_backbone,
+            },
+            "moser_tardos_lll_worktrees": {
+                "num_worktrees": report.worktree_schedule.num_worktrees,
+                "is_conflict_free": report.worktree_schedule.is_conflict_free,
+                "total_resamples": report.worktree_schedule.total_resamples,
+                "parallel_mis_rounds": report.worktree_schedule.parallel_rounds,
+                "max_shearer_degree_delta": report.worktree_schedule.max_dependency_degree,
+                "unit_to_worktree": report.worktree_schedule.unit_to_worktree,
+            },
+            "erdos_renyi_percolation": {
+                "empirical_p": report.security_report.empirical_p,
+                "critical_p_c": report.security_report.critical_p_c,
+                "mean_degree_c": (report.security_report.mean_degree_c * 1000.0).round() / 1000.0,
+                "molloy_reed_kappa": (report.security_report.molloy_reed_kappa * 1000.0).round() / 1000.0,
+                "giant_component_c1": report.security_report.giant_component_size,
+                "second_component_c2_susceptibility": report.security_report.second_component_size,
+                "phase_regime": regime_str,
+                "anomalous_components": report.security_report.anomalies.len(),
+            },
+            "ramsey_monochromatic_cliques": {
+                "ramsey_r_3_3_3": report.ramsey_report.ramsey_number_r333,
+                "red_sync_lock_cliques": report.ramsey_report.red_cliques,
+                "blue_mutable_state_cliques": report.ramsey_report.blue_cliques,
+                "green_module_coupling_cliques": report.ramsey_report.green_cliques,
+            },
+            "erdos_lexicon": {
+                "straight_from_the_book": report.lexicon_counts.0,
+                "epsilons_utility_helpers": report.lexicon_counts.1,
+                "legally_dead_orphans": report.lexicon_counts.2,
+                "pure_noise_sf_monoliths": report.lexicon_counts.3,
+            }
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
         Ok(())

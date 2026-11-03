@@ -732,18 +732,15 @@ impl Scanner {
             }
         }
 
-        // Primary categorization is by file extension (zero heap allocation via stack buffer).
+        // Primary categorization is by file extension (zero heap allocation via FELIX 16-byte SIMD lowercase).
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let ext_bytes = ext.as_bytes();
-            let mut lower_buf = [0u8; 16];
-            let ext_lower: &str = if ext_bytes.len() <= 16 && ext_bytes.is_ascii() {
-                for (dst, &src) in lower_buf[..ext_bytes.len()].iter_mut().zip(ext_bytes) {
-                    *dst = src.to_ascii_lowercase();
-                }
-                std::str::from_utf8(&lower_buf[..ext_bytes.len()]).unwrap_or(ext)
+            let (lower_buf, len) = if ext_bytes.len() <= 16 && ext_bytes.is_ascii() {
+                crate::felix_asm::felix_ascii_lowercase_16b(ext_bytes)
             } else {
                 return FileCategory::Unknown;
             };
+            let ext_lower: &str = std::str::from_utf8(&lower_buf[..len]).unwrap_or(ext);
             match ext_lower {
                 // --- Programming Languages ---
                 "rs" => FileCategory::Rust,

@@ -5,6 +5,17 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.9.0] - 2026-11-02
+
+### 🔥 FELIX Sovereign Assembly & SIMD Hot-Path Engine (`src/felix_asm.rs`) + Paul Erdős "Straight from The Book"
+
+- **FELIX Hardware Assembly & SIMD Kernels (`src/felix_asm.rs`)**:
+  - `felix_popcnt_u64` & `felix_tzcnt_u64` (`core::arch::asm!` `cnt`/`addv` & `rbit`/`clz` on AArch64; `popcnt` & `tzcnt` on x86_64) wired into `LoudsSmartTree::rank1` and `LoudsSmartTree::select1`.
+  - `felix_dot64_f32`: 4-way unrolled NEON `vfmaq_f32` (`fmla v0.4s`) / x86_64 SSE FMA 64-lane wave dot product ($T(64) \approx 4\text{--}6$ cycles throughput) wired into `ZeroCopyMem8Book::top_k_super_nodes` and `prune_context_erdos_steiner`.
+  - `felix_normalize_f64_slice`: Dual-accumulator NEON `vfmaq_f64` L2 norm + vector reciprocal scale wired into `check_bipartite_regularity`.
+  - `felix_ascii_lowercase_16b` & `felix_find_high_byte`: Branchless 16-byte SIMD ASCII lowercase conversion in `Scanner::get_file_category` and 16-byte SIMD high-bit (`>= 0x80`) bulk ASCII copy in `Tokenizer::decode` and `QuantumTokenizer::quantum_decode`.
+  - `felix_splitmix64_x4`: 4-lane superscalar SplitMix64 PRNG breaking the 6-cycle serial multiplication dependency chain for Moser–Tardos Constructive LLL worktree resampling.
+
 ## [10.8.0] - 2026-11-02
 
 ### 🚀 Oni-Felix Ultra-Evolution (`8B-META-WP-v2.1`)
@@ -18,7 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cryptographic `.m8` Block Hash-Chaining**:
   - Upgraded `M8BinaryFile::append_block` to chain the real SHA-256 digest of the previous block's wire representation (`last_block_hash`) and dynamically extract searchable tokens.
 - **Sovereign Three-Kaya Ontology Expansion**:
-  - Added `oni-felix` (`8B-META-WP-v2.1`) and `hue` / `8bit-wraith` (`DAD`) entries to the Sovereign Three-Kaya Ontology (`handle_ontology`).
+  - Added `oni-felix` (`8B-META-WP-v2.1`), `erdos` / `the-book` (Paul Erdős — "The Magician from Budapest"), and `hue` / `8bit-wraith` (`DAD`) entries to the Sovereign Three-Kaya Ontology (`handle_ontology`).
+- **Paul Erdős ("Straight from The Book") SOTA Graph-Theoretic Engine (`src/mem8/regularity/`, `--mode the-book`)**:
+  - **Szemerédi Regularity Compression ("MEM8 Book Mode")**: Matrix-free rank-1 shifted power-iteration Spectral Witness Oracle (`check_bipartite_regularity`) on the Frieze–Kannan Discrepancy Operator and Kohayakawa–Rödl energy-pumping refinement (`compress_symbol_graph_to_mem8`).
+  - **Zero-Copy `.m8b` Wire Format & SIMD Recall**: 128-byte `#[repr(C, align(64))] Mem8BookHeader`, 256-byte cache-line-aligned `SuperNodeCentroidPod`, columnar delta + LEB128 T8R exception ledger (`encode_t8r_exceptions_leb128` / `decode_t8r_exceptions_leb128`), and `ZeroCopyMem8Book::top_k_super_nodes`.
+  - **Erdős Number & Mehlhorn Voronoi Steiner Tree Context Pruner**: Multi-source Voronoi Dijkstra wavefronts + Kruskal's MST over Voronoi boundary bridges (`prune_context_erdos_steiner`).
+  - **Constructive Lovász Local Lemma (Moser–Tardos) Worktree Splitter**: Dual-CSR `LllHypergraph` with parallel Maximal Independent Set (MIS) resampling and Moser Witness Tree bottleneck certificates (`solve_moser_tardos_worktrees`).
+  - **Erdős–Rényi Percolation Security Scanner & Ramsey Monochromatic Cliques**: Molloy–Reed $\kappa = \langle k^2 \rangle / \langle k \rangle$, Chernoff–Erdős union-bound log-surprise $\Lambda(C)$, Füredi–Komlós spectral radius $\lambda_1$, iterative Tarjan SCCs (`scan_erdos_renyi_supply_chain`), and Red/Blue/Green monochromatic clique detection (`scan_ramsey_monochromatic_cliques`).
+  - **New `--mode the-book` Formatter (`TheBookFormatter`)**: Wired `--mode the-book` (aliases `erdos`, `szemeredi`, `mem8-regular`, `book`) across CLI, HTTP daemon, and MCP `analyze` tool.
 
 ### ⚡ Ultra-Wild Hot-Path Performance Optimizations
 

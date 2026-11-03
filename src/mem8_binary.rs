@@ -838,7 +838,7 @@ impl LoudsSmartTree {
         }
     }
 
-    /// Hardware `POPCNT` (`u64::count_ones()`) $O(1)$ rank-1 query over `louds_bits[0..=bit_pos]`.
+    /// Hardware `POPCNT` (`felix_asm::felix_popcnt_u64`) $O(1)$ rank-1 query over `louds_bits[0..=bit_pos]`.
     #[inline]
     pub fn rank1(&self, bit_pos: usize) -> u32 {
         let clamped = bit_pos.min(255);
@@ -846,14 +846,14 @@ impl LoudsSmartTree {
         let bit_idx = clamped & 63;
         let mut total = 0u32;
         for w in 0..word_idx {
-            total += self.louds_bits[w].count_ones();
+            total += crate::felix_asm::felix_popcnt_u64(self.louds_bits[w]);
         }
         let mask = if bit_idx == 63 {
             u64::MAX
         } else {
             (1u64 << (bit_idx + 1)) - 1
         };
-        total + (self.louds_bits[word_idx] & mask).count_ones()
+        total + crate::felix_asm::felix_popcnt_u64(self.louds_bits[word_idx] & mask)
     }
 
     /// Complement $O(1)$ rank-0 query over `louds_bits[0..=bit_pos]`.
@@ -863,7 +863,7 @@ impl LoudsSmartTree {
         ((clamped + 1) as u32).saturating_sub(self.rank1(clamped))
     }
 
-    /// Hardware `POPCNT` + `TZCNT` (`trailing_zeros()`) $O(1)$ select-1 query.
+    /// Hardware `POPCNT` + `TZCNT` (`felix_asm::felix_tzcnt_u64`) $O(1)$ select-1 query.
     /// Returns the bit index (0..256) of the `target_rank`-th (1-based) set bit.
     #[inline]
     pub fn select1(&self, target_rank: u32) -> Option<usize> {
@@ -872,13 +872,13 @@ impl LoudsSmartTree {
         }
         let mut remaining = target_rank;
         for (w_idx, &word) in self.louds_bits.iter().enumerate() {
-            let ones = word.count_ones();
+            let ones = crate::felix_asm::felix_popcnt_u64(word);
             if remaining <= ones {
                 let mut cur = word;
                 for _ in 1..remaining {
                     cur &= cur - 1; // clear lowest set bit (BLSR)
                 }
-                return Some((w_idx << 6) + (cur.trailing_zeros() as usize));
+                return Some((w_idx << 6) + (crate::felix_asm::felix_tzcnt_u64(cur) as usize));
             }
             remaining -= ones;
         }

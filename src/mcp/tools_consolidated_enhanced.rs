@@ -214,7 +214,8 @@ EXAMPLES:
                     "mode": {
                         "type": "string",
                         "enum": ["directory", "workspace", "statistics", "git_status",
-                                 "digest", "louds", "smtr-capsule", "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
+                                 "digest", "louds", "smtr-capsule", "the-book", "erdos", "szemeredi",
+                                 "semantic", "quantum-semantic", "size_breakdown", "ai_tools", "security"],
                         "description": "Analysis type (default: 'directory')",
                         "default": "directory"
                     },
