@@ -41,11 +41,11 @@ struct Request {
 pub fn definition() -> Value {
     json!({
         "name": "rink",
-        "description": "Offline, opt-in external Rink quantities and classical wave math. Operations: query (expression), period (frequency), wavelength (speed/frequency), beat (frequency/other_frequency), recall (memory_id). Requires operator ST_RINK_BIN absolute path and Linux /usr/bin/prlimit. Fixed CPU/memory/time/output limits; no shell or currency fetch. Results retain Rink text, not a universal exactness guarantee (Rink has float fallbacks). remember:true explicitly stores provenance using Smart Tree native MEM8 in ST_RINK_MEMORY_DIR. No quantum hardware claim.",
+        "description": "Offline, opt-in external Rink quantities and classical wave math. Operations: query (expression), period (frequency), wavelength (speed/frequency), beat (frequency/other_frequency), wave (exact frequency/speed query; requires a Rink build with that command, otherwise it fails closed), recall (memory_id). Requires operator ST_RINK_BIN absolute path and Linux /usr/bin/prlimit. Fixed CPU/memory/time/output limits; no shell or currency fetch. Results retain Rink text, not a universal exactness guarantee (Rink has float fallbacks). remember:true explicitly stores provenance using Smart Tree native MEM8 in ST_RINK_MEMORY_DIR. No quantum hardware claim.",
         "inputSchema": {
             "type": "object", "additionalProperties": false,
             "properties": {
-                "operation": {"type": "string", "enum": ["query", "period", "wavelength", "beat", "recall"], "default": "query"},
+                "operation": {"type": "string", "enum": ["query", "period", "wavelength", "beat", "wave", "recall"], "default": "query"},
                 "expression": {"type": "string", "maxLength": MAX_EXPRESSION, "description": "Rink expression, e.g. (1/3) meter to fraction cm, 1640 g to lb;oz, or #jan 01, 1970# -> UTC. Semicolon, hash, comma, and colon are Rink syntax, not shell commands."},
                 "frequency": {"type": "string", "maxLength": 128, "description": "Strictly positive ordinary cycle frequency: integer or p/q plus Hz, kHz, MHz, GHz, mHz, uHz or nHz; e.g. 432 Hz or (1/3) kHz. Not rad/s; angular omega = 2*pi*f."},
                 "other_frequency": {"type": "string", "maxLength": 128},
@@ -244,6 +244,15 @@ fn expression(request: &Request) -> Result<String> {
             };
             // Subtraction of exact rationals stays exact; sqrt(square) uses Rink's float fallback.
             format!("({high}) - ({low}) to fraction Hz")
+        }
+        "wave" => {
+            let frequency = frequency(&request.frequency, "frequency")?;
+            let speed = field(&request.speed, "speed")?;
+            ensure!(
+                !speed.contains(','),
+                "Wave phase speed must not contain a comma"
+            );
+            format!("wave {}, {speed}", frequency.text)
         }
         _ => bail!("Unknown Rink operation: {operation}"),
     };
@@ -477,7 +486,7 @@ pub async fn handle(args: Value) -> Result<Value> {
         "arithmetic": "Rink text retained without numeric coercion; rational operations may be exact; external Rink has floating-point fallbacks",
         "limits": {"wall_seconds": 3, "cpu_seconds": 2, "address_space_bytes": 536870912u64, "output_bytes_per_stream": MAX_OUTPUT},
         "scope": "quantity conversion and classical wave relationships, not quantum hardware",
-        "wave_convention": "Presets require positive ordinary cycle frequency f in Hz-family units: T=1/f, wavelength=v/f; angular omega=2*pi*f, so angular inputs need an explicit conversion and are rejected by presets.",
+        "wave_convention": "Presets require positive ordinary cycle frequency f in Hz-family units: T=1/f, wavelength=v/f; angular omega=2*pi*f, so angular inputs need an explicit conversion and are rejected by presets. The wave operation asks Rink for exact period, wavelength, and omega/pi. It is classical and fails closed on a Rink build without that command.",
         "offline": "currency disabled; no network operation requested; trusted external binary, not a network sandbox"
     }))
 }
