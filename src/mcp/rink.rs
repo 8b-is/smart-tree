@@ -16,7 +16,12 @@ const MAX_OUTPUT: u64 = 16 * 1024;
 const WALL_LIMIT: Duration = Duration::from_secs(3);
 const MAX_STORE: u64 = 16 * 1024 * 1024;
 static QUERIES: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
-const CONFIG: &str = "[rink]\nshow_interpretation = false\nlong_output = false\n[currency]\nenabled = false\n[colors]\nenabled = false\n[limits]\nenabled = false\n";
+fn config_text(interpret: bool) -> String {
+    format!(
+        "[rink]\nshow_interpretation = {}\nlong_output = false\n[currency]\nenabled = false\n[colors]\nenabled = false\n[limits]\nenabled = false\n",
+        if interpret { "true" } else { "false" }
+    )
+}
 
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -28,6 +33,8 @@ struct Request {
     speed: Option<String>,
     remember: bool,
     memory_id: Option<String>,
+    interpret: bool,
+    definitions: Option<String>,
 }
 
 /// The same schema is used by every MCP discovery path.
@@ -39,15 +46,29 @@ pub fn definition() -> Value {
             "type": "object", "additionalProperties": false,
             "properties": {
                 "operation": {"type": "string", "enum": ["query", "period", "wavelength", "beat", "recall"], "default": "query"},
-                "expression": {"type": "string", "maxLength": MAX_EXPRESSION, "description": "Rink expression, e.g. (1/3) meter to fraction cm; bounded ASCII arithmetic subset"},
+                "expression": {"type": "string", "maxLength": MAX_EXPRESSION, "description": "Rink expression, e.g. (1/3) meter to fraction cm, 1640 g to lb;oz, or #jan 01, 1970# -> UTC. Semicolon, hash, comma, and colon are Rink syntax, not shell commands."},
                 "frequency": {"type": "string", "maxLength": 128, "description": "Strictly positive ordinary cycle frequency: integer or p/q plus Hz, kHz, MHz, GHz, mHz, uHz or nHz; e.g. 432 Hz or (1/3) kHz. Not rad/s; angular omega = 2*pi*f."},
                 "other_frequency": {"type": "string", "maxLength": 128},
                 "speed": {"type": "string", "maxLength": 128, "description": "Propagation speed, e.g. 343 m/s"},
                 "remember": {"type": "boolean", "default": false, "description": "Explicitly consent to durable provenance storage; requires ST_RINK_MEMORY_DIR"},
+                "interpret": {"type": "boolean", "default": false, "description": "Show Rink's input interpretation. Default false keeps the answer compact."},
+                "definitions": {"type": "string", "maxLength": 4096, "description": "Optional unit definitions for this query only, including ! directives, quantities, docs, and substances. They are not read from the home directory. Shadowing a built-in requires a Rink build that keeps duplicate definitions as warnings."},
                 "memory_id": {"type": "string", "description": "UUID from a prior remembered result"}
             }
         }
     })
+}
+
+fn validate_definitions(text: &str) -> Result<()> {
+    ensure!(!text.trim().is_empty(), "Empty Rink definitions");
+    ensure!(text.len() <= 4096, "Rink definitions exceed 4096 bytes");
+    for byte in text.bytes() {
+        ensure!(
+            byte.is_ascii_alphanumeric() || b" \t\n+-*/^().>;#,:_!?\"{}|".contains(&byte),
+            "Rink definitions contain an unsupported character"
+        );
+    }
+    Ok(())
 }
 
 fn validate(expression: &str) -> Result<()> {
@@ -60,7 +81,7 @@ fn validate(expression: &str) -> Result<()> {
     let mut digits = 0u8;
     for byte in expression.bytes() {
         ensure!(
-            byte.is_ascii_alphanumeric() || b" +-*/^().>".contains(&byte),
+            byte.is_ascii_alphanumeric() || b" +-*/^().>;#,:_".contains(&byte),
             "Only bounded ASCII quantity arithmetic is supported"
         );
         if byte.is_ascii_digit() {
@@ -233,7 +254,7 @@ fn expression(request: &Request) -> Result<String> {
 /// Private empty working/config directories prevent ambient user unit overrides.
 struct QueryDir(PathBuf);
 impl QueryDir {
-    fn create() -> Result<Self> {
+    fn create(interpret: bool, definitions: Option<&str>) -> Result<Self> {
         let path = std::env::temp_dir().join(format!("st-rink-{}", uuid::Uuid::new_v4()));
         let mut builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
@@ -243,7 +264,10 @@ impl QueryDir {
         }
         builder.create(&path)?;
         let directory = Self(path);
-        std::fs::write(directory.0.join("config.toml"), CONFIG)?;
+        std::fs::write(directory.0.join("config.toml"), config_text(interpret))?;
+        if let Some(definitions) = definitions {
+            std::fs::write(directory.0.join("definitions.units"), definitions)?;
+        }
         Ok(directory)
     }
 }
@@ -271,6 +295,16 @@ async fn limited_read(reader: impl AsyncRead + Unpin) -> Result<String> {
 }
 
 async fn evaluate(binary: &Path, expression: &str, wall: Duration) -> Result<String> {
+    evaluate_with(binary, expression, wall, false, None).await
+}
+
+async fn evaluate_with(
+    binary: &Path,
+    expression: &str,
+    wall: Duration,
+    interpret: bool,
+    definitions: Option<&str>,
+) -> Result<String> {
     ensure!(
         cfg!(target_os = "linux"),
         "Bounded Rink adapter currently requires Linux"
@@ -279,7 +313,7 @@ async fn evaluate(binary: &Path, expression: &str, wall: Duration) -> Result<Str
         binary.is_absolute() && binary.is_file(),
         "ST_RINK_BIN must name an existing absolute executable"
     );
-    let directory = QueryDir::create()?;
+    let directory = QueryDir::create(interpret, definitions)?;
     let mut command = tokio::process::Command::new("/usr/bin/prlimit");
     command
         .args([
@@ -386,6 +420,10 @@ pub async fn handle(args: Value) -> Result<Value> {
         .context("Rink busy: at most two concurrent requests")?;
     if request.operation.as_deref() == Some("recall") {
         ensure!(!request.remember, "recall does not accept remember");
+        ensure!(
+            request.definitions.is_none(),
+            "recall does not accept definitions"
+        );
         let id = request.memory_id.context("Missing memory_id")?;
         let path = memory_path()?;
         let value = tokio::task::spawn_blocking(move || store(&path, &id, None)).await??;
@@ -404,7 +442,17 @@ pub async fn handle(args: Value) -> Result<Value> {
     let binary = binary
         .canonicalize()
         .context("Cannot resolve ST_RINK_BIN")?;
-    let output = evaluate(&binary, &expression, WALL_LIMIT).await?;
+    if let Some(definitions) = &request.definitions {
+        validate_definitions(definitions)?;
+    }
+    let output = evaluate_with(
+        &binary,
+        &expression,
+        WALL_LIMIT,
+        request.interpret,
+        request.definitions.as_deref(),
+    )
+    .await?;
     let provenance = Provenance {
         expression,
         output,

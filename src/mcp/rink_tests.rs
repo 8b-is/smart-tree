@@ -9,13 +9,18 @@ fn rink_validation_rejects_injection_and_excess_work() {
         "(343 m/s)/(432 Hz) to fraction m",
         "m^2",
         "s^-2",
+        "1640 g to lb;oz",
+        "(2/3) meter to m;cm fraction 32",
+        "#jan 01, 1970 00:00 UTC# -> America/Los_Angeles",
+        "#jan 01, 1970 00:00 UTC# -> +02:00",
     ] {
         assert!(validate(valid).is_ok(), "{valid}");
     }
     for invalid in [
         "",
         "\n1 m",
-        "1 m; touch evil",
+        "1 m;$(id)",
+        "#jan 01, 1970#;$(id)",
         "$(id)",
         "`id`",
         "1 | cat",
@@ -36,6 +41,40 @@ fn rink_validation_rejects_injection_and_excess_work() {
     }
     assert!(validate(&"x".repeat(513)).is_err());
     assert!(validate(&format!("{}1{}", "(".repeat(17), ")".repeat(17))).is_err());
+}
+
+#[test]
+fn rink_interpretation_is_opt_in_and_currency_stays_disabled() {
+    let quiet = config_text(false);
+    let shown = config_text(true);
+    assert!(quiet.contains("show_interpretation = false"), "{quiet}");
+    assert!(shown.contains("show_interpretation = true"), "{shown}");
+    assert!(shown.contains("[currency]\nenabled = false"), "{shown}");
+    assert_eq!(
+        definition()["inputSchema"]["properties"]["interpret"]["default"],
+        false
+    );
+}
+
+#[test]
+fn rink_definitions_are_explicit_and_do_not_read_home() {
+    assert!(validate_definitions("stack 64\n").is_ok());
+    assert!(validate_definitions(
+        "!category localwood \"Local wood\"\n?? note\nstack 7\n!endcategory\n"
+    )
+    .is_ok());
+    assert!(validate_definitions("widget {\n}\n").is_ok());
+    assert!(validate_definitions("1|2 cord\n").is_ok());
+    assert!(validate_definitions("stack $(id)\n").is_err());
+    assert!(validate_definitions("stack `id`\n").is_err());
+    assert!(validate_definitions(&"x".repeat(4097)).is_err());
+    let with_defs = QueryDir::create(false, Some("stack 64\n")).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(with_defs.0.join("definitions.units")).unwrap(),
+        "stack 64\n"
+    );
+    let quiet = QueryDir::create(false, None).unwrap();
+    assert!(!quiet.0.join("definitions.units").exists());
 }
 
 #[test]

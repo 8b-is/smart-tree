@@ -410,10 +410,10 @@ pub fn felix_normalize_f64_slice(vec: &mut [f64]) -> f64 {
     norm
 }
 
-/// Branchless 16-byte SIMD / SWAR-64 ASCII lowercase conversion (`'A'..='Z'` $\to$ `'a'..='z'`).
+/// 16-byte ASCII lowercase conversion (`'A'..='Z'` to `'a'..='z'`).
 ///
-/// Used by `Scanner::get_file_category` to classify file extensions in a single register pass
-/// without branches or heap allocations across all CPU architectures.
+/// AArch64 uses NEON. Other targets use an explicit 16-byte loop because the old SWAR
+/// formula did not lowercase on x86_64. Used by `Scanner::get_file_category`.
 #[inline(always)]
 pub fn felix_ascii_lowercase_16b(src: &[u8]) -> ([u8; 16], usize) {
     let len = src.len().min(16);
@@ -435,24 +435,13 @@ pub fn felix_ascii_lowercase_16b(src: &[u8]) -> ([u8; 16], usize) {
 
     #[cfg(not(target_arch = "aarch64"))]
     {
-        // CPU-agnostic 64-bit SWAR (SIMD Within A Register) branchless ASCII lowercase:
-        // Processes 8 bytes per u64 register (2 registers = 16 bytes) in pure integer ALU ops.
-        #[inline(always)]
-        const fn swar_ascii_lower_u64(w: u64) -> u64 {
-            let ascii_mask = (w & 0x8080_8080_8080_8080) ^ 0x8080_8080_8080_8080;
-            let ge_a = (w | 0x8080_8080_8080_8080).wrapping_sub(0x4141_4141_4141_4141);
-            let le_z = 0xDA_DA_DA_DA_DA_DA_DA_DAu64.wrapping_add(w | 0x8080_8080_8080_8080);
-            let upper_hi = ascii_mask & ge_a & !le_z & 0x8080_8080_8080_8080;
-            w | (upper_hi >> 2)
+        // The previous 64-bit SWAR formula left ASCII uppercase unchanged on x86_64.
+        // Sixteen bytes do not need that formula; set the lowercase bit only for A-Z.
+        for byte in &mut buf[..len] {
+            if byte.is_ascii_uppercase() {
+                *byte |= 0x20;
+            }
         }
-        let mut lo = [0u8; 8];
-        let mut hi = [0u8; 8];
-        lo.copy_from_slice(&buf[0..8]);
-        hi.copy_from_slice(&buf[8..16]);
-        let lo_out = swar_ascii_lower_u64(u64::from_le_bytes(lo)).to_le_bytes();
-        let hi_out = swar_ascii_lower_u64(u64::from_le_bytes(hi)).to_le_bytes();
-        buf[0..8].copy_from_slice(&lo_out);
-        buf[8..16].copy_from_slice(&hi_out);
     }
 
     (buf, len)
