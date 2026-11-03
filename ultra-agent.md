@@ -1,8 +1,8 @@
-# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v10.11.0)
+# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v10.12.0)
 
 <div align="center">
 
-![Smart Tree v10.11.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
+![Smart Tree v10.12.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
 
 **"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."**  
 *— Paul Erdős (1913–1996), The Magician from Budapest*
@@ -70,6 +70,7 @@ Running `st --mcp-install` or `st --claude-init` automatically extracts four sel
 2. **[`flyxion-salience-ontology`](skills/flyxion-salience-ontology/SKILL.md)**: Separates observable temporal distance $d_T(x, q)$ from relational distance $d_R(x, q)$ and rescues "Load-Bearing Old" ("Corrugated Iron") foundational files from chronological retrieval-as-amnesia.
 3. **[`ramsey-karp-fpt`](skills/ramsey-karp-fpt/SKILL.md)**: 256-bit SIMD bitboard (`BitSet256`) Tomita Bron–Kerbosch, Erdős–Moser tournament vs. deadlock knot classification, Fox–Sudakov/Rödl bi-clique API conformance bug hunting, and Karp's 21 NP-complete FPT reductions.
 4. **[`manybody-strang-mem8`](skills/manybody-strang-mem8/SKILL.md)**: Quantum Many-Body Kohn–Sham DFT super-node orbitals, Local Natural Orbital (`T8R`) correlation corrections, and second-order Strang split-operator salience wave propagation.
+5. **[`ultrabackyardloop`](skills/ultrabackyardloop/SKILL.md)**: The Sovereign Constellation `DO = reflect → improve → wire → polish → push → readme` measured Backyard Ultra loop (`st --ultrabackyard 12 .` & [`docs/ULTRABACKYARDLOOP.md`](docs/ULTRABACKYARDLOOP.md)).
 
 ---
 
@@ -96,4 +97,7 @@ st --erdos-split 4 .
 
 # 7. Sovereign p/q Mode (Exact Coprime Rationals + Hölder L_p/L_q Dual + Zarankiewicz z(n;p,q) + Symplectic Leapfrog):
 st --mode pq .
+
+# 8. Sovereign Ultra-Backyard Loop (DO = reflect → improve → wire → polish → push → readme):
+st --ultrabackyard 12 .
 ```

@@ -10,7 +10,10 @@ use crate::formatters::{
     ai::AiFormatter,
     classic::ClassicFormatter,
     csv::CsvFormatter,
-    digest::{DigestFormatter, PqModeFormatter, SmtrCapsuleFormatter, TheBookFormatter},
+    digest::{
+        DigestFormatter, PqModeFormatter, SmtrCapsuleFormatter, TheBookFormatter,
+        UltraBackyardFormatter,
+    },
     hex::HexFormatter,
     json::JsonFormatter,
     ls::LsFormatter,
@@ -357,7 +360,8 @@ fn get_ideal_depth_for_mode(mode: &str) -> usize {
         "summary" | "summaryai" | "context" => 4,
         "ai" | "semantic" | "smart" => 5,
         "digest" | "stats" | "louds" | "smtrcapsule" | "capsule" | "thebook" | "erdos"
-        | "szemeredi" | "mem8regular" | "book" | "pq" | "rationalpq" | "symplectic" => 20,
+        | "szemeredi" | "mem8regular" | "book" | "pq" | "rationalpq" | "symplectic"
+        | "ultrabackyard" | "backyardultra" | "ultrabackyardloop" | "doloop" => 20,
         "relations" => 3,
         "projects" => 5,
         _ => 3, // Default for classic, json, etc.
@@ -441,6 +445,10 @@ fn format_output(
             let formatter = PqModeFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
         }
+        "ultrabackyard" | "backyardultra" | "ultrabackyardloop" | "doloop" => {
+            let formatter = UltraBackyardFormatter::new();
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
         "quantum" => {
             let formatter = QuantumFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
@@ -519,6 +527,8 @@ mod tests {
             ("pq", "\"spec\": \"SOVEREIGN-PQ-MODE-v1.0\""),
             ("p-q", "\"spec\": \"SOVEREIGN-PQ-MODE-v1.0\""),
             ("symplectic", "\"spec\": \"SOVEREIGN-PQ-MODE-v1.0\""),
+            ("ultrabackyard", "\"spec\": \"ULTRABACKYARDLOOP-DO-v1.0\""),
+            ("do-loop", "\"spec\": \"ULTRABACKYARDLOOP-DO-v1.0\""),
         ] {
             let request = serde_json::from_value(serde_json::json!({
                 "path": temp.path(), "mode": mode

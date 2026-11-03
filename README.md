@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-10.11.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-10.12.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
@@ -1057,13 +1057,16 @@ flowchart LR
 | **VII. Karp's 21 NP-Complete FPT Certificate** | Fixed-Parameter Tractable ($O(d \cdot \vert V\vert \cdot 3^{d/3})$) degeneracy $d$, Caro–Wei $\alpha(G)$, Gavril 2-approx Vertex Cover, and Minimum Feedback Arc Set | `st --ramsey-cliques .` |
 | **VIII. Quantum Many-Body Kohn–Sham DFT & Strang Wave** | `[f32; 64]` Kohn–Sham super-node orbitals + Local Natural Orbital (`T8R`) correlations evolved via $e^{h(A+B)} \approx e^{hA/2} e^{hB} e^{hA/2}$ | `st --mode the-book .` |
 | **IX. Sovereign `p/q` Mode (`pq_engine.rs`)** | Exact coprime rationals via Stein's Binary GCD (`felix_binary_gcd_u64`), 128-bit cross-multiplication (`felix_pq_cross_cmp`), Hölder $(L_{3/2} \to L_3)$ dual spectral norm, Kővári–Sós–Turán $z(n; p, q)$, and Störmer–Verlet symplectic $(p, q)$ leapfrog | `st --mode pq .` |
+| **X. Sovereign Ultra-Backyard Loop (`ultrabackyard.rs`)** | Measured A/B Backyard Ultra laps (`DO = reflect → improve → wire → polish → push → readme`) cycling $\varepsilon$ & $C$, auditing SpherePOP / `mem\|8` / Phoenix / Vaked / `g8t.is` wiring (`zero_orphan_surfaces = true`), and binding only verified branches ([`docs/ULTRABACKYARDLOOP.md`](docs/ULTRABACKYARDLOOP.md), [`docs/lap-ledger.jsonl`](docs/lap-ledger.jsonl)) | `st --ultrabackyard 12 .` |
 
 ### 🤖 First-Class Model & Harness Support (`st --mcp-install`)
 
-See **[`ultra-agent.md`](ultra-agent.md)** for the complete multi-agent operating manual across **Gemini, ChatGPT, DeepSeek, and Claude** on **Antigravity (`agy`), OpenCode (`opencode`), Crush (`crush`), and Claude Code (`claude`)**, plus the 4 binary-embedded skills:
+See **[`ultra-agent.md`](ultra-agent.md)** for the complete multi-agent operating manual across **Gemini, ChatGPT, DeepSeek, and Claude** on **Antigravity (`agy`), OpenCode (`opencode`), Crush (`crush`), and Claude Code (`claude`)**, plus the 5 binary-embedded skills:
 - [`skills/ultra-graph-theory/SKILL.md`](skills/ultra-graph-theory/SKILL.md)
 - [`skills/flyxion-salience-ontology/SKILL.md`](skills/flyxion-salience-ontology/SKILL.md)
 - [`skills/ramsey-karp-fpt/SKILL.md`](skills/ramsey-karp-fpt/SKILL.md)
 - [`skills/manybody-strang-mem8/SKILL.md`](skills/manybody-strang-mem8/SKILL.md)
+- [`skills/ultrabackyardloop/SKILL.md`](skills/ultrabackyardloop/SKILL.md)
+
 
 

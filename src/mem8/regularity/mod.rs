@@ -24,6 +24,7 @@ pub mod pq_engine;
 pub mod ramsey_erdos_hajnal;
 pub mod salience_karp_manybody;
 pub mod types;
+pub mod ultrabackyard;
 pub mod wire;
 
 pub use compressor::{compress_symbol_graph_to_mem8, RegularityConfig};
@@ -61,6 +62,9 @@ pub use salience_karp_manybody::{
 pub use types::{
     ClusterId, CsrSymbolGraph, EdgeKind, ErdosLexiconBadge, ExceptionReason, Mem8BookArchive,
     Mem8SuperNode, RegularSuperEdge, SymbolId, SzemerediPartition, T8rExceptionEdge,
+};
+pub use ultrabackyard::{
+    run_ultrabackyard_laps, BackyardLapRecord, ConstellationWiringStatus, UltraBackyardReport,
 };
 pub use wire::{
     decode_t8r_exceptions_leb128, encode_t8r_exceptions_leb128, Mem8BookHeader,

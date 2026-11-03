@@ -1,5 +1,5 @@
 use super::Formatter;
-use crate::mem8::regularity::{analyze_the_book_pipeline, PhaseRegime};
+use crate::mem8::regularity::{analyze_the_book_pipeline, run_ultrabackyard_laps, PhaseRegime};
 use crate::mem8_binary::LoudsSmartTree;
 use crate::scanner::{FileNode, TreeStats};
 use anyhow::Result;
@@ -11,6 +11,7 @@ pub struct DigestFormatter;
 pub struct SmtrCapsuleFormatter;
 pub struct TheBookFormatter;
 pub struct PqModeFormatter;
+pub struct UltraBackyardFormatter;
 
 impl Default for DigestFormatter {
     fn default() -> Self {
@@ -396,6 +397,49 @@ impl Formatter for PqModeFormatter {
                 "liouville_jacobian_det": pq.liouville_jacobian_det,
                 "phase_space_orbitals": pq.phase_space_orbitals,
             },
+        });
+        writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
+        Ok(())
+    }
+}
+
+impl Default for UltraBackyardFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UltraBackyardFormatter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Formatter for UltraBackyardFormatter {
+    fn format(
+        &self,
+        writer: &mut dyn Write,
+        nodes: &[FileNode],
+        stats: &TreeStats,
+        root_path: &Path,
+    ) -> Result<()> {
+        let report = run_ultrabackyard_laps(nodes, 6);
+        let payload = serde_json::json!({
+            "spec": report.spec,
+            "motto": report.motto,
+            "root_path": root_path.display().to_string(),
+            "total_files": stats.total_files,
+            "total_dirs": stats.total_dirs,
+            "do_stages": report.do_stages,
+            "total_laps": report.total_laps,
+            "total_symbols": report.total_symbols,
+            "total_edges": report.total_edges,
+            "best_lap": report.best_lap,
+            "best_symbols_per_sec": report.best_symbols_per_sec,
+            "best_epsilon": report.best_epsilon,
+            "best_bound_worktrees_c": report.best_bound_worktrees_c,
+            "constellation_wiring": report.wiring,
+            "laps": report.laps,
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
         Ok(())

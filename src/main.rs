@@ -483,6 +483,10 @@ async fn main() -> Result<()> {
         let target_path = cli.path.as_deref().unwrap_or(".");
         return st::cli_commands::handle_erdos_worktree_split(target_path, num_wt).await;
     }
+    if let Some(num_laps) = cli.ultrabackyard {
+        let target_path = cli.path.as_deref().unwrap_or(".");
+        return st::cli_commands::handle_ultrabackyard_loop(target_path, num_laps).await;
+    }
 
     // Handle Google Drive / Sync commands
     if let Some(action) = &cli.gdrive {

@@ -331,6 +331,10 @@ pub struct Cli {
     #[arg(long, alias = "agent-split", value_name = "WORKTREES", default_missing_value = "4", num_args = 0..=1, help_heading = "Analysis")]
     pub erdos_split: Option<u16>,
 
+    /// Execute the Sovereign Ultra-Backyard Loop (DO = reflect → improve → wire → polish → push → readme) over N measured laps
+    #[arg(long, alias = "backyard-ultra", alias = "ultrabackyardloop", alias = "do-loop", value_name = "LAPS", default_missing_value = "12", num_args = 0..=1, help_heading = "Analysis")]
+    pub ultrabackyard: Option<usize>,
+
     // =========================================================================
     // G8T.IS RUST FUNCTION CAPSULES, YOLO FASTEST-PICK & FOKEN SCOREBOARD
     // =========================================================================
@@ -1018,6 +1022,14 @@ pub enum OutputMode {
         alias = "symplectic"
     )]
     Pq,
+    /// Sovereign Ultra-Backyard Loop (DO = reflect → improve → wire → polish → push → readme) measured lap report
+    #[value(
+        name = "ultrabackyard",
+        alias = "backyard-ultra",
+        alias = "ultrabackyardloop",
+        alias = "do-loop"
+    )]
+    UltraBackyard,
     /// Emotional tree - files with feelings!
     Emotional,
     /// MEM|8 Quantum format - ultimate compression
@@ -1058,7 +1070,11 @@ pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
         OutputMode::Classic => 3,
         OutputMode::Ai | OutputMode::Hex => 5,
         OutputMode::Stats => 10,
-        OutputMode::Digest | OutputMode::Louds | OutputMode::TheBook | OutputMode::Pq => 10,
+        OutputMode::Digest
+        | OutputMode::Louds
+        | OutputMode::TheBook
+        | OutputMode::Pq
+        | OutputMode::UltraBackyard => 10,
         OutputMode::Emotional => 5,
         OutputMode::Quantum | OutputMode::QuantumSemantic | OutputMode::HexTree => 5,
         OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4,

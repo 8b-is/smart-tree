@@ -572,6 +572,26 @@ pub async fn handle_erdos_worktree_split(path: &str, num_worktrees: u16) -> Resu
     Ok(())
 }
 
+/// Execute the Sovereign Ultra-Backyard Loop (`DO = reflect → improve → wire → polish → push → readme`)
+/// over `num_laps` measured A/B laps and emit the verified bound report.
+pub async fn handle_ultrabackyard_loop(path: &str, num_laps: usize) -> Result<()> {
+    use crate::mem8::regularity::run_ultrabackyard_laps;
+    use crate::scanner::{Scanner, ScannerConfig};
+    use std::path::Path;
+
+    let scan_path = Path::new(path);
+    let config = ScannerConfig {
+        max_depth: 6,
+        ..Default::default()
+    };
+    let scanner = Scanner::new(scan_path, config)?;
+    let (nodes, _) = scanner.scan()?;
+    let report = run_ultrabackyard_laps(&nodes, num_laps);
+
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
 pub async fn handle_integrity_scan(path: &str, no_daemon: bool) -> Result<()> {
     use crate::config::StConfig;
     use crate::magiscanner::service::{print_reports, scan_path};
