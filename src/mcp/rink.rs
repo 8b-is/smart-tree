@@ -39,7 +39,7 @@ pub fn definition() -> Value {
             "type": "object", "additionalProperties": false,
             "properties": {
                 "operation": {"type": "string", "enum": ["query", "period", "wavelength", "beat", "recall"], "default": "query"},
-                "expression": {"type": "string", "maxLength": MAX_EXPRESSION, "description": "Rink expression, e.g. (1/3) meter to fraction cm; bounded ASCII arithmetic subset"},
+                "expression": {"type": "string", "maxLength": MAX_EXPRESSION, "description": "Rink expression, e.g. (1/3) meter to fraction cm or 1640 g to lb;oz. Semicolon separates a unit list and is not a shell command."},
                 "frequency": {"type": "string", "maxLength": 128, "description": "Strictly positive ordinary cycle frequency: integer or p/q plus Hz, kHz, MHz, GHz, mHz, uHz or nHz; e.g. 432 Hz or (1/3) kHz. Not rad/s; angular omega = 2*pi*f."},
                 "other_frequency": {"type": "string", "maxLength": 128},
                 "speed": {"type": "string", "maxLength": 128, "description": "Propagation speed, e.g. 343 m/s"},
@@ -60,7 +60,7 @@ fn validate(expression: &str) -> Result<()> {
     let mut digits = 0u8;
     for byte in expression.bytes() {
         ensure!(
-            byte.is_ascii_alphanumeric() || b" +-*/^().>".contains(&byte),
+            byte.is_ascii_alphanumeric() || b" +-*/^().>;".contains(&byte),
             "Only bounded ASCII quantity arithmetic is supported"
         );
         if byte.is_ascii_digit() {

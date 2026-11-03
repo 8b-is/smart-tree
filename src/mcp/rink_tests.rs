@@ -9,13 +9,15 @@ fn rink_validation_rejects_injection_and_excess_work() {
         "(343 m/s)/(432 Hz) to fraction m",
         "m^2",
         "s^-2",
+        "1640 g to lb;oz",
+        "(2/3) meter to m;cm fraction 32",
     ] {
         assert!(validate(valid).is_ok(), "{valid}");
     }
     for invalid in [
         "",
         "\n1 m",
-        "1 m; touch evil",
+        "1 m;$(id)",
         "$(id)",
         "`id`",
         "1 | cat",
