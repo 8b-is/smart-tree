@@ -11,6 +11,8 @@ fn rink_validation_rejects_injection_and_excess_work() {
         "s^-2",
         "1640 g to lb;oz",
         "(2/3) meter to m;cm fraction 32",
+        "#jan 01, 1970 00:00 UTC# -> America/Los_Angeles",
+        "#jan 01, 1970 00:00 UTC# -> +02:00",
     ] {
         assert!(validate(valid).is_ok(), "{valid}");
     }
@@ -18,6 +20,7 @@ fn rink_validation_rejects_injection_and_excess_work() {
         "",
         "\n1 m",
         "1 m;$(id)",
+        "#jan 01, 1970#;$(id)",
         "$(id)",
         "`id`",
         "1 | cat",
