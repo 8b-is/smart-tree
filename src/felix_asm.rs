@@ -438,7 +438,7 @@ pub fn felix_ascii_lowercase_16b(src: &[u8]) -> ([u8; 16], usize) {
         // The previous 64-bit SWAR formula left ASCII uppercase unchanged on x86_64.
         // Sixteen bytes do not need that formula; set the lowercase bit only for A-Z.
         for byte in &mut buf[..len] {
-            if (b'A'..=b'Z').contains(byte) {
+            if byte.is_ascii_uppercase() {
                 *byte |= 0x20;
             }
         }
