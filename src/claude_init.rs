@@ -1135,6 +1135,9 @@ pub fn update_agy_hooks_file(hooks_path: &Path, st_bin: &str, enable: bool) -> R
     Ok(())
 }
 
+/// Embedded model-agnostic `ultra-agent.md` operating manual baked directly into the `st` binary
+pub const EMBEDDED_ULTRA_AGENT_MD: &str = include_str!("../ultra-agent.md");
+
 /// Embedded model-agnostic `ultra-graph-theory` SKILL.md baked directly into the `st` binary
 pub const EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD: &str =
     include_str!("../skills/ultra-graph-theory/SKILL.md");
@@ -1143,30 +1146,65 @@ pub const EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD: &str =
 pub const EMBEDDED_ULTRA_GRAPH_THEORY_ADAPTERS_MD: &str =
     include_str!("../skills/ultra-graph-theory/references/model-and-harness-adapters.md");
 
-/// Installs the baked-in `ultra-graph-theory` skill across Antigravity (`agy`), Claude Code (`claude`),
+/// Embedded `flyxion-salience-ontology` SKILL.md baked directly into the `st` binary
+pub const EMBEDDED_FLYXION_SALIENCE_SKILL_MD: &str =
+    include_str!("../skills/flyxion-salience-ontology/SKILL.md");
+
+/// Embedded `ramsey-karp-fpt` SKILL.md baked directly into the `st` binary
+pub const EMBEDDED_RAMSEY_KARP_FPT_SKILL_MD: &str =
+    include_str!("../skills/ramsey-karp-fpt/SKILL.md");
+
+/// Embedded `manybody-strang-mem8` SKILL.md baked directly into the `st` binary
+pub const EMBEDDED_MANYBODY_STRANG_SKILL_MD: &str =
+    include_str!("../skills/manybody-strang-mem8/SKILL.md");
+
+/// Installs the baked-in `ultra-graph-theory`, `flyxion-salience-ontology`, `ramsey-karp-fpt`,
+/// and `manybody-strang-mem8` skills + `ultra-agent.md` across Antigravity (`agy`), Claude Code (`claude`),
 /// OpenCode (`opencode`), and Crush (`crush`) skill directories.
 pub fn install_embedded_ultra_graph_theory_skill() -> Result<Vec<PathBuf>> {
     let Some(home) = dirs::home_dir() else {
         return Ok(Vec::new());
     };
 
-    let target_skill_dirs = [
-        home.join(".gemini/antigravity-cli/skills/ultra-graph-theory"),
-        home.join(".claude/skills/ultra-graph-theory"),
-        home.join(".config/opencode/skills/ultra-graph-theory"),
-        home.join(".config/crush/skills/ultra-graph-theory"),
+    let harness_roots = [
+        home.join(".gemini/antigravity-cli/skills"),
+        home.join(".claude/skills"),
+        home.join(".config/opencode/skills"),
+        home.join(".config/crush/skills"),
+    ];
+
+    let companion_skills = [
+        (
+            "flyxion-salience-ontology",
+            EMBEDDED_FLYXION_SALIENCE_SKILL_MD,
+        ),
+        ("ramsey-karp-fpt", EMBEDDED_RAMSEY_KARP_FPT_SKILL_MD),
+        ("manybody-strang-mem8", EMBEDDED_MANYBODY_STRANG_SKILL_MD),
     ];
 
     let mut installed_paths = Vec::new();
-    for skill_dir in &target_skill_dirs {
-        let refs_dir = skill_dir.join("references");
+    for root in &harness_roots {
+        let ugt_dir = root.join("ultra-graph-theory");
+        let refs_dir = ugt_dir.join("references");
         if fs::create_dir_all(&refs_dir).is_ok() {
-            let skill_md = skill_dir.join("SKILL.md");
+            let skill_md = ugt_dir.join("SKILL.md");
             let adapters_md = refs_dir.join("model-and-harness-adapters.md");
+            let ultra_agent_md = refs_dir.join("ultra-agent.md");
             if fs::write(&skill_md, EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD).is_ok()
                 && fs::write(&adapters_md, EMBEDDED_ULTRA_GRAPH_THEORY_ADAPTERS_MD).is_ok()
+                && fs::write(&ultra_agent_md, EMBEDDED_ULTRA_AGENT_MD).is_ok()
             {
                 installed_paths.push(skill_md);
+            }
+        }
+
+        for (name, content) in &companion_skills {
+            let s_dir = root.join(name);
+            if fs::create_dir_all(&s_dir).is_ok() {
+                let s_md = s_dir.join("SKILL.md");
+                if fs::write(&s_md, content).is_ok() {
+                    installed_paths.push(s_md);
+                }
             }
         }
     }

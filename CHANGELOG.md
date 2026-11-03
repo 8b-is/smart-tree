@@ -5,6 +5,25 @@ All notable changes to Smart Tree will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.10.0] - 2026-11-03
+
+### 📐 256-Bit Ramsey/Erdős–Hajnal Bitboards, Flyxion Salience Ontology ($d_T \neq d_R$), Karp-21 FPT & Quantum Many-Body Kohn–Sham Wave Engine
+
+- **Ramsey & Erdős–Hajnal 256-Bit Bitboard Analyzer (`src/mem8/regularity/ramsey_erdos_hajnal.rs`)**:
+  - Added stack-allocated `BitSet256([u64; 4])` accelerated by `felix_popcnt_u64` and `felix_tzcnt_u64` for single-cycle Bron–Kerbosch neighborhood intersections.
+  - Added Matula–Beck $O(|V| + |E|)$ degeneracy ordering (`compute_degeneracy_ordering`) and Tomita-pivoted Bron–Kerbosch (`bron_kerbosch_tomita_256`) across all 5 AST `EdgeKind` colors plus the 6th anti-color $c_\emptyset$ (`extract_caro_wei_independent_set`).
+  - Added Erdős–Moser `TransitiveTournament` ($\vec{T}_k^{(c)}$) vs. `CyclicDeadlockKnot` classification (`classify_directed_clique`) with minimum `feedback_back_edges` and actionable `RefactorPrescription`.
+  - Added Fox–Sudakov / Rödl Pure & Almost-Pure Bi-Clique mining (`extract_erdos_hajnal_bicliques`) to detect latent trait abstractions ($d_c(A, B) = 1.0$) and **API Conformance Bugs** (`missing_anomaly_edges` where $1 - \delta \le d_c(A, B) < 1.0$), plus the **Erdős–Hajnal Modularity Exponent** $\gamma_{\text{EH}}$.
+- **Flyxion *Recency as Salience* ($d_T \neq d_R$) Ontology & Retrieval-as-Amnesia Detector (`src/mem8/regularity/salience_karp_manybody.rs`)**:
+  - Formal separation of observable temporal rank $r_T(x)$ from Erdős–Steiner relational rank $r_R(x)$, computing proxy disagreement $\Pr[x^*_T \neq x^*_R]$ and rescuing **"Load-Bearing Old" ("Corrugated Iron")** artifacts (`LoadBearingOldArtifact`) from chronological amnesia ($\text{retained}(x) \not\Rightarrow \text{retrievable}(x, q) \not\Rightarrow \text{salient}(x, q)$).
+- **Karp's 21 NP-Complete FPT & Approximation Certificate (`KarpComplexityCertificate`)**:
+  - Certifies FPT degeneracy $d$, $\omega(G)$, Caro–Wei $\alpha(G)$, Gavril 2-approx Minimum Vertex Cover, Minimum Feedback Arc Set, Moser–Tardos LLL $\chi_{\text{LLL}}$, Szemerédi Clique Cover $K$, Mehlhorn Voronoi 2-approx Steiner Tree, and Token Knapsack utilization.
+- **Quantum Many-Body Kohn–Sham DFT & Strang Split-Operator Wave Propagation (`ManyBodyDftWaveReport`)**:
+  - Treats `[f32; 64]` Szemerédi super-node centroids as Kohn–Sham electron density orbitals $\rho(\mathbf{r})$ coupled with Local Natural Orbital (`T8R` exception ledger) correlation corrections, evolved via second-order Strang operator splitting ($e^{h(A + B)} \approx e^{hA/2} e^{hB} e^{hA/2}$).
+- **Baked into Core Formatters, CLI, Embedded Skills & `ultra-agent.md`**:
+  - Baked into `SmartFormatter`, `ContextFormatter`, `DigestFormatter`, `TheBookFormatter`, `handle_security_scan`, `handle_erdos_anomaly_scan` (`--erdos-anomaly`), `handle_ramsey_cliques_scan` (`--ramsey-cliques`), `handle_erdos_center_scan` (`--erdos-center`), and `handle_erdos_worktree_split` (`--erdos-split`).
+  - Embedded `ultra-agent.md` and 4 model-agnostic skills (`ultra-graph-theory`, `flyxion-salience-ontology`, `ramsey-karp-fpt`, `manybody-strang-mem8`) directly into the `st` binary for **Gemini, ChatGPT, DeepSeek, and Claude** across **Antigravity (`agy`), OpenCode (`opencode`), Crush (`crush`), and Claude Code (`claude`)**.
+
 ## [10.9.0] - 2026-11-02
 
 ### 🔥 FELIX Sovereign Assembly & SIMD Hot-Path Engine (`src/felix_asm.rs`) + Paul Erdős "Straight from The Book"

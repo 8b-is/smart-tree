@@ -1014,3 +1014,54 @@ Status is recorded in `.auto-update/last-success`; macOS logs go to
 `/var/log/smart-tree-updater.log`, Linux logs to the service journal. Disabling
 updates leaves the daemon and its data in place. Future updates only become
 available when a validated, platform-compatible release is promoted to i1.
+
+---
+
+## 📐 Smart Tree v10.10.0 — "Straight from The Book" (Paul Erdős & Many-Body Wave Engine)
+
+<div align="center">
+
+![Smart Tree v10.10.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
+
+> *"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."*  
+> — **Paul Erdős (1913–1996), The Magician from Budapest**
+
+</div>
+
+Smart Tree v10.10.0 bakes **eight mathematical & physical pillars** directly into the core scanner, formatters (`st`, `st -m context`, `st -m digest`, `st -m the-book`), security engine (`st --security-scan`), and binary-embedded AI skills (`st --mcp-install` / [ultra-agent.md](ultra-agent.md)):
+
+![Paul Erdős & Many-Body Graph Visualizations](assets/erdos-graph-visualizations.jpg)
+
+```mermaid
+flowchart LR
+    A["Scanner + FELIX ASM\n(LoudsSmartTree 64B SMTR)"] --> B["I. Szemerédi Regularity\n(ZeroCopyMem8Book .m8b + T8R)"]
+    B --> C["II. Mehlhorn Voronoi Steiner\n(Erdős Center Z(G) & Radius)"]
+    C --> D["III. Moser–Tardos LLL\n(Conflict-Free Worktree Split)"]
+    A --> E["IV. Erdős–Rényi G_shadow\n(kappa, s(C), Lambda(C), lambda_1)"]
+    A --> F["V. 256-Bit BitSet256 Ramsey\n(Tournaments & Bi-Clique Bugs)"]
+    C --> G["VI. Flyxion Salience (d_T != d_R)\n(Rescues Load-Bearing Old Files)"]
+    F --> H["VII. Karp's 21 NP-Complete\n(FPT Degeneracy & 2-Approx Cert)"]
+    B --> I["VIII. Kohn–Sham DFT & Strang Wave\n(exp(hA/2) exp(hB) exp(hA/2))"]
+```
+
+### 🔬 The 8 Baked-In Pillars (`src/mem8/regularity/` & `src/felix_asm.rs`)
+
+| Pillar | Mathematical Engine | Core CLI / Flag |
+| :--- | :--- | :--- |
+| **I. Szemerédi Regularity Compression** | Kohayakawa–Rödl energy pumping + $L_2$ codegree spectral oracle (`oracle.rs`) into 64B-aligned `.m8b` + `T8R` LEB128 exception ledger | `st --mode the-book .` |
+| **II. Erdős Number & Voronoi Steiner Pruner** | Single-pass multi-source Voronoi Dijkstra + Kruskal MST + Turán $K_5$-free extremal bound & Erdős Center $Z(G)$ | `st --erdos-center .` |
+| **III. Constructive Lovász Local Lemma (Moser–Tardos)** | Parallel Maximal Independent Set (MIS) worktree coloring with a priori $e \cdot p(B) \cdot (d(B)+1) \le 1$ verification & auto-scaling | `st --erdos-split 4 .` |
+| **IV. Erdős–Rényi Shadow Graph ($G_{\text{shadow}}$)** | Cross-boundary percolation $\kappa = \langle k^2 \rangle / \langle k \rangle$, component excess $s(C)$, Chernoff–Erdős $\Lambda(C)$, and Füredi–Komlós $\lambda_1$ | `st --erdos-anomaly .` |
+| **V. 256-Bit Bitboard Ramsey & Erdős–Hajnal Bi-Cliques** | `BitSet256([u64; 4])` (`felix_popcnt_u64`/`felix_tzcnt_u64`) Tomita Bron–Kerbosch, Erdős–Moser tournaments vs. deadlock knots, and API conformance bug detection | `st --ramsey-cliques .` |
+| **VI. Flyxion *Recency as Salience* ($d_T \neq d_R$)** | Separates temporal rank $r_T(x)$ from relational rank $r_R(x)$ and rescues **"Load-Bearing Old" ("Corrugated Iron")** files from chronological amnesia | `st --erdos-center .` |
+| **VII. Karp's 21 NP-Complete FPT Certificate** | Fixed-Parameter Tractable ($O(d \cdot \vert V\vert \cdot 3^{d/3})$) degeneracy $d$, Caro–Wei $\alpha(G)$, Gavril 2-approx Vertex Cover, and Minimum Feedback Arc Set | `st --ramsey-cliques .` |
+| **VIII. Quantum Many-Body Kohn–Sham DFT & Strang Wave** | `[f32; 64]` Kohn–Sham super-node orbitals + Local Natural Orbital (`T8R`) correlations evolved via $e^{h(A+B)} \approx e^{hA/2} e^{hB} e^{hA/2}$ | `st --mode the-book .` |
+
+### 🤖 First-Class Model & Harness Support (`st --mcp-install`)
+
+See **[`ultra-agent.md`](ultra-agent.md)** for the complete multi-agent operating manual across **Gemini, ChatGPT, DeepSeek, and Claude** on **Antigravity (`agy`), OpenCode (`opencode`), Crush (`crush`), and Claude Code (`claude`)**, plus the 4 binary-embedded skills:
+- [`skills/ultra-graph-theory/SKILL.md`](skills/ultra-graph-theory/SKILL.md)
+- [`skills/flyxion-salience-ontology/SKILL.md`](skills/flyxion-salience-ontology/SKILL.md)
+- [`skills/ramsey-karp-fpt/SKILL.md`](skills/ramsey-karp-fpt/SKILL.md)
+- [`skills/manybody-strang-mem8/SKILL.md`](skills/manybody-strang-mem8/SKILL.md)
+
