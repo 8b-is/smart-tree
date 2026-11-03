@@ -518,6 +518,19 @@ impl Formatter for SmartFormatter {
             )?;
             writeln!(
                 writer,
+                "  ULTRA-OMNI-ZENO v11: wire=64B@{} ({}, seal={}) | QAT={} | SPQT={:?} | 8b-is(CT-000={}, GEMM={}, spherepop={}) | ISA={}",
+                book.zeno_report.upz_wupz.gate_byte_hex,
+                book.zeno_report.upz_wupz.litany_wire_verified,
+                book.zeno_report.upz_wupz.litany_wire_seal16_hex,
+                book.zeno_report.upz_wupz.qat_single_edit_reuse_pq,
+                book.zeno_report.upz_wupz.spqt_root_base243,
+                book.zeno_report.eight_b_is_engines.admissibility_ct000_epistemic_overlap_verified,
+                book.zeno_report.eight_b_is_engines.ternary_gemm_i32_accumulator,
+                book.zeno_report.eight_b_is_engines.spherepop_innermost_first_value,
+                book.zeno_report.os_agent_matrix.cpu_isa_profile,
+            )?;
+            writeln!(
+                writer,
                 "  Erdős Lexicon: {} Book | {} Epsilons | {} Legally Dead | {} S.F. Monoliths",
                 book.lexicon_counts.0,
                 book.lexicon_counts.1,

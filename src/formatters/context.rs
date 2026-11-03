@@ -190,7 +190,7 @@ impl Formatter for ContextFormatter {
                 let book = crate::mem8::regularity::analyze_the_book_pipeline(nodes);
                 writeln!(
                     writer,
-                    "ERDOS_BOOK_V1:K={} V0={} QP={:.4} RATIO={:.2}x M8B={}B RAD={} DIAM={} CENTER={:?} WORKTREES={} LLL_OK={} KAPPA={:.2} LAMBDA1={:.2} REGIME={:?} RAMSEY_RBG={}/{}/{} GAMMA_EH={:.3} DEGEN_D={} ALPHA={} SALIENCE_DISAGREE={:.2} STRANG_COH={:.3} PQ_AMB={} PQ_KAPPA={} HOLDER_32_3={:.3} Z33={}",
+                    "ERDOS_BOOK_V1:K={} V0={} QP={:.4} RATIO={:.2}x M8B={}B RAD={} DIAM={} CENTER={:?} WORKTREES={} LLL_OK={} KAPPA={:.2} LAMBDA1={:.2} REGIME={:?} RAMSEY_RBG={}/{}/{} GAMMA_EH={:.3} DEGEN_D={} ALPHA={} SALIENCE_DISAGREE={:.2} STRANG_COH={:.3} PQ_AMB={} PQ_KAPPA={} HOLDER_32_3={:.3} Z33={} ZENO_WIRE=64B@{} ZENO_SEAL={} QAT_REUSE={} SPQT={} GEMM_158B={} ISA={}",
                     book.archive.super_nodes.len(),
                     book.archive.outlier_vertices.len(),
                     book.archive.final_energy,
@@ -216,6 +216,12 @@ impl Formatter for ContextFormatter {
                     book.pq_report.molloy_reed_kappa_pq.display_ratio(),
                     book.pq_report.holder_3_2_to_3_norm,
                     book.pq_report.zarankiewicz_z_3_3_bound,
+                    book.zeno_report.upz_wupz.gate_byte_hex,
+                    book.zeno_report.upz_wupz.litany_wire_seal16_hex,
+                    book.zeno_report.upz_wupz.qat_single_edit_reuse_pq,
+                    book.zeno_report.upz_wupz.gaia_b158_compression_pq,
+                    book.zeno_report.eight_b_is_engines.ternary_gemm_i32_accumulator,
+                    book.zeno_report.os_agent_matrix.cpu_isa_profile,
                 )?;
             }
 

@@ -625,7 +625,7 @@ pub fn analyze_zeno_omni_engine(
 
     ZenoOmniReport {
         spec: "ULTRA-OMNI-ZENO-v11.0",
-        version: "11.0.0",
+        version: env!("CARGO_PKG_VERSION"),
         header_banner: "ULTRA-OMNI-ZENO {} :: ⟦+AND=1 : ~NAND=-1 | gate=0x62 | qt=0x55 | SPQT base-243 (3^5=243<=256) | uber > ultra⟧",
         upz_wupz: UpzWupzReport {
             abi_version: 1,

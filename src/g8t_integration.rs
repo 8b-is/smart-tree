@@ -55,19 +55,30 @@ pub fn resolve_g8t_url() -> String {
 // 1. EXACT REDUCED RATIONAL `p/q` ARITHMETIC (100% INTEGER, ZERO FLOATS)
 // ============================================================================
 
-/// Compute greatest common divisor using iterative Euclidean algorithm.
+/// Compute greatest common divisor using Stein's binary GCD (`trailing_zeros` + shift-subtract, zero modulo division).
 #[inline]
 pub const fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
-    while b != 0 {
-        let r = a % b;
-        a = b;
-        b = r;
-    }
     if a == 0 {
-        1
-    } else {
-        a
+        return if b == 0 { 1 } else { b };
     }
+    if b == 0 {
+        return a;
+    }
+    let shift = (a | b).trailing_zeros();
+    a >>= a.trailing_zeros();
+    loop {
+        b >>= b.trailing_zeros();
+        if a > b {
+            let tmp = a;
+            a = b;
+            b = tmp;
+        }
+        b -= a;
+        if b == 0 {
+            break;
+        }
+    }
+    a << shift
 }
 
 /// Exact reduced rational number `num / den` (`p/q`) with `den > 0` and `gcd(|num|, den) == 1`.
