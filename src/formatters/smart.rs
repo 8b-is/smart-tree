@@ -509,6 +509,15 @@ impl Formatter for SmartFormatter {
             )?;
             writeln!(
                 writer,
+                "  Sovereign p/q Mode: p_amb={} kappa_pq={} | Holder ||A||_(3/2->3)={:.3} | z(n;3,3)={} | Symplectic dH={:.2e}",
+                book.pq_report.ambient_density_pq.display_ratio(),
+                book.pq_report.molloy_reed_kappa_pq.display_ratio(),
+                book.pq_report.holder_3_2_to_3_norm,
+                book.pq_report.zarankiewicz_z_3_3_bound,
+                book.pq_report.symplectic_energy_drift,
+            )?;
+            writeln!(
+                writer,
                 "  Erdős Lexicon: {} Book | {} Epsilons | {} Legally Dead | {} S.F. Monoliths",
                 book.lexicon_counts.0,
                 book.lexicon_counts.1,

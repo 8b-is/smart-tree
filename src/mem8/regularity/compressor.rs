@@ -6,8 +6,9 @@
 //! absorbs micro-fragments ($|C| < \lfloor \varepsilon n / k_{\max} \rfloor$) into the outlier bucket $V_0$,
 //! and synthesizes the `Mem8BookArchive` (Reduced Graph $R$ + T8R Exception Ledger).
 
-use super::oracle::{check_bipartite_regularity, RegularityCheck};
+use super::oracle::{check_bipartite_regularity_with_scratch, OracleScratch, RegularityCheck};
 use super::types::*;
+use crate::felix_asm::{felix_add_assign_64_f32, felix_normalize64_f32};
 use rayon::prelude::*;
 
 /// Hyperparameters for MEM8 "Book Mode" Szemerédi Regularity Compression
@@ -71,15 +72,15 @@ pub fn compress_symbol_graph_to_mem8(
             }
         }
 
-        // Evaluate all pairs in parallel using thread-local scratch buffers
+        // Evaluate all pairs in parallel using zero-allocation thread-local OracleScratch arenas
         let pair_evaluations: Vec<((ClusterId, ClusterId), RegularityCheck, usize)> = pairs
             .par_iter()
             .map_init(
-                || vec![0u32; n],
+                || OracleScratch::with_vertices(n),
                 |scratch, &(ci, cj)| {
                     let v_i = &partition.clusters[ci as usize];
                     let v_j = &partition.clusters[cj as usize];
-                    let check = check_bipartite_regularity(
+                    let check = check_bipartite_regularity_with_scratch(
                         graph,
                         &partition.vertex_to_cluster,
                         ci,
@@ -104,7 +105,9 @@ pub fn compress_symbol_graph_to_mem8(
         for ((ci, cj), check, area) in pair_evaluations {
             total_regular_area += area;
             match check {
-                RegularityCheck::Regular { relative_p_density } => {
+                RegularityCheck::Regular {
+                    relative_p_density, ..
+                } => {
                     energy_sum +=
                         (area as f64 / (n * n) as f64) * relative_p_density * relative_p_density;
                 }
@@ -230,15 +233,13 @@ fn build_mem8_book_archive(
             continue;
         }
 
-        let mut centroid = vec![0.0_f32; 64];
+        let mut centroid = [0.0_f32; 64];
         let mut internal_edges = 0usize;
         let mut deg_pairs: Vec<(SymbolId, u32)> = Vec::with_capacity(verts.len());
 
         for &u in verts {
             let emb = &graph.symbol_embeddings[u as usize];
-            for (lane, &val) in emb.iter().enumerate() {
-                centroid[lane] += val;
-            }
+            felix_add_assign_64_f32(&mut centroid, emb);
 
             let start = graph.row_ptr[u as usize] as usize;
             let end = graph.row_ptr[u as usize + 1] as usize;
@@ -252,11 +253,8 @@ fn build_mem8_book_archive(
             deg_pairs.push((u, internal_deg));
         }
 
-        // L2-normalize the super-node centroid embedding
-        let norm = centroid.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-8);
-        for x in &mut centroid {
-            *x /= norm;
-        }
+        // L2-normalize the super-node centroid embedding via FELIX 64-lane SIMD kernel
+        felix_normalize64_f32(&mut centroid);
 
         // Pick top-3 internal-degree symbols as human/LLM anchor names
         deg_pairs.sort_unstable_by_key(|a| std::cmp::Reverse(a.1));
@@ -271,13 +269,13 @@ fn build_mem8_book_archive(
             cluster_id: cid as ClusterId,
             vertex_count: verts.len() as u32,
             internal_p_density,
-            centroid_embedding: centroid,
+            centroid_embedding: centroid.to_vec(),
             representative_symbols,
         });
     }
 
     // 2. Classify inter-cluster edges into Reduced Graph R vs. T8R Exception Ledger
-    let mut scratch = vec![0u32; graph.num_vertices];
+    let mut scratch = OracleScratch::with_vertices(graph.num_vertices);
     for i in 1..=k {
         for j in 1..=k {
             if i == j {
@@ -289,7 +287,7 @@ fn build_mem8_book_archive(
                 continue;
             }
 
-            let check = check_bipartite_regularity(
+            let check = check_bipartite_regularity_with_scratch(
                 graph,
                 &partition.vertex_to_cluster,
                 i as ClusterId,
@@ -301,13 +299,16 @@ fn build_mem8_book_archive(
             );
 
             match check {
-                RegularityCheck::Regular { relative_p_density } => {
+                RegularityCheck::Regular {
+                    relative_p_density,
+                    dominant_kind,
+                } => {
                     if relative_p_density >= cfg.min_reduced_density {
                         reduced_edges.push(RegularSuperEdge {
                             src_cluster: i as ClusterId,
                             dst_cluster: j as ClusterId,
                             relative_p_density: relative_p_density as f32,
-                            dominant_kind: EdgeKind::CallRef,
+                            dominant_kind,
                         });
                     } else if relative_p_density > 0.0 {
                         // Sparse cross-module leak below d_min -> record exact edges in T8R

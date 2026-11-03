@@ -1,8 +1,8 @@
-# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v10.10.0)
+# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v10.11.0)
 
 <div align="center">
 
-![Smart Tree v10.10.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
+![Smart Tree v10.11.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
 
 **"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."**  
 *— Paul Erdős (1913–1996), The Magician from Budapest*
@@ -52,10 +52,11 @@ flowchart TD
         CSR -->|"Matula-Beck Degeneracy + BitSet256 Bron-Kerbosch"| RAMSEY["Erdős–Moser Tournaments, Deadlock Knots & Bi-Cliques"]
     end
 
-    subgraph P3["VI–VIII. Flyxion Salience (d_T != d_R), Karp-21 FPT & Kohn–Sham Strang Wave"]
+    subgraph P3["VI–IX. Flyxion Salience (d_T != d_R), Karp-21 FPT, Kohn–Sham Strang Wave & Sovereign p/q Mode"]
         STEINER -->|"r_T(x) vs r_R(x)"| SALIENCE["Flyxion Salience Ontology (Rescues Load-Bearing Old Files)"]
         RAMSEY -->|"FPT Degeneracy d + Gavril 2-Approx"| KARP["Karp's 21 NP-Complete Certificate"]
         M8B -->|"exp(hA/2) exp(hB) exp(hA/2)"| DFT["Kohn–Sham DFT Super-Orbitals & Strang Wave Coherence"]
+        SALIENCE -->|"Stein Binary GCD + Hölder L_p/L_q + Symplectic Leapfrog"| PQ["Sovereign p/q Mode (--mode pq)"]
     end
 ```
 
@@ -92,4 +93,7 @@ st --erdos-center .
 
 # 6. Moser–Tardos Constructive LLL Conflict-Free Multi-Agent Worktree Schedule:
 st --erdos-split 4 .
+
+# 7. Sovereign p/q Mode (Exact Coprime Rationals + Hölder L_p/L_q Dual + Zarankiewicz z(n;p,q) + Symplectic Leapfrog):
+st --mode pq .
 ```

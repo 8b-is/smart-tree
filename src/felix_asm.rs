@@ -505,6 +505,196 @@ pub fn felix_splitmix64_x4(state: &mut u64) -> [u64; 4] {
     ]
 }
 
+/// Stein's Binary GCD (`felix_binary_gcd_u64`) accelerated by hardware `felix_tzcnt_u64`
+/// (`rbit` + `clz` on AArch64, `tzcnt` on x86_64).
+///
+/// Reduces rational pairs `(p, q)` in `p/q` mode without a single 15-cycle hardware `udiv`/`divq` instruction.
+#[inline(always)]
+pub fn felix_binary_gcd_u64(mut u: u64, mut v: u64) -> u64 {
+    if u == 0 {
+        return v;
+    }
+    if v == 0 {
+        return u;
+    }
+    let shift = felix_tzcnt_u64(u | v);
+    u >>= felix_tzcnt_u64(u);
+    loop {
+        v >>= felix_tzcnt_u64(v);
+        if u > v {
+            core::mem::swap(&mut u, &mut v);
+        }
+        v = v.wrapping_sub(u);
+        if v == 0 {
+            break;
+        }
+    }
+    u << shift
+}
+
+/// Division-free 128-bit exact cross-multiplication comparison of two non-negative rationals `p1/q1` and `p2/q2`.
+///
+/// Compiles to a single `umulh` + `mul` pair on AArch64 and `mul rdx:rax` on x86_64 (`1–3 cycles`),
+/// eliminating `fdiv` latency and IEEE-754 rounding drift in `p/q` mode.
+#[inline(always)]
+pub fn felix_pq_cross_cmp(p1: u64, q1: u64, p2: u64, q2: u64) -> core::cmp::Ordering {
+    let lhs = (p1 as u128) * (q2.max(1) as u128);
+    let rhs = (p2 as u128) * (q1.max(1) as u128);
+    lhs.cmp(&rhs)
+}
+
+/// Hardware-accelerated 64-lane `f32` vector accumulation (`acc[0..64] += src[0..64]`).
+///
+/// Used by `compressor.rs` (`build_mem8_book_archive`) to accumulate 256-byte Szemerédi
+/// super-node wave centroids in 4 unrolled SIMD instructions per symbol.
+#[inline(always)]
+pub fn felix_add_assign_64_f32(acc: &mut [f32; 64], src: &[f32; 64]) {
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        use core::arch::aarch64::*;
+        let pa = acc.as_mut_ptr();
+        let ps = src.as_ptr();
+        let mut offset = 0usize;
+        while offset < 64 {
+            let a0 = vld1q_f32(pa.add(offset));
+            let s0 = vld1q_f32(ps.add(offset));
+            vst1q_f32(pa.add(offset), vaddq_f32(a0, s0));
+
+            let a1 = vld1q_f32(pa.add(offset + 4));
+            let s1 = vld1q_f32(ps.add(offset + 4));
+            vst1q_f32(pa.add(offset + 4), vaddq_f32(a1, s1));
+
+            let a2 = vld1q_f32(pa.add(offset + 8));
+            let s2 = vld1q_f32(ps.add(offset + 8));
+            vst1q_f32(pa.add(offset + 8), vaddq_f32(a2, s2));
+
+            let a3 = vld1q_f32(pa.add(offset + 12));
+            let s3 = vld1q_f32(ps.add(offset + 12));
+            vst1q_f32(pa.add(offset + 12), vaddq_f32(a3, s3));
+
+            offset += 16;
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use core::arch::x86_64::*;
+        let pa = acc.as_mut_ptr();
+        let ps = src.as_ptr();
+        let mut offset = 0usize;
+        while offset < 64 {
+            let a0 = _mm_loadu_ps(pa.add(offset));
+            let s0 = _mm_loadu_ps(ps.add(offset));
+            _mm_storeu_ps(pa.add(offset), _mm_add_ps(a0, s0));
+
+            let a1 = _mm_loadu_ps(pa.add(offset + 4));
+            let s1 = _mm_loadu_ps(ps.add(offset + 4));
+            _mm_storeu_ps(pa.add(offset + 4), _mm_add_ps(a1, s1));
+
+            let a2 = _mm_loadu_ps(pa.add(offset + 8));
+            let s2 = _mm_loadu_ps(ps.add(offset + 8));
+            _mm_storeu_ps(pa.add(offset + 8), _mm_add_ps(a2, s2));
+
+            let a3 = _mm_loadu_ps(pa.add(offset + 12));
+            let s3 = _mm_loadu_ps(ps.add(offset + 12));
+            _mm_storeu_ps(pa.add(offset + 12), _mm_add_ps(a3, s3));
+
+            offset += 16;
+        }
+    }
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    {
+        for i in 0..64 {
+            acc[i] += src[i];
+        }
+    }
+}
+
+/// Hardware-accelerated 64-lane `f32` L2 normalization in place (`vec /= ||vec||_2`).
+///
+/// Uses `felix_dot64_f32(vec, vec)` for the norm squared and 4-way unrolled SIMD reciprocal multiplication.
+#[inline(always)]
+pub fn felix_normalize64_f32(vec: &mut [f32; 64]) -> f32 {
+    let norm = felix_dot64_f32(vec, vec).sqrt();
+    if norm < 1e-8 {
+        return norm;
+    }
+    let inv = 1.0 / norm;
+
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        use core::arch::aarch64::*;
+        let pv = vec.as_mut_ptr();
+        let vinv = vdupq_n_f32(inv);
+        let mut offset = 0usize;
+        while offset < 64 {
+            let v0 = vld1q_f32(pv.add(offset));
+            let v1 = vld1q_f32(pv.add(offset + 4));
+            let v2 = vld1q_f32(pv.add(offset + 8));
+            let v3 = vld1q_f32(pv.add(offset + 12));
+            vst1q_f32(pv.add(offset), vmulq_f32(v0, vinv));
+            vst1q_f32(pv.add(offset + 4), vmulq_f32(v1, vinv));
+            vst1q_f32(pv.add(offset + 8), vmulq_f32(v2, vinv));
+            vst1q_f32(pv.add(offset + 12), vmulq_f32(v3, vinv));
+            offset += 16;
+        }
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        for slot in vec.iter_mut() {
+            *slot *= inv;
+        }
+    }
+
+    norm
+}
+
+/// Hölder Conjugate `(p, q)` Dual-Space Map & Normalization (`1/p + 1/q = 1`):
+/// Applies $\psi_p(x_i) = \text{sgn}(x_i) |x_i|^{p - 1}$ in place and normalizes in $L_p$,
+/// with a dedicated hardware `sqrt` fast-path for $p = 3/2, q = 3$ ($\psi_{3/2}(x) = \text{sgn}(x)\sqrt{|x|}$).
+#[inline]
+pub fn felix_holder_pq_dual_norm_f64(vec: &mut [f64], p_num: u32, p_den: u32) -> f64 {
+    if vec.is_empty() {
+        return 0.0;
+    }
+    if p_num == 2 && p_den == 1 {
+        return felix_normalize_f64_slice(vec);
+    }
+
+    let p = (p_num.max(1) as f64) / (p_den.max(1) as f64);
+    let q = p / (p - 1.0).max(1e-6);
+
+    let mut lq_sum = 0.0_f64;
+    if p_num == 3 && p_den == 2 {
+        // Fast hardware fsqrt path for p = 3/2, q = 3: psi(x) = sgn(x) * sqrt(|x|)
+        for x in vec.iter_mut() {
+            let abs_x = x.abs();
+            let mapped = abs_x.sqrt().copysign(*x);
+            *x = mapped;
+            lq_sum += abs_x * abs_x.sqrt();
+        }
+    } else {
+        let exp = (p - 1.0).max(0.1);
+        for x in vec.iter_mut() {
+            let abs_x = x.abs();
+            let mapped = abs_x.powf(exp).copysign(*x);
+            *x = mapped;
+            lq_sum += mapped.abs().powf(q);
+        }
+    }
+
+    let norm_q = lq_sum.powf(1.0 / q);
+    if norm_q >= 1e-12 {
+        let inv = 1.0 / norm_q;
+        for x in vec.iter_mut() {
+            *x *= inv;
+        }
+    }
+    norm_q
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -597,5 +787,26 @@ mod tests {
         let batch = felix_splitmix64_x4(&mut s_vec);
         assert_ne!(batch[0], batch[1]);
         assert_ne!(batch[2], batch[3]);
+    }
+
+    #[test]
+    fn test_felix_pq_kernels_binary_gcd_cross_cmp_and_holder() {
+        assert_eq!(felix_binary_gcd_u64(48, 18), 6);
+        assert_eq!(felix_binary_gcd_u64(0, 42), 42);
+        assert_eq!(felix_binary_gcd_u64(1071, 462), 21);
+        assert_eq!(felix_pq_cross_cmp(1, 3, 2, 6), core::cmp::Ordering::Equal);
+        assert_eq!(felix_pq_cross_cmp(3, 4, 2, 3), core::cmp::Ordering::Greater);
+
+        let mut acc = [1.0_f32; 64];
+        let src = [2.0_f32; 64];
+        felix_add_assign_64_f32(&mut acc, &src);
+        assert!((acc[0] - 3.0).abs() < 1e-6);
+        let norm = felix_normalize64_f32(&mut acc);
+        assert!((norm - 24.0).abs() < 1e-4);
+        assert!((felix_dot64_f32(&acc, &acc) - 1.0).abs() < 1e-5);
+
+        let mut dual = vec![4.0_f64, -9.0_f64];
+        let q_norm = felix_holder_pq_dual_norm_f64(&mut dual, 3, 2);
+        assert!(q_norm > 0.0);
     }
 }

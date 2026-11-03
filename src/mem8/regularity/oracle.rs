@@ -3,14 +3,41 @@
 //! Tests whether a bipartite pair `(V_i, V_j)` is `(epsilon, p)`-regular in
 //! `O(e(V_i, V_j) + |V_i| + |V_j|)` time using rank-1 shifted power iteration on
 //! the Frieze-Kannan / Alon-Naor Discrepancy Operator `M = A_{V_i, V_j} - d_bar * 1 * 1^T`.
+//!
+//! Polished for zero inner-loop heap allocations via thread-local `OracleScratch` reuse
+//! and single-pass dominant `EdgeKind` histogramming.
 
-use super::types::{ClusterId, CsrSymbolGraph, SymbolId};
+use super::types::{ClusterId, CsrSymbolGraph, EdgeKind, SymbolId};
+
+/// Reusable thread-local scratch arena eliminating per-pair `Vec` allocations during
+/// parallel Kohayakawa–Rödl regularity refinement.
+#[derive(Debug, Clone)]
+pub struct OracleScratch {
+    pub local_index_map: Vec<u32>,
+    pub vec_u: Vec<f64>,
+    pub vec_v: Vec<f64>,
+    pub indexed: Vec<(usize, f64)>,
+}
+
+impl OracleScratch {
+    pub fn with_vertices(num_vertices: usize) -> Self {
+        Self {
+            local_index_map: vec![0u32; num_vertices],
+            vec_u: Vec::with_capacity(num_vertices.min(512)),
+            vec_v: Vec::with_capacity(num_vertices.min(512)),
+            indexed: Vec::with_capacity(num_vertices.min(512)),
+        }
+    }
+}
 
 /// Result of checking `(epsilon, p)`-regularity on the pair `(V_i, V_j)`
 #[derive(Debug, Clone)]
 pub enum RegularityCheck {
-    /// Pair is `(epsilon, p)`-regular with relative density `d_p`
-    Regular { relative_p_density: f64 },
+    /// Pair is `(epsilon, p)`-regular with relative density `d_p` and dominant AST edge kind
+    Regular {
+        relative_p_density: f64,
+        dominant_kind: EdgeKind,
+    },
     /// Pair is irregular; includes witness sets `A subset V_i` and `B subset V_j`
     Irregular {
         witness_a: Vec<SymbolId>,
@@ -32,11 +59,72 @@ pub fn check_bipartite_regularity(
     epsilon: f64,
     local_index_map: &mut [u32],
 ) -> RegularityCheck {
+    let mut vec_u = Vec::new();
+    let mut vec_v = Vec::new();
+    let mut indexed = Vec::new();
+    check_bipartite_regularity_buffers(
+        graph,
+        vertex_to_cluster,
+        cluster_i,
+        cluster_j,
+        v_i,
+        v_j,
+        epsilon,
+        local_index_map,
+        &mut vec_u,
+        &mut vec_v,
+        &mut indexed,
+    )
+}
+
+/// Zero-allocation entry point using a thread-local `OracleScratch` arena.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub fn check_bipartite_regularity_with_scratch(
+    graph: &CsrSymbolGraph,
+    vertex_to_cluster: &[ClusterId],
+    cluster_i: ClusterId,
+    cluster_j: ClusterId,
+    v_i: &[SymbolId],
+    v_j: &[SymbolId],
+    epsilon: f64,
+    scratch: &mut OracleScratch,
+) -> RegularityCheck {
+    check_bipartite_regularity_buffers(
+        graph,
+        vertex_to_cluster,
+        cluster_i,
+        cluster_j,
+        v_i,
+        v_j,
+        epsilon,
+        &mut scratch.local_index_map,
+        &mut scratch.vec_u,
+        &mut scratch.vec_v,
+        &mut scratch.indexed,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_bipartite_regularity_buffers(
+    graph: &CsrSymbolGraph,
+    vertex_to_cluster: &[ClusterId],
+    cluster_i: ClusterId,
+    cluster_j: ClusterId,
+    v_i: &[SymbolId],
+    v_j: &[SymbolId],
+    epsilon: f64,
+    local_index_map: &mut [u32],
+    vec_u: &mut Vec<f64>,
+    vec_v: &mut Vec<f64>,
+    indexed: &mut Vec<(usize, f64)>,
+) -> RegularityCheck {
     let n_i = v_i.len();
     let n_j = v_j.len();
     if n_i == 0 || n_j == 0 {
         return RegularityCheck::Regular {
             relative_p_density: 0.0,
+            dominant_kind: EdgeKind::CallRef,
         };
     }
 
@@ -48,17 +136,30 @@ pub fn check_bipartite_regularity(
         local_index_map[sym as usize] = local_idx as u32;
     }
 
-    // Count edges e(V_i, V_j) in O(|V_i| + deg(V_i))
+    // Count edges e(V_i, V_j) + dominant EdgeKind in a single CSR pass O(|V_i| + deg(V_i))
     let mut edge_count: usize = 0;
+    let mut kind_hist = [0u32; 5];
     for &u in v_i {
         let start = graph.row_ptr[u as usize] as usize;
         let end = graph.row_ptr[u as usize + 1] as usize;
-        for &v in &graph.col_idx[start..end] {
+        for idx in start..end {
+            let v = graph.col_idx[idx];
             if vertex_to_cluster[v as usize] == cluster_j {
                 edge_count += 1;
+                kind_hist[graph.edge_kind[idx] as usize] += 1;
             }
         }
     }
+
+    let mut best_k = 1usize; // default CallRef
+    let mut best_cnt = 0u32;
+    for (k_idx, &cnt) in kind_hist.iter().enumerate() {
+        if cnt > best_cnt {
+            best_cnt = cnt;
+            best_k = k_idx;
+        }
+    }
+    let dominant_kind = EdgeKind::from_u8(best_k as u8);
 
     let pair_area = (n_i * n_j) as f64;
     let raw_density = (edge_count as f64) / pair_area;
@@ -66,21 +167,26 @@ pub fn check_bipartite_regularity(
 
     // Trivial sparsity short-circuit: if total edges cannot even violate an epsilon*V_i*V_j box
     if relative_p_density < epsilon * epsilon {
-        return RegularityCheck::Regular { relative_p_density };
+        return RegularityCheck::Regular {
+            relative_p_density,
+            dominant_kind,
+        };
     }
 
-    // Initialize right singular vector v in R^{n_j} with deterministic alternating signs
-    let mut vec_u = vec![0.0_f64; n_i];
+    // Reuse vec_u and vec_v without heap allocation
+    vec_u.clear();
+    vec_u.resize(n_i, 0.0);
+
     let inv_sqrt_nj = 1.0 / (n_j as f64).sqrt();
-    let mut vec_v: Vec<f64> = (0..n_j)
-        .map(|idx| {
-            if idx % 2 == 0 {
-                inv_sqrt_nj
-            } else {
-                -inv_sqrt_nj
-            }
-        })
-        .collect();
+    vec_v.clear();
+    vec_v.reserve(n_j);
+    for idx in 0..n_j {
+        vec_v.push(if idx & 1 == 0 {
+            inv_sqrt_nj
+        } else {
+            -inv_sqrt_nj
+        });
+    }
 
     let power_steps = 6;
     let mut sigma = 0.0_f64;
@@ -104,9 +210,12 @@ pub fn check_bipartite_regularity(
         }
 
         // Normalize vec_u via FELIX hardware SIMD norm & reciprocal scale
-        let norm_u = crate::felix_asm::felix_normalize_f64_slice(&mut vec_u);
+        let norm_u = crate::felix_asm::felix_normalize_f64_slice(vec_u);
         if norm_u < 1e-12 {
-            return RegularityCheck::Regular { relative_p_density };
+            return RegularityCheck::Regular {
+                relative_p_density,
+                dominant_kind,
+            };
         }
 
         // Step 2: vec_v = M^T * vec_u = A_{i,j}^T * vec_u - raw_density * sum(vec_u) * 1
@@ -126,24 +235,30 @@ pub fn check_bipartite_regularity(
             vec_v[local_v] = dot - rank1_shift_v;
         }
 
-        sigma = crate::felix_asm::felix_normalize_f64_slice(&mut vec_v);
+        sigma = crate::felix_asm::felix_normalize_f64_slice(vec_v);
         if sigma < 1e-12 {
-            return RegularityCheck::Regular { relative_p_density };
+            return RegularityCheck::Regular {
+                relative_p_density,
+                dominant_kind,
+            };
         }
     }
 
     // Spectral threshold for (epsilon, p)-regularity
     let spectral_threshold = epsilon * graph.ambient_density_p * pair_area.sqrt();
     if sigma <= spectral_threshold {
-        return RegularityCheck::Regular { relative_p_density };
+        return RegularityCheck::Regular {
+            relative_p_density,
+            dominant_kind,
+        };
     }
 
     // Extract combinatorial witness sets A subset V_i and B subset V_j
     let min_a = ((epsilon * (n_i as f64)).ceil() as usize).max(1);
     let min_b = ((epsilon * (n_j as f64)).ceil() as usize).max(1);
 
-    let witness_a = extract_top_witness(v_i, &vec_u, min_a);
-    let witness_b = extract_top_witness(v_j, &vec_v, min_b);
+    let witness_a = extract_top_witness(v_i, vec_u, min_a, indexed);
+    let witness_b = extract_top_witness(v_j, vec_v, min_b, indexed);
 
     // Verify actual combinatorial density deviation |d_p(A, B) - d_p(V_i, V_j)|
     let dev = measure_witness_deviation(
@@ -161,20 +276,27 @@ pub fn check_bipartite_regularity(
             discrepancy_energy: dev * dev,
         }
     } else {
-        RegularityCheck::Regular { relative_p_density }
+        RegularityCheck::Regular {
+            relative_p_density,
+            dominant_kind,
+        }
     }
 }
 
-fn extract_top_witness(vertices: &[SymbolId], scores: &[f64], min_len: usize) -> Vec<SymbolId> {
+fn extract_top_witness(
+    vertices: &[SymbolId],
+    scores: &[f64],
+    min_len: usize,
+    indexed: &mut Vec<(usize, f64)>,
+) -> Vec<SymbolId> {
     let pos_count = scores.iter().filter(|&&s| s > 0.0).count();
     let use_positive = pos_count >= min_len;
 
-    let mut indexed: Vec<(usize, f64)> = scores
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(i, s)| (i, if use_positive { s } else { -s }))
-        .collect();
+    indexed.clear();
+    indexed.reserve(scores.len());
+    for (i, &s) in scores.iter().enumerate() {
+        indexed.push((i, if use_positive { s } else { -s }));
+    }
 
     indexed.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 

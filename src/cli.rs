@@ -1009,6 +1009,15 @@ pub enum OutputMode {
         alias = "book"
     )]
     TheBook,
+    /// Sovereign p/q mode: Exact Coprime Rational Arithmetic (Binary GCD), Hölder (L_p, L_q) Dual Spectral Norm, Zarankiewicz z(n;p,q) & Symplectic (p,q) Störmer-Verlet Leapfrog
+    #[value(
+        name = "pq",
+        alias = "p-q",
+        alias = "p_q",
+        alias = "rational-pq",
+        alias = "symplectic"
+    )]
+    Pq,
     /// Emotional tree - files with feelings!
     Emotional,
     /// MEM|8 Quantum format - ultimate compression
@@ -1049,7 +1058,7 @@ pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
         OutputMode::Classic => 3,
         OutputMode::Ai | OutputMode::Hex => 5,
         OutputMode::Stats => 10,
-        OutputMode::Digest | OutputMode::Louds | OutputMode::TheBook => 10,
+        OutputMode::Digest | OutputMode::Louds | OutputMode::TheBook | OutputMode::Pq => 10,
         OutputMode::Emotional => 5,
         OutputMode::Quantum | OutputMode::QuantumSemantic | OutputMode::HexTree => 5,
         OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4,

@@ -98,15 +98,25 @@ This skill treats **all four frontier model families** and **all four terminal/I
   2. Evolves codebase salience waves via **Second-Order Strang Operator Splitting**:
      $$e^{h(A_{\text{temporal}} + B_{\text{relational}})} = e^{\frac{h}{2} A_{\text{temporal}}} \, e^{h B_{\text{relational}}} \, e^{\frac{h}{2} A_{\text{temporal}}} + O(h^3)$$
 
+### Pillar IX: Sovereign `p/q` Mode (`src/mem8/regularity/pq_engine.rs` & `--mode pq`)
+- **Unifies 4 `(p, q)` Mathematical Frameworks (`SOVEREIGN-PQ-MODE-v1.0`):**
+  1. **Exact Coprime Rational `(p/q)` Arithmetic (`RationalPQ`):** Reduces ambient edge density $p_{\text{amb}}/q_{\text{amb}}$, Molloy–Reed percolation $\kappa = p_\kappa / q_\kappa$, Turán $K_5$ ratio, and Kohayakawa–Rödl energy $q_p(\mathcal{P})$ to canonical coprime rationals via Stein's Binary GCD (`felix_binary_gcd_u64`, zero hardware `udiv` instructions) and compares rationals via 128-bit integer cross-multiplication (`felix_pq_cross_cmp`, zero IEEE-754 drift).
+  2. **Hölder Conjugate $(L_p, L_q)$ Dual-Space Spectral Norm ($\frac{1}{p} + \frac{1}{q} = 1$):** Evaluates the Bollobás–Riordan operator norm $\|A_R\|_{3/2 \to 3}$ vs. Hilbert $\|A_R\|_{2 \to 2}$ via `felix_holder_pq_dual_norm_f64` (hardware `fsqrt` fast-path for $p = 3/2, q = 3$) to quantify heavy-tailed hub concentration.
+  3. **Kővári–Sós–Turán / Zarankiewicz Extremal Bound $z(n; p, q)$ (1954):** Evaluates $z(n; p, q) = \lfloor \frac{1}{2}(q-1)^{1/p} n^{2 - 1/p} + \frac{1}{2}(p-1)n \rfloor$ for $(p, q) \in \{(2, 2), (3, 3)\}$, certifying when bipartite call/import layers guarantee $K_{2,2}$ or $K_{3,3}$ Erdős–Hajnal bi-cliques.
+  4. **Hamiltonian Canonical $(p, q)$ Phase-Space & Symplectic Störmer–Verlet Leapfrog Integrator:** Models each Szemerédi super-node as a canonical particle $(q_i, p_i)$ where generalized position $q_i = d_R(V_i)$ is relational Steiner salience and conjugate momentum $p_i = d_T^{-1}(V_i)$ is temporal activity flux, evolving 16 symplectic leapfrog steps with exact Liouville volume preservation ($\det J = 1.0$).
+
 ---
 
 ## 3. Direct CLI Commands & Step-by-Step Agent Workflow
 
 ```bash
-# 1. Full 5-Pillar Paul Erdős "Straight from The Book" JSON Diagnostic:
+# 1. Full 9-Pillar Paul Erdős "Straight from The Book" JSON Diagnostic:
 st --mode the-book .
 
-# 2. Erdős–Rényi Cross-Boundary Shadow Graph (G_shadow) Supply-Chain Anomaly Scan:
+# 2. Sovereign p/q Mode (Exact Coprime Rationals + Hölder L_p/L_q Dual + Zarankiewicz z(n;p,q) + Symplectic Leapfrog):
+st --mode pq .
+
+# 3. Erdős–Rényi Cross-Boundary Shadow Graph (G_shadow) Supply-Chain Anomaly Scan:
 st --erdos-anomaly .
 
 # 3. Ramsey Monochromatic Cliques (Red/Blue/Green K_3 & K_4) + Turán Extremal Audit:

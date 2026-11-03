@@ -20,6 +20,7 @@ pub mod erdos_steiner;
 pub mod mmap_view;
 pub mod moser_tardos;
 pub mod oracle;
+pub mod pq_engine;
 pub mod ramsey_erdos_hajnal;
 pub mod salience_karp_manybody;
 pub mod types;
@@ -42,7 +43,13 @@ pub use moser_tardos::{
     solve_moser_tardos_worktrees, BadEventId, BadEventKind, LllHypergraph, MoserTardosSchedule,
     WorkUnitId, WorktreeColor,
 };
-pub use oracle::{check_bipartite_regularity, RegularityCheck};
+pub use oracle::{
+    check_bipartite_regularity, check_bipartite_regularity_with_scratch, OracleScratch,
+    RegularityCheck,
+};
+pub use pq_engine::{
+    analyze_pq_mode, kovari_sos_turan_bound, PqModeReport, RationalPQ, SymplecticParticlePQ,
+};
 pub use ramsey_erdos_hajnal::{
     analyze_ramsey_and_erdos_hajnal, BitSet256, CliqueTopology, ErdosHajnalBiClique,
     RamseyErdosHajnalReport, RamseyMonochromaticClique, RamseyScanConfig, RefactorPrescription,
@@ -78,6 +85,7 @@ pub struct TheBookPipelineReport {
     pub salience_report: SalienceOntologyReport,
     pub karp_certificate: KarpComplexityCertificate,
     pub manybody_wave_report: ManyBodyDftWaveReport,
+    pub pq_report: PqModeReport,
     /// Counts of files classified under Paul Erdős's lexicon:
     /// (StraightFromTheBook, Epsilons, LegallyDead, PureNoiseMonoliths)
     pub lexicon_counts: (usize, usize, usize, usize),
@@ -162,6 +170,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         &worktree_schedule,
         &ramsey_erdos_hajnal_report,
     );
+    let pq_report = analyze_pq_mode(&graph, &archive, &salience_report, &center_turan_report);
 
     // Classify every node using Paul Erdős's vocabulary
     let mut from_the_book = 0usize;
@@ -191,6 +200,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         salience_report,
         karp_certificate,
         manybody_wave_report,
+        pq_report,
         lexicon_counts: (from_the_book, epsilons, legally_dead, pure_noise),
     }
 }
@@ -447,6 +457,9 @@ mod tests {
         assert!(report.manybody_wave_report.kohn_sham_orbitals_k > 0);
         assert!(report.manybody_wave_report.strang_split_coherence > 0.0);
         assert!(report.karp_certificate.independent_set_alpha > 0);
+        assert!(report.pq_report.ambient_density_pq.q >= 1);
+        assert!(report.pq_report.holder_3_2_to_3_norm >= 0.0);
+        assert!((report.pq_report.liouville_jacobian_det - 1.0).abs() < 1e-12);
     }
 
     #[test]

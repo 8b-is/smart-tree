@@ -10,6 +10,7 @@ use std::path::Path;
 pub struct DigestFormatter;
 pub struct SmtrCapsuleFormatter;
 pub struct TheBookFormatter;
+pub struct PqModeFormatter;
 
 impl Default for DigestFormatter {
     fn default() -> Self {
@@ -290,12 +291,111 @@ impl Formatter for TheBookFormatter {
                 "strang_split_coherence": (report.manybody_wave_report.strang_split_coherence * 10000.0).round() / 10000.0,
                 "dominant_salience_orbitals": report.manybody_wave_report.dominant_salience_orbitals,
             },
+            "pq_rational_symplectic_mode": {
+                "ambient_density_pq": report.pq_report.ambient_density_pq.display_ratio(),
+                "molloy_reed_kappa_pq": report.pq_report.molloy_reed_kappa_pq.display_ratio(),
+                "turan_k5_ratio_pq": report.pq_report.turan_k5_ratio_pq.display_ratio(),
+                "kohayakawa_rodl_energy_pq": report.pq_report.kohayakawa_rodl_energy_pq.display_ratio(),
+                "holder_conjugate_pair": format!("(L_{}, L_{})", report.pq_report.holder_p_ratio, report.pq_report.holder_q_ratio),
+                "holder_3_2_to_3_norm": (report.pq_report.holder_3_2_to_3_norm * 10000.0).round() / 10000.0,
+                "hilbert_l2_norm": (report.pq_report.hilbert_l2_norm * 10000.0).round() / 10000.0,
+                "holder_hub_concentration_ratio": (report.pq_report.holder_hub_concentration_ratio * 10000.0).round() / 10000.0,
+                "zarankiewicz_z_2_2_bound": report.pq_report.zarankiewicz_z_2_2_bound,
+                "zarankiewicz_z_3_3_bound": report.pq_report.zarankiewicz_z_3_3_bound,
+                "zarankiewicz_k22_guaranteed": report.pq_report.zarankiewicz_k22_guaranteed,
+                "zarankiewicz_k33_guaranteed": report.pq_report.zarankiewicz_k33_guaranteed,
+                "symplectic_initial_h0": (report.pq_report.symplectic_initial_h0 * 10000.0).round() / 10000.0,
+                "symplectic_final_h": (report.pq_report.symplectic_final_h * 10000.0).round() / 10000.0,
+                "symplectic_energy_drift": report.pq_report.symplectic_energy_drift,
+                "liouville_jacobian_det": report.pq_report.liouville_jacobian_det,
+                "phase_space_orbitals": report.pq_report.phase_space_orbitals,
+            },
             "erdos_lexicon": {
                 "straight_from_the_book": report.lexicon_counts.0,
                 "epsilons_utility_helpers": report.lexicon_counts.1,
                 "legally_dead_orphans": report.lexicon_counts.2,
                 "pure_noise_sf_monoliths": report.lexicon_counts.3,
             }
+        });
+        writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
+        Ok(())
+    }
+}
+
+impl Default for PqModeFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PqModeFormatter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Formatter for PqModeFormatter {
+    fn format(
+        &self,
+        writer: &mut dyn Write,
+        nodes: &[FileNode],
+        stats: &TreeStats,
+        root_path: &Path,
+    ) -> Result<()> {
+        let report = analyze_the_book_pipeline(nodes);
+        let pq = &report.pq_report;
+        let payload = serde_json::json!({
+            "spec": "SOVEREIGN-PQ-MODE-v1.0",
+            "mode": "p/q (Exact Coprime Rational + Hölder L_p/L_q Dual + Zarankiewicz z(n;p,q) + Symplectic (p,q) Leapfrog)",
+            "root_path": root_path.display().to_string(),
+            "total_files": stats.total_files,
+            "total_dirs": stats.total_dirs,
+            "exact_coprime_rationals_pq": {
+                "ambient_density": {
+                    "ratio": pq.ambient_density_pq.display_ratio(),
+                    "p": pq.ambient_density_pq.p,
+                    "q": pq.ambient_density_pq.q,
+                    "q32_fixed": pq.ambient_density_pq.q32_fixed,
+                },
+                "molloy_reed_kappa": {
+                    "ratio": pq.molloy_reed_kappa_pq.display_ratio(),
+                    "p": pq.molloy_reed_kappa_pq.p,
+                    "q": pq.molloy_reed_kappa_pq.q,
+                    "q32_fixed": pq.molloy_reed_kappa_pq.q32_fixed,
+                },
+                "turan_k5_density_ratio": {
+                    "ratio": pq.turan_k5_ratio_pq.display_ratio(),
+                    "p": pq.turan_k5_ratio_pq.p,
+                    "q": pq.turan_k5_ratio_pq.q,
+                },
+                "kohayakawa_rodl_energy_q_p": {
+                    "ratio": pq.kohayakawa_rodl_energy_pq.display_ratio(),
+                    "p": pq.kohayakawa_rodl_energy_pq.p,
+                    "q": pq.kohayakawa_rodl_energy_pq.q,
+                },
+            },
+            "holder_conjugate_dual_spectral_oracle": {
+                "identity": "1/p + 1/q = 1",
+                "p_exponent": pq.holder_p_ratio,
+                "q_exponent": pq.holder_q_ratio,
+                "bollobas_riordan_3_2_to_3_norm": (pq.holder_3_2_to_3_norm * 10000.0).round() / 10000.0,
+                "hilbert_2_to_2_norm": (pq.hilbert_l2_norm * 10000.0).round() / 10000.0,
+                "hub_concentration_ratio": (pq.holder_hub_concentration_ratio * 10000.0).round() / 10000.0,
+            },
+            "kovari_sos_turan_zarankiewicz_bounds": {
+                "z_n_2_2_c4_free_bound": pq.zarankiewicz_z_2_2_bound,
+                "z_n_3_3_k33_free_bound": pq.zarankiewicz_z_3_3_bound,
+                "k22_biclique_guaranteed": pq.zarankiewicz_k22_guaranteed,
+                "k33_biclique_guaranteed": pq.zarankiewicz_k33_guaranteed,
+            },
+            "hamiltonian_symplectic_phase_space": {
+                "integrator": "Störmer–Verlet 2nd-Order Symplectic Leapfrog (S=16, dt=0.025)",
+                "initial_hamiltonian_h0": (pq.symplectic_initial_h0 * 10000.0).round() / 10000.0,
+                "final_hamiltonian_h": (pq.symplectic_final_h * 10000.0).round() / 10000.0,
+                "relative_energy_drift": pq.symplectic_energy_drift,
+                "liouville_jacobian_det": pq.liouville_jacobian_det,
+                "phase_space_orbitals": pq.phase_space_orbitals,
+            },
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
         Ok(())
@@ -366,5 +466,16 @@ mod tests {
         assert_eq!(val["louds_raw_nodes"], 3);
         assert_eq!(val["louds_sufficient_nodes"], 2);
         assert_eq!(val["dharma_mudra_verified"], true);
+
+        let mut pq_out = Vec::new();
+        PqModeFormatter::new()
+            .format(&mut pq_out, &nodes, &stats, Path::new("."))
+            .unwrap();
+        let pq_val: serde_json::Value = serde_json::from_slice(&pq_out).unwrap();
+        assert_eq!(pq_val["spec"], "SOVEREIGN-PQ-MODE-v1.0");
+        assert_eq!(
+            pq_val["hamiltonian_symplectic_phase_space"]["liouville_jacobian_det"],
+            1.0
+        );
     }
 }

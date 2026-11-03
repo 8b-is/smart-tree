@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-10.9.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-10.11.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
@@ -1056,6 +1056,7 @@ flowchart LR
 | **VI. Flyxion *Recency as Salience* ($d_T \neq d_R$)** | Separates temporal rank $r_T(x)$ from relational rank $r_R(x)$ and rescues **"Load-Bearing Old" ("Corrugated Iron")** files from chronological amnesia | `st --erdos-center .` |
 | **VII. Karp's 21 NP-Complete FPT Certificate** | Fixed-Parameter Tractable ($O(d \cdot \vert V\vert \cdot 3^{d/3})$) degeneracy $d$, Caro–Wei $\alpha(G)$, Gavril 2-approx Vertex Cover, and Minimum Feedback Arc Set | `st --ramsey-cliques .` |
 | **VIII. Quantum Many-Body Kohn–Sham DFT & Strang Wave** | `[f32; 64]` Kohn–Sham super-node orbitals + Local Natural Orbital (`T8R`) correlations evolved via $e^{h(A+B)} \approx e^{hA/2} e^{hB} e^{hA/2}$ | `st --mode the-book .` |
+| **IX. Sovereign `p/q` Mode (`pq_engine.rs`)** | Exact coprime rationals via Stein's Binary GCD (`felix_binary_gcd_u64`), 128-bit cross-multiplication (`felix_pq_cross_cmp`), Hölder $(L_{3/2} \to L_3)$ dual spectral norm, Kővári–Sós–Turán $z(n; p, q)$, and Störmer–Verlet symplectic $(p, q)$ leapfrog | `st --mode pq .` |
 
 ### 🤖 First-Class Model & Harness Support (`st --mcp-install`)
 
@@ -1064,4 +1065,5 @@ See **[`ultra-agent.md`](ultra-agent.md)** for the complete multi-agent operatin
 - [`skills/flyxion-salience-ontology/SKILL.md`](skills/flyxion-salience-ontology/SKILL.md)
 - [`skills/ramsey-karp-fpt/SKILL.md`](skills/ramsey-karp-fpt/SKILL.md)
 - [`skills/manybody-strang-mem8/SKILL.md`](skills/manybody-strang-mem8/SKILL.md)
+
 
