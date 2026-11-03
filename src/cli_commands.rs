@@ -326,6 +326,48 @@ pub async fn handle_security_scan(path: &str) -> Result<()> {
     let report = scanner.generate_report(&findings);
     println!("{}", report);
 
+    // Bake Paul Erdős–Rényi Cross-Boundary Shadow Graph (G_shadow) & Ramsey Clique audit into core security scan
+    if let Ok(st_scanner) = crate::scanner::Scanner::new(
+        scan_path,
+        crate::scanner::ScannerConfig {
+            max_depth: 5,
+            ..Default::default()
+        },
+    ) {
+        if let Ok((nodes, _)) = st_scanner.scan() {
+            let book = crate::mem8::regularity::analyze_the_book_pipeline(&nodes);
+            let sec = &book.security_report;
+            println!("\n📐 Paul Erdős–Rényi Shadow Graph (G_shadow) & Percolation Audit");
+            println!("───────────────────────────────────────────────────────────────");
+            println!(
+                "  Phase Regime:      {:?} (kappa={:.2}, mean_degree_c={:.2}, n^(2/3)={:.2})",
+                sec.regime,
+                sec.molloy_reed_kappa,
+                sec.mean_degree_c,
+                sec.critical_scale_n_two_thirds,
+            );
+            println!(
+                "  Spectral Radius:   lambda_1={:.2} (Füredi-Komlós random bound={:.2})",
+                sec.spectral_radius_lambda1, sec.expected_random_lambda1,
+            );
+            println!(
+                "  Shadow Topology:   |V_active|={} |E_shadow|={} |C_1|={} |C_2|={} anomalies={}",
+                sec.active_vertices,
+                sec.shadow_edges,
+                sec.giant_component_size,
+                sec.second_component_size,
+                sec.anomalies.len(),
+            );
+            println!(
+                "  Ramsey Cliques:    Red(Sync/Lock)={} Blue(Mutable)={} Green(Coupling)={} | Turán K5 ratio={:.3}",
+                book.ramsey_report.red_cliques,
+                book.ramsey_report.blue_cliques,
+                book.ramsey_report.green_cliques,
+                book.center_turan_report.turan_density_ratio,
+            );
+        }
+    }
+
     let critical_count = findings
         .iter()
         .filter(|f| matches!(f.risk_level, crate::security_scan::RiskLevel::Critical))

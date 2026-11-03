@@ -132,6 +132,7 @@ impl SmartFormatter {
             "notable" => "📌 ",
             "background" => "📦 ",
             "project" => "🌳 ",
+            "erdos" => "📖 ",
             _ => "",
         }
     }
@@ -448,6 +449,55 @@ impl Formatter for SmartFormatter {
                 }
                 writeln!(writer)?;
             }
+        }
+
+        // === PAUL ERDŐS ("THE BOOK") GRAPH TOPOLOGY ===
+        if nodes.len() >= 2 && nodes.len() <= 5_000 {
+            let book = crate::mem8::regularity::analyze_the_book_pipeline(nodes);
+            writeln!(
+                writer,
+                "{}{}THE BOOK (Erdős Graph Topology){}",
+                self.section_emoji("erdos"),
+                self.level_color(InterestLevel::Notable),
+                self.reset()
+            )?;
+            writeln!(
+                writer,
+                "  Szemerédi Regularity: K={} super-nodes, V0={} outliers, q_p={:.3}, {:.1}x compression ({}B .m8b)",
+                book.archive.super_nodes.len(),
+                book.archive.outlier_vertices.len(),
+                book.archive.final_energy,
+                book.archive.compression_ratio,
+                book.m8b_wire_bytes,
+            )?;
+            writeln!(
+                writer,
+                "  Erdős-Steiner & Turán: rad={} diam={} center={:?} | Turán K5 ratio={:.3} (chi={})",
+                book.center_turan_report.graph_radius_hops,
+                book.center_turan_report.graph_diameter_hops,
+                book.center_turan_report.center_clusters,
+                book.center_turan_report.turan_density_ratio,
+                book.center_turan_report.erdos_stone_chromatic_bound,
+            )?;
+            writeln!(
+                writer,
+                "  Moser-Tardos LLL: C={} worktrees (conflict_free={}, resamples={}) | Percolation: {:?} (kappa={:.2}, lambda1={:.2})",
+                book.worktree_schedule.num_worktrees,
+                book.worktree_schedule.is_conflict_free,
+                book.worktree_schedule.total_resamples,
+                book.security_report.regime,
+                book.security_report.molloy_reed_kappa,
+                book.security_report.spectral_radius_lambda1,
+            )?;
+            writeln!(
+                writer,
+                "  Erdős Lexicon: {} Book | {} Epsilons | {} Legally Dead | {} S.F. Monoliths",
+                book.lexicon_counts.0,
+                book.lexicon_counts.1,
+                book.lexicon_counts.2,
+                book.lexicon_counts.3,
+            )?;
+            writeln!(writer)?;
         }
 
         // === BACKGROUND SUMMARY ===

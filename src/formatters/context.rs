@@ -185,6 +185,31 @@ impl Formatter for ContextFormatter {
                 writeln!(writer, "KEY:{}", key_files.join(","))?;
             }
 
+            // Bake Paul Erdős ("Straight from The Book") Graph Invariants directly into AI Context
+            if nodes.len() >= 2 && nodes.len() <= 5_000 {
+                let book = crate::mem8::regularity::analyze_the_book_pipeline(nodes);
+                writeln!(
+                    writer,
+                    "ERDOS_BOOK_V1:K={} V0={} QP={:.4} RATIO={:.2}x M8B={}B RAD={} DIAM={} CENTER={:?} WORKTREES={} LLL_OK={} KAPPA={:.2} LAMBDA1={:.2} REGIME={:?} RAMSEY_RBG={}/{}/{}",
+                    book.archive.super_nodes.len(),
+                    book.archive.outlier_vertices.len(),
+                    book.archive.final_energy,
+                    book.archive.compression_ratio,
+                    book.m8b_wire_bytes,
+                    book.center_turan_report.graph_radius_hops,
+                    book.center_turan_report.graph_diameter_hops,
+                    book.center_turan_report.center_clusters,
+                    book.worktree_schedule.num_worktrees,
+                    book.worktree_schedule.is_conflict_free,
+                    book.security_report.molloy_reed_kappa,
+                    book.security_report.spectral_radius_lambda1,
+                    book.security_report.regime,
+                    book.ramsey_report.red_cliques,
+                    book.ramsey_report.blue_cliques,
+                    book.ramsey_report.green_cliques,
+                )?;
+            }
+
             // Recent changes
             let recent = find_recent_files(nodes, 86400); // Last 24 hours
             if !recent.is_empty() {

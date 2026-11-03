@@ -64,11 +64,12 @@ impl Formatter for DigestFormatter {
         let raw_tree = LoudsSmartTree::from_file_nodes(nodes, &key);
         let proj_tree = raw_tree.project_sufficient(false);
         let capsule = proj_tree.pack_m8_capsule(&key);
+        let book = analyze_the_book_pipeline(nodes);
 
-        // First line: Hash, basic stats, and 64B SMTR capsule
+        // First line: Hash, basic stats, LOUDS/SMTR capsule, and baked-in Erdős Book invariants
         write!(
             writer,
-            "HASH: {} F:{} D:{} S:{:x} LOUDS:{}/{} SMTR_V2:{}",
+            "HASH: {} F:{} D:{} S:{:x} LOUDS:{}/{} SMTR_V2:{} ERDOS_K:{}/{} KAPPA:{:.2}",
             tree_hash,
             stats.total_files,
             stats.total_dirs,
@@ -76,6 +77,9 @@ impl Formatter for DigestFormatter {
             proj_tree.node_count,
             raw_tree.node_count,
             hex::encode(capsule),
+            book.archive.super_nodes.len(),
+            book.archive.outlier_vertices.len(),
+            book.security_report.molloy_reed_kappa,
         )?;
 
         // File type summary (top 5) - super compact

@@ -868,6 +868,11 @@ impl McpInstaller {
             });
         }
 
+        // Also bake and install the embedded model-agnostic `ultra-graph-theory` skill across harnesses
+        if self.custom_config_path.is_none() {
+            let _ = install_embedded_ultra_graph_theory_skill();
+        }
+
         Ok(results)
     }
 
@@ -1128,4 +1133,43 @@ pub fn update_agy_hooks_file(hooks_path: &Path, st_bin: &str, enable: bool) -> R
     let pretty = serde_json::to_string_pretty(&config)?;
     fs::write(hooks_path, pretty)?;
     Ok(())
+}
+
+/// Embedded model-agnostic `ultra-graph-theory` SKILL.md baked directly into the `st` binary
+pub const EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD: &str =
+    include_str!("../skills/ultra-graph-theory/SKILL.md");
+
+/// Embedded model-and-harness adapter reference baked directly into the `st` binary
+pub const EMBEDDED_ULTRA_GRAPH_THEORY_ADAPTERS_MD: &str =
+    include_str!("../skills/ultra-graph-theory/references/model-and-harness-adapters.md");
+
+/// Installs the baked-in `ultra-graph-theory` skill across Antigravity (`agy`), Claude Code (`claude`),
+/// OpenCode (`opencode`), and Crush (`crush`) skill directories.
+pub fn install_embedded_ultra_graph_theory_skill() -> Result<Vec<PathBuf>> {
+    let Some(home) = dirs::home_dir() else {
+        return Ok(Vec::new());
+    };
+
+    let target_skill_dirs = [
+        home.join(".gemini/antigravity-cli/skills/ultra-graph-theory"),
+        home.join(".claude/skills/ultra-graph-theory"),
+        home.join(".config/opencode/skills/ultra-graph-theory"),
+        home.join(".config/crush/skills/ultra-graph-theory"),
+    ];
+
+    let mut installed_paths = Vec::new();
+    for skill_dir in &target_skill_dirs {
+        let refs_dir = skill_dir.join("references");
+        if fs::create_dir_all(&refs_dir).is_ok() {
+            let skill_md = skill_dir.join("SKILL.md");
+            let adapters_md = refs_dir.join("model-and-harness-adapters.md");
+            if fs::write(&skill_md, EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD).is_ok()
+                && fs::write(&adapters_md, EMBEDDED_ULTRA_GRAPH_THEORY_ADAPTERS_MD).is_ok()
+            {
+                installed_paths.push(skill_md);
+            }
+        }
+    }
+
+    Ok(installed_paths)
 }
