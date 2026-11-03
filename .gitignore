@@ -131,3 +131,4 @@ codex-session*
 
 # Native CrabCC index (Smart Tree owns this cache).
 .st/symbols/
+.build/
