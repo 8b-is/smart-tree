@@ -57,6 +57,20 @@ fn rink_interpretation_is_opt_in_and_currency_stays_disabled() {
 }
 
 #[test]
+fn rink_definitions_are_explicit_and_do_not_read_home() {
+    assert!(validate_definitions("stack 64\n").is_ok());
+    assert!(validate_definitions("stack $(id)\n").is_err());
+    assert!(validate_definitions(&"x".repeat(4097)).is_err());
+    let with_defs = QueryDir::create(false, Some("stack 64\n")).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(with_defs.0.join("definitions.units")).unwrap(),
+        "stack 64\n"
+    );
+    let quiet = QueryDir::create(false, None).unwrap();
+    assert!(!quiet.0.join("definitions.units").exists());
+}
+
+#[test]
 fn rink_wave_presets_preserve_rational_operands_and_units() {
     let examples = [
         (

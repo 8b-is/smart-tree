@@ -34,6 +34,7 @@ struct Request {
     remember: bool,
     memory_id: Option<String>,
     interpret: bool,
+    definitions: Option<String>,
 }
 
 /// The same schema is used by every MCP discovery path.
@@ -51,10 +52,23 @@ pub fn definition() -> Value {
                 "speed": {"type": "string", "maxLength": 128, "description": "Propagation speed, e.g. 343 m/s"},
                 "remember": {"type": "boolean", "default": false, "description": "Explicitly consent to durable provenance storage; requires ST_RINK_MEMORY_DIR"},
                 "interpret": {"type": "boolean", "default": false, "description": "Show Rink's input interpretation. Default false keeps the answer compact."},
+                "definitions": {"type": "string", "maxLength": 4096, "description": "Optional unit definitions for this query only. They are not read from the home directory. Shadowing a built-in requires a Rink build that keeps duplicate definitions as warnings."},
                 "memory_id": {"type": "string", "description": "UUID from a prior remembered result"}
             }
         }
     })
+}
+
+fn validate_definitions(text: &str) -> Result<()> {
+    ensure!(!text.trim().is_empty(), "Empty Rink definitions");
+    ensure!(text.len() <= 4096, "Rink definitions exceed 4096 bytes");
+    for byte in text.bytes() {
+        ensure!(
+            byte.is_ascii_alphanumeric() || b" \t\n+-*/^().>;#,:_".contains(&byte),
+            "Rink definitions contain an unsupported character"
+        );
+    }
+    Ok(())
 }
 
 fn validate(expression: &str) -> Result<()> {
@@ -240,7 +254,7 @@ fn expression(request: &Request) -> Result<String> {
 /// Private empty working/config directories prevent ambient user unit overrides.
 struct QueryDir(PathBuf);
 impl QueryDir {
-    fn create(interpret: bool) -> Result<Self> {
+    fn create(interpret: bool, definitions: Option<&str>) -> Result<Self> {
         let path = std::env::temp_dir().join(format!("st-rink-{}", uuid::Uuid::new_v4()));
         let mut builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
@@ -251,6 +265,9 @@ impl QueryDir {
         builder.create(&path)?;
         let directory = Self(path);
         std::fs::write(directory.0.join("config.toml"), config_text(interpret))?;
+        if let Some(definitions) = definitions {
+            std::fs::write(directory.0.join("definitions.units"), definitions)?;
+        }
         Ok(directory)
     }
 }
@@ -278,7 +295,7 @@ async fn limited_read(reader: impl AsyncRead + Unpin) -> Result<String> {
 }
 
 async fn evaluate(binary: &Path, expression: &str, wall: Duration) -> Result<String> {
-    evaluate_with(binary, expression, wall, false).await
+    evaluate_with(binary, expression, wall, false, None).await
 }
 
 async fn evaluate_with(
@@ -286,6 +303,7 @@ async fn evaluate_with(
     expression: &str,
     wall: Duration,
     interpret: bool,
+    definitions: Option<&str>,
 ) -> Result<String> {
     ensure!(
         cfg!(target_os = "linux"),
@@ -295,7 +313,7 @@ async fn evaluate_with(
         binary.is_absolute() && binary.is_file(),
         "ST_RINK_BIN must name an existing absolute executable"
     );
-    let directory = QueryDir::create(interpret)?;
+    let directory = QueryDir::create(interpret, definitions)?;
     let mut command = tokio::process::Command::new("/usr/bin/prlimit");
     command
         .args([
@@ -402,6 +420,10 @@ pub async fn handle(args: Value) -> Result<Value> {
         .context("Rink busy: at most two concurrent requests")?;
     if request.operation.as_deref() == Some("recall") {
         ensure!(!request.remember, "recall does not accept remember");
+        ensure!(
+            request.definitions.is_none(),
+            "recall does not accept definitions"
+        );
         let id = request.memory_id.context("Missing memory_id")?;
         let path = memory_path()?;
         let value = tokio::task::spawn_blocking(move || store(&path, &id, None)).await??;
@@ -420,7 +442,17 @@ pub async fn handle(args: Value) -> Result<Value> {
     let binary = binary
         .canonicalize()
         .context("Cannot resolve ST_RINK_BIN")?;
-    let output = evaluate_with(&binary, &expression, WALL_LIMIT, request.interpret).await?;
+    if let Some(definitions) = &request.definitions {
+        validate_definitions(definitions)?;
+    }
+    let output = evaluate_with(
+        &binary,
+        &expression,
+        WALL_LIMIT,
+        request.interpret,
+        request.definitions.as_deref(),
+    )
+    .await?;
     let provenance = Provenance {
         expression,
         output,
