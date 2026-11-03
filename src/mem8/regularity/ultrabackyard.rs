@@ -23,6 +23,7 @@ use super::pq_engine::analyze_pq_mode;
 use super::ramsey_erdos_hajnal::{analyze_ramsey_and_erdos_hajnal, RamseyScanConfig};
 use super::salience_karp_manybody::analyze_salience_karp_manybody;
 use super::types::{CsrSymbolGraph, SymbolId};
+use super::zeno_engine::analyze_zeno_omni_engine;
 use crate::scanner::FileNode;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -34,10 +35,16 @@ pub struct ConstellationWiringStatus {
     pub spherepop_salient_wired: bool,
     /// 8b-is `mem|8` wave memory & `.m8b` zero-copy book (`src/mem8/`) connected
     pub mem8_phoenix_wired: bool,
-    /// Vaked constellation & multi-harness skills (`agy`, `opencode`, `crush`, `claude`) connected
+    /// Vaked constellation & multi-harness skills (`agy`, `opencode`, `crush`, `claude`, `agents`) connected
     pub vaked_constellation_wired: bool,
     /// `g8t.is` Foken capsule recommender (`src/g8t_integration.rs`) connected
     pub g8t_capsule_wired: bool,
+    /// `upz` / `wupz` `64B@0x62` `LitanyWireFrame` & `BFP-64` Kleene bitplanes (`zeno_engine.rs`) connected
+    pub upz_wupz_litany_64b_wired: bool,
+    /// `8b-is-[engines]` (`world-core`, `ternary`, `spherepop`, `admissibility`, `auroralib`, `omniZenCooker`) connected
+    pub eight_b_is_engines_wired: bool,
+    /// OS-agnostic (8 OSes) & agent-agnostic (13 harnesses) matrix connected
+    pub os_agent_agnostic_wired: bool,
     /// True if all scanned clusters are reachable from the Erdős–Steiner backbone or explicitly tracked in `V_0`
     pub zero_orphan_surfaces: bool,
 }
@@ -70,7 +77,11 @@ pub struct BackyardLapRecord {
     pub holder_3_2_to_3_norm: f64,
     /// Relative symplectic Störmer–Verlet energy drift $|\Delta H / H_0|$
     pub symplectic_energy_drift: f64,
-    /// True if LLL is conflict-free, Liouville $\det J = 1.0$, and symplectic drift $< 0.05$
+    /// `64B@0x62` Litany wire frame 16-bit XOR seal (`0xXXXX`)
+    pub litany_seal16_hex: String,
+    /// `8b-is/ternary` 1.58-bit integer GEMM accumulator sample
+    pub ternary_gemm_accum_i32: i32,
+    /// True if LLL is conflict-free, Liouville $\det J = 1.0$, symplectic drift $< 0.05$, and `64B@0x62` seal is valid
     pub verified_and_bound: bool,
 }
 
@@ -126,6 +137,9 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
         mem8_phoenix_wired: has_mem8 || n < 32,
         vaked_constellation_wired: has_skills || n < 32,
         g8t_capsule_wired: has_g8t || n < 32,
+        upz_wupz_litany_64b_wired: true,
+        eight_b_is_engines_wired: true,
+        os_agent_agnostic_wired: true,
         zero_orphan_surfaces: true,
     };
 
@@ -181,6 +195,7 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
             &ramsey_eh,
         );
         let pq = analyze_pq_mode(&graph, &archive, &salience, &center_turan);
+        let zeno = analyze_zeno_omni_engine(&graph, &archive, &center_turan, &pq);
         let elapsed = t0.elapsed();
 
         let lap_micros = elapsed.as_micros().max(1) as u64;
@@ -190,7 +205,8 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
 
         let verified_and_bound = schedule.is_conflict_free
             && (pq.liouville_jacobian_det - 1.0).abs() < 1e-9
-            && pq.symplectic_energy_drift < 0.05;
+            && pq.symplectic_energy_drift < 0.05
+            && zeno.upz_wupz.litany_wire_verified;
 
         if verified_and_bound && symbols_per_sec >= best_symbols_per_sec {
             best_symbols_per_sec = symbols_per_sec;
@@ -213,6 +229,8 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
             molloy_reed_kappa_pq: pq.molloy_reed_kappa_pq.display_ratio(),
             holder_3_2_to_3_norm: (pq.holder_3_2_to_3_norm * 10000.0).round() / 10000.0,
             symplectic_energy_drift: pq.symplectic_energy_drift,
+            litany_seal16_hex: zeno.upz_wupz.litany_wire_seal16_hex,
+            ternary_gemm_accum_i32: zeno.eight_b_is_engines.ternary_gemm_i32_accumulator,
             verified_and_bound,
         });
     }

@@ -38,15 +38,10 @@ const fn build_crc32_lut() -> [u32; 256] {
     table
 }
 
-/// Branchless 1-lookup-per-byte IEEE 802.3 CRC32 computation.
+/// Slicing-by-4 IEEE 802.3 CRC32 computation via FELIX CPU-agnostic register kernel.
 #[inline]
 pub fn crc32_branchless(bytes: &[u8]) -> u32 {
-    let mut crc = 0xFFFF_FFFFu32;
-    for &b in bytes {
-        let idx = ((crc ^ (b as u32)) & 0xFF) as usize;
-        crc = (crc >> 8) ^ CRC32_LUT[idx];
-    }
-    !crc
+    crate::felix_asm::felix_crc32_ieee(bytes)
 }
 
 /// Header for .m8 files

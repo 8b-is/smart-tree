@@ -1017,11 +1017,11 @@ available when a validated, platform-compatible release is promoted to i1.
 
 ---
 
-## 📐 Smart Tree v10.10.0 — "Straight from The Book" (Paul Erdős & Many-Body Wave Engine)
+## 📐 Smart Tree v11.1.0 — "Straight from The Book" & `ULTRA-OMNI-ZENO` (`upz`/`wupz` + `8b-is-[engines]`)
 
 <div align="center">
 
-![Smart Tree v10.10.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
+![Smart Tree v11.1.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
 
 > *"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."*  
 > — **Paul Erdős (1913–1996), The Magician from Budapest**
