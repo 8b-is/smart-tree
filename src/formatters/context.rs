@@ -190,7 +190,7 @@ impl Formatter for ContextFormatter {
                 let book = crate::mem8::regularity::analyze_the_book_pipeline(nodes);
                 writeln!(
                     writer,
-                    "ERDOS_BOOK_V1:K={} V0={} QP={:.4} RATIO={:.2}x M8B={}B RAD={} DIAM={} CENTER={:?} WORKTREES={} LLL_OK={} KAPPA={:.2} LAMBDA1={:.2} REGIME={:?} RAMSEY_RBG={}/{}/{}",
+                    "ERDOS_BOOK_V1:K={} V0={} QP={:.4} RATIO={:.2}x M8B={}B RAD={} DIAM={} CENTER={:?} WORKTREES={} LLL_OK={} KAPPA={:.2} LAMBDA1={:.2} REGIME={:?} RAMSEY_RBG={}/{}/{} GAMMA_EH={:.3} DEGEN_D={} ALPHA={} SALIENCE_DISAGREE={:.2} STRANG_COH={:.3}",
                     book.archive.super_nodes.len(),
                     book.archive.outlier_vertices.len(),
                     book.archive.final_energy,
@@ -207,6 +207,11 @@ impl Formatter for ContextFormatter {
                     book.ramsey_report.red_cliques,
                     book.ramsey_report.blue_cliques,
                     book.ramsey_report.green_cliques,
+                    book.ramsey_erdos_hajnal_report.erdos_hajnal_exponent_gamma,
+                    book.ramsey_erdos_hajnal_report.degeneracy_d,
+                    book.ramsey_erdos_hajnal_report.alpha_independent_set.len(),
+                    book.salience_report.proxy_disagreement_prob,
+                    book.manybody_wave_report.strang_split_coherence,
                 )?;
             }
 

@@ -491,6 +491,24 @@ impl Formatter for SmartFormatter {
             )?;
             writeln!(
                 writer,
+                "  Ramsey & Erdős-Hajnal: gamma_EH={:.3} (rand={:.3}) | degen_d={} | Caro-Wei alpha={} | Bi-Cliques={}",
+                book.ramsey_erdos_hajnal_report.erdos_hajnal_exponent_gamma,
+                book.ramsey_erdos_hajnal_report.expected_random_gamma,
+                book.ramsey_erdos_hajnal_report.degeneracy_d,
+                book.ramsey_erdos_hajnal_report.alpha_independent_set.len(),
+                book.ramsey_erdos_hajnal_report.bi_cliques.len(),
+            )?;
+            writeln!(
+                writer,
+                "  Salience (d_T!=d_R) & DFT: {:?} (disagree={:.0}%, rescued_old={}) | Kohn-Sham speedup={:.1}x (Strang coh={:.3})",
+                book.salience_report.regime,
+                book.salience_report.proxy_disagreement_prob * 100.0,
+                book.salience_report.load_bearing_old_artifacts.len(),
+                book.manybody_wave_report.many_body_speedup_factor,
+                book.manybody_wave_report.strang_split_coherence,
+            )?;
+            writeln!(
+                writer,
                 "  Erdős Lexicon: {} Book | {} Epsilons | {} Legally Dead | {} S.F. Monoliths",
                 book.lexicon_counts.0,
                 book.lexicon_counts.1,

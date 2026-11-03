@@ -20,6 +20,8 @@ pub mod erdos_steiner;
 pub mod mmap_view;
 pub mod moser_tardos;
 pub mod oracle;
+pub mod ramsey_erdos_hajnal;
+pub mod salience_karp_manybody;
 pub mod types;
 pub mod wire;
 
@@ -41,6 +43,14 @@ pub use moser_tardos::{
     WorkUnitId, WorktreeColor,
 };
 pub use oracle::{check_bipartite_regularity, RegularityCheck};
+pub use ramsey_erdos_hajnal::{
+    analyze_ramsey_and_erdos_hajnal, BitSet256, CliqueTopology, ErdosHajnalBiClique,
+    RamseyErdosHajnalReport, RamseyMonochromaticClique, RamseyScanConfig, RefactorPrescription,
+};
+pub use salience_karp_manybody::{
+    analyze_salience_karp_manybody, KarpComplexityCertificate, LoadBearingOldArtifact,
+    ManyBodyDftWaveReport, SalienceOntologyReport, SalienceRegime,
+};
 pub use types::{
     ClusterId, CsrSymbolGraph, EdgeKind, ErdosLexiconBadge, ExceptionReason, Mem8BookArchive,
     Mem8SuperNode, RegularSuperEdge, SymbolId, SzemerediPartition, T8rExceptionEdge,
@@ -64,12 +74,16 @@ pub struct TheBookPipelineReport {
     pub worktree_schedule: MoserTardosSchedule,
     pub security_report: ErdosRenyiSecurityReport,
     pub ramsey_report: RamseyCliqueReport,
+    pub ramsey_erdos_hajnal_report: RamseyErdosHajnalReport,
+    pub salience_report: SalienceOntologyReport,
+    pub karp_certificate: KarpComplexityCertificate,
+    pub manybody_wave_report: ManyBodyDftWaveReport,
     /// Counts of files classified under Paul Erdős's lexicon:
     /// (StraightFromTheBook, Epsilons, LegallyDead, PureNoiseMonoliths)
     pub lexicon_counts: (usize, usize, usize, usize),
 }
 
-/// Runs all 5 stages of the Paul Erdős ("Straight from The Book") mathematical pipeline
+/// Runs all stages of the Paul Erdős ("Straight from The Book") mathematical pipeline
 /// on a scanned slice of `FileNode`s.
 pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     let (graph, initial_partition) = CsrSymbolGraph::from_file_nodes(nodes);
@@ -136,6 +150,18 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     let security_report =
         scan_erdos_renyi_shadow_graph(&graph, zero_copy_book.symbol_to_cluster(), &hazards, 10.0);
     let ramsey_report = scan_ramsey_monochromatic_cliques(&graph);
+    let ramsey_erdos_hajnal_report =
+        analyze_ramsey_and_erdos_hajnal(&graph, RamseyScanConfig::default());
+    let (salience_report, karp_certificate, manybody_wave_report) = analyze_salience_karp_manybody(
+        nodes,
+        &graph,
+        &archive,
+        &zero_copy_book,
+        &steiner_slice,
+        &center_turan_report,
+        &worktree_schedule,
+        &ramsey_erdos_hajnal_report,
+    );
 
     // Classify every node using Paul Erdős's vocabulary
     let mut from_the_book = 0usize;
@@ -161,6 +187,10 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         worktree_schedule,
         security_report,
         ramsey_report,
+        ramsey_erdos_hajnal_report,
+        salience_report,
+        karp_certificate,
+        manybody_wave_report,
         lexicon_counts: (from_the_book, epsilons, legally_dead, pure_noise),
     }
 }
@@ -414,5 +444,75 @@ mod tests {
         assert!(report.m8b_wire_bytes >= 128);
         assert!(report.lexicon_counts.0 > 0);
         assert_eq!(report.lexicon_counts.2, 1); // i == 15 is LegallyDead
+        assert!(report.manybody_wave_report.kohn_sham_orbitals_k > 0);
+        assert!(report.manybody_wave_report.strang_split_coherence > 0.0);
+        assert!(report.karp_certificate.independent_set_alpha > 0);
+    }
+
+    #[test]
+    fn test_ramsey_erdos_hajnal_bitboard_bron_kerbosch_and_biclique() {
+        // 40 vertices:
+        // - Sparse background tree on 0..25
+        // - Mutual CyclicDeadlockKnot K_5 in MutableShared on 25..30
+        // - Acyclic Erdős-Moser TransitiveTournament T_4 in TraitImpl on 30..34
+        // - Almost-Pure Erdős-Hajnal Bi-Clique A={10,11,12} -> B={20,21,22} in CallRef missing (12, 22)
+        let n = 40;
+        let mut edges = Vec::new();
+        for u in 1..25 {
+            edges.push(((u - 1) as SymbolId, u as SymbolId, EdgeKind::Import));
+        }
+
+        // Plant mutual K_5 in MutableShared (25..30)
+        for u in 25..30 {
+            for v in 25..30 {
+                if u != v {
+                    edges.push((u as SymbolId, v as SymbolId, EdgeKind::MutableShared));
+                }
+            }
+        }
+
+        // Plant acyclic Erdős-Moser TransitiveTournament T_4 in TraitImpl (30..34)
+        for u in 30..34 {
+            for v in (u + 1)..34 {
+                edges.push((u as SymbolId, v as SymbolId, EdgeKind::TraitImpl));
+            }
+        }
+
+        // Plant Almost-Pure Bi-Clique A={10,11,12} -> B={20,21,22} in CallRef missing (12, 22)
+        for &a in &[10u32, 11, 12] {
+            for &b in &[20u32, 21, 22] {
+                if !(a == 12 && b == 22) {
+                    edges.push((a, b, EdgeKind::CallRef));
+                }
+            }
+        }
+
+        let graph = CsrSymbolGraph::from_edges(n, &edges, Vec::new());
+        let eh = analyze_ramsey_and_erdos_hajnal(&graph, RamseyScanConfig::default());
+
+        assert_eq!(eh.omega_per_color[EdgeKind::MutableShared as usize], 5);
+        assert_eq!(eh.omega_per_color[EdgeKind::TraitImpl as usize], 4);
+        assert!(!eh.alpha_independent_set.is_empty());
+        assert!(eh.erdos_hajnal_exponent_gamma > 0.0);
+
+        // Verify both CyclicDeadlockKnot and TransitiveTournament are classified
+        assert!(eh.cliques.iter().any(|c| {
+            c.color == EdgeKind::MutableShared
+                && c.size_k == 5
+                && matches!(c.topology, CliqueTopology::CyclicDeadlockKnot { .. })
+                && c.prescription == RefactorPrescription::BreakDeadlockCycle
+        }));
+        assert!(eh.cliques.iter().any(|c| {
+            c.color == EdgeKind::TraitImpl
+                && c.size_k == 4
+                && c.topology == CliqueTopology::TransitiveTournament
+        }));
+
+        // Verify Almost-Pure Bi-Clique detects the missing API conformance edge (12, 22)
+        assert!(eh.bi_cliques.iter().any(|bc| {
+            bc.color == EdgeKind::CallRef
+                && bc.missing_anomaly_edges == vec![(12, 22)]
+                && bc.prescription == RefactorPrescription::AuditMissingBiCliqueEdge
+        }));
     }
 }

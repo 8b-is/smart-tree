@@ -449,7 +449,7 @@ pub async fn handle_ramsey_cliques_scan(path: &str) -> Result<()> {
     let report = analyze_the_book_pipeline(&nodes);
 
     let payload = serde_json::json!({
-        "spec": "RAMSEY-TURAN-EXTREMAL-v1.0",
+        "spec": "RAMSEY-ERDOS-HAJNAL-TURAN-v1.0",
         "path": scan_path.display().to_string(),
         "ramsey_r_3_3_3": report.ramsey_report.ramsey_number_r333,
         "red_sync_lock_cliques": report.ramsey_report.red_cliques,
@@ -460,6 +460,16 @@ pub async fn handle_ramsey_cliques_scan(path: &str) -> Result<()> {
             "order_k": c.order_k,
             "vertices": c.vertices,
         })).collect::<Vec<_>>(),
+        "erdos_hajnal_and_bitboard_bron_kerbosch": {
+            "degeneracy_d": report.ramsey_erdos_hajnal_report.degeneracy_d,
+            "omega_per_color_5c": report.ramsey_erdos_hajnal_report.omega_per_color,
+            "caro_wei_independent_set_alpha": report.ramsey_erdos_hajnal_report.alpha_independent_set.len(),
+            "erdos_hajnal_exponent_gamma": (report.ramsey_erdos_hajnal_report.erdos_hajnal_exponent_gamma * 10000.0).round() / 10000.0,
+            "expected_random_gamma": (report.ramsey_erdos_hajnal_report.expected_random_gamma * 10000.0).round() / 10000.0,
+            "monochromatic_cliques": report.ramsey_erdos_hajnal_report.cliques,
+            "erdos_hajnal_bi_cliques": report.ramsey_erdos_hajnal_report.bi_cliques,
+        },
+        "karp_21_np_complete_certificate": report.karp_certificate,
         "turan_extremal_theorem": {
             "turan_ex_k5_bound_edges": report.center_turan_report.turan_ex_k5_edges,
             "turan_density_ratio": (report.center_turan_report.turan_density_ratio * 10000.0).round() / 10000.0,
@@ -470,7 +480,7 @@ pub async fn handle_ramsey_cliques_scan(path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Compute the Erdős Center `Z(G)`, Graph Radius/Diameter, and Voronoi Steiner Context Backbone
+/// Compute the Erdős Center `Z(G)`, Graph Radius/Diameter, Voronoi Steiner Context Backbone, and Flyxion Recency-vs-Salience Ontology
 pub async fn handle_erdos_center_scan(path: &str) -> Result<()> {
     use crate::mem8::regularity::analyze_the_book_pipeline;
     use crate::scanner::{Scanner, ScannerConfig};
@@ -486,7 +496,7 @@ pub async fn handle_erdos_center_scan(path: &str) -> Result<()> {
     let report = analyze_the_book_pipeline(&nodes);
 
     let payload = serde_json::json!({
-        "spec": "ERDOS-CENTER-STEINER-v1.0",
+        "spec": "ERDOS-CENTER-STEINER-SALIENCE-v1.0",
         "path": scan_path.display().to_string(),
         "graph_radius_hops": report.center_turan_report.graph_radius_hops,
         "graph_diameter_hops": report.center_turan_report.graph_diameter_hops,
@@ -502,6 +512,8 @@ pub async fn handle_erdos_center_scan(path: &str) -> Result<()> {
             "anchor_symbols": n.anchor_symbols,
             "expand_full_symbols": n.expand_full_symbols,
         })).collect::<Vec<_>>(),
+        "flyxion_salience_ontology": report.salience_report,
+        "quantum_manybody_dft_strang_wave": report.manybody_wave_report,
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())

@@ -72,13 +72,31 @@ This skill treats **all four frontier model families** and **all four terminal/I
   2. Tracks **Component Excess / Cyclomatic Surplus** $s(C) = |E(C)| - |V(C)| + 1$ in $O(\alpha(n))$ time via Path-Compressing Union-Find (`uf_union_with_excess`).
   3. Computes **Chernoff–Erdős KL Log-Surprise** $\Lambda(C)$ in nats, **Füredi–Komlós Spectral Radius** $\lambda_1(A_{\text{shadow}})$ vs. `expected_random_lambda1` ($\max(c, \sqrt{\Delta_{\max}})$), **Top-5 Eigenvector Centrality `pivot_symbols`**, and iterative Tarjan `directed_scc_cycles`.
 
-### Pillar V: Ramsey-Theoretic Monochromatic Cliques & Turán Extremal Theorem
-- **Theorem (Ramsey 1930; Turán 1941; Erdős–Stone–Simonovits 1946):**
-  - **Ramsey:** Since $R(3, 3) = 6$ and $R(3, 3, 3) = 17$, any sufficiently dense multi-relational subsystem inevitably contains monochromatic $K_3$ or $K_4$ cliques.
-  - **Turán:** Any $K_{r+1}$-free graph on $n$ vertices has at most $\text{ex}(n; K_{r+1}) = (1 - 1/r) \frac{n^2}{2}$ edges (achieved uniquely by the $r$-partite Turán graph $T(n, r)$). By the **Erdős–Stone–Simonovits Theorem**, exceeding this density guarantees dense multi-layer architectural entanglement ($\hat{\chi}(G) > r$).
-- **Implementation (`scan_ramsey_monochromatic_cliques` & `compute_erdos_center_and_turan`):**
-  - Colors edges into **Red (`RedSyncLock`: blocking calls/locks)**, **Blue (`BlueSharedState`: shared mutable state)**, and **Green (`GreenModuleCoupling`: circular trait/type bounds)** and extracts $K_3$/$K_4$ cliques via sorted neighbor-list binary intersection.
-  - Computes the **Erdős Center $Z(R)$**, **Graph Radius**, **Graph Diameter**, **Turán $K_5$-free Extremal Bound**, and **Erdős–Stone Chromatic Number $\hat{\chi}(G)$**.
+### Pillar V: Ramsey-Theoretic 256-Bit Bitboard Bron–Kerbosch, Erdős–Hajnal Bi-Cliques & Turán Extremal Theorem
+- **Theorem (Ramsey 1930; Erdős–Szekeres 1935; Turán 1941; Erdős–Stone–Simonovits 1946; Erdős–Hajnal 1989):**
+  - **Ramsey & Degeneracy:** Since $R(3, 3) = 6$ and $R(3, 3, 3) = 17$, any sufficiently dense multi-relational subsystem contains monochromatic cliques. Because AST symbol graphs have low Matula–Beck degeneracy $d \ll n$ ($d \le 64$), we pack each forward monochromatic neighborhood $N_c^+(v_i)$ into a stack-allocated 256-bit SIMD bitboard (`BitSet256([u64; 4])`, accelerated via `felix_popcnt_u64` and `felix_tzcnt_u64`) and run **Tomita-pivoted Bron–Kerbosch** across all 5 AST `EdgeKind` colors (`Import`, `CallRef`, `TraitImpl`, `TypeBound`, `MutableShared`) plus the 6th anti-color $c_\emptyset$ (**Caro–Wei Independent Set** $\alpha(G)$).
+  - **Erdős–Moser Tournaments vs. Cyclic Deadlock Knots:** Every monochromatic clique $K_k^{(c)}$ is classified into either an acyclic **Erdős–Moser Transitive Tournament** ($\vec{T}_k^{(c)}$: clean compilation/call pipeline) or a **Cyclic Deadlock Knot** (with minimum feedback arc set `feedback_back_edges` and actionable `RefactorPrescription`).
+  - **Fox–Sudakov / Rödl Erdős–Hajnal Bi-Cliques & $\gamma_{\text{EH}}$:** Extracts **Pure Bi-Cliques** ($d_c(A, B) = 1.0$: unextracted trait facades) and **Almost-Pure Bi-Cliques** ($1 - \delta \le d_c(A, B) < 1.0$: **API Conformance Bugs** where `missing_anomaly_edges` pinpoints the exact struct $a^* \in A$ that forgot to call/implement $b^* \in B$), alongside the **Erdős–Hajnal Modularity Exponent** $\gamma_{\text{EH}} = \ln\max(\omega, \alpha) / \ln n$.
+  - **Turán:** Any $K_{r+1}$-free graph on $n$ vertices has at most $\text{ex}(n; K_{r+1}) = (1 - 1/r) \frac{n^2}{2}$ edges; exceeding this guarantees $\hat{\chi}(G) > r$.
+
+### Pillar VI: Flyxion's *Recency as Salience* ($d_T(x, q) \neq d_R(x, q)$) Ontology & Retrieval-as-Amnesia Detector
+- **Principle (Flyxion 2026):** Pure chronological ranking confuses an observable timestamp proxy $d_T(x, q) = t_q - t_a(x)$ with latent **Relational Distance** $d_R(x, q)$ (Erdős–Steiner geodesic resistance distance + Erdős Center $Z(G)$ membership + MEM8 wave coupling):
+  $$\text{retained}(x) \not\Rightarrow \text{retrievable}(x, q) \not\Rightarrow \text{salient}(x, q)$$
+- **Implementation (`src/mem8/regularity/salience_karp_manybody.rs`):**
+  1. Computes the **Proxy Disagreement Probability** $\Pr[x^*_T \neq x^*_R]$ across the top-$k$ retrieval frontier and the **Admissibility Structural Change Ratio** $\Delta_R / N$.
+  2. Rescues **"Load-Bearing Old" ("Corrugated Iron")** artifacts (`load_bearing_old_artifacts`): foundational files with old modification timestamps (poor temporal rank $r_T$) that sit near the top of the relational Steiner backbone ($r_R \ll r_T$).
+
+### Pillar VII: Karp's 21 NP-Complete Problems FPT & Approximation Certificate
+- **Implementation (`KarpComplexityCertificate`):** Certifies how `smart-tree` tames Karp's 21 NP-complete problems on codebase graphs in polynomial or Fixed-Parameter Tractable ($O(d \cdot |V| \cdot 3^{d/3})$) time:
+  - **Clique & Independent Set**: Solved via Matula–Beck degeneracy $d$ + 256-bit Tomita Bron–Kerbosch ($\omega(G)$) and Caro–Wei greedy dual ($\alpha(G)$).
+  - **Vertex Cover & Feedback Arc Set**: Gavril's maximal-matching **2-Approximation for Minimum Vertex Cover** (`vertex_cover_2approx_size`) and tournament degree-sort **Minimum Feedback Arc Set** (`feedback_arc_set_size`).
+  - **Chromatic Number, Clique Cover, Steiner Tree & Knapsack**: Moser–Tardos LLL worktree coloring ($\chi_{\text{LLL}}$), Szemerédi cluster cover ($K$), Mehlhorn Voronoi 2-Approximation Steiner Tree, and Token Knapsack utilization.
+
+### Pillar VIII: Quantum Many-Body Kohn–Sham DFT & Strang Split-Operator Wave Propagation
+- **Implementation (`ManyBodyDftWaveReport`):**
+  1. Avoids the $O(2^N)$ quantum many-body exponential wall by treating each Szemerédi `SuperNodeCentroidPod` (`[f32; 64]`) as a one-particle **Kohn–Sham electron density orbital** $\rho(\mathbf{r})$ coupled via `felix_dot64_f32` mean-field exchange + **Local Natural Orbital (LNO / QM-MM)** correlation corrections from the `T8R` exception ledger.
+  2. Evolves codebase salience waves via **Second-Order Strang Operator Splitting**:
+     $$e^{h(A_{\text{temporal}} + B_{\text{relational}})} = e^{\frac{h}{2} A_{\text{temporal}}} \, e^{h B_{\text{relational}}} \, e^{\frac{h}{2} A_{\text{temporal}}} + O(h^3)$$
 
 ---
 
