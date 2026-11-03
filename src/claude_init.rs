@@ -1162,15 +1162,21 @@ pub const EMBEDDED_MANYBODY_STRANG_SKILL_MD: &str =
 pub const EMBEDDED_ULTRABACKYARDLOOP_SKILL_MD: &str =
     include_str!("../skills/ultrabackyardloop/SKILL.md");
 
+/// Embedded `ultra-omni-zeno` SKILL.md baked directly into the `st` binary
+pub const EMBEDDED_ULTRA_OMNI_ZENO_SKILL_MD: &str =
+    include_str!("../skills/ultra-omni-zeno/SKILL.md");
+
 /// Installs the baked-in `ultra-graph-theory`, `flyxion-salience-ontology`, `ramsey-karp-fpt`,
-/// `manybody-strang-mem8`, and `ultrabackyardloop` skills + `ultra-agent.md` across Antigravity (`agy`),
-/// Claude Code (`claude`), OpenCode (`opencode`), and Crush (`crush`) skill directories.
+/// `manybody-strang-mem8`, `ultrabackyardloop`, and `ultra-omni-zeno` skills + `ultra-agent.md`
+/// across universal `.agents/skills`, Antigravity (`agy`), Claude Code (`claude`), OpenCode (`opencode`),
+/// and Crush (`crush`) skill directories.
 pub fn install_embedded_ultra_graph_theory_skill() -> Result<Vec<PathBuf>> {
     let Some(home) = dirs::home_dir() else {
         return Ok(Vec::new());
     };
 
     let harness_roots = [
+        home.join(".agents/skills"),
         home.join(".gemini/antigravity-cli/skills"),
         home.join(".claude/skills"),
         home.join(".config/opencode/skills"),
@@ -1185,6 +1191,7 @@ pub fn install_embedded_ultra_graph_theory_skill() -> Result<Vec<PathBuf>> {
         ("ramsey-karp-fpt", EMBEDDED_RAMSEY_KARP_FPT_SKILL_MD),
         ("manybody-strang-mem8", EMBEDDED_MANYBODY_STRANG_SKILL_MD),
         ("ultrabackyardloop", EMBEDDED_ULTRABACKYARDLOOP_SKILL_MD),
+        ("ultra-omni-zeno", EMBEDDED_ULTRA_OMNI_ZENO_SKILL_MD),
     ];
 
     let mut installed_paths = Vec::new();

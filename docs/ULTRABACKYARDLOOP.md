@@ -1,4 +1,4 @@
-# ULTRABACKYARDLOOP — Measured Laps & Sovereign DO Loop (`smart-tree` v10.12.0)
+# ULTRABACKYARDLOOP — Measured Laps & Sovereign DO Loop (`smart-tree` v11.0.0)
 
 > *"One pass, end to end, merged into a single DO. No loose ends between laps. Every DO leaves the tree clean, pushed, and readme'd. A plausible branch may be ranked; only a verified branch may be bound. From love, from within."*
 
@@ -32,6 +32,7 @@ st --mode ultrabackyard .
 |  10 |      **0.10** |         **6** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **913 043** |        **2 478 261** |      **✅**      |
 |  11 |          0.08 |             8 |              27 |       6.54x |                    0.2765 |         `19/7` |                1.9348 |                    `1.38e-4`  |            724 138 |            1 965 517 |        ✅        |
 |  12 |          0.06 |            12 |              34 |       5.89x |                    0.3082 |         `19/7` |                1.9612 |                    `1.24e-4`  |            664 908 |            1 804 749 |        ✅        |
+|  13 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **948 148** |        **2 574 074** |      **✅**      |
 
 - **Best Verified & Bound Lap**: **Lap 10** ($\varepsilon = 0.10$, $C = 6$ conflict-free worktrees, **913,043 symbols/s**, **2,478,261 edges/s**, `7.12x` `.m8b` compression, Liouville $\det J = 1.0$, symplectic drift $1.49 \times 10^{-4}$).
 - **What the Laps Changed**:

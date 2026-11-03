@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-10.12.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-11.0.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
@@ -1058,15 +1058,17 @@ flowchart LR
 | **VIII. Quantum Many-Body Kohn–Sham DFT & Strang Wave** | `[f32; 64]` Kohn–Sham super-node orbitals + Local Natural Orbital (`T8R`) correlations evolved via $e^{h(A+B)} \approx e^{hA/2} e^{hB} e^{hA/2}$ | `st --mode the-book .` |
 | **IX. Sovereign `p/q` Mode (`pq_engine.rs`)** | Exact coprime rationals via Stein's Binary GCD (`felix_binary_gcd_u64`), 128-bit cross-multiplication (`felix_pq_cross_cmp`), Hölder $(L_{3/2} \to L_3)$ dual spectral norm, Kővári–Sós–Turán $z(n; p, q)$, and Störmer–Verlet symplectic $(p, q)$ leapfrog | `st --mode pq .` |
 | **X. Sovereign Ultra-Backyard Loop (`ultrabackyard.rs`)** | Measured A/B Backyard Ultra laps (`DO = reflect → improve → wire → polish → push → readme`) cycling $\varepsilon$ & $C$, auditing SpherePOP / `mem\|8` / Phoenix / Vaked / `g8t.is` wiring (`zero_orphan_surfaces = true`), and binding only verified branches ([`docs/ULTRABACKYARDLOOP.md`](docs/ULTRABACKYARDLOOP.md), [`docs/lap-ledger.jsonl`](docs/lap-ledger.jsonl)) | `st --ultrabackyard 12 .` |
+| **XI. Sovereign `ULTRA-OMNI-ZENO` v11 (`zeno_engine.rs`)** | `upz`/`wupz-core` `64B@0x62` `LitanyWireFrame`, `BFP-64` Kleene bitplanes (`qt:55`), `.rodata.gaia.b158` `1.585 bits/trit` SPQT `base-243` packing, 18-stage branchless integer CORDIC (`felix_cordic_atan2_u32`), `8b-is-[engines]` (`world-core`, `ternary` `1.58-bit` integer GEMM, `spherepop`, `admissibility` `CT-000`/`CT-016` + `Seed 001`, `auroralib`, `omniZenCooker`), and OS/Agent-agnostic matrix | `st --zeno .` / `st --mode zeno .` |
 
 ### 🤖 First-Class Model & Harness Support (`st --mcp-install`)
 
-See **[`ultra-agent.md`](ultra-agent.md)** for the complete multi-agent operating manual across **Gemini, ChatGPT, DeepSeek, and Claude** on **Antigravity (`agy`), OpenCode (`opencode`), Crush (`crush`), and Claude Code (`claude`)**, plus the 5 binary-embedded skills:
+See **[`ultra-agent.md`](ultra-agent.md)** for the complete multi-agent operating manual across **Gemini, ChatGPT, DeepSeek, and Claude** on **Antigravity (`agy`), OpenCode (`opencode`), Crush (`crush`), and Claude Code (`claude`)**, plus the 6 binary-embedded skills:
 - [`skills/ultra-graph-theory/SKILL.md`](skills/ultra-graph-theory/SKILL.md)
 - [`skills/flyxion-salience-ontology/SKILL.md`](skills/flyxion-salience-ontology/SKILL.md)
 - [`skills/ramsey-karp-fpt/SKILL.md`](skills/ramsey-karp-fpt/SKILL.md)
 - [`skills/manybody-strang-mem8/SKILL.md`](skills/manybody-strang-mem8/SKILL.md)
 - [`skills/ultrabackyardloop/SKILL.md`](skills/ultrabackyardloop/SKILL.md)
+- [`skills/ultra-omni-zeno/SKILL.md`](skills/ultra-omni-zeno/SKILL.md)
 
 
 

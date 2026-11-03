@@ -335,6 +335,10 @@ pub struct Cli {
     #[arg(long, alias = "backyard-ultra", alias = "ultrabackyardloop", alias = "do-loop", value_name = "LAPS", default_missing_value = "12", num_args = 0..=1, help_heading = "Analysis")]
     pub ultrabackyard: Option<usize>,
 
+    /// Execute Sovereign ULTRA-OMNI-ZENO v11 engine (upz/wupz 64B@0x62 LitanyWireFrame, BFP-64 Kleene bitplanes, SPQT base-243, 8b-is-[engines], and OS/Agent-agnostic matrix)
+    #[arg(long, alias = "ultra-omni-zeno", alias = "upz", alias = "wupz", alias = "8b-engines", value_name = "PATH", default_missing_value = ".", num_args = 0..=1, help_heading = "Analysis")]
+    pub zeno: Option<String>,
+
     // =========================================================================
     // G8T.IS RUST FUNCTION CAPSULES, YOLO FASTEST-PICK & FOKEN SCOREBOARD
     // =========================================================================
@@ -1030,6 +1034,16 @@ pub enum OutputMode {
         alias = "do-loop"
     )]
     UltraBackyard,
+    /// Sovereign ULTRA-OMNI-ZENO v11 (upz/wupz 64B@0x62 LitanyWireFrame, BFP-64 Kleene bitplanes, SPQT base-243, and 8b-is-[engines])
+    #[value(
+        name = "zeno",
+        alias = "ultra-omni-zeno",
+        alias = "upz",
+        alias = "wupz",
+        alias = "8b-is",
+        alias = "8b-engines"
+    )]
+    Zeno,
     /// Emotional tree - files with feelings!
     Emotional,
     /// MEM|8 Quantum format - ultimate compression
@@ -1074,7 +1088,8 @@ pub fn get_ideal_depth_for_mode(mode: &OutputMode) -> usize {
         | OutputMode::Louds
         | OutputMode::TheBook
         | OutputMode::Pq
-        | OutputMode::UltraBackyard => 10,
+        | OutputMode::UltraBackyard
+        | OutputMode::Zeno => 10,
         OutputMode::Emotional => 5,
         OutputMode::Quantum | OutputMode::QuantumSemantic | OutputMode::HexTree => 5,
         OutputMode::Summary | OutputMode::SummaryAi | OutputMode::Context => 4,

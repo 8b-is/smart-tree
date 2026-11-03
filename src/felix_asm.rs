@@ -313,7 +313,33 @@ pub fn felix_normalize_f64_slice(vec: &mut [f64]) -> f64 {
         sum.sqrt()
     };
 
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(target_arch = "x86_64")]
+    let norm = unsafe {
+        use core::arch::x86_64::*;
+        let ptr = vec.as_ptr();
+        let mut acc0 = _mm_setzero_pd();
+        let mut acc1 = _mm_setzero_pd();
+        let mut i = 0usize;
+        while i + 4 <= n {
+            let v0 = _mm_loadu_pd(ptr.add(i));
+            let v1 = _mm_loadu_pd(ptr.add(i + 2));
+            acc0 = _mm_add_pd(acc0, _mm_mul_pd(v0, v0));
+            acc1 = _mm_add_pd(acc1, _mm_mul_pd(v1, v1));
+            i += 4;
+        }
+        let total = _mm_add_pd(acc0, acc1);
+        let mut lanes = [0.0_f64; 2];
+        _mm_storeu_pd(lanes.as_mut_ptr(), total);
+        let mut sum = lanes[0] + lanes[1];
+        while i < n {
+            let x = *ptr.add(i);
+            sum += x * x;
+            i += 1;
+        }
+        sum.sqrt()
+    };
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     let norm = {
         let mut acc0 = 0.0_f64;
         let mut acc1 = 0.0_f64;
@@ -355,7 +381,26 @@ pub fn felix_normalize_f64_slice(vec: &mut [f64]) -> f64 {
         }
     }
 
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use core::arch::x86_64::*;
+        let ptr = vec.as_mut_ptr();
+        let vscale = _mm_set1_pd(inv_norm);
+        let mut i = 0usize;
+        while i + 4 <= n {
+            let v0 = _mm_loadu_pd(ptr.add(i));
+            let v1 = _mm_loadu_pd(ptr.add(i + 2));
+            _mm_storeu_pd(ptr.add(i), _mm_mul_pd(v0, vscale));
+            _mm_storeu_pd(ptr.add(i + 2), _mm_mul_pd(v1, vscale));
+            i += 4;
+        }
+        while i < n {
+            *ptr.add(i) *= inv_norm;
+            i += 1;
+        }
+    }
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     {
         for x in vec.iter_mut() {
             *x *= inv_norm;
@@ -365,10 +410,10 @@ pub fn felix_normalize_f64_slice(vec: &mut [f64]) -> f64 {
     norm
 }
 
-/// Branchless 16-byte SIMD ASCII lowercase conversion (`'A'..='Z'` $\to$ `'a'..='z'`).
+/// Branchless 16-byte SIMD / SWAR-64 ASCII lowercase conversion (`'A'..='Z'` $\to$ `'a'..='z'`).
 ///
 /// Used by `Scanner::get_file_category` to classify file extensions in a single register pass
-/// without branches or heap allocations.
+/// without branches or heap allocations across all CPU architectures.
 #[inline(always)]
 pub fn felix_ascii_lowercase_16b(src: &[u8]) -> ([u8; 16], usize) {
     let len = src.len().min(16);
@@ -390,10 +435,24 @@ pub fn felix_ascii_lowercase_16b(src: &[u8]) -> ([u8; 16], usize) {
 
     #[cfg(not(target_arch = "aarch64"))]
     {
-        for slot in &mut buf[..len] {
-            let is_upper = (*slot >= b'A') & (*slot <= b'Z');
-            *slot |= (is_upper as u8) << 5;
+        // CPU-agnostic 64-bit SWAR (SIMD Within A Register) branchless ASCII lowercase:
+        // Processes 8 bytes per u64 register (2 registers = 16 bytes) in pure integer ALU ops.
+        #[inline(always)]
+        const fn swar_ascii_lower_u64(w: u64) -> u64 {
+            let ascii_mask = (w & 0x8080_8080_8080_8080) ^ 0x8080_8080_8080_8080;
+            let ge_a = (w | 0x8080_8080_8080_8080).wrapping_sub(0x4141_4141_4141_4141);
+            let le_z = 0xDA_DA_DA_DA_DA_DA_DA_DAu64.wrapping_add(w | 0x8080_8080_8080_8080);
+            let upper_hi = ascii_mask & ge_a & !le_z & 0x8080_8080_8080_8080;
+            w | (upper_hi >> 2)
         }
+        let mut lo = [0u8; 8];
+        let mut hi = [0u8; 8];
+        lo.copy_from_slice(&buf[0..8]);
+        hi.copy_from_slice(&buf[8..16]);
+        let lo_out = swar_ascii_lower_u64(u64::from_le_bytes(lo)).to_le_bytes();
+        let hi_out = swar_ascii_lower_u64(u64::from_le_bytes(hi)).to_le_bytes();
+        buf[0..8].copy_from_slice(&lo_out);
+        buf[8..16].copy_from_slice(&hi_out);
     }
 
     (buf, len)
@@ -641,7 +700,26 @@ pub fn felix_normalize64_f32(vec: &mut [f32; 64]) -> f32 {
         }
     }
 
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use core::arch::x86_64::*;
+        let pv = vec.as_mut_ptr();
+        let vinv = _mm_set1_ps(inv);
+        let mut offset = 0usize;
+        while offset < 64 {
+            let v0 = _mm_loadu_ps(pv.add(offset));
+            let v1 = _mm_loadu_ps(pv.add(offset + 4));
+            let v2 = _mm_loadu_ps(pv.add(offset + 8));
+            let v3 = _mm_loadu_ps(pv.add(offset + 12));
+            _mm_storeu_ps(pv.add(offset), _mm_mul_ps(v0, vinv));
+            _mm_storeu_ps(pv.add(offset + 4), _mm_mul_ps(v1, vinv));
+            _mm_storeu_ps(pv.add(offset + 8), _mm_mul_ps(v2, vinv));
+            _mm_storeu_ps(pv.add(offset + 12), _mm_mul_ps(v3, vinv));
+            offset += 16;
+        }
+    }
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     {
         for slot in vec.iter_mut() {
             *slot *= inv;
@@ -693,6 +771,349 @@ pub fn felix_holder_pq_dual_norm_f64(vec: &mut [f64], p_num: u32, p_den: u32) ->
         }
     }
     norm_q
+}
+
+// =========================================================================
+// ULTRA-OMNI-ZENO v11: CPU-AGNOSTIC PORTABLE REGISTER ISA (`upz` / `wupz` / `8b-is-engine`)
+// =========================================================================
+
+/// Reports the active CPU-agnostic hardware register/vector assembly backend.
+#[inline(always)]
+pub const fn felix_cpu_isa_profile() -> &'static str {
+    #[cfg(target_arch = "aarch64")]
+    {
+        "aarch64-neon+asm (AdvSIMD 128b + rbit/clz/cnt)"
+    }
+    #[cfg(target_arch = "x86_64")]
+    {
+        "x86_64-sse2+bmi+popcnt (XMM 128b + tzcnt/lzcnt)"
+    }
+    #[cfg(target_arch = "riscv64")]
+    {
+        "riscv64-swar64+zbb (64-bit register SWAR)"
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        "wasm32-swar64+simd128 (portable WASM register lane)"
+    }
+    #[cfg(not(any(
+        target_arch = "aarch64",
+        target_arch = "x86_64",
+        target_arch = "riscv64",
+        target_arch = "wasm32"
+    )))]
+    {
+        "swar64-cpu-agnostic (portable 64-bit register ALU)"
+    }
+}
+
+/// Hardware 64-bit leading-zero count (`clz` on aarch64, `bsr`/`lzcnt` on x86_64, `leading_zeros` portable).
+#[inline(always)]
+pub fn felix_lzcnt_u64(x: u64) -> u32 {
+    #[cfg(target_arch = "aarch64")]
+    {
+        let out: u64;
+        // SAFETY: `clz` is a pure 1-cycle register-to-register AArch64 base instruction.
+        unsafe {
+            core::arch::asm!(
+                "clz {out}, {inp}",
+                inp = in(reg) x,
+                out = lateout(reg) out,
+                options(pure, nomem, nostack),
+            );
+        }
+        out as u32
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        x.leading_zeros()
+    }
+}
+
+/// Exact integer square root $\lfloor\sqrt{n}\rfloor$ with zero IEEE-754 floating-point operations.
+///
+/// Seeds Newton–Raphson via hardware `felix_lzcnt_u64` (`1u64 << ((64 - clz(n)) / 2)`), converging
+/// in at most 5 integer steps (`wupz-core` / `upz` parity).
+#[inline(always)]
+pub fn felix_isqrt_u64(n: u64) -> u64 {
+    if n < 2 {
+        return n;
+    }
+    let bit_len = 64 - felix_lzcnt_u64(n);
+    let mut x = 1u64 << ((bit_len + 1) >> 1);
+    loop {
+        let y = (x + n / x) >> 1;
+        if y >= x {
+            return x;
+        }
+        x = y;
+    }
+}
+
+/// CPU-agnostic 4-lane register-unrolled 64-bit XOR integrity fold (`wupz_xor_fold` / `upz` bit-exact).
+///
+/// Folds 32 bytes (4 `u64` registers) per iteration with deferred reduction, then folds trailing
+/// 8-byte words and tail bytes into the low bits so output matches `wupz::fold::xor_fold_scalar`
+/// bit-for-bit across all buffer lengths `0..=N`.
+#[inline(always)]
+pub fn felix_xor_fold_64b(bytes: &[u8]) -> u64 {
+    let len = bytes.len();
+    let full_words_len = len & !7usize;
+    let mut acc0 = 0u64;
+    let mut acc1 = 0u64;
+    let mut acc2 = 0u64;
+    let mut acc3 = 0u64;
+    let mut i = 0usize;
+
+    while i + 32 <= full_words_len {
+        let w0 = u64::from_le_bytes([
+            bytes[i],
+            bytes[i + 1],
+            bytes[i + 2],
+            bytes[i + 3],
+            bytes[i + 4],
+            bytes[i + 5],
+            bytes[i + 6],
+            bytes[i + 7],
+        ]);
+        let w1 = u64::from_le_bytes([
+            bytes[i + 8],
+            bytes[i + 9],
+            bytes[i + 10],
+            bytes[i + 11],
+            bytes[i + 12],
+            bytes[i + 13],
+            bytes[i + 14],
+            bytes[i + 15],
+        ]);
+        let w2 = u64::from_le_bytes([
+            bytes[i + 16],
+            bytes[i + 17],
+            bytes[i + 18],
+            bytes[i + 19],
+            bytes[i + 20],
+            bytes[i + 21],
+            bytes[i + 22],
+            bytes[i + 23],
+        ]);
+        let w3 = u64::from_le_bytes([
+            bytes[i + 24],
+            bytes[i + 25],
+            bytes[i + 26],
+            bytes[i + 27],
+            bytes[i + 28],
+            bytes[i + 29],
+            bytes[i + 30],
+            bytes[i + 31],
+        ]);
+        acc0 ^= w0;
+        acc1 ^= w1;
+        acc2 ^= w2;
+        acc3 ^= w3;
+        i += 32;
+    }
+
+    let mut acc = (acc0 ^ acc1) ^ (acc2 ^ acc3);
+    while i + 8 <= full_words_len {
+        let w = u64::from_le_bytes([
+            bytes[i],
+            bytes[i + 1],
+            bytes[i + 2],
+            bytes[i + 3],
+            bytes[i + 4],
+            bytes[i + 5],
+            bytes[i + 6],
+            bytes[i + 7],
+        ]);
+        acc ^= w;
+        i += 8;
+    }
+    while i < len {
+        acc ^= bytes[i] as u64;
+        i += 1;
+    }
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+    acc
+}
+
+/// CPU-agnostic 16-byte SIMD / 8-byte SWAR branchless byte-difference counter (`wupz_byte_diff` bit-exact).
+///
+/// Counts how many positions `i in 0..a.len().min(b.len())` satisfy `a[i] != b[i]`.
+#[inline(always)]
+pub fn felix_byte_diff_64b(a: &[u8], b: &[u8]) -> u64 {
+    let n = a.len().min(b.len());
+    let mut i = 0usize;
+    let mut count = 0u64;
+
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        use core::arch::aarch64::*;
+        let pa = a.as_ptr();
+        let pb = b.as_ptr();
+        let ones = vdupq_n_u8(1);
+        while i + 16 <= n {
+            let va = vld1q_u8(pa.add(i));
+            let vb = vld1q_u8(pb.add(i));
+            let eq = vceqq_u8(va, vb);
+            let neq = vmvnq_u8(eq);
+            let bits = vandq_u8(neq, ones);
+            count += vaddlvq_u8(bits) as u64;
+            i += 16;
+        }
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        use core::arch::x86_64::*;
+        let pa = a.as_ptr();
+        let pb = b.as_ptr();
+        while i + 16 <= n {
+            let va = _mm_loadu_si128(pa.add(i) as *const __m128i);
+            let vb = _mm_loadu_si128(pb.add(i) as *const __m128i);
+            let eq = _mm_cmpeq_epi8(va, vb);
+            let eq_mask = (_mm_movemask_epi8(eq) as u32) & 0xFFFF;
+            let neq_mask = (!eq_mask) & 0xFFFF;
+            count += felix_popcnt_u64(neq_mask as u64) as u64;
+            i += 16;
+        }
+    }
+
+    // CPU-agnostic 64-bit SWAR (8 bytes at a time): Collapse non-zero XOR bytes into bit 7 of each byte,
+    // then count set high bits with `felix_popcnt_u64`.
+    while i + 8 <= n {
+        let wa = u64::from_le_bytes([
+            a[i],
+            a[i + 1],
+            a[i + 2],
+            a[i + 3],
+            a[i + 4],
+            a[i + 5],
+            a[i + 6],
+            a[i + 7],
+        ]);
+        let wb = u64::from_le_bytes([
+            b[i],
+            b[i + 1],
+            b[i + 2],
+            b[i + 3],
+            b[i + 4],
+            b[i + 5],
+            b[i + 6],
+            b[i + 7],
+        ]);
+        let diff = wa ^ wb;
+        let nz = ((diff & 0x7F7F_7F7F_7F7F_7F7F).wrapping_add(0x7F7F_7F7F_7F7F_7F7F) | diff)
+            & 0x8080_8080_8080_8080;
+        count += felix_popcnt_u64(nz) as u64;
+        i += 8;
+    }
+
+    while i < n {
+        count += (a[i] != b[i]) as u64;
+        i += 1;
+    }
+    count
+}
+
+/// Precomputed 18-stage integer CORDIC `atan(2^-i)` table in $\mathbb{Z}_{2^{32}}$ (`2*pi == 2^32`).
+/// Zero floating-point operations at compile time or runtime (`wupz-core` / `upz` parity).
+pub const FELIX_CORDIC_ATAN_U32: [u32; 18] = [
+    536_870_912,
+    316_933_406,
+    167_458_907,
+    85_004_756,
+    42_667_331,
+    21_354_465,
+    10_679_838,
+    5_340_245,
+    2_670_163,
+    1_335_087,
+    667_544,
+    333_772,
+    166_886,
+    83_443,
+    41_722,
+    20_861,
+    10_430,
+    5_215,
+];
+
+/// Branchless 18-stage integer CORDIC `atan2(y, x)` in $\mathbb{Z}_{2^{32}}$ (`2*pi == 2^32`).
+///
+/// Uses arithmetic right-shift sign masks (`sgn_mask = y_cur >> 63`) so all 18 micro-rotations
+/// execute without a single conditional branch (`wupz_cordic_atan2_u32` bit-exact).
+#[inline(always)]
+pub const fn felix_cordic_atan2_u32(y: i32, x: i32) -> u32 {
+    if x == 0 && y == 0 {
+        return 0;
+    }
+    let xi = x as i64;
+    let yi = y as i64;
+    let (mut x_cur, mut y_cur, mut angle): (i64, i64, u32) = if xi >= 0 {
+        (xi << 16, yi << 16, 0)
+    } else if yi >= 0 {
+        (yi << 16, (-xi) << 16, 1u32 << 30)
+    } else {
+        ((-yi) << 16, xi << 16, 3u32 << 30)
+    };
+
+    let mut i = 0usize;
+    while i < 18 {
+        let x_shift = x_cur >> i;
+        let y_shift = y_cur >> i;
+        let step = FELIX_CORDIC_ATAN_U32[i];
+        // Branchless sign mask: 0 if y_cur >= 0, -1 (all 1s) if y_cur < 0
+        let neg_mask = y_cur >> 63;
+        let dx = (y_shift ^ neg_mask).wrapping_sub(neg_mask);
+        let dy = (x_shift ^ neg_mask).wrapping_sub(neg_mask);
+        x_cur = x_cur.wrapping_add(dx);
+        y_cur = y_cur.wrapping_sub(dy);
+        let step_signed = (step ^ (neg_mask as u32)).wrapping_sub(neg_mask as u32);
+        angle = angle.wrapping_add(step_signed);
+        i += 1;
+    }
+    angle
+}
+
+/// Bit-exact 1.58-bit (`{-1, 0, +1}`) integer GEMM dot-product (`8b-is-engine/crates/ternary`).
+///
+/// Computes $\sum_i \text{acts}[i] \cdot \text{trits}[i]$ in exact `i32` integer arithmetic using
+/// 4-way unrolled branchless sign/zero bitmasks (`0` multiplications, `0` branches, `0` floats).
+/// Produces the exact same `i32` sum across AArch64, x86_64, RISC-V, and WASM.
+#[inline(always)]
+pub fn felix_ternary_gemm_i32(acts: &[i16], trits: &[i8]) -> i32 {
+    let n = acts.len().min(trits.len());
+    let mut acc0 = 0i32;
+    let mut acc1 = 0i32;
+    let mut acc2 = 0i32;
+    let mut acc3 = 0i32;
+
+    #[inline(always)]
+    const fn trit_mul_branchless(a: i16, t: i8) -> i32 {
+        let ai = a as i32;
+        let ti = t as i32;
+        let nz_mask = -((ti != 0) as i32);
+        let neg_mask = ti >> 31;
+        ((ai ^ neg_mask).wrapping_sub(neg_mask)) & nz_mask
+    }
+
+    let mut i = 0usize;
+    while i + 4 <= n {
+        acc0 = acc0.wrapping_add(trit_mul_branchless(acts[i], trits[i]));
+        acc1 = acc1.wrapping_add(trit_mul_branchless(acts[i + 1], trits[i + 1]));
+        acc2 = acc2.wrapping_add(trit_mul_branchless(acts[i + 2], trits[i + 2]));
+        acc3 = acc3.wrapping_add(trit_mul_branchless(acts[i + 3], trits[i + 3]));
+        i += 4;
+    }
+    let mut total = acc0
+        .wrapping_add(acc1)
+        .wrapping_add(acc2.wrapping_add(acc3));
+    while i < n {
+        total = total.wrapping_add(trit_mul_branchless(acts[i], trits[i]));
+        i += 1;
+    }
+    total
 }
 
 #[cfg(test)]
@@ -808,5 +1229,53 @@ mod tests {
         let mut dual = vec![4.0_f64, -9.0_f64];
         let q_norm = felix_holder_pq_dual_norm_f64(&mut dual, 3, 2);
         assert!(q_norm > 0.0);
+    }
+
+    #[test]
+    fn test_felix_zeno_v11_xor_fold_byte_diff_cordic_isqrt_and_ternary_gemm() {
+        assert!(!felix_cpu_isa_profile().is_empty());
+        assert_eq!(felix_isqrt_u64(0), 0);
+        assert_eq!(felix_isqrt_u64(1), 1);
+        assert_eq!(felix_isqrt_u64(15), 3);
+        assert_eq!(felix_isqrt_u64(16), 4);
+        assert_eq!(felix_isqrt_u64(10_000_000_000), 100_000);
+
+        // Verify bit-for-bit parity with wupz::fold::xor_fold_scalar across lengths 0..=97
+        let sample: Vec<u8> = (0..97).map(|i| (i * 37 + 11) as u8).collect();
+        for len in 0..=sample.len() {
+            let slice = &sample[..len];
+            let full_words_len = slice.len() & !7usize;
+            let mut expected = 0u64;
+            for i in 0..full_words_len {
+                expected ^= (slice[i] as u64) << ((i & 7) * 8);
+            }
+            for &b in &slice[full_words_len..] {
+                expected ^= b as u64;
+            }
+            assert_eq!(felix_xor_fold_64b(slice), expected, "mismatch at len {len}");
+        }
+
+        // Verify felix_byte_diff_64b parity across SIMD + SWAR + scalar tail
+        let a = vec![0x42u8; 75];
+        let mut b = a.clone();
+        b[0] = 0x11;
+        b[15] = 0x22;
+        b[23] = 0x33;
+        b[64] = 0x44;
+        b[74] = 0x55;
+        assert_eq!(felix_byte_diff_64b(&a, &b), 5);
+
+        // Verify 18-stage integer CORDIC atan2 in Z_{2^32} (exact wupz-core parity)
+        assert_eq!(felix_cordic_atan2_u32(0, 0), 0);
+        assert_eq!(felix_cordic_atan2_u32(0, 1000), 3617);
+        let q1 = felix_cordic_atan2_u32(1000, 1000);
+        // 45 deg = 2^32 / 8 = 536_870_912
+        assert!((q1 as i64 - 536_870_912).abs() < 200_000);
+
+        // Verify bit-exact 1.58-bit ternary GEMM
+        let acts = [100i16, -50, 25, 10, -30, 7];
+        let trits = [1i8, -1, 0, 1, 1, -1];
+        // 100*(1) + (-50)*(-1) + 25*(0) + 10*(1) + (-30)*(1) + 7*(-1) = 100 + 50 + 0 + 10 - 30 - 7 = 123
+        assert_eq!(felix_ternary_gemm_i32(&acts, &trits), 123);
     }
 }
