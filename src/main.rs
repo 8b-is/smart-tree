@@ -470,6 +470,19 @@ async fn main() -> Result<()> {
     if let Some(hash) = &cli.hash_lookup {
         return handle_hash_lookup(hash);
     }
+    if let Some(path) = &cli.erdos_anomaly {
+        return st::cli_commands::handle_erdos_anomaly_scan(path).await;
+    }
+    if let Some(path) = &cli.ramsey_cliques {
+        return st::cli_commands::handle_ramsey_cliques_scan(path).await;
+    }
+    if let Some(path) = &cli.erdos_center {
+        return st::cli_commands::handle_erdos_center_scan(path).await;
+    }
+    if let Some(num_wt) = cli.erdos_split {
+        let target_path = cli.path.as_deref().unwrap_or(".");
+        return st::cli_commands::handle_erdos_worktree_split(target_path, num_wt).await;
+    }
 
     // Handle Google Drive / Sync commands
     if let Some(action) = &cli.gdrive {

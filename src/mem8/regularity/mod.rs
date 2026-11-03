@@ -30,8 +30,9 @@ pub use erdos_renyi::{
     MonochromaticClique, PhaseRegime, RamseyCliqueReport, RamseyEdgeColor, SymbolHazardFlags,
 };
 pub use erdos_steiner::{
-    decode_fp16, extract_t8r_virtual_bridges, prune_context_erdos_steiner, ErdosSteinerConfig,
-    ErdosSteinerSlice, SteinerClusterNode,
+    compute_erdos_center_and_turan, decode_fp16, extract_t8r_virtual_bridges,
+    prune_context_erdos_steiner, ErdosCenterTuranReport, ErdosSteinerConfig, ErdosSteinerSlice,
+    SteinerClusterNode,
 };
 pub use mmap_view::ZeroCopyMem8Book;
 pub use moser_tardos::{
@@ -59,6 +60,7 @@ pub struct TheBookPipelineReport {
     pub m8b_wire_bytes: usize,
     pub t8r_wire_bytes: usize,
     pub steiner_slice: ErdosSteinerSlice,
+    pub center_turan_report: ErdosCenterTuranReport,
     pub worktree_schedule: MoserTardosSchedule,
     pub security_report: ErdosRenyiSecurityReport,
     pub ramsey_report: RamseyCliqueReport,
@@ -97,6 +99,8 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         None,
         ErdosSteinerConfig::default(),
     );
+    let center_turan_report =
+        compute_erdos_center_and_turan(&zero_copy_book, graph.num_vertices, graph.num_edges);
 
     let hg = build_hypergraph_from_steiner_slices(
         &zero_copy_book,
@@ -153,6 +157,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         m8b_wire_bytes: aligned_bytes.len(),
         archive,
         steiner_slice,
+        center_turan_report,
         worktree_schedule,
         security_report,
         ramsey_report,

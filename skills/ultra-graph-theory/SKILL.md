@@ -72,14 +72,34 @@ This skill treats **all four frontier model families** and **all four terminal/I
   2. Tracks **Component Excess / Cyclomatic Surplus** $s(C) = |E(C)| - |V(C)| + 1$ in $O(\alpha(n))$ time via Path-Compressing Union-Find (`uf_union_with_excess`).
   3. Computes **Chernoff–Erdős KL Log-Surprise** $\Lambda(C)$ in nats, **Füredi–Komlós Spectral Radius** $\lambda_1(A_{\text{shadow}})$ vs. `expected_random_lambda1` ($\max(c, \sqrt{\Delta_{\max}})$), **Top-5 Eigenvector Centrality `pivot_symbols`**, and iterative Tarjan `directed_scc_cycles`.
 
-### Pillar V: Ramsey-Theoretic Monochromatic Clique Detector
-- **Theorem (Ramsey 1930):** Since $R(3, 3) = 6$ and $R(3, 3, 3) = 17$, any sufficiently dense multi-relational subsystem inevitably contains monochromatic $K_3$ or $K_4$ cliques.
-- **Implementation (`scan_ramsey_monochromatic_cliques`):**
+### Pillar V: Ramsey-Theoretic Monochromatic Cliques & Turán Extremal Theorem
+- **Theorem (Ramsey 1930; Turán 1941; Erdős–Stone–Simonovits 1946):**
+  - **Ramsey:** Since $R(3, 3) = 6$ and $R(3, 3, 3) = 17$, any sufficiently dense multi-relational subsystem inevitably contains monochromatic $K_3$ or $K_4$ cliques.
+  - **Turán:** Any $K_{r+1}$-free graph on $n$ vertices has at most $\text{ex}(n; K_{r+1}) = (1 - 1/r) \frac{n^2}{2}$ edges (achieved uniquely by the $r$-partite Turán graph $T(n, r)$). By the **Erdős–Stone–Simonovits Theorem**, exceeding this density guarantees dense multi-layer architectural entanglement ($\hat{\chi}(G) > r$).
+- **Implementation (`scan_ramsey_monochromatic_cliques` & `compute_erdos_center_and_turan`):**
   - Colors edges into **Red (`RedSyncLock`: blocking calls/locks)**, **Blue (`BlueSharedState`: shared mutable state)**, and **Green (`GreenModuleCoupling`: circular trait/type bounds)** and extracts $K_3$/$K_4$ cliques via sorted neighbor-list binary intersection.
+  - Computes the **Erdős Center $Z(R)$**, **Graph Radius**, **Graph Diameter**, **Turán $K_5$-free Extremal Bound**, and **Erdős–Stone Chromatic Number $\hat{\chi}(G)$**.
 
 ---
 
-## 3. Step-by-Step Agent Workflow
+## 3. Direct CLI Commands & Step-by-Step Agent Workflow
+
+```bash
+# 1. Full 5-Pillar Paul Erdős "Straight from The Book" JSON Diagnostic:
+st --mode the-book .
+
+# 2. Erdős–Rényi Cross-Boundary Shadow Graph (G_shadow) Supply-Chain Anomaly Scan:
+st --erdos-anomaly .
+
+# 3. Ramsey Monochromatic Cliques (Red/Blue/Green K_3 & K_4) + Turán Extremal Audit:
+st --ramsey-cliques .
+
+# 4. Erdős Center Z(G), Graph Radius/Diameter & Voronoi Steiner Context Backbone:
+st --erdos-center .
+
+# 5. Moser–Tardos Constructive LLL Parallel Worktree Splitter (auto-scales C if needed):
+st --erdos-split 4 .
+```
 
 Whenever you are asked to **comprehend a large repo, plan a multi-agent refactor, prune LLM context, or audit supply-chain security**:
 

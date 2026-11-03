@@ -342,6 +342,182 @@ pub async fn handle_security_scan(path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Run the Paul Erdős–Rényi Phase-Transition & Cross-Boundary Shadow Graph (`G_shadow`) Supply-Chain Anomaly Detector
+pub async fn handle_erdos_anomaly_scan(path: &str) -> Result<()> {
+    use crate::mem8::regularity::analyze_the_book_pipeline;
+    use crate::scanner::{Scanner, ScannerConfig};
+    use std::path::Path;
+
+    let scan_path = Path::new(path);
+    let config = ScannerConfig {
+        max_depth: 6,
+        ..Default::default()
+    };
+    let scanner = Scanner::new(scan_path, config)?;
+    let (nodes, _) = scanner.scan()?;
+    let report = analyze_the_book_pipeline(&nodes);
+    let sec = &report.security_report;
+
+    let payload = serde_json::json!({
+        "spec": "ERDOS-RENYI-SHADOW-GRAPH-v1.0",
+        "path": scan_path.display().to_string(),
+        "num_vertices": sec.num_vertices,
+        "num_edges": sec.num_edges,
+        "active_shadow_vertices": sec.active_vertices,
+        "shadow_edges": sec.shadow_edges,
+        "empirical_p": sec.empirical_p,
+        "critical_p_c": sec.critical_p_c,
+        "critical_scale_n_two_thirds": (sec.critical_scale_n_two_thirds * 1000.0).round() / 1000.0,
+        "mean_degree_c": (sec.mean_degree_c * 1000.0).round() / 1000.0,
+        "molloy_reed_kappa": (sec.molloy_reed_kappa * 1000.0).round() / 1000.0,
+        "spectral_radius_lambda1": (sec.spectral_radius_lambda1 * 1000.0).round() / 1000.0,
+        "expected_random_lambda1": (sec.expected_random_lambda1 * 1000.0).round() / 1000.0,
+        "giant_component_c1": sec.giant_component_size,
+        "second_component_c2_susceptibility": sec.second_component_size,
+        "phase_regime": format!("{:?}", sec.regime),
+        "anomalies": sec.anomalies.iter().map(|a| serde_json::json!({
+            "component_id": a.component_id,
+            "vertex_count": a.vertex_count,
+            "edge_count": a.edge_count,
+            "cyclomatic_excess_s_c": a.cyclomatic_excess,
+            "directed_scc_cycles": a.directed_scc_cycles,
+            "erdos_log_surprise_nats": (a.erdos_log_surprise_nats * 1000.0).round() / 1000.0,
+            "spectral_radius": (a.spectral_radius * 1000.0).round() / 1000.0,
+            "hazard_bits": a.combined_hazards.bits(),
+            "pivot_symbols": a.pivot_symbols,
+        })).collect::<Vec<_>>(),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+/// Run the Ramsey-Theoretic Monochromatic Clique Detector & Turán Extremal Theorem Audit
+pub async fn handle_ramsey_cliques_scan(path: &str) -> Result<()> {
+    use crate::mem8::regularity::analyze_the_book_pipeline;
+    use crate::scanner::{Scanner, ScannerConfig};
+    use std::path::Path;
+
+    let scan_path = Path::new(path);
+    let config = ScannerConfig {
+        max_depth: 6,
+        ..Default::default()
+    };
+    let scanner = Scanner::new(scan_path, config)?;
+    let (nodes, _) = scanner.scan()?;
+    let report = analyze_the_book_pipeline(&nodes);
+
+    let payload = serde_json::json!({
+        "spec": "RAMSEY-TURAN-EXTREMAL-v1.0",
+        "path": scan_path.display().to_string(),
+        "ramsey_r_3_3_3": report.ramsey_report.ramsey_number_r333,
+        "red_sync_lock_cliques": report.ramsey_report.red_cliques,
+        "blue_mutable_state_cliques": report.ramsey_report.blue_cliques,
+        "green_module_coupling_cliques": report.ramsey_report.green_cliques,
+        "top_cliques": report.ramsey_report.top_cliques.iter().map(|c| serde_json::json!({
+            "color": c.color.label(),
+            "order_k": c.order_k,
+            "vertices": c.vertices,
+        })).collect::<Vec<_>>(),
+        "turan_extremal_theorem": {
+            "turan_ex_k5_bound_edges": report.center_turan_report.turan_ex_k5_edges,
+            "turan_density_ratio": (report.center_turan_report.turan_density_ratio * 10000.0).round() / 10000.0,
+            "erdos_stone_chromatic_bound_chi": report.center_turan_report.erdos_stone_chromatic_bound,
+        }
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+/// Compute the Erdős Center `Z(G)`, Graph Radius/Diameter, and Voronoi Steiner Context Backbone
+pub async fn handle_erdos_center_scan(path: &str) -> Result<()> {
+    use crate::mem8::regularity::analyze_the_book_pipeline;
+    use crate::scanner::{Scanner, ScannerConfig};
+    use std::path::Path;
+
+    let scan_path = Path::new(path);
+    let config = ScannerConfig {
+        max_depth: 6,
+        ..Default::default()
+    };
+    let scanner = Scanner::new(scan_path, config)?;
+    let (nodes, _) = scanner.scan()?;
+    let report = analyze_the_book_pipeline(&nodes);
+
+    let payload = serde_json::json!({
+        "spec": "ERDOS-CENTER-STEINER-v1.0",
+        "path": scan_path.display().to_string(),
+        "graph_radius_hops": report.center_turan_report.graph_radius_hops,
+        "graph_diameter_hops": report.center_turan_report.graph_diameter_hops,
+        "erdos_center_clusters_z_g": report.center_turan_report.center_clusters,
+        "periphery_clusters": report.center_turan_report.periphery_clusters,
+        "focal_terminals": report.steiner_slice.root_terminals,
+        "estimated_llm_tokens": report.steiner_slice.estimated_tokens,
+        "exact_v0_bridges": report.steiner_slice.exact_bridge_symbols,
+        "steiner_backbone": report.steiner_slice.steiner_super_nodes.iter().map(|n| serde_json::json!({
+            "cluster_id": n.cluster_id,
+            "erdos_number": n.erdos_number,
+            "resistance_dist": (n.resistance_dist * 1000.0).round() / 1000.0,
+            "anchor_symbols": n.anchor_symbols,
+            "expand_full_symbols": n.expand_full_symbols,
+        })).collect::<Vec<_>>(),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+/// Run the Constructive Lovász Local Lemma (Moser–Tardos) Parallel Agent Worktree Splitter
+pub async fn handle_erdos_worktree_split(path: &str, num_worktrees: u16) -> Result<()> {
+    use crate::mem8::regularity::{
+        build_hypergraph_from_steiner_slices, compress_symbol_graph_to_mem8,
+        prune_context_erdos_steiner, seed_from_mem8_header, solve_moser_tardos_auto_scale,
+        CsrSymbolGraph, ErdosSteinerConfig, RegularityConfig, ZeroCopyMem8Book,
+    };
+    use crate::scanner::{Scanner, ScannerConfig};
+    use std::path::Path;
+
+    let scan_path = Path::new(path);
+    let config = ScannerConfig {
+        max_depth: 6,
+        ..Default::default()
+    };
+    let scanner = Scanner::new(scan_path, config)?;
+    let (nodes, _) = scanner.scan()?;
+    let (graph, initial_partition) = CsrSymbolGraph::from_file_nodes(&nodes);
+    let archive =
+        compress_symbol_graph_to_mem8(&graph, initial_partition, RegularityConfig::default());
+    let book = ZeroCopyMem8Book::from_archive(&archive);
+
+    let focal_roots: Vec<u32> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| !n.is_dir && !n.is_ignored)
+        .take(3)
+        .map(|(i, _)| i as u32)
+        .collect();
+    let steiner =
+        prune_context_erdos_steiner(&book, &focal_roots, None, ErdosSteinerConfig::default());
+    let hg = build_hypergraph_from_steiner_slices(&book, std::slice::from_ref(&steiner), 0.35);
+    let seed = seed_from_mem8_header(&archive.model_digest, 0xE2D0_5B00);
+    let sched = solve_moser_tardos_auto_scale(&hg, num_worktrees, true, seed, 1024);
+
+    let payload = serde_json::json!({
+        "spec": "MOSER-TARDOS-LLL-WORKTREES-v1.0",
+        "path": scan_path.display().to_string(),
+        "requested_worktrees": num_worktrees,
+        "effective_worktrees": sched.num_worktrees,
+        "lll_guaranteed_a_priori": sched.lll_guaranteed_a_priori,
+        "is_conflict_free": sched.is_conflict_free,
+        "total_resamples": sched.total_resamples,
+        "parallel_mis_rounds": sched.parallel_rounds,
+        "max_witness_tree_depth": sched.max_witness_tree_depth,
+        "max_shearer_degree_delta": sched.max_dependency_degree,
+        "worktree_buckets": sched.worktree_buckets,
+        "witness_bottleneck_events": sched.witness_bottleneck_events,
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
 pub async fn handle_integrity_scan(path: &str, no_daemon: bool) -> Result<()> {
     use crate::config::StConfig;
     use crate::magiscanner::service::{print_reports, scan_path};

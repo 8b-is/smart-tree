@@ -243,6 +243,10 @@ pub struct Cli {
     #[arg(long, value_name = "SHA256", help_heading = "Security")]
     pub hash_lookup: Option<String>,
 
+    /// Run Paul Erdős–Rényi Phase-Transition & Cross-Boundary Shadow Graph (G_shadow) Supply-Chain Anomaly Detector
+    #[arg(long, value_name = "PATH", default_missing_value = ".", num_args = 0..=1, help_heading = "Security")]
+    pub erdos_anomaly: Option<String>,
+
     // =========================================================================
     // GOOGLE DRIVE & VOICE
     // =========================================================================
@@ -314,6 +318,18 @@ pub struct Cli {
     /// Get wave frequency for a directory
     #[arg(long, value_name = "PATH", help_heading = "Analysis")]
     pub get_frequency: Option<String>,
+
+    /// Detect Ramsey-Theoretic Monochromatic Cliques (K_3 / K_4 Red/Blue/Green) & Turán Extremal Density
+    #[arg(long, value_name = "PATH", default_missing_value = ".", num_args = 0..=1, help_heading = "Analysis")]
+    pub ramsey_cliques: Option<String>,
+
+    /// Compute Erdős Center Z(G), Graph Radius/Diameter, and Voronoi Steiner Context Backbone
+    #[arg(long, value_name = "PATH", default_missing_value = ".", num_args = 0..=1, help_heading = "Analysis")]
+    pub erdos_center: Option<String>,
+
+    /// Partition codebase into C conflict-free parallel agent worktrees via Constructive Lovász Local Lemma (Moser-Tardos)
+    #[arg(long, alias = "agent-split", value_name = "WORKTREES", default_missing_value = "4", num_args = 0..=1, help_heading = "Analysis")]
+    pub erdos_split: Option<u16>,
 
     // =========================================================================
     // G8T.IS RUST FUNCTION CAPSULES, YOLO FASTEST-PICK & FOKEN SCOREBOARD

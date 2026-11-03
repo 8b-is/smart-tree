@@ -440,3 +440,136 @@ pub fn decode_fp16(bits: u16) -> f32 {
     let f32_mant = mant << 13;
     f32::from_bits(sign | f32_exp | f32_mant)
 }
+
+/// Erdős Center $Z(G)$, Graph Radius/Diameter, and Turán Extremal Density Report
+#[derive(Debug, Clone)]
+pub struct ErdosCenterTuranReport {
+    /// Graph radius $\text{rad}(R) = \min_{u \in R} e(u)$ (in hops over the Reduced Graph $R$)
+    pub graph_radius_hops: u32,
+    /// Graph diameter $\text{diam}(R) = \max_{u \in R} e(u)$
+    pub graph_diameter_hops: u32,
+    /// Erdős Center $Z(R) = \{ C_i \mid e(C_i) = \text{rad}(R) \}$ (minimum-eccentricity core clusters)
+    pub center_clusters: Vec<ClusterId>,
+    /// Graph Periphery $\{ C_i \mid e(C_i) = \text{diam}(R) \}$ (maximum-eccentricity leaf clusters)
+    pub periphery_clusters: Vec<ClusterId>,
+    /// Turán extremal edge bound $\text{ex}(n; K_{r+1}) = (1 - 1/r) \cdot n^2 / 2$ for $r = 4$ architectural layers
+    pub turan_ex_k5_edges: usize,
+    /// Ratio of actual edges to Turán's $K_5$-free extremal bound ($> 1.0$ guarantees $K_5$ entanglement)
+    pub turan_density_ratio: f64,
+    /// Erdős–Stone–Simonovits effective chromatic number $\hat{\chi}(G)$
+    pub erdos_stone_chromatic_bound: usize,
+}
+
+/// Computes the Erdős Center $Z(R)$, Graph Radius/Diameter via All-Pairs BFS over the Reduced Graph $R$,
+/// and Turán's Extremal Theorem ($T(n, r)$) invariant for $r = 4$ canonical architectural layers.
+pub fn compute_erdos_center_and_turan(
+    book: &ZeroCopyMem8Book,
+    total_vertices: usize,
+    total_edges: usize,
+) -> ErdosCenterTuranReport {
+    let super_nodes = book.super_nodes();
+    let reduced_edges = book.reduced_edges();
+    let k = super_nodes.len();
+
+    // Turán extremal bound ex(n; K_{r+1}) for r = 4 architectural layers: (1 - 1/4) * n^2 / 2 = 3/8 * n^2
+    let r_layers = 4.0_f64;
+    let turan_ex_k5 =
+        (((1.0 - 1.0 / r_layers) * (total_vertices as f64) * (total_vertices as f64) * 0.5).ceil()
+            as usize)
+            .max(1);
+    let turan_ratio = (total_edges as f64) / (turan_ex_k5 as f64);
+
+    // Erdős–Stone–Simonovits effective chromatic number
+    let max_possible = (total_vertices * total_vertices.saturating_sub(1)).max(1) as f64 * 0.5;
+    let density = ((total_edges as f64) / max_possible).clamp(0.0, 0.99);
+    let erdos_stone_chi = ((1.0 / (1.0 - density)).ceil() as usize).clamp(2, 16);
+
+    if k == 0 {
+        return ErdosCenterTuranReport {
+            graph_radius_hops: 0,
+            graph_diameter_hops: 0,
+            center_clusters: Vec::new(),
+            periphery_clusters: Vec::new(),
+            turan_ex_k5_edges: turan_ex_k5,
+            turan_density_ratio: turan_ratio,
+            erdos_stone_chromatic_bound: erdos_stone_chi,
+        };
+    }
+
+    let max_cid = super_nodes
+        .iter()
+        .map(|s| s.cluster_id as usize)
+        .max()
+        .unwrap_or(0)
+        .max(k);
+    let mut adj: Vec<Vec<ClusterId>> = vec![Vec::new(); max_cid + 1];
+    for e in reduced_edges {
+        if (e.src_cluster as usize) <= max_cid && (e.dst_cluster as usize) <= max_cid {
+            adj[e.src_cluster as usize].push(e.dst_cluster);
+            adj[e.dst_cluster as usize].push(e.src_cluster);
+        }
+    }
+
+    let mut eccentricities: Vec<(ClusterId, u32)> = Vec::with_capacity(k);
+    let mut bfs_dist = vec![u32::MAX; max_cid + 1];
+    let mut queue = Vec::with_capacity(k);
+
+    for sn in super_nodes {
+        let start = sn.cluster_id;
+        bfs_dist.fill(u32::MAX);
+        queue.clear();
+        bfs_dist[start as usize] = 0;
+        queue.push(start);
+
+        let mut head = 0;
+        let mut max_d = 0u32;
+        while head < queue.len() {
+            let u = queue[head];
+            head += 1;
+            let d = bfs_dist[u as usize];
+            if d > max_d {
+                max_d = d;
+            }
+            for &v in &adj[u as usize] {
+                if bfs_dist[v as usize] == u32::MAX {
+                    bfs_dist[v as usize] = d + 1;
+                    queue.push(v);
+                }
+            }
+        }
+        eccentricities.push((start, max_d));
+    }
+
+    let positive_ecc: Vec<u32> = eccentricities
+        .iter()
+        .map(|&(_, e)| e)
+        .filter(|&e| e > 0)
+        .collect();
+    let radius = positive_ecc
+        .iter()
+        .copied()
+        .min()
+        .unwrap_or_else(|| eccentricities.iter().map(|&(_, e)| e).min().unwrap_or(0));
+    let diameter = eccentricities.iter().map(|&(_, e)| e).max().unwrap_or(0);
+
+    let center_clusters: Vec<ClusterId> = eccentricities
+        .iter()
+        .filter(|&&(_, e)| e == radius)
+        .map(|&(cid, _)| cid)
+        .collect();
+    let periphery_clusters: Vec<ClusterId> = eccentricities
+        .iter()
+        .filter(|&&(_, e)| e == diameter)
+        .map(|&(cid, _)| cid)
+        .collect();
+
+    ErdosCenterTuranReport {
+        graph_radius_hops: radius,
+        graph_diameter_hops: diameter,
+        center_clusters,
+        periphery_clusters,
+        turan_ex_k5_edges: turan_ex_k5,
+        turan_density_ratio: turan_ratio,
+        erdos_stone_chromatic_bound: erdos_stone_chi,
+    }
+}

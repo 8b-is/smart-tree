@@ -210,6 +210,15 @@ impl Formatter for TheBookFormatter {
                 "estimated_llm_tokens": report.steiner_slice.estimated_tokens,
                 "exact_v0_bridges": report.steiner_slice.exact_bridge_symbols,
                 "steiner_backbone": steiner_backbone,
+                "graph_radius_hops": report.center_turan_report.graph_radius_hops,
+                "graph_diameter_hops": report.center_turan_report.graph_diameter_hops,
+                "erdos_center_clusters_z_g": report.center_turan_report.center_clusters,
+                "periphery_clusters": report.center_turan_report.periphery_clusters,
+            },
+            "turan_extremal_theorem": {
+                "turan_ex_k5_bound_edges": report.center_turan_report.turan_ex_k5_edges,
+                "turan_density_ratio": (report.center_turan_report.turan_density_ratio * 10000.0).round() / 10000.0,
+                "erdos_stone_chromatic_bound_chi": report.center_turan_report.erdos_stone_chromatic_bound,
             },
             "moser_tardos_lll_worktrees": {
                 "num_worktrees": report.worktree_schedule.num_worktrees,
