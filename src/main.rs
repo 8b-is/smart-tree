@@ -487,6 +487,9 @@ async fn main() -> Result<()> {
         let target_path = cli.path.as_deref().unwrap_or(".");
         return st::cli_commands::handle_ultrabackyard_loop(target_path, num_laps).await;
     }
+    if let Some(path) = &cli.zeno {
+        return st::cli_commands::handle_zeno_omni_engine(path).await;
+    }
 
     // Handle Google Drive / Sync commands
     if let Some(action) = &cli.gdrive {

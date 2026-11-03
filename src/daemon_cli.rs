@@ -12,7 +12,7 @@ use crate::formatters::{
     csv::CsvFormatter,
     digest::{
         DigestFormatter, PqModeFormatter, SmtrCapsuleFormatter, TheBookFormatter,
-        UltraBackyardFormatter,
+        UltraBackyardFormatter, ZenoModeFormatter,
     },
     hex::HexFormatter,
     json::JsonFormatter,
@@ -361,7 +361,8 @@ fn get_ideal_depth_for_mode(mode: &str) -> usize {
         "ai" | "semantic" | "smart" => 5,
         "digest" | "stats" | "louds" | "smtrcapsule" | "capsule" | "thebook" | "erdos"
         | "szemeredi" | "mem8regular" | "book" | "pq" | "rationalpq" | "symplectic"
-        | "ultrabackyard" | "backyardultra" | "ultrabackyardloop" | "doloop" => 20,
+        | "ultrabackyard" | "backyardultra" | "ultrabackyardloop" | "doloop" | "zeno"
+        | "ultraomnizeno" | "upz" | "wupz" | "8bis" | "8bengines" => 20,
         "relations" => 3,
         "projects" => 5,
         _ => 3, // Default for classic, json, etc.
@@ -449,6 +450,10 @@ fn format_output(
             let formatter = UltraBackyardFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
         }
+        "zeno" | "ultraomnizeno" | "upz" | "wupz" | "8bis" | "8bengines" => {
+            let formatter = ZenoModeFormatter::new();
+            formatter.format(writer, nodes, stats, root_path)?;
+        }
         "quantum" => {
             let formatter = QuantumFormatter::new();
             formatter.format(writer, nodes, stats, root_path)?;
@@ -529,6 +534,10 @@ mod tests {
             ("symplectic", "\"spec\": \"SOVEREIGN-PQ-MODE-v1.0\""),
             ("ultrabackyard", "\"spec\": \"ULTRABACKYARDLOOP-DO-v1.0\""),
             ("do-loop", "\"spec\": \"ULTRABACKYARDLOOP-DO-v1.0\""),
+            ("zeno", "\"spec\": \"ULTRA-OMNI-ZENO-v11.0\""),
+            ("upz", "\"spec\": \"ULTRA-OMNI-ZENO-v11.0\""),
+            ("wupz", "\"spec\": \"ULTRA-OMNI-ZENO-v11.0\""),
+            ("8b-engines", "\"spec\": \"ULTRA-OMNI-ZENO-v11.0\""),
         ] {
             let request = serde_json::from_value(serde_json::json!({
                 "path": temp.path(), "mode": mode

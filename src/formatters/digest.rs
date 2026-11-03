@@ -12,6 +12,7 @@ pub struct SmtrCapsuleFormatter;
 pub struct TheBookFormatter;
 pub struct PqModeFormatter;
 pub struct UltraBackyardFormatter;
+pub struct ZenoModeFormatter;
 
 impl Default for DigestFormatter {
     fn default() -> Self {
@@ -311,6 +312,17 @@ impl Formatter for TheBookFormatter {
                 "liouville_jacobian_det": report.pq_report.liouville_jacobian_det,
                 "phase_space_orbitals": report.pq_report.phase_space_orbitals,
             },
+            "ultra_omni_zeno_v11": {
+                "spec": report.zeno_report.spec,
+                "litany_wire_seal16": report.zeno_report.upz_wupz.litany_wire_seal16_hex,
+                "litany_wire_verified": report.zeno_report.upz_wupz.litany_wire_verified,
+                "qat_single_edit_reuse_pq": report.zeno_report.upz_wupz.qat_single_edit_reuse_pq,
+                "gaia_b158_compression_pq": report.zeno_report.upz_wupz.gaia_b158_compression_pq,
+                "ternary_gemm_i32": report.zeno_report.eight_b_is_engines.ternary_gemm_i32_accumulator,
+                "spherepop_value": report.zeno_report.eight_b_is_engines.spherepop_innermost_first_value,
+                "admissibility_ct000_verified": report.zeno_report.eight_b_is_engines.admissibility_ct000_epistemic_overlap_verified,
+                "cpu_isa_profile": report.zeno_report.os_agent_matrix.cpu_isa_profile,
+            },
             "erdos_lexicon": {
                 "straight_from_the_book": report.lexicon_counts.0,
                 "epsilons_utility_helpers": report.lexicon_counts.1,
@@ -440,6 +452,44 @@ impl Formatter for UltraBackyardFormatter {
             "best_bound_worktrees_c": report.best_bound_worktrees_c,
             "constellation_wiring": report.wiring,
             "laps": report.laps,
+        });
+        writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
+        Ok(())
+    }
+}
+
+impl Default for ZenoModeFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ZenoModeFormatter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Formatter for ZenoModeFormatter {
+    fn format(
+        &self,
+        writer: &mut dyn Write,
+        nodes: &[FileNode],
+        stats: &TreeStats,
+        root_path: &Path,
+    ) -> Result<()> {
+        let book_report = analyze_the_book_pipeline(nodes);
+        let zeno = &book_report.zeno_report;
+        let payload = serde_json::json!({
+            "spec": zeno.spec,
+            "version": zeno.version,
+            "header_banner": zeno.header_banner,
+            "root_path": root_path.display().to_string(),
+            "total_files": stats.total_files,
+            "total_dirs": stats.total_dirs,
+            "upz_wupz_core": zeno.upz_wupz,
+            "eight_b_is_engines": zeno.eight_b_is_engines,
+            "os_agent_agnostic_matrix": zeno.os_agent_matrix,
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
         Ok(())

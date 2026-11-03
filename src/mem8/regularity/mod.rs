@@ -26,6 +26,7 @@ pub mod salience_karp_manybody;
 pub mod types;
 pub mod ultrabackyard;
 pub mod wire;
+pub mod zeno_engine;
 
 pub use compressor::{compress_symbol_graph_to_mem8, RegularityConfig};
 pub use erdos_renyi::{
@@ -71,6 +72,15 @@ pub use wire::{
     RegularSuperEdgePod, SuperNodeCentroidPod, SuperNodeMetaPod, MEM8_BOOK_MAGIC,
     MEM8_BOOK_VERSION, SQLITE_WAL_MIGRATION_004_SZEMEREDI,
 };
+pub use zeno_engine::{
+    analyze_zeno_omni_engine, bfp64_and_kleene, bfp64_nand_kleene, evaluate_spherepop_witness,
+    mulberry32_step_u32, pack_fold_bfp64, pack_word15_to_spqt3b, quantize_groupwise_l2_ternary_pq,
+    seal_litany_wire_64b, unpack_fold_bfp64, unpack_spqt3b_to_word15, verify_litany_wire_64b,
+    xor_fold_gaia_b158, EightBIsEnginesReport, LitanyWireFrame, OsAgentAgnosticMatrix,
+    SpqtSignalLadderEntry, UpzWupzReport, WhereIsTheLoveContext, ZenoOmniReport,
+    FOLD_BEEHIVE_SWEEP, FOLD_BEEHIVE_TARGET, GALACTIC_MANTRA_FOLD_243, GATE_0X62, LANES_8_OF_8,
+    QUANT_QT55,
+};
 
 use crate::scanner::{FileCategory, FileNode};
 
@@ -90,6 +100,7 @@ pub struct TheBookPipelineReport {
     pub karp_certificate: KarpComplexityCertificate,
     pub manybody_wave_report: ManyBodyDftWaveReport,
     pub pq_report: PqModeReport,
+    pub zeno_report: ZenoOmniReport,
     /// Counts of files classified under Paul Erdős's lexicon:
     /// (StraightFromTheBook, Epsilons, LegallyDead, PureNoiseMonoliths)
     pub lexicon_counts: (usize, usize, usize, usize),
@@ -175,6 +186,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         &ramsey_erdos_hajnal_report,
     );
     let pq_report = analyze_pq_mode(&graph, &archive, &salience_report, &center_turan_report);
+    let zeno_report = analyze_zeno_omni_engine(&graph, &archive, &center_turan_report, &pq_report);
 
     // Classify every node using Paul Erdős's vocabulary
     let mut from_the_book = 0usize;
@@ -205,6 +217,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         karp_certificate,
         manybody_wave_report,
         pq_report,
+        zeno_report,
         lexicon_counts: (from_the_book, epsilons, legally_dead, pure_noise),
     }
 }

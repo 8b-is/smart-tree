@@ -1,8 +1,8 @@
-# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v10.12.0)
+# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v11.0.0)
 
 <div align="center">
 
-![Smart Tree v10.12.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
+![Smart Tree v11.0.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
 
 **"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."**  
 *— Paul Erdős (1913–1996), The Magician from Budapest*
@@ -71,6 +71,7 @@ Running `st --mcp-install` or `st --claude-init` automatically extracts four sel
 3. **[`ramsey-karp-fpt`](skills/ramsey-karp-fpt/SKILL.md)**: 256-bit SIMD bitboard (`BitSet256`) Tomita Bron–Kerbosch, Erdős–Moser tournament vs. deadlock knot classification, Fox–Sudakov/Rödl bi-clique API conformance bug hunting, and Karp's 21 NP-complete FPT reductions.
 4. **[`manybody-strang-mem8`](skills/manybody-strang-mem8/SKILL.md)**: Quantum Many-Body Kohn–Sham DFT super-node orbitals, Local Natural Orbital (`T8R`) correlation corrections, and second-order Strang split-operator salience wave propagation.
 5. **[`ultrabackyardloop`](skills/ultrabackyardloop/SKILL.md)**: The Sovereign Constellation `DO = reflect → improve → wire → polish → push → readme` measured Backyard Ultra loop (`st --ultrabackyard 12 .` & [`docs/ULTRABACKYARDLOOP.md`](docs/ULTRABACKYARDLOOP.md)).
+6. **[`ultra-omni-zeno`](skills/ultra-omni-zeno/SKILL.md)**: Sovereign Constellation Kompressed Meta-Skill (`upz`/`wupz-core` `64B@0x62` `LitanyWireFrame`, `BFP-64` Kleene bitplanes, SPQT `base-243`, 18-stage integer CORDIC, `8b-is-[engines]`, and OS/Agent-agnostic execution via `st --zeno .`).
 
 ---
 
@@ -80,7 +81,7 @@ Running `st --mcp-install` or `st --claude-init` automatically extracts four sel
 # 1. Instant Erdős-enriched Smart Overview (default):
 st .
 
-# 2. Full 8-Pillar JSON Diagnostic ("Straight from The Book"):
+# 2. Full 11-Pillar JSON Diagnostic ("Straight from The Book"):
 st --mode the-book .
 
 # 3. Supply-Chain Security & Cross-Boundary Shadow Graph (G_shadow) Percolation Audit:
@@ -100,4 +101,8 @@ st --mode pq .
 
 # 8. Sovereign Ultra-Backyard Loop (DO = reflect → improve → wire → polish → push → readme):
 st --ultrabackyard 12 .
+
+# 9. Sovereign ULTRA-OMNI-ZENO v11 (upz/wupz 64B@0x62 LitanyWireFrame + 8b-is-[engines] + OS/Agent Agnostic Matrix):
+st --zeno .
+st --mode zeno .
 ```

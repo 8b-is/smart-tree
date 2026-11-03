@@ -592,6 +592,26 @@ pub async fn handle_ultrabackyard_loop(path: &str, num_laps: usize) -> Result<()
     Ok(())
 }
 
+/// Execute the Sovereign `ULTRA-OMNI-ZENO` (`v11.0.0`) engine (`upz`/`wupz` `64B@0x62` `LitanyWireFrame`,
+/// `BFP-64` Kleene bitplanes, `SPQT` `base-243`, `8b-is-[engines]`, and OS/Agent-agnostic matrix).
+pub async fn handle_zeno_omni_engine(path: &str) -> Result<()> {
+    use crate::mem8::regularity::analyze_the_book_pipeline;
+    use crate::scanner::{Scanner, ScannerConfig};
+    use std::path::Path;
+
+    let scan_path = Path::new(path);
+    let config = ScannerConfig {
+        max_depth: 6,
+        ..Default::default()
+    };
+    let scanner = Scanner::new(scan_path, config)?;
+    let (nodes, _) = scanner.scan()?;
+    let report = analyze_the_book_pipeline(&nodes);
+
+    println!("{}", serde_json::to_string_pretty(&report.zeno_report)?);
+    Ok(())
+}
+
 pub async fn handle_integrity_scan(path: &str, no_daemon: bool) -> Result<()> {
     use crate::config::StConfig;
     use crate::magiscanner::service::{print_reports, scan_path};
