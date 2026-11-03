@@ -1536,6 +1536,8 @@ impl Scanner {
 
         // Parallelize content search, security scanning, and interest scoring across cores
         // after deterministic safety-budget admission completes.
+        // Uses David Lattimore's Wild Linker trick (`split_off_mut` + `par_bridge`) so each
+        // worker thread processes a contiguous, directory-local slice of `FileNode`s.
         if self.config.search_keyword.is_some()
             || self.security_scanner.is_some()
             || self.interest_calculator.is_some()
@@ -1549,8 +1551,16 @@ impl Scanner {
                 }
             };
             if all_nodes_collected.len() >= 16 {
-                use rayon::prelude::*;
-                all_nodes_collected.par_iter_mut().for_each(enrich_node);
+                let chunk_size = (all_nodes_collected.len() / 8).clamp(8, 64);
+                crate::wild_perf::parallel_for_each_contiguous_mut(
+                    &mut all_nodes_collected,
+                    chunk_size,
+                    |_chunk_idx, slice| {
+                        for node in slice {
+                            enrich_node(node);
+                        }
+                    },
+                );
             } else {
                 all_nodes_collected.iter_mut().for_each(enrich_node);
             }
@@ -1595,9 +1605,24 @@ impl Scanner {
 
         let mut state = ScanState::new(self.root.clone());
 
-        for node in nodes {
-            if let Ok(sig) = FileSignature::from_path(&node.path) {
-                state.add_signature(node.path.clone(), sig);
+        if nodes.len() >= 32 {
+            use rayon::prelude::*;
+            let sigs: Vec<(PathBuf, FileSignature)> = nodes
+                .par_iter()
+                .filter_map(|node| {
+                    FileSignature::from_path(&node.path)
+                        .ok()
+                        .map(|sig| (node.path.clone(), sig))
+                })
+                .collect();
+            for (path, sig) in sigs {
+                state.add_signature(path, sig);
+            }
+        } else {
+            for node in nodes {
+                if let Ok(sig) = FileSignature::from_path(&node.path) {
+                    state.add_signature(node.path.clone(), sig);
+                }
             }
         }
 
@@ -1641,13 +1666,16 @@ impl Scanner {
         all_nodes_collected: Vec<FileNode>,
     ) -> (Vec<FileNode>, TreeStats) {
         let mut final_stats = TreeStats::default();
-        let mut included_files_and_matching_dirs = Vec::new(); // Files that pass filters, and Dirs that match --find
-        let mut required_ancestor_dirs = HashSet::new(); // Ancestors of included_files
+        let mut direct_matches = vec![false; all_nodes_collected.len()];
+        let mut any_direct_match = false;
+        let mut required_ancestor_dirs = HashSet::new();
+        // Wild Linker buffer-reuse trick: reuse a single `Vec<&Path>` allocation across
+        // all loop iterations despite each `node` having a scoped borrow lifetime.
+        let mut ancestor_store: Vec<&'static Path> = Vec::with_capacity(16);
 
         // --- Pass 1: Identify matching files and directories that directly match --find ---
-        for node in &all_nodes_collected {
+        for (idx, node) in all_nodes_collected.iter().enumerate() {
             if node.permission_denied {
-                // Skip permission denied entries for filtering logic
                 continue;
             }
 
@@ -1656,136 +1684,72 @@ impl Scanner {
                 .as_ref()
                 .is_some_and(|m| m.total_count > 0);
 
-            if node.is_dir {
-                // For directories, only the --find pattern applies directly.
-                // Other filters (size, date, type) don't apply to directories themselves.
-                if self
-                    .config
+            let matched = if node.is_dir {
+                self.config
                     .find_pattern
                     .as_ref()
                     .is_some_and(|p| p.is_match(&node.path.to_string_lossy()))
-                {
-                    included_files_and_matching_dirs.push(node.clone());
-                    // Add ancestors of this directly matched directory
-                    let mut current = node.path.parent();
-                    while let Some(parent_path) = current {
-                        if parent_path == self.root || required_ancestor_dirs.contains(parent_path)
-                        {
-                            break;
-                        }
-                        required_ancestor_dirs.insert(parent_path.to_path_buf());
-                        current = parent_path.parent();
-                    }
-                }
+            } else if self.config.search_keyword.is_some() {
+                has_search_match && self.should_include(node)
             } else {
-                // For files, check if it passes all filters OR has a search match.
-                // If we have a search keyword, ONLY include files with search matches
-                if self.config.search_keyword.is_some() {
-                    if has_search_match {
-                        // Even with search matches, the file must still pass other filters
-                        if self.should_include(node) {
-                            included_files_and_matching_dirs.push(node.clone());
-                            // Add all ancestors of this matching file to `required_ancestor_dirs`.
-                            let mut current = node.path.parent();
-                            while let Some(parent_path) = current {
-                                // Stop if we reach the root or an already added ancestor.
-                                if parent_path == self.root
-                                    || required_ancestor_dirs.contains(parent_path)
-                                {
-                                    break;
-                                }
-                                required_ancestor_dirs.insert(parent_path.to_path_buf());
-                                current = parent_path.parent();
-                            }
-                        }
+                has_search_match || self.should_include(node)
+            };
+
+            if matched {
+                direct_matches[idx] = true;
+                any_direct_match = true;
+
+                let mut ancestors: Vec<&Path> = crate::wild_perf::reuse_vec(ancestor_store);
+                let mut current = node.path.parent();
+                while let Some(parent_path) = current {
+                    if parent_path == self.root || required_ancestor_dirs.contains(parent_path) {
+                        break;
                     }
-                } else {
-                    // No search keyword, use normal filtering
-                    if has_search_match || self.should_include(node) {
-                        included_files_and_matching_dirs.push(node.clone());
-                        // Add all ancestors of this matching file to `required_ancestor_dirs`.
-                        let mut current = node.path.parent();
-                        while let Some(parent_path) = current {
-                            // Stop if we reach the root or an already added ancestor.
-                            if parent_path == self.root
-                                || required_ancestor_dirs.contains(parent_path)
-                            {
-                                break;
-                            }
-                            required_ancestor_dirs.insert(parent_path.to_path_buf());
-                            current = parent_path.parent();
-                        }
-                    }
+                    ancestors.push(parent_path);
+                    current = parent_path.parent();
                 }
+                for &anc in &ancestors {
+                    required_ancestor_dirs.insert(anc.to_path_buf());
+                }
+                ancestor_store = crate::wild_perf::reuse_vec(ancestors);
             }
         }
 
-        // --- Pass 2: Build the final list of nodes ---
-        let mut final_node_list = Vec::new();
-        let mut added_paths = HashSet::new(); // To prevent duplicates if a dir is both an ancestor and matches --find
+        // --- Pass 2: Partition `all_nodes_collected` by move (zero `FileNode::clone()`) ---
+        let mut final_node_list = Vec::with_capacity(all_nodes_collected.len().min(256));
+        let mut rejected_nodes = Vec::new();
 
-        // Always add the root node if there's anything to show.
-        if !included_files_and_matching_dirs.is_empty() {
-            if let Some(root_node) = all_nodes_collected.iter().find(|n| n.path == self.root) {
-                if added_paths.insert(root_node.path.clone()) {
-                    final_node_list.push(root_node.clone());
-                }
-            }
-        }
-
-        // Add required ancestor directories and directly matching directories from `all_nodes_collected`.
-        for node in &all_nodes_collected {
-            if node.permission_denied {
-                // Also include permission denied nodes if they are part of the path
-                if (required_ancestor_dirs.contains(&node.path)
-                    || node.path == self.root && !final_node_list.is_empty())
-                    && added_paths.insert(node.path.clone())
-                {
-                    final_node_list.push(node.clone());
-                }
-                continue;
-            }
-
-            if node.is_dir {
-                // Is it a required ancestor OR a directory that itself matched --find?
-                let is_find_match = self
-                    .config
-                    .find_pattern
-                    .as_ref()
-                    .is_some_and(|p| p.is_match(&node.path.to_string_lossy()));
-                if (required_ancestor_dirs.contains(&node.path)
-                    || (is_find_match && node.path != self.root))
-                    && added_paths.insert(node.path.clone())
-                {
-                    final_node_list.push(node.clone());
-                }
-            }
-        }
-
-        // Add the files that passed filters or had search matches.
-        for node in included_files_and_matching_dirs {
-            // If it's a directory, it was already handled above (if it matched --find).
-            // If it's a file, add it now.
-            if !node.is_dir {
-                if added_paths.insert(node.path.clone()) {
-                    final_node_list.push(node);
-                }
+        for (idx, node) in all_nodes_collected.into_iter().enumerate() {
+            let keep = if direct_matches[idx] {
+                true
+            } else if any_direct_match && node.path == self.root {
+                true
+            } else if node.permission_denied {
+                required_ancestor_dirs.contains(&node.path)
+            } else if node.is_dir {
+                required_ancestor_dirs.contains(&node.path)
             } else {
-                // It's a directory that matched --find
-                if added_paths.insert(node.path.clone()) {
-                    final_node_list.push(node);
-                }
+                false
+            };
+
+            if keep {
+                final_node_list.push(node);
+            } else {
+                rejected_nodes.push(node);
             }
         }
 
-        // Sort the final list by path for consistent output.
+        // Sort the final list by path and deduplicate in-place (zero HashSet<PathBuf> clones).
         final_node_list.sort_by(|a, b| a.path.cmp(&b.path));
+        final_node_list.dedup_by(|a, b| a.path == b.path);
+
+        // Offload deallocation of rejected FileNodes and ancestor buffers to background Rayon thread.
+        crate::wild_perf::drop_in_background(rejected_nodes, 256);
+        crate::wild_perf::drop_ref_vec_in_background(ancestor_store, 64);
 
         // --- Pass 3: Calculate stats on the final_node_list ---
         for node in &final_node_list {
-            // Update stats, ensuring not to double-count or miscount permission-denied entries.
             if !node.permission_denied || node.is_dir {
-                // Dirs (even denied) contribute to dir count.
                 final_stats.update_file(node);
             }
         }

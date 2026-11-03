@@ -295,8 +295,8 @@ impl M8BinaryFile {
             .open(&path)
             .context("Failed to open .m8 file")?;
 
-        // Read header
-        let mut header_bytes = vec![0u8; std::mem::size_of::<M8Header>()];
+        // Read header (stack-allocated 30-byte buffer)
+        let mut header_bytes = [0u8; 30];
         file.read_exact(&mut header_bytes)?;
 
         let header = M8Header::from_bytes(&header_bytes)?;
@@ -814,6 +814,19 @@ impl LoudsSmartTree {
             }
             bit_cursor += 1; // terminating '0' bit for this node's child run
         }
+    }
+
+    /// Computes node out-degrees using Wild Linker's zero-cost in-place
+    /// `Vec<u32>` <-> `Vec<AtomicU32>` conversion (`wild_perf::parallel_count_by_index`).
+    pub fn atomic_out_degrees(&self) -> Vec<u32> {
+        if self.node_count == 0 {
+            return Vec::new();
+        }
+        let parents: Vec<u32> = self.parent_idx[1..self.node_count]
+            .iter()
+            .map(|&p| p as u32)
+            .collect();
+        crate::wild_perf::parallel_count_by_index(self.node_count, &parents)
     }
 
     #[inline]

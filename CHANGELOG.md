@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-Allocation Extension Stats & Bounded Top-10 Gate**: `TreeStats::update_file` now queries `HashMap<String, u64>` via `Borrow<str>` before allocating on first-seen extensions and gates `largest_files`, `newest_files`, and `oldest_files` before cloning `PathBuf`.
 - **Cached Default Ignores DFA & CI Detection**: Cached `DEFAULT_IGNORE_PATTERNS` `GlobSet` compilation and `IS_CI` environment checks via `once_cell::sync::Lazy`, accelerating `Scanner::new` instantiation by ~180x.
 - **Reusable Line Buffer & Multi-Core Rayon Enrichment**: `Scanner::search_in_file` reuses a single `String` line buffer, while `Scanner::scan` and `directory_size_breakdown` parallelize content search, security scanning, interest scoring, and subdirectory sizing across CPU cores via `rayon`.
+- **Wild Linker Zero-`unsafe` Performance Primitives (`src/wild_perf.rs`)**:
+  - Inspired by David Lattimore's *Wild Performance Tricks* (RustForge 2025): added contiguous mutable slice partitioning (`split_off_mut` + `par_bridge`), zero-cost in-place `Vec<SymbolId/u16/u32/u64>` ↔ `Vec<Atomic*>` conversion (`into_atomic_*` / `into_non_atomic_*`), compile-time layout-checked lifetime-erasing buffer reuse (`reuse_vec<T, U>`), `MaybeUninit` lifetime stripping for non-trivial `Drop` types (`without_lifetime`), and background Rayon deallocation (`drop_in_background`).
+  - Rewrote `Scanner::filter_nodes_and_calculate_stats` to eliminate multi-pass `FileNode::clone()` and `HashSet<PathBuf>` clones via move-partitioning, `reuse_vec` ancestor buffers, and background thread deallocation of rejected nodes.
+  - Bounded `Tokenizer::tokenize` lookahead to `MAX_TOKEN_PATTERN_LEN = 16`, turning $O(L^2)$ tokenization into $O(L)$.
 
 ### 🛡️ End-to-End Truncation Telemetry & Cache Safety
 

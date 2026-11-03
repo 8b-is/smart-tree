@@ -101,16 +101,19 @@ impl Tokenizer {
         self.tokens.insert(token, pattern.to_string());
     }
 
-    /// Tokenize a string
+    /// Tokenize a string in O(N) time by bounding pattern lookahead to the maximum
+    /// registered token length (16 bytes) and pre-allocating the output buffer.
     pub fn tokenize(&self, text: &str) -> Vec<u8> {
-        let mut result = Vec::new();
+        const MAX_TOKEN_PATTERN_LEN: usize = 16;
+        let mut result = Vec::with_capacity(text.len());
         let mut remaining = text;
 
         while !remaining.is_empty() {
             let mut found = false;
+            let max_len = remaining.len().min(MAX_TOKEN_PATTERN_LEN);
 
-            // Try to match longest pattern first
-            for len in (1..=remaining.len()).rev() {
+            // Try to match longest pattern first (bounded to MAX_TOKEN_PATTERN_LEN)
+            for len in (1..=max_len).rev() {
                 if let Some(chunk) = remaining.get(0..len) {
                     if let Some(&token) = self.patterns.get(chunk) {
                         result.push(token);

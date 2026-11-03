@@ -47,6 +47,7 @@ pub mod tokenizer; // Smart tokenization for semantic pattern recognition
 pub mod tree_sitter_quantum;
 pub mod universal_chat_scanner; // Finds conversations everywhere!
 pub mod universal_format_detector; // Detects format by structure! // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
+pub mod wild_perf; // Wild Linker-inspired zero-unsafe, zero-alloc & lock-free multi-core tricks!
 
 // The `mcp` module for Model Context Protocol integration.
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
