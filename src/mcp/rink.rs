@@ -16,7 +16,12 @@ const MAX_OUTPUT: u64 = 16 * 1024;
 const WALL_LIMIT: Duration = Duration::from_secs(3);
 const MAX_STORE: u64 = 16 * 1024 * 1024;
 static QUERIES: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
-const CONFIG: &str = "[rink]\nshow_interpretation = false\nlong_output = false\n[currency]\nenabled = false\n[colors]\nenabled = false\n[limits]\nenabled = false\n";
+fn config_text(interpret: bool) -> String {
+    format!(
+        "[rink]\nshow_interpretation = {}\nlong_output = false\n[currency]\nenabled = false\n[colors]\nenabled = false\n[limits]\nenabled = false\n",
+        if interpret { "true" } else { "false" }
+    )
+}
 
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -28,6 +33,7 @@ struct Request {
     speed: Option<String>,
     remember: bool,
     memory_id: Option<String>,
+    interpret: bool,
 }
 
 /// The same schema is used by every MCP discovery path.
@@ -44,6 +50,7 @@ pub fn definition() -> Value {
                 "other_frequency": {"type": "string", "maxLength": 128},
                 "speed": {"type": "string", "maxLength": 128, "description": "Propagation speed, e.g. 343 m/s"},
                 "remember": {"type": "boolean", "default": false, "description": "Explicitly consent to durable provenance storage; requires ST_RINK_MEMORY_DIR"},
+                "interpret": {"type": "boolean", "default": false, "description": "Show Rink's input interpretation. Default false keeps the answer compact."},
                 "memory_id": {"type": "string", "description": "UUID from a prior remembered result"}
             }
         }
@@ -233,7 +240,7 @@ fn expression(request: &Request) -> Result<String> {
 /// Private empty working/config directories prevent ambient user unit overrides.
 struct QueryDir(PathBuf);
 impl QueryDir {
-    fn create() -> Result<Self> {
+    fn create(interpret: bool) -> Result<Self> {
         let path = std::env::temp_dir().join(format!("st-rink-{}", uuid::Uuid::new_v4()));
         let mut builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
@@ -243,7 +250,7 @@ impl QueryDir {
         }
         builder.create(&path)?;
         let directory = Self(path);
-        std::fs::write(directory.0.join("config.toml"), CONFIG)?;
+        std::fs::write(directory.0.join("config.toml"), config_text(interpret))?;
         Ok(directory)
     }
 }
@@ -271,6 +278,15 @@ async fn limited_read(reader: impl AsyncRead + Unpin) -> Result<String> {
 }
 
 async fn evaluate(binary: &Path, expression: &str, wall: Duration) -> Result<String> {
+    evaluate_with(binary, expression, wall, false).await
+}
+
+async fn evaluate_with(
+    binary: &Path,
+    expression: &str,
+    wall: Duration,
+    interpret: bool,
+) -> Result<String> {
     ensure!(
         cfg!(target_os = "linux"),
         "Bounded Rink adapter currently requires Linux"
@@ -279,7 +295,7 @@ async fn evaluate(binary: &Path, expression: &str, wall: Duration) -> Result<Str
         binary.is_absolute() && binary.is_file(),
         "ST_RINK_BIN must name an existing absolute executable"
     );
-    let directory = QueryDir::create()?;
+    let directory = QueryDir::create(interpret)?;
     let mut command = tokio::process::Command::new("/usr/bin/prlimit");
     command
         .args([
@@ -404,7 +420,7 @@ pub async fn handle(args: Value) -> Result<Value> {
     let binary = binary
         .canonicalize()
         .context("Cannot resolve ST_RINK_BIN")?;
-    let output = evaluate(&binary, &expression, WALL_LIMIT).await?;
+    let output = evaluate_with(&binary, &expression, WALL_LIMIT, request.interpret).await?;
     let provenance = Provenance {
         expression,
         output,

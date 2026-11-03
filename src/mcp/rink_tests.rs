@@ -44,6 +44,19 @@ fn rink_validation_rejects_injection_and_excess_work() {
 }
 
 #[test]
+fn rink_interpretation_is_opt_in_and_currency_stays_disabled() {
+    let quiet = config_text(false);
+    let shown = config_text(true);
+    assert!(quiet.contains("show_interpretation = false"), "{quiet}");
+    assert!(shown.contains("show_interpretation = true"), "{shown}");
+    assert!(shown.contains("[currency]\nenabled = false"), "{shown}");
+    assert_eq!(
+        definition()["inputSchema"]["properties"]["interpret"]["default"],
+        false
+    );
+}
+
+#[test]
 fn rink_wave_presets_preserve_rational_operands_and_units() {
     let examples = [
         (
