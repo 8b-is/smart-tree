@@ -1310,8 +1310,8 @@ mod tests {
             let slice = &sample[..len];
             let full_words_len = slice.len() & !7usize;
             let mut expected = 0u64;
-            for i in 0..full_words_len {
-                expected ^= (slice[i] as u64) << ((i & 7) * 8);
+            for (i, &b) in slice.iter().enumerate().take(full_words_len) {
+                expected ^= (b as u64) << ((i & 7) * 8);
             }
             for &b in &slice[full_words_len..] {
                 expected ^= b as u64;

@@ -7,6 +7,7 @@ use st::mcp_combinatorics_llm::{
     model_cache::McpProgressEmitter,
     MoserTardosParams, SzemerediParams,
 };
+use st::mem8::regularity::xor_fold_gaia_b158;
 use std::hint::black_box;
 
 fn generate_deterministic_edges(n: usize, density_permille: u64) -> Vec<(usize, usize)> {
@@ -109,10 +110,24 @@ fn bench_moser_tardos_luby_mis(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_xor_fold_gaia_b158_1mib(c: &mut Criterion) {
+    let mut group = c.benchmark_group("xor_fold_gaia_b158");
+    let trits: Vec<i8> = (0usize..(1024 * 1024))
+        .map(|i| ((i as i32 * 73 - 101) % 3 - 1) as i8)
+        .collect();
+
+    group.bench_function("1MiB_8lane_pack5", |b| {
+        b.iter(|| black_box(xor_fold_gaia_b158(black_box(&trits))))
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_ramsey_stack_vs_heap,
     bench_szemeredi_rayon_bitset,
-    bench_moser_tardos_luby_mis
+    bench_moser_tardos_luby_mis,
+    bench_xor_fold_gaia_b158_1mib
 );
 criterion_main!(benches);
