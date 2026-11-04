@@ -1,8 +1,8 @@
-# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v11.2.0)
+# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v11.3.0)
 
 <div align="center">
 
-![Smart Tree v11.2.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
+![Smart Tree v11.3.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
 
 **"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."**  
 *— Paul Erdős (1913–1996), The Magician from Budapest*
