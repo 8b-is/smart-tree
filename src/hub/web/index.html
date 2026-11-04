@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Preserve important Git repositories. Find useful knowledge with source references and recall by permission.">
+  <meta name="color-scheme" content="light dark">
+  <title>8s.is — Smart Tree Hub</title>
+  <link rel="stylesheet" href="/hub.css"><script src="/hub.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="container">
+    <header>
+      <a class="brand" href="/" aria-label="Smart Tree Hub home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 27V6M16 17l-8-7M16 22l8-8"/><circle cx="16" cy="5" r="3"/><circle cx="7" cy="9" r="3"/><circle cx="25" cy="13" r="3"/></svg><strong>8s<span>.is</span></strong><span class="brand-caption">SMART TREE HUB</span></a>
+      <nav aria-label="Main navigation"><a href="#collections">Explore</a><a href="/docs">For agents</a><button class="icon-button" id="theme" aria-label="Switch to dark theme" title="Switch theme">◐</button></nav>
+    </header>
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="eyebrow"><span class="status-dot" id="status-dot"></span><span id="connection">Connecting to the archive</span></div>
+        <h1 id="hero-title">Good repositories deserve<br>a <span>long memory.</span></h1>
+        <p class="hero-copy">A home for the code and ideas worth keeping.<br>Archive a repository. Find what matters. Give your agents a head start.</p>
+        <form id="search-form" class="search-box" role="search">
+          <label class="sr-only" for="search">Search archived knowledge</label><span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="search" name="query" placeholder="What would you like to find?" maxlength="512" required autocomplete="off">
+          <button class="primary" type="submit" id="search-button">Recall <span aria-hidden="true">↗</span></button>
+        </form>
+        <div class="suggestions"><span>Try a thought</span><button data-query="persistent memory">persistent memory</button><button data-query="agents working together">agents working together</button><button data-query="wave propagation">wave propagation</button></div>
+        <div class="hero-actions"><button class="primary" data-dialog="archive-dialog">＋ Archive a repository</button><a class="secondary" href="https://i1.is/tools/smart-tree">Get Smart Tree <span aria-hidden="true">↗</span></a></div>
+        <p class="small">Your archive. Your choice to share. Recall is always opt-in.</p>
+      </section>
+
+      <section id="results-section" class="results-section" hidden aria-labelledby="results-heading">
+        <div class="section-heading"><div><div class="eyebrow">FROM THE ARCHIVE</div><h2 id="results-heading">Recall results</h2></div><button class="text-button" id="clear-results">Clear results ×</button></div>
+        <p id="result-summary" class="muted" role="status"></p><div id="results" class="results"></div>
+      </section>
+
+      <section class="stats" aria-label="Live archive statistics">
+        <div><span class="stat-value" id="repo-count">—</span><span class="stat-label">public repositories</span></div>
+        <div><span class="stat-value" id="passage-count">—</span><span class="stat-label">searchable passages</span></div>
+        <div><span class="stat-value" id="storage-free">—</span><span class="stat-label">available archive storage</span></div>
+        <a href="/docs#coverage" class="stat-note">Live on 8s.is<br><span>See indexing coverage ↗</span></a>
+      </section>
+
+      <section id="collections" aria-labelledby="collections-heading">
+        <div class="section-heading"><div><div class="eyebrow">A GROWING COMMONS</div><h2 id="collections-heading">Explore the archive</h2></div><label class="collection-filter"><span class="sr-only">Collection</span><select id="collection"><option value="">All collections</option></select></label></div>
+        <p class="section-copy">Real repositories, preserved history, and a direct path back to the source.</p>
+        <div id="repositories" class="repo-grid" aria-live="polite"><p class="muted">Loading the catalogue…</p></div>
+        <div class="center"><button class="secondary" id="load-more" hidden>Load more repositories</button></div>
+      </section>
+
+      <section class="agent-section" aria-labelledby="agents-heading">
+        <div class="agent-copy"><div class="eyebrow">MADE FOR PEOPLE. READY FOR AGENTS.</div><h2 id="agents-heading">Less searching.<br> More understanding.</h2><p>Ask the hub for relevant passages and get the repository, commit, file, and lines alongside each result.</p><a href="/docs">Explore the API <span aria-hidden="true">↗</span></a></div>
+        <div class="terminal"><div class="terminal-top"><span><i></i><i></i><i></i></span><span>recall.sh</span><button class="copy-button" data-copy="agent-command" aria-label="Copy recall command">Copy</button></div><pre><code id="agent-command">curl -sS https://8s.is/api/v1/recall \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"persistent memory","limit":5}'</code></pre><div class="terminal-bottom"><span class="green-dot"></span>Source passages + commit references</div></div>
+      </section>
+
+      <section class="principles" aria-label="How the hub works">
+        <article><span class="principle-icon">⑂</span><h3>Git stays Git.</h3><p>Keep the repository’s history and clone it with the tools you already use.</p></article>
+        <article><span class="principle-icon">⌁</span><h3>Memory with permission.</h3><p>Choose whether the hub can index your archive for recall. Change that choice with your private receipt.</p></article>
+        <article><span class="principle-icon">↗</span><h3>Every result has a source.</h3><p>See the original words, their file, and their commit. Follow the evidence straight back to the repository.</p></article>
+      </section>
+      <section class="feedback-banner"><div><h2>Help this tree grow.</h2><p>Found a bug or have an idea? Smart Tree feedback has a home here.</p></div><button class="secondary" data-dialog="feedback-dialog">Share feedback ↗</button></section>
+    </main>
+    <footer><a class="footer-brand" href="https://8b.is">Built by 8b.is</a><span>A little more knowledge, kept within reach.</span><div><button class="text-button" data-dialog="manage-dialog">Manage an archive</button><a href="https://i1.is">i1.is installer ↗</a><a href="https://github.com/8b-is/smart-tree">Source ↗</a></div></footer>
+  </div>
+
+  <dialog id="archive-dialog"><form id="archive-form"><div class="dialog-heading"><h2>Keep something important.</h2><button type="button" class="icon-button close" aria-label="Close">×</button></div><p>Request an archive of a public GitHub repository. Requests are reviewed before cloning.</p><label for="archive-url">Repository URL</label><input id="archive-url" type="url" placeholder="https://github.com/owner/repository" required maxlength="300"><label class="check"><input id="archive-public" type="checkbox"><span>Make this archive public<small>Anyone can browse and clone the archive.</small></span></label><label class="check"><input id="archive-recall" type="checkbox"><span>Allow recall indexing<small>The hub may process supported text locally for keyword and semantic retrieval. Private archives remain accessible only with your receipt.</small></span></label><p class="small">No account required. Keep the private receipt to manage your archive. The intake limit is 10 GiB per repository; Git LFS objects and submodules are separate.</p><button class="primary full" type="submit">Request archive</button><p class="form-status" role="status"></p></form><div id="receipt" hidden><h3>Your archive receipt</h3><p>Save this file. It contains the private access token and archive ID.</p><button class="primary" id="save-receipt">Save receipt</button><p id="receipt-id" class="small mono"></p></div></dialog>
+
+  <dialog id="feedback-dialog"><form id="feedback-form"><div class="dialog-heading"><h2>Make Smart Tree better.</h2><button type="button" class="icon-button close" aria-label="Close">×</button></div><label for="feedback-category">Type</label><select id="feedback-category"><option value="nice_to_have">An idea or improvement</option><option value="bug">A bug</option><option value="critical">A critical issue</option></select><label for="feedback-title">Title</label><input id="feedback-title" required maxlength="200" placeholder="What could be better?"><label for="feedback-description">Details</label><textarea id="feedback-description" required maxlength="10000" rows="5" placeholder="What happened, or what would help?"></textarea><p class="small">Feedback is saved privately for review. Please leave out passwords and other secrets.</p><button class="primary full" type="submit">Send feedback</button><p class="form-status" role="status"></p></form></dialog>
+
+  <dialog id="manage-dialog"><form id="manage-form"><div class="dialog-heading"><h2>Your archive, your choice.</h2><button type="button" class="icon-button close" aria-label="Close">×</button></div><label for="manage-id">Archive ID</label><input id="manage-id" required autocomplete="off"><label for="manage-token">Private receipt token</label><input id="manage-token" type="password" required autocomplete="off"><button class="secondary full" type="submit">Open archive</button><p class="form-status" role="status"></p></form><div id="manage-details" hidden><h3 id="manage-name"></h3><p id="manage-state" class="muted"></p><label class="check"><input id="manage-public" type="checkbox"><span>Public archive</span></label><label class="check"><input id="manage-recall" type="checkbox"><span>Allow recall indexing</span></label><p class="small">Turning recall off removes its passages from search and logically deletes stored recall data. Git history stays archived.</p><button class="primary" id="save-permissions">Save permissions</button><p id="manage-status" role="status"></p></div></dialog>
+
+  <dialog id="repo-dialog"><div class="dialog-heading"><h2 id="repo-title">Repository</h2><button class="icon-button close" aria-label="Close">×</button></div><div id="repo-details"></div></dialog>
+  <div id="toast" role="status" class="toast"></div>
+</body>
+</html>

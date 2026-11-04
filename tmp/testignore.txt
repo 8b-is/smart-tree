@@ -1,0 +1,1 @@
+This is a .gitignored tmp directory to keep the smart-tree tests on the same folder for security.

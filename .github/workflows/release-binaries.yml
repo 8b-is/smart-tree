@@ -1,0 +1,65 @@
+name: Release binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub prerelease containing source.tar.gz and manifest.json
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      TARGET: ${{ matrix.target }}
+      SMART_TREE_NO_UPDATE_CHECK: '1'
+      CARGO_BUILD_JOBS: '3'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Download and verify the exact source snapshot
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern source.tar.gz --pattern manifest.json --dir bundle
+          python3 - <<'PY'
+          import hashlib, json, pathlib, tarfile
+          root = pathlib.Path('bundle')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          source = root / 'source.tar.gz'
+          assert 'sha256:' + hashlib.sha256(source.read_bytes()).hexdigest() == manifest['source']['digest']
+          with tarfile.open(source) as archive:
+              archive.extractall('source', filter='data')
+          PY
+      - name: Build and smoke test all four native binaries
+        run: |
+          export ST_BUILD_ID=$(cat source/smart-tree/BUILD_ID)
+          cargo build --locked --release --features full --manifest-path source/smart-tree/Cargo.toml --bin st --bin std --bin m8 --bin n8x
+          source/smart-tree/target/release/st --version
+          source/smart-tree/target/release/st --help > /dev/null
+          source/smart-tree/target/release/std --help > /dev/null
+          source/smart-tree/target/release/m8 --help > /dev/null
+          source/smart-tree/target/release/n8x --help > /dev/null
+          python3 scripts/package_i1_release.py binaries --release bundle --binaries source/smart-tree/target/release --target "$TARGET"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: smart-tree-${{ matrix.target }}
+          path: |
+            bundle/st-*.tar.gz
+            bundle/st-*.tar.gz.sha256
+            bundle/manifest.json
+          if-no-files-found: error
+          retention-days: 14

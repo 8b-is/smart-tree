@@ -1,0 +1,31 @@
+# Smart Tree test lock
+# Auto-generated lock file to pin test fixtures and environment for CI
+format = "smart-tree-test-lock"
+version = 1
+generated = "2025-09-13T00:00:00Z"
+
+engine = "MEM|8"
+baseline_wave_khz = 44.1
+compression_mode = "quantum-fallback-standard"
+
+[[files]]
+path = "test_files/test.rs"
+sha256 = "b6d81b360a5672d80c27430f39153e2c9a4d2b8f6a0e7b1c3d4e5f6789012345"
+size = 768
+mode = "text"
+
+[[files]]
+path = "test_files/test.py"
+sha256 = "c1a5298f939e87e8f962a5edfc206918f3a2b4c6d7e8f90123456789abcdef01"
+size = 1024
+mode = "text"
+
+[[files]]
+path = "test_files/test.log"
+sha256 = "2e7d2c03a9507ae265ecf5b5356885a5338a1b41c0d2f3e4a5b6c7d8e9f01234"
+size = 512
+mode = "text"
+
+[meta]
+tests_ignored = ["tests/test_mcp_session.rs"]
+ci_hint = "Regenerate this lock when test fixtures or engine settings change."
