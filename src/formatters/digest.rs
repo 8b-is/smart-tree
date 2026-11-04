@@ -323,6 +323,7 @@ impl Formatter for TheBookFormatter {
                 "admissibility_ct000_verified": report.zeno_report.eight_b_is_engines.admissibility_ct000_epistemic_overlap_verified,
                 "cpu_isa_profile": report.zeno_report.os_agent_matrix.cpu_isa_profile,
             },
+            "semantic_world_engine": &report.world_field_report,
             "erdos_lexicon": {
                 "straight_from_the_book": report.lexicon_counts.0,
                 "epsilons_utility_helpers": report.lexicon_counts.1,
@@ -490,6 +491,7 @@ impl Formatter for ZenoModeFormatter {
             "upz_wupz_core": zeno.upz_wupz,
             "eight_b_is_engines": zeno.eight_b_is_engines,
             "os_agent_agnostic_matrix": zeno.os_agent_matrix,
+            "semantic_world_engine": &book_report.world_field_report,
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
         Ok(())
