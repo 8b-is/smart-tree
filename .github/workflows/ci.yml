@@ -68,3 +68,9 @@ jobs:
         # Serial is green on main and on feature branches; parallel is red on both.
         # Restore the default threads only once that shared lock is gone.
         run: cargo test --workspace -- --test-threads=1
+
+      - name: MCP Combinatorics & LLM Integration (macOS Metal + MLX FFI)
+        if: runner.os == 'macOS'
+        run: |
+          cargo test --test mcp_integration --features "metal,mlx-ffi" -- --nocapture
+          cargo bench --bench combinatorics_llm_bench --features "metal,mlx-ffi" --no-run

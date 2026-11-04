@@ -1,497 +1,556 @@
-// MCP Integration Tests for Smart Tree v3.3.5
-// Tests the MCP server functionality programmatically
-
-// TEMPORARILY DISABLED: These tests hang in CI environments
-// TODO: Fix process spawning issues in GitHub Actions
-/*
-#[cfg(test)]
-mod mcp_tests {
-    use serde_json::{json, Value};
-    use std::io::Write;
-    use std::path::PathBuf;
-    use std::process::{Command, Stdio};
-    use std::time::Duration;
-
-    fn run_mcp_command(request: Value) -> Result<Value, String> {
-        // Try release first, fall back to debug (for GitHub Actions)
-        let binary_path = if std::path::Path::new("./target/release/st").exists() {
-            "./target/release/st"
-        } else {
-            "./target/debug/st"
-        };
-
-        let mut child = Command::new(binary_path)
-            .arg("--mcp")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("Failed to spawn process: {}", e))?;
-
-        // Send request
-        let stdin = child.stdin.as_mut().ok_or("Failed to get stdin")?;
-        let request_str = request.to_string();
-        stdin
-            .write_all(request_str.as_bytes())
-            .map_err(|e| format!("Failed to write: {}", e))?;
-        stdin
-            .write_all(b"\n")
-            .map_err(|e| format!("Failed to write newline: {}", e))?;
-
-        // Wait a bit for response
-        std::thread::sleep(Duration::from_millis(1000));
-
-        // Kill the process
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("Failed to wait: {}", e))?;
-
-        // Parse stdout for JSON-RPC response
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        // Debug output if no response found
-        if !stdout.contains("jsonrpc") {
-            eprintln!("=== DEBUG: No JSON-RPC in stdout ===");
-            eprintln!("STDOUT: {}", stdout);
-            eprintln!("STDERR: {}", stderr);
-        }
-
-        for line in stdout.lines() {
-            if line.starts_with("{\"jsonrpc\"") {
-                return serde_json::from_str(line)
-                    .map_err(|e| format!("Failed to parse JSON: {}", e));
-            }
-        }
-
-        Err(format!(
-            "No JSON-RPC response found in output. STDOUT: {} STDERR: {}",
-            stdout, stderr
-        ))
-    }
-
-    #[test]
-    fn test_server_info_has_current_time() {
-        // Skip test in CI
-        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-            return;
-        }
-
-        let request = json!({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "server_info",
-                "arguments": {}
-            },
-            "id": 1
-        });
-
-        let response = run_mcp_command(request).expect("Failed to get response");
-
-        // Check response structure
-        assert_eq!(response["jsonrpc"], "2.0");
-        assert_eq!(response["id"], 1);
-
-        // Parse the content
-        let content = response["result"]["content"][0]["text"]
-            .as_str()
-            .expect("No text content");
-
-        // The response might be double-wrapped due to consolidated tools
-        let parsed: Value = serde_json::from_str(content).expect("Failed to parse content");
-
-        // Check if it's double-wrapped (has a "content" field)
-        let server_info = if parsed.get("content").is_some() {
-            // It's double-wrapped, parse the inner content
-            let inner_content = parsed["content"][0]["text"]
-                .as_str()
-                .expect("No inner text content");
-            serde_json::from_str::<Value>(inner_content).expect("Failed to parse inner server info")
-        } else {
-            // Not double-wrapped, use as-is
-            parsed
-        };
-
-        // Verify current_time exists
-        assert!(server_info["server"]["current_time"].is_object());
-        assert!(server_info["server"]["current_time"]["local"].is_string());
-        assert!(server_info["server"]["current_time"]["utc"].is_string());
-        assert!(server_info["server"]["current_time"]["date_format_hint"].is_string());
-    }
-
-    #[test]
-    fn test_find_in_timespan_tool_exists() {
-        // Skip test in CI
-        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-            return;
-        }
-
-        let request = json!({
-            "jsonrpc": "2.0",
-            "method": "tools/list",
-            "params": {},
-            "id": 2
-        });
-
-        let response = run_mcp_command(request).expect("Failed to get response");
-
-        // Check for find tool which includes timespan functionality
-        let tools = response["result"]["tools"]
-            .as_array()
-            .expect("No tools array");
-
-        // With consolidated tools, find_in_timespan is now part of the 'find' tool
-        let has_find_tool = tools.iter().any(|tool| tool["name"] == "find");
-
-        assert!(
-            has_find_tool,
-            "find tool not found (includes timespan functionality)"
-        );
-    }
-
-    #[test]
-    #[ignore = "Temp directory issues in test environment - functionality works with real paths"]
-    fn test_entry_type_filtering() {
-        use std::fs;
-        use tempfile::TempDir;
-
-        // Create test directory
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let test_path = temp_dir.path();
-
-        // Create mixed content
-        fs::create_dir(test_path.join("dir1")).unwrap();
-        fs::create_dir(test_path.join("dir2")).unwrap();
-        fs::write(test_path.join("file1.txt"), "test").unwrap();
-        fs::write(test_path.join("file2.txt"), "test").unwrap();
-
-        // With consolidated tools, find_files is now 'find' with type 'files'
-        // First test without any filters to ensure files are found
-        let test_request = json!({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "find",
-                "arguments": {
-                    "type": "files",
-                    "path": test_path.to_str().unwrap(),
-                    "pattern": ".*"
-                }
-            },
-            "id": 2
-        });
-
-        let test_response = run_mcp_command(test_request).expect("Failed to get test response");
-        let test_content_raw = test_response["result"]["content"][0]["text"]
-            .as_str()
-            .expect("No test content");
-
-        // Handle potential double-wrapping
-        let test_parsed: Value =
-            serde_json::from_str(test_content_raw).expect("Failed to parse test content");
-        let test_content = if test_parsed.get("content").is_some() {
-            test_parsed["content"][0]["text"].as_str().unwrap()
-        } else {
-            test_content_raw
-        };
-
-        println!("=== Test without filters ===");
-        println!("{}", test_content);
-
-        // Test directory-only filter
-        let request = json!({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "find",
-                "arguments": {
-                    "type": "files",
-                    "path": test_path.to_str().unwrap(),
-                    "pattern": ".*",
-                    "entry_type": "d"
-                }
-            },
-            "id": 3
-        });
-
-        let response = match run_mcp_command(request) {
-            Ok(r) => r,
-            Err(e) => panic!("Failed to get response: {}", e),
-        };
-
-        let content_raw = response["result"]["content"][0]["text"]
-            .as_str()
-            .expect("No content");
-
-        // Handle potential double-wrapping
-        let parsed: Value = serde_json::from_str(content_raw).expect("Failed to parse content");
-        let content = if parsed.get("content").is_some() {
-            parsed["content"][0]["text"].as_str().unwrap()
-        } else {
-            content_raw
-        };
-
-        println!("=== Entry Type Test Content ===");
-        println!("{}", content);
-
-        // Parse the JSON content
-        let content_json: Value =
-            serde_json::from_str(content).expect("Failed to parse content as JSON");
-
-        let files = content_json["files"]
-            .as_array()
-            .expect("No files array in response");
-
-        // Filter out the temporary root directory to count only subdirectories
-        let subdirs: Vec<_> = files
-            .iter()
-            .filter(|f| {
-                let name = f["name"].as_str().unwrap();
-                !name.starts_with(".tmp") // Exclude temporary root directory
-            })
-            .collect();
-
-        println!(
-            "Found {} entries ({} subdirectories)",
-            files.len(),
-            subdirs.len()
-        );
-
-        // Should have found 2 subdirectories (excluding temp root)
-        assert_eq!(subdirs.len(), 2, "Should find exactly 2 subdirectories");
-
-        // Check that both subdirectories are found
-        let names: Vec<&str> = subdirs
-            .iter()
-            .map(|f| f["name"].as_str().unwrap())
-            .collect();
-
-        assert!(names.contains(&"dir1"), "Should contain dir1");
-        assert!(names.contains(&"dir2"), "Should contain dir2");
-
-        // Verify they are marked as directories
-        for file in files {
-            assert!(
-                file["is_directory"].as_bool().unwrap(),
-                "Entry {} should be marked as directory",
-                file["name"]
-            );
-        }
-    }
-
-    #[test]
-    #[ignore = "Temp directory issues in test environment - functionality works with real paths"]
-    fn test_hidden_directory_handling() {
-        use std::fs;
-        use tempfile::TempDir;
-
-        // Create test structure
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let test_path = temp_dir.path();
-
-        // Create hidden directory (may fail on Windows, but we'll handle it)
-        let _ = fs::create_dir(test_path.join(".hidden"));
-        let _ = fs::create_dir(test_path.join(".hidden/subdir"));
-        let _ = fs::write(test_path.join(".hidden/subdir/deep.txt"), "hidden");
-
-        // Always create a visible file for the test
-        fs::write(test_path.join("visible.txt"), "visible").unwrap();
-
-        // Verify visible file exists (hidden files may not work on Windows)
-        assert!(
-            test_path.join("visible.txt").exists(),
-            "visible.txt should exist"
-        );
-
-        // Check if hidden directory was created successfully (optional on Windows)
-        let hidden_works = test_path.join(".hidden/subdir/deep.txt").exists();
-
-        // Test without show_hidden
-        // With consolidated tools, analyze_directory is now 'analyze'
-        let request = json!({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "analyze",
-                "arguments": {
-                    "mode": "directory",
-                    "path": test_path.to_str().unwrap(),
-                    "format": "ai",
-                    "show_hidden": false
-                }
-            },
-            "id": 4
-        });
-
-        let response = run_mcp_command(request).expect("Failed to get response");
-        let content_raw = response["result"]["content"][0]["text"]
-            .as_str()
-            .expect("No content");
-
-        // Handle potential double-wrapping
-        let parsed: Value = serde_json::from_str(content_raw).expect("Failed to parse content");
-        let content = if parsed.get("content").is_some() {
-            parsed["content"][0]["text"].as_str().unwrap()
-        } else {
-            content_raw
-        };
-
-        println!("=== Hidden Directory Test Content ===");
-        println!("{}", content);
-        println!("Test path: {}", test_path.display());
-
-        // Parse the stats to check if visible files were found
-        // Should find at least 1 file (visible.txt) even with show_hidden=false
-        let has_visible_files = content.contains("F:1") || content.contains("F:0x1");
-
-        if !has_visible_files {
-            // This might be a Windows-specific issue with temp directories
-            println!("DEBUG: No files found in temp directory on Windows, this is a known issue");
-            println!("DEBUG: Windows temp path: {}", test_path.display());
-            println!("DEBUG: Files in directory:");
-            if let Ok(entries) = std::fs::read_dir(test_path) {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        println!("  - {}", entry.path().display());
-                    }
-                }
-            }
-            // Skip the rest of the test on Windows if temp directory scanning fails
-            return;
-        }
-
-        // Test passed - found visible files, now verify hidden files are hidden
-        assert!(
-            content.contains("visible.txt"),
-            "Visible files should be shown. Content: {}",
-            content
-        );
-
-        // Only check for hidden content if it was successfully created
-        if hidden_works {
-            assert!(
-                !content.contains("deep.txt"),
-                "Hidden directory contents should not be shown"
-            );
-        }
-    }
-
-    #[test]
-    #[ignore = "Known issue: date filtering has timezone problems - not a v3.3.5 regression"]
-    fn test_date_format_parsing() {
-        use chrono::{Duration, Local};
-        use std::fs;
-
-        // Use a known path in /tmp instead of tempdir
-        let test_path = PathBuf::from(format!(
-            "/tmp/st_date_test_{}_{}",
-            std::process::id(),
-            chrono::Utc::now().timestamp_millis()
-        ));
-        fs::create_dir_all(&test_path).unwrap();
-
-        // Create a recent file
-        fs::write(test_path.join("recent.txt"), "new").unwrap();
-
-        // Get date strings
-        let today = Local::now().format("%Y-%m-%d").to_string();
-        let yesterday = (Local::now() - Duration::days(1))
-            .format("%Y-%m-%d")
-            .to_string();
-
-        // Test find with timespan type (consolidated tools)
-        let request = json!({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "find",
-                "arguments": {
-                    "type": "timespan",
-                    "path": test_path.to_str().unwrap(),
-                    "start_date": yesterday,
-                    "end_date": today
-                }
-            },
-            "id": 5
-        });
-
-        let response = run_mcp_command(request).expect("Failed to get response");
-
-        // Should not have an error
-        assert!(
-            response["error"].is_null(),
-            "Date parsing should work with YYYY-MM-DD format"
-        );
-
-        let content = response["result"]["content"][0]["text"]
-            .as_str()
-            .expect("No content");
-
-        println!("=== Date Test Content ===");
-        println!("{}", content);
-        println!("Test path: {}", test_path.display());
-        println!("Start date: {}", yesterday);
-        println!("End date: {}", today);
-
-        // Parse JSON to check properly
-        let content_json: Value =
-            serde_json::from_str(content).expect("Failed to parse content as JSON");
-
-        let found = content_json["found"].as_u64().unwrap_or(0);
-
-        if found == 0 {
-            // Try with a direct /tmp path as a fallback
-            let alt_path = PathBuf::from(format!("/tmp/st_date_test_{}", std::process::id()));
-            fs::create_dir(&alt_path).unwrap();
-            fs::write(alt_path.join("recent.txt"), "new").unwrap();
-
-            let alt_request = json!({
-                "jsonrpc": "2.0",
-                "method": "tools/call",
-                "params": {
-                    "name": "find",
-                    "arguments": {
-                        "type": "timespan",
-                        "path": alt_path.to_str().unwrap(),
-                        "start_date": yesterday,
-                        "end_date": today
-                    }
-                },
-                "id": 6
-            });
-
-            let alt_response = run_mcp_command(alt_request).expect("Failed to get alt response");
-            let alt_content = alt_response["result"]["content"][0]["text"]
-                .as_str()
-                .expect("No alt content");
-
-            println!("=== Alternative date test with /tmp path ===");
-            println!("{}", alt_content);
-
-            // Clean up
-            fs::remove_dir_all(&alt_path).ok();
-
-            let alt_json: Value =
-                serde_json::from_str(alt_content).expect("Failed to parse alt content as JSON");
-            let alt_found = alt_json["found"].as_u64().unwrap_or(0);
-
-            assert!(
-                alt_found > 0,
-                "Should find at least one file. Original: {}, Alternative: {}",
-                content,
-                alt_content
-            );
-        } else {
-            assert!(
-                found > 0,
-                "Should find at least one file. Content: {}",
-                content
-            );
-        }
-
-        // Clean up
-        fs::remove_dir_all(&test_path).ok();
+use axum::{
+    body::Body,
+    http::{header, Request, StatusCode},
+};
+use http_body_util::BodyExt;
+use serde_json::{json, Value};
+#[allow(unused_imports)]
+use st::mcp_combinatorics_llm::{
+    self, build_mcp_router, evaluate_jsonrpc_payload,
+    kernels::{
+        ffi_progress_trampoline, run_erdos_renyi_scanning, run_erdos_steiner_pruning,
+        run_mlx_quant, run_moser_tardos_splitting, run_ramsey_clique_analysis,
+        run_szemeredi_compression, BitSet, FfiCallbackState, StackBitMatrix, StackBitSet,
+    },
+    llama_cpp_2,
+    model_cache::{KvForkMode, McpProgressEmitter},
+    AppState, ErdosRenyiParams, ErdosSteinerParams, MlxQuantParams, MlxQuantScheme,
+    MoserTardosParams, RamseyCliqueParams, SzemerediParams,
+};
+#[allow(unused_imports)]
+use std::{collections::HashSet, ffi::CString, fs, sync::Arc};
+use tokio::sync::mpsc;
+use tower::ServiceExt;
+
+// ============================================================================
+// 1. MCP JSON-RPC Lifecycle, Batching & Axum SSE Transport Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_mcp_initialize_and_tool_registry() {
+    let state = Arc::new(AppState::new(2));
+
+    // 1. Verify `initialize` handshake
+    let init_req = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {}
+    });
+    let init_resp = evaluate_jsonrpc_payload(Arc::clone(&state), init_req, None)
+        .await
+        .expect("initialize must return a response");
+    assert_eq!(init_resp["result"]["protocolVersion"], "2025-03-26");
+
+    // 2. Verify one-way notification returns None
+    let notif_req = json!({
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized"
+    });
+    assert!(
+        evaluate_jsonrpc_payload(Arc::clone(&state), notif_req, None)
+            .await
+            .is_none(),
+        "MCP notifications must not emit a response"
+    );
+
+    // 3. Verify `tools/list` exposes all 7 tools
+    let list_req = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list"
+    });
+    let list_resp = evaluate_jsonrpc_payload(state, list_req, None)
+        .await
+        .unwrap();
+    let tools = list_resp["result"]["tools"].as_array().unwrap();
+    let names: HashSet<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
+
+    for expected in [
+        "szemeredi_compression",
+        "erdos_steiner_pruning",
+        "moser_tardos_splitting",
+        "erdos_renyi_scanning",
+        "ramsey_clique_analysis",
+        "mlx_quant",
+        "llama_rust",
+    ] {
+        assert!(names.contains(expected), "Missing tool schema: {expected}");
     }
 }
-*/
+
+#[tokio::test]
+async fn test_axum_sse_progress_stream_end_to_end() {
+    let state = Arc::new(AppState::new(2));
+    let app = build_mcp_router(state);
+
+    let rpc_body = json!({
+        "jsonrpc": "2.0",
+        "id": "sse-test-1",
+        "method": "tools/call",
+        "params": {
+            "name": "erdos_renyi_scanning",
+            "arguments": { "n": 120, "p": 0.08, "seed": 42 },
+            "_meta": { "progressToken": "er-token-99" }
+        }
+    });
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ACCEPT, "text/event-stream")
+        .body(Body::from(rpc_body.to_string()))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("text/event-stream"));
+
+    let raw_bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let sse_text = String::from_utf8_lossy(&raw_bytes);
+
+    let events: Vec<Value> = sse_text
+        .lines()
+        .filter_map(|line| line.strip_prefix("data: "))
+        .filter_map(|data| serde_json::from_str::<Value>(data).ok())
+        .collect();
+
+    // Must contain multiple `notifications/progress` frames followed by the final `result` frame
+    assert!(
+        events.len() >= 3,
+        "Expected progress frames + final response, got {}",
+        events.len()
+    );
+
+    let progress_frames: Vec<&Value> = events
+        .iter()
+        .filter(|e| e["method"] == "notifications/progress")
+        .collect();
+    assert!(!progress_frames.is_empty());
+    assert_eq!(
+        progress_frames[0]["params"]["progressToken"],
+        json!("er-token-99")
+    );
+
+    let final_frame = events.last().unwrap();
+    assert_eq!(final_frame["id"], json!("sse-test-1"));
+    assert_eq!(final_frame["result"]["isError"], json!(false));
+}
+
+// ============================================================================
+// 2. Combinatorial Solver Verification & Client Disconnect Cancellation
+// ============================================================================
+
+#[test]
+fn test_szemeredi_compression_regularity_and_energy() {
+    let n = 64;
+    let mut edges = Vec::new();
+    // Construct a dense complete bipartite graph K_{32, 32}
+    for u in 0..32 {
+        for v in 32..64 {
+            edges.push((u, v));
+        }
+    }
+
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let emitter = McpProgressEmitter::new(Some(tx), Some(json!("sz-prog")));
+
+    let res = run_szemeredi_compression(
+        SzemerediParams {
+            num_vertices: n,
+            edges,
+            epsilon: 0.15,
+            min_parts: 2,
+        },
+        &emitter,
+    )
+    .expect("Szemerédi compression should succeed");
+
+    assert_eq!(res["status"], "compressed");
+    assert!(res["energy_potential"].as_f64().unwrap() > 0.0);
+
+    let mut progress_count = 0;
+    while let Ok(frame) = rx.try_recv() {
+        assert_eq!(frame["method"], "notifications/progress");
+        progress_count += 1;
+    }
+    assert!(
+        progress_count >= 2,
+        "Expected initialized + refinement_step events"
+    );
+}
+
+#[test]
+fn test_erdos_steiner_pruning_and_disconnect_cancellation() {
+    // 1. Verify leaf pruning, degree-2 contraction, and triangle metric dominance
+    // Triangle (0, 1, w=2.0), (1, 2, w=2.0), direct (0, 2, w=9.0 -> dominated!)
+    // Plus non-terminal leaf (2, 3, w=1.0) where 3 is not a terminal -> pruned!
+    let params = ErdosSteinerParams {
+        edges: vec![(0, 1, 2.0), (1, 2, 2.0), (0, 2, 9.0), (2, 3, 1.0)],
+        terminals: vec![0, 1, 2],
+        pruning_threshold: 10.0,
+    };
+
+    let res = run_erdos_steiner_pruning(params, &McpProgressEmitter::default()).unwrap();
+    assert_eq!(res["pruned_leaf_vertices"], 1); // Vertex 3 removed
+    assert_eq!(res["retained_edge_count"], 2); // Edge (0,2,9.0) dominated by 0->1->2 (cost 4.0)
+    assert!((res["total_retained_weight"].as_f64().unwrap() - 4.0).abs() < 1e-9);
+
+    // 2. Verify cooperative cancellation when SSE receiver drops mid-flight
+    let (tx, rx) = mpsc::unbounded_channel();
+    drop(rx); // Simulate immediate client SSE disconnect
+    let dead_emitter = McpProgressEmitter::new(Some(tx), Some(json!("cancel-steiner")));
+
+    let cancel_res = run_erdos_steiner_pruning(
+        ErdosSteinerParams {
+            edges: vec![(0, 1, 1.0), (1, 2, 1.0)],
+            terminals: vec![0, 2],
+            pruning_threshold: 5.0,
+        },
+        &dead_emitter,
+    );
+    assert!(cancel_res.is_err());
+    assert!(cancel_res.unwrap_err().contains("Client disconnected"));
+}
+
+#[test]
+fn test_moser_tardos_parallel_mis_disjointness_and_reproducibility() {
+    // Construct a 3-CNF formula with 40 variables and 30 clauses
+    let mut bad_events = Vec::new();
+    for i in 1..=30 {
+        let v1 = i as i32;
+        let v2 = ((i % 40) + 1) as i32;
+        let v3 = (((i + 7) % 40) + 1) as i32;
+        bad_events.push(vec![v1, -v2, v3]);
+    }
+
+    let params1 = MoserTardosParams {
+        num_variables: 40,
+        bad_events: bad_events.clone(),
+        max_resamples: 500,
+    };
+    let params2 = MoserTardosParams {
+        num_variables: 40,
+        bad_events: bad_events.clone(),
+        max_resamples: 500,
+    };
+
+    let res1 = run_moser_tardos_splitting(params1, &McpProgressEmitter::default()).unwrap();
+    let res2 = run_moser_tardos_splitting(params2, &McpProgressEmitter::default()).unwrap();
+
+    assert_eq!(res1["status"], "converged");
+    // Thread-schedule invariant PRNG guarantees identical assignments across runs
+    assert_eq!(res1["assignment"], res2["assignment"]);
+
+    // Verify that every parallel MIS layer contains strictly variable-disjoint clauses
+    if let Some(layers) = res1["witness_parallel_layers"].as_array() {
+        for layer in layers {
+            let mut seen_vars = HashSet::new();
+            for c_val in layer.as_array().unwrap() {
+                let c_idx = c_val.as_u64().unwrap() as usize;
+                for &lit in &bad_events[c_idx] {
+                    let v = lit.unsigned_abs() as usize;
+                    assert!(
+                        seen_vars.insert(v),
+                        "MIS invariant violated: variable {v} appeared twice in the same parallel layer"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_erdos_renyi_phase_transitions() {
+    let sub = run_erdos_renyi_scanning(
+        ErdosRenyiParams {
+            n: 200,
+            p: 0.001,
+            seed: Some(99),
+        },
+        &McpProgressEmitter::default(),
+    )
+    .unwrap();
+    assert_eq!(sub["regime"], "subcritical");
+
+    let sup = run_erdos_renyi_scanning(
+        ErdosRenyiParams {
+            n: 200,
+            p: 0.06,
+            seed: Some(99),
+        },
+        &McpProgressEmitter::default(),
+    )
+    .unwrap();
+    assert_eq!(sup["regime"], "connected_supercritical");
+}
+
+#[test]
+fn test_ramsey_clique_stack_tiers_and_degeneracy() {
+    // Test across N=1 (40 vertices) and N=2 (90 vertices) with a planted 6-clique on {0..5}
+    for &num_vertices in &[40usize, 90usize] {
+        let mut edges = Vec::new();
+        for u in 0..6 {
+            for v in (u + 1)..6 {
+                edges.push((u, v));
+            }
+        }
+
+        let res = run_ramsey_clique_analysis(
+            RamseyCliqueParams {
+                num_vertices,
+                edges,
+                k_clique: 6,
+                l_independent: 10,
+            },
+            &McpProgressEmitter::default(),
+        )
+        .unwrap();
+
+        assert_eq!(res["heap_allocations_in_search"], 0);
+        assert_eq!(res["graph_degeneracy"], 5);
+        assert_eq!(res["k_clique_found"], true);
+        assert_eq!(res["l_independent_found"], true);
+        assert_eq!(res["largest_clique_witness"], json!([0, 1, 2, 3, 4, 5]));
+    }
+}
+
+// ============================================================================
+// 3. MLX Quantization Checkpoint Inspection & C-FFI Callback Trampoline Test
+// ============================================================================
+
+#[test]
+fn test_mlx_quant_ffi_trampoline_and_disconnect_abort() {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let emitter = McpProgressEmitter::new(Some(tx), Some(json!("mlx-token")));
+
+    let mut state = FfiCallbackState {
+        emitter: &emitter,
+        scheme: "mxfp4",
+        bits: 4,
+        group_size: 64,
+        source_bytes: 1_000_000_000,
+        cancelled: false,
+    };
+
+    let tensor_name = CString::new("model.layers.3.self_attn.q_proj.weight").unwrap();
+    let rc = ffi_progress_trampoline(
+        4,
+        32,
+        tensor_name.as_ptr(),
+        32_000_000,
+        (&mut state as *mut FfiCallbackState<'_>) as *mut libc::c_void,
+    );
+    assert_eq!(rc, 0, "Trampoline must return 0 when SSE stream is healthy");
+
+    let frame = rx.try_recv().expect("Expected layer_quantized SSE frame");
+    assert_eq!(frame["params"]["data"]["phase"], "layer_quantized");
+    assert_eq!(frame["params"]["data"]["layer"], 4);
+    assert!(
+        frame["params"]["data"]["live_compression_ratio"]
+            .as_f64()
+            .unwrap()
+            > 3.5
+    );
+
+    // Drop receiver to simulate client disconnect and verify trampoline returns 1 (abort)
+    drop(rx);
+    let rc_abort = ffi_progress_trampoline(
+        5,
+        32,
+        tensor_name.as_ptr(),
+        40_000_000,
+        (&mut state as *mut FfiCallbackState<'_>) as *mut libc::c_void,
+    );
+    assert_eq!(
+        rc_abort, 1,
+        "Trampoline must return 1 to abort C FFI when client disconnects"
+    );
+    assert!(state.cancelled);
+}
+
+// ============================================================================
+// 4. Tree-Attention Speculative Decoding, N-Gram Drafter & PID Controller Tests
+// ============================================================================
+
+#[test]
+fn test_speculative_tree_attention_seq_id_propagation() {
+    use llama_cpp_2::token::LlamaToken;
+    use mcp_combinatorics_llm::model_cache::{DraftTreeNode, SpeculativeDraftTree};
+
+    // Build a 4-node tree rooted at Node 0 (pos 10):
+    //   Node 0 (root) -> Node 1 (branch seq 2) -> Node 3 (leaf seq 2)
+    //                 -> Node 2 (leaf seq 9)
+    let mut tree = SpeculativeDraftTree {
+        root_pos: 10,
+        borrowed_aux_seqs: vec![9],
+        nodes: vec![
+            DraftTreeNode {
+                token: LlamaToken(100),
+                draft_prob: 1.0,
+                pos: 10,
+                depth: 0,
+                parent_idx: None,
+                children: vec![1, 2],
+                leaf_seq_ids: vec![],
+                target_batch_idx: None,
+            },
+            DraftTreeNode {
+                token: LlamaToken(101),
+                draft_prob: 0.6,
+                pos: 11,
+                depth: 1,
+                parent_idx: Some(0),
+                children: vec![3],
+                leaf_seq_ids: vec![],
+                target_batch_idx: None,
+            },
+            DraftTreeNode {
+                token: LlamaToken(102),
+                draft_prob: 0.3,
+                pos: 11,
+                depth: 1,
+                parent_idx: Some(0),
+                children: vec![],
+                leaf_seq_ids: vec![9],
+                target_batch_idx: None,
+            },
+            DraftTreeNode {
+                token: LlamaToken(103),
+                draft_prob: 0.8,
+                pos: 12,
+                depth: 2,
+                parent_idx: Some(1),
+                children: vec![],
+                leaf_seq_ids: vec![2],
+                target_batch_idx: None,
+            },
+        ],
+    };
+
+    tree.finalize_tree_attention_masks();
+
+    // Root Node 0 must be visible to both leaf sequence 2 and auxiliary leaf sequence 9
+    assert_eq!(tree.nodes[0].leaf_seq_ids, vec![2, 9]);
+    // Internal Node 1 must be visible only to leaf sequence 2
+    assert_eq!(tree.nodes[1].leaf_seq_ids, vec![2]);
+    // Sibling Leaf Node 2 must be visible only to auxiliary leaf sequence 9
+    assert_eq!(tree.nodes[2].leaf_seq_ids, vec![9]);
+}
+
+#[test]
+fn test_ngram_prompt_lookup_tree_drafter() {
+    use llama_cpp_2::token::LlamaToken;
+    use mcp_combinatorics_llm::model_cache::PromptLookupDrafter;
+
+    // Construct a token history containing two distinct continuations after the 3-gram [10, 20, 30]:
+    //   Occurrence 1: [10, 20, 30] -> [40, 41, 42]
+    //   Occurrence 2: [10, 20, 30] -> [50, 51, 52]
+    //   Occurrence 3: [10, 20, 30] -> [40, 41, 42] (makes branch 40 twice as frequent as 50)
+    //   Current suffix ending at `root_token = 30`: committed ends with [..., 10, 20]
+    let committed: Vec<LlamaToken> = vec![
+        10, 20, 30, 40, 41, 42, 99, 10, 20, 30, 50, 51, 52, 99, 10, 20, 30, 40, 41, 42, 99, 10, 20,
+    ]
+    .into_iter()
+    .map(LlamaToken)
+    .collect();
+
+    let root_token = LlamaToken(30);
+    let root_pos = committed.len() as i32;
+    let mut aux_pool = vec![11, 10, 9, 8];
+
+    let drafter = PromptLookupDrafter::default();
+    let tree = drafter
+        .build_ngram_draft_tree(
+            2, // primary seq_id = 2
+            &committed,
+            root_token,
+            root_pos,
+            3, // depth_k = 3
+            2, // width_w = 2
+            4096,
+            |tok| tok.0 == 999,
+            &mut aux_pool,
+        )
+        .expect("N-gram prompt lookup drafter should build a 2-branch speculative tree");
+
+    // Borrowed 1 auxiliary sequence ID (8) for the second branch
+    assert_eq!(tree.borrowed_aux_seqs, vec![8]);
+    // Root node must carry both leaf sequence IDs [2, 8]
+    assert_eq!(tree.nodes[0].leaf_seq_ids, vec![2, 8]);
+    assert_eq!(tree.nodes[0].children.len(), 2);
+
+    let branch_a_idx = tree.nodes[0].children[0];
+    let branch_b_idx = tree.nodes[0].children[1];
+
+    // Branch A must be the higher-frequency continuation [40, 41, 42] on primary seq 2
+    assert_eq!(tree.nodes[branch_a_idx].token, LlamaToken(40));
+    assert_eq!(tree.nodes[branch_a_idx].leaf_seq_ids, vec![2]);
+    assert!(tree.nodes[branch_a_idx].draft_prob > tree.nodes[branch_b_idx].draft_prob);
+
+    // Branch B must be the secondary continuation [50, 51, 52] on auxiliary seq 8
+    assert_eq!(tree.nodes[branch_b_idx].token, LlamaToken(50));
+    assert_eq!(tree.nodes[branch_b_idx].leaf_seq_ids, vec![8]);
+}
+
+#[test]
+fn test_pid_ewma_speculative_controller_regimes() {
+    use mcp_combinatorics_llm::model_cache::AdaptiveSpeculativeController;
+
+    let mut ctrl = AdaptiveSpeculativeController::new(3, 2);
+
+    // 1. High-Acceptance Regime: 100% of drafted depth accepted over 5 steps
+    //    Controller must scale K upward toward max_k (8) and collapse W to 1 (laser chain)
+    for _ in 0..5 {
+        let (k, _w) = ctrl.select_k_and_w(100, 1, 16, 128);
+        ctrl.record_verification_outcome(k, k, k + 1);
+    }
+    let (high_k, high_w) = ctrl.select_k_and_w(100, 1, 16, 128);
+    assert!(
+        high_k >= 6,
+        "Expected PID loop to expand K >= 6 under 100% acceptance, got {high_k}"
+    );
+    assert_eq!(
+        high_w, 1,
+        "Expected W == 1 (single chain) when ewma_accept_rate > 0.78"
+    );
+
+    // 2. Moderate-Uncertainty Regime: ~45% acceptance rate
+    //    Controller must widen tree_width W >= 2 to hedge depth-1 ambiguity
+    let mut mod_ctrl = AdaptiveSpeculativeController::new(4, 2);
+    for _ in 0..4 {
+        mod_ctrl.record_verification_outcome(4, 2, 7);
+    }
+    let (mod_k, mod_w) = mod_ctrl.select_k_and_w(100, 1, 16, 128);
+    assert!((2..=5).contains(&mod_k));
+    assert!(
+        mod_w >= 2,
+        "Expected controller to widen W >= 2 in moderate acceptance regime, got {mod_w}"
+    );
+
+    // 3. Zero-Acceptance Collapse & Cooldown Probe Recovery:
+    //    Repeated 0-token acceptances must trigger K=0 cooldown bypass, then recover with a (1, 1) probe
+    for _ in 0..6 {
+        mod_ctrl.record_verification_outcome(4, 0, 5);
+    }
+    assert!(mod_ctrl.ewma_accept_rate < 0.18);
+
+    // Next two calls during cooldown must bypass speculation (K = 0)
+    let (cd1_k, _) = mod_ctrl.select_k_and_w(100, 1, 16, 128);
+    let (cd2_k, _) = mod_ctrl.select_k_and_w(100, 1, 16, 128);
+    assert_eq!(cd1_k, 0);
+    assert_eq!(cd2_k, 0);
+
+    // Third call expires cooldown and fires a (K = 1, W = 1) recovery probe
+    let (probe_k, probe_w) = mod_ctrl.select_k_and_w(100, 1, 16, 128);
+    assert_eq!(probe_k, 1, "Expected K=1 recovery probe after cooldown");
+    assert_eq!(probe_w, 1, "Expected W=1 recovery probe after cooldown");
+    assert_eq!(mod_ctrl.stats().probe_recoveries, 1);
+}

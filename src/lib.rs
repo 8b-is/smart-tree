@@ -116,6 +116,7 @@ pub mod emoji_mapper;
 // Re-export key items from the `scanner` module for easier access.
 // This means users of the `st` library can use `st::Scanner`
 // instead of `st::scanner::Scanner`, for example. It's all about convenience!
+pub use crate::mcp::combinatorics_llm as mcp_combinatorics_llm;
 pub use scanner::{
     parse_size, FileCategory, FileNode, FilesystemType, Scanner, ScannerConfig, TreeStats,
 };

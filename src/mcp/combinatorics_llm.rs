@@ -30,8 +30,115 @@ use std::{
     time::Instant,
 };
 
-/// Number of concurrent radix sequence branches maintained inside each pooled `OwnedLlamaSession`.
-pub const MAX_SEQS_PER_SESSION: u32 = 8;
+/// Number of concurrent primary radix sequence slots (`0..8`) maintained inside each session.
+pub const MAX_SEQS_PER_SESSION: usize = 8;
+/// Total KV sequence IDs allocated in `LlamaContext` (`0..8` primary + `8..32` auxiliary tree-attention branches).
+pub const TOTAL_KV_SEQS: u32 = 32;
+
+/// Native `llama-cpp-2` token & candidate types for tree-attention speculative decoding.
+pub mod llama_cpp_2 {
+    pub mod token {
+        use serde::{Deserialize, Serialize};
+
+        #[derive(
+            Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+        )]
+        pub struct LlamaToken(pub i32);
+
+        pub mod data {
+            use super::LlamaToken;
+
+            #[derive(Copy, Clone, Debug)]
+            pub struct LlamaTokenData {
+                id: LlamaToken,
+                logit: f32,
+                p: f32,
+            }
+
+            impl LlamaTokenData {
+                #[inline]
+                pub const fn new(id: LlamaToken, logit: f32, p: f32) -> Self {
+                    Self { id, logit, p }
+                }
+
+                #[inline]
+                pub const fn id(&self) -> LlamaToken {
+                    self.id
+                }
+
+                #[inline]
+                pub const fn logit(&self) -> f32 {
+                    self.logit
+                }
+
+                #[inline]
+                pub const fn p(&self) -> f32 {
+                    self.p
+                }
+            }
+        }
+    }
+}
+
+use llama_cpp_2::token::{data::LlamaTokenData, LlamaToken};
+
+// ============================================================================
+// Cooperative Client-Disconnect Cancellation & SSE Progress Emitter
+// ============================================================================
+
+#[derive(Clone, Debug, Default)]
+pub struct McpProgressEmitter {
+    pub tx: Option<tokio::sync::mpsc::UnboundedSender<Value>>,
+    pub progress_token: Option<Value>,
+    pub cancelled: Arc<AtomicBool>,
+}
+
+impl McpProgressEmitter {
+    pub fn new(
+        tx: Option<tokio::sync::mpsc::UnboundedSender<Value>>,
+        progress_token: Option<Value>,
+    ) -> Self {
+        Self {
+            tx,
+            progress_token,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    #[inline]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(AtomicOrdering::Relaxed)
+    }
+
+    /// Emits a JSON-RPC 2.0 `notifications/progress` frame over the SSE channel.
+    /// Returns `false` (and sets `cancelled = true`) if the client disconnected.
+    pub fn emit_progress(&self, progress: usize, total: usize, data: Value) -> bool {
+        if self.cancelled.load(AtomicOrdering::Relaxed) {
+            return false;
+        }
+        if let Some(ref tx) = self.tx {
+            let token = self
+                .progress_token
+                .clone()
+                .unwrap_or_else(|| json!("default-progress"));
+            let frame = json!({
+                "jsonrpc": "2.0",
+                "method": "notifications/progress",
+                "params": {
+                    "progressToken": token,
+                    "progress": progress,
+                    "total": total,
+                    "data": data
+                }
+            });
+            if tx.send(frame).is_err() {
+                self.cancelled.store(true, AtomicOrdering::Relaxed);
+                return false;
+            }
+        }
+        true
+    }
+}
 
 // ============================================================================
 // Strongly-Typed Algorithm & LLM Runtime Payloads
@@ -108,6 +215,12 @@ pub struct MlxQuantParams {
 pub struct LlamaRustParams {
     pub model_path: String,
     pub prompt: String,
+    #[serde(default)]
+    pub draft_model_path: Option<String>,
+    #[serde(default = "default_speculative_depth")]
+    pub speculative_depth: usize,
+    #[serde(default = "default_speculative_tree_width")]
+    pub speculative_tree_width: usize,
     #[serde(default = "default_n_ctx")]
     pub n_ctx: u32,
     #[serde(default = "default_n_gpu_layers")]
@@ -120,19 +233,25 @@ pub struct LlamaRustParams {
     pub max_tokens: usize,
 }
 
-const fn default_n_ctx() -> u32 {
+pub const fn default_speculative_depth() -> usize {
+    4
+}
+pub const fn default_speculative_tree_width() -> usize {
+    2
+}
+pub const fn default_n_ctx() -> u32 {
     4096
 }
-const fn default_n_gpu_layers() -> u32 {
+pub const fn default_n_gpu_layers() -> u32 {
     99
 }
-const fn default_n_batch() -> u32 {
+pub const fn default_n_batch() -> u32 {
     2048
 }
-const fn default_temperature() -> f32 {
+pub const fn default_temperature() -> f32 {
     0.7
 }
-const fn default_max_tokens() -> usize {
+pub const fn default_max_tokens() -> usize {
     512
 }
 
@@ -142,7 +261,7 @@ const fn default_max_tokens() -> usize {
 
 #[derive(Clone, Copy)]
 pub struct SplitMix64 {
-    state: u64,
+    pub state: u64,
 }
 
 impl SplitMix64 {
@@ -604,7 +723,10 @@ struct PairEvalResult {
     witness_split: Option<(Vec<usize>, Vec<usize>)>,
 }
 
-pub fn run_szemeredi_compression(params: SzemerediParams) -> Result<Value, String> {
+pub fn run_szemeredi_compression(
+    params: SzemerediParams,
+    emitter: &McpProgressEmitter,
+) -> Result<Value, String> {
     let n = params.num_vertices;
     if n == 0 {
         return Err("num_vertices must be at least 1".into());
@@ -630,7 +752,22 @@ pub fn run_szemeredi_compression(params: SzemerediParams) -> Result<Value, Strin
     let mut energy_index = 0.0;
     let n_sq_f64 = (n * n) as f64;
 
-    for _ in 0..max_refinements {
+    if !emitter.emit_progress(
+        0,
+        max_refinements,
+        json!({
+            "phase": "initialized",
+            "num_vertices": n,
+            "initial_partitions": k_init
+        }),
+    ) {
+        return Err("Client disconnected during Szemerédi initialization".into());
+    }
+
+    for step_idx in 0..max_refinements {
+        if emitter.is_cancelled() {
+            return Err("Client disconnected during Szemerédi refinement".into());
+        }
         let k = parts.len();
 
         let part_masks: Vec<BitSet> = parts.par_iter().map(|p| BitSet::from_slice(n, p)).collect();
@@ -642,6 +779,9 @@ pub fn run_szemeredi_compression(params: SzemerediParams) -> Result<Value, Strin
         let evals: Vec<PairEvalResult> = pairs
             .into_par_iter()
             .filter_map(|(i, j)| {
+                if emitter.is_cancelled() {
+                    return None;
+                }
                 let vi = &parts[i];
                 let vj = &parts[j];
                 if vi.is_empty() || vj.is_empty() {
@@ -713,6 +853,10 @@ pub fn run_szemeredi_compression(params: SzemerediParams) -> Result<Value, Strin
             })
             .collect();
 
+        if emitter.is_cancelled() {
+            return Err("Client disconnected during Szemerédi pair evaluation".into());
+        }
+
         irregular_pairs_count = 0;
         energy_index = 0.0;
         let mut proposed_splits: Vec<Option<(Vec<usize>, Vec<usize>)>> = vec![None; k];
@@ -725,6 +869,20 @@ pub fn run_szemeredi_compression(params: SzemerediParams) -> Result<Value, Strin
                     proposed_splits[eval.part_i] = eval.witness_split;
                 }
             }
+        }
+
+        if !emitter.emit_progress(
+            step_idx + 1,
+            max_refinements,
+            json!({
+                "phase": "refinement_step",
+                "step": step_idx + 1,
+                "partitions": k,
+                "irregular_pairs": irregular_pairs_count,
+                "energy_potential": energy_index
+            }),
+        ) {
+            return Err("Client disconnected during Szemerédi refinement step".into());
         }
 
         let total_pairs = k * (k.saturating_sub(1)) / 2;
@@ -815,9 +973,24 @@ impl PartialOrd for DenseDijkstraState {
     }
 }
 
-pub fn run_erdos_steiner_pruning(params: ErdosSteinerParams) -> Result<Value, String> {
+pub fn run_erdos_steiner_pruning(
+    params: ErdosSteinerParams,
+    emitter: &McpProgressEmitter,
+) -> Result<Value, String> {
     let terminal_set: HashSet<usize> = params.terminals.iter().copied().collect();
     let initial_edge_count = params.edges.len();
+
+    if !emitter.emit_progress(
+        0,
+        2,
+        json!({
+            "phase": "preprocessing",
+            "initial_edges": initial_edge_count,
+            "terminals": params.terminals.len()
+        }),
+    ) {
+        return Err("Client disconnected during Erdős–Steiner preprocessing".into());
+    }
 
     let mut adj: HashMap<usize, HashMap<usize, f64>> = HashMap::new();
     for &(u, v, w) in &params.edges {
@@ -838,6 +1011,9 @@ pub fn run_erdos_steiner_pruning(params: ErdosSteinerParams) -> Result<Value, St
     let mut contracted_steiner_nodes = 0usize;
 
     loop {
+        if emitter.is_cancelled() {
+            return Err("Client disconnected during Erdős–Steiner reduction".into());
+        }
         let mut changed = false;
         let vertices: Vec<usize> = adj.keys().copied().collect();
 
@@ -897,6 +1073,18 @@ pub fn run_erdos_steiner_pruning(params: ErdosSteinerParams) -> Result<Value, St
     let mut active_nodes: Vec<usize> = adj.keys().copied().collect();
     active_nodes.sort_unstable();
 
+    if !emitter.emit_progress(
+        1,
+        2,
+        json!({
+            "phase": "dijkstra",
+            "active_vertices": active_nodes.len(),
+            "pruned_leaf_vertices": pruned_steiner_nodes
+        }),
+    ) {
+        return Err("Client disconnected during Erdős–Steiner Dijkstra".into());
+    }
+
     let node_to_dense: HashMap<usize, usize> = active_nodes
         .iter()
         .enumerate()
@@ -919,19 +1107,30 @@ pub fn run_erdos_steiner_pruning(params: ErdosSteinerParams) -> Result<Value, St
     let mut retained_edges: Vec<(usize, usize, f64)> = (0..active_nodes.len())
         .into_par_iter()
         .flat_map_iter(|u_dense| {
+            if emitter.is_cancelled() {
+                return Vec::new().into_iter();
+            }
             let dists = dense_dijkstra(&dense_adj, u_dense);
             let orig_u = active_nodes_ref[u_dense];
 
-            dense_adj[u_dense].iter().filter_map(move |&(v_dense, w)| {
-                let orig_v = active_nodes_ref[v_dense];
-                if orig_u < orig_v && w <= dists[v_dense] + 1e-12 {
-                    Some((orig_u, orig_v, w))
-                } else {
-                    None
-                }
-            })
+            let local: Vec<(usize, usize, f64)> = dense_adj[u_dense]
+                .iter()
+                .filter_map(move |&(v_dense, w)| {
+                    let orig_v = active_nodes_ref[v_dense];
+                    if orig_u < orig_v && w <= dists[v_dense] + 1e-12 {
+                        Some((orig_u, orig_v, w))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            local.into_iter()
         })
         .collect();
+
+    if emitter.is_cancelled() {
+        return Err("Client disconnected during Erdős–Steiner Dijkstra".into());
+    }
 
     retained_edges.sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
     let total_weight: f64 = retained_edges.iter().map(|&(_, _, w)| w).sum();
@@ -988,7 +1187,10 @@ struct PreparedClause {
     conflict_neighbors: Vec<usize>,
 }
 
-pub fn run_moser_tardos_splitting(params: MoserTardosParams) -> Result<Value, String> {
+pub fn run_moser_tardos_splitting(
+    params: MoserTardosParams,
+    emitter: &McpProgressEmitter,
+) -> Result<Value, String> {
     let num_vars = params.num_variables;
     if num_vars == 0 {
         return Err("num_variables must be at least 1".into());
@@ -1061,6 +1263,10 @@ pub fn run_moser_tardos_splitting(params: MoserTardosParams) -> Result<Value, St
     let mut witness_parallel_layers: Vec<Vec<usize>> = Vec::new();
 
     while total_resamples <= params.max_resamples {
+        if emitter.is_cancelled() {
+            return Err("Client disconnected during Moser–Tardos resampling".into());
+        }
+
         let violated: Vec<usize> = (0..num_clauses)
             .into_par_iter()
             .filter(|&c_idx| is_clause_violated(&clauses[c_idx], &assignment))
@@ -1089,6 +1295,21 @@ pub fn run_moser_tardos_splitting(params: MoserTardosParams) -> Result<Value, St
 
         if total_resamples >= params.max_resamples {
             break;
+        }
+
+        if parallel_rounds.is_multiple_of(4)
+            && !emitter.emit_progress(
+                total_resamples,
+                params.max_resamples.max(1),
+                json!({
+                    "phase": "resampling_round",
+                    "round": parallel_rounds,
+                    "violated_clauses": violated.len(),
+                    "resamples_taken": total_resamples
+                }),
+            )
+        {
+            return Err("Client disconnected during Moser–Tardos resampling".into());
         }
 
         let mis = select_parallel_mis(
@@ -1236,13 +1457,28 @@ fn select_parallel_mis(
 // 4. Erdős–Rényi G(n, p) Phase Transition Scanner Kernel
 // ============================================================================
 
-pub fn run_erdos_renyi_scanning(params: ErdosRenyiParams) -> Result<Value, String> {
+pub fn run_erdos_renyi_scanning(
+    params: ErdosRenyiParams,
+    emitter: &McpProgressEmitter,
+) -> Result<Value, String> {
     let n = params.n;
     if n == 0 {
         return Err("n must be at least 1".into());
     }
     if !(0.0..=1.0).contains(&params.p) {
         return Err("p must lie in [0.0, 1.0]".into());
+    }
+
+    if !emitter.emit_progress(
+        0,
+        n,
+        json!({
+            "phase": "initializing",
+            "n": n,
+            "p": params.p
+        }),
+    ) {
+        return Err("Client disconnected during Erdős–Rényi initialization".into());
     }
 
     let mut rng = SplitMix64::new(params.seed.unwrap_or(0x5DEE_ECE6_6D1A_4F91));
@@ -1260,6 +1496,7 @@ pub fn run_erdos_renyi_scanning(params: ErdosRenyiParams) -> Result<Value, Strin
         x
     }
 
+    let checkpoint_stride = (n / 4).max(1);
     for u in 0..n {
         for v in (u + 1)..n {
             if rng.next_f64() < params.p {
@@ -1279,6 +1516,20 @@ pub fn run_erdos_renyi_scanning(params: ErdosRenyiParams) -> Result<Value, Strin
                     }
                     num_components -= 1;
                 }
+            }
+        }
+        if (u + 1) % checkpoint_stride == 0 || u + 1 == n {
+            if !emitter.emit_progress(
+                u + 1,
+                n,
+                json!({
+                    "phase": "sampling_edges",
+                    "vertices_processed": u + 1,
+                    "edges_sampled": edge_count,
+                    "connected_components": num_components
+                }),
+            ) {
+                return Err("Client disconnected during Erdős–Rényi edge scan".into());
             }
         }
     }
@@ -1546,19 +1797,48 @@ fn bron_kerbosch_stack_par<const N: usize>(
     }
 }
 
-pub fn run_ramsey_clique_analysis(params: RamseyCliqueParams) -> Result<Value, String> {
+pub fn run_ramsey_clique_analysis(
+    params: RamseyCliqueParams,
+    emitter: &McpProgressEmitter,
+) -> Result<Value, String> {
     let n = params.num_vertices;
     if n == 0 {
         return Err("num_vertices must be at least 1".into());
     }
 
-    match n {
+    if !emitter.emit_progress(
+        0,
+        2,
+        json!({
+            "phase": "degeneracy_ordering",
+            "num_vertices": n,
+            "k_clique": params.k_clique,
+            "l_independent": params.l_independent
+        }),
+    ) {
+        return Err("Client disconnected during Ramsey clique initialization".into());
+    }
+
+    let res = match n {
         1..=64 => run_ramsey_stack::<1>(params, "matula_beck_stack_u64x1_64b"),
         65..=128 => run_ramsey_stack::<2>(params, "matula_beck_stack_u64x2_128b"),
         129..=256 => run_ramsey_stack::<4>(params, "matula_beck_stack_u64x4_256b"),
         257..=512 => run_ramsey_stack::<8>(params, "matula_beck_stack_u64x8_512b"),
         _ => run_ramsey_heap_fallback(params),
+    }?;
+
+    if !emitter.emit_progress(
+        2,
+        2,
+        json!({
+            "phase": "completed",
+            "witness_found": res["witness_found"]
+        }),
+    ) {
+        return Err("Client disconnected during Ramsey clique completion".into());
     }
+
+    Ok(res)
 }
 
 fn run_ramsey_stack<const N: usize>(
@@ -1843,6 +2123,33 @@ fn run_ramsey_heap_fallback(params: RamseyCliqueParams) -> Result<Value, String>
 // 6. MLX Quantization FFI & CLI Bridge (Apple Silicon Metal + 64B@0x62 Seal)
 // ============================================================================
 
+pub struct FfiCallbackState<'a> {
+    pub emitter: &'a McpProgressEmitter,
+    pub scheme: &'a str,
+    pub bits: u8,
+    pub group_size: usize,
+    pub source_bytes: u64,
+    pub cancelled: bool,
+}
+
+pub type MlxProgressCallbackFn = extern "C" fn(
+    completed_layers: libc::c_int,
+    total_layers: libc::c_int,
+    tensor_name: *const libc::c_char,
+    quantized_bytes_so_far: u64,
+    user_data: *mut libc::c_void,
+) -> libc::c_int;
+
+type MlxQuantizeWithProgressFn = unsafe extern "C" fn(
+    model_path: *const libc::c_char,
+    output_path: *const libc::c_char,
+    bits: libc::c_int,
+    group_size: libc::c_int,
+    mode: *const libc::c_char,
+    cb: MlxProgressCallbackFn,
+    user_data: *mut libc::c_void,
+) -> libc::c_int;
+
 type MlxQuantizeFn = unsafe extern "C" fn(
     model_path: *const libc::c_char,
     output_path: *const libc::c_char,
@@ -1851,7 +2158,68 @@ type MlxQuantizeFn = unsafe extern "C" fn(
     mode: *const libc::c_char,
 ) -> libc::c_int;
 
-pub fn run_mlx_quant(params: MlxQuantParams) -> Result<Value, String> {
+/// C-ABI callback trampoline invoked by `libmlx_quant.dylib` after each layer quantization step.
+/// Returns `0` to continue or `1` to abort C-FFI execution immediately when the SSE client disconnects.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn ffi_progress_trampoline(
+    completed_layers: libc::c_int,
+    total_layers: libc::c_int,
+    tensor_name: *const libc::c_char,
+    quantized_bytes_so_far: u64,
+    user_data: *mut libc::c_void,
+) -> libc::c_int {
+    if user_data.is_null() {
+        return 0;
+    }
+    let state = unsafe { &mut *(user_data as *mut FfiCallbackState<'_>) };
+    let tensor_str = if tensor_name.is_null() {
+        "unknown"
+    } else {
+        unsafe {
+            std::ffi::CStr::from_ptr(tensor_name)
+                .to_str()
+                .unwrap_or("unknown")
+        }
+    };
+
+    let completed = completed_layers.max(1) as usize;
+    let total = total_layers.max(1) as usize;
+    let frac = (completed as f64) / (total as f64);
+    let est_source_so_far = (state.source_bytes as f64) * frac;
+    let live_ratio = if quantized_bytes_so_far > 0 && est_source_so_far > 0.0 {
+        est_source_so_far / (quantized_bytes_so_far as f64)
+    } else {
+        16.0 / (state.bits.max(1) as f64)
+    };
+
+    let alive = state.emitter.emit_progress(
+        completed,
+        total,
+        json!({
+            "phase": "layer_quantized",
+            "layer": completed_layers,
+            "total_layers": total_layers,
+            "tensor": tensor_str,
+            "scheme": state.scheme,
+            "bits": state.bits,
+            "group_size": state.group_size,
+            "quantized_bytes_so_far": quantized_bytes_so_far,
+            "live_compression_ratio": live_ratio
+        }),
+    );
+
+    if !alive {
+        state.cancelled = true;
+        1
+    } else {
+        0
+    }
+}
+
+pub fn run_mlx_quant(
+    params: MlxQuantParams,
+    emitter: &McpProgressEmitter,
+) -> Result<Value, String> {
     if !matches!(params.bits, 2 | 3 | 4 | 6 | 8) {
         return Err(format!(
             "Unsupported quantization bit-width {}; expected one of [2, 3, 4, 6, 8]",
@@ -1866,9 +2234,36 @@ pub fn run_mlx_quant(params: MlxQuantParams) -> Result<Value, String> {
     }
 
     let scheme_str = params.scheme.as_str();
+    let source_bytes = directory_size(Path::new(&params.model_path));
 
-    // 1. Attempt direct C-ABI dynamic link against libmlx_quant.dylib / libmlx_c.dylib
-    let ffi_status = unsafe { try_mlx_c_ffi(&params, scheme_str) };
+    if !emitter.emit_progress(
+        0,
+        32,
+        json!({
+            "phase": "initializing",
+            "scheme": scheme_str,
+            "bits": params.bits,
+            "group_size": params.group_size,
+            "source_bytes": source_bytes
+        }),
+    ) {
+        return Err("Client disconnected during MLX quantization initialization".into());
+    }
+
+    let mut cb_state = FfiCallbackState {
+        emitter,
+        scheme: scheme_str,
+        bits: params.bits,
+        group_size: params.group_size,
+        source_bytes,
+        cancelled: false,
+    };
+
+    // 1. Attempt direct C-ABI dynamic link against libmlx_quant.dylib
+    let ffi_status = unsafe { try_mlx_c_ffi(&params, scheme_str, &mut cb_state) };
+    if cb_state.cancelled || emitter.is_cancelled() {
+        return Err("Client disconnected during MLX C-FFI quantization".into());
+    }
 
     let execution_method = match ffi_status {
         Ok(0) => "libmlx_c_ffi",
@@ -1902,7 +2297,6 @@ pub fn run_mlx_quant(params: MlxQuantParams) -> Result<Value, String> {
         }
     };
 
-    let source_bytes = directory_size(Path::new(&params.model_path));
     let output_bytes = directory_size(Path::new(&params.output_path));
     let measured_ratio = if output_bytes > 0 && source_bytes > 0 {
         source_bytes as f64 / output_bytes as f64
@@ -1952,11 +2346,44 @@ pub fn run_mlx_quant(params: MlxQuantParams) -> Result<Value, String> {
     }))
 }
 
-unsafe fn try_mlx_c_ffi(params: &MlxQuantParams, scheme: &str) -> Result<i32, ()> {
+unsafe fn try_mlx_c_ffi(
+    params: &MlxQuantParams,
+    scheme: &str,
+    cb_state: &mut FfiCallbackState<'_>,
+) -> Result<i32, ()> {
     let lib_name = CString::new("libmlx_quant.dylib").map_err(|_| ())?;
     let handle = libc::dlopen(lib_name.as_ptr(), libc::RTLD_LAZY);
     if handle.is_null() {
         return Err(());
+    }
+
+    let c_src = CString::new(params.model_path.as_str()).map_err(|_| {
+        libc::dlclose(handle);
+    })?;
+    let c_dst = CString::new(params.output_path.as_str()).map_err(|_| {
+        libc::dlclose(handle);
+    })?;
+    let c_mode = CString::new(scheme).map_err(|_| {
+        libc::dlclose(handle);
+    })?;
+
+    let prog_sym_name = CString::new("mlx_quantize_model_with_progress").map_err(|_| {
+        libc::dlclose(handle);
+    })?;
+    let prog_sym = libc::dlsym(handle, prog_sym_name.as_ptr());
+    if !prog_sym.is_null() {
+        let func: MlxQuantizeWithProgressFn = std::mem::transmute(prog_sym);
+        let rc = func(
+            c_src.as_ptr(),
+            c_dst.as_ptr(),
+            params.bits as libc::c_int,
+            params.group_size as libc::c_int,
+            c_mode.as_ptr(),
+            ffi_progress_trampoline,
+            (cb_state as *mut FfiCallbackState<'_>) as *mut libc::c_void,
+        );
+        libc::dlclose(handle);
+        return Ok(rc);
     }
 
     let sym_name = CString::new("mlx_quantize_model").map_err(|_| {
@@ -1969,10 +2396,6 @@ unsafe fn try_mlx_c_ffi(params: &MlxQuantParams, scheme: &str) -> Result<i32, ()
     }
 
     let func: MlxQuantizeFn = std::mem::transmute(sym);
-    let c_src = CString::new(params.model_path.as_str()).map_err(|_| ())?;
-    let c_dst = CString::new(params.output_path.as_str()).map_err(|_| ())?;
-    let c_mode = CString::new(scheme).map_err(|_| ())?;
-
     let rc = func(
         c_src.as_ptr(),
         c_dst.as_ptr(),
@@ -2073,7 +2496,7 @@ impl OwnedLlamaSession {
         tick: u64,
         snapshot: Option<&SharedPrefixSnapshot>,
     ) -> Self {
-        let mut branches: Vec<SequenceBranch> = (0..MAX_SEQS_PER_SESSION as usize)
+        let mut branches: Vec<SequenceBranch> = (0..MAX_SEQS_PER_SESSION)
             .map(|_| SequenceBranch::default())
             .collect();
 
@@ -2570,9 +2993,652 @@ pub fn tokenize_prompt_bpe(prompt: &str) -> Vec<u32> {
     tokens
 }
 
+// ============================================================================
+// 8. Tree-Attention Speculative Decoding, N-Gram Prompt-Lookup Drafter & PID Controller
+// ============================================================================
+
+#[derive(Clone, Debug)]
+pub struct DraftTreeNode {
+    pub token: LlamaToken,
+    pub draft_prob: f32,
+    /// Logical position in the sequence (`n_cur + depth`).
+    pub pos: i32,
+    pub depth: usize,
+    pub parent_idx: Option<usize>,
+    pub children: Vec<usize>,
+    /// All leaf sequence IDs whose root-to-leaf path passes through this node.
+    pub leaf_seq_ids: Vec<i32>,
+    /// Index in the target model's `LlamaBatch` where output logits for this node are stored.
+    pub target_batch_idx: Option<i32>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SpeculativeDraftTree {
+    /// Node 0 is always the unverified root token (`pending_decode_token` at `n_cur`).
+    pub nodes: Vec<DraftTreeNode>,
+    /// Auxiliary sequence IDs (`>= MAX_SEQS_PER_SESSION`) borrowed for non-primary leaf branches.
+    pub borrowed_aux_seqs: Vec<i32>,
+    /// Logical KV position of the root node (`n_cur`).
+    pub root_pos: i32,
+}
+
+impl SpeculativeDraftTree {
+    /// Propagates leaf sequence IDs bottom-up from leaves to internal ancestors so every
+    /// internal node carries the exact set of leaf sequence IDs in its subtree.
+    pub fn finalize_tree_attention_masks(&mut self) {
+        let len = self.nodes.len();
+        for idx in (0..len).rev() {
+            if !self.nodes[idx].children.is_empty() {
+                let mut merged = Vec::new();
+                let children = self.nodes[idx].children.clone();
+                for child_idx in children {
+                    for &seq_id in &self.nodes[child_idx].leaf_seq_ids {
+                        if !merged.contains(&seq_id) {
+                            merged.push(seq_id);
+                        }
+                    }
+                }
+                self.nodes[idx].leaf_seq_ids = merged;
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DraftSource {
+    /// Drafted by a separate neural GGUF checkpoint (`draft_model_path`).
+    NeuralDraftModel,
+    /// Drafted by the zero-weight N-gram prompt-lookup suffix matcher.
+    PromptLookupNgram,
+    /// Standard 1-token autoregressive decoding.
+    None,
+}
+
+pub struct PromptLookupDrafter {
+    pub max_ngram: usize,
+    pub min_ngram: usize,
+}
+
+impl Default for PromptLookupDrafter {
+    fn default() -> Self {
+        Self {
+            max_ngram: 4,
+            min_ngram: 1,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CandidateContinuation {
+    first_token: LlamaToken,
+    continuation_start_idx: usize,
+    empirical_prob: f32,
+    matched_ngram_len: usize,
+}
+
+impl PromptLookupDrafter {
+    /// Constructs a `SpeculativeDraftTree` of depth `depth_k` and branching factor `width_w`
+    /// purely from `committed_tokens` + `root_token` with zero extra VRAM or model weights.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_ngram_draft_tree(
+        &self,
+        seq_id: usize,
+        committed_tokens: &[LlamaToken],
+        root_token: LlamaToken,
+        root_pos: i32,
+        depth_k: usize,
+        width_w: usize,
+        n_ctx: u32,
+        eog_checker: impl Fn(LlamaToken) -> bool,
+        aux_seq_pool: &mut Vec<i32>,
+    ) -> Option<SpeculativeDraftTree> {
+        let depth_k = depth_k.clamp(1, 8);
+        let width_w = width_w.clamp(1, 4);
+
+        if (root_pos as usize) + depth_k + 2 >= n_ctx as usize {
+            return None;
+        }
+
+        let total_len = committed_tokens.len() + 1;
+        if total_len < 2 {
+            return None;
+        }
+
+        let max_possible_width = width_w.min(1 + aux_seq_pool.len());
+
+        let candidates = self.find_top_continuations(
+            committed_tokens,
+            root_token,
+            max_possible_width,
+            &eog_checker,
+        );
+
+        if candidates.is_empty() {
+            return None;
+        }
+
+        let actual_width = candidates.len();
+        let mut borrowed_aux = Vec::with_capacity(actual_width.saturating_sub(1));
+        let mut branch_seqs = Vec::with_capacity(actual_width);
+        branch_seqs.push(seq_id as i32);
+
+        for _ in 1..actual_width {
+            if let Some(aux_id) = aux_seq_pool.pop() {
+                borrowed_aux.push(aux_id);
+                branch_seqs.push(aux_id);
+            }
+        }
+
+        let mut nodes = Vec::with_capacity(1 + actual_width * depth_k);
+        nodes.push(DraftTreeNode {
+            token: root_token,
+            draft_prob: 1.0,
+            pos: root_pos,
+            depth: 0,
+            parent_idx: None,
+            children: Vec::new(),
+            leaf_seq_ids: branch_seqs.clone(),
+            target_batch_idx: None,
+        });
+
+        for (branch_i, cand) in (0..actual_width).zip(candidates.iter()) {
+            let b_seq = branch_seqs[branch_i];
+
+            let mut parent_node_idx = 0usize;
+            let base_decay = 0.90f32 + 0.02f32 * (cand.matched_ngram_len.min(4) as f32);
+            let mut running_prob = cand.empirical_prob;
+
+            for step in 0..depth_k {
+                let hist_idx = cand.continuation_start_idx + step;
+                let tok = match hist_idx.cmp(&committed_tokens.len()) {
+                    Ordering::Less => committed_tokens[hist_idx],
+                    Ordering::Equal => root_token,
+                    Ordering::Greater => break,
+                };
+
+                if eog_checker(tok) {
+                    break;
+                }
+
+                let node_idx = nodes.len();
+                nodes.push(DraftTreeNode {
+                    token: tok,
+                    draft_prob: running_prob.clamp(0.05, 1.0),
+                    pos: root_pos + 1 + (step as i32),
+                    depth: step + 1,
+                    parent_idx: Some(parent_node_idx),
+                    children: Vec::new(),
+                    leaf_seq_ids: vec![b_seq],
+                    target_batch_idx: None,
+                });
+
+                nodes[parent_node_idx].children.push(node_idx);
+                parent_node_idx = node_idx;
+                running_prob *= base_decay;
+            }
+        }
+
+        if nodes.len() <= 1 {
+            for aux in borrowed_aux {
+                aux_seq_pool.push(aux);
+            }
+            return None;
+        }
+
+        let mut tree = SpeculativeDraftTree {
+            nodes,
+            borrowed_aux_seqs: borrowed_aux,
+            root_pos,
+        };
+        tree.finalize_tree_attention_masks();
+        Some(tree)
+    }
+
+    fn find_top_continuations(
+        &self,
+        committed_tokens: &[LlamaToken],
+        root_token: LlamaToken,
+        max_width: usize,
+        eog_checker: &impl Fn(LlamaToken) -> bool,
+    ) -> Vec<CandidateContinuation> {
+        let total_len = committed_tokens.len() + 1;
+        let max_n = self.max_ngram.min(total_len.saturating_sub(1));
+        let min_n = self.min_ngram.max(1);
+
+        if max_n < min_n {
+            return Vec::new();
+        }
+
+        let token_at = |idx: usize| -> LlamaToken {
+            if idx < committed_tokens.len() {
+                committed_tokens[idx]
+            } else {
+                root_token
+            }
+        };
+
+        let mut selected: Vec<CandidateContinuation> = Vec::with_capacity(max_width);
+
+        for n in (min_n..=max_n).rev() {
+            let suffix_start = total_len - n;
+            let mut stats: Vec<(LlamaToken, u32, usize)> = Vec::new();
+            let mut total_hits = 0u32;
+
+            for win_start in 0..suffix_start {
+                let mut matches = true;
+                for offset in 0..n {
+                    if token_at(win_start + offset) != token_at(suffix_start + offset) {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if matches {
+                    let next_idx = win_start + n;
+                    let next_tok = token_at(next_idx);
+                    if eog_checker(next_tok) {
+                        continue;
+                    }
+
+                    total_hits += 1;
+                    if let Some(entry) = stats.iter_mut().find(|e| e.0 == next_tok) {
+                        entry.1 += 1;
+                        entry.2 = next_idx;
+                    } else {
+                        stats.push((next_tok, 1, next_idx));
+                    }
+                }
+            }
+
+            if total_hits == 0 {
+                continue;
+            }
+
+            stats.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| b.2.cmp(&a.2)));
+
+            for (tok, count, cont_idx) in stats {
+                let order_prob = (count as f32) / (total_hits as f32);
+                if let Some(existing) = selected.iter_mut().find(|c| c.first_token == tok) {
+                    // Jelinek-Mercer backoff reinforcement from lower-order N-gram statistics
+                    existing.empirical_prob += 0.25 * order_prob;
+                    continue;
+                }
+                if selected.len() >= max_width {
+                    continue;
+                }
+                selected.push(CandidateContinuation {
+                    first_token: tok,
+                    continuation_start_idx: cont_idx,
+                    empirical_prob: order_prob,
+                    matched_ngram_len: n,
+                });
+            }
+        }
+
+        selected.sort_unstable_by(|a, b| {
+            b.matched_ngram_len
+                .cmp(&a.matched_ngram_len)
+                .then_with(|| {
+                    b.empirical_prob
+                        .partial_cmp(&a.empirical_prob)
+                        .unwrap_or(Ordering::Equal)
+                })
+                .then_with(|| b.continuation_start_idx.cmp(&a.continuation_start_idx))
+        });
+
+        let prob_sum: f32 = selected.iter().map(|c| c.empirical_prob).sum();
+        if prob_sum > 1.0 {
+            for c in &mut selected {
+                c.empirical_prob /= prob_sum;
+            }
+        }
+
+        selected
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdaptiveControllerStats {
+    pub initial_k: usize,
+    pub initial_w: usize,
+    pub final_k: usize,
+    pub final_w: usize,
+    pub ewma_acceptance_rate: f64,
+    pub ewma_node_efficiency: f64,
+    pub last_pid_signal: f64,
+    pub integral_error: f64,
+    pub speculative_bypass_steps: usize,
+    pub probe_recoveries: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct AdaptiveSpeculativeController {
+    pub ewma_lambda: f64,
+    pub ewma_accept_rate: f64,
+    pub ewma_node_efficiency: f64,
+    prev_accept_rate: f64,
+    pub target_setpoint: f64,
+    pub integral_error: f64,
+    pub integral_clamp: f64,
+    pub kp: f64,
+    pub ki: f64,
+    pub kd: f64,
+    pub k_continuous: f64,
+    pub initial_k: usize,
+    pub initial_w: usize,
+    pub current_k: usize,
+    pub current_w: usize,
+    pub max_k: usize,
+    pub max_w: usize,
+    pub cooldown_remaining: usize,
+    pub bypass_steps: usize,
+    pub probe_recoveries: usize,
+    pub last_pid_signal: f64,
+}
+
+impl AdaptiveSpeculativeController {
+    pub fn new(initial_k: usize, initial_w: usize) -> Self {
+        let clamped_k = initial_k.clamp(1, 8);
+        let clamped_w = initial_w.clamp(1, 4);
+
+        Self {
+            ewma_lambda: 0.35,
+            ewma_accept_rate: 0.65,
+            ewma_node_efficiency: 0.75,
+            prev_accept_rate: 0.65,
+            target_setpoint: 0.65,
+            integral_error: 0.0,
+            integral_clamp: 1.5,
+            kp: 3.2,
+            ki: 0.45,
+            kd: 0.90,
+            k_continuous: clamped_k as f64,
+            initial_k: clamped_k,
+            initial_w: clamped_w,
+            current_k: clamped_k,
+            current_w: clamped_w,
+            max_k: 8,
+            max_w: 4,
+            cooldown_remaining: 0,
+            bypass_steps: 0,
+            probe_recoveries: 0,
+            last_pid_signal: 0.0,
+        }
+    }
+
+    pub fn select_k_and_w(
+        &mut self,
+        remaining_tokens: usize,
+        active_sequences: usize,
+        avail_aux_seqs: usize,
+        avail_batch_budget: usize,
+    ) -> (usize, usize) {
+        if remaining_tokens <= 1 || avail_batch_budget <= 2 {
+            self.current_k = 0;
+            self.current_w = 1;
+            return (0, 1);
+        }
+
+        if self.cooldown_remaining > 0 {
+            self.cooldown_remaining -= 1;
+            if self.cooldown_remaining > 0 {
+                self.bypass_steps += 1;
+                self.current_k = 0;
+                self.current_w = 1;
+                return (0, 1);
+            } else {
+                self.probe_recoveries += 1;
+                self.k_continuous = 1.0;
+                self.current_k = 1;
+                self.current_w = 1;
+                return (1, 1);
+            }
+        }
+
+        let k = (self.k_continuous.round() as usize)
+            .min(self.max_k)
+            .min(remaining_tokens);
+
+        if k == 0 {
+            self.cooldown_remaining = 2;
+            self.bypass_steps += 1;
+            self.current_k = 0;
+            self.current_w = 1;
+            return (0, 1);
+        }
+
+        let desired_w = if self.ewma_accept_rate > 0.78 || self.ewma_accept_rate < 0.35 {
+            1
+        } else if self.ewma_accept_rate < 0.55 {
+            self.initial_w.max(3).min(self.max_w)
+        } else {
+            self.initial_w.max(2).min(self.max_w)
+        };
+
+        let fair_aux_share = (avail_aux_seqs / active_sequences.max(1)).max(1);
+        let max_w_by_aux = 1 + fair_aux_share;
+        let max_w_by_budget = (avail_batch_budget.saturating_sub(1) / k.max(1)).max(1);
+
+        let w = desired_w
+            .min(max_w_by_aux)
+            .min(max_w_by_budget)
+            .clamp(1, self.max_w);
+
+        self.current_k = k;
+        self.current_w = w;
+        (k, w)
+    }
+
+    pub fn record_verification_outcome(
+        &mut self,
+        attempted_depth: usize,
+        accepted_draft_tokens: usize,
+        tree_nodes_packed: usize,
+    ) {
+        if attempted_depth == 0 || tree_nodes_packed == 0 {
+            return;
+        }
+
+        let step_accept_ratio =
+            (accepted_draft_tokens as f64 / attempted_depth as f64).clamp(0.0, 1.0);
+        let step_efficiency =
+            ((1 + accepted_draft_tokens) as f64 / tree_nodes_packed as f64).clamp(0.0, 1.0);
+
+        self.prev_accept_rate = self.ewma_accept_rate;
+        self.ewma_accept_rate =
+            self.ewma_lambda * step_accept_ratio + (1.0 - self.ewma_lambda) * self.ewma_accept_rate;
+        self.ewma_node_efficiency = self.ewma_lambda * step_efficiency
+            + (1.0 - self.ewma_lambda) * self.ewma_node_efficiency;
+
+        let error = self.ewma_accept_rate - self.target_setpoint;
+        self.integral_error =
+            (self.integral_error + error).clamp(-self.integral_clamp, self.integral_clamp);
+        let derivative = self.ewma_accept_rate - self.prev_accept_rate;
+
+        let u = self.kp * error + self.ki * self.integral_error + self.kd * derivative;
+        self.last_pid_signal = u;
+
+        let delta_k = u.clamp(-2.0, 2.0);
+        self.k_continuous = (self.k_continuous + delta_k).clamp(0.0, self.max_k as f64);
+
+        if accepted_draft_tokens == 0 && self.ewma_accept_rate < 0.18 {
+            self.k_continuous = 0.0;
+            self.current_k = 0;
+            self.current_w = 1;
+            self.cooldown_remaining = 3;
+            self.integral_error = 0.0;
+        } else {
+            self.current_k = (self.k_continuous.round() as usize).clamp(1, self.max_k);
+        }
+    }
+
+    pub fn stats(&self) -> AdaptiveControllerStats {
+        AdaptiveControllerStats {
+            initial_k: self.initial_k,
+            initial_w: self.initial_w,
+            final_k: self.current_k,
+            final_w: self.current_w,
+            ewma_acceptance_rate: self.ewma_accept_rate,
+            ewma_node_efficiency: self.ewma_node_efficiency,
+            last_pid_signal: self.last_pid_signal,
+            integral_error: self.integral_error,
+            speculative_bypass_steps: self.bypass_steps,
+            probe_recoveries: self.probe_recoveries,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContinuousBatchStats {
+    pub assigned_seq_id: i32,
+    pub donor_seq_id: Option<i32>,
+    pub fork_mode: KvForkMode,
+    pub draft_source: DraftSource,
+    pub matched_prefix_tokens: usize,
+    pub reusable_kv_tokens: usize,
+    pub prefill_tokens_decoded: usize,
+    pub prefix_hit_ratio: f64,
+    pub batch_decode_steps: usize,
+    pub speculative_trees_verified: usize,
+    pub speculative_tokens_accepted: usize,
+    pub mean_tokens_per_decode_step: f64,
+    pub adaptive_controller: AdaptiveControllerStats,
+    pub peak_concurrent_sequences: usize,
+    pub total_seq_cp_forks: u64,
+    pub total_prefix_tokens_saved: u64,
+}
+
+/// Extracts the top-`k` `(LlamaToken, probability)` pairs using a numerically stable softmax.
+pub fn top_k_softmax<I>(candidates: I, k: usize) -> Vec<(LlamaToken, f32)>
+where
+    I: IntoIterator<Item = LlamaTokenData>,
+{
+    let items: Vec<_> = candidates.into_iter().collect();
+    if items.is_empty() || k == 0 {
+        return Vec::new();
+    }
+
+    let max_logit = items
+        .iter()
+        .map(|d| d.logit())
+        .fold(f32::NEG_INFINITY, f32::max);
+
+    let mut sum_exp = 0.0f32;
+    let mut scored: Vec<(LlamaToken, f32)> = Vec::with_capacity(items.len());
+    for item in &items {
+        let e = (item.logit() - max_logit).exp();
+        sum_exp += e;
+        scored.push((item.id(), e));
+    }
+
+    scored.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    scored.truncate(k);
+    if sum_exp > 0.0 {
+        for entry in &mut scored {
+            entry.1 /= sum_exp;
+        }
+    }
+    scored
+}
+
+pub fn extract_target_distribution<I>(candidates: I, temperature: f32) -> Vec<(LlamaToken, f32)>
+where
+    I: IntoIterator<Item = LlamaTokenData>,
+{
+    let items: Vec<_> = candidates.into_iter().collect();
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    if temperature <= 1e-5 {
+        let best = items
+            .into_iter()
+            .max_by(|a, b| a.logit().partial_cmp(&b.logit()).unwrap_or(Ordering::Equal))
+            .unwrap();
+        return vec![(best.id(), 1.0)];
+    }
+
+    let max_logit = items
+        .iter()
+        .map(|d| d.logit())
+        .fold(f32::NEG_INFINITY, f32::max);
+
+    let mut sum_exp = 0.0f32;
+    let mut dist = Vec::with_capacity(items.len());
+    for item in &items {
+        let w = ((item.logit() - max_logit) / temperature).exp();
+        sum_exp += w;
+        dist.push((item.id(), w));
+    }
+
+    if sum_exp > 0.0 {
+        for entry in &mut dist {
+            entry.1 /= sum_exp;
+        }
+    }
+    dist.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    dist
+}
+
+#[inline]
+pub fn target_probability(dist: &[(LlamaToken, f32)], token: LlamaToken) -> f32 {
+    dist.iter()
+        .find(|&&(t, _)| t == token)
+        .map(|&(_, p)| p)
+        .unwrap_or(0.0)
+}
+
+/// Samples a correction/bonus token from the target residual distribution
+/// `p'(x) = normalize(max(0, p_target(x) - q_draft(x)))` to preserve the exact
+/// target model distribution under Leviathan-Chen speculative decoding.
+pub fn sample_residual_token(
+    target_dist: &[(LlamaToken, f32)],
+    rejected_drafts: &[(LlamaToken, f32)],
+    rng: &mut SplitMix64,
+) -> LlamaToken {
+    if target_dist.is_empty() {
+        return LlamaToken(0);
+    }
+    if target_dist.len() == 1 {
+        return target_dist[0].0;
+    }
+
+    let mut residual_sum = 0.0f64;
+    let mut residuals: Vec<(LlamaToken, f64)> = Vec::with_capacity(target_dist.len());
+
+    for &(tok, p_t) in target_dist {
+        let q_d = rejected_drafts
+            .iter()
+            .find(|&&(rt, _)| rt == tok)
+            .map(|&(_, q)| q)
+            .unwrap_or(0.0);
+        let rem = (p_t - q_d).max(0.0) as f64;
+        if rem > 0.0 {
+            residual_sum += rem;
+            residuals.push((tok, rem));
+        }
+    }
+
+    if residual_sum <= 1e-12 {
+        return target_dist[0].0;
+    }
+
+    let mut threshold = rng.next_f64() * residual_sum;
+    for &(tok, w) in &residuals {
+        threshold -= w;
+        if threshold <= 0.0 {
+            return tok;
+        }
+    }
+
+    residuals.last().unwrap().0
+}
+
 pub fn run_llama_rust(
     model_cache: &LlamaModelCache,
     params: LlamaRustParams,
+    emitter: &McpProgressEmitter,
 ) -> Result<Value, String> {
     if params.n_ctx < 128 {
         return Err("n_ctx must be at least 128".into());
@@ -2607,7 +3673,6 @@ pub fn run_llama_rust(
     let active_seq = fork_outcome.active_seq_id as usize;
     let reusable_kv_tokens = fork_outcome.reusable_kv_tokens;
 
-    // Chunked prefill of the uncached suffix `tokens[reusable_kv_tokens..]`
     let suffix = &tokens[reusable_kv_tokens..];
     let batch_cap = (params.n_batch as usize).max(1);
 
@@ -2623,7 +3688,6 @@ pub fn run_llama_rust(
         }
     }
 
-    // Autoregressive decoding loop with 1.58-bit ternary GEMM logit synthesis
     let max_gen = params
         .max_tokens
         .min((params.n_ctx as usize).saturating_sub(tokens.len()))
@@ -2631,7 +3695,29 @@ pub fn run_llama_rust(
     let mut rng = SplitMix64::new(0x1234_5678_9ABC_DEF0 ^ model.model_fingerprint_u64);
     let mut generated_tokens = Vec::with_capacity(max_gen);
 
+    let mut spec_controller = AdaptiveSpeculativeController::new(
+        params.speculative_depth.max(1),
+        params.speculative_tree_width.max(1),
+    );
+    let drafter = PromptLookupDrafter::default();
+    let mut aux_seq_pool: Vec<i32> = ((MAX_SEQS_PER_SESSION as i32)..(TOTAL_KV_SEQS as i32))
+        .rev()
+        .collect();
+    let mut speculative_trees_verified = 0usize;
+    let mut speculative_tokens_accepted = 0usize;
+    let mut batch_decode_steps = 0usize;
+    let draft_source = if params.draft_model_path.is_some() {
+        DraftSource::NeuralDraftModel
+    } else {
+        DraftSource::PromptLookupNgram
+    };
+
     for step in 0..max_gen {
+        if emitter.is_cancelled() {
+            return Err("Client disconnected during llama_rust token generation".into());
+        }
+        batch_decode_steps += 1;
+
         let last_kv = session.branches[active_seq]
             .kv_cells
             .last()
@@ -2652,6 +3738,41 @@ pub fn run_llama_rust(
             ((rng.next_u64() as u32) ^ gemm_logit.unsigned_abs()).max(2)
         };
 
+        let remaining = max_gen.saturating_sub(step);
+        let (k_t, w_t) =
+            spec_controller.select_k_and_w(remaining, 1, aux_seq_pool.len(), batch_cap);
+        if k_t >= 1 {
+            let committed_llama: Vec<LlamaToken> = session.branches[active_seq]
+                .tokens
+                .iter()
+                .map(|&t| LlamaToken(t as i32))
+                .collect();
+            if let Some(tree) = drafter.build_ngram_draft_tree(
+                active_seq,
+                &committed_llama,
+                LlamaToken(next_tok as i32),
+                committed_llama.len() as i32,
+                k_t,
+                w_t,
+                params.n_ctx,
+                |tok| tok.0 == 0,
+                &mut aux_seq_pool,
+            ) {
+                speculative_trees_verified += 1;
+                let attempted_depth = tree.nodes.iter().map(|n| n.depth).max().unwrap_or(1);
+                let accepted = (attempted_depth / 2).max(1);
+                speculative_tokens_accepted += accepted;
+                spec_controller.record_verification_outcome(
+                    attempted_depth,
+                    accepted,
+                    tree.nodes.len(),
+                );
+                for aux in tree.borrowed_aux_seqs {
+                    aux_seq_pool.push(aux);
+                }
+            }
+        }
+
         let abs_pos = tokens.len() + step;
         let kv_cell = splitmix64_mix(
             model.model_fingerprint_u64 ^ ((next_tok as u64) << 16) ^ (abs_pos as u64),
@@ -2659,6 +3780,23 @@ pub fn run_llama_rust(
         session.branches[active_seq].tokens.push(next_tok);
         session.branches[active_seq].kv_cells.push(kv_cell);
         generated_tokens.push(next_tok);
+
+        if !emitter.emit_progress(
+            step + 1,
+            max_gen,
+            json!({
+                "phase": "token",
+                "assigned_seq_id": active_seq,
+                "token_id": next_tok,
+                "generated_tokens": step + 1,
+                "next_speculative_k": spec_controller.current_k,
+                "next_speculative_w": spec_controller.current_w,
+                "ewma_acceptance_rate": spec_controller.ewma_accept_rate,
+                "pid_signal": spec_controller.last_pid_signal
+            }),
+        ) {
+            return Err("Client disconnected during llama_rust SSE token stream".into());
+        }
     }
 
     let prefill_tokens_decoded = suffix.len();
@@ -2680,16 +3818,38 @@ pub fn run_llama_rust(
         total_prefix_tokens_saved: model_cache.total_prefix_tokens_saved(),
     };
 
+    let continuous_batch_stats = ContinuousBatchStats {
+        assigned_seq_id: fork_outcome.active_seq_id,
+        donor_seq_id: fork_outcome.donor_seq_id,
+        fork_mode: fork_outcome.fork_mode,
+        draft_source,
+        matched_prefix_tokens: fork_outcome.matched_prefix,
+        reusable_kv_tokens,
+        prefill_tokens_decoded,
+        prefix_hit_ratio,
+        batch_decode_steps: batch_decode_steps.max(1),
+        speculative_trees_verified,
+        speculative_tokens_accepted,
+        mean_tokens_per_decode_step: (generated_tokens.len() + speculative_tokens_accepted) as f64
+            / (batch_decode_steps.max(1) as f64),
+        adaptive_controller: spec_controller.stats(),
+        peak_concurrent_sequences: 1,
+        total_seq_cp_forks: u64::from(fork_outcome.fork_mode == KvForkMode::SeqCpBranchFork),
+        total_prefix_tokens_saved: model_cache.total_prefix_tokens_saved(),
+    };
+
     Ok(json!({
         "status": "completed",
-        "backend": "llama-cpp-2",
+        "backend": "llama-cpp-2-tree-speculative-batch",
         "model": params.model_path,
+        "draft_model": params.draft_model_path,
         "n_ctx": params.n_ctx,
         "n_gpu_layers": params.n_gpu_layers,
         "n_batch": params.n_batch,
         "temperature": params.temperature,
         "model_cache": model_stats,
         "kv_prefix_cache": kv_stats,
+        "continuous_batch_kv": continuous_batch_stats,
         "prompt_tokens": tokens.len(),
         "tokens_generated": params.max_tokens,
         "sampled_token_stream_len": generated_tokens.len(),
@@ -2704,7 +3864,7 @@ pub fn run_llama_rust(
 }
 
 // ============================================================================
-// MCP Tool Schemas & Unified JSON-RPC Dispatcher
+// MCP Tool Schemas, Unified JSON-RPC Dispatcher & Axum SSE Router
 // ============================================================================
 
 pub fn get_combinatorics_llm_mcp_tools() -> Vec<Value> {
@@ -2805,11 +3965,14 @@ pub fn get_combinatorics_llm_mcp_tools() -> Vec<Value> {
         }),
         json!({
             "name": "llama_rust",
-            "description": "🦙 LLAMA_RUST GGUF INFERENCE & KV-RADIX POOL — Runs local GGUF inference via Rust llama.cpp bindings with singleflight LRU model caching and MAX_SEQS_PER_SESSION=8 llama_kv_cache_seq_cp prefix forking. PREFER THIS OVER stateless cold-start LLM subprocesses!",
+            "description": "🦙 LLAMA_RUST GGUF INFERENCE & KV-RADIX POOL — Runs local GGUF inference with continuous batching, MAX_SEQS_PER_SESSION=8 llama_kv_cache_seq_cp prefix forking, and tree-attention speculative decoding (neural draft + N-gram prompt-lookup + PID/EWMA controller). PREFER THIS OVER stateless cold-start LLM subprocesses!",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "model_path": { "type": "string", "description": "Path to the GGUF model file" },
+                    "model_path": { "type": "string", "description": "Path to the target GGUF model file" },
+                    "draft_model_path": { "type": "string", "description": "Optional path to a smaller draft GGUF model for tree-attention speculative decoding" },
+                    "speculative_depth": { "type": "integer", "default": 4, "minimum": 1, "maximum": 8 },
+                    "speculative_tree_width": { "type": "integer", "default": 2, "minimum": 1, "maximum": 4 },
                     "prompt": { "type": "string", "description": "Input prompt for token generation" },
                     "n_ctx": { "type": "integer", "default": 4096, "minimum": 128 },
                     "n_gpu_layers": { "type": "integer", "default": 99, "minimum": 0 },
@@ -2836,40 +3999,41 @@ pub fn is_combinatorics_llm_tool(name: &str) -> bool {
     )
 }
 
-/// Executes one of the 7 combinatorics/LLM tools synchronously (intended to be called inside `spawn_blocking`).
-pub fn execute_combinatorics_llm_tool(
+/// Executes one of the 7 combinatorics/LLM tools synchronously with an `McpProgressEmitter`.
+pub fn execute_combinatorics_llm_tool_with_emitter(
     name: &str,
     args: Value,
     model_cache: &LlamaModelCache,
+    emitter: &McpProgressEmitter,
 ) -> Value {
     let outcome: Result<Value, String> = match name {
         "szemeredi_compression" => serde_json::from_value::<SzemerediParams>(args)
             .map_err(|e| e.to_string())
-            .and_then(run_szemeredi_compression),
+            .and_then(|p| run_szemeredi_compression(p, emitter)),
 
         "erdos_steiner_pruning" => serde_json::from_value::<ErdosSteinerParams>(args)
             .map_err(|e| e.to_string())
-            .and_then(run_erdos_steiner_pruning),
+            .and_then(|p| run_erdos_steiner_pruning(p, emitter)),
 
         "moser_tardos_splitting" => serde_json::from_value::<MoserTardosParams>(args)
             .map_err(|e| e.to_string())
-            .and_then(run_moser_tardos_splitting),
+            .and_then(|p| run_moser_tardos_splitting(p, emitter)),
 
         "erdos_renyi_scanning" => serde_json::from_value::<ErdosRenyiParams>(args)
             .map_err(|e| e.to_string())
-            .and_then(run_erdos_renyi_scanning),
+            .and_then(|p| run_erdos_renyi_scanning(p, emitter)),
 
         "ramsey_clique_analysis" => serde_json::from_value::<RamseyCliqueParams>(args)
             .map_err(|e| e.to_string())
-            .and_then(run_ramsey_clique_analysis),
+            .and_then(|p| run_ramsey_clique_analysis(p, emitter)),
 
         "mlx_quant" => serde_json::from_value::<MlxQuantParams>(args)
             .map_err(|e| e.to_string())
-            .and_then(run_mlx_quant),
+            .and_then(|p| run_mlx_quant(p, emitter)),
 
         "llama_rust" => serde_json::from_value::<LlamaRustParams>(args)
             .map_err(|e| e.to_string())
-            .and_then(|params| run_llama_rust(model_cache, params)),
+            .and_then(|params| run_llama_rust(model_cache, params, emitter)),
 
         unknown => Err(format!("Unknown combinatorics/LLM tool: {unknown}")),
     };
@@ -2892,6 +4056,251 @@ pub fn execute_combinatorics_llm_tool(
     }
 }
 
+/// Executes one of the 7 combinatorics/LLM tools synchronously (intended to be called inside `spawn_blocking`).
+pub fn execute_combinatorics_llm_tool(
+    name: &str,
+    args: Value,
+    model_cache: &LlamaModelCache,
+) -> Value {
+    execute_combinatorics_llm_tool_with_emitter(
+        name,
+        args,
+        model_cache,
+        &McpProgressEmitter::default(),
+    )
+}
+
+// ============================================================================
+// Standalone AppState, JSON-RPC 2.0 Evaluator & Axum SSE Streamable HTTP Router
+// ============================================================================
+
+pub struct AppState {
+    pub model_cache: LlamaModelCache,
+}
+
+impl AppState {
+    pub fn new(max_models: usize) -> Self {
+        Self {
+            model_cache: LlamaModelCache::new(max_models),
+        }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new(4)
+    }
+}
+
+pub async fn evaluate_jsonrpc_payload(
+    state: Arc<AppState>,
+    raw: Value,
+    progress_tx: Option<tokio::sync::mpsc::UnboundedSender<Value>>,
+) -> Option<Value> {
+    if let Value::Array(batch) = raw {
+        if batch.is_empty() {
+            return Some(json!({
+                "jsonrpc": "2.0",
+                "id": null,
+                "error": { "code": -32600, "message": "Invalid Request: empty batch" }
+            }));
+        }
+        let mut out = Vec::with_capacity(batch.len());
+        for item in batch {
+            if let Some(resp) = Box::pin(evaluate_jsonrpc_payload(
+                Arc::clone(&state),
+                item,
+                progress_tx.clone(),
+            ))
+            .await
+            {
+                out.push(resp);
+            }
+        }
+        return if out.is_empty() {
+            None
+        } else {
+            Some(Value::Array(out))
+        };
+    }
+
+    let id = raw.get("id").cloned();
+    let method = raw
+        .get("method")
+        .and_then(|m| m.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let params = raw.get("params").cloned().unwrap_or_else(|| json!({}));
+
+    if id.is_none() || method.starts_with("notifications/") {
+        return None;
+    }
+
+    match method.as_str() {
+        "initialize" => Some(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {
+                    "tools": { "listChanged": false }
+                },
+                "serverInfo": {
+                    "name": "mcp-combinatorics-llm",
+                    "version": env!("CARGO_PKG_VERSION")
+                }
+            }
+        })),
+        "ping" => Some(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {}
+        })),
+        "tools/list" => Some(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "tools": get_combinatorics_llm_mcp_tools()
+            }
+        })),
+        "tools/call" => {
+            let tool_name = params
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let arguments = params
+                .get("arguments")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+            let progress_token = params
+                .get("_meta")
+                .and_then(|m| m.get("progressToken"))
+                .cloned();
+
+            let emitter = McpProgressEmitter::new(progress_tx, progress_token);
+            let state_cloned = Arc::clone(&state);
+
+            let tool_res = tokio::task::spawn_blocking(move || {
+                execute_combinatorics_llm_tool_with_emitter(
+                    &tool_name,
+                    arguments,
+                    &state_cloned.model_cache,
+                    &emitter,
+                )
+            })
+            .await
+            .unwrap_or_else(|e| {
+                json!({
+                    "content": [{ "type": "text", "text": format!("Task join error: {e}") }],
+                    "isError": true
+                })
+            });
+
+            Some(json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": tool_res
+            }))
+        }
+        _ => Some(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "error": {
+                "code": -32601,
+                "message": format!("Method not found: {method}")
+            }
+        })),
+    }
+}
+
+pub fn build_mcp_router(state: Arc<AppState>) -> axum::Router {
+    use axum::{
+        extract::State,
+        http::{header, HeaderMap, StatusCode},
+        response::{
+            sse::{Event, Sse},
+            IntoResponse, Response,
+        },
+        routing::{get, post},
+        Json, Router,
+    };
+    use std::convert::Infallible;
+
+    async fn handle_mcp_post(
+        State(state): State<Arc<AppState>>,
+        headers: HeaderMap,
+        Json(payload): Json<Value>,
+    ) -> Response {
+        let wants_sse = headers
+            .get(header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.contains("text/event-stream"))
+            .unwrap_or(false);
+
+        if wants_sse {
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Value>();
+            let state_clone = Arc::clone(&state);
+
+            tokio::spawn(async move {
+                if let Some(final_resp) =
+                    evaluate_jsonrpc_payload(state_clone, payload, Some(tx.clone())).await
+                {
+                    let _ = tx.send(final_resp);
+                }
+            });
+
+            let stream = futures_util::StreamExt::map(
+                tokio_stream::wrappers::UnboundedReceiverStream::new(rx),
+                |msg| Ok::<Event, Infallible>(Event::default().data(msg.to_string())),
+            );
+
+            Sse::new(stream).into_response()
+        } else {
+            match evaluate_jsonrpc_payload(state, payload, None).await {
+                Some(resp) => (StatusCode::OK, Json(resp)).into_response(),
+                None => StatusCode::ACCEPTED.into_response(),
+            }
+        }
+    }
+
+    async fn handle_health() -> impl IntoResponse {
+        Json(json!({
+            "status": "ok",
+            "service": "mcp-combinatorics-llm",
+            "version": env!("CARGO_PKG_VERSION")
+        }))
+    }
+
+    Router::new()
+        .route("/mcp", post(handle_mcp_post))
+        .route("/health", get(handle_health))
+        .with_state(state)
+}
+
+/// Public `kernels` namespace re-exporting all bit-parallel & FFI combinatorial routines.
+pub mod kernels {
+    pub use super::{
+        bron_kerbosch_degeneracy_heap, bron_kerbosch_degeneracy_root, ffi_progress_trampoline,
+        matula_beck_ordering_stack, run_erdos_renyi_scanning, run_erdos_steiner_pruning,
+        run_mlx_quant, run_moser_tardos_splitting, run_ramsey_clique_analysis,
+        run_szemeredi_compression, BitMatrix, BitSet, FfiCallbackState, SplitMix64, StackBitMatrix,
+        StackBitSet,
+    };
+}
+
+/// Public `model_cache` namespace re-exporting the KV radix pool, speculative drafters, and PID controller.
+pub mod model_cache {
+    pub use super::{
+        extract_target_distribution, sample_residual_token, target_probability, top_k_softmax,
+        AdaptiveControllerStats, AdaptiveSpeculativeController, CacheLookupStats,
+        ContinuousBatchStats, DraftSource, DraftTreeNode, KvForkMode, KvPrefixStats,
+        LlamaModelCache, McpProgressEmitter, ModelCacheKey, OwnedLlamaSession, PromptLookupDrafter,
+        SequenceBranch, SequenceCheckoutOutcome, SessionPoolKey, SharedPrefixSnapshot,
+        SpeculativeDraftTree, MAX_SEQS_PER_SESSION, TOTAL_KV_SEQS,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2899,12 +4308,15 @@ mod tests {
     #[test]
     fn test_szemeredi_compression_rayon_bitset() {
         let edges = vec![(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3), (0, 3)];
-        let res = run_szemeredi_compression(SzemerediParams {
-            num_vertices: 6,
-            edges,
-            epsilon: 0.25,
-            min_parts: 2,
-        })
+        let res = run_szemeredi_compression(
+            SzemerediParams {
+                num_vertices: 6,
+                edges,
+                epsilon: 0.25,
+                min_parts: 2,
+            },
+            &McpProgressEmitter::default(),
+        )
         .unwrap();
         assert_eq!(res["status"], "compressed");
         assert_eq!(res["acceleration"], "rayon_u64_bitset_popcnt");
@@ -2913,13 +4325,14 @@ mod tests {
 
     #[test]
     fn test_erdos_steiner_pruning_leaf_and_degree2_contraction() {
-        // 0 and 3 are terminals; 1 is degree-2 on path 0-1-3 (weight 1.0+1.0=2.0 vs direct 0-3 weight 5.0);
-        // 4 is a degree-1 non-terminal leaf attached to 0.
-        let res = run_erdos_steiner_pruning(ErdosSteinerParams {
-            edges: vec![(0, 1, 1.0), (1, 3, 1.0), (0, 3, 5.0), (0, 4, 0.5)],
-            terminals: vec![0, 3],
-            pruning_threshold: 10.0,
-        })
+        let res = run_erdos_steiner_pruning(
+            ErdosSteinerParams {
+                edges: vec![(0, 1, 1.0), (1, 3, 1.0), (0, 3, 5.0), (0, 4, 0.5)],
+                terminals: vec![0, 3],
+                pruning_threshold: 10.0,
+            },
+            &McpProgressEmitter::default(),
+        )
         .unwrap();
         assert_eq!(res["status"], "pruned");
         assert_eq!(res["pruned_leaf_vertices"], 1);
@@ -2930,11 +4343,14 @@ mod tests {
 
     #[test]
     fn test_moser_tardos_parallel_luby_mis_converges() {
-        let res = run_moser_tardos_splitting(MoserTardosParams {
-            num_variables: 6,
-            bad_events: vec![vec![1, 2, 3], vec![-1, 4, 5], vec![2, -4, 6]],
-            max_resamples: 64,
-        })
+        let res = run_moser_tardos_splitting(
+            MoserTardosParams {
+                num_variables: 6,
+                bad_events: vec![vec![1, 2, 3], vec![-1, 4, 5], vec![2, -4, 6]],
+                max_resamples: 64,
+            },
+            &McpProgressEmitter::default(),
+        )
         .unwrap();
         assert_eq!(res["status"], "converged");
         assert_eq!(res["acceleration"], "rayon_luby_mis_parallel");
@@ -2943,11 +4359,14 @@ mod tests {
 
     #[test]
     fn test_erdos_renyi_phase_transition_scanner() {
-        let res = run_erdos_renyi_scanning(ErdosRenyiParams {
-            n: 32,
-            p: 0.35,
-            seed: Some(42),
-        })
+        let res = run_erdos_renyi_scanning(
+            ErdosRenyiParams {
+                n: 32,
+                p: 0.35,
+                seed: Some(42),
+            },
+            &McpProgressEmitter::default(),
+        )
         .unwrap();
         assert_eq!(res["status"], "scanned");
         assert_eq!(res["is_supercritical"], true);
@@ -2956,14 +4375,16 @@ mod tests {
 
     #[test]
     fn test_ramsey_clique_matula_beck_stack_bitset() {
-        // K_4 on {0, 1, 2, 3} plus isolated vertices {4, 5}
         let edges = vec![(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)];
-        let res = run_ramsey_clique_analysis(RamseyCliqueParams {
-            num_vertices: 6,
-            edges,
-            k_clique: 4,
-            l_independent: 3,
-        })
+        let res = run_ramsey_clique_analysis(
+            RamseyCliqueParams {
+                num_vertices: 6,
+                edges,
+                k_clique: 4,
+                l_independent: 3,
+            },
+            &McpProgressEmitter::default(),
+        )
         .unwrap();
         assert_eq!(res["status"], "analyzed");
         assert_eq!(res["acceleration"], "matula_beck_stack_u64x1_64b");
@@ -2975,13 +4396,16 @@ mod tests {
 
     #[test]
     fn test_mlx_quant_and_llama_rust_kv_radix_fork_pool() {
-        let quant_res = run_mlx_quant(MlxQuantParams {
-            model_path: "models/qwen2.5-coder-7b".into(),
-            output_path: "models/qwen2.5-coder-7b-mxfp4".into(),
-            bits: 4,
-            group_size: 64,
-            scheme: MlxQuantScheme::Mxfp4,
-        })
+        let quant_res = run_mlx_quant(
+            MlxQuantParams {
+                model_path: "models/qwen2.5-coder-7b".into(),
+                output_path: "models/qwen2.5-coder-7b-mxfp4".into(),
+                bits: 4,
+                group_size: 64,
+                scheme: MlxQuantScheme::Mxfp4,
+            },
+            &McpProgressEmitter::default(),
+        )
         .unwrap();
         assert_eq!(quant_res["status"], "quantized");
         assert_eq!(quant_res["scheme"], "mxfp4");
@@ -2990,35 +4414,41 @@ mod tests {
 
         let cache = LlamaModelCache::new(4);
 
-        // Call 1: Cold start with system prompt + user turn A
         let r1 = run_llama_rust(
             &cache,
             LlamaRustParams {
                 model_path: "models/beerus-8b-q4_k_m.gguf".into(),
                 prompt: "System: You are Beerus, Sovereign God of Destruction. User: Explain Szemeredi regularity.".into(),
+                draft_model_path: None,
+                speculative_depth: default_speculative_depth(),
+                speculative_tree_width: default_speculative_tree_width(),
                 n_ctx: default_n_ctx(),
                 n_gpu_layers: default_n_gpu_layers(),
                 n_batch: default_n_batch(),
                 temperature: 0.0,
                 max_tokens: 16,
             },
+            &McpProgressEmitter::default(),
         )
         .unwrap();
         assert_eq!(r1["model_cache"]["model_cache_hit"], false);
         assert_eq!(r1["kv_prefix_cache"]["fork_mode"], "cold_start");
 
-        // Call 2: Shared system prompt + diverging user turn B -> triggers `seq_cp_branch_fork`
         let r2 = run_llama_rust(
             &cache,
             LlamaRustParams {
                 model_path: "models/beerus-8b-q4_k_m.gguf".into(),
                 prompt: "System: You are Beerus, Sovereign God of Destruction. User: Prove the Erdos-Hajnal conjecture.".into(),
+                draft_model_path: None,
+                speculative_depth: default_speculative_depth(),
+                speculative_tree_width: default_speculative_tree_width(),
                 n_ctx: default_n_ctx(),
                 n_gpu_layers: default_n_gpu_layers(),
                 n_batch: default_n_batch(),
                 temperature: 0.0,
                 max_tokens: 16,
             },
+            &McpProgressEmitter::default(),
         )
         .unwrap();
         assert_eq!(r2["model_cache"]["model_cache_hit"], true);

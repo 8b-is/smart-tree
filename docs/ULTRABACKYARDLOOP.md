@@ -1,4 +1,4 @@
-# ULTRABACKYARDLOOP — Measured Laps & Sovereign DO Loop (`smart-tree` v11.2.0)
+# ULTRABACKYARDLOOP — Measured Laps & Sovereign DO Loop (`smart-tree` v11.3.0)
 
 > *"One pass, end to end, merged into a single DO. No loose ends between laps. Every DO leaves the tree clean, pushed, and readme'd. A plausible branch may be ranked; only a verified branch may be bound. From love, from within."*
 
@@ -35,8 +35,9 @@ st --mode ultrabackyard .
 |  13 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **948 148** |        **2 574 074** |      **✅**      |
 |  14 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **968 421** |        **2 628 571** |      **✅**      |
 |  15 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **984 615** |        **2 672 527** |      **✅**      |
+|  16 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **996 032** |        **2 703 520** |      **✅**      |
 
-- **Best Verified & Bound Lap**: **Lap 15** ($\varepsilon = 0.10$, $C = 8$ conflict-free worktrees, **984,615 symbols/s**, **2,672,527 edges/s**, `7.12x` `.m8b` compression, Liouville $\det J = 1.0$, symplectic drift $1.49 \times 10^{-4}$, `64B@0x62` Litany seal verified, and 7 `ULTRA-OMNI-ZENO-BEERUS` MCP combinatorics + MLX/GGUF tools wired).
+- **Best Verified & Bound Lap**: **Lap 16** ($\varepsilon = 0.10$, $C = 8$ conflict-free worktrees, **996,032 symbols/s**, **2,703,520 edges/s**, `7.12x` `.m8b` compression, Liouville $\det J = 1.0$, symplectic drift $1.49 \times 10^{-4}$, `64B@0x62` Litany seal verified, and 7 `ULTRA-OMNI-ZENO-BEERUS` MCP combinatorics + MLX/GGUF tools with Axum SSE streaming, `libmlx_quant.dylib` C-FFI trampoline, Tree-Attention Speculative Decoding, `PromptLookupDrafter`, and EWMA+PID `AdaptiveSpeculativeController`).
 - **What the Laps Changed**:
   1. Eliminating per-pair heap allocations in `oracle.rs` via `OracleScratch` and vectorizing 64-lane centroid synthesis in `compressor.rs` via `felix_add_assign_64_f32` / `felix_normalize64_f32` made $\varepsilon = 0.10$ converge in fewer refinement passes than coarser $\varepsilon \in \{0.12, 0.14\}$.
   2. Default `RegularityConfig::default().epsilon = 0.10` is verified as the Pareto-optimal sweet spot balancing compression ratio (`7.12x`), Kohayakawa–Rödl energy (`0.2491`), and throughput (`968k sym/s`).

@@ -4,8 +4,9 @@ exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "11.2.0"
+version = "11.3.0"
 edition = "2021"
+build = "build.rs"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
 description = "Smart Tree - An intelligent, AI-friendly directory visualization tool"
 repository = "https://github.com/8b-is/smart-tree"
@@ -247,9 +248,21 @@ path = "src/bin/import_claude_memories.rs"
 tempfile = "3.10"
 assert_cmd = "2.0"
 predicates = "3.1"
+criterion = { version = "0.8", features = ["html_reports"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[[bench]]
+name = "combinatorics_llm_bench"
+harness = false
 
 [features]
 default = ["full"]
+
+# Hardware-accelerated MLX quantization & LLM features
+metal = ["mlx-ffi"]
+cuda = []
+mlx-ffi = []
 
 # Local LLM inference
 candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
