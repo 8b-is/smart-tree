@@ -1180,6 +1180,83 @@ pub fn felix_crc32_ieee(bytes: &[u8]) -> u32 {
     !crc
 }
 
+// ============================================================================
+// 10. NAND BIT-PLANE UTF-8 SCALAR COUNTER (`aarch64` NEON + `x86_64` BMI1/POPCNT)
+// ============================================================================
+
+/// Fundamental 64-bit bitwise NAND gate: `~(a & b)`.
+#[inline(always)]
+pub const fn felix_nand_u64(a: u64, b: u64) -> u64 {
+    !(a & b)
+}
+
+/// Computes a mask with bit 7 set (`0x80`) in every byte lane that is a UTF-8
+/// scalar start byte (`0xxxxxxx` or `11xxxxxx`), and `0x00` for continuation
+/// bytes (`10xxxxxx`), synthesized purely from NAND gates:
+///
+/// `lead = NAND(b7, NOT(b6)) & 0x8080_8080_8080_8080`
+#[inline(always)]
+pub const fn felix_utf8_lead_mask_nand64(word: u64) -> u64 {
+    const MSB_MASK: u64 = 0x8080_8080_8080_8080;
+    let not_b6 = felix_nand_u64(word << 1, word << 1);
+    let nand_lead = felix_nand_u64(word, not_b6);
+    felix_nand_u64(
+        felix_nand_u64(nand_lead, MSB_MASK),
+        felix_nand_u64(nand_lead, MSB_MASK),
+    )
+}
+
+/// Hardware-accelerated 8-byte UTF-8 scalar count via NAND bit-plane synthesis:
+/// counts byte lanes where `NAND(b7, NOT(b6)) == 1`.
+#[inline(always)]
+pub fn felix_count_utf8_leads_nand64(word: u64) -> u32 {
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        let count: u64;
+        core::arch::asm!(
+            "lsl {tmp}, {w}, #1",
+            "bic {tmp}, {w}, {tmp}",
+            "mvn {tmp}, {tmp}",
+            "and {tmp}, {tmp}, #0x8080808080808080",
+            "fmov d0, {tmp}",
+            "cnt v0.8b, v0.8b",
+            "uaddlv h0, v0.8b",
+            "fmov {out}, d0",
+            w = in(reg) word,
+            tmp = out(reg) _,
+            out = out(reg) count,
+            out("v0") _,
+            options(pure, nomem, nostack),
+        );
+        count as u32
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        let count: u64;
+        let msb_mask: u64 = 0x8080_8080_8080_8080;
+        core::arch::asm!(
+            "mov {tmp}, {w}",
+            "shl {tmp}, 1",
+            "andn {tmp}, {tmp}, {w}",
+            "not {tmp}",
+            "and {tmp}, {mask}",
+            "popcnt {out}, {tmp}",
+            w = in(reg) word,
+            mask = in(reg) msb_mask,
+            tmp = out(reg) _,
+            out = out(reg) count,
+            options(pure, nomem, nostack),
+        );
+        count as u32
+    }
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    {
+        felix_utf8_lead_mask_nand64(word).count_ones()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
