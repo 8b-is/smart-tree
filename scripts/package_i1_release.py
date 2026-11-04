@@ -43,8 +43,8 @@ def snapshot(args):
     candidates = subprocess.check_output(["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=root).decode().split("\0")
     selected = {"Cargo.toml", "Cargo.lock", "README.md", "LICENSE"}
     for name in candidates:
-        if name.startswith(("src/", "systemd/", "st-protocol/src/", "expert_prompt_engineer/src/")) or name in {
-            "st-protocol/Cargo.toml", "expert_prompt_engineer/Cargo.toml",
+        if name.startswith(("src/", "benches/", "systemd/", "st-protocol/src/", "expert_prompt_engineer/src/")) or name in {
+            "build.rs", "st-protocol/Cargo.toml", "expert_prompt_engineer/Cargo.toml",
         }:
             selected.add(name)
     contents = []
