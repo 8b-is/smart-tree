@@ -409,25 +409,9 @@ git config user.email "your.email@example.com"
    git push origin feature/my-windows-improvement
    ```
 
-## CI/CD on Windows
+## CI and native Windows validation
 
-Smart Tree uses GitHub Actions for Windows CI:
-
-```yaml
-# .github/workflows/rust.yml includes Windows testing
-- os: windows-latest
-  name: Windows
-  rust: stable
-```
-
-You can run the same tests locally:
-
-```powershell
-# Simulate CI environment
-$env:SMART_TREE_NO_UPDATE_CHECK = "1"
-$env:RUST_BACKTRACE = "1"
-cargo test --release --verbose
-```
+The [current CI workflow](../.github/workflows/ci.yml) runs the workspace on Ubuntu and macOS. Record the toolchain, features, and test results when validating a native Windows build. See the [Windows quick start](WINDOWS_QUICKSTART.md) for release artifact availability.
 
 ## Advanced Topics
 

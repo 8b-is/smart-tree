@@ -1,5 +1,7 @@
 # 🤖 Smart Tree for AI Assistants - Your Superpower Guide
 
+> Historical workflow examples use the older tool catalog. For the default consolidated server, use the [assistant workflow](AI_QUICK_REFERENCE.md) and [MCP calls](mcp-quick-reference.md).
+
 > **This guide is written specifically for AI assistants (like you!) to help you become dramatically more effective when helping users with codebases.**
 
 ## Why You NEED Smart Tree (Seriously)

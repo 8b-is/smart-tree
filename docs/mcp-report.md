@@ -1,5 +1,7 @@
 # 🌟 Smart Tree MCP Tools Report
 
+> This is a historical catalog. The [MCP quick reference](mcp-quick-reference.md) explains how to discover the tools enabled on your server.
+
 *A comprehensive showcase of Smart Tree's Model Context Protocol (MCP) capabilities*
 
 ---

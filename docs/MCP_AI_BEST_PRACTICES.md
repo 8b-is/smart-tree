@@ -1,5 +1,7 @@
 # 🤖 Smart Tree MCP Tools - AI Construction Helper Guide 🏗️
 
+> These examples describe an earlier tool catalog. See the [current MCP guide](mcp-guide.md) for configuration and working calls.
+
 **Welcome to your construction site! Smart Tree is your helper, ready to hand you the right tools at the right time.**
 
 ## 🚨 Important: Compression Default Changed (v4.0.0+)

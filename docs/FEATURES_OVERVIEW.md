@@ -1,5 +1,7 @@
 # Smart Tree Features Overview 🌳
 
+> This inventory describes an earlier release. For current commands and feature-specific limits, start in the [documentation index](INDEX.md).
+
 ## Revolutionary Features in v4.0.0 🏗️
 
 ### 🚀 Smart Edit Tools - 90-95% Token Reduction!

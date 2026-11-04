@@ -1,5 +1,7 @@
 # Smart Tree Compression Guide: From Bloat to Boat 🚤
 
+> Design examples illustrate encoding ideas. For the formats accepted by the current CLI and a reproducible byte comparison, see [mode selection](MODE_SELECTION_GUIDE.md) and [performance measurements](PERFORMANCE_METRICS.md).
+
 ## The Problem: JSON/XML Obesity Epidemic 🍔
 
 Modern data formats are like that friend who can't tell a story without including what they had for breakfast. Here's how Smart Tree fights the bloat!

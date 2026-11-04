@@ -1,17 +1,17 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-11.3.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-11.3.1-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-reproduce-brightgreen)](docs/PERFORMANCE_METRICS.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
 [![Erdős Book Mode](https://img.shields.io/badge/Erd%C5%91s-The_Book_Szemer%C3%A9di-ff8800)](docs/ARCHITECTURE_REVIEW_V10_8.md)
 [![FELIX ASM](https://img.shields.io/badge/FELIX-ASM_%26_SIMD_Hot_Paths-ff0055)](src/felix_asm.rs)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
-[![Spicy Mode](https://img.shields.io/badge/TUI-🌶️_Spicy-red)](docs/spicy-tui.md)
+[![Spicy Mode](https://img.shields.io/badge/TUI-🌶️_Spicy-red)](docs/st-cheatsheet.md)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v10.9.0 (Oni-Felix + Paul Erdős "Straight from The Book" + FELIX Assembly Hot-Paths)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, code-symbol, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **LOUDS Bit-Packed 64B `SMTR` `.m8` Capsules (`8B-META-WP-v2.1`)**, embedded **CrabCC Code Intelligence** (`st symbol`), **Salient Forge Memory** (`st remember`), **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> Smart Tree scans a workspace and presents it as a directory tree, structured output, or a bounded summary for an AI assistant. Use the Rust CLI for local scans, the MCP server for tool calls, and the embedded CrabCC index for source-level symbol queries. [Documentation](docs/README.md)
 
 ---
 
@@ -36,23 +36,15 @@ After install, run `st --cleanup` to scan for and remove any malicious AI integr
 
 ### 🧬 Oni-Felix LOUDS Bit-Packed Smart Tree & 64B `SMTR` Capsule (`v10.8.0`)
 
-Smart Tree v10.8.0 implements the **`8B-META-WP-v2.1` LOUDS (Level-Order Unary Degree Sequence)** succinct tree representation (`#[repr(C, align(64))] LoudsSmartTree`), packing up to **63 tree nodes into 16 bytes (`2N + 1` bits)** of topology with $O(1)$ hardware `POPCNT`/`TZCNT` `rank1`/`select1` navigation and a **64-byte cryptographically verified `SMTR` `.m8` capsule** (branchless IEEE 802.3 CRC32 + `8BIS` seal):
+The LOUDS formatter admits up to 64 scanned nodes, projects selected categories, and returns JSON containing a 64-byte structural capsule. It is useful for comparing bounded views. A same-size edit to file contents can leave the capsule unchanged.
 
 ```bash
-# Emit the full 64-byte SMTR_CAPSULE_V2 with LOUDS bitvector, wave digest & node table
-st --mode louds .
-st --mode smtr-capsule ./src
-
-# Compact single-line SHA-256 + LOUDS SMTR_V2 fingerprint for instant change detection
-st --mode digest .
-
-# Paul Erdős ("Straight from The Book") Szemerédi Regularity, Voronoi Steiner Pruner,
-# Moser-Tardos Constructive LLL Worktree Splitter, Erdős-Rényi Percolation & Ramsey Cliques
-st --mode the-book .
-st --mode erdos ./src
+st --no-daemon --mode louds ./src
+st --no-daemon --mode digest ./src
+st --no-daemon --mode the-book ./src
 ```
 
-See the full [v10.8.0 End-to-End Architectural Review](docs/ARCHITECTURE_REVIEW_V10_8.md) for C4 diagrams, wire layout, and hot-path benchmarks.
+See the [byte layout and worked example](docs/SMTR_CAPSULE.md) and the [architecture review](docs/ARCHITECTURE_REVIEW_V10_8.md) for graph and persistence limits.
 
 ### Built-in code intelligence
 
@@ -227,9 +219,9 @@ quick_tree .                                         // Understand structure
 
 | Feature | Description | Command / Tool |
 |---------|-------------|----------------|
-| **🧬 LOUDS 64B `SMTR` Capsule** | Cache-line aligned `#[repr(C, align(64))]` `2N+1` bit succinct topology with $O(1)$ `POPCNT`/`TZCNT` traversal, subtree salience folding, and CRC32-verified 64B `.m8` capsules. | `st --mode louds`, `analyze` (`mode:"louds"`) |
-| **⚡ Ultra-Wild Scanner Engine** | Zero-alloc stack-buffered `.m8` framing & file categorization, cached `GlobSet` DFA (~180x faster `Scanner::new`), reusable search buffers, and multi-core `rayon` enrichment. | All scan & search modes |
-| **🧠 Salient Forge Memory (`st remember`)** | Ingest local checkouts or GitHub/GitLab/Forgejo URLs into SHA-256 hash-chained `.m8` wave stores with salience levels & instant `--check` recall. | `st remember <path\|url>` |
+| **🧬 LOUDS 64B `SMTR` Capsule** | A 64-byte summary of a bounded directory projection with a topology prefix, subtree digest, and tag computed with a public constant. | `st --mode louds`, `analyze` (`mode:"louds"`) |
+| **⚡ Ultra-Wild Scanner Engine** | Stack buffers for framing, cached ignore patterns, reusable search buffers, and parallel enrichment. | All scan & search modes |
+| **🧠 Salient Forge Memory (`st remember`)** | Ingest local checkouts or GitHub/GitLab/Forgejo URLs into MEM8 stores with salience levels and `--check` recall. See the [persistence limits](docs/ARCHITECTURE_REVIEW_V10_8.md). | `st remember <path\|url>` |
 | **🦀 Embedded CrabCC Code Intelligence** | Native symbol definitions, references, file outlines, and call-graph statistics cached in `.st/symbols/` with zero external binaries. | `st symbol`, `symbol` MCP |
 | **⚛️ Atomic Smart Edit Transactions** | AST-aware file editing with `batch_mode: "atomic"` rollback protection and end-to-end truncation telemetry across daemon, CLI, SSE & MCP cache. | `edit` MCP (`smart_edit`) |
 | **🔐 Ed25519 DNS & X.509 Cert Scanner** | Signed TXT release verification, SHA-256 rollback updater service, and deep PEM/DER certificate inventory (`--cert-scan`). | `st --update`, `st --cert-scan` |
@@ -282,7 +274,7 @@ st --agent-save             # Save AI session consciousness
 st --memory-anchor insight "key concepts" "Important findings about X"
 ```
 
-Note: For guidance and copyable templates to make GitHub Copilot (or other LLMs) call Smart Tree's MCP tools correctly, see `.github/COPILOT_MCP_GUIDELINES.md` and the repository-level instructions at `.github/COPILOT_REPO_INSTRUCTIONS.md`.
+For MCP setup and copyable calls, see the [connection guide](docs/mcp-guide.md) and [quick reference](docs/mcp-quick-reference.md).
 
 ## 🚀 MCP Auto-Installer
 
@@ -508,22 +500,13 @@ hooks {operation:'test', hook_type:'UserPromptSubmit', input:'analyze /src'}
 
 ## 🚀 Why Smart Tree?
 
-### ⚡ Performance Benchmarks
+### Output size and performance
 
-| Directory Size | `tree` | `exa --tree` | **Smart Tree** | Speedup |
-|---------------|--------|--------------|----------------|---------|
-| Small (100 files) | 15ms | 25ms | **2ms** | **7.5x** |
-| Medium (10K files) | 450ms | 380ms | **35ms** | **12.8x** |
-| Large (100K files) | 4.8s | 3.2s | **198ms** | **24.2x** |
-| Massive (1M files) | 45s | 28s | **1.9s** | **23.7x** |
+Compare modes on the same directory and with the same depth and ignore rules. Listings retain individual entries, while summaries and fingerprints omit detail. The [performance guide](docs/PERFORMANCE_METRICS.md) includes observed byte counts, a copyable fixture, and instructions for timing graph workloads.
 
-### 🧠 AI-Optimized Features
+### Tools for AI clients
 
-- **30+ MCP Tools**: Comprehensive toolkit for AI assistants
-- **Token-Efficient Formats**: 70-90% reduction in token usage
-- **Quantum Compression**: Revolutionary format achieving 100:1 compression
-- **Semantic Analysis**: Understands code structure and relationships
-- **Context Preservation**: Maintains session state between interactions
+Use the [MCP guide](docs/mcp-guide.md) for discovery and structured scans, and [mode selection](docs/MODE_SELECTION_GUIDE.md) to choose the information each call should return.
 
 ## 🎯 Core Features
 
@@ -536,7 +519,7 @@ hooks {operation:'test', hook_type:'UserPromptSubmit', input:'analyze /src'}
 - **Mermaid** (`--mode mermaid`): Flowchart diagrams
 
 ### Advanced Capabilities
-- **Content Search**: Lightning-fast regex search across files
+- **Content Search**: Locate a keyword in file contents with `--search` or use `--find` to match names by regex
 - **Git Integration**: Shows repository status inline
 - **Streaming Mode**: Handles millions of files efficiently
 - **MCP Server**: Model Context Protocol for AI assistants
@@ -680,69 +663,11 @@ All Smart Tree operations can be logged in JSONL format for:
 - **Auditing**: Review AI assistant interactions with your codebase
 - **Analytics**: Understand usage patterns
 
-## 🔧 MCP Integration - Tools That Make AI Assistants Irresistible
+## MCP integration
 
-Smart Tree provides 30+ tools via Model Context Protocol, designed to make AI assistants dramatically more capable:
+Start the stdio server with `st --mcp`. On a default server, use `overview` for a directory survey, `find` for paths, `search` for text, and `analyze` for a formatted scan. Clients discover the enabled tools and their schemas with `tools/list`.
 
-### Setup for Claude Desktop
-```bash
-st --mcp-config >> ~/Library/Application\ Support/Claude/claude_desktop_config.json
-```
-
-### 🧠 Memory & Intelligence Tools (Use These!)
-- `anchor_collaborative_memory`: Build persistent memory across sessions
-- `find_collaborative_memories`: Recall past insights instantly
-- `consciousness`: Save/restore AI session state
-- `mega_session`: Track long-term development sessions
-
-**Why**: Never forget context. Become smarter with each session.
-
-### 🔍 Discovery Tools (Your First Move)
-- `quick_tree`: Instant directory overview (10-100x faster)
-- `project_overview`: Compressed project intelligence
-- `analyze_directory`: Multi-mode analysis with 80% token reduction
-
-**Why**: Understand codebases in seconds, not minutes.
-
-### 🔎 Search Tools (Better Than Grep)
-- `search_in_files`: Lightning-fast content search with context
-- `find_files`: Regex-powered file discovery
-- `find_code_files`: Language-specific search
-
-**Why**: Find anything instantly without manual exploration.
-
-### 🧬 Analysis Tools (Deep Understanding)
-- `semantic_analysis`: Understand code relationships
-- `get_statistics`: Codebase metrics
-- `get_git_status`: Repository status inline
-
-**Why**: Get architectural understanding without reading every file.
-
-### ⚡ Action Tools (Token-Efficient Editing)
-- `smart_edit`: AST-aware code editing (90% token savings!)
-- `insert_function` / `remove_function`: Structure-aware edits
-- `track_file_operation`: Track file changes
-
-**Why**: Edit precisely without loading entire files.
-
-### 🗣️ Interaction Tools (Cross-Origin AI Prompting)
-- `ask_user`: Pause execution, trigger a modal on the web dashboard, and ask the human user a question!
-
-**Why**: Get explicit permission or clarify requirements without flooding the chat log.
-
-### And 20+ more specialized tools!
-
-See [AI Assistant Guide](docs/AI_ASSISTANT_GUIDE.md) for detailed usage patterns and psychological triggers.
-
-### GitHub Copilot Integration
-Smart Tree includes Copilot-specific instructions to help GitHub Copilot use MCP tools effectively:
-
-- **Automatic Guidance**: Instructions in `.github/copilot-instructions.md` help Copilot understand tool requirements
-- **Three-Lane Pattern**: EXPLORE → ANALYZE → ACT workflow for safer, more effective tool usage
-- **Common Patterns**: Pre-defined examples for frequent operations
-- **Error Prevention**: Guidance on required parameters and common mistakes
-
-See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for detailed usage patterns.
+[Connect a client](docs/mcp-guide.md) · [Copyable calls](docs/mcp-quick-reference.md) · [Atomic edit behavior](docs/atomic-edit-batches.md)
 
 ## 🎨 Configuration
 
@@ -921,7 +846,7 @@ cargo test
 ### Running Tests
 ```bash
 cargo test                    # Unit tests
-./scripts/test_all.sh        # Integration tests
+./scripts/manage.sh test     # Workspace tests, Clippy, and formatting
 cargo bench                  # Performance benchmarks
 ```
 
@@ -930,11 +855,11 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📚 Documentation
 
-- [API Documentation](https://docs.rs/smart-tree)
-- [MCP Tools Reference](docs/mcp-tools.md)
-- [Compression Formats](docs/compression.md)
-- [Performance Guide](docs/performance.md)
-- [Claude Integration](docs/claude.md)
+- [Documentation index](docs/INDEX.md)
+- [CLI commands and modes](docs/st-cheatsheet.md)
+- [MCP setup and examples](docs/mcp-guide.md)
+- [Architecture and format contracts](docs/ARCHITECTURE_REVIEW_V10_8.md)
+- [Performance measurements](docs/PERFORMANCE_METRICS.md)
 
 ## 🎖️ Credits
 
@@ -1064,7 +989,7 @@ flowchart LR
 | **VII. Karp's 21 NP-Complete FPT Certificate** | Fixed-Parameter Tractable ($O(d \cdot \vert V\vert \cdot 3^{d/3})$) degeneracy $d$, Caro–Wei $\alpha(G)$, Gavril 2-approx Vertex Cover, and Minimum Feedback Arc Set | `st --ramsey-cliques .` |
 | **VIII. Quantum Many-Body Kohn–Sham DFT & Strang Wave** | `[f32; 64]` Kohn–Sham super-node orbitals + Local Natural Orbital (`T8R`) correlations evolved via $e^{h(A+B)} \approx e^{hA/2} e^{hB} e^{hA/2}$ | `st --mode the-book .` |
 | **IX. Sovereign `p/q` Mode (`pq_engine.rs`)** | Exact coprime rationals via Stein's Binary GCD (`felix_binary_gcd_u64`), 128-bit cross-multiplication (`felix_pq_cross_cmp`), Hölder $(L_{3/2} \to L_3)$ dual spectral norm, Kővári–Sós–Turán $z(n; p, q)$, and Störmer–Verlet symplectic $(p, q)$ leapfrog | `st --mode pq .` |
-| **X. Sovereign Ultra-Backyard Loop (`ultrabackyard.rs`)** | Measured A/B Backyard Ultra laps (`DO = reflect → improve → wire → polish → push → readme`) cycling $\varepsilon$ & $C$, auditing SpherePOP / `mem\|8` / Phoenix / Vaked / `g8t.is` wiring (`zero_orphan_surfaces = true`), and binding only verified branches ([`docs/ULTRABACKYARDLOOP.md`](docs/ULTRABACKYARDLOOP.md), [`docs/lap-ledger.jsonl`](docs/lap-ledger.jsonl)) | `st --ultrabackyard 12 .` |
+| **X. Sovereign Ultra-Backyard Loop** | Times a graph pipeline on scanned file nodes and reports each lap’s throughput and predicate results. See the [lap report and verification limits](docs/ULTRABACKYARDLOOP.md). | `st --ultrabackyard 12 .` |
 | **XI. Sovereign `ULTRA-OMNI-ZENO` v11 (`zeno_engine.rs`)** | `upz`/`wupz-core` `64B@0x62` `LitanyWireFrame`, `BFP-64` Kleene bitplanes (`qt:55`), `.rodata.gaia.b158` `1.585 bits/trit` SPQT `base-243` packing, 18-stage branchless integer CORDIC (`felix_cordic_atan2_u32`), `8b-is-[engines]` (`world-core`, `ternary` `1.58-bit` integer GEMM, `spherepop`, `admissibility` `CT-000`/`CT-016` + `Seed 001`, `auroralib`, `omniZenCooker`), and OS/Agent-agnostic matrix | `st --zeno .` / `st --mode zeno .` |
 | **XII. `ULTRA-OMNI-ZENO-BEERUS` MCP Combinatorics & Local LLM Runtime (`src/mcp/combinatorics_llm.rs`)** | Unified JSON-RPC 2.0 + Axum SSE (`text/event-stream`) MCP runtime with cooperative client-disconnect cancellation (`McpProgressEmitter`, C-FFI `ffi_progress_trampoline` in `libmlx_quant.dylib`), 5 Rayon-parallel bitboard solvers (`szemeredi_compression`, `erdos_steiner_pruning`, `moser_tardos_splitting`, `erdos_renyi_scanning`, `ramsey_clique_analysis` with `StackBitSet<N>`), Apple Silicon `mlx_quant` (`affine`, `mxfp4`, `mxfp8`, `nvfp4`), and `llama_rust` with **Tree-Attention Speculative Decoding** (`SpeculativeDraftTree`, `TOTAL_KV_SEQS = 32`, Leviathan–Chen rejection + residual bonus sampler), **Zero-Weight N-Gram Prompt-Lookup Drafter (`PromptLookupDrafter`)**, and **EWMA + Anti-Windup PID Adaptive Speculative Controller (`AdaptiveSpeculativeController`)** | `st --mcp` |
 
