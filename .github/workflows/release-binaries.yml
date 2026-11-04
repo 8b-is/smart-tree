@@ -44,6 +44,8 @@ jobs:
           with tarfile.open(source) as archive:
               archive.extractall('source', filter='data')
           PY
+          [ -e source/smart-tree/ultra-agent.md ] || cp -a ultra-agent.md source/smart-tree/
+          [ -d source/smart-tree/skills ] || cp -a skills source/smart-tree/
       - name: Build and smoke test all four native binaries
         run: |
           export ST_BUILD_ID=$(cat source/smart-tree/BUILD_ID)
