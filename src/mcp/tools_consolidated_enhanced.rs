@@ -1141,6 +1141,8 @@ EXAMPLES:
         }
     }));
 
+    tools.extend(super::combinatorics_llm::get_combinatorics_llm_mcp_tools());
+
     tools
 }
 
