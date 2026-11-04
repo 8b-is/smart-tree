@@ -67,6 +67,7 @@ async fn ensure_mcp_context(state: &SharedMcpContext) -> Arc<McpContext> {
         cwd: Arc::new(std::sync::Mutex::new(
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
         )),
+        model_cache: Arc::new(crate::mcp::combinatorics_llm::LlamaModelCache::new(4)),
     });
 
     let mut write_guard = state.write().await;

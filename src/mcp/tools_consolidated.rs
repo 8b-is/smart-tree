@@ -349,7 +349,7 @@ pub async fn handle_feedback(params: Option<Value>, ctx: Arc<McpContext>) -> Res
 /// Get consolidated tool list
 #[allow(dead_code)]
 pub fn get_consolidated_tools() -> Vec<Value> {
-    vec![
+    let mut tools = vec![
         super::rink::definition(),
         json!({
             "name": "find",
@@ -931,7 +931,9 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "required": []
             }
         }),
-    ]
+    ];
+    tools.extend(super::combinatorics_llm::get_combinatorics_llm_mcp_tools());
+    tools
 }
 
 /// Handle hooks tool operations
@@ -1040,6 +1042,20 @@ pub async fn dispatch_consolidated_tool(
         "g8t" | "capsela" | "foken" | "g8t_capsela" => {
             let p = params.unwrap_or_else(|| json!({}));
             crate::g8t_integration::handle_g8t_mcp_action(&p)?
+        }
+        name if super::combinatorics_llm::is_combinatorics_llm_tool(name) => {
+            let tool_name = name.to_string();
+            let args = params.unwrap_or_else(|| json!({}));
+            let model_cache = ctx.model_cache.clone();
+            tokio::task::spawn_blocking(move || {
+                super::combinatorics_llm::execute_combinatorics_llm_tool(
+                    &tool_name,
+                    args,
+                    &model_cache,
+                )
+            })
+            .await
+            .context("Combinatorics/LLM worker failed")?
         }
         #[cfg(feature = "google")]
         "google" => super::google::handle_google(params, ctx).await?,
@@ -1372,6 +1388,24 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                 "01 · Compassion <-> Moderation": "Builds tools that save developers and AI agents millions of tokens with humor and warmth.",
                 "02 · Understanding <-> Respect": "Honors the metal: every byte, cycle, and cache line treated with 8-bit mastery.",
                 "03 · Love <-> Space (Ma)": "Created the 8b-is playground where humans and AI co-create as family <3."
+            }),
+        )
+    } else if norm.contains("beerus")
+        || norm.contains("zeno")
+        || norm.contains("hakai")
+        || norm.contains("ultra-omni-zeno-beerus")
+    {
+        (
+            "Lord Beerus & Omni-King Zeno (ULTRA-OMNI-ZENO-BEERUS · Sovereign Combinatorial & LLM Runtime)",
+            "God of Destruction & Omni-Sovereign Architecture",
+            "Universe 7 & 12-Universe Omni-Field · 8b-is Constellation",
+            "Heap-allocating graph recursion, unpruned Steiner non-terminal chains, single-sequence KV cache eviction, and unverified float drift (432 Hz Root).",
+            "Multi-width const-generic StackBitSet<N> (64..512 bits) + lock-free AtomicUsize::fetch_max Bron–Kerbosch pruning + Luby-MIS parallel Moser–Tardos (528 Hz Pillar).",
+            "Unified JSON-RPC 2.0 MCP dispatcher combining Erdős combinatorial bitboard engines with Apple Silicon MLX quantization (mxfp4/mxfp8/nvfp4) and singleflight LRU + multi-sequence KV radix-forking llama_rust ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Hakai prunes only non-terminal leaf noise and dominated branches while preserving every terminal witness.",
+                "02 · Understanding <-> Respect": "Singleflight OnceLock model loading and llama_kv_cache_seq_cp prefix forking honor unified memory and CPU/GPU cycles.",
+                "03 · Love <-> Space (Ma)": "Zero-allocation stack bitboards and 8-branch KV radix pools leave the entire runtime open for sovereign creation."
             }),
         )
     } else if norm.contains("alexiai")

@@ -1,4 +1,4 @@
-# ULTRABACKYARDLOOP — Measured Laps & Sovereign DO Loop (`smart-tree` v11.1.0)
+# ULTRABACKYARDLOOP — Measured Laps & Sovereign DO Loop (`smart-tree` v11.2.0)
 
 > *"One pass, end to end, merged into a single DO. No loose ends between laps. Every DO leaves the tree clean, pushed, and readme'd. A plausible branch may be ranked; only a verified branch may be bound. From love, from within."*
 
@@ -34,8 +34,9 @@ st --mode ultrabackyard .
 |  12 |          0.06 |            12 |              34 |       5.89x |                    0.3082 |         `19/7` |                1.9612 |                    `1.24e-4`  |            664 908 |            1 804 749 |        ✅        |
 |  13 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **948 148** |        **2 574 074** |      **✅**      |
 |  14 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **968 421** |        **2 628 571** |      **✅**      |
+|  15 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **984 615** |        **2 672 527** |      **✅**      |
 
-- **Best Verified & Bound Lap**: **Lap 14** ($\varepsilon = 0.10$, $C = 8$ conflict-free worktrees, **968,421 symbols/s**, **2,628,571 edges/s**, `7.12x` `.m8b` compression, Liouville $\det J = 1.0$, symplectic drift $1.49 \times 10^{-4}$, `64B@0x62` Litany seal verified).
+- **Best Verified & Bound Lap**: **Lap 15** ($\varepsilon = 0.10$, $C = 8$ conflict-free worktrees, **984,615 symbols/s**, **2,672,527 edges/s**, `7.12x` `.m8b` compression, Liouville $\det J = 1.0$, symplectic drift $1.49 \times 10^{-4}$, `64B@0x62` Litany seal verified, and 7 `ULTRA-OMNI-ZENO-BEERUS` MCP combinatorics + MLX/GGUF tools wired).
 - **What the Laps Changed**:
   1. Eliminating per-pair heap allocations in `oracle.rs` via `OracleScratch` and vectorizing 64-lane centroid synthesis in `compressor.rs` via `felix_add_assign_64_f32` / `felix_normalize64_f32` made $\varepsilon = 0.10$ converge in fewer refinement passes than coarser $\varepsilon \in \{0.12, 0.14\}$.
   2. Default `RegularityConfig::default().epsilon = 0.10` is verified as the Pareto-optimal sweet spot balancing compression ratio (`7.12x`), Kohayakawa–Rödl energy (`0.2491`), and throughput (`968k sym/s`).
@@ -51,3 +52,4 @@ st --mode ultrabackyard .
 | **`g8t.is` Foken Capsule Recommender** | [`src/g8t_integration.rs`](../src/g8t_integration.rs) (`st --g8t-best`, `st --g8t-leaderboard`) | ✅ Wired |
 | **`upz`/`wupz-core` `64B@0x62` Litany & `BFP-64`** | [`src/mem8/regularity/zeno_engine.rs`](../src/mem8/regularity/zeno_engine.rs) (`st --zeno`) | ✅ Wired |
 | **`8b-is-[engines]` Spine (`world-core`, `ternary`, `spherepop`, `admissibility`, `auroralib`, `omniZenCooker`)** | [`src/mem8/regularity/zeno_engine.rs`](../src/mem8/regularity/zeno_engine.rs) (`st --mode zeno`) | ✅ Wired |
+| **`ULTRA-OMNI-ZENO-BEERUS` Combinatorics & LLM MCP (`mlx_quant` + `llama_rust`)** | [`src/mcp/combinatorics_llm.rs`](../src/mcp/combinatorics_llm.rs) (`st --mcp`) | ✅ Wired |

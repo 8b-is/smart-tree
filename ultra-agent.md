@@ -1,8 +1,8 @@
-# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v11.1.0)
+# `ultra-agent.md` — Sovereign Mathematical Operating Manual for AI Agents (`smart-tree` v11.2.0)
 
 <div align="center">
 
-![Smart Tree v11.1.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
+![Smart Tree v11.2.0 — Straight from The Book](assets/smart-tree-v10-10-hero.jpg)
 
 **"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."**  
 *— Paul Erdős (1913–1996), The Magician from Budapest*
@@ -105,4 +105,7 @@ st --ultrabackyard 12 .
 # 9. Sovereign ULTRA-OMNI-ZENO v11 (upz/wupz 64B@0x62 LitanyWireFrame + 8b-is-[engines] + OS/Agent Agnostic Matrix):
 st --zeno .
 st --mode zeno .
+
+# 10. Sovereign ULTRA-OMNI-ZENO-BEERUS MCP Combinatorics & Local LLM Runtime (szemeredi_compression, erdos_steiner_pruning, moser_tardos_splitting, erdos_renyi_scanning, ramsey_clique_analysis, mlx_quant, llama_rust):
+st --mcp
 ```

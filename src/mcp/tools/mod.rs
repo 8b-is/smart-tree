@@ -1624,6 +1624,12 @@ pub async fn handle_tools_list(_params: Option<Value>, _ctx: Arc<McpContext>) ->
         }
     }
 
+    for tool_val in crate::mcp::combinatorics_llm::get_combinatorics_llm_mcp_tools() {
+        if let Ok(tool_def) = serde_json::from_value::<ToolDefinition>(tool_val) {
+            tools.push(tool_def);
+        }
+    }
+
     Ok(json!({
         "tools": tools
     }))
@@ -1814,6 +1820,21 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
 
         #[cfg(feature = "voice")]
         "voice" => crate::mcp::tools_consolidated::handle_voice(Some(args), ctx_clone).await,
+
+        name if crate::mcp::combinatorics_llm::is_combinatorics_llm_tool(name) => {
+            let tool_name_owned = name.to_string();
+            let model_cache = ctx_clone.model_cache.clone();
+            let payload = tokio::task::spawn_blocking(move || {
+                crate::mcp::combinatorics_llm::execute_combinatorics_llm_tool(
+                    &tool_name_owned,
+                    args,
+                    &model_cache,
+                )
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Combinatorics/LLM worker failed: {e}"))?;
+            Ok(payload)
+        }
 
         _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
     }?;

@@ -73,6 +73,7 @@ pub fn fmt_line(n: usize, hex: bool) -> String {
 
 pub mod assistant;
 pub mod cache;
+pub mod combinatorics_llm;
 pub mod consciousness;
 pub mod context_absorber;
 mod context_tools;
@@ -181,6 +182,8 @@ pub struct McpContext {
     /// and it is updated after each call so an agent can omit the path on
     /// follow-up calls. Initialized to the process working directory.
     pub cwd: Arc<std::sync::Mutex<PathBuf>>,
+    /// Singleflight LRU GGUF model cache & multi-sequence KV radix pool for `llama_rust`.
+    pub model_cache: Arc<combinatorics_llm::LlamaModelCache>,
 }
 
 /// MCP server configuration
@@ -257,6 +260,11 @@ impl McpServer {
         // Use silent constructor - MCP protocol requires clean stdout
         let consciousness = Arc::new(tokio::sync::Mutex::new(ConsciousnessManager::new_silent()));
 
+        let cache_cap: usize = std::env::var("MCP_MODEL_CACHE_SIZE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(4);
+
         let context = Arc::new(McpContext {
             cache: Arc::new(AnalysisCache::new(config.cache_ttl)),
             config: Arc::new(config),
@@ -268,6 +276,7 @@ impl McpServer {
             cwd: Arc::new(std::sync::Mutex::new(
                 std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             )),
+            model_cache: Arc::new(combinatorics_llm::LlamaModelCache::new(cache_cap)),
         });
 
         Self {
@@ -350,8 +359,46 @@ impl McpServer {
         Ok(())
     }
 
-    /// Handle a single JSON-RPC request
+    /// Handle a single JSON-RPC request or a JSON-RPC 2.0 batch array
     async fn handle_request(&self, request_str: &str) -> Result<String> {
+        let raw_value: Value =
+            serde_json::from_str(request_str).context("Failed to parse JSON-RPC request")?;
+
+        if let Value::Array(batch) = raw_value {
+            if batch.is_empty() {
+                let err = JsonRpcResponse {
+                    jsonrpc: "2.0".to_string(),
+                    result: None,
+                    error: Some(JsonRpcError {
+                        code: -32600,
+                        message: "Invalid Request: empty batch".to_string(),
+                        data: None,
+                    }),
+                    id: Some(Value::Null),
+                };
+                return Ok(serde_json::to_string(&err)?);
+            }
+            let mut responses = Vec::new();
+            for item in batch {
+                let item_str = serde_json::to_string(&item)?;
+                let single_resp = self.handle_single_request(&item_str).await?;
+                if !single_resp.is_empty() {
+                    if let Ok(val) = serde_json::from_str::<Value>(&single_resp) {
+                        responses.push(val);
+                    }
+                }
+            }
+            if responses.is_empty() {
+                return Ok(String::new());
+            }
+            return Ok(serde_json::to_string(&responses)?);
+        }
+
+        self.handle_single_request(request_str).await
+    }
+
+    /// Handle a single JSON-RPC 2.0 object request
+    async fn handle_single_request(&self, request_str: &str) -> Result<String> {
         // Parse JSON-RPC request
         let request: JsonRpcRequest =
             serde_json::from_str(request_str).context("Failed to parse JSON-RPC request")?;
@@ -390,6 +437,7 @@ impl McpServer {
 
         // Route the request
         let result = match request.method.as_str() {
+            "ping" => Ok(json!({})),
             "initialize" => {
                 // Use session-aware initialization if ST_SESSION_AWARE is set
                 if std::env::var("ST_SESSION_AWARE").is_ok() {
@@ -521,7 +569,13 @@ pub const MCP_SERVER_INSTRUCTIONS: &str = "\
    • Persistent MEM8 wave memory (`memory {operation:'find'|'anchor'}`), hierarchical `.m8` directory consciousness pyramids, and automatic `~/.ssh/config` fleet host recall across sessions. Proactively anchor breakthroughs, decisions, patterns, and gotchas!
 
 8. ⚡ `g8t` INSTEAD OF writing unbenchmarked hot-path Rust from scratch:
-   • Instant lookup (`action:'best'` or `action:'yolo'`) of hardware-verified, cycle-counted (`_rdtsc`/`cntvct_el0` exact rational `p/q` `cycles_per_op`) fastest Rust functions from g8t.is.";
+   • Instant lookup (`action:'best'` or `action:'yolo'`) of hardware-verified, cycle-counted (`_rdtsc`/`cntvct_el0` exact rational `p/q` `cycles_per_op`) fastest Rust functions from g8t.is.
+
+9. 🧮 `szemeredi_compression`, `erdos_steiner_pruning`, `moser_tardos_splitting`, `erdos_renyi_scanning`, `ramsey_clique_analysis` INSTEAD OF slow Python graph scripts:
+   • Zero-allocation SIMD `StackBitSet` (`N=1,2,4,8` up to 512 vertices) + Rayon parallel Matula–Beck Bron–Kerbosch (`AtomicUsize::fetch_max`), parallel Luby-MIS Moser–Tardos, dense-indexed Dijkstra Steiner pruning, and deterministic SplitMix64 phase-transition scanning.
+
+10. 🍎 `mlx_quant` & 🦙 `llama_rust` INSTEAD OF external CLI wrappers:
+    • Unified Apple Silicon Metal quantization (`affine`, `mxfp4`, `mxfp8`, `nvfp4`) + `64B@0x62` LitanyWireFrame sealing and local GGUF inference with singleflight LRU model caching and multi-sequence KV radix prefix forking (`seq_cp_branch_fork`).";
 
 async fn handle_initialize(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     // Check if client supports compression from their request
@@ -563,6 +617,8 @@ async fn handle_initialize(params: Option<Value>, _ctx: Arc<McpContext>) -> Resu
                 "crabcc-symbol-callgraph",
                 "mem8-wave-memory-and-m8-pyramid",
                 "g8t-rational-cycle-verified-rust",
+                "erdos-combinatorial-bitboard-solvers",
+                "mlx-quant-and-llama-rust-kv-radix-pool",
                 "mcp-optimization",
                 "content-search",
                 "streaming",
@@ -839,6 +895,13 @@ mod tests {
             "symbol",
             "memory",
             "project_context_dump",
+            "szemeredi_compression",
+            "erdos_steiner_pruning",
+            "moser_tardos_splitting",
+            "erdos_renyi_scanning",
+            "ramsey_clique_analysis",
+            "mlx_quant",
+            "llama_rust",
         ] {
             let tool = tools
                 .iter()
@@ -851,5 +914,99 @@ mod tests {
             );
         }
         assert!(list_resp["result"]["_welcome"]["why_pick_smart_tree_first"].is_object());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_combinatorics_and_llm_tools_dispatch_and_batch() {
+        let server = McpServer::new(McpConfig::default());
+
+        // 1. Test JSON-RPC ping
+        let ping_str = server
+            .handle_request(r#"{"jsonrpc":"2.0","id":10,"method":"ping"}"#)
+            .await
+            .unwrap();
+        let ping_val: Value = serde_json::from_str(&ping_str).unwrap();
+        assert_eq!(ping_val["id"], 10);
+        assert!(ping_val["result"].is_object());
+
+        // 2. Test JSON-RPC 2.0 batch request combining ramsey_clique_analysis, mlx_quant, and llama_rust (2 turns for KV radix fork)
+        let batch_req = json!([
+            {
+                "jsonrpc": "2.0",
+                "id": 101,
+                "method": "tools/call",
+                "params": {
+                    "name": "ramsey_clique_analysis",
+                    "arguments": {
+                        "num_vertices": 6,
+                        "edges": [[0, 1], [1, 2], [0, 2], [3, 4]],
+                        "k_clique": 3,
+                        "l_independent": 3
+                    }
+                }
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 102,
+                "method": "tools/call",
+                "params": {
+                    "name": "mlx_quant",
+                    "arguments": {
+                        "model_path": "mlx-community/Qwen2.5-Coder-7B",
+                        "output_path": "/tmp/qwen-mxfp4",
+                        "bits": 4,
+                        "group_size": 64,
+                        "scheme": "mxfp4"
+                    }
+                }
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 103,
+                "method": "tools/call",
+                "params": {
+                    "name": "llama_rust",
+                    "arguments": {
+                        "model_path": "models/qwen2.5-coder-7b-q4_k_m.gguf",
+                        "prompt": "System: ULTRA-OMNI-ZENO-BEERUS\nUser: Analyze graph regularity."
+                    }
+                }
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 104,
+                "method": "tools/call",
+                "params": {
+                    "name": "llama_rust",
+                    "arguments": {
+                        "model_path": "models/qwen2.5-coder-7b-q4_k_m.gguf",
+                        "prompt": "System: ULTRA-OMNI-ZENO-BEERUS\nUser: Analyze Erdos-Hajnal bicliques."
+                    }
+                }
+            }
+        ]);
+        let batch_resp_str = server.handle_request(&batch_req.to_string()).await.unwrap();
+        let batch_resp: Value = serde_json::from_str(&batch_resp_str).unwrap();
+        let arr = batch_resp.as_array().unwrap();
+        assert_eq!(arr.len(), 4);
+
+        let ramsey_text = arr[0]["result"]["content"][0]["text"].as_str().unwrap();
+        let ramsey_json: Value = serde_json::from_str(ramsey_text).unwrap();
+        assert_eq!(ramsey_json["k_clique_found"], true);
+        assert_eq!(ramsey_json["l_independent_found"], true);
+
+        let mlx_text = arr[1]["result"]["content"][0]["text"].as_str().unwrap();
+        let mlx_json: Value = serde_json::from_str(mlx_text).unwrap();
+        assert_eq!(mlx_json["scheme"], "mxfp4");
+        assert_eq!(mlx_json["litany_wire_verified"], true);
+        assert_eq!(mlx_json["compression_ratio_pq"], "4/1");
+
+        let llama_turn2_text = arr[3]["result"]["content"][0]["text"].as_str().unwrap();
+        let llama_turn2_json: Value = serde_json::from_str(llama_turn2_text).unwrap();
+        assert_eq!(llama_turn2_json["model_cache"]["model_cache_hit"], true);
+        assert_eq!(
+            llama_turn2_json["kv_prefix_cache"]["fork_mode"],
+            "seq_cp_branch_fork"
+        );
     }
 }
