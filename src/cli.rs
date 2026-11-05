@@ -737,8 +737,8 @@ pub enum Cmd {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct MemnetCommand {
-    /// Action: status, share, ls (or shares), routes, add-route, ask, teach (or learn),
-    /// stream-chunk, chirp-encode, chirp-decode
+    /// Action: status, share, ls (or shares), routes, add-route, escape (or lll / rtc),
+    /// ask, teach (or learn), stream-chunk, chirp-encode, chirp-decode
     #[arg(default_value = "status")]
     pub action: String,
     /// Primary argument (folder path for share, question for ask/teach, message/file for chirp-encode, wav path for chirp-decode)

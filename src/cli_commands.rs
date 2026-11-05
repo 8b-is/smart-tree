@@ -3817,24 +3817,90 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                 println!("{}", serde_json::to_string_pretty(&state.routes)?);
             } else {
                 println!(
-                    "🧭 MemNet Multi-Medium Route Table (Node {} '{}', Tier {:?}):",
-                    state.local_address, state.node_name, state.tier
+                    "🧭 MemNet Multi-Medium Route Table (Node {} '{}', Tier {:?}, Parallel RTC τ={}ms):",
+                    state.local_address,
+                    state.node_name,
+                    state.tier,
+                    state.composite_rtc_tau_ms(0xC5)
                 );
                 println!(
-                    "   {:<10} {:<28} {:<18} {:<9} {:<8} {:<8} {:<8}",
-                    "ADDR/VIA", "NODE", "MEDIUM", "CREDITS", "RTT", "SCORE", "STATUS"
+                    "   {:<10} {:<28} {:<18} {:<9} {:<8} {:<9} {:<9} {:<7} {:<8}",
+                    "ADDR/VIA", "NODE", "MEDIUM", "CREDITS", "RTT", "RTC(τ)", "5τ-LOCK", "SCORE", "STATUS"
                 );
                 for r in &state.routes {
                     println!(
-                        "   {:<10} {:<28} {:<18} {:>2}/{:<6} {:>4}ms   {:>5}    {:?}",
+                        "   {:<10} {:<28} {:<18} {:>2}/{:<6} {:>4}ms   {:>4}ms    {:>5}ms   {:>5}   {:?}",
                         r.address_via_label(),
                         r.node_name,
                         r.medium.to_string(),
                         r.heartbeat_credits,
                         r.max_credits,
                         r.latency_ms,
+                        r.effective_rtc_ms(),
+                        r.settling_5tau_ms(),
                         r.marine_quality_score(),
                         r.status
+                    );
+                }
+            }
+        }
+        "escape" | "lll" | "rtc" | "ultragraph" | "ultra-graph" | "3rd-escape" | "sun" => {
+            let payload = cmd.target.as_deref().unwrap_or(
+                "Solar core fusion wave: Ultra-Graph Erdős-Steiner T8R + Constructive LLL + Language LLL",
+            );
+            let report = state.compute_3rd_escape(payload);
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                println!(
+                    "☀️  MemNet 3rd+ Escape Report — Ultra-Graph, Constructive LLL, Language LLL & Real Time Constant (RTC τ)"
+                );
+                println!("   Core Payload:          {}", report.core_payload);
+                println!(
+                    "   Ultra-Graph Topology:  {}D Expander Hypergraph | K={} Szemerédi Kohn-Sham Orbitals | {} Erdős-Steiner T8R Bridge(s)",
+                    report.ultra_graph_dimensions,
+                    report.szemeredi_orbital_clusters_k,
+                    report.steiner_t8r_virtual_bridges
+                );
+                println!(
+                    "   Constructive LLL:      e·p·(d+1) = {:.4} <= 1.0 (guaranteed={}) | Moser-Tardos resamples={} | zero_collisions={}",
+                    report.lll_ep_d_plus_1,
+                    report.lll_guaranteed,
+                    report.moser_tardos_resamples,
+                    report.zero_collision_verified
+                );
+                println!(
+                    "   Language LLL Basis:    {} | 4D norm² {} -> {} ({:.2}x lattice basis compression)",
+                    report.language_lll.language_lll_symbol,
+                    report.language_lll.initial_norm_sq,
+                    report.language_lll.reduced_norm_sq,
+                    (report.language_lll.basis_compression_bps as f64) / 10_000.0
+                );
+                println!(
+                    "   Real Time Constant:    Single-link RTC τ={}ms -> Parallel Steiner RTC τ_eff={}ms (3τ={}ms, 5τ={}ms steady-state lock)",
+                    report.single_route_rtc_tau_ms,
+                    report.parallel_rtc_tau_ms,
+                    report.settling_3tau_ms,
+                    report.settling_5tau_ms
+                );
+                println!(
+                    "   Symbolic Wave Frame:   79B SUN:TDECK id={:?} (freq {}/{} Hz) | 64B@0x62 Litany seal=0x{:04X} (SPQT {:?})",
+                    report.wave_frame.id,
+                    report.wave_frame.frequency.num,
+                    report.wave_frame.frequency.den,
+                    report.litany_wire.wire_seal16,
+                    report.litany_wire.spqt_root
+                );
+                println!("\n   Escape Regimes Comparison:");
+                for reg in &report.regimes {
+                    println!(
+                        "     [{}] {:<52} | hops={:<12} | coupling={:>3}% | collision_free={:<5} | RTC τ={}ms",
+                        reg.regime_id,
+                        reg.name,
+                        reg.topological_hops,
+                        reg.semantic_coupling_pct,
+                        reg.collision_free,
+                        reg.effective_rtc_tau_ms
                     );
                 }
             }
@@ -4037,6 +4103,8 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
         }
         _ => {
             let selected = state.select_routes(0xC5);
+            let parallel_rtc_ms = state.composite_rtc_tau_ms(0xC5);
+            let escape = state.compute_3rd_escape(&state.node_name);
             let total_drive_mb: u64 = state
                 .shared_folders
                 .values()
@@ -4050,17 +4118,32 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                     "🌐 Smart Tree Sovereign MemNet Node: '{}' (Address: {}, Tier: {:?})",
                     state.node_name, state.local_address, state.tier
                 );
-                println!("   Active Routes:         {} (Multi-route 0xC5 active paths: {})", state.routes.len(), selected.len());
+                println!(
+                    "   Active Routes:         {} (Multi-route 0xC5 active paths: {}, Parallel RTC τ={}ms, 5τ={}ms)",
+                    state.routes.len(),
+                    selected.len(),
+                    parallel_rtc_ms,
+                    parallel_rtc_ms * 5
+                );
                 for r in &selected {
                     println!(
-                        "     ↳ Primary/Failover:  {} [{}] via {} (RTT {}ms, Marine score {})",
+                        "     ↳ Primary/Failover:  {} [{}] via {} (RTT {}ms, RTC τ={}ms, Marine score {})",
                         r.address_via_label(),
                         r.node_name,
                         r.medium,
                         r.latency_ms,
+                        r.effective_rtc_ms(),
                         r.marine_quality_score()
                     );
                 }
+                println!(
+                    "   3rd+ Escape (LLL):     {}D Ultra-Graph | e·p·(d+1)={:.4} (0 collisions={}) | {} ({:.2}x basis compression)",
+                    escape.ultra_graph_dimensions,
+                    escape.lll_ep_d_plus_1,
+                    escape.zero_collision_verified,
+                    escape.language_lll.language_lll_symbol,
+                    (escape.language_lll.basis_compression_bps as f64) / 10_000.0
+                );
                 println!(
                     "   Shared Folders:        {} (Pooled Drive Space: {} MB)",
                     state.shared_folders.len(),

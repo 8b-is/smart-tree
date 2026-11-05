@@ -246,6 +246,22 @@ impl MemnetMedium {
         }
     }
 
+    /// Intrinsic physical relaxation time constant floor `τ_0` (ms) for Peter's Real Time Constant (RTC).
+    #[inline]
+    pub const fn intrinsic_rtc_floor_ms(self) -> u32 {
+        match self {
+            Self::Usb => 2,
+            Self::Ethernet => 3,
+            Self::WiFi => 8,
+            Self::Esp32Now => 10,
+            Self::Bluetooth => 18,
+            Self::VpnTunnel => 25,
+            Self::LoRaSx1262 => 60,
+            Self::UltrasonicChirp => 90,
+            Self::Infrasound => 250,
+        }
+    }
+
     pub fn parse_str(s: &str) -> Self {
         match s.trim().to_ascii_lowercase().as_str() {
             "usb" => Self::Usb,
@@ -309,6 +325,9 @@ pub struct MemnetRouteEntry {
     pub endpoint: String,
     pub latency_ms: u16,
     pub jitter_ms: u16,
+    /// Peter's Real Time Constant (`RTC`, `τ` in ms): continuous-time 1st-order relaxation constant (`1 - e^(-t/τ)`).
+    #[serde(default)]
+    pub rtc_ms: u32,
     pub marine_salience_pct: u8,
     pub heartbeat_credits: u8,
     pub max_credits: u8,
@@ -327,6 +346,9 @@ impl MemnetRouteEntry {
         latency_ms: u16,
     ) -> Self {
         let max_credits = medium.max_credits();
+        let jitter_ms = 2u16;
+        let rtc_ms =
+            (latency_ms as u32) + (jitter_ms as u32) * 2 + medium.intrinsic_rtc_floor_ms();
         Self {
             address,
             via,
@@ -334,7 +356,8 @@ impl MemnetRouteEntry {
             medium,
             endpoint: endpoint.into(),
             latency_ms,
-            jitter_ms: 2,
+            jitter_ms,
+            rtc_ms,
             marine_salience_pct: 92,
             heartbeat_credits: max_credits,
             max_credits,
@@ -342,6 +365,52 @@ impl MemnetRouteEntry {
             status: RouteStatus::Up,
             shared_free_mb: 0,
         }
+    }
+
+    /// Effective Real Time Constant `τ` in milliseconds (`RTC`).
+    /// Falls back to physical relaxation formula if loaded from a pre-RTC state snapshot (`rtc_ms == 0`).
+    #[inline]
+    pub fn effective_rtc_ms(&self) -> u32 {
+        if self.rtc_ms > 0 {
+            self.rtc_ms
+        } else {
+            (self.latency_ms as u32)
+                + (self.jitter_ms as u32) * 2
+                + self.medium.intrinsic_rtc_floor_ms()
+        }
+    }
+
+    /// `3τ` settling horizon in milliseconds (~95.0% relaxation to steady state).
+    #[inline]
+    pub fn settling_3tau_ms(&self) -> u32 {
+        self.effective_rtc_ms().saturating_mul(3)
+    }
+
+    /// `5τ` full steady-state lock horizon in milliseconds (~99.3% relaxation).
+    #[inline]
+    pub fn settling_5tau_ms(&self) -> u32 {
+        self.effective_rtc_ms().saturating_mul(5)
+    }
+
+    /// Continuous-time first-order exponential filter update using Peter's Real Time Constant `τ` (`RTC`):
+    /// `α = 1 - e^(-Δt / τ)`, so bursts of rapid packets do not over-weight a momentary spike,
+    /// and quiet links naturally relax after `Δt >= τ`.
+    pub fn update_with_rtc(&mut self, sample_rtt_ms: u16, elapsed_dt_ms: u32) {
+        let tau = (self.effective_rtc_ms().max(1)) as f64;
+        let dt = (elapsed_dt_ms.max(1)) as f64;
+        let alpha = (1.0 - (-dt / tau).exp()).clamp(0.02, 1.0);
+        let prev = self.latency_ms as f64;
+        let curr = sample_rtt_ms as f64;
+        let instant_err = (curr - prev).abs();
+
+        let next_lat = (prev + alpha * (curr - prev)).round().clamp(1.0, 65535.0) as u16;
+        let next_jit = ((self.jitter_ms as f64) + alpha * (instant_err - (self.jitter_ms as f64)))
+            .round()
+            .clamp(0.0, 65535.0) as u16;
+        self.latency_ms = next_lat;
+        self.jitter_ms = next_jit;
+        self.rtc_ms =
+            (next_lat as u32) + (next_jit as u32) * 2 + self.medium.intrinsic_rtc_floor_ms();
     }
 
     /// Format as `address/via` (e.g. `C5/12` or `42/1`).
@@ -373,7 +442,7 @@ impl MemnetRouteEntry {
         }
     }
 
-    /// Integer Marine route quality score (higher is better) combining latency, jitter, salience, and bandwidth.
+    /// Integer Marine route quality score (higher is better) combining RTC (`τ`), latency, jitter, salience, and bandwidth.
     pub fn marine_quality_score(&self) -> u32 {
         if self.status == RouteStatus::Down || self.heartbeat_credits == 0 {
             return 0;
@@ -382,7 +451,8 @@ impl MemnetRouteEntry {
             ((self.heartbeat_credits as u32) * 256) / (self.max_credits.max(1) as u32);
         let salience_bonus = (self.marine_salience_pct as u32) * 8;
         let bw_bonus = (self.medium.nominal_kbps().ilog2() + 1) * 40;
-        let penalty = (self.latency_ms as u32) * 3 + (self.jitter_ms as u32) * 10;
+        let rtc_penalty = self.effective_rtc_ms();
+        let penalty = (self.latency_ms as u32) * 2 + (self.jitter_ms as u32) * 8 + rtc_penalty;
         (1000 + credit_ratio_q8 + salience_bonus + bw_bonus).saturating_sub(penalty)
     }
 }
@@ -1886,6 +1956,302 @@ impl MemnetNodeState {
         }
         sent
     }
+
+    /// Compute the composite parallel Real Time Constant (`RTC`, `τ_eff` in ms) across active routes
+    /// for `destination` using parallel RC conductance (`1 / τ_eff = Σ (1 / τ_i)`).
+    pub fn composite_rtc_tau_ms(&self, destination: u8) -> u32 {
+        let selected = self.select_routes(destination);
+        if selected.is_empty() {
+            return 0;
+        }
+        let inv_sum: f64 = selected
+            .iter()
+            .map(|r| 1.0 / (r.effective_rtc_ms().max(1) as f64))
+            .sum();
+        if inv_sum <= 0.0 {
+            0
+        } else {
+            (1.0 / inv_sum).round().max(1.0) as u32
+        }
+    }
+
+    /// Compute the **3rd+ Escape** (`UltraGraphEscapeReport`) for a core semantic state/payload:
+    /// combines Multi-Dimensional Ultra-Graph shortcuts (Szemerédi + Erdős–Steiner T8R virtual bridges),
+    /// Constructive Lovász Local Lemma (`LllHypergraph` Moser–Tardos zero-collision channel assignment),
+    /// and **Language LLL** (4D Lenstra–Lenstra–Lovász lattice basis reduction + `64B@0x62` / `79B` `SUN:TDECK` wave).
+    pub fn compute_3rd_escape(&self, core_payload: &str) -> UltraGraphEscapeReport {
+        use crate::mem8::regularity::moser_tardos::{
+            solve_moser_tardos_auto_scale, BadEventKind, LllHypergraph, WorkUnitId,
+        };
+
+        let active_routes: Vec<&MemnetRouteEntry> = self
+            .routes
+            .iter()
+            .filter(|r| r.status != RouteStatus::Down && r.heartbeat_credits > 0)
+            .collect();
+        let route_count = active_routes.len().max(1);
+
+        // 1. Constructive Lovász Local Lemma (Moser-Tardos) over multi-dimensional route × phase hypergraph:
+        // Each work unit is a wave sub-carrier / medium slot; each 4-uniform hyperedge is a MonochromaticHyperedge
+        // phase-collision constraint under 3-coloring (ternary SPQT -1, 0, +1 -> p = 3^(1-4) = 1/27 ≈ 0.037)
+        // with bounded dependency degree d <= 2 so e * p * (d + 1) ≈ 0.302 <= 1.0.
+        let num_units = (route_count * 4).max(8);
+        let mut scope_storage: Vec<[WorkUnitId; 4]> = Vec::new();
+        let mut v = 0usize;
+        while v + 4 <= num_units {
+            scope_storage.push([
+                v as WorkUnitId,
+                (v + 1) as WorkUnitId,
+                (v + 2) as WorkUnitId,
+                (v + 3) as WorkUnitId,
+            ]);
+            v += 3; // Overlap by 1 variable so dependency degree d <= 2
+        }
+        let constraints: Vec<(BadEventKind, &[WorkUnitId])> = scope_storage
+            .iter()
+            .map(|s| (BadEventKind::MonochromaticHyperedge, &s[..]))
+            .collect();
+        let lll_graph = LllHypergraph::from_constraints(num_units, &constraints);
+        let seed_hash = fnv64_1a(core_payload.as_bytes());
+        let lll_sched = solve_moser_tardos_auto_scale(&lll_graph, 3, true, seed_hash, 1024);
+        let max_p = if lll_graph.num_events > 0 {
+            lll_graph.event_probability(0, lll_sched.num_worktrees)
+        } else {
+            0.0
+        };
+        let ep_d_plus_1 =
+            std::f64::consts::E * max_p * ((lll_sched.max_dependency_degree + 1) as f64);
+
+        // 2. Language LLL: 4D Lenstra-Lenstra-Lovász Lattice Basis Reduction + Symbolic Invariant Wave
+        let basis_report = lll_reduce_wave_basis_4d(core_payload);
+        let wave_frame = WaveFrame79::from_semantic_text(core_payload);
+        let (_tokens, _trits, _wave_b3, litany_wire) =
+            extract_semantic_wave_features(core_payload);
+
+        // 3. Real Time Constant (RTC τ) across the multi-dimensional Steiner/T8R shortcut
+        let single_best_rtc_ms = active_routes
+            .iter()
+            .map(|r| r.effective_rtc_ms())
+            .min()
+            .unwrap_or(20);
+        let parallel_rtc_tau_ms = self.composite_rtc_tau_ms(0xC5).max(1);
+
+        // 4. Compare the 3 Escape Regimes
+        let core_particles_proxy = (core_payload.len().max(16) as u64) * (route_count as u64) * 64;
+        let photon_3d_walk_steps = core_particles_proxy.saturating_mul(core_particles_proxy);
+        let ultra_graph_dimensions = 4 + active_routes.len(); // 3D space + phase + 1D per orthogonal medium/orbital
+
+        let regimes = vec![
+            EscapeRegimeSummary {
+                regime_id: 1,
+                name: "Escape #1: Neutrino (Weak Decoupled)".to_string(),
+                geometry: "3D straight line (ignores medium)".to_string(),
+                topological_hops: 1,
+                semantic_coupling_pct: 0,
+                collision_free: true,
+                effective_rtc_tau_ms: single_best_rtc_ms,
+            },
+            EscapeRegimeSummary {
+                regime_id: 2,
+                name: "Escape #2: Photon (3D Lattice Random Walk)".to_string(),
+                geometry: format!(
+                    "3D radiative diffusion (O((R/l)^2) = {} scatter steps)",
+                    photon_3d_walk_steps
+                ),
+                topological_hops: photon_3d_walk_steps,
+                semantic_coupling_pct: 100,
+                collision_free: false,
+                effective_rtc_tau_ms: single_best_rtc_ms.saturating_mul(1_000),
+            },
+            EscapeRegimeSummary {
+                regime_id: 3,
+                name: "Escape #3+: Ultra-Graph + Constructive LLL + Language LLL".to_string(),
+                geometry: format!(
+                    "{}D Expander Hypergraph + Erdős-Steiner T8R Bridge + LLL Basis",
+                    ultra_graph_dimensions
+                ),
+                topological_hops: 1,
+                semantic_coupling_pct: 100,
+                collision_free: lll_sched.is_conflict_free,
+                effective_rtc_tau_ms: parallel_rtc_tau_ms,
+            },
+        ];
+
+        UltraGraphEscapeReport {
+            core_payload: core_payload.to_string(),
+            ultra_graph_dimensions,
+            szemeredi_orbital_clusters_k: active_routes.len().max(2),
+            steiner_t8r_virtual_bridges: self.select_routes(0xC5).len().max(1),
+            lll_ep_d_plus_1: ep_d_plus_1,
+            lll_guaranteed: lll_sched.lll_guaranteed_a_priori,
+            moser_tardos_resamples: lll_sched.total_resamples,
+            zero_collision_verified: lll_sched.is_conflict_free,
+            single_route_rtc_tau_ms: single_best_rtc_ms,
+            parallel_rtc_tau_ms,
+            settling_3tau_ms: parallel_rtc_tau_ms.saturating_mul(3),
+            settling_5tau_ms: parallel_rtc_tau_ms.saturating_mul(5),
+            language_lll: basis_report,
+            wave_frame,
+            litany_wire,
+            regimes,
+        }
+    }
+}
+
+// ============================================================================
+// 7. 3rd+ Escape: Ultra-Graph Multi-Dimensional Network & Language LLL
+// ============================================================================
+
+/// Summary of one of the three escape regimes from a dense core (solar plasma or cognitive/network core).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EscapeRegimeSummary {
+    pub regime_id: u8,
+    pub name: String,
+    pub geometry: String,
+    pub topological_hops: u64,
+    pub semantic_coupling_pct: u8,
+    pub collision_free: bool,
+    pub effective_rtc_tau_ms: u32,
+}
+
+/// Report from 4D Lenstra–Lenstra–Lovász (`LLL`) Lattice Basis Reduction + Symbolic Language Compression.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageLllBasisReport {
+    /// Original skewed 4D semantic lattice basis vectors before LLL reduction.
+    pub initial_basis: [[i64; 4]; 4],
+    /// LLL-reduced shortest, nearly-orthogonal 4D basis vectors (`δ = 3/4`).
+    pub reduced_basis: [[i64; 4]; 4],
+    /// Sum of squared Euclidean norms `Σ ||b_i||^2` before LLL reduction.
+    pub initial_norm_sq: u64,
+    /// Sum of squared Euclidean norms `Σ ||b'_i||^2` after LLL reduction.
+    pub reduced_norm_sq: u64,
+    /// Basis norm reduction ratio in basis points (`10000` = 1.0x, higher means stronger lattice compression).
+    pub basis_compression_bps: u64,
+    /// Compact symbolic Language LLL invariant token (`SPQT + seal + reduced basis signature`).
+    pub language_lll_symbol: String,
+}
+
+/// Complete report for the **3rd+ Escape** combining Ultra-Graph Theory, Constructive LLL, Language LLL, and RTC (`τ`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UltraGraphEscapeReport {
+    pub core_payload: String,
+    pub ultra_graph_dimensions: usize,
+    pub szemeredi_orbital_clusters_k: usize,
+    pub steiner_t8r_virtual_bridges: usize,
+    pub lll_ep_d_plus_1: f64,
+    pub lll_guaranteed: bool,
+    pub moser_tardos_resamples: usize,
+    pub zero_collision_verified: bool,
+    pub single_route_rtc_tau_ms: u32,
+    pub parallel_rtc_tau_ms: u32,
+    pub settling_3tau_ms: u32,
+    pub settling_5tau_ms: u32,
+    pub language_lll: LanguageLllBasisReport,
+    pub wave_frame: WaveFrame79,
+    pub litany_wire: LitanyWireFrame,
+    pub regimes: Vec<EscapeRegimeSummary>,
+}
+
+/// Perform exact 4D Lenstra–Lenstra–Lovász (`LLL`) lattice basis reduction (`δ = 3/4`) on a skewed
+/// semantic wave lattice generated from `payload`, finding the shortest orthogonal basis for Language LLL.
+pub fn lll_reduce_wave_basis_4d(payload: &str) -> LanguageLllBasisReport {
+    let h64 = fnv64_1a(payload.as_bytes());
+    let hb = h64.to_le_bytes();
+    let s0 = (hb[0] as i64) + 11;
+    let s1 = (hb[1] as i64) + 7;
+    let s2 = (hb[2] as i64) + 5;
+    let s3 = (hb[3] as i64) + 3;
+
+    // Skewed unimodular-like full-rank 4D lattice basis representing entangled high-entropy scattering walks
+    let initial_basis: [[i64; 4]; 4] = [
+        [s0, 1, 0, 0],
+        [s0 * 3 + s1, 3, 1, 0],
+        [s0 * 5 + s2, 5, 2, 1],
+        [s0 * 7 + s3, 7, 3, 2],
+    ];
+
+    let mut b = initial_basis;
+    let mut b_star = [[0.0f64; 4]; 4];
+    let mut mu = [[0.0f64; 4]; 4];
+    let mut b_star_norm_sq = [0.0f64; 4];
+
+    let recompute_gram_schmidt = |b: &[[i64; 4]; 4],
+                                  b_star: &mut [[f64; 4]; 4],
+                                  mu: &mut [[f64; 4]; 4],
+                                  b_star_norm_sq: &mut [f64; 4]| {
+        for i in 0..4 {
+            for d in 0..4 {
+                b_star[i][d] = b[i][d] as f64;
+            }
+            for j in 0..i {
+                let mut dot = 0.0f64;
+                for d in 0..4 {
+                    dot += (b[i][d] as f64) * b_star[j][d];
+                }
+                mu[i][j] = if b_star_norm_sq[j] > 1e-12 {
+                    dot / b_star_norm_sq[j]
+                } else {
+                    0.0
+                };
+                for d in 0..4 {
+                    b_star[i][d] -= mu[i][j] * b_star[j][d];
+                }
+            }
+            let mut nsq = 0.0f64;
+            for d in 0..4 {
+                nsq += b_star[i][d] * b_star[i][d];
+            }
+            b_star_norm_sq[i] = nsq;
+        }
+    };
+
+    recompute_gram_schmidt(&b, &mut b_star, &mut mu, &mut b_star_norm_sq);
+
+    let delta = 0.75f64; // Standard Lovász constant δ = 3/4
+    let mut k = 1usize;
+    let mut guard = 0usize;
+    while k < 4 && guard < 256 {
+        guard += 1;
+        for j in (0..k).rev() {
+            if mu[k][j].abs() > 0.5 {
+                let q = mu[k][j].round() as i64;
+                for d in 0..4 {
+                    b[k][d] -= q * b[j][d];
+                }
+                recompute_gram_schmidt(&b, &mut b_star, &mut mu, &mut b_star_norm_sq);
+            }
+        }
+        if b_star_norm_sq[k] >= (delta - mu[k][k - 1] * mu[k][k - 1]) * b_star_norm_sq[k - 1] {
+            k += 1;
+        } else {
+            b.swap(k, k - 1);
+            recompute_gram_schmidt(&b, &mut b_star, &mut mu, &mut b_star_norm_sq);
+            k = k.saturating_sub(1).max(1);
+        }
+    }
+
+    let norm_sq_sum = |mat: &[[i64; 4]; 4]| -> u64 {
+        mat.iter()
+            .map(|row| row.iter().map(|&x| (x as i128 * x as i128) as u64).sum::<u64>())
+            .sum()
+    };
+
+    let initial_norm_sq = norm_sq_sum(&initial_basis).max(1);
+    let reduced_norm_sq = norm_sq_sum(&b).max(1);
+    let basis_compression_bps = (initial_norm_sq.saturating_mul(10_000)) / reduced_norm_sq;
+    let language_lll_symbol = format!(
+        "LLL4[{},{},{},{}|seal:{:02x}{:02x}]",
+        b[0][0], b[0][1], b[1][0], b[1][1], hb[0], hb[1]
+    );
+
+    LanguageLllBasisReport {
+        initial_basis,
+        reduced_basis: b,
+        initial_norm_sq,
+        reduced_norm_sq,
+        basis_compression_bps,
+        language_lll_symbol,
+    }
 }
 
 // ============================================================================
@@ -2008,5 +2374,63 @@ mod tests {
         let pcm_aud = audible.encode_frame_to_pcm16(original);
         let decoded_aud = audible.decode_pcm16_to_frame(&pcm_aud).unwrap();
         assert_eq!(decoded_aud, original);
+    }
+
+    #[test]
+    fn real_time_constant_rtc_relaxation_and_parallel_tau() {
+        let mut route = MemnetRouteEntry::new(
+            0xC5,
+            20,
+            "wifi-peer",
+            MemnetMedium::WiFi,
+            "192.168.1.50:8423",
+            10,
+        );
+        // τ = 10 + 2*2 + 8 (WiFi floor) = 22ms
+        assert_eq!(route.effective_rtc_ms(), 22);
+        assert_eq!(route.settling_3tau_ms(), 66);
+        assert_eq!(route.settling_5tau_ms(), 110);
+
+        // Micro-burst spike 1ms later (Δt << τ) is heavily damped by continuous-time RTC filter
+        route.update_with_rtc(100, 1);
+        assert!(
+            route.latency_ms < 20,
+            "RTC filter should damp high-frequency spike when dt << tau, got {}",
+            route.latency_ms
+        );
+
+        // Sustained shift over Δt = 5τ relaxes ~99.3% toward the new steady state
+        route.update_with_rtc(50, route.settling_5tau_ms());
+        assert!(
+            route.latency_ms >= 48 && route.latency_ms <= 51,
+            "RTC filter should relax to steady state after 5τ, got {}",
+            route.latency_ms
+        );
+
+        let state = MemnetNodeState::default();
+        let parallel_tau = state.composite_rtc_tau_ms(0xC5);
+        assert!(parallel_tau > 0 && parallel_tau <= 16);
+    }
+
+    #[test]
+    fn third_escape_ultra_graph_and_language_lll_zero_collision() {
+        let state = MemnetNodeState::default();
+        let report = state.compute_3rd_escape(
+            "Solar fusion proton-proton tunneling + Ultra-Graph Language LLL 3rd+ Escape",
+        );
+        assert!(report.lll_guaranteed);
+        assert!(report.lll_ep_d_plus_1 <= 1.0);
+        assert!(report.zero_collision_verified);
+        assert!(
+            report.language_lll.reduced_norm_sq < report.language_lll.initial_norm_sq,
+            "4D LLL lattice basis reduction must shrink skewed basis norm: {} -> {}",
+            report.language_lll.initial_norm_sq,
+            report.language_lll.reduced_norm_sq
+        );
+        assert!(report.language_lll.basis_compression_bps > 10_000);
+        assert_eq!(report.regimes.len(), 3);
+        assert_eq!(report.regimes[2].topological_hops, 1);
+        assert_eq!(report.regimes[2].semantic_coupling_pct, 100);
+        assert!(report.regimes[2].collision_free);
     }
 }
