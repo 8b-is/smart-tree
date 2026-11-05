@@ -61,7 +61,6 @@ accounting is cumulative admitted bytes, not current queue occupancy.
 When limits are hit:
 ```
 ⚠️  Scan truncated: Reached maximum node limit of 500000 nodes
-   Use --max-depth, --stream mode, or scan a more specific directory
 ```
 
 ## Usage Recommendations
@@ -70,7 +69,7 @@ When limits are hit:
 
 1. **Use depth limits**:
    ```bash
-   st --max-depth 3 ~
+   st --depth 3 ~
    ```
 
 2. **Use streaming mode** (for large directories):

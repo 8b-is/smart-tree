@@ -1,5 +1,7 @@
 # Smart Tree Compression: Real World Examples 🌍
 
+> These are illustrative encoding comparisons. For measured CLI output with a named release and fixture, see [performance measurements](PERFORMANCE_METRICS.md).
+
 ## Example 1: The Node.js Project Disaster 🤯
 
 ### What Everyone Else Sends:

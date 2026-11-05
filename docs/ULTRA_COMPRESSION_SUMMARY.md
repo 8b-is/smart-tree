@@ -1,5 +1,7 @@
 # Ultra Compression: What We've Implemented 🚀
 
+> Historical JavaScript prototype. The file names below describe that prototype. For the current Rust output formats, use the [mode selection guide](MODE_SELECTION_GUIDE.md).
+
 ## The Journey from Spaces to Nothing 🌟
 
 We've successfully implemented the ULTRA compression format that removes ALL delimiters between fixed-width fields, just as we discussed! Here's what we've created:
@@ -13,7 +15,7 @@ The complete specification including:
 - ASCII separator usage (File Separator, Group Separator, etc.)
 - Parsing algorithms
 
-### 2. **[server/ultra-compressor.js](server/ultra-compressor.js)**
+### 2. **`server/ultra-compressor.js`**
 The implementation featuring:
 - Zero-delimiter packing algorithm
 - Type+permission nibble encoding
@@ -21,14 +23,14 @@ The implementation featuring:
 - Comparison tools
 - Bill Burr-approved compression
 
-### 3. **[server/smart-tree-enhanced.js](server/smart-tree-enhanced.js)** (Updated)
+### 3. **`server/smart-tree-enhanced.js`** (Updated)
 Enhanced with:
 - New `ultra` format option in `smart_list` tool
 - Dedicated `ultra_compression` tool
 - Comparison demonstrations
 - Integration with existing compression pipeline
 
-### 4. **[demo-ultra-compression.js](demo-ultra-compression.js)**
+### 4. **`demo-ultra-compression.js`**
 A fun demo showing:
 - Side-by-side format comparison
 - Environmental impact calculations

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Smart Tree MCP Edit tool provides revolutionary AST-aware code editing that achieves **90% token reduction** compared to traditional diff-based approaches. Instead of sending entire file contents or diffs, you describe what you want to change and the tool understands your code structure.
+The consolidated `edit` tool accepts an operation and file path. The examples below are tool arguments. Discover the enabled schema through `tools/list` before editing. For the difference between best-effort and atomic batches, including rollback limits, see [atomic edit batches](atomic-edit-batches.md).
 
 ## Quick Start
 

@@ -4,47 +4,332 @@
 .SH NAME
 st \- Smart Tree \- An intelligent directory visualization tool. Not just a tree, it\*(Aqs a smart\-tree!
 .SH SYNOPSIS
-\fBst\fR [\fB\-\-cheet\fR] [\fB\-\-completions\fR] [\fB\-\-man\fR] [\fB\-\-mcp\fR] [\fB\-\-mcp\-tools\fR] [\fB\-\-mcp\-config\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fB\-\-terminal\fR] [\fB\-\-rename\-project\fR] [\fB\-\-input\fR] [\fB\-m\fR|\fB\-\-mode\fR] [\fB\-\-find\fR] [\fB\-\-type\fR] [\fB\-\-entry\-type\fR] [\fB\-\-min\-size\fR] [\fB\-\-max\-size\fR] [\fB\-\-newer\-than\fR] [\fB\-\-older\-than\fR] [\fB\-d\fR|\fB\-\-depth\fR] [\fB\-\-no\-ignore\fR] [\fB\-\-no\-default\-ignore\fR] [\fB\-a\fR|\fB\-\-all\fR] [\fB\-\-show\-ignored\fR] [\fB\-\-everything\fR] [\fB\-\-show\-filesystems\fR] [\fB\-\-no\-emoji\fR] [\fB\-z\fR|\fB\-\-compress\fR] [\fB\-\-mcp\-optimize\fR] [\fB\-\-compact\fR] [\fB\-\-path\-mode\fR] [\fB\-\-color\fR] [\fB\-\-ai\-json\fR] [\fB\-\-stream\fR] [\fB\-\-sse\-server\fR] [\fB\-\-sse\-port\fR] [\fB\-\-search\fR] [\fB\-\-semantic\fR] [\fB\-\-mermaid\-style\fR] [\fB\-\-no\-markdown\-mermaid\fR] [\fB\-\-no\-markdown\-tables\fR] [\fB\-\-no\-markdown\-pie\-charts\fR] [\fB\-\-focus\fR] [\fB\-\-relations\-filter\fR] [\fB\-\-sort\fR] [\fB\-\-top\fR] [\fB\-\-show\-private\fR] [\fB\-\-view\-diffs\fR] [\fB\-\-cleanup\-diffs\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIPATH\fR] 
+\fBst\fR [\fB\-\-cheet\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fB\-\-completions\fR] [\fB\-\-man\fR] [\fB\-\-update\fR] [\fB\-\-auto\-update\fR] [\fB\-\-no\-update\-check\fR] [\fB\-\-spicy\fR] [\fB\-\-terminal\fR] [\fB\-\-dashboard\fR] [\fB\-\-open\-browser\fR] [\fB\-\-allow\fR] [\fB\-\-http\-daemon\fR] [\fB\-\-mcp\fR] [\fB\-\-mcp\-install\fR] [\fB\-\-mcp\-uninstall\fR] [\fB\-\-mcp\-status\fR] [\fB\-\-log\-level\fR] [\fB\-\-daemon\-start\fR] [\fB\-\-daemon\-stop\fR] [\fB\-\-daemon\-status\fR] [\fB\-\-daemon\-context\fR] [\fB\-\-recall\fR] [\fB\-\-daemon\-projects\fR] [\fB\-\-daemon\-credits\fR] [\fB\-\-no\-daemon\fR] [\fB\-\-agent\-save\fR] [\fB\-\-agent\-restore\fR] [\fB\-\-agent\-context\fR] [\fB\-\-agent\-kickstart\fR] [\fB\-\-agent\-dump\fR] [\fB\-\-memory\-anchor\fR] [\fB\-\-memory\-find\fR] [\fB\-\-memory\-stats\fR] [\fB\-\-update\-consciousness\fR] [\fB\-\-security\-scan\fR] [\fB\-\-guardian\-scan\fR] [\fB\-\-guardian\-daemon\fR] [\fB\-\-cleanup\fR] [\fB\-\-integrity\-scan\fR] [\fB\-\-cert\-scan\fR] [\fB\-\-cert\-audit\fR] [\fB\-\-cert\-generate\-script\fR] [\fB\-\-hash\-lookup\fR] [\fB\-\-erdos\-anomaly\fR] [\fB\-\-gdrive\fR] [\fB\-\-voice\fR] [\fB\-\-hooks\-install\fR] [\fB\-\-hooks\-config\fR] [\fB\-\-agy\-hook\fR] [\fB\-\-mega\-start\fR] [\fB\-\-mega\-save\fR] [\fB\-\-mega\-list\fR] [\fB\-\-mega\-stats\fR] [\fB\-\-token\-stats\fR] [\fB\-\-get\-frequency\fR] [\fB\-\-ramsey\-cliques\fR] [\fB\-\-erdos\-center\fR] [\fB\-\-erdos\-split\fR] [\fB\-\-ultrabackyard\fR] [\fB\-\-zeno\fR] [\fB\-\-g8t\-best\fR] [\fB\-\-yolo\fR] [\fB\-\-g8t\-leaderboard\fR] [\fB\-\-g8t\-submit\fR] [\fB\-\-partner\fR] [\fB\-\-g8t\-domain\fR] [\fB\-\-g8t\-name\fR] [\fB\-\-g8t\-arch\fR] [\fB\-\-g8t\-top\fR] [\fB\-\-log\fR] [\fB\-\-tips\fR] [\fB\-\-input\fR] [\fB\-m\fR|\fB\-\-mode\fR] [\fB\-\-find\fR] [\fB\-\-type\fR] [\fB\-\-entry\-type\fR] [\fB\-\-min\-size\fR] [\fB\-\-max\-size\fR] [\fB\-\-newer\-than\fR] [\fB\-\-older\-than\fR] [\fB\-d\fR|\fB\-\-depth\fR] [\fB\-\-no\-ignore\fR] [\fB\-\-no\-default\-ignore\fR] [\fB\-a\fR|\fB\-\-all\fR] [\fB\-\-show\-ignored\fR] [\fB\-\-everything\fR] [\fB\-\-smart\fR] [\fB\-\-changes\-only\fR] [\fB\-\-min\-interest\fR] [\fB\-\-no\-security\fR] [\fB\-\-show\-filesystems\fR] [\fB\-\-no\-emoji\fR] [\fB\-z\fR|\fB\-\-compress\fR] [\fB\-\-mcp\-optimize\fR] [\fB\-\-compact\fR] [\fB\-\-path\-mode\fR] [\fB\-\-color\fR] [\fB\-\-ai\-json\fR] [\fB\-\-stream\fR] [\fB\-\-sse\-server\fR] [\fB\-\-sse\-port\fR] [\fB\-\-search\fR] [\fB\-\-semantic\fR] [\fB\-\-focus\fR] [\fB\-\-relations\-filter\fR] [\fB\-\-sort\fR] [\fB\-\-top\fR] [\fB\-\-mermaid\-style\fR] [\fB\-\-no\-markdown\-mermaid\fR] [\fB\-\-no\-markdown\-tables\fR] [\fB\-\-no\-markdown\-pie\-charts\fR] [\fB\-\-index\-registry\fR] [\fB\-\-show\-private\fR] [\fB\-\-view\-diffs\fR] [\fB\-\-cleanup\-diffs\fR] [\fB\-\-sync\-user\fR] [\fB\-\-sync\-dir\fR] [\fB\-\-sync\-limit\fR] [\fB\-\-refresh\-all\fR] [\fB\-\-quarantine\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIPATH\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
 Smart Tree \- An intelligent directory visualization tool. Not just a tree, it\*(Aqs a smart\-tree!
 .SH OPTIONS
 .TP
+\fB\-\-input\fR \fI<TYPE>\fR
+Specify input type explicitly (filesystem, qcp, sse, openapi, mem8)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+[\fIPATH\fR]
+Path to analyze (directory, file, URL, or stream)
+.SH "GETTING STARTED"
+.TP
 \fB\-\-cheet\fR
-Show the cheatsheet
-.TP
-\fB\-\-completions\fR=\fISHELL\fR
-Generate shell completion scripts
-.br
-
-.br
-[\fIpossible values: \fRbash, elvish, fish, powershell, zsh]
-.TP
-\fB\-\-man\fR
-Generate the man page
-.TP
-\fB\-\-mcp\fR
-Run `st` as an MCP (Model Context Protocol) server
-.TP
-\fB\-\-mcp\-tools\fR
-List the tools `st` provides when running as an MCP server
-.TP
-\fB\-\-mcp\-config\fR
-Show the configuration snippet for the MCP server
+Show the cheatsheet \- quick reference for all commands
 .TP
 \fB\-V\fR, \fB\-\-version\fR
 Show version information and check for updates
 .TP
+\fB\-\-completions\fR \fI<SHELL>\fR
+Generate shell completion scripts (bash, zsh, fish, powershell)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+bash
+.IP \(bu 2
+elvish
+.IP \(bu 2
+fish
+.IP \(bu 2
+powershell
+.IP \(bu 2
+zsh
+.RE
+.TP
+\fB\-\-man\fR
+Generate the man page
+.TP
+\fB\-\-update\fR
+Check for updates and install the latest version
+.TP
+\fB\-\-no\-update\-check\fR
+Skip the automatic update check on startup
+.SH "DAEMON CONTROL"
+.TP
+\fB\-\-auto\-update\fR
+Install a stable release and restart the managed daemon (root, opt\-in service only)
+.TP
+\fB\-\-log\-level\fR \fI<LOG_LEVEL>\fR
+Set the log level
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+error
+.IP \(bu 2
+warn
+.IP \(bu 2
+info
+.IP \(bu 2
+debug
+.IP \(bu 2
+trace
+.RE
+.TP
+\fB\-\-daemon\-start\fR
+Start the Smart Tree daemon
+.TP
+\fB\-\-daemon\-stop\fR
+Stop the Smart Tree daemon
+.TP
+\fB\-\-daemon\-status\fR
+Show Smart Tree daemon status
+.TP
+\fB\-\-daemon\-context\fR
+Get context from the daemon
+.TP
+\fB\-\-recall\fR \fI<RECALL>\fR
+Recall indexed files and remembered context through the daemon (JSON)
+.TP
+\fB\-\-daemon\-projects\fR
+List projects tracked by the daemon
+.TP
+\fB\-\-daemon\-credits\fR
+Show Foken credits from daemon
+.TP
+\fB\-\-no\-daemon\fR
+Bypass daemon and scan locally (standalone mode)
+.SH "INTERACTIVE MODES"
+.TP
+\fB\-\-spicy\fR
+Launch Spicy TUI \- interactive file browser with fuzzy search!
+.TP
 \fB\-\-terminal\fR
-Launch Smart Tree Terminal Interface (STTI) \- Your coding companion! This starts an interactive terminal that anticipates your needs
+Launch Smart Tree Terminal Interface (STTI)
 .TP
-\fB\-\-rename\-project\fR=\fIOLD NEW\fR
-Rename project \- elegant identity transition (format: "OldName" "NewName")
+\fB\-\-dashboard\fR
+Launch web dashboard (browser\-based terminal + file browser)
 .TP
-\fB\-\-input\fR=\fITYPE\fR
-Specify input type explicitly (filesystem, qcp, sse, openapi, mem8)
+\fB\-\-open\-browser\fR
+Open browser automatically when starting dashboard
 .TP
-\fB\-m\fR, \fB\-\-mode\fR=\fIMODE\fR [default: auto]
-Choose your adventure! Selects the output format. From classic human\-readable to AI\-optimized hex, we\*(Aqve got options
+\fB\-\-allow\fR \fI<CIDR>\fR
+Network CIDR allow\-list for dashboard (e.g., 192.168.1.0/24)
+.TP
+\fB\-\-http\-daemon\fR
+Start HTTP daemon (MCP over HTTP, LLM proxy, The Custodian)
+.SH "MCP SERVER"
+.TP
+\fB\-\-mcp\fR
+Run as MCP server for AI assistants (auto\-starts daemon)
+.TP
+\fB\-\-mcp\-install\fR
+Install Smart Tree as MCP server in AI agents (Claude Desktop, Antigravity/agy, Gemini)
+.TP
+\fB\-\-mcp\-uninstall\fR
+Uninstall Smart Tree MCP server from AI agents
+.TP
+\fB\-\-mcp\-status\fR
+Check MCP installation status across AI agents
+.SH "CONSCIOUSNESS & MEMORY"
+.TP
+\fB\-\-agent\-save\fR
+Save agent consciousness state to .aye_consciousness.m8
+.TP
+\fB\-\-agent\-restore\fR
+Restore agent consciousness from .aye_consciousness.m8
+.TP
+\fB\-\-agent\-context\fR
+Show agent consciousness status and summary
+.TP
+\fB\-\-agent\-kickstart\fR
+Ultra\-compressed consciousness restoration format
+.TP
+\fB\-\-agent\-dump\fR
+Dump raw consciousness file content for debugging
+.TP
+\fB\-\-memory\-anchor\fR \fI<TYPE>\fR\fI \fR\fI<KEYWORDS>\fR\fI \fR\fI<CONTEXT>\fR
+Anchor a memory: \-\-memory\-anchor <TYPE> <KEYWORDS> <CONTEXT> Types: insight, decision, pattern, gotcha, todo
+.TP
+\fB\-\-memory\-find\fR \fI<KEYWORDS>\fR
+Find memories by keywords (comma\-separated)
+.TP
+\fB\-\-memory\-stats\fR
+Show memory statistics
+.TP
+\fB\-\-update\-consciousness\fR \fI<PATH>\fR
+Update .m8 consciousness files for a directory
+.SH SECURITY
+.TP
+\fB\-\-security\-scan\fR [\fI<PATH>\fR]
+Scan codebase for supply chain attack patterns (default: current dir)
+.TP
+\fB\-\-guardian\-scan\fR \fI<FILE>\fR
+Scan a file for prompt injection patterns
+.TP
+\fB\-\-guardian\-daemon\fR
+Run Guardian daemon for system\-wide AI protection
+.TP
+\fB\-\-cleanup\fR
+Security cleanup \- detect and remove malicious MCP entries
+.TP
+\fB\-\-integrity\-scan\fR \fI<PATH>\fR
+Deep integrity scan (exploit detection, hash memory, cert analysis)
+.TP
+\fB\-\-cert\-scan\fR [\fI<PATH>\fR]
+Inspect PEM/DER certificates embedded in files (supports \-\-mode json)
+.TP
+\fB\-\-cert\-audit\fR
+Audit system CA certificate trust store
+.TP
+\fB\-\-cert\-generate\-script\fR
+Generate blacklist script from cert audit (use with \-\-cert\-audit)
+.TP
+\fB\-\-hash\-lookup\fR \fI<SHA256>\fR
+Look up a SHA\-256 hash in security memory
+.TP
+\fB\-\-erdos\-anomaly\fR [\fI<PATH>\fR]
+Run Paul Erdős–Rényi Phase\-Transition & Cross\-Boundary Shadow Graph (G_shadow) Supply\-Chain Anomaly Detector
+.SH "GOOGLE DRIVE & CLOUD"
+.TP
+\fB\-\-gdrive\fR \fI<ACTION>\fR
+Google Drive / Gmail operations (status, list, sync, login, logout)
+.SH "VOICE & AUDIO"
+.TP
+\fB\-\-voice\fR \fI<ACTION>\fR
+Voice & audio operations (status, test, speak)
+.SH HOOKS
+.TP
+\fB\-\-hooks\-install\fR
+Install Smart Tree hooks to AI Agent settings (Antigravity/agy & Claude)
+.TP
+\fB\-\-hooks\-config\fR \fI<ACTION>\fR
+Manage hooks: enable, disable, status
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+enable
+.IP \(bu 2
+disable
+.IP \(bu 2
+status
+.RE
+.TP
+\fB\-\-agy\-hook\fR \fI<EVENT>\fR
+Execute an Antigravity (agy) lifecycle hook handler (stdin JSON \-> stdout JSON)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+session\-start
+.IP \(bu 2
+pre\-invocation
+.IP \(bu 2
+pre\-tool\-use
+.IP \(bu 2
+post\-tool\-use
+.IP \(bu 2
+stop
+.IP \(bu 2
+SessionStart
+.IP \(bu 2
+PreInvocation
+.IP \(bu 2
+PreToolUse
+.IP \(bu 2
+PostToolUse
+.IP \(bu 2
+Stop
+.RE
+.SH "MEGA SESSIONS"
+.TP
+\fB\-\-mega\-start\fR [\fI<NAME>\fR]
+Start a mega session (persistent cross\-context conversation)
+.TP
+\fB\-\-mega\-save\fR
+Save current mega session snapshot
+.TP
+\fB\-\-mega\-list\fR
+List all mega sessions
+.TP
+\fB\-\-mega\-stats\fR
+Show mega session statistics
+.SH ANALYSIS
+.TP
+\fB\-\-token\-stats\fR \fI<PATH>\fR
+Show tokenization statistics for a path
+.TP
+\fB\-\-get\-frequency\fR \fI<PATH>\fR
+Get wave frequency for a directory
+.TP
+\fB\-\-ramsey\-cliques\fR [\fI<PATH>\fR]
+Detect Ramsey\-Theoretic Monochromatic Cliques (K_3 / K_4 Red/Blue/Green) & Turán Extremal Density
+.TP
+\fB\-\-erdos\-center\fR [\fI<PATH>\fR]
+Compute Erdős Center Z(G), Graph Radius/Diameter, and Voronoi Steiner Context Backbone
+.TP
+\fB\-\-erdos\-split\fR [\fI<WORKTREES>\fR]
+Partition codebase into C conflict\-free parallel agent worktrees via Constructive Lovász Local Lemma (Moser\-Tardos)
+.TP
+\fB\-\-ultrabackyard\fR [\fI<LAPS>\fR]
+Execute the Sovereign Ultra\-Backyard Loop (DO = reflect → improve → wire → polish → push → readme) over N measured laps
+.TP
+\fB\-\-zeno\fR [\fI<PATH>\fR]
+Execute Sovereign ULTRA\-OMNI\-ZENO v11 engine (upz/wupz 64B@0x62 LitanyWireFrame, BFP\-64 Kleene bitplanes, SPQT base\-243, 8b\-is\-[engines], and OS/Agent\-agnostic matrix)
+.SH "G8T.IS RUST CAPSULES & FOKENS"
+.TP
+\fB\-\-g8t\-best\fR \fI<QUERY>\fR
+Query g8t.is for the fastest verified Rust functions by keyword, domain, or signature (e.g. "binary search", "(u64,u64)\->u64")
+.TP
+\fB\-\-yolo\fR
+YOLO fastest\-pick mode: return ONLY the #1 fastest verified Rust function (raw drop\-in code + 1\-line receipt)
+.TP
+\fB\-\-g8t\-leaderboard\fR
+Show the live G8T × Smart\-Tree Speed & Foken Scoreboard (https://g8t.is/g8t/leaderboard)
+.TP
+\fB\-\-g8t\-submit\fR \fI<FILE_OR_CODE>\fR
+Submit a pure\-Rust function file or snippet to https://g8t.is/g8t/capsules/publish with local hardware cycle measurement
+.TP
+\fB\-\-partner\fR \fI<PARTNER>\fR [default: Hue + Gemini (0+1)]
+Partnership attribution for \-\-g8t\-submit (encoded into author_aye, e.g. "Hue + Gemini (0+1)")
+.TP
+\fB\-\-g8t\-domain\fR \fI<DOMAIN>\fR
+Domain tag for \-\-g8t\-submit (default: "smart\-tree\-<arch>")
+.TP
+\fB\-\-g8t\-name\fR \fI<NAME>\fR
+Function name when \-\-g8t\-submit is given a raw expression body
+.TP
+\fB\-\-g8t\-arch\fR \fI<ARCH>\fR
+Filter g8t.is capsules by hardware architecture (e.g. "x86_64", "aarch64")
+.TP
+\fB\-\-g8t\-top\fR \fI<N>\fR
+Number of top g8t.is functions or scoreboard rows to return (default: 3 for best, 15 for leaderboard)
+.SH "LOGGING & TRANSPARENCY"
+.TP
+\fB\-\-log\fR [\fI<PATH>\fR]
+Enable activity logging to JSONL file
+.TP
+\fB\-\-tips\fR \fI<STATE>\fR
+Control smart tips (on/off)
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+on
+.IP \(bu 2
+off
+.RE
+.SH "OUTPUT FORMAT"
+.TP
+\fB\-m\fR, \fB\-\-mode\fR \fI<MODE>\fR [default: classic]
+Output format (classic, ai, quantum, json, etc.)
 .br
 
 .br
@@ -53,189 +338,206 @@ Choose your adventure! Selects the output format. From classic human\-readable t
 .IP \(bu 2
 auto: Auto mode \- smart default selection based on context
 .IP \(bu 2
-classic: Classic tree format, human\-readable with metadata and emojis (unless disabled). Our beloved default
+classic: Classic tree format with metadata and emojis
 .IP \(bu 2
-hex: Hexadecimal format with fixed\-width fields. Excellent for AI parsing or detailed analysis
+hex: Hexadecimal format with fixed\-width fields
 .IP \(bu 2
-json: JSON output. Structured data for easy programmatic use
+hex\-tree: HexTree \- readable quantum compression with tree structure
 .IP \(bu 2
-ls: Unix ls \-Alh format. Familiar directory listing with human\-readable sizes and permissions
+json: JSON output for programmatic use
 .IP \(bu 2
-ai: AI\-optimized format. A special blend of hex tree and statistics, designed for LLMs
+ls: Unix ls \-Alh format
 .IP \(bu 2
-stats: Directory statistics only. Get a summary without the full tree
+ai: AI\-optimized format for LLMs
 .IP \(bu 2
-csv: CSV (Comma Separated Values) format. Spreadsheet\-friendly
+stats: Directory statistics only
 .IP \(bu 2
-tsv: TSV (Tab Separated Values) format. Another spreadsheet favorite
+csv: CSV format
 .IP \(bu 2
-digest: Super compact digest format. A single line with a hash and minimal stats, perfect for quick AI pre\-checks
+tsv: TSV format
 .IP \(bu 2
-quantum: MEM|8 Quantum format. The ultimate compression with bitfield headers and tokenization
+digest: Super compact digest format
 .IP \(bu 2
-semantic: Semantic grouping format. Groups files by conceptual similarity (inspired by Omni!)
+louds: LOUDS bit\-packed sufficient tree & 64B SMTR .m8 capsule (8B\-META\-WP\-v2.1)
 .IP \(bu 2
-mermaid: Mermaid diagram format. Perfect for embedding in documentation!
+the\-book: Paul Erdős ("Straight from The Book") Szemerédi Regularity, Steiner Pruner, Moser\-Tardos LLL & Erdős\-Rényi Scanner
 .IP \(bu 2
-markdown: Markdown report format. Combines mermaid, tables, and charts for beautiful documentation!
+pq: Sovereign p/q mode: Exact Coprime Rational Arithmetic (Binary GCD), Hölder (L_p, L_q) Dual Spectral Norm, Zarankiewicz z(n;p,q) & Symplectic (p,q) Störmer\-Verlet Leapfrog
 .IP \(bu 2
-summary: Interactive summary mode (default for humans in terminal)
+ultrabackyard: Sovereign Ultra\-Backyard Loop (DO = reflect → improve → wire → polish → push → readme) measured lap report
 .IP \(bu 2
-summary\-ai: AI\-optimized summary mode (default for AI/piped output)
+zeno: Sovereign ULTRA\-OMNI\-ZENO v11 (upz/wupz 64B@0x62 LitanyWireFrame, BFP\-64 Kleene bitplanes, SPQT base\-243, and 8b\-is\-[engines])
+.IP \(bu 2
+emotional: Emotional tree \- files with feelings!
+.IP \(bu 2
+quantum: MEM|8 Quantum format \- ultimate compression
+.IP \(bu 2
+semantic: Semantic grouping format
+.IP \(bu 2
+projects: Projects discovery mode
+.IP \(bu 2
+mermaid: Mermaid diagram format
+.IP \(bu 2
+markdown: Markdown report format
+.IP \(bu 2
+summary: Interactive summary mode
+.IP \(bu 2
+summary\-ai: AI\-optimized summary mode
+.IP \(bu 2
+context: Context mode for AI conversations
 .IP \(bu 2
 relations: Code relationship analysis
 .IP \(bu 2
-quantum\-semantic: Quantum compression with semantic understanding (Omni\*(Aqs nuclear option!)
+quantum\-semantic: Quantum compression with semantic understanding
 .IP \(bu 2
-waste: Waste detection and optimization analysis (Marie Kondo mode!)
+waste: Waste detection and optimization analysis
 .IP \(bu 2
-marqant: Marqant \- Quantum\-compressed markdown format (.mq)
+marqant: Marqant \- Quantum\-compressed markdown format
 .IP \(bu 2
-sse: SSE \- Server\-Sent Events streaming format for real\-time monitoring
+sse: SSE \- Server\-Sent Events streaming format
 .IP \(bu 2
-function\-markdown: Function documentation in markdown format \- living blueprints of your code!
+function\-markdown: Function documentation in markdown format
 .RE
+.SH FILTERING
 .TP
-\fB\-\-find\fR=\fIFIND\fR
-Feeling like a detective? Find files/directories matching this regex pattern. Example: \-\-find "README\\\\.md"
+\fB\-\-find\fR \fI<FIND>\fR
+Find files matching regex pattern (e.g., \-\-find "README\\.md")
 .TP
-\fB\-\-type\fR=\fIFILTER_TYPE\fR
-Filter by file extension. Show only files of this type (e.g., "rs", "txt"). No leading dot needed, just the extension itself
+\fB\-\-type\fR \fI<FILTER_TYPE>\fR
+Filter by file extension (e.g., \-\-type rs)
 .TP
-\fB\-\-entry\-type\fR=\fIENTRY_TYPE\fR
-Filter to show only files (f) or directories (d)
+\fB\-\-entry\-type\fR \fI<ENTRY_TYPE>\fR
+Filter by entry type: f (files) or d (directories)
 .br
 
 .br
-[\fIpossible values: \fRf, d]
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+f
+.IP \(bu 2
+d
+.RE
 .TP
-\fB\-\-min\-size\fR=\fIMIN_SIZE\fR
-Only show files larger than this size. Accepts human\-readable sizes like "1M" (1 Megabyte), "500K" (500 Kilobytes), "100B" (100 Bytes)
+\fB\-\-min\-size\fR \fI<MIN_SIZE>\fR
+Only files larger than size (e.g., \-\-min\-size 1M)
 .TP
-\fB\-\-max\-size\fR=\fIMAX_SIZE\fR
-Only show files smaller than this size. Same format as \-\-min\-size. Let\*(Aqs find those tiny files!
+\fB\-\-max\-size\fR \fI<MAX_SIZE>\fR
+Only files smaller than size (e.g., \-\-max\-size 100K)
 .TP
-\fB\-\-newer\-than\fR=\fINEWER_THAN\fR
-Time traveler? Show files newer than this date (YYYY\-MM\-DD format)
+\fB\-\-newer\-than\fR \fI<NEWER_THAN>\fR
+Files newer than date (YYYY\-MM\-DD)
 .TP
-\fB\-\-older\-than\fR=\fIOLDER_THAN\fR
-Or perhaps you prefer antiques? Show files older than this date (YYYY\-MM\-DD format)
+\fB\-\-older\-than\fR \fI<OLDER_THAN>\fR
+Files older than date (YYYY\-MM\-DD)
+.SH TRAVERSAL
 .TP
-\fB\-d\fR, \fB\-\-depth\fR=\fIDEPTH\fR [default: 0]
-How deep should we dig? Limits the traversal depth. Default is 0 (auto) which lets each mode pick its ideal depth. Set explicitly to override: 1 for shallow, 10 for deep exploration
+\fB\-d\fR, \fB\-\-depth\fR \fI<DEPTH>\fR [default: 0]
+Traversal depth (0 = auto, 1 = shallow, 10 = deep)
 .TP
 \fB\-\-no\-ignore\fR
-Daredevil mode: Ignores `.gitignore` files. See everything, even what Git tries to hide!
+Ignore .gitignore files
 .TP
 \fB\-\-no\-default\-ignore\fR
-Double daredevil: Ignores our built\-in default ignore patterns too (like `node_modules`, `__pycache__`). Use with caution, or you might see more than you bargained for!
+Ignore default patterns (node_modules, __pycache__, etc.)
 .TP
 \fB\-a\fR, \fB\-\-all\fR
-Show all files, including hidden ones (those starting with a `.`). The `\-a` is for "all", naturally
+Show hidden files (starting with .)
 .TP
 \fB\-\-show\-ignored\fR
-Want to see what\*(Aqs being ignored? This flag shows ignored directories in brackets `[dirname]`. Useful for debugging your ignore patterns or just satisfying curiosity
+Show ignored directories in brackets
 .TP
 \fB\-\-everything\fR
-SHOW ME EVERYTHING! The nuclear option that combines \-\-all, \-\-no\-ignore, and \-\-no\-default\-ignore. This reveals absolutely everything: hidden files, git directories, node_modules, the works! Warning: May produce overwhelming output in large codebases
+Show EVERYTHING (\-\-all + \-\-no\-ignore + \-\-no\-default\-ignore)
+.SH "SMART SCANNING"
+.TP
+\fB\-\-smart\fR
+Enable smart mode \- surface what matters, not everything Groups output by interest: security, changes, important, background
+.TP
+\fB\-\-changes\-only\fR
+Only show changes since last scan
+.TP
+\fB\-\-min\-interest\fR \fI<MIN_INTEREST>\fR [default: 0.0]
+Minimum interest level (0.0\-1.0) to display
+.TP
+\fB\-\-no\-security\fR
+Disable security scanning during traversal
+.SH DISPLAY
 .TP
 \fB\-\-show\-filesystems\fR
-Show filesystem type indicators in output (e.g., X=XFS, 4=ext4, B=Btrfs). Each file/directory gets a single character showing what filesystem it\*(Aqs on. Great for understanding storage layout and mount points!
+Show filesystem type indicators (X=XFS, 4=ext4, B=Btrfs)
 .TP
 \fB\-\-no\-emoji\fR
-Not a fan of emojis? This flag disables them for a plain text experience. (But Trish loves the emojis, just saying!) 🌳✨
+Disable emojis (Trish will miss them!)
 .TP
 \fB\-z\fR, \fB\-\-compress\fR
-Compress the output using zlib. Great for sending large tree structures over the wire or for AI models that appreciate smaller inputs. Output will be base64 encoded
+Compress output with zlib (base64 encoded)
 .TP
 \fB\-\-mcp\-optimize\fR
-MCP/API optimization mode. Automatically enables compression, disables colors/emoji, and optimizes output for machine consumption. Perfect for MCP servers, LLM APIs, and tools. Works with any output mode to make it API\-friendly!
+Optimize for MCP/API (compression + no colors/emoji)
 .TP
 \fB\-\-compact\fR
-For JSON output, this makes it compact (one line) instead of pretty\-printed. Saves space, but might make Trish\*(Aqs eyes water if she tries to read it directly
+Compact JSON (single line)
 .TP
-\fB\-\-path\-mode\fR=\fIPATH_MODE\fR [default: off]
-Controls how file paths are displayed in the output
+\fB\-\-path\-mode\fR \fI<PATH_MODE>\fR [default: off]
+Path display: off, relative, or full
 .br
 
 .br
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-off: Show only filenames (default). Clean and simple
+off: Show only filenames (default)
 .IP \(bu 2
-relative: Show paths relative to the scan root. Good for context within the project
+relative: Show paths relative to scan root
 .IP \(bu 2
-full: Show full absolute paths. Leaves no doubt where things are
+full: Show full absolute paths
 .RE
 .TP
-\fB\-\-color\fR=\fICOLOR\fR [default: auto]
-When should we splash some color on the output? `auto` (default) uses colors if outputting to a terminal
+\fB\-\-color\fR \fI<COLOR>\fR [default: auto]
+Color output: always, never, or auto
 .br
 
 .br
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-always: Always use colors, no matter what. Go vibrant!
+always: Always use colors
 .IP \(bu 2
-never: Never use colors. For the minimalists
+never: Never use colors
 .IP \(bu 2
-auto: Use colors if the output is a terminal (tty), otherwise disable. This is the default smart behavior
+auto: Auto\-detect (colors if terminal)
 .RE
 .TP
 \fB\-\-ai\-json\fR
-For AI mode, wraps the output in a JSON structure. Makes it easier for programmatic consumption by our AI overlords (just kidding... mostly)
+Wrap AI output in JSON structure
+.SH STREAMING
 .TP
 \fB\-\-stream\fR
-Stream output as files are scanned. This is a game\-changer for very large directories! You\*(Aqll see results trickling in, rather than waiting for the whole scan to finish. Note: Compression is disabled in stream mode for now
+Stream output as files are scanned
 .TP
 \fB\-\-sse\-server\fR
-Start SSE server mode for real\-time directory monitoring (experimental). This starts an HTTP server that streams directory changes as Server\-Sent Events. Example: st \-\-sse\-server \-\-sse\-port 28428 /path/to/watch
+Start SSE server for real\-time monitoring
 .TP
-\fB\-\-sse\-port\fR=\fISSE_PORT\fR [default: 28428]
-Port for SSE server mode (default: 28428)
+\fB\-\-sse\-port\fR \fI<SSE_PORT>\fR [default: 28428]
+SSE server port (also used as daemon port)
+.SH "SEARCH & ANALYSIS"
 .TP
-\fB\-\-search\fR=\fISEARCH\fR
-Search for a keyword within file contents. Best used with `\-\-type` to limit search to specific file types (e.g., `\-\-type rs \-\-search "TODO"`). This is like having X\-ray vision for your files!
+\fB\-\-search\fR \fI<SEARCH>\fR
+Search file contents (e.g., \-\-search "TODO")
 .TP
 \fB\-\-semantic\fR
-Group files by semantic similarity (inspired by Omni\*(Aqs wisdom!). Uses content\-aware tokenization to identify conceptually related files. Perfect for understanding project structure at a higher level. Example groups: "tests", "documentation", "configuration", "source code"
+Group by semantic similarity
 .TP
-\fB\-\-mermaid\-style\fR=\fIMERMAID_STYLE\fR [default: flowchart]
-Mermaid diagram style (only used with \-\-mode mermaid). Options: flowchart (default), mindmap, gitgraph
-.br
-
-.br
-\fIPossible values:\fR
-.RS 14
-.IP \(bu 2
-flowchart: Traditional flowchart (default)
-.IP \(bu 2
-mindmap: Mind map style
-.IP \(bu 2
-gitgraph: Git graph style
-.IP \(bu 2
-treemap: Treemap style (shows file sizes visually)
-.RE
+\fB\-\-focus\fR \fI<FILE>\fR
+Focus analysis on specific file (relations mode)
 .TP
-\fB\-\-no\-markdown\-mermaid\fR
-Exclude mermaid diagrams from markdown report (only used with \-\-mode markdown)
+\fB\-\-relations\-filter\fR \fI<TYPE>\fR
+Filter relationships: imports, calls, types, tests, coupled
+.SH SORTING
 .TP
-\fB\-\-no\-markdown\-tables\fR
-Exclude tables from markdown report (only used with \-\-mode markdown)
-.TP
-\fB\-\-no\-markdown\-pie\-charts\fR
-Exclude pie charts from markdown report (only used with \-\-mode markdown)
-.TP
-\fB\-\-focus\fR=\fIFILE\fR
-Focus analysis on specific file (for relations mode). Shows all relationships for a particular file
-.TP
-\fB\-\-relations\-filter\fR=\fITYPE\fR
-Filter relationships by type (for relations mode). Options: imports, calls, types, tests, coupled
-.TP
-\fB\-\-sort\fR=\fISORT\fR
-Sort results by: a\-to\-z, z\-to\-a, largest, smallest, newest, oldest, type Examples: \-\-sort largest (biggest files first), \-\-sort newest (recent files first) Use with \-\-top to get "top 10 largest files" or "20 newest files"
+\fB\-\-sort\fR \fI<SORT>\fR
+Sort by: a\-to\-z, z\-to\-a, largest, smallest, newest, oldest, type
 .br
 
 .br
@@ -263,22 +565,85 @@ size
 date
 .RE
 .TP
-\fB\-\-top\fR=\fIN\fR
-Show only the top N results (useful with \-\-sort) Examples: \-\-sort size \-\-top 10 (10 largest files) \-\-sort date \-\-top 20 (20 most recent files)
+\fB\-\-top\fR \fI<N>\fR
+Show only top N results (use with \-\-sort)
+.SH "MERMAID & MARKDOWN"
+.TP
+\fB\-\-mermaid\-style\fR \fI<MERMAID_STYLE>\fR [default: flowchart]
+Mermaid style: flowchart, mindmap, gitgraph, treemap
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+flowchart: Traditional flowchart (default)
+.IP \(bu 2
+mindmap: Mind map style
+.IP \(bu 2
+gitgraph: Git graph style
+.IP \(bu 2
+treemap: Treemap style (shows file sizes visually)
+.RE
+.TP
+\fB\-\-no\-markdown\-mermaid\fR
+Exclude mermaid diagrams from markdown
+.TP
+\fB\-\-no\-markdown\-tables\fR
+Exclude tables from markdown
+.TP
+\fB\-\-no\-markdown\-pie\-charts\fR
+Exclude pie charts from markdown
+.SH ADVANCED
+.TP
+\fB\-\-index\-registry\fR \fI<URL>\fR
+Index code to SmartPastCode registry
 .TP
 \fB\-\-show\-private\fR
-Include private functions in function documentation (for function\-markdown mode) By default, only public functions are shown
+Show private functions in docs (function\-markdown mode)
 .TP
 \fB\-\-view\-diffs\fR
-View diffs stored in the .st folder (Smart Edit history) Shows all diffs for files modified by Smart Edit operations
+View Smart Edit diffs from .st folder
 .TP
-\fB\-\-cleanup\-diffs\fR=\fIN\fR
-Clean up old diffs in .st folder, keeping only last N per file Example: \-\-cleanup\-diffs 5 (keep last 5 diffs per file)
+\fB\-\-cleanup\-diffs\fR \fI<N>\fR
+Clean up old diffs, keep last N per file
+.SH "GITHUB SYNC"
 .TP
-\fB\-h\fR, \fB\-\-help\fR
-Print help (see a summary with \*(Aq\-h\*(Aq)
+\fB\-\-sync\-user\fR \fI<USER>\fR
+Sync all GitHub repositories for a user/org into <dir>/<user>/<repo> (clone new, refresh updated)
 .TP
-[\fIPATH\fR]
-Path to the directory or file you want to analyze. Can also be a URL (http://), QCP query (qcp://), SSE stream, or MEM8 stream (mem8://)
+\fB\-\-sync\-dir\fR \fI<DIR>\fR [default: .]
+Base directory for \-\-sync\-user (creates <DIR>/<USER>/<repo>, default: current directory)
+.TP
+\fB\-\-sync\-limit\fR \fI<LIMIT>\fR [default: 10000]
+Maximum repositories to list with `gh repo list \-L <LIMIT>` (default: 10000)
+.TP
+\fB\-\-refresh\-all\fR
+Bypass timestamp cache and refresh eligible clean branches (blocked branches stay untouched)
+.TP
+\fB\-\-quarantine\fR
+Quarantine diverged/broken repos into .diverged/ or .sync\-issues/ with a DIFF_REPORT.md and reclone clean copies
+.SH SUBCOMMANDS
+.TP
+st\-symbol(1)
+Code intelligence powered by CrabCC built into Smart Tree
+.TP
+st\-sync(1)
+Sync all GitHub repositories for a user/org into <dir>/<user>/<repo> (clone new, refresh updated)
+.TP
+st\-remember(1)
+Remember a git forge (github, gitlab, forgejo, local dir, or URL) into salient MEM8. Extracts code + thoughts, incremental diffs, compresses, turns into waves. Levels control depth: extreme (full nexus), professor/expert/high, down to bullshitter (shallow). Special full treatment for StandardGalactic. Auto\-detects non\-git and limits generic sources
+.TP
+st\-service(1)
+Manage the smart\-tree daemon (Linux: systemd, macOS: launchctl, Windows: Task Scheduler)
+.TP
+st\-project\-tags(1)
+Manage project tags
+.TP
+st\-g8t(1)
+Query, YOLO\-pick, submit, and rank pure\-Rust function capsules on https://g8t.is
+.TP
+st\-help(1)
+Print this message or the help of the given subcommand(s)
 .SH AUTHORS
 8bit\-wraith, Claude, Omni, 8b\-is Team

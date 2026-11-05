@@ -6,17 +6,22 @@
 DO = reflect → improve → wire → polish → push → readme
 ```
 
-Each lap is a **measurement**, not a claim: `st --ultrabackyard 12 .` runs the 9-pillar Paul Erdős & Sovereign `p/q` pipeline at cycling Szemerédi regularity thresholds $\varepsilon \in \{0.16, 0.14, 0.12, 0.10, 0.08, 0.06\}$ and Moser–Tardos worktree concurrency targets $C \in \{2, 3, 4, 6, 8, 12\}$, records hardware throughput and symplectic invariants, and appends every verified lap to [`lap-ledger.jsonl`](lap-ledger.jsonl).
+The [checked-in ledger](lap-ledger.jsonl) holds 16 historical rows. The current command builds a graph from scanned directory entries and prints a JSON report. Its vertices and inferred edges reflect file layout and metadata. Use the symbol index for actual source references.
 
-## Reproduce
+## Run and inspect a lap report
+
+From your checkout, with the output file outside the scanned root:
 
 ```bash
-st --ultrabackyard 12 .
-# or via OutputMode:
-st --mode ultrabackyard .
+st --ultrabackyard 12 . > ../smart-tree-laps.json
+jq '.total_laps, .laps[0]' ../smart-tree-laps.json
 ```
 
-## 12 Measured Laps (`smart-tree` AST Symbol Graph)
+The explicit lap count is clamped to 1–108. The formatter `st --no-daemon --mode ultrabackyard .` runs six laps. Neither command appends to the checked-in ledger. The first command runs a depth-6 scan before timing the graph pipeline. In each lap `verified_and_bound` checks the schedule, Jacobian determinant tolerance, energy drift threshold, and Litany wire predicate. It does not certify graph regularity, AST dependency accuracy, or availability of external services. See the [command handler](../src/cli_commands.rs) and [lap implementation](../src/mem8/regularity/ultrabackyard.rs).
+
+## Historical ledger
+
+The rows below describe the committed record. They do not include enough machine, source, or input metadata to reproduce the exact throughput from the ledger alone. The current schedule cycles six parameter pairs. A fresh 16-lap run does not select the historical parameter pairs for rows 13–16 automatically.
 
 | Lap | $\varepsilon$ | Worktrees $C$ | Super-Nodes $K$ | Compression | Energy $q_p(\mathcal{P})$ | $\kappa_{p/q}$ | $\|A_R\|_{3/2 \to 3}$ | Symplectic $|\Delta H / H_0|$ | Throughput (sym/s) | Throughput (edges/s) | Verified & Bound |
 | --: | ------------: | ------------: | --------------: | ----------: | ------------------------: | -------------: | --------------------: | ----------------------------: | -----------------: | -------------------: | :--------------: |
@@ -37,20 +42,8 @@ st --mode ultrabackyard .
 |  15 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **984 615** |        **2 672 527** |      **✅**      |
 |  16 |      **0.10** |         **8** |          **22** |   **7.12x** |                **0.2491** |     **`19/7`** |            **1.9102** |                **`1.49e-4`**  |        **996 032** |        **2 703 520** |      **✅**      |
 
-- **Best Verified & Bound Lap**: **Lap 16** ($\varepsilon = 0.10$, $C = 8$ conflict-free worktrees, **996,032 symbols/s**, **2,703,520 edges/s**, `7.12x` `.m8b` compression, Liouville $\det J = 1.0$, symplectic drift $1.49 \times 10^{-4}$, `64B@0x62` Litany seal verified, and 7 `ULTRA-OMNI-ZENO-BEERUS` MCP combinatorics + MLX/GGUF tools with Axum SSE streaming, `libmlx_quant.dylib` C-FFI trampoline, Tree-Attention Speculative Decoding, `PromptLookupDrafter`, and EWMA+PID `AdaptiveSpeculativeController`).
-- **What the Laps Changed**:
-  1. Eliminating per-pair heap allocations in `oracle.rs` via `OracleScratch` and vectorizing 64-lane centroid synthesis in `compressor.rs` via `felix_add_assign_64_f32` / `felix_normalize64_f32` made $\varepsilon = 0.10$ converge in fewer refinement passes than coarser $\varepsilon \in \{0.12, 0.14\}$.
-  2. Default `RegularityConfig::default().epsilon = 0.10` is verified as the Pareto-optimal sweet spot balancing compression ratio (`7.12x`), Kohayakawa–Rödl energy (`0.2491`), and throughput (`968k sym/s`).
-  3. Lap 14 replaced modulo Euclidean `gcd_u64` in `g8t_integration.rs` with Stein's binary GCD, upgraded `crc32_branchless` in `mem8_binary.rs` to 8-byte Slicing-by-4 `felix_crc32_ieee`, and wired `64B@0x62` Litany seal + `8b-is/ternary` 1.58-bit GEMM verification into every Backyard lap.
+The largest recorded symbol throughput is in row 16. This is a comparison of the recorded rows. The timing starts after graph construction, so these rates describe the lap work rather than an end-to-end CLI scan. See [performance measurements](PERFORMANCE_METRICS.md) for how to collect a comparable result.
 
-## End-to-End Constellation Wiring (`zero_orphan_surfaces = true`)
+## Interpreting the wiring fields
 
-| Surface | Module / Entrypoint | Status |
-| :--- | :--- | :---: |
-| **SpherePOP / Salient Forge Memory** | [`src/salient.rs`](../src/salient.rs) (`st remember`) | ✅ Wired |
-| **8b-is `mem\|8` & Phoenix `.m8b`** | [`src/mem8/regularity/`](../src/mem8/regularity/mod.rs) (`st --mode the-book`, `st --mode pq`) | ✅ Wired |
-| **Vaked Constellation & 6 Embedded Skills** | [`src/claude_init.rs`](../src/claude_init.rs) (`st --mcp-install` across `agy`, `opencode`, `crush`, `claude`, `agents`) | ✅ Wired |
-| **`g8t.is` Foken Capsule Recommender** | [`src/g8t_integration.rs`](../src/g8t_integration.rs) (`st --g8t-best`, `st --g8t-leaderboard`) | ✅ Wired |
-| **`upz`/`wupz-core` `64B@0x62` Litany & `BFP-64`** | [`src/mem8/regularity/zeno_engine.rs`](../src/mem8/regularity/zeno_engine.rs) (`st --zeno`) | ✅ Wired |
-| **`8b-is-[engines]` Spine (`world-core`, `ternary`, `spherepop`, `admissibility`, `auroralib`, `omniZenCooker`)** | [`src/mem8/regularity/zeno_engine.rs`](../src/mem8/regularity/zeno_engine.rs) (`st --mode zeno`) | ✅ Wired |
-| **`ULTRA-OMNI-ZENO-BEERUS` Combinatorics & LLM MCP (`mlx_quant` + `llama_rust`)** | [`src/mcp/combinatorics_llm.rs`](../src/mcp/combinatorics_llm.rs) (`st --mcp`) | ✅ Wired |
+The [report builder](../src/mem8/regularity/ultrabackyard.rs) derives some wiring flags from path names or small-fixture defaults and sets others directly. Treat those fields as implementation metadata. To test an integration, exercise its entry point with its actual dependencies and inspect the output.
