@@ -145,6 +145,9 @@ pub mod file_history;
 // MEM8 - Wave-based cognitive architecture for consciousness simulation
 pub mod mem8;
 
+// MEMNET - Local network folder/drive sharing, ESP32/LoRa/BLE/WiFi routing, Wave Q&A offload & Ultrasonic Chirp modem
+pub mod memnet;
+
 // MEM8 Lite - Minimal wave types for hot directory tracking (self-contained)
 pub mod mem8_lite;
 

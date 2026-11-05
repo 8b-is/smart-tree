@@ -141,6 +141,9 @@ async fn main() -> Result<()> {
         }
         return Ok(());
     }
+    if let Some(st::cli::Cmd::Memnet(memnet_cmd)) = &cli.cmd {
+        return st::cli_commands::handle_memnet_command(memnet_cmd);
+    }
 
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {
@@ -334,8 +337,8 @@ async fn main() -> Result<()> {
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
-            st::cli::Cmd::Symbol(_) | st::cli::Cmd::G8t(_) => {
-                unreachable!("symbol and g8t commands return before daemon startup")
+            st::cli::Cmd::Symbol(_) | st::cli::Cmd::G8t(_) | st::cli::Cmd::Memnet(_) => {
+                unreachable!("symbol, g8t, and memnet commands return before daemon startup")
             }
             st::cli::Cmd::Sync(sync_cmd) => {
                 return handle_sync_user(&sync_cmd).await;

@@ -728,6 +728,44 @@ pub enum Cmd {
     /// Query, YOLO-pick, submit, and rank pure-Rust function capsules on https://g8t.is
     #[command(alias = "capsela", alias = "foken")]
     G8t(G8tCommand),
+
+    /// Sovereign MemNet local folder/drive sharing, multi-medium routing (ESP32, WiFi, BLE, LoRa, Ethernet),
+    /// MEM|8 wave packet Q&A LLM offload, audio/video chunk streaming, and Ultrasonic Chirp acoustic modem
+    #[command(alias = "mesh", alias = "chirp")]
+    Memnet(MemnetCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct MemnetCommand {
+    /// Action: status, share, ls (or shares), routes, add-route, ask, teach (or learn),
+    /// stream-chunk, chirp-encode, chirp-decode
+    #[arg(default_value = "status")]
+    pub action: String,
+    /// Primary argument (folder path for share, question for ask/teach, message/file for chirp-encode, wav path for chirp-decode)
+    pub target: Option<String>,
+    /// Secondary argument (answer for teach, endpoint for add-route, output wav path for chirp-encode)
+    pub extra: Option<String>,
+    /// Shared drive space quota in MB offered to local MemNet peers & ESP32s (default: 4096 MB)
+    #[arg(long, default_value_t = 4096)]
+    pub quota_mb: u64,
+    /// Transport medium for add-route or routing (wifi, bluetooth, ethernet, lora, esp32, usb, ultrasonic)
+    #[arg(long, default_value = "wifi")]
+    pub medium: String,
+    /// MemNet node address (0x01..0xEF, default: 0xC5 multi-route)
+    #[arg(long, default_value_t = 0xC5)]
+    pub addr: u8,
+    /// Multi-route via identifier
+    #[arg(long, default_value_t = 25)]
+    pub via: u8,
+    /// Output or input WAV file path for ultrasonic chirp modem
+    #[arg(long, short = 'o')]
+    pub out: Option<PathBuf>,
+    /// Use audible bird-chirp frequencies (1.85–3.15 kHz) instead of ultrasonic (18.5–21.0 kHz)
+    #[arg(long)]
+    pub audible: bool,
+    /// Emit JSON output
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Clone, clap::Args)]

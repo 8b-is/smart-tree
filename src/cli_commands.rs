@@ -2464,6 +2464,8 @@ fn non_ignorable_porcelain_status(dir: &std::path::Path) -> Result<String> {
     Ok(filtered.join("\n"))
 }
 
+const UNBORN_HEAD_SHA: &str = "unborn";
+
 fn is_empty_unborn_repo(dir: &std::path::Path) -> bool {
     if !dir.join(".git").exists() {
         return false;
@@ -2476,8 +2478,7 @@ fn is_empty_unborn_repo(dir: &std::path::Path) -> bool {
         .unwrap_or(false)
 }
 
-// An error here is a blocked reconciliation, never permission to try a pull.
-fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
+fn verify_clean_attached_worktree(dir: &std::path::Path) -> Result<String> {
     let root = sync_git(dir, &["rev-parse", "--show-toplevel"])?;
     anyhow::ensure!(
         std::fs::canonicalize(root)? == std::fs::canonicalize(dir)?,
@@ -2487,7 +2488,8 @@ fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
         non_ignorable_porcelain_status(dir)?.is_empty(),
         "Dirty working tree or index"
     );
-    sync_git(dir, &["symbolic-ref", "--quiet", "HEAD"]).context("Detached HEAD")?;
+    let branch =
+        sync_git(dir, &["symbolic-ref", "--quiet", "--short", "HEAD"]).context("Detached HEAD")?;
     for marker in [
         "MERGE_HEAD",
         "CHERRY_PICK_HEAD",
@@ -2503,6 +2505,12 @@ fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
             "Git operation in progress: {marker}"
         );
     }
+    Ok(branch)
+}
+
+// An error here is a blocked reconciliation, never permission to try a pull.
+fn sync_ready_branch(dir: &std::path::Path) -> Result<(String, String)> {
+    verify_clean_attached_worktree(dir)?;
     let head = sync_git(dir, &["rev-parse", "--verify", "HEAD"])?;
     let upstream =
         sync_git(dir, &["rev-parse", "--verify", "@{upstream}"]).context("No usable upstream")?;
@@ -2785,6 +2793,126 @@ fn write_quarantine_diff_report(
     Ok(())
 }
 
+fn sync_unborn_repository(
+    dir: &std::path::Path,
+    branch: &str,
+    cached: Option<&RepoSyncRecord>,
+    pushed_at: &str,
+    updated_at: &str,
+    refresh_all: bool,
+) -> Result<RepoSyncOutcome> {
+    let remote = match sync_git(dir, &["config", "--get", &format!("branch.{branch}.remote")])
+        .or_else(|_| sync_git(dir, &["remote", "get-url", "origin"]).map(|_| "origin".to_string()))
+    {
+        Ok(r) => r,
+        Err(error) => {
+            return Ok(RepoSyncOutcome::Blocked {
+                reason: format!("No usable upstream: {error:#}"),
+                fetched: false,
+            })
+        }
+    };
+    let remote_refs_before = sync_git(
+        dir,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            &format!("refs/remotes/{remote}"),
+        ],
+    )?;
+    if !refresh_all
+        && remote_refs_before.is_empty()
+        && !pushed_at.is_empty()
+        && !updated_at.is_empty()
+        && cached.is_some_and(|rec| {
+            rec.head_sha == UNBORN_HEAD_SHA
+                && rec.pushed_at == pushed_at
+                && rec.updated_at == updated_at
+        })
+    {
+        return Ok(RepoSyncOutcome::Skipped);
+    }
+
+    sync_git(dir, &["fetch", "--prune", "--quiet", "--", &remote])?;
+
+    let branch_after = match verify_clean_attached_worktree(dir) {
+        Ok(b) => b,
+        Err(error) => {
+            return Ok(RepoSyncOutcome::Blocked {
+                reason: format!("{error:#}"),
+                fetched: true,
+            })
+        }
+    };
+    if branch_after != branch
+        || sync_git(dir, &["rev-parse", "--verify", "HEAD"]).is_ok()
+    {
+        return Ok(RepoSyncOutcome::Blocked {
+            reason: "HEAD changed during fetch".into(),
+            fetched: true,
+        });
+    }
+
+    let remote_refs_after = sync_git(
+        dir,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            &format!("refs/remotes/{remote}"),
+        ],
+    )?;
+    if remote_refs_after.is_empty() {
+        return Ok(RepoSyncOutcome::UpToDate(UNBORN_HEAD_SHA.to_string()));
+    }
+
+    let target = match sync_git(dir, &["rev-parse", "--verify", "@{upstream}"]).or_else(|_| {
+        sync_git(
+            dir,
+            &[
+                "rev-parse",
+                "--verify",
+                &format!("refs/remotes/{remote}/{branch}"),
+            ],
+        )
+    }) {
+        Ok(t) => t,
+        Err(error) => {
+            return Ok(RepoSyncOutcome::Blocked {
+                reason: format!("No usable upstream after fetch: {error:#}"),
+                fetched: true,
+            })
+        }
+    };
+
+    sync_git(
+        dir,
+        &[
+            "-c",
+            "merge.autostash=false",
+            "merge",
+            "--ff-only",
+            "--quiet",
+            &target,
+        ],
+    )?;
+    if sync_git(dir, &["rev-parse", "--verify", "@{upstream}"]).is_err() {
+        let _ = sync_git(
+            dir,
+            &[
+                "branch",
+                &format!("--set-upstream-to={remote}/{branch}"),
+                branch,
+            ],
+        );
+    }
+    let (after, upstream) = sync_ready_branch(dir)?;
+    anyhow::ensure!(
+        after == target && after == upstream,
+        "Branch changed during reconciliation"
+    );
+    Ok(RepoSyncOutcome::Updated(after))
+}
+
 fn sync_repository(
     dir: &std::path::Path,
     clone_url: &str,
@@ -2812,9 +2940,12 @@ fn sync_repository(
             "Clone failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
-        // Empty remotes may clone successfully but have no branch to reconcile.
+        // Empty remotes clone as clean unborn repositories with no remote refs.
         return Ok(match sync_ready_branch(dir) {
             Ok((head, upstream)) if head == upstream => RepoSyncOutcome::Cloned(head),
+            Err(_) if is_empty_unborn_repo(dir) && verify_clean_attached_worktree(dir).is_ok() => {
+                RepoSyncOutcome::Cloned(UNBORN_HEAD_SHA.to_string())
+            }
             result => RepoSyncOutcome::Blocked {
                 reason: format!("Clone has no reconciled branch: {result:?}"),
                 fetched: false,
@@ -2824,10 +2955,22 @@ fn sync_repository(
     let (head, upstream) = match sync_ready_branch(dir) {
         Ok(state) => state,
         Err(error) => {
+            if sync_git(dir, &["rev-parse", "--verify", "HEAD"]).is_err() {
+                if let Ok(branch) = verify_clean_attached_worktree(dir) {
+                    return sync_unborn_repository(
+                        dir,
+                        &branch,
+                        cached,
+                        pushed_at,
+                        updated_at,
+                        refresh_all,
+                    );
+                }
+            }
             return Ok(RepoSyncOutcome::Blocked {
                 reason: format!("{error:#}"),
                 fetched: false,
-            })
+            });
         }
     };
     // Timestamps are only an optimization, not evidence of remote equality.
@@ -3179,22 +3322,84 @@ mod sync_tests {
             RepoSyncOutcome::Blocked { fetched: false, .. }
         ));
         let empty = f._temp.path().join("empty.git");
+        let empty_clone = f._temp.path().join("empty-clone");
         git(
             f._temp.path(),
             &["init", "--bare", "-b", "main", empty.to_str().unwrap()],
         );
-        assert!(matches!(
+        assert_eq!(
+            sync_repository(&empty_clone, empty.to_str().unwrap(), None, "p", "u", false).unwrap(),
+            RepoSyncOutcome::Cloned(UNBORN_HEAD_SHA.to_string())
+        );
+        let unborn_record = RepoSyncRecord {
+            pushed_at: "p".into(),
+            updated_at: "u".into(),
+            head_sha: UNBORN_HEAD_SHA.into(),
+            last_synced_at: "receipt".into(),
+        };
+        assert_eq!(
             sync_repository(
-                &f._temp.path().join("empty-clone"),
+                &empty_clone,
                 empty.to_str().unwrap(),
-                None,
+                Some(&unborn_record),
                 "p",
                 "u",
                 false
             )
             .unwrap(),
-            RepoSyncOutcome::Blocked { .. }
+            RepoSyncOutcome::Skipped
+        );
+        assert_eq!(
+            sync_repository(
+                &empty_clone,
+                empty.to_str().unwrap(),
+                Some(&unborn_record),
+                "p",
+                "u",
+                true
+            )
+            .unwrap(),
+            RepoSyncOutcome::UpToDate(UNBORN_HEAD_SHA.to_string())
+        );
+
+        // Dirty unborn worktree is still protected and blocked.
+        std::fs::write(empty_clone.join("draft.txt"), "local draft").unwrap();
+        assert!(matches!(
+            sync_repository(
+                &empty_clone,
+                empty.to_str().unwrap(),
+                Some(&unborn_record),
+                "p",
+                "u",
+                false
+            )
+            .unwrap(),
+            RepoSyncOutcome::Blocked { fetched: false, .. }
         ));
+        std::fs::remove_file(empty_clone.join("draft.txt")).unwrap();
+
+        // Once the previously empty remote gets its first commit, syncing advances the unborn clone.
+        let empty_pub = f._temp.path().join("empty-pub");
+        git(
+            f._temp.path(),
+            &["clone", empty.to_str().unwrap(), empty_pub.to_str().unwrap()],
+        );
+        Fixture::commit(&empty_pub, "initial");
+        git(&empty_pub, &["push", "-u", "origin", "main"]);
+        let first_sha = git(&empty_pub, &["rev-parse", "HEAD"]);
+        assert_eq!(
+            sync_repository(
+                &empty_clone,
+                empty.to_str().unwrap(),
+                Some(&unborn_record),
+                "p2",
+                "u2",
+                false
+            )
+            .unwrap(),
+            RepoSyncOutcome::Updated(first_sha.clone())
+        );
+        assert_eq!(git(&empty_clone, &["rev-parse", "HEAD"]), first_sha);
     }
 
     #[tokio::test]
@@ -3511,4 +3716,369 @@ mod sync_tests {
             "base"
         );
     }
+}
+
+/// Handle `st memnet <action>` CLI commands for local folder/drive sharing,
+/// multi-medium routing (ESP32, WiFi, BLE, LoRa, Ethernet, Ultrasonic Chirp),
+/// MEM|8 wave packet Q&A LLM offload, media chunking, and acoustic chirp modem.
+pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
+    use crate::memnet::{
+        chunk_media_stream, reassemble_media_chunks, AcousticModemConfig, MediaKind, MemnetMedium,
+        MemnetNodeState, MemnetPayload, MemnetRouteEntry, SharedFolderManifest,
+        UltrasonicChirpModem, MEMNET_CHUNK_BYTES, MEMNET_FS_PORT,
+    };
+
+    let mut state = MemnetNodeState::load_or_default();
+    let action = cmd.action.trim().to_ascii_lowercase();
+
+    match action.as_str() {
+        "share" => {
+            let folder = cmd.target.as_deref().unwrap_or(".");
+            let endpoint = format!("0.0.0.0:{MEMNET_FS_PORT}");
+            let manifest = SharedFolderManifest::from_directory(
+                std::path::Path::new(folder),
+                cmd.extra.as_deref(),
+                state.local_address,
+                &state.node_name,
+                &endpoint,
+                cmd.quota_mb,
+            )?;
+            let pkt = MemnetPayload::FolderShareAnnounce(manifest.clone())
+                .into_raw_packet(vec![0xF2])?; // 2-level local cascade broadcast
+            let udp_sent = state.broadcast_lan_udp(&pkt);
+            state
+                .shared_folders
+                .insert(manifest.share_name.clone(), manifest.clone());
+            let state_path = state.save()?;
+
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&manifest)?);
+            } else {
+                println!(
+                    "📡 MemNet Shared Folder Active: '{}' ({})",
+                    manifest.share_name, manifest.host_path
+                );
+                println!(
+                    "   Share ID:          {} (owner node: {} '{}')",
+                    manifest.share_id, manifest.owner_node, manifest.owner_name
+                );
+                println!(
+                    "   Files / Size:      {} files ({} bytes)",
+                    manifest.total_files, manifest.total_bytes
+                );
+                println!(
+                    "   Drive Space Pool:  {} MB offered to local MemNet mesh",
+                    manifest.offered_drive_space_mb
+                );
+                println!(
+                    "   Semantic Essence:  {} ({:.2} Hz)",
+                    manifest.semantic_essence,
+                    (manifest.consciousness_freq_hz as f64) / 100.0
+                );
+                println!(
+                    "   Litany Wire Seal:  0x{:04X} (SPQT {:?})",
+                    manifest.litany_wire.wire_seal16, manifest.litany_wire.spqt_root
+                );
+                println!(
+                    "   LAN Broadcast:     {} UDP beacon(s) sent | state saved to {}",
+                    udp_sent,
+                    state_path.display()
+                );
+            }
+        }
+        "ls" | "shares" | "list" => {
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&state.shared_folders)?);
+            } else if state.shared_folders.is_empty() {
+                println!("📂 No MemNet shared folders registered yet. Run `st memnet share <dir>` to share one.");
+            } else {
+                println!(
+                    "📂 MemNet Shared Folders ({} active on node {} '{}'):",
+                    state.shared_folders.len(),
+                    state.local_address,
+                    state.node_name
+                );
+                for m in state.shared_folders.values() {
+                    println!(
+                        "   • {} [{}] -> {} ({} files, {} B, +{} MB shared drive space, seal 0x{:04X})",
+                        m.share_name,
+                        m.share_id,
+                        m.host_path,
+                        m.total_files,
+                        m.total_bytes,
+                        m.offered_drive_space_mb,
+                        m.litany_wire.wire_seal16
+                    );
+                }
+            }
+        }
+        "routes" => {
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&state.routes)?);
+            } else {
+                println!(
+                    "🧭 MemNet Multi-Medium Route Table (Node {} '{}', Tier {:?}):",
+                    state.local_address, state.node_name, state.tier
+                );
+                println!(
+                    "   {:<10} {:<28} {:<18} {:<9} {:<8} {:<8} {:<8}",
+                    "ADDR/VIA", "NODE", "MEDIUM", "CREDITS", "RTT", "SCORE", "STATUS"
+                );
+                for r in &state.routes {
+                    println!(
+                        "   {:<10} {:<28} {:<18} {:>2}/{:<6} {:>4}ms   {:>5}    {:?}",
+                        r.address_via_label(),
+                        r.node_name,
+                        r.medium.to_string(),
+                        r.heartbeat_credits,
+                        r.max_credits,
+                        r.latency_ms,
+                        r.marine_quality_score(),
+                        r.status
+                    );
+                }
+            }
+        }
+        "add-route" => {
+            let name = cmd.target.as_deref().unwrap_or("peer-aye-node");
+            let endpoint = cmd
+                .extra
+                .as_deref()
+                .unwrap_or("255.255.255.255:8423");
+            let medium = MemnetMedium::parse_str(&cmd.medium);
+            let mut entry =
+                MemnetRouteEntry::new(cmd.addr, cmd.via, name, medium, endpoint, 8);
+            entry.shared_free_mb = cmd.quota_mb;
+            state
+                .routes
+                .retain(|r| !(r.address == cmd.addr && r.via == cmd.via));
+            state.routes.push(entry.clone());
+            state.save()?;
+            println!(
+                "✅ Added MemNet route {} ({}) via {} -> {} (+{} MB drive pool)",
+                entry.address_via_label(),
+                entry.node_name,
+                entry.medium,
+                entry.endpoint,
+                entry.shared_free_mb
+            );
+        }
+        "teach" | "learn" => {
+            let question = cmd
+                .target
+                .as_deref()
+                .context("Usage: st memnet teach \"<question>\" \"<answer>\"")?;
+            let answer = cmd
+                .extra
+                .as_deref()
+                .context("Usage: st memnet teach \"<question>\" \"<answer>\"")?;
+            let pkt = state.learn_wave_qa(question, answer);
+            let raw = MemnetPayload::WaveQaResponse(pkt.clone()).into_raw_packet(vec![0xF1])?;
+            let _ = state.broadcast_lan_udp(&raw);
+            state.save()?;
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&pkt)?);
+            } else {
+                println!(
+                    "🌊 Stored & broadcast MEM|8 Wave Q&A Packet [{}] (wave_b3={}, wire_seal=0x{:04X})",
+                    pkt.packet_id, pkt.wave_b3, pkt.litany_wire.wire_seal16
+                );
+            }
+        }
+        "ask" | "query" => {
+            let question = cmd
+                .target
+                .as_deref()
+                .context("Usage: st memnet ask \"<question>\"")?;
+            let hit = state.query_wave_qa(question, 300);
+            state.save()?;
+            match hit {
+                Some((score_pm, pkt)) => {
+                    if cmd.json {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "llm_offloaded": true,
+                                "resonance_permille": score_pm,
+                                "packet": pkt,
+                            }))?
+                        );
+                    } else {
+                        println!(
+                            "⚡ MEM|8 Wave Q&A Hit ({}.{}% resonance from '{}' [node {}] — LLM offloaded!):",
+                            score_pm / 10,
+                            score_pm % 10,
+                            pkt.origin_name,
+                            pkt.origin_node
+                        );
+                        println!("   Q: {}", pkt.question);
+                        println!("   A: {}", pkt.answer);
+                        println!(
+                            "   Wave: b3={} | 79B WaveFrame id={:?} | 64B Litany seal=0x{:04X}",
+                            pkt.wave_b3,
+                            pkt.wave_frame.id,
+                            pkt.litany_wire.wire_seal16
+                        );
+                    }
+                }
+                None => {
+                    println!(
+                        "🔍 No cached MEM|8 Wave Q&A match above threshold for: {:?} (use `st memnet teach <q> <a>` to seed local area knowledge)",
+                        question
+                    );
+                }
+            }
+        }
+        "stream-chunk" => {
+            let target = cmd
+                .target
+                .as_deref()
+                .context("Usage: st memnet stream-chunk <file_path>")?;
+            let bytes = std::fs::read(target)
+                .with_context(|| format!("Failed to read media/file {}", target))?;
+            let ext = std::path::Path::new(target)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let kind = match ext.as_str() {
+                "opus" | "ogg" => MediaKind::AudioOpus,
+                "flac" => MediaKind::AudioFlac,
+                "wav" | "pcm" => MediaKind::AudioPcm16,
+                "av1" | "ivf" => MediaKind::VideoAv1,
+                "mp4" | "h264" | "mkv" => MediaKind::VideoH264,
+                _ => MediaKind::SharedFileChunk,
+            };
+            let chunks = chunk_media_stream(
+                target,
+                kind,
+                &bytes,
+                MEMNET_CHUNK_BYTES,
+                48_000,
+                175,
+                95,
+            );
+            let verified = reassemble_media_chunks(&chunks)?;
+            println!(
+                "🎬 MemNet Media Streamer: split '{}' ({} bytes, {:?}) into {} CRC32-sealed chunk(s) (reassembly verified: {} bytes)",
+                target,
+                bytes.len(),
+                kind,
+                chunks.len(),
+                verified.len()
+            );
+        }
+        "chirp-encode" => {
+            let input = cmd
+                .target
+                .as_deref()
+                .unwrap_or("MEMNET-CHIRP:hello-from-smart-tree");
+            let payload_bytes = if std::path::Path::new(input).is_file() {
+                std::fs::read(input)?
+            } else {
+                input.as_bytes().to_vec()
+            };
+            let out_path = cmd
+                .out
+                .clone()
+                .or_else(|| cmd.extra.as_ref().map(PathBuf::from))
+                .unwrap_or_else(|| PathBuf::from("memnet_chirp.wav"));
+            let cfg = if cmd.audible {
+                AcousticModemConfig::audible_chirp_48khz()
+            } else {
+                AcousticModemConfig::ultrasonic_48khz()
+            };
+            let modem = UltrasonicChirpModem::new(cfg);
+            let pcm = modem.encode_frame_to_pcm16(&payload_bytes);
+            modem.write_wav_file(&out_path, &pcm)?;
+            let duration_ms = (pcm.len() as u64 * 1000) / (cfg.sample_rate_hz as u64);
+            println!(
+                "🔊 Ultrasonic Chirp Encoded: {} bytes -> {} ({} PCM samples, {} ms @ {} Hz, tones {}/{}/{} Hz)",
+                payload_bytes.len(),
+                out_path.display(),
+                pcm.len(),
+                duration_ms,
+                cfg.sample_rate_hz,
+                cfg.freq_neg_hz,
+                cfg.freq_zero_hz,
+                cfg.freq_pos_hz
+            );
+        }
+        "chirp-decode" => {
+            let wav_path_str = cmd
+                .target
+                .as_deref()
+                .or_else(|| cmd.out.as_ref().and_then(|p| p.to_str()))
+                .context("Usage: st memnet chirp-decode <wav_file>")?;
+            let wav_path = std::path::Path::new(wav_path_str);
+            let (_sr, pcm) = UltrasonicChirpModem::read_wav_file(wav_path)?;
+            let cfg = if cmd.audible {
+                AcousticModemConfig::audible_chirp_48khz()
+            } else {
+                AcousticModemConfig::ultrasonic_48khz()
+            };
+            let modem = UltrasonicChirpModem::new(cfg);
+            let decoded = modem.decode_pcm16_to_frame(&pcm)?;
+            match String::from_utf8(decoded.clone()) {
+                Ok(text) => {
+                    println!(
+                        "🎤 Ultrasonic Chirp Decoded ({} bytes, CRC32 verified): {}",
+                        decoded.len(),
+                        text
+                    );
+                }
+                Err(_) => {
+                    println!(
+                        "🎤 Ultrasonic Chirp Decoded binary frame ({} bytes, CRC32 verified)",
+                        decoded.len()
+                    );
+                }
+            }
+        }
+        _ => {
+            let selected = state.select_routes(0xC5);
+            let total_drive_mb: u64 = state
+                .shared_folders
+                .values()
+                .map(|s| s.offered_drive_space_mb)
+                .sum::<u64>()
+                + state.routes.iter().map(|r| r.shared_free_mb).sum::<u64>();
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&state)?);
+            } else {
+                println!(
+                    "🌐 Smart Tree Sovereign MemNet Node: '{}' (Address: {}, Tier: {:?})",
+                    state.node_name, state.local_address, state.tier
+                );
+                println!("   Active Routes:         {} (Multi-route 0xC5 active paths: {})", state.routes.len(), selected.len());
+                for r in &selected {
+                    println!(
+                        "     ↳ Primary/Failover:  {} [{}] via {} (RTT {}ms, Marine score {})",
+                        r.address_via_label(),
+                        r.node_name,
+                        r.medium,
+                        r.latency_ms,
+                        r.marine_quality_score()
+                    );
+                }
+                println!(
+                    "   Shared Folders:        {} (Pooled Drive Space: {} MB)",
+                    state.shared_folders.len(),
+                    total_drive_mb
+                );
+                println!(
+                    "   MEM|8 Wave Q&A Cache:  {} packet(s) ready for local LLM offload",
+                    state.wave_qa_cache.len()
+                );
+                println!(
+                    "   Ultrasonic Modem:      48 kHz ternary SPQT (18.5 / 19.75 / 21.0 kHz + audible 1.85–3.15 kHz fallback)"
+                );
+                println!(
+                    "   State File:            {}",
+                    MemnetNodeState::default_state_path().display()
+                );
+            }
+        }
+    }
+    Ok(())
 }
