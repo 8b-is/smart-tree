@@ -11,7 +11,6 @@
 #![allow(dead_code)] // CLI handlers are used via pattern matching
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
-use clap_complete::generate;
 
 // Import CLI definitions and handlers from the library
 use st::cli::{Cli, ColorMode, OutputMode, PathMode};
@@ -37,6 +36,27 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
+
+    // Fast-path dynamic completion callback for shells (< 2ms, zero logging/daemon overhead)
+    if let Some(args) = &cli.complete_dynamic {
+        return st::completions::handle_dynamic_completion(args);
+    }
+
+    // Fast-path completion script generation
+    if let Some(shell) = cli.completions {
+        st::completions::print_completions(shell);
+        return Ok(());
+    }
+
+    if let Some(st::cli::Cmd::Completions(comp_cmd)) = &cli.cmd {
+        return st::completions::handle_completions_command(comp_cmd);
+    }
+
+    // Self-maintaining autocomplete: ensure Fish/Bash/Zsh completion scripts and folder/memory cache
+    // are installed and up to date automatically without user intervention.
+    if !cli.mcp && cli.agy_hook.is_none() {
+        st::completions::ensure_user_completions_fresh();
+    }
 
     // Code intelligence is entirely local and in-process. It needs neither a
     // running daemon nor startup network checks, and stdout stays valid JSON.
@@ -285,9 +305,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     if let Some(shell) = cli.completions {
-        let mut cmd = Cli::command();
-        let bin_name = cmd.get_name().to_string();
-        generate(shell, &mut cmd, bin_name, &mut io::stdout());
+        st::completions::print_completions(shell);
         return Ok(());
     }
     if cli.man {
@@ -337,8 +355,13 @@ async fn main() -> Result<()> {
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
-            st::cli::Cmd::Symbol(_) | st::cli::Cmd::G8t(_) | st::cli::Cmd::Memnet(_) => {
-                unreachable!("symbol, g8t, and memnet commands return before daemon startup")
+            st::cli::Cmd::Symbol(_)
+            | st::cli::Cmd::G8t(_)
+            | st::cli::Cmd::Memnet(_)
+            | st::cli::Cmd::Completions(_) => {
+                unreachable!(
+                    "symbol, g8t, memnet, and completions commands return before daemon startup"
+                )
             }
             st::cli::Cmd::Sync(sync_cmd) => {
                 return handle_sync_user(&sync_cmd).await;

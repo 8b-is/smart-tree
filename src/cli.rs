@@ -38,6 +38,15 @@ pub struct Cli {
     )]
     pub completions: Option<clap_complete::Shell>,
 
+    /// Internal fast-path dynamic completion provider for shells (folders, memories, memnet-ask, sync-users, symbols)
+    #[arg(
+        long,
+        num_args = 1..=2,
+        value_names = ["KIND", "PREFIX"],
+        hide = true
+    )]
+    pub complete_dynamic: Option<Vec<String>>,
+
     /// Generate the man page
     #[arg(long, exclusive = true, help_heading = "Getting Started")]
     pub man: bool,
@@ -733,6 +742,19 @@ pub enum Cmd {
     /// MEM|8 wave packet Q&A LLM offload, audio/video chunk streaming, and Ultrasonic Chirp acoustic modem
     #[command(alias = "mesh", alias = "chirp")]
     Memnet(MemnetCommand),
+
+    /// Self-maintaining shell autocomplete (Fish, Zsh, Bash) with live folder consciousness & MEM|8 memory descriptions
+    #[command(alias = "autocomplete", alias = "complete")]
+    Completions(CompletionsCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct CompletionsCommand {
+    /// Action: status, sync (or install/maintain), fish, zsh, bash, powershell, folders, memories
+    #[arg(default_value = "status")]
+    pub action: String,
+    /// Optional prefix filter when testing dynamic folder/memory completions
+    pub prefix: Option<String>,
 }
 
 #[derive(Debug, Clone, clap::Args)]
@@ -865,10 +887,15 @@ pub struct SymbolCommand {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum SymbolOperation {
+    /// Build or refresh the CrabCC AST symbol index for the repository
     Index,
+    /// Find symbol definitions (functions, structs, enums, traits)
     Sym,
+    /// Find all call-sites and references to a symbol
     Refs,
+    /// Show the structural AST outline of a source file
     Outline,
+    /// Summarize the repository symbol dependency graph
     Graph,
 }
 
@@ -974,11 +1001,13 @@ pub enum SortField {
     /// Sort by file type/extension
     #[value(name = "type")]
     Type,
-    /// Legacy aliases for backward compatibility
+    /// Legacy alias: sort alphabetically by name
     #[value(name = "name", alias = "alpha")]
     Name,
+    /// Legacy alias: sort by file size
     #[value(name = "size")]
     Size,
+    /// Legacy alias: sort by modification date
     #[value(name = "date", alias = "modified")]
     Date,
 }
@@ -1046,7 +1075,7 @@ pub enum OutputMode {
     /// LOUDS bit-packed sufficient tree & 64B SMTR .m8 capsule (8B-META-WP-v2.1)
     #[value(alias = "smtr-capsule", alias = "smtr_capsule", alias = "capsule")]
     Louds,
-    /// Paul Erdős ("Straight from The Book") Szemerédi Regularity, Steiner Pruner, Moser-Tardos LLL & Erdős-Rényi Scanner
+    /// Paul Erdős (Straight from The Book) Szemerédi Regularity, Steiner Pruner, Moser-Tardos LLL & Erdős-Rényi Scanner
     #[value(
         name = "the-book",
         alias = "erdos",
@@ -1152,9 +1181,14 @@ pub fn parse_date(date_str: &str) -> Result<SystemTime> {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum LogLevel {
+    /// Only log critical errors
     Error,
+    /// Log warnings and errors
     Warn,
+    /// Standard operational messages (default)
     Info,
+    /// Verbose debugging diagnostics
     Debug,
+    /// Ultra-detailed execution trace
     Trace,
 }

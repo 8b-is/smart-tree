@@ -928,6 +928,9 @@ pub async fn handle_memory_anchor(
     let origin = std::env::current_dir()?.to_string_lossy().to_string();
 
     manager.anchor(anchor_type, keywords, context, &origin)?;
+    if let Some(home) = dirs::home_dir() {
+        let _ = crate::completions::refresh_completion_cache_for_home(&home);
+    }
 
     println!("\n✨ Memory anchored successfully!");
     println!("Use 'st --memory-find {}' to recall", keywords_str);
@@ -2801,8 +2804,11 @@ fn sync_unborn_repository(
     updated_at: &str,
     refresh_all: bool,
 ) -> Result<RepoSyncOutcome> {
-    let remote = match sync_git(dir, &["config", "--get", &format!("branch.{branch}.remote")])
-        .or_else(|_| sync_git(dir, &["remote", "get-url", "origin"]).map(|_| "origin".to_string()))
+    let remote = match sync_git(
+        dir,
+        &["config", "--get", &format!("branch.{branch}.remote")],
+    )
+    .or_else(|_| sync_git(dir, &["remote", "get-url", "origin"]).map(|_| "origin".to_string()))
     {
         Ok(r) => r,
         Err(error) => {
@@ -2844,9 +2850,7 @@ fn sync_unborn_repository(
             })
         }
     };
-    if branch_after != branch
-        || sync_git(dir, &["rev-parse", "--verify", "HEAD"]).is_ok()
-    {
+    if branch_after != branch || sync_git(dir, &["rev-parse", "--verify", "HEAD"]).is_ok() {
         return Ok(RepoSyncOutcome::Blocked {
             reason: "HEAD changed during fetch".into(),
             fetched: true,
@@ -3382,7 +3386,11 @@ mod sync_tests {
         let empty_pub = f._temp.path().join("empty-pub");
         git(
             f._temp.path(),
-            &["clone", empty.to_str().unwrap(), empty_pub.to_str().unwrap()],
+            &[
+                "clone",
+                empty.to_str().unwrap(),
+                empty_pub.to_str().unwrap(),
+            ],
         );
         Fixture::commit(&empty_pub, "initial");
         git(&empty_pub, &["push", "-u", "origin", "main"]);
@@ -3743,8 +3751,8 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                 &endpoint,
                 cmd.quota_mb,
             )?;
-            let pkt = MemnetPayload::FolderShareAnnounce(manifest.clone())
-                .into_raw_packet(vec![0xF2])?; // 2-level local cascade broadcast
+            let pkt =
+                MemnetPayload::FolderShareAnnounce(manifest.clone()).into_raw_packet(vec![0xF2])?; // 2-level local cascade broadcast
             let udp_sent = state.broadcast_lan_udp(&pkt);
             state
                 .shared_folders
@@ -3825,7 +3833,15 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                 );
                 println!(
                     "   {:<10} {:<28} {:<18} {:<9} {:<8} {:<9} {:<9} {:<7} {:<8}",
-                    "ADDR/VIA", "NODE", "MEDIUM", "CREDITS", "RTT", "RTC(τ)", "5τ-LOCK", "SCORE", "STATUS"
+                    "ADDR/VIA",
+                    "NODE",
+                    "MEDIUM",
+                    "CREDITS",
+                    "RTT",
+                    "RTC(τ)",
+                    "5τ-LOCK",
+                    "SCORE",
+                    "STATUS"
                 );
                 for r in &state.routes {
                     println!(
@@ -3964,13 +3980,9 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
         }
         "add-route" => {
             let name = cmd.target.as_deref().unwrap_or("peer-aye-node");
-            let endpoint = cmd
-                .extra
-                .as_deref()
-                .unwrap_or("255.255.255.255:8423");
+            let endpoint = cmd.extra.as_deref().unwrap_or("255.255.255.255:8423");
             let medium = MemnetMedium::parse_str(&cmd.medium);
-            let mut entry =
-                MemnetRouteEntry::new(cmd.addr, cmd.via, name, medium, endpoint, 8);
+            let mut entry = MemnetRouteEntry::new(cmd.addr, cmd.via, name, medium, endpoint, 8);
             entry.shared_free_mb = cmd.quota_mb;
             state
                 .routes
@@ -4038,9 +4050,7 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                         println!("   A: {}", pkt.answer);
                         println!(
                             "   Wave: b3={} | 79B WaveFrame id={:?} | 64B Litany seal=0x{:04X}",
-                            pkt.wave_b3,
-                            pkt.wave_frame.id,
-                            pkt.litany_wire.wire_seal16
+                            pkt.wave_b3, pkt.wave_frame.id, pkt.litany_wire.wire_seal16
                         );
                     }
                 }
@@ -4072,15 +4082,8 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                 "mp4" | "h264" | "mkv" => MediaKind::VideoH264,
                 _ => MediaKind::SharedFileChunk,
             };
-            let chunks = chunk_media_stream(
-                target,
-                kind,
-                &bytes,
-                MEMNET_CHUNK_BYTES,
-                48_000,
-                175,
-                95,
-            );
+            let chunks =
+                chunk_media_stream(target, kind, &bytes, MEMNET_CHUNK_BYTES, 48_000, 175, 95);
             let verified = reassemble_media_chunks(&chunks)?;
             println!(
                 "🎬 MemNet Media Streamer: split '{}' ({} bytes, {:?}) into {} CRC32-sealed chunk(s) (reassembly verified: {} bytes)",

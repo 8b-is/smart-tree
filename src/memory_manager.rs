@@ -75,6 +75,11 @@ impl MemoryManager {
         Ok(Self { bank_path, bank })
     }
 
+    /// Return all anchored memories in the bank
+    pub fn memories(&self) -> &[Memory] {
+        &self.bank.memories
+    }
+
     /// Anchor a new memory
     pub fn anchor(
         &mut self,
@@ -339,7 +344,7 @@ impl MemoryManager {
         Some((keywords, summary))
     }
 
-    fn synthesize_directory_memory(dir: &Path) -> Option<(Vec<String>, String)> {
+    pub fn synthesize_directory_memory(dir: &Path) -> Option<(Vec<String>, String)> {
         let dir_name = dir
             .file_name()
             .and_then(|n| n.to_str())

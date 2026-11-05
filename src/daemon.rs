@@ -507,6 +507,12 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             // remains available while changed metadata is checked off-thread.
             let reconcile = ticks.is_multiple_of(300);
             let checkpoint = ticks.is_multiple_of(30);
+            if reconcile {
+                let _ = tokio::task::spawn_blocking(|| {
+                    let _ = crate::completions::maintain_service_completions(false);
+                })
+                .await;
+            }
             if let Err(error) = update_directory_memory(&maintenance_state, move |memory| {
                 memory.maintain(reconcile, checkpoint)
             })
