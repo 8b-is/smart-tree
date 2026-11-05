@@ -327,30 +327,61 @@ fn extract_salient_repo(
         }
     }
 
-    // 2. Scan code files at repo root and common source subdirectories
+    // 2. Scan code, markdown, and structured files at repo root and nested subdirectories (up to 3 levels)
     let mut candidate_dirs = vec![repo_path.to_path_buf()];
     for sub in [
-        "src", "lib", "code", "bin", "tests", "crates", "csrc", "python", "pkg", "cmd", "include",
+        "src",
+        "investigations",
+        "seeds",
+        "docs",
+        "analysis_outputs",
+        "lib",
+        "code",
+        "bin",
+        "crates",
+        "python",
+        "pkg",
+        "cmd",
+        "include",
+        "tests",
+        "csrc",
+        "data",
     ] {
         let sub_path = repo_path.join(sub);
         if sub_path.is_dir() {
-            candidate_dirs.push(sub_path);
+            collect_salient_subdirs(&sub_path, 0, 3, &mut candidate_dirs);
         }
     }
 
     let mut files_visited = 0usize;
+    let file_visit_cap = depth.saturating_mul(25).max(150);
+    let per_dir_cap = 50usize;
     'outer: for dir in candidate_dirs {
         let Ok(rd) = fs::read_dir(&dir) else {
             continue;
         };
-        for f in rd.flatten() {
-            if files_visited >= depth {
+        let mut entries: Vec<_> = rd.flatten().collect();
+        entries.sort_by_key(|e| e.file_name());
+        let mut dir_visited = 0usize;
+        for f in entries {
+            if files_visited >= file_visit_cap {
                 break 'outer;
+            }
+            if dir_visited >= per_dir_cap {
+                break;
             }
             let fpath = f.path();
             if !fpath.is_file() {
                 continue;
             }
+            dir_visited += 1;
+            let fname = f.file_name().to_string_lossy().to_string();
+            let rel_path = fpath
+                .strip_prefix(repo_path)
+                .unwrap_or(&fpath)
+                .to_string_lossy()
+                .to_string();
+
             if let Some(ext) = fpath.extension().and_then(|e| e.to_str()) {
                 if matches!(
                     ext,
@@ -382,6 +413,65 @@ fn extract_salient_repo(
                         if repo.code_samples.len() < max_samples {
                             repo.code_samples.push(content.chars().take(160).collect());
                         }
+                    }
+                } else if matches!(ext, "md" | "rst" | "txt")
+                    && !fname.eq_ignore_ascii_case("readme.md")
+                {
+                    files_visited += 1;
+                    if let Ok(md_text) = fs::read_to_string(&fpath) {
+                        let first_heading = md_text
+                            .lines()
+                            .map(str::trim)
+                            .find(|l| !l.is_empty())
+                            .unwrap_or(&fname);
+                        let summary_line: String = first_heading.chars().take(140).collect();
+                        repo.thoughts.push(SalientThought {
+                            source: format!("doc:{}", rel_path),
+                            text: format!("{} — {}", rel_path, summary_line),
+                            provenance: format!(
+                                "https://github.com/{}/{}/blob/HEAD/{}",
+                                github_user, repo_name, rel_path
+                            ),
+                        });
+                    }
+                } else if matches!(ext, "json" | "csv" | "toml") {
+                    // Index notable dataset / seed / profile filenames & compact headers
+                    let meta_len = f.metadata().map(|m| m.len()).unwrap_or(0);
+                    if meta_len > 0 && meta_len <= 512 * 1024 {
+                        files_visited += 1;
+                        if let Ok(text) = fs::read_to_string(&fpath) {
+                            let preview: String = text
+                                .lines()
+                                .take(3)
+                                .map(str::trim)
+                                .filter(|l| !l.is_empty())
+                                .collect::<Vec<_>>()
+                                .join(" | ")
+                                .chars()
+                                .take(140)
+                                .collect();
+                            repo.thoughts.push(SalientThought {
+                                source: format!("data:{}", rel_path),
+                                text: format!("{} — {}", rel_path, preview),
+                                provenance: format!(
+                                    "https://github.com/{}/{}/blob/HEAD/{}",
+                                    github_user, repo_name, rel_path
+                                ),
+                            });
+                        }
+                    } else if meta_len > 512 * 1024 {
+                        repo.thoughts.push(SalientThought {
+                            source: format!("dataset:{}", rel_path),
+                            text: format!(
+                                "{} ({} KiB structured dataset)",
+                                rel_path,
+                                meta_len / 1024
+                            ),
+                            provenance: format!(
+                                "https://github.com/{}/{}/blob/HEAD/{}",
+                                github_user, repo_name, rel_path
+                            ),
+                        });
                     }
                 }
             }
@@ -1269,6 +1359,255 @@ impl SalienceLevel {
     pub fn should_compress(&self) -> bool {
         !matches!(self, Self::Bullshitter)
     }
+}
+
+fn collect_salient_subdirs(
+    dir: &Path,
+    current_depth: usize,
+    max_depth: usize,
+    out: &mut Vec<PathBuf>,
+) {
+    out.push(dir.to_path_buf());
+    if current_depth >= max_depth {
+        return;
+    }
+    let Ok(rd) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut subdirs: Vec<PathBuf> = rd
+        .flatten()
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .map(|e| e.path())
+        .collect();
+    subdirs.sort();
+    for sub in subdirs.into_iter().take(16) {
+        let name = sub
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if name.starts_with('.')
+            || matches!(
+                name,
+                "target" | "node_modules" | "__pycache__" | "venv" | ".venv" | "dist" | "build"
+            )
+        {
+            continue;
+        }
+        collect_salient_subdirs(&sub, current_depth + 1, max_depth, out);
+    }
+}
+
+/// Summary statistics across all native Salient `.m8` stores on the system.
+#[derive(Debug, Default, Clone)]
+pub struct SalientGlobalStats {
+    pub store_paths: Vec<(PathBuf, u64, usize, usize)>, // (path, bytes, repos, thoughts)
+    pub total_stores: usize,
+    pub total_bytes: u64,
+    pub total_repos: usize,
+    pub total_thoughts: usize,
+    pub total_code_samples: usize,
+}
+
+fn discover_salient_m8_files() -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut candidate_dirs = vec![
+        PathBuf::from("/data/.mem8/salient"),
+        PathBuf::from("/data/.mem8/nexus"),
+    ];
+    if let Some(home) = dirs::home_dir() {
+        candidate_dirs.push(home.join(".mem8").join("salient"));
+        candidate_dirs.push(home.join(".mem8").join("nexus"));
+    }
+    for dir in candidate_dirs {
+        let Ok(rd) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in rd.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) == Some("m8") && p.is_file() {
+                if !files.contains(&p) {
+                    files.push(p);
+                }
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+/// Aggregate statistics across all native Salient `MEM|8` stores (`/data/.mem8/salient/*.m8`, etc.).
+pub fn global_salient_stats() -> SalientGlobalStats {
+    let mut stats = SalientGlobalStats::default();
+    for path in discover_salient_m8_files() {
+        let bytes = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        let Ok(mut store) = RecordStore::open_memory(&path) else {
+            continue;
+        };
+        let repo_keys = store.keys_with_prefix("salient:repo:");
+        let summary_keys = store.keys_with_prefix("salient:summary:");
+        let mut thoughts = 0usize;
+        let mut samples = 0usize;
+        if let Some(sk) = summary_keys.first() {
+            if let Ok(Some(rep)) = store.get::<IngestReport>(sk) {
+                thoughts = rep.total_thoughts;
+                samples = rep.total_code_samples;
+            }
+        }
+        if thoughts == 0 {
+            for rk in repo_keys.iter().take(250) {
+                if let Ok(Some(r)) = store.get::<SalientRepo>(rk) {
+                    thoughts += r.thoughts.len();
+                    samples += r.code_samples.len();
+                }
+            }
+        }
+        stats.total_stores += 1;
+        stats.total_bytes += bytes;
+        stats.total_repos += repo_keys.len();
+        stats.total_thoughts += thoughts;
+        stats.total_code_samples += samples;
+        stats
+            .store_paths
+            .push((path, bytes, repo_keys.len(), thoughts));
+    }
+    stats
+}
+
+/// Search across all native Salient `MEM|8` stores (`/data/.mem8/salient/*.m8`, `/data/.mem8/nexus/*.m8`)
+/// for repositories, thoughts, doc paths, or code samples matching `keywords`.
+pub fn search_all_salient_stores(
+    keywords: &[String],
+    max_results: usize,
+) -> Vec<crate::memory_manager::Memory> {
+    use chrono::Utc;
+    let kw_lower: Vec<String> = keywords
+        .iter()
+        .map(|k| k.trim().to_lowercase())
+        .filter(|k| !k.is_empty())
+        .collect();
+    if kw_lower.is_empty() {
+        return Vec::new();
+    }
+
+    let mut results = Vec::new();
+    for path in discover_salient_m8_files() {
+        let Ok(mut store) = RecordStore::open_memory(&path) else {
+            continue;
+        };
+        let mut repo_keys = store.keys_with_prefix("salient:repo:");
+        repo_keys.sort();
+        for key in repo_keys {
+            if results.len() >= max_results {
+                return results;
+            }
+            let Ok(Some(repo)) = store.get::<SalientRepo>(&key) else {
+                continue;
+            };
+            let name_lower = repo.name.to_lowercase();
+            let user_lower = repo.github_user.to_lowercase();
+            let repo_matches = kw_lower
+                .iter()
+                .any(|q| name_lower.contains(q) || user_lower.contains(q));
+
+            let matched_thoughts: Vec<&SalientThought> = repo
+                .thoughts
+                .iter()
+                .filter(|t| {
+                    let tl = t.text.to_lowercase();
+                    let sl = t.source.to_lowercase();
+                    kw_lower.iter().any(|q| tl.contains(q) || sl.contains(q))
+                })
+                .collect();
+
+            let matched_samples: Vec<&String> = repo
+                .code_samples
+                .iter()
+                .filter(|s| {
+                    let sl = s.to_lowercase();
+                    kw_lower.iter().any(|q| sl.contains(q))
+                })
+                .collect();
+
+            if !repo_matches && matched_thoughts.is_empty() && matched_samples.is_empty() {
+                continue;
+            }
+
+            let wave = store.get_wave(&key).ok().flatten();
+            let hz = wave.map(|w| w.frequency).unwrap_or(432.0);
+            let store_fname = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+            if !matched_thoughts.is_empty() {
+                for chunk in matched_thoughts.chunks(2).take(4) {
+                    if results.len() >= max_results {
+                        return results;
+                    }
+                    let snippet_parts: Vec<String> = chunk
+                        .iter()
+                        .map(|t| {
+                            let clean: String = t.text.chars().take(135).collect();
+                            format!("[{}] {}", t.source, clean)
+                        })
+                        .collect();
+                    let context = format!(
+                        "{}/{} ({} matched / {} total thoughts in {}): {}",
+                        repo.github_user,
+                        repo.name,
+                        matched_thoughts.len(),
+                        repo.thoughts.len(),
+                        store_fname,
+                        snippet_parts.join(" • ")
+                    );
+                    results.push(crate::memory_manager::Memory {
+                        timestamp: Utc::now(),
+                        anchor_type: "salient-m8".to_string(),
+                        keywords: vec![
+                            repo.github_user.clone(),
+                            repo.name.clone(),
+                            format!("{}matches", matched_thoughts.len()),
+                        ],
+                        context,
+                        origin: repo.path.to_string_lossy().to_string(),
+                        frequency: hz,
+                    });
+                }
+            } else {
+                let mut snippet_parts = Vec::new();
+                for t in repo.thoughts.iter().take(2) {
+                    let clean: String = t.text.chars().take(120).collect();
+                    snippet_parts.push(format!("[{}] {}", t.source, clean));
+                }
+                for s in matched_samples.iter().take(1) {
+                    let clean: String = s.lines().take(2).collect::<Vec<_>>().join(" ");
+                    snippet_parts.push(format!("[sample] {}", clean));
+                }
+                let context = format!(
+                    "{}/{} ({} thoughts in {}): {}",
+                    repo.github_user,
+                    repo.name,
+                    repo.thoughts.len(),
+                    store_fname,
+                    snippet_parts.join(" • ")
+                );
+                results.push(crate::memory_manager::Memory {
+                    timestamp: Utc::now(),
+                    anchor_type: "salient-m8".to_string(),
+                    keywords: vec![
+                        repo.github_user.clone(),
+                        repo.name.clone(),
+                        format!("{}thoughts", repo.thoughts.len()),
+                    ],
+                    context,
+                    origin: repo.path.to_string_lossy().to_string(),
+                    frequency: hz,
+                });
+            }
+        }
+    }
+    results
 }
 
 #[cfg(test)]

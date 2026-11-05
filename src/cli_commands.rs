@@ -999,7 +999,7 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
 
     // Always remember the current directory (and any directly referenced sibling/child repo)
     // without requiring manual memory initialization.
-    let cwd_memory = manager.ensure_directory_remembered(&cwd_canon);
+    let _cwd_memory = manager.ensure_directory_remembered(&cwd_canon);
     for kw in &keywords {
         if kw.is_empty() || kw.contains('/') || kw.contains("..") {
             continue;
@@ -1040,8 +1040,7 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
         }
     });
 
-    // Also include existing native MEM8 wave memories from current directory, ancestors, and ~/.st/mem8
-    // Only open stores that already exist on disk so we do not create empty .st/mem8 folders.
+    // 2. Also include existing native MEM8 wave memories from current directory, ancestors, and ~/.st/mem8
     let mut wave_dirs: Vec<PathBuf> = cwd_canon.ancestors().map(PathBuf::from).collect();
     if let Some(home) = dirs::home_dir() {
         if !wave_dirs.contains(&home) {
@@ -1070,9 +1069,35 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
         }
     }
 
-    if filtered.is_empty() {
-        if let Some(mem) = cwd_memory {
-            filtered.push(mem);
+    // 3. Also search all native Salient MEM|8 stores (/data/.mem8/salient/*.m8, /data/.mem8/nexus/*.m8, ~/.mem8/salient/*.m8)
+    for salient_mem in crate::salient::search_all_salient_stores(&keywords, 25) {
+        if !filtered.iter().any(|m| m.context == salient_mem.context) {
+            filtered.push(salient_mem);
+        }
+    }
+
+    // 4. Also search MemNet Wave Q&A cache (~/.mem8/memnet/mesh_state.json)
+    let mesh = crate::memnet::MemnetNodeState::load_or_default();
+    let kw_lower: Vec<String> = keywords
+        .iter()
+        .map(|k| k.trim().to_lowercase())
+        .filter(|k| !k.is_empty())
+        .collect();
+    for entry in &mesh.wave_qa_cache {
+        let ql = entry.question.to_lowercase();
+        let al = entry.answer.to_lowercase();
+        if kw_lower.iter().any(|q| ql.contains(q) || al.contains(q)) {
+            let ctx = format!("Q: {} -> A: {}", entry.question, entry.answer);
+            if !filtered.iter().any(|m| m.context == ctx) {
+                filtered.push(Memory {
+                    timestamp: chrono::Utc::now(),
+                    anchor_type: "memnet-wave".to_string(),
+                    keywords: vec![entry.origin_name.clone(), "wave-qa".to_string()],
+                    context: ctx,
+                    origin: format!("memnet://{}", entry.origin_name),
+                    frequency: entry.wave_frame.frequency.num as f64,
+                });
+            }
         }
     }
 
@@ -1116,12 +1141,40 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
     Ok(())
 }
 
-/// Show memory statistics
+/// Show memory statistics across all MEM|8 banks (Anchored, Salient Native Stores, and MemNet Waves)
 pub async fn handle_memory_stats() -> Result<()> {
     use crate::memory_manager::MemoryManager;
 
     let manager = MemoryManager::new()?;
     println!("📊 {}", manager.stats());
+
+    let salient = crate::salient::global_salient_stats();
+    if salient.total_stores > 0 {
+        println!("\n🏛️  Salient Native MEM|8 Stores (/data/.mem8/salient & nexus):");
+        println!("• Total native stores: {}", salient.total_stores);
+        println!("• Total repos indexed: {}", salient.total_repos);
+        println!("• Total thoughts:      {}", salient.total_thoughts);
+        println!("• Total code samples:  {}", salient.total_code_samples);
+        println!(
+            "• Total native size:   {} bytes ({:.2} MiB)",
+            salient.total_bytes,
+            salient.total_bytes as f64 / (1024.0 * 1024.0)
+        );
+        for (path, bytes, repos, thoughts) in &salient.store_paths {
+            println!(
+                "  ├─ {} -> {} repos, {} thoughts ({} KiB)",
+                path.display(),
+                repos,
+                thoughts,
+                bytes / 1024
+            );
+        }
+    }
+
+    let mesh = crate::memnet::MemnetNodeState::load_or_default();
+    println!("\n🌊 MemNet Wave Q&A Cache (~/.mem8/memnet/mesh_state.json):");
+    println!("• Cached Wave Q&A packets: {}", mesh.wave_qa_cache.len());
+    println!("• Shared LAN folders:      {}", mesh.shared_folders.len());
 
     Ok(())
 }
