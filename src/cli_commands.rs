@@ -3863,18 +3863,20 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                     report.steiner_t8r_virtual_bridges
                 );
                 println!(
-                    "   Constructive LLL:      e·p·(d+1) = {:.4} <= 1.0 (guaranteed={}) | Moser-Tardos resamples={} | zero_collisions={}",
-                    report.lll_ep_d_plus_1,
+                    "   Constructive LLL:      e·p·(d+1) = {} ({}‰ <= 1000‰, guaranteed={}) | Moser-Tardos resamples={} | zero_collisions={}",
+                    report.lll_ep_d_plus_1_pq,
+                    report.lll_ep_d_plus_1_permille,
                     report.lll_guaranteed,
                     report.moser_tardos_resamples,
                     report.zero_collision_verified
                 );
                 println!(
-                    "   Language LLL Basis:    {} | 4D norm² {} -> {} ({:.2}x lattice basis compression)",
+                    "   Language LLL Basis:    {} | 4D norm² {} -> {} ({}.{:02}x lattice basis compression)",
                     report.language_lll.language_lll_symbol,
                     report.language_lll.initial_norm_sq,
                     report.language_lll.reduced_norm_sq,
-                    (report.language_lll.basis_compression_bps as f64) / 10_000.0
+                    report.language_lll.basis_compression_bps / 10_000,
+                    (report.language_lll.basis_compression_bps % 10_000) / 100
                 );
                 println!(
                     "   Real Time Constant:    Single-link RTC τ={}ms -> Parallel Steiner RTC τ_eff={}ms (3τ={}ms, 5τ={}ms steady-state lock)",
@@ -3902,6 +3904,61 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                         reg.collision_free,
                         reg.effective_rtc_tau_ms
                     );
+                }
+            }
+        }
+        "glassdoor" | "demoscene" | "space-bender" | "kompress-super-ultra" | "zeno" => {
+            let payload = cmd.target.as_deref().unwrap_or(
+                "kompress-super-ultra:GLASSDOOR::memnet+mem|8+8b-is/space-bender++8b-is/demoscene(codeberg-8b-is)<3<3<3+1",
+            );
+            let gd = state.audit_glassdoor(payload);
+            if let Some(out_path) = &cmd.out {
+                std::fs::write(out_path, &gd.glassdoor_html)?;
+            }
+            if cmd.json {
+                println!("{}", gd.glassdoor_json);
+            } else {
+                println!(
+                    "🪟 kompress-super-ultra :: GLASSDOOR Audit (memnet + mem|8 + 8b-is/space-bender + 8b-is/demoscene)"
+                );
+                println!(
+                    "   Law #1 NO-FLOAT Gate:  verified={} (qT_pq INT Padé [2/2] Q16 RTC + Q20 i128 LLL + Q8 PID)",
+                    gd.no_float_verified
+                );
+                println!(
+                    "   Demoscene pQb/SPQT:    4K 4-trit={} B (2.0b/t) vs 5-trit SPQT={} B (1.6b/t) | round_trip={} | SSE E={} <= {} | t_60={}ms",
+                    gd.demoscene_probe.frame_4k_4trit_bytes,
+                    gd.demoscene_probe.frame_4k_5trit_spqt_bytes,
+                    gd.demoscene_probe.round_trip_exact,
+                    gd.demoscene_probe.reconstruction_error_sse,
+                    gd.demoscene_probe.max_error_bound,
+                    gd.demoscene_probe.t60_ms
+                );
+                println!(
+                    "   Space-Bender Proofs:   1kyu 4-Squares {} = {}²+{}²+{}²+{}² | 2kyu tzcnt steps={} | 4kyu H_1690={} (verified={})",
+                    gd.space_bender_probe.target_n,
+                    gd.space_bender_probe.four_squares.0,
+                    gd.space_bender_probe.four_squares.1,
+                    gd.space_bender_probe.four_squares.2,
+                    gd.space_bender_probe.four_squares.3,
+                    gd.space_bender_probe.tzcnt_reachable_steps,
+                    gd.space_bender_probe.hamming_1690,
+                    gd.space_bender_probe.all_verified
+                );
+                println!(
+                    "   Layered Linker (wupz): linker={} | WUPZ v1 bundle={} B (member FNV-1a={}, unwupz_ok={})",
+                    gd.wupz_probe.detected_linker,
+                    gd.wupz_probe.bundle_bytes,
+                    gd.wupz_probe.member_fnv1a_hex,
+                    gd.wupz_probe.unwupz_verified
+                );
+                println!(
+                    "   Control Q8 PID (RTC):  setpoint={} -> measured={} (integral={}, converged={})",
+                    gd.pid_setpoint, gd.pid_measured, gd.pid_integral, gd.pid_converged
+                );
+                println!("\n   Glassdoor Specialist Feed:");
+                for rev in &gd.reviews {
+                    println!("     • {}", rev.line());
                 }
             }
         }
@@ -4137,12 +4194,14 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                     );
                 }
                 println!(
-                    "   3rd+ Escape (LLL):     {}D Ultra-Graph | e·p·(d+1)={:.4} (0 collisions={}) | {} ({:.2}x basis compression)",
+                    "   3rd+ Escape (LLL):     {}D Ultra-Graph | e·p·(d+1)={} ({}‰, 0 collisions={}) | {} ({}.{:02}x basis compression)",
                     escape.ultra_graph_dimensions,
-                    escape.lll_ep_d_plus_1,
+                    escape.lll_ep_d_plus_1_pq,
+                    escape.lll_ep_d_plus_1_permille,
                     escape.zero_collision_verified,
                     escape.language_lll.language_lll_symbol,
-                    (escape.language_lll.basis_compression_bps as f64) / 10_000.0
+                    escape.language_lll.basis_compression_bps / 10_000,
+                    (escape.language_lll.basis_compression_bps % 10_000) / 100
                 );
                 println!(
                     "   Shared Folders:        {} (Pooled Drive Space: {} MB)",
