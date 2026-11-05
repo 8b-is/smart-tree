@@ -252,6 +252,25 @@ fn install_user_completions_for_home(
         written.push(zsh_path);
     }
 
+    // 4. Sovereign Companion: Lightpanda Fish completions (~/.config/fish/completions/lightpanda.fish)
+    if Path::new("/usr/bin/lightpanda").exists() {
+        let lp_fish_path = home
+            .join(".config")
+            .join("fish")
+            .join("completions")
+            .join("lightpanda.fish");
+        if let Ok(output) = std::process::Command::new("/usr/bin/lightpanda")
+            .args(["completion", "fish"])
+            .output()
+        {
+            if output.status.success() && !output.stdout.is_empty() {
+                if atomic_write_file(&lp_fish_path, &output.stdout, owner).is_ok() {
+                    written.push(lp_fish_path);
+                }
+            }
+        }
+    }
+
     Ok(written)
 }
 

@@ -14,6 +14,7 @@
 // Declare the public modules that form the `st` library.
 pub mod activity_logger; // Transparent activity logging in JSONL format
 pub mod ai_guardian; // AI Guardian - Protects AI from prompt injection attacks
+pub mod bitnet_m8; // Sovereign BitNet b1.58 (B+/B- NO-FLOAT) built-in hierarchical code & repo summarizer
 pub mod cli; // Command-line argument definitions (extracted from main.rs)
 pub mod cli_commands; // Modular CLI subcommand and flag handlers (extracted from main.rs)
 pub mod completions; // Self-maintaining shell autocomplete (Fish, Zsh, Bash) with live folder & MEM|8 descriptions

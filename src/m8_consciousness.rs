@@ -43,6 +43,15 @@ pub struct DirectoryConsciousness {
     #[serde(default)]
     pub markdown_insights: Vec<String>,
 
+    /// Built-in BitNet b1.58 (B+/B- ternary NO-FLOAT) multi-resolution summary & gist
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bitnet_summary: Option<crate::bitnet_m8::BitNetDirectorySummary>,
+
+    /// Extensive function/struct/enum consciousness (populated at leaf code folders like `src/.m8`;
+    /// omitted at parent folders so parent `.m8` holds the rolled-up gist!)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub functions: Vec<crate::bitnet_m8::FunctionConsciousness>,
+
     /// Quantum digest (compressed understanding)
     pub quantum_digest: Vec<u8>,
 
@@ -81,6 +90,8 @@ impl DirectoryConsciousness {
             children: HashMap::new(),
             child_summaries: HashMap::new(),
             markdown_insights: Vec::new(),
+            bitnet_summary: None,
+            functions: Vec::new(),
             quantum_digest: Vec::new(),
             parent_coherence: 1.0,
         })
@@ -118,6 +129,31 @@ impl DirectoryConsciousness {
         // Determine essence from manifests, .md files, child .m8 summaries, and directory contents
         self.essence = self.determine_essence(path)?;
 
+        // Run built-in BitNet b1.58 multi-resolution code & hierarchy summarizer
+        let (leaf_fns, leaf_files) = crate::bitnet_m8::analyze_leaf_code_directory(path);
+        let mut child_m8_map = std::collections::BTreeMap::new();
+        for child_name in self.children.keys() {
+            let cp = path.join(child_name);
+            if cp.join(".m8").is_file() {
+                if let Ok(cc) = Self::load(&cp) {
+                    child_m8_map.insert(child_name.clone(), cc);
+                }
+            }
+        }
+        let bn_summary = crate::bitnet_m8::synthesize_bitnet_directory_summary(
+            path,
+            &leaf_fns,
+            &leaf_files,
+            &child_m8_map,
+            &self.essence,
+        );
+        if bn_summary.zoom_level == "leaf-code" {
+            self.functions = leaf_fns;
+        } else {
+            self.functions.clear();
+        }
+        self.bitnet_summary = Some(bn_summary);
+
         // Generate quantum digest
         self.generate_quantum_digest()?;
 
@@ -146,6 +182,7 @@ impl DirectoryConsciousness {
 
         let mut child_map = HashMap::new();
         let mut child_summaries = HashMap::new();
+        let mut child_m8_objects = std::collections::BTreeMap::new();
 
         for child_path in child_dirs {
             let Some(child_name) = child_path
@@ -160,16 +197,28 @@ impl DirectoryConsciousness {
                     Self::build_bottom_up_pyramid(&child_path, current_depth + 1, max_depth)
                 {
                     child_map.insert(child_name.clone(), child_c.frequency);
-                    if !child_c.essence.is_empty() {
-                        child_summaries.insert(child_name, child_c.essence);
+                    let child_gist = child_c
+                        .bitnet_summary
+                        .as_ref()
+                        .map(|b| b.synthesized_gist.clone())
+                        .unwrap_or_else(|| child_c.essence.clone());
+                    if !child_gist.is_empty() {
+                        child_summaries.insert(child_name.clone(), child_gist);
                     }
+                    child_m8_objects.insert(child_name, child_c);
                 }
             } else if child_path.join(".m8").is_file() {
                 if let Ok(child_c) = Self::load(&child_path) {
                     child_map.insert(child_name.clone(), child_c.frequency);
-                    if !child_c.essence.is_empty() {
-                        child_summaries.insert(child_name, child_c.essence);
+                    let child_gist = child_c
+                        .bitnet_summary
+                        .as_ref()
+                        .map(|b| b.synthesized_gist.clone())
+                        .unwrap_or_else(|| child_c.essence.clone());
+                    if !child_gist.is_empty() {
+                        child_summaries.insert(child_name.clone(), child_gist);
                     }
+                    child_m8_objects.insert(child_name, child_c);
                 }
             } else {
                 child_map.insert(child_name, Self::calculate_frequency(&child_path));
@@ -184,6 +233,22 @@ impl DirectoryConsciousness {
         consciousness.children = child_map;
         consciousness.child_summaries = child_summaries;
         consciousness.essence = consciousness.determine_essence(path)?;
+
+        let (leaf_fns, leaf_files) = crate::bitnet_m8::analyze_leaf_code_directory(path);
+        let bn_summary = crate::bitnet_m8::synthesize_bitnet_directory_summary(
+            path,
+            &leaf_fns,
+            &leaf_files,
+            &child_m8_objects,
+            &consciousness.essence,
+        );
+        if bn_summary.zoom_level == "leaf-code" {
+            consciousness.functions = leaf_fns;
+        } else {
+            consciousness.functions.clear();
+        }
+        consciousness.bitnet_summary = Some(bn_summary);
+
         consciousness.generate_quantum_digest()?;
         let _ = consciousness.save(path);
 

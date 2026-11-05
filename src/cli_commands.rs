@@ -267,6 +267,47 @@ pub async fn handle_update_consciousness(path: &str) -> Result<()> {
             println!("✅ Consciousness updated: {}", root.join(".m8").display());
             println!("   Frequency: {:.2} Hz", c.frequency);
             println!("   Essence:   {}", c.essence);
+            if let Some(bn) = &c.bitnet_summary {
+                println!(
+                    "   BitNet:    {} [zoom={}, wave={}, B+/B-={}‰, syms={}]",
+                    bn.engine,
+                    bn.zoom_level,
+                    bn.pooled_wave_b3,
+                    bn.pooled_wave.balance_permille,
+                    bn.total_symbols_rolled_up
+                );
+                println!("   Gist:      {}", bn.synthesized_gist);
+                if !c.functions.is_empty() {
+                    println!(
+                        "   Functions: {} detailed leaf functions/structs stored in .m8",
+                        c.functions.len()
+                    );
+                } else if !bn.flagship_symbols.is_empty() {
+                    println!(
+                        "   Flagships: {} rolled-up top symbols from child code folders",
+                        bn.flagship_symbols.len()
+                    );
+                }
+
+                // Automatically teach MemNet Wave Q&A so local peers & LLMs can query this folder/repo
+                let dir_label = root
+                    .canonicalize()
+                    .ok()
+                    .and_then(|p| p.file_name().and_then(|s| s.to_str()).map(str::to_string))
+                    .unwrap_or_else(|| path.to_string());
+                let mut mesh = crate::memnet::MemnetNodeState::load_or_default();
+                mesh.learn_wave_qa(
+                    &format!("what is in {dir_label} overview architecture gist"),
+                    &bn.synthesized_gist,
+                );
+                for sym in c.functions.iter().take(6) {
+                    mesh.learn_wave_qa(
+                        &format!("function {} in {} {}", sym.name, sym.file, sym.domain),
+                        &format!("{} (L{}): {}", sym.signature, sym.line, sym.bitnet_gist),
+                    );
+                }
+                let _ = mesh.save();
+            }
             if !c.child_summaries.is_empty() {
                 println!(
                     "   Rolled up: {} child directory consciousness file(s)",
