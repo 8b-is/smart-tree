@@ -2414,6 +2414,36 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         let _ = mem_mgr.ensure_directory_remembered(&user_dir);
     }
 
+    // Automatically sync Salient MEM|8 memories (/data/.mem8/salient/<user>-<user>.m8)
+    // and refresh dynamic autocomplete cache whenever a GitHub user/org is synced.
+    let mut salient_summary_line: Option<String> = None;
+    if std::env::var_os("ST_SYNC_TEST_BASE").is_none() {
+        let target_str = user_dir.to_string_lossy().to_string();
+        match crate::salient::remember(&target_str, "expert", None, cmd.refresh_all) {
+            Ok(rep) => {
+                let m8_display = rep
+                    .mem8_path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| format!("/data/.mem8/salient/{}-{}.m8", user, user));
+                salient_summary_line = Some(format!(
+                    "   Salient MEM|8: {} repos ({} written, {} unchanged), {} thoughts -> {}",
+                    rep.repos_processed,
+                    rep.repos_persisted,
+                    rep.repos_skipped_unchanged,
+                    rep.total_thoughts,
+                    m8_display
+                ));
+            }
+            Err(err) => {
+                eprintln!("⚠️ Salient MEM|8 sync warning for '{}': {err:#}", user);
+            }
+        }
+        if let Some(home) = dirs::home_dir() {
+            let _ = crate::completions::refresh_completion_cache_for_home(&home);
+        }
+    }
+
     // The destination lock covers both repository operations and atomic cache replacement.
     let guard = state
         .lock()
@@ -2442,6 +2472,9 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         q,
         state_path.display()
     );
+    if let Some(salient_line) = salient_summary_line {
+        println!("{}", salient_line);
+    }
     anyhow::ensure!(f == 0, "GitHub sync failed for {f} repositories");
     Ok(())
 }

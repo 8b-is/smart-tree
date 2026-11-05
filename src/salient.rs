@@ -181,7 +181,7 @@ fn resolve_git_head_oid(repo_path: &Path) -> Option<String> {
                 }
             }
         }
-        None
+        Some(format!("unborn:{}", ref_rel.trim()))
     } else if trimmed.len() >= 7 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
         Some(trimmed.to_string())
     } else {
@@ -507,6 +507,19 @@ fn extract_salient_repo(
             &salient_to_family_rust(first, "unknown"),
             &repo.thoughts,
         ));
+    }
+
+    if repo.thoughts.is_empty() {
+        repo.thoughts.push(SalientThought {
+            source: "repo-manifest".to_string(),
+            text: format!(
+                "{}/{} ({})",
+                github_user,
+                repo_name,
+                repo.head_oid.as_deref().unwrap_or("unborn-or-minimal")
+            ),
+            provenance: format!("https://github.com/{}/{}", github_user, repo_name),
+        });
     }
 
     repo
