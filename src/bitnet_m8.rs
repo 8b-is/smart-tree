@@ -54,96 +54,215 @@ pub const BITNET_DOMAINS: [(&str, &str, &[&str]); 12] = [
         "memnet-mesh",
         "Sovereign MemNet multi-medium routing & shared folder mesh",
         &[
-            "memnet", "route", "share", "mesh", "esp32", "lora", "ble", "bluetooth", "wifi",
-            "capsule", "peer", "quota", "envelope", "medium",
+            "memnet",
+            "route",
+            "share",
+            "mesh",
+            "esp32",
+            "lora",
+            "ble",
+            "bluetooth",
+            "wifi",
+            "capsule",
+            "peer",
+            "quota",
+            "envelope",
+            "medium",
         ],
     ),
     (
         "rtc-control",
         "Peter's Real Time Constant (RTC τ) continuous-time relaxation & Q16/Q8 PID control",
         &[
-            "rtc", "tau", "pade", "exp_neg", "settling", "3tau", "5tau", "pid", "plant", "jitter",
-            "latency", "relaxation", "conductance",
+            "rtc",
+            "tau",
+            "pade",
+            "exp_neg",
+            "settling",
+            "3tau",
+            "5tau",
+            "pid",
+            "plant",
+            "jitter",
+            "latency",
+            "relaxation",
+            "conductance",
         ],
     ),
     (
         "mem8-wave",
         "MEM|8 wave consciousness, 79B WaveFrame & zero-LLM-cost Q&A recall",
         &[
-            "mem8", "m8", "wave", "consciousness", "frequency", "resonance", "salience", "anchor",
-            "recall", "memory", "pyramid", "essence", "litany",
+            "mem8",
+            "m8",
+            "wave",
+            "consciousness",
+            "frequency",
+            "resonance",
+            "salience",
+            "anchor",
+            "recall",
+            "memory",
+            "pyramid",
+            "essence",
+            "litany",
         ],
     ),
     (
         "acoustic-chirp",
         "48kHz Ultrasonic Chirp acoustic speaker->mic modem & Goertzel DSP",
         &[
-            "chirp", "ultrasonic", "acoustic", "modem", "goertzel", "hamming", "pcm", "wav",
-            "audible", "sample_rate", "vad", "marine",
+            "chirp",
+            "ultrasonic",
+            "acoustic",
+            "modem",
+            "goertzel",
+            "hamming",
+            "pcm",
+            "wav",
+            "audible",
+            "sample_rate",
+            "vad",
+            "marine",
         ],
     ),
     (
         "lattice-lll",
         "3rd+ Escape: Ultra-Graph, Constructive Lovász Local Lemma & 4D Language LLL",
         &[
-            "lll", "escape", "lovasz", "moser", "tardos", "gram", "schmidt", "basis", "lattice",
-            "ultragraph", "erdos", "ramsey", "steiner", "fusion",
+            "lll",
+            "escape",
+            "lovasz",
+            "moser",
+            "tardos",
+            "gram",
+            "schmidt",
+            "basis",
+            "lattice",
+            "ultragraph",
+            "erdos",
+            "ramsey",
+            "steiner",
+            "fusion",
         ],
     ),
     (
         "glassdoor-spqt",
         "Sovereign Glassdoor: SPQT base-243 5-trit packing, space-bender & demoscene",
         &[
-            "glassdoor", "spqt", "trit", "ternary", "pqb", "demoscene", "space_bender", "wupz",
-            "upz", "zeno", "bfp64", "kleene", "bitnet",
+            "glassdoor",
+            "spqt",
+            "trit",
+            "ternary",
+            "pqb",
+            "demoscene",
+            "space_bender",
+            "wupz",
+            "upz",
+            "zeno",
+            "bfp64",
+            "kleene",
+            "bitnet",
         ],
     ),
     (
         "shell-autocomplete",
         "Self-maintaining Fish/Zsh/Bash autocomplete with live folder & MEM|8 descriptions",
         &[
-            "completion", "completions", "autocomplete", "fish", "zsh", "bash", "dynamic",
-            "prefix", "describe_directory",
+            "completion",
+            "completions",
+            "autocomplete",
+            "fish",
+            "zsh",
+            "bash",
+            "dynamic",
+            "prefix",
+            "describe_directory",
         ],
     ),
     (
         "ast-symbol",
         "CrabCC AST symbol indexing, call-graph references & structural code intelligence",
         &[
-            "symbol", "crab", "ast", "outline", "refs", "tree_sitter", "parser", "token",
-            "function", "signature", "relations",
+            "symbol",
+            "crab",
+            "ast",
+            "outline",
+            "refs",
+            "tree_sitter",
+            "parser",
+            "token",
+            "function",
+            "signature",
+            "relations",
         ],
     ),
     (
         "daemon-service",
         "Always-on HTTP/MCP daemon, systemd/launchd service manager & auto-updater",
         &[
-            "daemon", "service", "systemd", "launchd", "http", "axum", "mcp", "websocket",
-            "update", "watcher", "collab",
+            "daemon",
+            "service",
+            "systemd",
+            "launchd",
+            "http",
+            "axum",
+            "mcp",
+            "websocket",
+            "update",
+            "watcher",
+            "collab",
         ],
     ),
     (
         "security-custodian",
         "The Custodian supply-chain threat scanner, Erdős G_shadow audit & cert verification",
         &[
-            "security", "guardian", "custodian", "cert", "sha256", "hash", "anomaly", "exploit",
-            "malware", "signature", "gpg", "token",
+            "security",
+            "guardian",
+            "custodian",
+            "cert",
+            "sha256",
+            "hash",
+            "anomaly",
+            "exploit",
+            "malware",
+            "signature",
+            "gpg",
+            "token",
         ],
     ),
     (
         "forge-sync",
         "GitHub/Forgejo multi-repo parallel synchronization & g8t.is Foken capsules",
         &[
-            "sync", "github", "repo", "clone", "quarantine", "g8t", "foken", "leaderboard",
-            "capsule", "git",
+            "sync",
+            "github",
+            "repo",
+            "clone",
+            "quarantine",
+            "g8t",
+            "foken",
+            "leaderboard",
+            "capsule",
+            "git",
         ],
     ),
     (
         "scanner-formatter",
         "High-speed directory traversal, interest scoring & multi-mode tree formatters",
         &[
-            "scanner", "format", "classic", "quantum", "marqant", "digest", "louds", "mermaid",
-            "interest", " traversal", "filter",
+            "scanner",
+            "format",
+            "classic",
+            "quantum",
+            "marqant",
+            "digest",
+            "louds",
+            "mermaid",
+            "interest",
+            " traversal",
+            "filter",
         ],
     ),
 ];
@@ -239,8 +358,10 @@ impl BitNetWave64 {
     /// `(+1·+1) + (-1·-1) - (+1·-1) - (-1·+1)` via bitwise `AND` + hardware `POPCNT`.
     #[inline]
     pub const fn ternary_dot(self, other: Self) -> i32 {
-        let same_sign = ((self.b_pos & other.b_pos) | (self.b_neg & other.b_neg)).count_ones() as i32;
-        let opp_sign = ((self.b_pos & other.b_neg) | (self.b_neg & other.b_pos)).count_ones() as i32;
+        let same_sign =
+            ((self.b_pos & other.b_pos) | (self.b_neg & other.b_neg)).count_ones() as i32;
+        let opp_sign =
+            ((self.b_pos & other.b_neg) | (self.b_neg & other.b_pos)).count_ones() as i32;
         same_sign - opp_sign
     }
 
@@ -360,7 +481,11 @@ pub fn classify_domain_bitnet(tokens: &[String]) -> (&'static str, &'static str,
     }
 
     if best_score == 0 {
-        ("core-systems", "Core Rust systems & architectural logic", 350)
+        (
+            "core-systems",
+            "Core Rust systems & architectural logic",
+            350,
+        )
     } else {
         (best_id, best_desc, (best_score.min(1000)) as u16)
     }
@@ -586,7 +711,8 @@ fn extract_symbols_from_source(fname: &str, content: &str) -> Vec<FunctionConsci
         } else {
             0u16
         };
-        let salience_permille = (base_salience + domain_score / 2 + doc_bonus + memnet_bonus).min(999);
+        let salience_permille =
+            (base_salience + domain_score / 2 + doc_bonus + memnet_bonus).min(999);
 
         let bitnet_gist = if !docstring.is_empty() {
             format!("[{domain_id}] {docstring}")
@@ -623,10 +749,7 @@ pub fn synthesize_bitnet_directory_summary(
     child_m8s: &BTreeMap<String, crate::m8_consciousness::DirectoryConsciousness>,
     manifest_or_md_essence: &str,
 ) -> BitNetDirectorySummary {
-    let dir_name = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("root");
+    let dir_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("root");
 
     let has_cargo_or_manifest = path.join("Cargo.toml").is_file()
         || path.join("package.json").is_file()

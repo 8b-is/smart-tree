@@ -931,6 +931,7 @@ ${YELLOW}Commands:${NC}
   ${GREEN}install${NC} [dir]         Install binary (default: /usr/local/bin)
   ${GREEN}uninstall${NC} [dir]       Uninstall binary
   ${GREEN}release${NC} <vX.Y.Z> [notes] Create a GitHub release
+  ${GREEN}upload-mac${NC} [build_id] Build on Mac (172.16.47.91) & upload to i1.is + GitHub 🍎
   ${GREEN}bump${NC} [major|minor|patch] Bump version (default: patch +0.0.1)
   ${GREEN}quick-bump${NC}            Quick version bump + build 🚀
   ${GREEN}completions${NC}           Setup shell completions
@@ -1110,6 +1111,10 @@ main() {
         release)
             shift
             release "$@"
+            ;;
+        upload-mac|mac-release)
+            shift
+            "$PROJECT_DIR/scripts/upload-mac-release.sh" "$@"
             ;;
         bump)
             shift

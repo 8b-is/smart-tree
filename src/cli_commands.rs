@@ -443,6 +443,7 @@ pub async fn handle_erdos_anomaly_scan(path: &str) -> Result<()> {
 
     let payload = serde_json::json!({
         "spec": "ERDOS-RENYI-SHADOW-GRAPH-v1.0",
+        "complexity": "O(|V| + |E_SHADOW|)",
         "path": scan_path.display().to_string(),
         "num_vertices": sec.num_vertices,
         "num_edges": sec.num_edges,
@@ -452,7 +453,12 @@ pub async fn handle_erdos_anomaly_scan(path: &str) -> Result<()> {
         "critical_p_c": sec.critical_p_c,
         "critical_scale_n_two_thirds": (sec.critical_scale_n_two_thirds * 1000.0).round() / 1000.0,
         "mean_degree_c": (sec.mean_degree_c * 1000.0).round() / 1000.0,
+        "mean_degree_c_pq": format!("{}/{}", sec.mean_degree_c_num, sec.mean_degree_c_den),
         "molloy_reed_kappa": (sec.molloy_reed_kappa * 1000.0).round() / 1000.0,
+        "molloy_reed_kappa_pq": format!("{}/{}", sec.molloy_reed_kappa_num, sec.molloy_reed_kappa_den),
+        "percolation_kappa_gt_2": sec.percolation_kappa_gt_2,
+        "poisoned_leaf_reaches_core": sec.poisoned_leaf_reaches_core,
+        "percolation_diagnostic": sec.percolation_diagnostic,
         "spectral_radius_lambda1": (sec.spectral_radius_lambda1 * 1000.0).round() / 1000.0,
         "expected_random_lambda1": (sec.expected_random_lambda1 * 1000.0).round() / 1000.0,
         "giant_component_c1": sec.giant_component_size,
@@ -3947,19 +3953,23 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                 }
             }
         }
-        "routes" => {
+        "routes" | "probe" | "scan" => {
+            let up_count = state.discover_and_probe_live();
+            let _ = state.save();
             if cmd.json {
                 println!("{}", serde_json::to_string_pretty(&state.routes)?);
             } else {
                 println!(
-                    "🧭 MemNet Multi-Medium Route Table (Node {} '{}', Tier {:?}, Parallel RTC τ={}ms):",
+                    "🧭 MemNet Multi-Medium Route Table (Node {} '{}', Tier {:?}, {}/{} Up, Parallel RTC τ={}ms):",
                     state.local_address,
                     state.node_name,
                     state.tier,
+                    up_count,
+                    state.routes.len(),
                     state.composite_rtc_tau_ms(0xC5)
                 );
                 println!(
-                    "   {:<10} {:<28} {:<18} {:<9} {:<8} {:<9} {:<9} {:<7} {:<8}",
+                    "   {:<10} {:<34} {:<18} {:<9} {:<8} {:<9} {:<9} {:<7} {:<8}",
                     "ADDR/VIA",
                     "NODE",
                     "MEDIUM",
@@ -3972,7 +3982,7 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                 );
                 for r in &state.routes {
                     println!(
-                        "   {:<10} {:<28} {:<18} {:>2}/{:<6} {:>4}ms   {:>4}ms    {:>5}ms   {:>5}   {:?}",
+                        "   {:<10} {:<34} {:<18} {:>2}/{:<6} {:>4}ms   {:>4}ms    {:>5}ms   {:>5}   {:?}",
                         r.address_via_label(),
                         r.node_name,
                         r.medium.to_string(),
@@ -3986,6 +3996,17 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                     );
                 }
             }
+        }
+        "serve" | "listen" => {
+            let bind_addr = cmd
+                .target
+                .clone()
+                .unwrap_or_else(|| format!("0.0.0.0:{MEMNET_FS_PORT}"));
+            println!(
+                "📡 MemNet UDP Responder listening on {} (Node {} '{}')...",
+                bind_addr, state.local_address, state.node_name
+            );
+            state.serve_udp_responder(&bind_addr, None)?;
         }
         "escape" | "lll" | "rtc" | "ultragraph" | "ultra-graph" | "3rd-escape" | "sun" => {
             let payload = cmd.target.as_deref().unwrap_or(
@@ -4152,7 +4173,9 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                 .target
                 .as_deref()
                 .context("Usage: st memnet ask \"<question>\"")?;
-            let hit = state.query_wave_qa(question, 300);
+            let hit = state
+                .query_wave_qa(question, 300)
+                .or_else(|| state.query_lan_wave_qa(question, 300));
             state.save()?;
             match hit {
                 Some((score_pm, pkt)) => {
@@ -4289,6 +4312,8 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
             }
         }
         _ => {
+            let up_count = state.discover_and_probe_live();
+            let _ = state.save();
             let selected = state.select_routes(0xC5);
             let parallel_rtc_ms = state.composite_rtc_tau_ms(0xC5);
             let escape = state.compute_3rd_escape(&state.node_name);
@@ -4306,7 +4331,8 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                     state.node_name, state.local_address, state.tier
                 );
                 println!(
-                    "   Active Routes:         {} (Multi-route 0xC5 active paths: {}, Parallel RTC τ={}ms, 5τ={}ms)",
+                    "   Active Routes:         {}/{} Up (Multi-route 0xC5 selected: {}, Parallel RTC τ={}ms, 5τ={}ms)",
+                    up_count,
                     state.routes.len(),
                     selected.len(),
                     parallel_rtc_ms,

@@ -153,6 +153,59 @@ async fn main() -> Result<()> {
                 )?;
                 println!("{}", serde_json::to_string_pretty(&receipt)?);
             }
+            "targets" | "bounty" | "arcade" => {
+                let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(20);
+                let report = st::g8t_integration::get_routine_golf_targets(top_n)?;
+                println!(
+                    "{}",
+                    st::g8t_integration::format_routine_golf_board(&report)
+                );
+            }
+            "golf" | "routines" | "routinesd" => {
+                let q = g8t_cmd.target.as_deref().unwrap_or("all");
+                let max_targets = g8t_cmd.top.or(cli.g8t_top).unwrap_or(26);
+                let report = st::g8t_integration::golf_g8t_routines(
+                    q,
+                    None,
+                    &g8t_cmd.partner,
+                    true,
+                    max_targets,
+                )?;
+                println!(
+                    "{}",
+                    st::g8t_integration::format_routine_golf_session(&report)
+                );
+            }
+            "optimize" | "audit" | "g8t.md" => {
+                let target_dir = g8t_cmd.target.as_deref().unwrap_or(".");
+                let max_submits = g8t_cmd.top.or(cli.g8t_top).unwrap_or(3);
+                let report = st::g8t_integration::optimize_project_with_g8t(
+                    std::path::Path::new(target_dir),
+                    &g8t_cmd.partner,
+                    true,
+                    max_submits,
+                )?;
+                println!(
+                    "⚡ g8t.is Project Optimizer completed for `{}`",
+                    report.project_name
+                );
+                println!("  • Wrote report:          {}", report.g8t_md_path);
+                println!(
+                    "  • Scanned files:         {} (zero-float p/q ratio: {})",
+                    report.files_scanned, report.zero_float_file_ratio_pq
+                );
+                println!("  • Optimization findings: {}", report.findings.len());
+                println!(
+                    "  • Pure-Rust candidates:  {} (auto-submitted: {}, earned: +{} FKN)",
+                    report.candidate_capsules_found,
+                    report.submitted_capsules.len(),
+                    report.total_fokens_earned_fkn
+                );
+                println!(
+                    "  • Matched g8t.is caps:   {}",
+                    report.recommended_capsules.len()
+                );
+            }
             _ => {
                 let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(15);
                 let report = st::g8t_integration::get_foken_scoreboard(top_n)?;

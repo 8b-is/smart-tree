@@ -489,10 +489,18 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - Collab:       /collab/ws (Hot Tub Mode!) 🛁");
     println!("  - Hot Watcher:  /watch (MEM8 real-time intelligence) 🔥");
     println!("  - Security:     /security/* (integrity scan, hash memory, cert audit) 🛡️");
+    println!("  - MemNet UDP:   0.0.0.0:{} (NodePing/NodePong & Wave Q&A Offload) 🧭", crate::memnet::MEMNET_FS_PORT);
     println!("  - WebSocket:    /ws");
     println!("  - Shutdown:     POST /shutdown");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    // Spawn background MemNet UDP responder on :8423 (best-effort if port available)
+    std::thread::spawn(|| {
+        let mut mesh = crate::memnet::MemnetNodeState::load_or_default();
+        let bind_addr = format!("0.0.0.0:{}", crate::memnet::MEMNET_FS_PORT);
+        let _ = mesh.serve_udp_responder(&bind_addr, None);
+    });
 
     let (maintenance_stop, mut maintenance_rx) = oneshot::channel::<()>();
     let maintenance_state = Arc::clone(&state);

@@ -364,8 +364,7 @@ impl MemnetRouteEntry {
     ) -> Self {
         let max_credits = medium.max_credits();
         let jitter_ms = 2u16;
-        let rtc_ms =
-            (latency_ms as u32) + (jitter_ms as u32) * 2 + medium.intrinsic_rtc_floor_ms();
+        let rtc_ms = (latency_ms as u32) + (jitter_ms as u32) * 2 + medium.intrinsic_rtc_floor_ms();
         Self {
             address,
             via,
@@ -438,7 +437,10 @@ impl MemnetRouteEntry {
 
     /// Format as `address/via` (e.g. `C5/12` or `42/1`).
     pub fn address_via_label(&self) -> String {
-        if matches!(AddressClass::classify(self.address), AddressClass::MultiRoute(_)) {
+        if matches!(
+            AddressClass::classify(self.address),
+            AddressClass::MultiRoute(_)
+        ) {
             format!("0x{:02X}/{}", self.address, self.via)
         } else {
             format!("{}/{}", self.address, self.via)
@@ -447,7 +449,10 @@ impl MemnetRouteEntry {
 
     /// Record a received heartbeat: increments credits up to `max_credits` and restores `Up` status.
     pub fn tick_heartbeat_received(&mut self) {
-        self.heartbeat_credits = self.heartbeat_credits.saturating_add(1).min(self.max_credits);
+        self.heartbeat_credits = self
+            .heartbeat_credits
+            .saturating_add(1)
+            .min(self.max_credits);
         self.status = RouteStatus::Up;
     }
 
@@ -476,7 +481,9 @@ impl MemnetRouteEntry {
         let bw_bonus = (self.medium.nominal_kbps().ilog2() + 1) * 40;
         let rtc_penalty = self.effective_rtc_ms();
         let penalty = (self.latency_ms as u32) * 2 + (self.jitter_ms as u32) * 8 + rtc_penalty;
-        (1000 + credit_ratio_q8 + salience_bonus + bw_bonus).saturating_sub(penalty)
+        (1000 + credit_ratio_q8 + salience_bonus + bw_bonus)
+            .saturating_sub(penalty)
+            .max(1)
     }
 }
 
@@ -670,12 +677,7 @@ impl MemnetCapsule64 {
             rf_rssi_dbm: buf[15] as i8,
             rf_ap_count: u16::from_le_bytes([buf[16], buf[17]]),
             imu_motion_mg: i16::from_le_bytes([buf[18], buf[19]]),
-            peer_rssi_dbm: [
-                buf[20] as i8,
-                buf[21] as i8,
-                buf[22] as i8,
-                buf[23] as i8,
-            ],
+            peer_rssi_dbm: [buf[20] as i8, buf[21] as i8, buf[22] as i8, buf[23] as i8],
             top_bssid_fnv32: u32::from_le_bytes([buf[24], buf[25], buf[26], buf[27]]),
             top_bssid_rssi_dbm: buf[28] as i8,
             portal_ok: buf[29],
@@ -1153,11 +1155,7 @@ impl SharedFolderManifest {
 
         let folder_name = share_name
             .map(|s| s.to_string())
-            .or_else(|| {
-                canon
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-            })
+            .or_else(|| canon.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_else(|| "shared".to_string());
 
         let mut files = Vec::new();
@@ -1352,7 +1350,11 @@ pub fn reassemble_media_chunks(chunks: &[MediaChunkPacket]) -> Result<Vec<u8>> {
     );
     let mut out = Vec::new();
     for (idx, chunk) in ordered.into_iter().enumerate() {
-        anyhow::ensure!(chunk.seq as usize == idx, "Out-of-sequence chunk {}", chunk.seq);
+        anyhow::ensure!(
+            chunk.seq as usize == idx,
+            "Out-of-sequence chunk {}",
+            chunk.seq
+        );
         anyhow::ensure!(
             chunk.verify_crc(),
             "CRC32 mismatch on media chunk {}/{}",
@@ -1745,6 +1747,20 @@ impl UltrasonicChirpModem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MemnetPayload {
+    NodePing {
+        origin_node: u8,
+        origin_name: String,
+        timestamp_ms: u64,
+    },
+    NodePong {
+        node_address: u8,
+        node_name: String,
+        tier: RoutingTier,
+        shared_folders: usize,
+        wave_qa_entries: usize,
+        ollama_active: bool,
+        timestamp_ms: u64,
+    },
     FolderShareAnnounce(SharedFolderManifest),
     DriveSpaceOffer {
         node_address: u8,
@@ -1783,10 +1799,7 @@ impl MemnetPayload {
         let expected_crc = u32::from_le_bytes(pkt.payload[4..8].try_into()?);
         let body = &pkt.payload[8..];
         let actual_crc = felix_crc32_ieee(body);
-        anyhow::ensure!(
-            expected_crc == actual_crc,
-            "MemNet envelope CRC32 mismatch"
-        );
+        anyhow::ensure!(expected_crc == actual_crc, "MemNet envelope CRC32 mismatch");
         Ok(serde_json::from_slice(body)?)
     }
 }
@@ -1899,9 +1912,7 @@ impl MemnetNodeState {
             .routes
             .iter()
             .filter(|r| {
-                r.address == destination
-                    && r.heartbeat_credits > 0
-                    && r.status != RouteStatus::Down
+                r.address == destination && r.heartbeat_credits > 0 && r.status != RouteStatus::Down
             })
             .collect();
         if viable.is_empty() {
@@ -1927,7 +1938,11 @@ impl MemnetNodeState {
     }
 
     /// Query the local + LAN `MEM|8` Wave Q&A cache for the highest-resonance answer.
-    pub fn query_wave_qa(&mut self, question: &str, min_resonance_pm: u32) -> Option<(u32, WaveQaPacket)> {
+    pub fn query_wave_qa(
+        &mut self,
+        question: &str,
+        min_resonance_pm: u32,
+    ) -> Option<(u32, WaveQaPacket)> {
         let mut best_idx = None;
         let mut best_score = 0u32;
         for (idx, entry) in self.wave_qa_cache.iter().enumerate() {
@@ -1960,7 +1975,8 @@ impl MemnetNodeState {
         pkt
     }
 
-    /// Best-effort non-blocking UDP broadcast of a `MemnetRawPacket` to the local LAN (`:8423` & `:8888`).
+    /// Best-effort non-blocking UDP broadcast of a `MemnetRawPacket` to the local LAN (`:8423` & `:8888`)
+    /// plus direct unicast to all active IP-backed routes in `self.routes`.
     pub fn broadcast_lan_udp(&self, pkt: &MemnetRawPacket) -> usize {
         let Ok(sock) = UdpSocket::bind("0.0.0.0:0") else {
             return 0;
@@ -1977,7 +1993,498 @@ impl MemnetNodeState {
             let loopback = SocketAddr::from(([127, 0, 0, 1], port));
             let _ = sock.send_to(&wire, loopback);
         }
+        for route in &self.routes {
+            if route.status != RouteStatus::Down {
+                if let Some(ip_str) = route.endpoint.split(':').next() {
+                    if let Ok(ip) = ip_str.parse::<std::net::IpAddr>() {
+                        if !ip.is_unspecified() && !ip.is_multicast() {
+                            let peer_addr = SocketAddr::new(ip, MEMNET_FS_PORT);
+                            if sock.send_to(&wire, peer_addr).is_ok() {
+                                sent += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         sent
+    }
+
+    /// Discover real local network interfaces, ARP neighbors, USB/serial/Bluetooth/Audio hardware,
+    /// and `~/.ssh/config` peers, probing their live RTT in parallel and updating every route's
+    /// status, credits, and Peter's Real Time Constant (`RTC τ`) with zero floating-point math.
+    pub fn discover_and_probe_live(&mut self) -> usize {
+        // 1. Inspect local network interfaces (Ethernet, WiFi, WireGuard/VPN)
+        let ifaces = detect_local_network_interfaces();
+        let arp_map = read_system_arp_neighbors();
+        let serial_ports = detect_serial_ports();
+        let bt_controller = detect_bluetooth_controller();
+        let audio_cards = detect_audio_hardware();
+
+        let mut prev_by_key: BTreeMap<(u8, u8), MemnetRouteEntry> = BTreeMap::new();
+        let mut custom_routes: Vec<MemnetRouteEntry> = Vec::new();
+        for r in self.routes.drain(..) {
+            if r.address == 0xC5 && ((10..=24).contains(&r.via) || (30..=99).contains(&r.via)) {
+                prev_by_key.insert((r.address, r.via), r);
+            } else {
+                custom_routes.push(r);
+            }
+        }
+
+        // 2. Sovereign ESP32 Constellation (0xC5/10..=13): only Up if physically present on ARP, USB serial, or UDP :8888
+        for (idx, (node_id, name, mac, _glyph, _trit)) in
+            ESP32_CONSTELLATION_NODES.iter().enumerate()
+        {
+            let via = 10 + (*node_id);
+            let medium = if idx == 3 {
+                MemnetMedium::LoRaSx1262
+            } else {
+                MemnetMedium::Esp32Now
+            };
+            let mac_lower = mac.to_ascii_lowercase();
+            let mut entry = prev_by_key.remove(&(0xC5, via)).unwrap_or_else(|| {
+                MemnetRouteEntry::new(
+                    0xC5,
+                    via,
+                    format!("{name} ({mac})"),
+                    medium,
+                    format!("255.255.255.255:{MEMNET_ESP32_PORT}"),
+                    6 + (idx as u16) * 3,
+                )
+            });
+
+            if let Some((ip, _iface, reachable)) = arp_map.get(&mac_lower) {
+                entry.node_name = format!("{name} ({ip})");
+                entry.endpoint = format!("{ip}:{MEMNET_ESP32_PORT}");
+                if let Some(rtt_ms) =
+                    probe_host_rtt_ms(ip, &[MEMNET_ESP32_PORT, MEMNET_FS_PORT, 80, 22], 120)
+                {
+                    entry.update_with_rtc(rtt_ms, 100);
+                    entry.tick_heartbeat_received();
+                } else if *reachable {
+                    entry.update_with_rtc(8, 100);
+                    entry.tick_heartbeat_received();
+                } else {
+                    entry.heartbeat_credits = 0;
+                    entry.status = RouteStatus::Down;
+                }
+            } else if let Some(serial_dev) = serial_ports.get(idx) {
+                entry.node_name = format!("{name} ({serial_dev})");
+                entry.endpoint = format!("serial://{serial_dev}");
+                entry.update_with_rtc(3, 100);
+                entry.tick_heartbeat_received();
+            } else {
+                entry.node_name = format!("{name} ({mac})");
+                entry.endpoint = format!("unplugged:{MEMNET_ESP32_PORT}");
+                entry.heartbeat_credits = 0;
+                entry.status = RouteStatus::Down;
+            }
+            self.routes.push(entry);
+        }
+
+        // 3. Active Local Ethernet Interface + Default Gateway probe (0xC5/19)
+        if let Some((eth_iface, eth_ip, eth_up)) = ifaces
+            .iter()
+            .find(|(_, _, up, med)| *up && *med == MemnetMedium::Ethernet)
+            .or_else(|| {
+                ifaces
+                    .iter()
+                    .find(|(_, _, _, med)| *med == MemnetMedium::Ethernet)
+            })
+            .map(|(n, ip, up, _)| (n.clone(), ip.clone(), *up))
+        {
+            let via = 19u8;
+            let gw_ip = find_default_gateway_ip(&arp_map, &eth_ip);
+            let probe_target = gw_ip.as_deref().unwrap_or(&eth_ip);
+            let mut entry = prev_by_key.remove(&(0xC5, via)).unwrap_or_else(|| {
+                MemnetRouteEntry::new(
+                    0xC5,
+                    via,
+                    format!("LAN-Ethernet [{eth_iface} {eth_ip}]"),
+                    MemnetMedium::Ethernet,
+                    format!("{probe_target}:{MEMNET_FS_PORT}"),
+                    1,
+                )
+            });
+            if eth_up {
+                let rtt = probe_host_rtt_ms(probe_target, &[80, 443, 53, 22, MEMNET_FS_PORT], 100)
+                    .unwrap_or(1);
+                entry.node_name = if let Some(gw) = &gw_ip {
+                    format!("LAN-Ethernet [{eth_iface} {eth_ip} -> gw {gw}]")
+                } else {
+                    format!("LAN-Ethernet [{eth_iface} {eth_ip}]")
+                };
+                entry.endpoint = format!("{eth_ip}:{MEMNET_FS_PORT}");
+                entry.update_with_rtc(rtt, 100);
+                entry.heartbeat_credits = entry.max_credits;
+                entry.status = RouteStatus::Up;
+            } else {
+                entry.node_name = format!("LAN-Ethernet [{eth_iface} DOWN]");
+                entry.heartbeat_credits = 0;
+                entry.status = RouteStatus::Down;
+            }
+            self.routes.push(entry);
+        }
+
+        // 4. Local WiFi Interface (0xC5/20) — reflects real interface operstate!
+        {
+            let via = 20u8;
+            let wifi_info = ifaces
+                .iter()
+                .find(|(_, _, up, med)| *up && *med == MemnetMedium::WiFi)
+                .or_else(|| {
+                    ifaces
+                        .iter()
+                        .find(|(_, _, _, med)| *med == MemnetMedium::WiFi)
+                });
+            let mut entry = prev_by_key.remove(&(0xC5, via)).unwrap_or_else(|| {
+                MemnetRouteEntry::new(
+                    0xC5,
+                    via,
+                    "LAN-WiFi-Broadcast",
+                    MemnetMedium::WiFi,
+                    format!("255.255.255.255:{MEMNET_FS_PORT}"),
+                    4,
+                )
+            });
+            if let Some((w_name, w_ip, w_up, _)) = wifi_info {
+                if *w_up && !w_ip.is_empty() {
+                    entry.node_name = format!("LAN-WiFi [{w_name} {w_ip}]");
+                    entry.endpoint = format!("{w_ip}:{MEMNET_FS_PORT}");
+                    entry.update_with_rtc(3, 100);
+                    entry.heartbeat_credits = entry.max_credits;
+                    entry.status = RouteStatus::Up;
+                } else {
+                    entry.node_name = format!("LAN-WiFi [{w_name} DOWN]");
+                    entry.endpoint = format!("down://{w_name}");
+                    entry.heartbeat_credits = 0;
+                    entry.status = RouteStatus::Down;
+                }
+            } else {
+                entry.node_name = "LAN-WiFi [no active wlan]".to_string();
+                entry.endpoint = "down://wlan".to_string();
+                entry.heartbeat_credits = 0;
+                entry.status = RouteStatus::Down;
+            }
+            self.routes.push(entry);
+        }
+
+        // 5. Bluetooth 8BM8 Mesh (0xC5/21) — checks real HCI controller presence
+        {
+            let via = 21u8;
+            let mut entry = prev_by_key.remove(&(0xC5, via)).unwrap_or_else(|| {
+                MemnetRouteEntry::new(
+                    0xC5,
+                    via,
+                    "Bluetooth-8BM8-Mesh",
+                    MemnetMedium::Bluetooth,
+                    "ble://8BM8-mesh",
+                    12,
+                )
+            });
+            if let Some((hci_name, powered)) = bt_controller {
+                if powered {
+                    entry.node_name = format!("Bluetooth-8BM8 [{hci_name}]");
+                    entry.endpoint = format!("ble://{hci_name}/8BM8");
+                    entry.heartbeat_credits = entry.max_credits;
+                    entry.status = RouteStatus::Up;
+                } else {
+                    entry.node_name = format!("Bluetooth-8BM8 [{hci_name} unpowered]");
+                    entry.heartbeat_credits = entry.max_credits / 2;
+                    entry.status = RouteStatus::Degraded;
+                }
+            } else {
+                entry.node_name = "Bluetooth-8BM8 [no hci]".to_string();
+                entry.heartbeat_credits = 0;
+                entry.status = RouteStatus::Down;
+            }
+            self.routes.push(entry);
+        }
+
+        // 6. Ultrasonic Chirp Acoustic Modem (0xC5/22) — checks real ALSA/CoreAudio sound cards
+        {
+            let via = 22u8;
+            let mut entry = prev_by_key.remove(&(0xC5, via)).unwrap_or_else(|| {
+                MemnetRouteEntry::new(
+                    0xC5,
+                    via,
+                    "Ultrasonic-Chirp-SpeakerMic",
+                    MemnetMedium::UltrasonicChirp,
+                    "acoustic://18.5-21.0kHz",
+                    45,
+                )
+            });
+            if !audio_cards.is_empty() {
+                let summary = audio_cards
+                    .iter()
+                    .take(2)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("+");
+                entry.node_name = format!("Ultrasonic-Chirp [{summary}]");
+                entry.endpoint = "acoustic://18.5-21.0kHz".to_string();
+                entry.heartbeat_credits = entry.max_credits;
+                entry.status = RouteStatus::Up;
+            } else {
+                entry.node_name = "Ultrasonic-Chirp [no audio hw]".to_string();
+                entry.heartbeat_credits = 0;
+                entry.status = RouteStatus::Down;
+            }
+            self.routes.push(entry);
+        }
+
+        // 7. Active WireGuard / VPN Tunnel Interface (0xC5/23)
+        if let Some((vpn_name, vpn_ip, vpn_up, _)) = ifaces
+            .iter()
+            .find(|(_, _, up, med)| *up && *med == MemnetMedium::VpnTunnel)
+        {
+            let via = 23u8;
+            let mut entry = prev_by_key.remove(&(0xC5, via)).unwrap_or_else(|| {
+                MemnetRouteEntry::new(
+                    0xC5,
+                    via,
+                    format!("VPN-Mesh [{vpn_name} {vpn_ip}]"),
+                    MemnetMedium::VpnTunnel,
+                    format!("{vpn_ip}:{MEMNET_FS_PORT}"),
+                    15,
+                )
+            });
+            if *vpn_up {
+                entry.node_name = format!("VPN-Mesh [{vpn_name} {vpn_ip}]");
+                entry.endpoint = format!("{vpn_ip}:{MEMNET_FS_PORT}");
+                entry.heartbeat_credits = entry.max_credits;
+                entry.status = RouteStatus::Up;
+            }
+            self.routes.push(entry);
+        }
+
+        // 8. Discover & parallel-probe real peers from ~/.ssh/config (0xC5/30+)
+        let ssh_peers = discover_ssh_config_peers();
+        let local_node = self.local_address;
+        let local_name = self.node_name.clone();
+        let has_eth_up = ifaces
+            .iter()
+            .any(|(_, _, up, med)| *up && *med == MemnetMedium::Ethernet);
+
+        let probed_peers: Vec<(usize, Option<(u16, u16, Vec<&'static str>, Option<String>)>)> =
+            std::thread::scope(|s| {
+                let mut handles = Vec::with_capacity(ssh_peers.len());
+                for (idx, (_alias, host, ssh_port)) in ssh_peers.iter().enumerate() {
+                    let host = host.clone();
+                    let ssh_port = *ssh_port;
+                    let local_name = local_name.clone();
+                    handles.push(s.spawn(move || {
+                        let res = probe_peer_live(&host, ssh_port, local_node, &local_name);
+                        (idx, res)
+                    }));
+                }
+                handles
+                    .into_iter()
+                    .filter_map(|h| h.join().ok())
+                    .collect()
+            });
+
+        for (idx, probe_res) in probed_peers {
+            let (alias, host, ssh_port) = &ssh_peers[idx];
+            let via = (30 + idx).min(99) as u8;
+            let medium = classify_peer_medium(host, has_eth_up);
+            let had_prev = prev_by_key.contains_key(&(0xC5, via));
+            let initial_rtt = probe_res.as_ref().map(|(r, _, _, _)| *r).unwrap_or(20);
+            let mut entry = prev_by_key.remove(&(0xC5, via)).unwrap_or_else(|| {
+                MemnetRouteEntry::new(
+                    0xC5,
+                    via,
+                    format!("{alias} ({host})"),
+                    medium,
+                    format!("{host}:{ssh_port}"),
+                    initial_rtt,
+                )
+            });
+            entry.medium = medium;
+
+            if let Some((rtt_ms, active_port, services, remote_node_name)) = probe_res {
+                let svc_tag = services.join("+");
+                let label_host = remote_node_name.as_deref().unwrap_or(host.as_str());
+                entry.node_name = format!("{alias} ({label_host}) [{svc_tag}]");
+                entry.endpoint = format!("{host}:{active_port}");
+                if had_prev {
+                    entry.update_with_rtc(rtt_ms, 150);
+                } else {
+                    entry.jitter_ms = 1;
+                    entry.rtc_ms =
+                        (rtt_ms as u32) + 2 + entry.medium.intrinsic_rtc_floor_ms();
+                }
+                entry.heartbeat_credits = entry.max_credits;
+                entry.status = RouteStatus::Up;
+            } else {
+                entry.node_name = format!("{alias} ({host})");
+                entry.endpoint = format!("{host}:{ssh_port}");
+                entry.heartbeat_credits = 0;
+                entry.status = RouteStatus::Down;
+            }
+            self.routes.push(entry);
+        }
+
+        // 9. Also probe any custom user-added routes (`st memnet add-route`)
+        for mut custom in custom_routes {
+            if let Some((host, port_str)) = custom.endpoint.rsplit_once(':') {
+                let port = port_str.parse::<u16>().unwrap_or(MEMNET_FS_PORT);
+                if !host.starts_with("255.") && !host.contains("//") {
+                    if let Some((rtt_ms, active_port, _svcs, _)) =
+                        probe_peer_live(host, port, self.local_address, &self.node_name)
+                    {
+                        custom.endpoint = format!("{host}:{active_port}");
+                        custom.update_with_rtc(rtt_ms, 150);
+                        custom.tick_heartbeat_received();
+                    } else {
+                        custom.tick_heartbeat_missed();
+                    }
+                }
+            }
+            self.routes.push(custom);
+        }
+
+        // Sort routes so `Up` routes with highest Marine quality score appear first, followed by `Degraded`, then `Down`
+        self.routes.sort_by(|a, b| {
+            let rank = |s: RouteStatus| match s {
+                RouteStatus::Up => 0u8,
+                RouteStatus::Degraded => 1u8,
+                RouteStatus::Down => 2u8,
+            };
+            rank(a.status)
+                .cmp(&rank(b.status))
+                .then_with(|| b.marine_quality_score().cmp(&a.marine_quality_score()))
+                .then_with(|| a.via.cmp(&b.via))
+        });
+
+        self.routes
+            .iter()
+            .filter(|r| r.status == RouteStatus::Up)
+            .count()
+    }
+
+    /// Query active LAN/VPN peers over UDP `:8423` for a cached `MEM|8` `WaveQaPacket` if not found locally.
+    pub fn query_lan_wave_qa(
+        &mut self,
+        question: &str,
+        min_resonance_pm: u32,
+    ) -> Option<(u32, WaveQaPacket)> {
+        let Ok(sock) = UdpSocket::bind("0.0.0.0:0") else {
+            return None;
+        };
+        let _ = sock.set_broadcast(true);
+        let _ = sock.set_read_timeout(Some(Duration::from_millis(120)));
+        let _ = sock.set_write_timeout(Some(Duration::from_millis(50)));
+
+        let query_pkt = MemnetPayload::WaveQaQuery {
+            origin_node: self.local_address,
+            question: question.to_string(),
+            min_resonance_pm,
+        }
+        .into_raw_packet(vec![0xF1])
+        .ok()?;
+        let wire = query_pkt.to_wire_bytes();
+
+        let _ = sock.send_to(&wire, SocketAddr::from(([255, 255, 255, 255], MEMNET_FS_PORT)));
+        for r in &self.routes {
+            if r.status == RouteStatus::Up {
+                if let Some(host) = r.endpoint.split(':').next() {
+                    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                        if !ip.is_unspecified() {
+                            let _ = sock.send_to(&wire, SocketAddr::new(ip, MEMNET_FS_PORT));
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut buf = [0u8; 8192];
+        if let Ok((len, _peer)) = sock.recv_from(&mut buf) {
+            if let Ok(raw) = MemnetRawPacket::from_wire_bytes(&buf[..len]) {
+                if let Ok(MemnetPayload::WaveQaResponse(pkt)) = MemnetPayload::from_raw_packet(&raw)
+                {
+                    let score = pkt.resonance_permille(question);
+                    if score >= min_resonance_pm {
+                        if !self.wave_qa_cache.iter().any(|e| e.packet_id == pkt.packet_id) {
+                            self.wave_qa_cache.push(pkt.clone());
+                        }
+                        return Some((score, pkt));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Run a live UDP MemNet responder on `bind_addr` (default `0.0.0.0:8423`), answering
+    /// `NodePing` with `NodePong`, `WaveQaQuery` with `WaveQaResponse`, and recording announced shares.
+    pub fn serve_udp_responder(&mut self, bind_addr: &str, max_requests: Option<usize>) -> Result<usize> {
+        let sock = UdpSocket::bind(bind_addr)
+            .with_context(|| format!("Failed to bind MemNet UDP listener on {bind_addr}"))?;
+        let mut handled = 0usize;
+        let mut buf = [0u8; 16384];
+        loop {
+            if let Some(limit) = max_requests {
+                if handled >= limit {
+                    break;
+                }
+            }
+            let (len, peer) = sock.recv_from(&mut buf)?;
+            let Ok(raw) = MemnetRawPacket::from_wire_bytes(&buf[..len]) else {
+                continue;
+            };
+            let Ok(payload) = MemnetPayload::from_raw_packet(&raw) else {
+                continue;
+            };
+            handled += 1;
+            match payload {
+                MemnetPayload::NodePing {
+                    origin_node: _,
+                    origin_name: _,
+                    timestamp_ms,
+                } => {
+                    let ollama_active = probe_tcp_port_ms("127.0.0.1", 11434, 15).is_some();
+                    let pong = MemnetPayload::NodePong {
+                        node_address: self.local_address,
+                        node_name: self.node_name.clone(),
+                        tier: self.tier,
+                        shared_folders: self.shared_folders.len(),
+                        wave_qa_entries: self.wave_qa_cache.len(),
+                        ollama_active,
+                        timestamp_ms,
+                    };
+                    if let Ok(resp_raw) = pong.into_raw_packet(vec![self.local_address]) {
+                        let _ = sock.send_to(&resp_raw.to_wire_bytes(), peer);
+                    }
+                }
+                MemnetPayload::WaveQaQuery {
+                    origin_node: _,
+                    question,
+                    min_resonance_pm,
+                } => {
+                    if let Some((_score, pkt)) = self.query_wave_qa(&question, min_resonance_pm) {
+                        if let Ok(resp_raw) =
+                            MemnetPayload::WaveQaResponse(pkt).into_raw_packet(vec![self.local_address])
+                        {
+                            let _ = sock.send_to(&resp_raw.to_wire_bytes(), peer);
+                        }
+                    }
+                }
+                MemnetPayload::WaveQaResponse(pkt) => {
+                    if !self.wave_qa_cache.iter().any(|e| e.packet_id == pkt.packet_id) {
+                        self.wave_qa_cache.push(pkt);
+                        let _ = self.save();
+                    }
+                }
+                MemnetPayload::FolderShareAnnounce(manifest) => {
+                    self.shared_folders
+                        .insert(manifest.share_name.clone(), manifest);
+                    let _ = self.save();
+                }
+                _ => {}
+            }
+        }
+        Ok(handled)
     }
 
     /// Compute the composite parallel Real Time Constant (`RTC`, `τ_eff` in ms) across active routes
@@ -2043,15 +2550,17 @@ impl MemnetNodeState {
         let p_denom = colors.saturating_mul(colors).saturating_mul(colors); // c^(4-1) = c^3
         let dep_plus_1 = (lll_sched.max_dependency_degree + 1) as u64;
         // Exact rational convergent e ≈ 2721 / 1001
-        let ep_pq = RationalPQ::new_reduced(2721u64.saturating_mul(dep_plus_1), 1001u64.saturating_mul(p_denom));
+        let ep_pq = RationalPQ::new_reduced(
+            2721u64.saturating_mul(dep_plus_1),
+            1001u64.saturating_mul(p_denom),
+        );
         let lll_ep_d_plus_1_permille = ((ep_pq.p.saturating_mul(1000)) / ep_pq.q.max(1)) as u32;
         let lll_ep_d_plus_1_pq = format!("{}/{}", ep_pq.p, ep_pq.q);
 
         // 2. Language LLL: 4D Lenstra-Lenstra-Lovász Lattice Basis Reduction + Symbolic Invariant Wave
         let basis_report = lll_reduce_wave_basis_4d(core_payload);
         let wave_frame = WaveFrame79::from_semantic_text(core_payload);
-        let (_tokens, _trits, _wave_b3, litany_wire) =
-            extract_semantic_wave_features(core_payload);
+        let (_tokens, _trits, _wave_b3, litany_wire) = extract_semantic_wave_features(core_payload);
 
         // 3. Real Time Constant (RTC τ) across the multi-dimensional Steiner/T8R shortcut
         let single_best_rtc_ms = active_routes
@@ -2136,7 +2645,8 @@ impl MemnetNodeState {
 
         // 3. MemNet RTC Q8 PID closed-loop controller (`crates/deck/src/control.rs` discipline)
         let mut pid = MemnetRtcPid::new(256, 96, 32, 0, 100).with_deadband(1);
-        let mut plant = MemnetFirstOrderPlant::new(0, (escape.parallel_rtc_tau_ms.clamp(2, 16)) as i32);
+        let mut plant =
+            MemnetFirstOrderPlant::new(0, (escape.parallel_rtc_tau_ms.clamp(2, 16)) as i32);
         let setpoint = 60i32;
         let mut measured = plant.value;
         let first_step_out = pid.step(setpoint, measured);
@@ -2153,10 +2663,15 @@ impl MemnetNodeState {
         let mut glassdoor = MemnetGlassdoor::new();
 
         glassdoor.publish(GlassdoorReview {
-            intent: "demoscene 8b/pqb shared field & accountable ternary reconstruction".to_string(),
+            intent: "demoscene 8b/pqb shared field & accountable ternary reconstruction"
+                .to_string(),
             speciality: GlassdoorSpeciality::Colour,
             brain: "mem|8-wave+demoscene".to_string(),
-            score: if demoscene_probe.round_trip_exact { 98 } else { 40 },
+            score: if demoscene_probe.round_trip_exact {
+                98
+            } else {
+                40
+            },
             note: format!(
                 "4K pQb={}B (4-trit 2.0b/t) vs SPQT={}B (5-trit 1.6b/t), SSE E={} <= bound {}",
                 demoscene_probe.frame_4k_4trit_bytes,
@@ -2168,7 +2683,8 @@ impl MemnetNodeState {
         });
 
         glassdoor.publish(GlassdoorReview {
-            intent: "1-bit Bayer ordered dither & RTC Q8 PID deadband / anti-windup stability".to_string(),
+            intent: "1-bit Bayer ordered dither & RTC Q8 PID deadband / anti-windup stability"
+                .to_string(),
             speciality: GlassdoorSpeciality::Dither,
             brain: "demoscene-control-pid".to_string(),
             score: if pid_converged { 97 } else { 50 },
@@ -2183,10 +2699,15 @@ impl MemnetNodeState {
         });
 
         glassdoor.publish(GlassdoorReview {
-            intent: "kompress-super-ultra 0x62 LitanyWireFrame + 4D Language LLL lattice reduction".to_string(),
+            intent: "kompress-super-ultra 0x62 LitanyWireFrame + 4D Language LLL lattice reduction"
+                .to_string(),
             speciality: GlassdoorSpeciality::Quantise,
             brain: "ultra-omni-zeno".to_string(),
-            score: if escape.language_lll.basis_compression_bps > 10_000 { 99 } else { 60 },
+            score: if escape.language_lll.basis_compression_bps > 10_000 {
+                99
+            } else {
+                60
+            },
             note: format!(
                 "{} norm² {}->{} ({}bps) seal=0x{:04X} SPQT={:?}",
                 escape.language_lll.language_lll_symbol,
@@ -2200,7 +2721,9 @@ impl MemnetNodeState {
         });
 
         glassdoor.publish(GlassdoorReview {
-            intent: "60fps drift-free integer schedule (t_60=1000ms) + Parallel RTC τ_eff + wild->wupz".to_string(),
+            intent:
+                "60fps drift-free integer schedule (t_60=1000ms) + Parallel RTC τ_eff + wild->wupz"
+                    .to_string(),
             speciality: GlassdoorSpeciality::Performance,
             brain: "wild+rustpro".to_string(),
             score: if demoscene_probe.t60_ms == 1000 && wupz_probe.unwupz_verified {
@@ -2220,7 +2743,8 @@ impl MemnetNodeState {
         });
 
         glassdoor.publish(GlassdoorReview {
-            intent: "NO-FLOAT gate + Constructive LLL zero-collision + space-bender 1kyu/2kyu/4kyu".to_string(),
+            intent: "NO-FLOAT gate + Constructive LLL zero-collision + space-bender 1kyu/2kyu/4kyu"
+                .to_string(),
             speciality: GlassdoorSpeciality::Determinism,
             brain: "space-bender+moser-tardos".to_string(),
             score: if escape.zero_collision_verified && space_bender_probe.all_verified {
@@ -2257,6 +2781,449 @@ impl MemnetNodeState {
             reviews: glassdoor.feed().to_vec(),
         }
     }
+}
+
+// ============================================================================
+// Live Hardware, Network Interface, ARP Neighbor & Peer Probing Helpers
+// ============================================================================
+
+/// Detect local network interfaces `(iface_name, ipv4_str, is_up, medium)` across Linux and macOS.
+fn detect_local_network_interfaces() -> Vec<(String, String, bool, MemnetMedium)> {
+    let mut out: Vec<(String, String, bool, MemnetMedium)> = Vec::new();
+
+    // Try `ip -br -4 addr` on Linux
+    if let Ok(output) = std::process::Command::new("ip")
+        .args(["-br", "-4", "addr"])
+        .output()
+    {
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() < 2 {
+                    continue;
+                }
+                let name = parts[0];
+                if name == "lo" || name.starts_with("docker") || name.starts_with("br-") || name.starts_with("veth") {
+                    continue;
+                }
+                let state = parts[1];
+                let ip = parts
+                    .get(2)
+                    .and_then(|cidr| cidr.split('/').next())
+                    .unwrap_or("")
+                    .to_string();
+                let is_wireless = Path::new(&format!("/sys/class/net/{name}/wireless")).exists()
+                    || name.starts_with("wl");
+                let is_vpn = name.starts_with("wg")
+                    || name.starts_with("tailscale")
+                    || name.starts_with("tun")
+                    || name.starts_with("utun");
+                let medium = if is_vpn {
+                    MemnetMedium::VpnTunnel
+                } else if is_wireless {
+                    MemnetMedium::WiFi
+                } else {
+                    MemnetMedium::Ethernet
+                };
+                let up = state.eq_ignore_ascii_case("UP")
+                    || (state.eq_ignore_ascii_case("UNKNOWN") && !ip.is_empty());
+                out.push((name.to_string(), ip, up, medium));
+            }
+        }
+    }
+
+    // Also inspect `/sys/class/net` for interfaces without IPv4 addresses (like a DOWN `wlan0`)
+    if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name == "lo"
+                || name.starts_with("docker")
+                || name.starts_with("br-")
+                || name.starts_with("veth")
+                || out.iter().any(|(n, _, _, _)| n == &name)
+            {
+                continue;
+            }
+            let oper = std::fs::read_to_string(entry.path().join("operstate"))
+                .unwrap_or_default()
+                .trim()
+                .to_ascii_lowercase();
+            let is_wireless = entry.path().join("wireless").exists() || name.starts_with("wl");
+            let is_vpn = name.starts_with("wg")
+                || name.starts_with("tailscale")
+                || name.starts_with("tun")
+                || name.starts_with("utun");
+            let medium = if is_vpn {
+                MemnetMedium::VpnTunnel
+            } else if is_wireless {
+                MemnetMedium::WiFi
+            } else {
+                MemnetMedium::Ethernet
+            };
+            out.push((name, String::new(), oper == "up", medium));
+        }
+    }
+
+    // Fallback for macOS / BSD via `ifconfig`
+    if out.is_empty() {
+        if let Ok(output) = std::process::Command::new("ifconfig").output() {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                let mut cur_name = String::new();
+                let mut cur_ip = String::new();
+                let mut cur_up = false;
+                let flush = |out: &mut Vec<(String, String, bool, MemnetMedium)>,
+                             name: &str,
+                             ip: &str,
+                             up: bool| {
+                    if name.is_empty() || name == "lo0" || name.starts_with("gif") || name.starts_with("stf") {
+                        return;
+                    }
+                    let med = if name.starts_with("utun") || name.starts_with("wg") {
+                        MemnetMedium::VpnTunnel
+                    } else if name == "en0" {
+                        MemnetMedium::Ethernet
+                    } else if name.starts_with("en") {
+                        MemnetMedium::WiFi
+                    } else {
+                        return;
+                    };
+                    if !ip.is_empty() || name == "en0" || name == "en1" {
+                        out.push((name.to_string(), ip.to_string(), up && !ip.is_empty(), med));
+                    }
+                };
+                for line in text.lines() {
+                    if !line.starts_with('\t') && !line.starts_with(' ') {
+                        flush(&mut out, &cur_name, &cur_ip, cur_up);
+                        cur_name = line.split(':').next().unwrap_or("").to_string();
+                        cur_ip.clear();
+                        cur_up = line.contains("<UP,") && line.contains("RUNNING");
+                    } else {
+                        let trimmed = line.trim();
+                        if let Some(rest) = trimmed.strip_prefix("inet ") {
+                            if let Some(ip_tok) = rest.split_whitespace().next() {
+                                if ip_tok != "127.0.0.1" {
+                                    cur_ip = ip_tok.to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+                flush(&mut out, &cur_name, &cur_ip, cur_up);
+            }
+        }
+    }
+
+    out
+}
+
+/// Read system ARP / neighbor table: maps lowercase MAC address -> `(ipv4, iface, is_reachable)`.
+fn read_system_arp_neighbors() -> BTreeMap<String, (String, String, bool)> {
+    let mut map = BTreeMap::new();
+    if let Ok(arp_text) = std::fs::read_to_string("/proc/net/arp") {
+        for line in arp_text.lines().skip(1) {
+            let cols: Vec<&str> = line.split_whitespace().collect();
+            if cols.len() >= 6 {
+                let ip = cols[0].to_string();
+                let flags = cols[2];
+                let mac = cols[3].to_ascii_lowercase();
+                let iface = cols[5].to_string();
+                if mac != "00:00:00:00:00:00" && flags != "0x0" {
+                    map.insert(mac, (ip, iface, true));
+                }
+            }
+        }
+    }
+    if map.is_empty() {
+        if let Ok(out) = std::process::Command::new("arp").arg("-an").output() {
+            if out.status.success() {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for line in text.lines() {
+                    // ? (172.16.47.1) at aa:bb:cc:dd:ee:ff on en0 ifscope [ethernet]
+                    if let (Some(lpar), Some(rpar)) = (line.find('('), line.find(')')) {
+                        if lpar < rpar {
+                            let ip = line[lpar + 1..rpar].to_string();
+                            let parts: Vec<&str> = line[rpar + 1..].split_whitespace().collect();
+                            if parts.len() >= 4 && parts[0] == "at" && parts[1].contains(':') {
+                                let mac = parts[1].to_ascii_lowercase();
+                                let iface = parts[3].to_string();
+                                if mac != "(incomplete)" {
+                                    map.insert(mac, (ip, iface, true));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    map
+}
+
+fn find_default_gateway_ip(
+    arp_map: &BTreeMap<String, (String, String, bool)>,
+    local_ip: &str,
+) -> Option<String> {
+    let prefix = local_ip.rsplit_once('.').map(|(p, _)| p)?;
+    for candidate_suffix in ["1", "254"] {
+        let cand = format!("{prefix}.{candidate_suffix}");
+        if arp_map.values().any(|(ip, _, _)| ip == &cand) {
+            return Some(cand);
+        }
+    }
+    arp_map
+        .values()
+        .find(|(ip, _, _)| ip.starts_with(prefix) && ip.as_str() != local_ip)
+        .map(|(ip, _, _)| ip.clone())
+}
+
+/// Detect attached USB serial ports (`/dev/ttyACM*`, `/dev/ttyUSB*`, `/dev/cu.usbmodem*`, `/dev/cu.usbserial*`).
+fn detect_serial_ports() -> Vec<String> {
+    let mut ports = Vec::new();
+    if let Ok(entries) = std::fs::read_dir("/dev") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with("ttyACM")
+                || name.starts_with("ttyUSB")
+                || name.starts_with("cu.usbmodem")
+                || name.starts_with("cu.usbserial")
+            {
+                ports.push(format!("/dev/{name}"));
+            }
+        }
+    }
+    ports.sort();
+    ports
+}
+
+/// Detect local Bluetooth controller `(hci_name, is_powered)`.
+fn detect_bluetooth_controller() -> Option<(String, bool)> {
+    if let Ok(entries) = std::fs::read_dir("/sys/class/bluetooth") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with("hci") {
+                return Some((name, true));
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return Some(("CoreBluetooth".to_string(), true));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+/// Detect local audio playback/capture hardware for the Ultrasonic Chirp acoustic modem.
+fn detect_audio_hardware() -> Vec<String> {
+    let mut cards = Vec::new();
+    if let Ok(text) = std::fs::read_to_string("/proc/asound/cards") {
+        for line in text.lines() {
+            if let (Some(lb), Some(rb)) = (line.find('['), line.find(']')) {
+                if lb < rb {
+                    let short = line[lb + 1..rb].trim().to_string();
+                    if !short.is_empty() && short != "NVidia" {
+                        cards.push(short);
+                    }
+                }
+            }
+        }
+        if cards.is_empty() && text.contains('[') {
+            cards.push("HDA".to_string());
+        }
+    }
+    #[cfg(target_os = "macos")]
+    if cards.is_empty() {
+        cards.push("CoreAudio".to_string());
+    }
+    cards
+}
+
+/// Parse `~/.ssh/config` for configured real peer hosts `(alias, hostname, port)`.
+fn discover_ssh_config_peers() -> Vec<(String, String, u16)> {
+    let mut peers = Vec::new();
+    let Some(home) = dirs::home_dir() else {
+        return peers;
+    };
+    let Ok(text) = std::fs::read_to_string(home.join(".ssh").join("config")) else {
+        return peers;
+    };
+
+    let mut cur_alias = String::new();
+    let mut cur_hostname = String::new();
+    let mut cur_port = 22u16;
+
+    let flush = |peers: &mut Vec<(String, String, u16)>,
+                 alias: &str,
+                 hostname: &str,
+                 port: u16| {
+        if alias.is_empty()
+            || hostname.is_empty()
+            || alias.contains('*')
+            || hostname.eq_ignore_ascii_case("github.com")
+            || hostname.eq_ignore_ascii_case("gitlab.com")
+            || hostname.eq_ignore_ascii_case("codeberg.org")
+        {
+            return;
+        }
+        if !peers.iter().any(|(_, h, _)| h == hostname) {
+            peers.push((alias.to_string(), hostname.to_string(), port));
+        }
+    };
+
+    for raw_line in text.lines() {
+        let line = raw_line.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let Some(key) = parts.next() else {
+            continue;
+        };
+        if key.eq_ignore_ascii_case("Host") {
+            flush(&mut peers, &cur_alias, &cur_hostname, cur_port);
+            let tokens: Vec<&str> = parts.collect();
+            // Pick the shortest memorable alias (e.g. `s`, `t`, `i1`, `ns1`, `8s`)
+            cur_alias = tokens
+                .iter()
+                .copied()
+                .filter(|t| !t.contains('*'))
+                .min_by_key(|t| t.len())
+                .unwrap_or("")
+                .to_string();
+            cur_hostname = tokens.first().copied().unwrap_or("").to_string();
+            cur_port = 22;
+        } else if key.eq_ignore_ascii_case("HostName") {
+            if let Some(h) = parts.next() {
+                cur_hostname = h.to_string();
+            }
+        } else if key.eq_ignore_ascii_case("Port") {
+            if let Some(p) = parts.next().and_then(|s| s.parse::<u16>().ok()) {
+                cur_port = p;
+            }
+        }
+    }
+    flush(&mut peers, &cur_alias, &cur_hostname, cur_port);
+    peers
+}
+
+fn classify_peer_medium(host: &str, has_eth_up: bool) -> MemnetMedium {
+    if host.starts_with("10.") || host.starts_with("100.") || host.starts_with("fd") {
+        MemnetMedium::VpnTunnel
+    } else if host.starts_with("192.168.") || host.starts_with("172.") {
+        if has_eth_up {
+            MemnetMedium::Ethernet
+        } else {
+            MemnetMedium::WiFi
+        }
+    } else if has_eth_up {
+        MemnetMedium::Ethernet
+    } else {
+        MemnetMedium::WiFi
+    }
+}
+
+fn probe_tcp_port_ms(host: &str, port: u16, timeout_ms: u64) -> Option<u16> {
+    use std::net::{TcpStream, ToSocketAddrs};
+    let addr = (host, port).to_socket_addrs().ok()?.next()?;
+    let start = std::time::Instant::now();
+    TcpStream::connect_timeout(&addr, Duration::from_millis(timeout_ms)).ok()?;
+    let elapsed_ms = start.elapsed().as_millis().clamp(1, 65_535) as u16;
+    Some(elapsed_ms)
+}
+
+fn probe_host_rtt_ms(host: &str, ports: &[u16], timeout_ms: u64) -> Option<u16> {
+    for &port in ports {
+        if let Some(rtt) = probe_tcp_port_ms(host, port, timeout_ms) {
+            return Some(rtt);
+        }
+    }
+    None
+}
+
+/// Probe a peer over UDP `:8423` (`NodePing` -> `NodePong`) and TCP (`:8423`, `:11434` Ollama, `:22` SSH).
+/// Returns `Some((rtt_ms, primary_port, active_services, optional_remote_node_name))` if reachable.
+fn probe_peer_live(
+    host: &str,
+    ssh_port: u16,
+    local_node: u8,
+    local_name: &str,
+) -> Option<(u16, u16, Vec<&'static str>, Option<String>)> {
+    let is_lan = host.starts_with("192.168.")
+        || host.starts_with("172.")
+        || host.starts_with("10.")
+        || host.starts_with("127.");
+    let timeout_ms = if is_lan { 160u64 } else { 280u64 };
+
+    let mut services: Vec<&'static str> = Vec::new();
+    let mut best_rtt: Option<u16> = None;
+    let mut primary_port = ssh_port;
+    let mut remote_name: Option<String> = None;
+
+    // 1. Try UDP MemNet `:8423` NodePing -> NodePong on LAN/VPN hosts
+    if is_lan {
+        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+            if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
+                let _ = sock.set_read_timeout(Some(Duration::from_millis(45)));
+                let _ = sock.set_write_timeout(Some(Duration::from_millis(30)));
+                let ping = MemnetPayload::NodePing {
+                    origin_node: local_node,
+                    origin_name: local_name.to_string(),
+                    timestamp_ms: 0,
+                };
+                if let Ok(raw) = ping.into_raw_packet(vec![0x00]) {
+                    let start = std::time::Instant::now();
+                    if sock
+                        .send_to(&raw.to_wire_bytes(), SocketAddr::new(ip, MEMNET_FS_PORT))
+                        .is_ok()
+                    {
+                        let mut buf = [0u8; 2048];
+                        if let Ok((len, _)) = sock.recv_from(&mut buf) {
+                            let rtt = start.elapsed().as_millis().clamp(1, 65_535) as u16;
+                            if let Ok(resp_raw) = MemnetRawPacket::from_wire_bytes(&buf[..len]) {
+                                if let Ok(MemnetPayload::NodePong {
+                                    node_name,
+                                    ollama_active,
+                                    ..
+                                }) = MemnetPayload::from_raw_packet(&resp_raw)
+                                {
+                                    best_rtt = Some(rtt);
+                                    primary_port = MEMNET_FS_PORT;
+                                    services.push("MemNet");
+                                    if ollama_active {
+                                        services.push("Ollama");
+                                    }
+                                    remote_name = Some(node_name);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Check Ollama `:11434` on LAN peers (e.g. M1 Ultra Mac Studio `s`)
+        if let Some(rtt) = probe_tcp_port_ms(host, 11434, 80) {
+            best_rtt = Some(best_rtt.map_or(rtt, |b| b.min(rtt)));
+            if primary_port == ssh_port {
+                primary_port = 11434;
+            }
+            if !services.contains(&"Ollama") {
+                services.push("Ollama");
+            }
+        }
+    }
+
+    // 3. Probe SSH port (`22` or custom)
+    if let Some(rtt) = probe_tcp_port_ms(host, ssh_port, timeout_ms) {
+        best_rtt = Some(best_rtt.map_or(rtt, |b| b.min(rtt)));
+        services.push("SSH");
+    }
+
+    best_rtt.map(|rtt| (rtt, primary_port, services, remote_name))
 }
 
 // ============================================================================
@@ -2343,35 +3310,36 @@ pub fn lll_reduce_wave_basis_4d(payload: &str) -> LanguageLllBasisReport {
     let mut mu_q20 = [[0i128; 4]; 4];
     let mut b_star_norm_q20 = [0i128; 4];
 
-    let recompute_gram_schmidt = |b: &[[i64; 4]; 4],
-                                  b_star_q20: &mut [[i128; 4]; 4],
-                                  mu_q20: &mut [[i128; 4]; 4],
-                                  b_star_norm_q20: &mut [i128; 4]| {
-        for i in 0..4 {
-            for d in 0..4 {
-                b_star_q20[i][d] = (b[i][d] as i128) << SHIFT;
-            }
-            for j in 0..i {
-                let mut dot_q20 = 0i128;
+    let recompute_gram_schmidt =
+        |b: &[[i64; 4]; 4],
+         b_star_q20: &mut [[i128; 4]; 4],
+         mu_q20: &mut [[i128; 4]; 4],
+         b_star_norm_q20: &mut [i128; 4]| {
+            for i in 0..4 {
                 for d in 0..4 {
-                    dot_q20 += (b[i][d] as i128) * b_star_q20[j][d];
+                    b_star_q20[i][d] = (b[i][d] as i128) << SHIFT;
                 }
-                mu_q20[i][j] = if b_star_norm_q20[j] > 0 {
-                    ((dot_q20 << SHIFT) + (b_star_norm_q20[j] >> 1)) / b_star_norm_q20[j]
-                } else {
-                    0
-                };
+                for j in 0..i {
+                    let mut dot_q20 = 0i128;
+                    for d in 0..4 {
+                        dot_q20 += (b[i][d] as i128) * b_star_q20[j][d];
+                    }
+                    mu_q20[i][j] = if b_star_norm_q20[j] > 0 {
+                        ((dot_q20 << SHIFT) + (b_star_norm_q20[j] >> 1)) / b_star_norm_q20[j]
+                    } else {
+                        0
+                    };
+                    for d in 0..4 {
+                        b_star_q20[i][d] -= (mu_q20[i][j] * b_star_q20[j][d]) >> SHIFT;
+                    }
+                }
+                let mut nsq_q20 = 0i128;
                 for d in 0..4 {
-                    b_star_q20[i][d] -= (mu_q20[i][j] * b_star_q20[j][d]) >> SHIFT;
+                    nsq_q20 += (b_star_q20[i][d] * b_star_q20[i][d]) >> SHIFT;
                 }
+                b_star_norm_q20[i] = nsq_q20.max(1);
             }
-            let mut nsq_q20 = 0i128;
-            for d in 0..4 {
-                nsq_q20 += (b_star_q20[i][d] * b_star_q20[i][d]) >> SHIFT;
-            }
-            b_star_norm_q20[i] = nsq_q20.max(1);
-        }
-    };
+        };
 
     recompute_gram_schmidt(&b, &mut b_star_q20, &mut mu_q20, &mut b_star_norm_q20);
 
@@ -2412,7 +3380,11 @@ pub fn lll_reduce_wave_basis_4d(payload: &str) -> LanguageLllBasisReport {
 
     let norm_sq_sum = |mat: &[[i64; 4]; 4]| -> u64 {
         mat.iter()
-            .map(|row| row.iter().map(|&x| (x as i128 * x as i128) as u64).sum::<u64>())
+            .map(|row| {
+                row.iter()
+                    .map(|&x| (x as i128 * x as i128) as u64)
+                    .sum::<u64>()
+            })
             .sum()
     };
 
@@ -2734,10 +3706,7 @@ pub fn run_wild_wupz_link_probe(payload: &str, wire: &LitanyWireFrame) -> WildWu
         .into_iter()
         .find(|name| {
             std::env::var_os("PATH")
-                .map(|paths| {
-                    std::env::split_paths(&paths)
-                        .any(|dir| dir.join(name).is_file())
-                })
+                .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).is_file()))
                 .unwrap_or(false)
         })
         .unwrap_or("system-ld")
@@ -2753,7 +3722,10 @@ pub fn run_wild_wupz_link_probe(payload: &str, wire: &LitanyWireFrame) -> WildWu
     bundle.push(1u8); // VERSION = 1
     bundle.extend_from_slice(&2u32.to_le_bytes()); // 2 members
 
-    for (name, bytes) in [("litany.64b", wire_bytes), ("payload.mem8", payload.as_bytes())] {
+    for (name, bytes) in [
+        ("litany.64b", wire_bytes),
+        ("payload.mem8", payload.as_bytes()),
+    ] {
         bundle.push(name.len() as u8);
         bundle.extend_from_slice(name.as_bytes());
         bundle.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
@@ -2812,10 +3784,18 @@ impl GlassdoorSpeciality {
     pub const fn charter(self) -> &'static str {
         match self {
             Self::Colour => "Accountable shared field & pQb/SPQT reconstruction error E <= 65025*N",
-            Self::Dither => "1-bit Bayer legibility & integer Q8 PID closed-loop stability (no derivative kick)",
-            Self::Quantise => "kompress-super-ultra 0x62 LitanyWireFrame, BFP-64 Kleene & 4D Language LLL basis",
-            Self::Performance => "Drift-free 60fps schedule (t_60=1000ms), Parallel RTC τ_eff & wild->wupz->upz link",
-            Self::Determinism => "NO-FLOAT gate, Constructive LLL 0-collision & space-bender 1kyu/2kyu/4kyu proofs",
+            Self::Dither => {
+                "1-bit Bayer legibility & integer Q8 PID closed-loop stability (no derivative kick)"
+            }
+            Self::Quantise => {
+                "kompress-super-ultra 0x62 LitanyWireFrame, BFP-64 Kleene & 4D Language LLL basis"
+            }
+            Self::Performance => {
+                "Drift-free 60fps schedule (t_60=1000ms), Parallel RTC τ_eff & wild->wupz->upz link"
+            }
+            Self::Determinism => {
+                "NO-FLOAT gate, Constructive LLL 0-collision & space-bender 1kyu/2kyu/4kyu proofs"
+            }
         }
     }
 }
@@ -2879,7 +3859,10 @@ impl MemnetGlassdoor {
         entry.total += review.score as u32;
         entry.count += 1;
         if review.approved {
-            *self.would_again.entry(review.speciality.name()).or_default() += 1;
+            *self
+                .would_again
+                .entry(review.speciality.name())
+                .or_default() += 1;
         }
         self.feed.push(review);
     }
@@ -3022,7 +4005,10 @@ mod tests {
         assert_eq!(local.header_overhead_bytes(), 1);
         let wire_local = local.to_wire_bytes();
         assert_eq!(wire_local.len(), 5);
-        assert_eq!(MemnetRawPacket::from_wire_bytes(&wire_local).unwrap(), local);
+        assert_eq!(
+            MemnetRawPacket::from_wire_bytes(&wire_local).unwrap(),
+            local
+        );
 
         let room = MemnetRawPacket::same_room(42, b"hello".to_vec());
         assert_eq!(room.header_overhead_bytes(), 2);
@@ -3050,7 +4036,8 @@ mod tests {
         let selected = state.select_routes(0xC5);
         assert_eq!(selected.len(), 2); // Tier C dual-path zero-packet-loss selection
 
-        let mut usb_route = MemnetRouteEntry::new(42, 1, "usb-peer", MemnetMedium::Usb, "usb://0", 1);
+        let mut usb_route =
+            MemnetRouteEntry::new(42, 1, "usb-peer", MemnetMedium::Usb, "usb://0", 1);
         assert_eq!(usb_route.heartbeat_credits, 3);
         assert!(!usb_route.tick_heartbeat_missed());
         assert!(!usb_route.tick_heartbeat_missed());
@@ -3207,6 +4194,79 @@ mod tests {
         assert_eq!(gd.reviews.len(), 5);
         assert!(gd.reviews.iter().all(|r| r.approved && r.score >= 95));
         assert!(gd.glassdoor_json.contains("\"name\":\"colour\""));
-        assert!(gd.glassdoor_html.contains("kompress-super-ultra :: GLASSDOOR"));
+        assert!(gd
+            .glassdoor_html
+            .contains("kompress-super-ultra :: GLASSDOOR"));
+    }
+
+    #[test]
+    fn udp_node_ping_pong_and_wave_qa_responder_round_trip() {
+        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let addr = sock.local_addr().unwrap();
+        drop(sock);
+        let bind_str = addr.to_string();
+
+        let mut server_state = MemnetNodeState::default();
+        server_state.node_name = "s-mac-studio".to_string();
+        server_state.learn_wave_qa(
+            "What GPU and memory does the Mac Studio have?",
+            "Apple M1 Ultra with 128 GB unified memory and Ollama on port 11434.",
+        );
+
+        let handle = std::thread::spawn(move || {
+            server_state.serve_udp_responder(&bind_str, Some(2)).unwrap()
+        });
+
+        std::thread::sleep(Duration::from_millis(25));
+        let client = UdpSocket::bind("127.0.0.1:0").unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .unwrap();
+
+        // 1. Send NodePing -> receive NodePong
+        let ping = MemnetPayload::NodePing {
+            origin_node: 42,
+            origin_name: "linux-box".to_string(),
+            timestamp_ms: 1337,
+        }
+        .into_raw_packet(vec![0x00])
+        .unwrap();
+        client.send_to(&ping.to_wire_bytes(), addr).unwrap();
+        let mut buf = [0u8; 4096];
+        let (len, _) = client.recv_from(&mut buf).unwrap();
+        let raw_pong = MemnetRawPacket::from_wire_bytes(&buf[..len]).unwrap();
+        match MemnetPayload::from_raw_packet(&raw_pong).unwrap() {
+            MemnetPayload::NodePong {
+                node_name,
+                wave_qa_entries,
+                timestamp_ms,
+                ..
+            } => {
+                assert_eq!(node_name, "s-mac-studio");
+                assert_eq!(wave_qa_entries, 1);
+                assert_eq!(timestamp_ms, 1337);
+            }
+            other => panic!("Expected NodePong, got {other:?}"),
+        }
+
+        // 2. Send WaveQaQuery -> receive WaveQaResponse
+        let q = MemnetPayload::WaveQaQuery {
+            origin_node: 42,
+            question: "What memory does the Mac Studio have?".to_string(),
+            min_resonance_pm: 300,
+        }
+        .into_raw_packet(vec![0xF1])
+        .unwrap();
+        client.send_to(&q.to_wire_bytes(), addr).unwrap();
+        let (len2, _) = client.recv_from(&mut buf).unwrap();
+        let raw_qa = MemnetRawPacket::from_wire_bytes(&buf[..len2]).unwrap();
+        match MemnetPayload::from_raw_packet(&raw_qa).unwrap() {
+            MemnetPayload::WaveQaResponse(pkt) => {
+                assert!(pkt.answer.contains("128 GB"));
+            }
+            other => panic!("Expected WaveQaResponse, got {other:?}"),
+        }
+
+        assert_eq!(handle.join().unwrap(), 2);
     }
 }

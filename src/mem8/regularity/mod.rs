@@ -425,6 +425,19 @@ mod tests {
         assert_eq!(report.regime, PhaseRegime::AnomalousC2Clique);
         assert!(report.critical_scale_n_two_thirds > 1.0);
         assert!(report.spectral_radius_lambda1 > 0.0);
+        assert!(report.mean_degree_c_den >= 1);
+        assert!(report.molloy_reed_kappa_den >= 1);
+        // 25-node path (deg 1,2,...,2,1) + 5-clique on nodes 25..30 (deg 8 each):
+        // Σ deg(v)² = 2*1 + 23*4 + 5*64 = 414, Σ deg(v) = 2*1 + 23*2 + 5*8 = 88 -> κ = 414/88 = 207/44 > 2
+        assert_eq!(
+            (report.molloy_reed_kappa_num, report.molloy_reed_kappa_den),
+            (207, 44)
+        );
+        assert!(report.percolation_kappa_gt_2);
+        assert!(report.poisoned_leaf_reaches_core);
+        assert!(report
+            .percolation_diagnostic
+            .contains("giant transitive reachability component forms across package boundaries"));
         assert!(!report.anomalies.is_empty());
         assert!(!report.anomalies[0].pivot_symbols.is_empty());
         assert!(report.anomalies[0].directed_scc_cycles >= 1);

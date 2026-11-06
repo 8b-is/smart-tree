@@ -792,15 +792,15 @@ pub struct MemnetCommand {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct G8tCommand {
-    /// Action: best (or suggest), yolo, submit (or publish), leaderboard (or scoreboard)
+    /// Action: leaderboard (or scoreboard), targets (or bounty/arcade), golf (or routines/routinesd), best (or suggest), yolo, submit (or publish), optimize
     #[arg(default_value = "leaderboard")]
     pub action: String,
-    /// Query string for best/yolo, or file/source_code for submit
+    /// Query string for best/yolo, routine filter for golf (default: "all"), or file/source_code for submit
     pub target: Option<String>,
     /// Return ONLY the #1 fastest verified Rust function (raw drop-in source + 1-line receipt)
     #[arg(long)]
     pub yolo: bool,
-    /// Partnership attribution for submit (e.g. "Hue + Gemini (0+1)")
+    /// Partnership attribution for submit/golf (e.g. "Hue + Gemini (0+1)")
     #[arg(long, default_value = "Hue + Gemini (0+1)")]
     pub partner: String,
     /// Domain tag for submit
@@ -809,7 +809,7 @@ pub struct G8tCommand {
     /// Optional architecture filter (e.g. "x86_64", "aarch64")
     #[arg(long)]
     pub arch: Option<String>,
-    /// Number of top results to display
+    /// Number of top results to display (or max routines to golf)
     #[arg(long)]
     pub top: Option<usize>,
 }
