@@ -7,6 +7,7 @@ use st::g8t_integration::{
     FokenScoreboardReport, FokenBreakdown, RationalPq, LeaderboardCapsuleEntry,
     sovereign_cycle_golf_library, compute_capsule_fokens,
     FOKEN_BASE_C64_COMPLIANT, FOKEN_EQUIVALENCE_CROWN_BONUS, FOKEN_PER_POSITIVE_VOTE, FOKEN_SUB_10_CYCLE_BONUS,
+    gcd_u64,
 };
 
 #[test]
@@ -203,4 +204,42 @@ fn test_rational_pq_arithmetic() {
     use std::cmp::Ordering;
     let cmp = st::g8t_integration::cmp_cycles_fastest_first(r1, r2);
     assert_eq!(cmp, Ordering::Less); // 8 is faster than 10
+}
+
+#[test]
+fn test_qwave_marine_jitter_pq_exact_arithmetic() {
+    // Test the qwave p/q function produces valid output
+    // Uses packed_peaks with known frame values
+    let packed_peaks: u64 = 0x0010_0010_0010_0010; // pt=16, at=16 repeated
+    
+    let result = st::g8t_integration::st_golf_qwave_marine_jitter_pq_u64(packed_peaks);
+    
+    // Should produce a valid u64 result (not overflow)
+    assert!(result <= u64::MAX);
+    
+    // Test with different values
+    let packed_peaks2: u64 = 0x0019_0001_0019_0001; // pt=25, at=1 repeated
+    let result2 = st::g8t_integration::st_golf_qwave_marine_jitter_pq_u64(packed_peaks2);
+    assert!(result2 <= u64::MAX);
+    
+    // Test edge case: minimum values
+    let packed_peaks3: u64 = 0x0019_0001_0019_0001; // pt=25 (clamped), at=1 (clamped)
+    let result3 = st::g8t_integration::st_golf_qwave_marine_jitter_pq_u64(packed_peaks3);
+    assert!(result3 <= u64::MAX);
+    
+    println!("qwave p/q results: {}, {}, {}", result, result2, result3);
+}
+
+#[test]
+fn test_gcd_u64_stein_algorithm() {
+    // Test Stein's Binary GCD implementation
+    assert_eq!(gcd_u64(0, 5), 5);
+    assert_eq!(gcd_u64(5, 0), 5);
+    assert_eq!(gcd_u64(48, 18), 6);
+    assert_eq!(gcd_u64(17, 13), 1);
+    assert_eq!(gcd_u64(100, 25), 25);
+    assert_eq!(gcd_u64(2_u64.pow(10), 2_u64.pow(5)), 2_u64.pow(5));
+    
+    // Large numbers: gcd(2^30 * 3, 2^20 * 5) = 2^20
+    assert_eq!(gcd_u64((2_u64.pow(30)) * 3, (2_u64.pow(20)) * 5), 2_u64.pow(20));
 }

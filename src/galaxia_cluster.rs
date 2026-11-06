@@ -581,3 +581,107 @@ impl KintsugiLedger {
         event
     }
 }
+
+/// Append-only storage trait for Kintsugi ledger persistence.
+pub trait AppendOnlyStore: Send + Sync {
+    /// Append an event to the store.
+    fn append(&mut self, event: &KintsugiEvent) -> Result<(), String>;
+
+    /// Read all events from the store.
+    fn read_all(&self) -> Result<Vec<KintsugiEvent>, String>;
+
+    /// Get the last event (for hash chaining).
+    fn last_event(&self) -> Result<Option<KintsugiEvent>, String>;
+}
+
+/// File-based append-only store for Kintsugi ledger.
+pub struct FileStore {
+    path: std::path::PathBuf,
+}
+
+impl FileStore {
+    /// Create a new FileStore at the given path.
+    pub fn new(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let path = path.as_ref().to_path_buf();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        Ok(Self { path })
+    }
+}
+
+impl AppendOnlyStore for FileStore {
+    fn append(&mut self, event: &KintsugiEvent) -> Result<(), String> {
+        let line = serde_json::to_string(event).map_err(|e| e.to_string())?;
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .map_err(|e| e.to_string())?;
+        writeln!(file, "{}", line).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    fn read_all(&self) -> Result<Vec<KintsugiEvent>, String> {
+        if !self.path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = std::fs::read_to_string(&self.path).map_err(|e| e.to_string())?;
+        let mut events = Vec::new();
+        for line in content.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let event: KintsugiEvent = serde_json::from_str(line).map_err(|e| e.to_string())?;
+            events.push(event);
+        }
+        Ok(events)
+    }
+
+    fn last_event(&self) -> Result<Option<KintsugiEvent>, String> {
+        let events = self.read_all()?;
+        Ok(events.last().cloned())
+    }
+}
+
+/// KintsugiLedger with optional persistent store.
+pub struct PersistentKintsugiLedger {
+    ledger: KintsugiLedger,
+    store: Option<Box<dyn AppendOnlyStore>>,
+}
+
+impl PersistentKintsugiLedger {
+    pub fn new(store: Option<Box<dyn AppendOnlyStore>>) -> Result<Self, String> {
+        let mut ledger = KintsugiLedger::new();
+        
+        // Load existing events from store if available
+        if let Some(ref store) = store {
+            let events = store.read_all()?;
+            ledger.events = events;
+        }
+        
+        Ok(Self { ledger, store })
+    }
+
+    pub fn finalize_event(
+        &mut self,
+        lap: u64,
+        payload: Value,
+        mem8_state: &[u8],
+        sector_id: &str,
+    ) -> Result<KintsugiEvent, String> {
+        let event = self.ledger.finalize_event(lap, payload, mem8_state, sector_id);
+        
+        // Persist to store if available
+        if let Some(ref mut store) = self.store {
+            store.append(&event)?;
+        }
+        
+        Ok(event)
+    }
+
+    pub fn events(&self) -> &[KintsugiEvent] {
+        &self.ledger.events
+    }
+}

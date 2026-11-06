@@ -81,6 +81,90 @@ pub const fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
     a << shift
 }
 
+/// qwave Marine Jitter Salience with exact RationalPq arithmetic (zero floats, zero Q8 fixed-point).
+/// All divisions are exact reduced fractions via Stein's Binary GCD.
+pub const fn st_golf_qwave_marine_jitter_pq_u64(packed_peaks: u64) -> u64 {
+    const Q8_SCALE: u64 = 256;
+    
+    let f0 = packed_peaks & 0xFFFF;
+    let p0 = (f0 >> 8) & 0xFF;
+    let a0 = f0 & 0xFF;
+    
+    let p0_clamped = if p0 < 25 { 25 } else { p0 };
+    let a0_clamped = if a0 < 1 { 1 } else { a0 };
+    
+    let mut ema_p_num = (p0_clamped as i64) * Q8_SCALE as i64;
+    let mut ema_p_den = 1i64;
+    
+    let mut ema_a_num = (a0_clamped as i64) * Q8_SCALE as i64;
+    let mut ema_a_den = 1i64;
+    
+    let mut total_salience_num = 32767i64;
+    let mut total_salience_den = 1i64;
+    
+    let mut shift: u32 = 16;
+    while shift < 64 {
+        let frame = (packed_peaks >> shift) & 0xFFFF;
+        let pt = (frame >> 8) & 0xFF;
+        let at = frame & 0xFF;
+        
+        let pt_clamped = if pt < 25 { 25 } else { pt };
+        let at_clamped = if at < 1 { 1 } else { at };
+        
+        let period_q8_num = (pt_clamped as i64) * Q8_SCALE as i64;
+        let period_q8_den = 1i64;
+        
+        let amp_q8_num = (at_clamped as i64) * Q8_SCALE as i64;
+        let amp_q8_den = 1i64;
+        
+        ema_p_num = ema_p_num * 7 + period_q8_num;
+        ema_p_den = ema_p_den * 8;
+        
+        ema_a_num = ema_a_num * 7 + amp_q8_num;
+        ema_a_den = ema_a_den * 8;
+        
+        let g1 = gcd_u64(ema_p_num.unsigned_abs() as u64, ema_p_den as u64) as i64;
+        ema_p_num = ema_p_num / g1;
+        ema_p_den = ema_p_den / g1;
+        
+        let g2 = gcd_u64(ema_a_num.unsigned_abs() as u64, ema_a_den as u64) as i64;
+        ema_a_num = ema_a_num / g2;
+        ema_a_den = ema_a_den / g2;
+        
+        let period_minus_ema_p = (period_q8_num * ema_p_den - ema_p_num * period_q8_den).abs();
+        let period_minus_ema_p_den = period_q8_den * ema_p_den;
+        
+        let amp_minus_ema_a = (amp_q8_num * ema_a_den - ema_a_num * amp_q8_den).abs();
+        let amp_minus_ema_a_den = amp_q8_den * ema_a_den;
+        
+        let ja_num = amp_minus_ema_a;
+        let ja_den = amp_minus_ema_a_den * 4;
+        
+        let jp_ja_num = period_minus_ema_p * ja_den + ja_num * period_minus_ema_p_den;
+        let jp_ja_den = period_minus_ema_p_den * ja_den;
+        
+        let denom_num = 256 * jp_ja_den + jp_ja_num;
+        let denom_den = jp_ja_den;
+        
+        let inc_num = 8_388_352i64 * denom_den;
+        let inc_den = denom_num as u64;
+        
+        total_salience_num = total_salience_num * inc_den as i64 + inc_num * total_salience_den;
+        total_salience_den = total_salience_den * inc_den as i64;
+        
+        let g3 = gcd_u64(total_salience_num.unsigned_abs() as u64, total_salience_den as u64) as i64;
+        total_salience_num /= g3;
+        total_salience_den /= g3;
+        
+        shift += 16;
+    }
+    
+    let result_num = total_salience_num / 4;
+    let result_den = total_salience_den;
+    
+    (result_num / result_den) as u64
+}
+
 /// Exact reduced rational number `num / den` (`p/q`) with `den > 0` and `gcd(|num|, den) == 1`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RationalPq {
@@ -2920,6 +3004,14 @@ pub fn sovereign_cycle_golf_library() -> Vec<SovereignGolfSpec> {
             domain: "wifakerf-ternary",
             technique: "Branchless relational predicate radix-3 ternary gate packing",
             source_code: "pub const fn st_golf_steward_wifakerf_ternary_gate_pack_i64(a: i64, b: i64, threshold: i64) -> i64 {\n    let th = if threshold.abs() < 1 { 1 } else { threshold.abs() };\n    let d = a.wrapping_sub(b);\n    let t0 = 1 + ((a > th) as i64) - ((a < -th) as i64);\n    let t1 = 1 + ((b > th) as i64) - ((b < -th) as i64);\n    let t2 = 1 + ((d > th) as i64) - ((d < -th) as i64);\n    t0 * 9 + t1 * 3 + t2\n}",
+        },
+        SovereignGolfSpec {
+            target_name: "qwave_marine_jitter_salience_pq",
+            target_digest_prefix: "qwave_pq_sal",
+            golfed_fn_name: "st_golf_qwave_marine_jitter_pq_u64",
+            domain: "qwave",
+            technique: "Exact rational p/q EMA and salience computation using RationalPq (zero floats, zero Q8 fixed-point). All divisions are exact reduced fractions via Stein's Binary GCD.",
+            source_code: "use crate::g8t_integration::RationalPq;\n\npub const fn st_golf_qwave_marine_jitter_pq_u64(packed_peaks: u64) -> u64 {\n    // Q8 fixed-point converted to exact p/q\n    const Q8_SCALE: u64 = 256;\n    \n    let f0 = packed_peaks & 0xFFFF;\n    let p0 = (f0 >> 8) & 0xFF;\n    let a0 = f0 & 0xFF;\n    \n    // EMA state as exact p/q: numerator/denominator\n    let p0_clamped = if p0 < 25 { 25 } else { p0 };\n    let a0_clamped = if a0 < 1 { 1 } else { a0 };\n    \n    // ema_p = p0 * Q8 = p0 * 256/1\n    let mut ema_p_num = (p0_clamped as i64) * Q8_SCALE as i64;\n    let mut ema_p_den = 1i64;\n    \n    // ema_a = a0 * Q8 = a0 * 256/1\n    let mut ema_a_num = (a0_clamped as i64) * Q8_SCALE as i64;\n    let mut ema_a_den = 1i64;\n    \n    // Total salience starts at 32767 (exact)\n    let mut total_salience_num = 32767i64;\n    let mut total_salience_den = 1i64;\n    \n    let mut shift: u32 = 16;\n    while shift < 64 {\n        let frame = (packed_peaks >> shift) & 0xFFFF;\n        let pt = (frame >> 8) & 0xFF;\n        let at = frame & 0xFF;\n        \n        let pt_clamped = if pt < 25 { 25 } else { pt };\n        let at_clamped = if at < 1 { 1 } else { at };\n        \n        // period_q8 = pt * Q8 as exact p/q\n        let period_q8_num = (pt_clamped as i64) * Q8_SCALE as i64;\n        let period_q8_den = 1i64;\n        \n        // amp_q8 = at * Q8 as exact p/q\n        let amp_q8_num = (at_clamped as i64) * Q8_SCALE as i64;\n        let amp_q8_den = 1i64;\n        \n        // EMA update: ema = (ema * 7 + new) / 8\n        // ema_p = (ema_p * 7 + period_q8) / 8\n        ema_p_num = ema_p_num * 7 + period_q8_num;\n        ema_p_den = ema_p_den * 8;\n        \n        // ema_a = (ema_a * 7 + amp_q8) / 8\n        ema_a_num = ema_a_num * 7 + amp_q8_num;\n        ema_a_den = ema_a_den * 8;\n        \n        // Reduce fractions using gcd\n        let g1 = gcd_u64(ema_p_num.unsigned_abs() as u64, ema_p_den as u64);\n        ema_p_num = (ema_p_num as i64 / g1 as i64);\n        ema_p_den = (ema_p_den / g1);\n        \n        let g2 = gcd_u64(ema_a_num.unsigned_abs() as u64, ema_a_den as u64);\n        ema_a_num = (ema_a_num as i64 / g2 as i64);\n        ema_a_den = (ema_a_den / g2);\n        \n        // Jitter: jp = |period_q8 - ema_p|, ja = |amp_q8 - ema_a| >> 2\n        // Cross-multiply for exact difference\n        let period_minus_ema_p = (period_q8_num * ema_p_den - ema_p_num * period_q8_den).abs();\n        let period_minus_ema_p_den = period_q8_den * ema_p_den;\n        \n        let amp_minus_ema_a = (amp_q8_num * ema_a_den - ema_a_num * amp_q8_den).abs();\n        let amp_minus_ema_a_den = amp_q8_den * ema_a_den;\n        \n        // ja = (amp_diff / 4) as exact p/q\n        let ja_num = amp_minus_ema_a;\n        let ja_den = amp_minus_ema_a_den * 4;\n        \n        // Denominator for salience: 256 + jp + ja\n        // jp + ja as exact p/q\n        let jp_ja_num = period_minus_ema_p * ja_den + ja_num * period_minus_ema_p_den;\n        let jp_ja_den = period_minus_ema_p_den * ja_den;\n        \n        // 256 + jp + ja = (256 * jp_ja_den + jp_ja_num) / jp_ja_den\n        let denom_num = 256 * jp_ja_den + jp_ja_num;\n        let denom_den = jp_ja_den;\n        \n        // Salience increment: 8_388_352 / denom\n        let inc_num = 8_388_352i64 * denom_den;\n        let inc_den = denom_num as u64;\n        \n        // total_salience += inc\n        total_salience_num = total_salience_num * inc_den as i64 + inc_num * total_salience_den;\n        total_salience_den = total_salience_den * inc_den as i64;\n        \n        // Reduce total salience\n        let g3 = gcd_u64(total_salience_num.unsigned_abs() as u64, total_salience_den as u64);\n        total_salience_num /= g3 as i64;\n        total_salience_den /= g3;\n        \n        shift += 16;\n    }\n    \n    // Return integer part of total_salience >> 2\n    let result_num = total_salience_num / 4;\n    let result_den = total_salience_den;\n    \n    // Integer division: result_num / result_den\n    (result_num / result_den) as u64\n}\n\n// Stein's Binary GCD for exact rational reduction\nconst fn gcd_u64(mut a: u64, mut b: u64) -> u64 {\n    if a == 0 { return b; }\n    if b == 0 { return a; }\n    let shift = (a | b).trailing_zeros();\n    a >>= a.trailing_zeros();\n    while b != 0 {\n        b >>= b.trailing_zeros();\n        if a > b { std::mem::swap(&mut a, &mut b); }\n        b = b - a;\n    }\n    a << shift\n}",
         },
         SovereignGolfSpec {
             target_name: "aurora_mopd2_distill_loss_q15",
