@@ -266,6 +266,9 @@ google = [
     "http-body-util",
 ]
 
+# ARM SVE2 (Scalable Vector Extension 2) for AArch64
+sve2 = []
+
 # Terminal UI (tui) and Web dashboard are now always built-in
 
 # Full features (includes candle for local LLM, google drive & gmail sync, and voice)
