@@ -4,10 +4,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    net::IpAddr,
     sync::{Arc, RwLock},
     time::Duration,
 };
 use tokio::sync::broadcast;
+use url::Url;
 
 // ============================================================================
 // 1. State-CRDT Semilattice & Monotonic Term Leader Election Types
@@ -318,20 +320,38 @@ pub enum GalaxiaGossipEvent {
     CrdtStateSync { crdt: GalaxiaClusterCrdt },
 }
 
+/// Gossip bus configuration
+#[derive(Debug, Clone, Default)]
+pub struct GossipConfig {
+    /// Allowed peer URLs/hosts (if empty, all allowed except blocklist)
+    pub allowlist: Vec<String>,
+    /// Blocked peer URLs/hosts (takes precedence)
+    pub blocklist: Vec<String>,
+    /// Allow private IP ranges (default: false for security)
+    pub allow_private_ips: bool,
+    /// Allow loopback addresses (default: true for local dev)
+    pub allow_loopback: bool,
+}
+
 #[derive(Clone)]
 pub struct GalaxiaGossipBus {
     pub node_id: String,
     pub crdt: Arc<RwLock<GalaxiaClusterCrdt>>,
     pub tx: broadcast::Sender<GalaxiaGossipEvent>,
     pub http_client: Client,
+    config: GossipConfig,
 }
 
 impl GalaxiaGossipBus {
     pub fn new(node_id: impl Into<String>) -> Self {
-        Self::with_base_url(node_id, "")
+        Self::with_config(node_id, "", GossipConfig::default())
     }
 
     pub fn with_base_url(node_id: impl Into<String>, base_url: impl Into<String>) -> Self {
+        Self::with_config(node_id, base_url, GossipConfig::default())
+    }
+
+    pub fn with_config(node_id: impl Into<String>, base_url: impl Into<String>, config: GossipConfig) -> Self {
         let id_str = node_id.into();
         let url_str = base_url.into();
         let (tx, _) = broadcast::channel(128);
@@ -347,7 +367,74 @@ impl GalaxiaGossipBus {
             crdt: Arc::new(RwLock::new(initial_crdt)),
             tx,
             http_client,
+            config,
         }
+    }
+
+    /// Set gossip configuration
+    pub fn set_config(&mut self, config: GossipConfig) {
+        self.config = config;
+    }
+
+    /// Check if a peer URL is allowed by the gossip configuration
+    fn is_peer_allowed(&self, peer_url: &str) -> bool {
+        let url = match Url::parse(peer_url) {
+            Ok(u) => u,
+            Err(_) => return false,
+        };
+
+        let host = match url.host_str() {
+            Some(h) => h,
+            None => return false,
+        };
+
+        // Check blocklist first (takes precedence)
+        if self.config.blocklist.iter().any(|b| host.contains(b) || b == "*") {
+            return false;
+        }
+
+        // Check allowlist (if configured, only allow listed hosts)
+        if !self.config.allowlist.is_empty() {
+            if !self.config.allowlist.iter().any(|a| host.contains(a) || a == "*") {
+                return false;
+            }
+        }
+
+        // Parse IP for private/loopback checks
+        let ip = match host.parse::<IpAddr>() {
+            Ok(ip) => ip,
+            Err(_) => {
+                // Hostname, skip IP-based checks (would need DNS lookup)
+                return true;
+            }
+        };
+
+        // Check loopback
+        if !self.config.allow_loopback && ip.is_loopback() {
+            return false;
+        }
+
+        // Check private IP ranges
+        if !self.config.allow_private_ips {
+            if ip.is_loopback() || ip.is_unspecified() {
+                return false;
+            }
+            // Check IPv4 private ranges
+            if let std::net::IpAddr::V4(ipv4) = ip {
+                if ipv4.is_private() {
+                    return false;
+                }
+            }
+            // Check IPv6 unique local addresses (fc00::/7)
+            if let std::net::IpAddr::V6(ipv6) = ip {
+                let octets = ipv6.octets();
+                if octets[0] & 0xfe == 0xfc { // fc00::/7
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 
     pub fn set_self_base_url(&self, base_url: &str) {
@@ -441,6 +528,11 @@ impl GalaxiaGossipBus {
         peer_url: &str,
         model_cache: &LlamaModelCache,
     ) -> Result<CrdtMergeOutcome, String> {
+        // Validate peer URL against gossip configuration
+        if !self.is_peer_allowed(peer_url) {
+            return Err(format!("Peer URL '{}' blocked by gossip configuration", peer_url));
+        }
+
         let url = format!("{}/galaxia/crdt-gossip", peer_url.trim_end_matches('/'));
         let local_snapshot = self.snapshot_crdt();
 
@@ -471,6 +563,11 @@ impl GalaxiaGossipBus {
         let outcome = self.merge_remote_crdt(&remote_crdt);
 
         for (source_peer_url, model_id) in &outcome.missing_kv_prefixes {
+            // Validate source peer URL against gossip configuration
+            if !self.is_peer_allowed(source_peer_url) {
+                continue;
+            }
+
             let export_url = format!(
                 "{}/galaxia/kv-export?model={}",
                 source_peer_url.trim_end_matches('/'),

@@ -1,3 +1,6 @@
 [submodule "marqant"]
 	path = marqant
 	url = https://github.com/8b-is/marqant.git
+[submodule "external/BUI"]
+	path = external/BUI
+	url = https://github.com/ppmpreetham/BUI.git

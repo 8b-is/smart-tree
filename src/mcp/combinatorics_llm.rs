@@ -4498,9 +4498,18 @@ pub struct AppState {
 impl AppState {
     pub fn new(max_models: usize) -> Self {
         let node_id = format!("sector-{}", rand::random::<u64>() % 1000);
+        
+        // Configure gossip bus with secure defaults
+        let gossip_config = crate::galaxia_cluster::GossipConfig {
+            allowlist: vec![],
+            blocklist: vec!["localhost".to_string(), "127.0.0.1".to_string(), "0.0.0.0".to_string()],
+            allow_private_ips: false,
+            allow_loopback: false,
+        };
+        
         Self {
             model_cache: LlamaModelCache::new(max_models),
-            gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus::new(node_id),
+            gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus::with_config(node_id, "", gossip_config),
             wave_ledger: Arc::new(RwLock::new(crate::galaxia_cluster::KintsugiLedger::new())),
         }
     }

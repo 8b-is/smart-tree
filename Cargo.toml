@@ -185,6 +185,10 @@ burn-ndarray = { package = "burn-flex", version = "0.23.0-pre.1", optional = tru
 tokenizers = { version = "0.21", optional = true }
 marqant = "1.1.8"
 
+# BUI (Blender UI) GUI framework - REQUIRES cmake to build C++ backend
+# Install cmake first: brew install cmake (macOS) / apt-get install cmake (Linux)
+blenderui = { version = "0.4", optional = true, default-features = false, features = ["slug", "png", "webp", "svg", "gpu", "freetype", "filebrowser"] }
+
 # Voice transcription/TTS (liquid-rust)
 # Note: Requires liquid-rust to be properly set up with its dependencies
 # Uncomment when liquid-rust is ready:
@@ -276,10 +280,16 @@ google = [
 # ARM SVE2 (Scalable Vector Extension 2) for AArch64
 sve2 = []
 
+# BUI (Blender UI) GUI framework
+bui = ["blenderui"]
+
 # Terminal UI (tui) and Web dashboard are now always built-in
 
 # Full features (includes burn for local LLM, google drive & gmail sync, and voice)
 full = ["burn", "google", "voice"]
+
+# Full with BUI (requires cmake)
+full-bui = ["full", "bui"]
 
 # Full with voice alias
 full-voice = ["full"]

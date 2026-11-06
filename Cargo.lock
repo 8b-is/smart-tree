@@ -837,6 +837,70 @@ dependencies = [
 ]
 
 [[package]]
+name = "blenderui"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e306375a9563c47f9b61c03d7dfee48ad23acaaa2a1eff4a4735598ec0ada14"
+dependencies = [
+ "blenderui-macros",
+ "blenderui-sys",
+ "blenderui-table",
+ "blenderui-tailwind",
+ "blenderui-vlist",
+ "paste",
+ "smallvec",
+ "taffy",
+]
+
+[[package]]
+name = "blenderui-macros"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65bff0fc4aa19cc7293cacb986d7909908156680309a79ec64b4a75e694bb663"
+dependencies = [
+ "blenderui-tailwind",
+]
+
+[[package]]
+name = "blenderui-paint"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dfc98f05a4556ceda1923bff555ac48f02504d523bed4eada8946575512d38f"
+
+[[package]]
+name = "blenderui-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60ed3b7a9e076c660fcf34aa0b4521778eecb1d0283e12de3872d350701ef7d8"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
+name = "blenderui-table"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f938960d331500c0b06bde262c85e97b59a963b95487a8af46e178a78ef26335"
+dependencies = [
+ "blenderui-paint",
+]
+
+[[package]]
+name = "blenderui-tailwind"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0ffa5086cc343f5190faaabcf7ab86dcfc7ea1734e742dd91a396337dddf4e1"
+
+[[package]]
+name = "blenderui-vlist"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5720ab418c9d0cf60185a555ce4f46fc6a37ca29d82c0cdb87d266a5e601ca2f"
+dependencies = [
+ "blenderui-paint",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8906,7 +8970,7 @@ dependencies = [
  "rustc_apfloat",
  "slotmap",
  "smallvec",
- "spin 0.9.9",
+ "spin 0.12.3",
  "thiserror 2.0.21",
  "utf8-chars",
 ]
@@ -10940,6 +11004,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bincode",
+ "blenderui",
  "burn 0.23.0-pre.1",
  "burn-flex 0.23.0-pre.1",
  "burn-import",
@@ -11049,9 +11114,6 @@ name = "spin"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
-dependencies = [
- "lock_api",
-]
 
 [[package]]
 name = "spin"
@@ -11377,6 +11439,17 @@ dependencies = [
  "nom 7.1.3",
  "time",
  "winapi",
+]
+
+[[package]]
+name = "taffy"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31f7bd2d97198df05186f93a3a3c306845f40e8b3c22bf9279cdd7e5cf5fea7d"
+dependencies = [
+ "serde",
+ "slotmap",
+ "smallvec",
 ]
 
 [[package]]
