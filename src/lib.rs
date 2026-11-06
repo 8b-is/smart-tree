@@ -53,7 +53,7 @@ pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features wit
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
 pub mod ternary_deck; // Executable 5-card ternary verification deck
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
-// pub mod tree_sitter_quantum; // Removed: requires crabcc/tree-sitter dependencies
+                   // pub mod tree_sitter_quantum; // Removed: requires crabcc/tree-sitter dependencies
 pub mod ultra_zeno; // UltraZeno M1-M2-M3 Information Bottleneck & System 1/2 Cognitive Engine
 pub mod universal_chat_scanner; // Finds conversations everywhere!
 pub mod universal_format_detector; // Detects format by structure! // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni

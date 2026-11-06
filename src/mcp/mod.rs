@@ -82,6 +82,7 @@ mod enhanced_tool_descriptions;
 mod git_memory_integration;
 mod helpers;
 mod hook_tools;
+pub mod memnet_bridge;
 mod negotiation;
 pub mod permissions;
 mod proactive_assistant;

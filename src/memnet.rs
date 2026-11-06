@@ -2278,10 +2278,7 @@ impl MemnetNodeState {
                         (idx, res)
                     }));
                 }
-                handles
-                    .into_iter()
-                    .filter_map(|h| h.join().ok())
-                    .collect()
+                handles.into_iter().filter_map(|h| h.join().ok()).collect()
             });
 
         for (idx, probe_res) in probed_peers {
@@ -2311,8 +2308,7 @@ impl MemnetNodeState {
                     entry.update_with_rtc(rtt_ms, 150);
                 } else {
                     entry.jitter_ms = 1;
-                    entry.rtc_ms =
-                        (rtt_ms as u32) + 2 + entry.medium.intrinsic_rtc_floor_ms();
+                    entry.rtc_ms = (rtt_ms as u32) + 2 + entry.medium.intrinsic_rtc_floor_ms();
                 }
                 entry.heartbeat_credits = entry.max_credits;
                 entry.status = RouteStatus::Up;
@@ -2385,7 +2381,10 @@ impl MemnetNodeState {
         .ok()?;
         let wire = query_pkt.to_wire_bytes();
 
-        let _ = sock.send_to(&wire, SocketAddr::from(([255, 255, 255, 255], MEMNET_FS_PORT)));
+        let _ = sock.send_to(
+            &wire,
+            SocketAddr::from(([255, 255, 255, 255], MEMNET_FS_PORT)),
+        );
         for r in &self.routes {
             if r.status == RouteStatus::Up {
                 if let Some(host) = r.endpoint.split(':').next() {
@@ -2405,7 +2404,11 @@ impl MemnetNodeState {
                 {
                     let score = pkt.resonance_permille(question);
                     if score >= min_resonance_pm {
-                        if !self.wave_qa_cache.iter().any(|e| e.packet_id == pkt.packet_id) {
+                        if !self
+                            .wave_qa_cache
+                            .iter()
+                            .any(|e| e.packet_id == pkt.packet_id)
+                        {
                             self.wave_qa_cache.push(pkt.clone());
                         }
                         return Some((score, pkt));
@@ -2418,7 +2421,11 @@ impl MemnetNodeState {
 
     /// Run a live UDP MemNet responder on `bind_addr` (default `0.0.0.0:8423`), answering
     /// `NodePing` with `NodePong`, `WaveQaQuery` with `WaveQaResponse`, and recording announced shares.
-    pub fn serve_udp_responder(&mut self, bind_addr: &str, max_requests: Option<usize>) -> Result<usize> {
+    pub fn serve_udp_responder(
+        &mut self,
+        bind_addr: &str,
+        max_requests: Option<usize>,
+    ) -> Result<usize> {
         let sock = UdpSocket::bind(bind_addr)
             .with_context(|| format!("Failed to bind MemNet UDP listener on {bind_addr}"))?;
         let mut handled = 0usize;
@@ -2463,15 +2470,19 @@ impl MemnetNodeState {
                     min_resonance_pm,
                 } => {
                     if let Some((_score, pkt)) = self.query_wave_qa(&question, min_resonance_pm) {
-                        if let Ok(resp_raw) =
-                            MemnetPayload::WaveQaResponse(pkt).into_raw_packet(vec![self.local_address])
+                        if let Ok(resp_raw) = MemnetPayload::WaveQaResponse(pkt)
+                            .into_raw_packet(vec![self.local_address])
                         {
                             let _ = sock.send_to(&resp_raw.to_wire_bytes(), peer);
                         }
                     }
                 }
                 MemnetPayload::WaveQaResponse(pkt) => {
-                    if !self.wave_qa_cache.iter().any(|e| e.packet_id == pkt.packet_id) {
+                    if !self
+                        .wave_qa_cache
+                        .iter()
+                        .any(|e| e.packet_id == pkt.packet_id)
+                    {
                         self.wave_qa_cache.push(pkt);
                         let _ = self.save();
                     }
@@ -2804,7 +2815,11 @@ fn detect_local_network_interfaces() -> Vec<(String, String, bool, MemnetMedium)
                     continue;
                 }
                 let name = parts[0];
-                if name == "lo" || name.starts_with("docker") || name.starts_with("br-") || name.starts_with("veth") {
+                if name == "lo"
+                    || name.starts_with("docker")
+                    || name.starts_with("br-")
+                    || name.starts_with("veth")
+                {
                     continue;
                 }
                 let state = parts[1];
@@ -2877,7 +2892,11 @@ fn detect_local_network_interfaces() -> Vec<(String, String, bool, MemnetMedium)
                              name: &str,
                              ip: &str,
                              up: bool| {
-                    if name.is_empty() || name == "lo0" || name.starts_with("gif") || name.starts_with("stf") {
+                    if name.is_empty()
+                        || name == "lo0"
+                        || name.starts_with("gif")
+                        || name.starts_with("stf")
+                    {
                         return;
                     }
                     let med = if name.starts_with("utun") || name.starts_with("wg") {
@@ -3056,10 +3075,7 @@ fn discover_ssh_config_peers() -> Vec<(String, String, u16)> {
     let mut cur_hostname = String::new();
     let mut cur_port = 22u16;
 
-    let flush = |peers: &mut Vec<(String, String, u16)>,
-                 alias: &str,
-                 hostname: &str,
-                 port: u16| {
+    let flush = |peers: &mut Vec<(String, String, u16)>, alias: &str, hostname: &str, port: u16| {
         if alias.is_empty()
             || hostname.is_empty()
             || alias.contains('*')
@@ -4214,7 +4230,9 @@ mod tests {
         );
 
         let handle = std::thread::spawn(move || {
-            server_state.serve_udp_responder(&bind_str, Some(2)).unwrap()
+            server_state
+                .serve_udp_responder(&bind_str, Some(2))
+                .unwrap()
         });
 
         std::thread::sleep(Duration::from_millis(25));

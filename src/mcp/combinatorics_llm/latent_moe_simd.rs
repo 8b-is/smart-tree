@@ -405,7 +405,7 @@ unsafe fn quantize_bend_pack_row_sve2(
     // SVE2 uses scalable vectors - we'll process 4x VL trits per iteration
     // For 128-bit VL (minimum), that's 64 bytes = 64 trits
     // For 256-bit VL, that's 128 trits
-    
+
     let n = weights.len();
     let mut in_offset = 0usize;
     let mut out_offset = 0usize;
@@ -423,48 +423,48 @@ unsafe fn quantize_bend_pack_row_sve2(
     // Process 64 trits per iteration (128-bit VL)
     let vl = svcntb();
     let trits_per_iter = (vl / 2) as usize; // 5 trits = 1 byte, so vl/2 bytes = vl/10 * 5 trits
-    
+
     while in_offset + trits_per_iter <= n {
         let ptr = weights.as_ptr().add(in_offset);
         let pg = svwhilelt_b8_u64(in_offset as u64, n as u64);
-        
+
         let x = svld1_u8(pg, ptr);
-        
+
         // Threshold quantize
         let ge_t1 = svcmpge_u8(pg, x, t1_vec);
         let ge_t2 = svcmpge_u8(pg, x, t2_vec);
-        
+
         let u_trits = svsub_u8_x(pg, svdup_u8(0), svadd_u8_x(pg, ge_t1, ge_t2));
-        
+
         // Accumulate SSE
         let c_01 = svsel_u8(ge_t1, c1_vec, c0_vec);
         let c_q = svsel_u8(ge_t2, c2_vec, c_01);
         let diff = svabd_u8_x(pg, x, c_q);
-        
+
         let sq_lo = svmul_u8_x(pg, svget_low_u8(diff), svget_low_u8(diff));
         let sq_hi = svmul_u8_x(pg, svget_high_u8(diff), svget_high_u8(diff));
-        
+
         // TODO: Accumulate SSE - simplified for now
-        
+
         // Apply bend phase
         let phase = svdup_u8(r_mod3);
         let sum_ur = svadd_u8_x(pg, u_trits, phase);
         let ge_3 = svcmpge_u8(pg, sum_ur, v3);
         let bent = svsub_u8_x(pg, sum_ur, svand_u8_x(pg, ge_3, v3));
-        
+
         // Pack 5 trits per byte - simplified using scalar fallback for packing
         // Full SVE2 packing requires complex permute operations
-        
+
         // Advance phase
         r_mod3 += k_mod3;
         if r_mod3 >= 3 {
             r_mod3 -= 3;
         }
-        
+
         in_offset += trits_per_iter;
         out_offset += (trits_per_iter + 4) / 5;
     }
-    
+
     // Scalar fallback for remainder
     let mut total_sse = 0u64;
     if in_offset < n {
@@ -477,7 +477,7 @@ unsafe fn quantize_bend_pack_row_sve2(
             &mut packed_out[out_offset..],
         );
     }
-    
+
     total_sse
 }
 

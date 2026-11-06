@@ -349,18 +349,26 @@ fn evaluate_operation(tool_name: &str, args: &Option<Value>) -> Option<String> {
 /// 4. Server streams responses back here
 pub async fn mcp_sse_handler(
     State(_state): State<SharedMcpContext>,
+    headers: axum::http::HeaderMap,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     // Generate a unique session ID
     let session_id = uuid::Uuid::new_v4().to_string();
+    // Host-aware absolute endpoint (respects --sse-port); loopback default.
+    let host = headers
+        .get(axum::http::header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:28428")
+        .to_string();
+    let endpoint = format!("http://{}/mcp/message", host.trim_end_matches('/'));
+    let endpoint_with_session = format!("{}?session_id={}", endpoint, session_id);
 
     // Create the initial events stream
     // Note: endpoint must be absolute URL for Claude Code compatibility
     let events = stream::iter(vec![
         // Send the endpoint event as required by MCP SSE protocol
-        Ok(Event::default().event("endpoint").data(format!(
-            "http://localhost:28428/mcp/message?session_id={}",
-            session_id
-        ))),
+        Ok(Event::default()
+            .event("endpoint")
+            .data(endpoint_with_session)),
         // Send a welcome message
         Ok(Event::default().event("message").data(
             serde_json::to_string(&json!({
@@ -402,6 +410,8 @@ pub async fn mcp_message_handler(
 
     // Route to appropriate handler
     let result = match method {
+        "ping" => json!({}),
+        "notifications/initialized" | "notifications/cancelled" => json!({}),
         "initialize" => {
             json!({
                 "protocolVersion": "2024-11-05",
@@ -475,9 +485,35 @@ use axum::{
     Router,
 };
 
+/// GET /mcp - human + client discovery for the local HTTP MCP server.
+///
+/// Gives `curl http://localhost:28428/mcp` (and MCP clients that probe the
+/// bare URL) a useful answer instead of axum's default 404/405, so the local
+/// HTTP MCP server is self-explaining. Uses only the existing `/message` /
+/// `/sse` JSON-RPC handlers underneath.
+pub async fn mcp_root() -> impl IntoResponse {
+    Json(json!({
+        "name": "smart-tree",
+        "version": env!("CARGO_PKG_VERSION"),
+        "transport": "http",
+        "description": "Smart Tree MCP over local HTTP. Stdio twin: `st --mcp`.",
+        "endpoints": {
+            "streamable_http": "POST /mcp (JSON-RPC: initialize, tools/list, tools/call)",
+            "sse": "GET /mcp/sse",
+            "message": "POST /mcp/message",
+            "tools_list": "GET /mcp/tools/list",
+            "tools_call": "POST /mcp/tools/call",
+        },
+    }))
+}
+
 /// Create the MCP HTTP router
 pub fn mcp_router(state: SharedMcpContext) -> Router {
     Router::new()
+        // Streamable HTTP root: MCP clients configured with
+        // `{"type":"http","url":"http://localhost:28428/mcp"}` POST here.
+        .route("/", get(mcp_root))
+        .route("/", post(mcp_message_handler))
         // SSE endpoint (Claude Code compatible)
         .route("/sse", get(mcp_sse_handler))
         .route("/message", post(mcp_message_handler))

@@ -334,12 +334,13 @@ st --mcp-uninstall
 ```
 
 **What it does:**
-- Finds Claude Desktop config automatically (macOS/Windows/Linux)
+- Finds Claude Desktop / Claude Code / agent configs automatically (macOS/Windows/Linux)
 - Creates a timestamped backup before any changes
-- Adds Smart Tree MCP server entry to `claude_desktop_config.json`
+- Adds **both** transports: stdio (`st --mcp`, always works) and local HTTP (`smart-tree-http` → `http://localhost:28428/mcp`)
 - Preserves all your existing MCP servers
 
-**After installing, restart Claude Desktop and you'll have access to 30+ MCP tools!**
+**After installing, restart your AI agent and you'll have access to 30+ MCP tools!**
+Run `st --mcp-config` to print the same entries for any MCP client by hand.
 
 ## 🧠 Aye Consciousness
 
@@ -432,10 +433,17 @@ st --spicy
 Fire up the web-based dashboard with a real terminal, file browser, and markdown preview:
 
 ```bash
-st --dashboard                    # Start on localhost:28428
-st --dashboard --port 9000        # Custom port
-st --dashboard --open             # Auto-open browser
+st --dashboard                    # PTY dashboard on localhost:28429 (separate from daemon :28428)
+st --dashboard --dashboard-port 9000 # Custom PTY port
+st --dashboard --open-browser     # Auto-open browser
 st --dashboard --allow 192.168.1.0/24  # Allow network access from subnet
+```
+
+The automagic dashboard is the daemon one — no PTY port, no token hunt:
+
+```bash
+st up                             # Ensure daemon running, open dashboard, print MCP URLs
+# Dashboard: http://localhost:28428/   MCP HTTP: http://localhost:28428/mcp
 ```
 
 ### Features:
@@ -453,21 +461,30 @@ st --dashboard --allow 192.168.1.0/24  # Allow network access from subnet
 
 ## 🧠 ST Daemon - Always-On AI Context
 
-Smart Tree now runs as a two-product system:
+Smart Tree is one canonical server with two legacy shims:
 
-- **`st`** - Fast CLI that auto-starts the daemon when needed
-- **`std`** - The daemon (always-on, binary protocol, shared memory)
+- **`st up`** — canonical entry: background daemon, prints dashboard/MCP URLs (`--open-browser` to open). Localhost needs **no token** (same trust boundary as `st --mcp`).
+- **`st --serve`** (alias `--http-daemon`) — same server in the foreground.
+- **`st service install`** — same server as a system service (systemd/launchd).
+- **`std start`** — legacy Unix-socket daemon (adds the socket; HTTP server is the same).
+- **`st`** — fast CLI; scans in-process when the daemon isn't running, via daemon when it is.
 
 ```bash
-st .                      # Auto-starts daemon if not running
+st .                      # Scan; uses daemon when running, in-process otherwise
 st . --no-daemon          # Run standalone (no daemon)
 
+# Automagic (one command)
+st up                     # MCP HTTP + dashboard + token path, all printed
+st --serve                # Foreground server (Ctrl+C to stop)
+st --show-token           # Token only needed when externally bound
+
 # Manual daemon control
-std start                 # Start daemon
-std stop                  # Stop daemon
-std status                # Check status
+st --daemon-start / --daemon-status / --daemon-stop
+std start / std stop / std status   # Legacy socket daemon
 st --recall "document with my daughter last week"  # Search saved context (JSON)
 ```
+
+MCP over HTTP is the local `st up` daemon: Streamable HTTP at `http://localhost:28428/mcp` plus SSE at `http://localhost:28428/mcp/sse`. The MemNet mesh bridge is `memnet {operation:'ask'|'teach'|'peers'|'share'}` over MCP, or `GET /memnet/peers` / `POST /memnet/ask|teach|share` over HTTP.
 
 ### Benefits:
 - **Shared Memory**: Context persists across CLI invocations

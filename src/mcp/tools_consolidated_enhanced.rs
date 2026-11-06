@@ -1141,6 +1141,9 @@ EXAMPLES:
         }
     }));
 
+    // Add MemNet MCP bridge (wave-Q&A offload mesh over UDP :8423)
+    tools.push(super::memnet_bridge::memnet_tool_definition());
+
     tools.extend(super::combinatorics_llm::get_combinatorics_llm_mcp_tools());
 
     tools

@@ -1721,9 +1721,9 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
 
         // Smart edit tools (tree-sitter based - disabled without tree-sitter dep)
         "smart_edit" | "get_function_tree" | "get_functions" | "insert_function"
-        | "replace_function" | "remove_function" | "delete_function" | "create_file" => {
-            Err(anyhow::anyhow!("smart_edit requires tree-sitter dependencies (disabled)"))
-        }
+        | "replace_function" | "remove_function" | "delete_function" | "create_file" => Err(
+            anyhow::anyhow!("smart_edit requires tree-sitter dependencies (disabled)"),
+        ),
 
         // Context gathering tools (delegated to context_tools module)
         "gather_project_context" => {

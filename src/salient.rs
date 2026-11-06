@@ -1156,7 +1156,10 @@ fn is_standard_galactic_target(target: &str) -> bool {
         && !target.starts_with("git@")
     {
         if let Ok(canon) = Path::new(target).canonicalize() {
-            if let Some(name) = canon.file_name().map(|n| n.to_string_lossy().to_lowercase()) {
+            if let Some(name) = canon
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+            {
                 if name == "standardgalactic" {
                     return true;
                 }

@@ -74,6 +74,12 @@ enum Commands {
         #[arg(short, long)]
         json: bool,
     },
+
+    /// Tightly pack a .m8 file (or recursively pack all .m8 files in a directory) into MEM8 + Marqant + ZLIB/T8RZ
+    Pack {
+        /// Path to a .m8 file or directory tree
+        path: PathBuf,
+    },
 }
 
 // MEM8 Format Constants
@@ -265,6 +271,7 @@ fn inspect_file(path: &PathBuf, hex: bool, limit: Option<usize>) -> Result<()> {
     println!("----  ----------  ----------  -----");
 
     let max_sections = limit.unwrap_or(header.section_count as usize);
+    let mut sections = Vec::new();
     for _i in 0..header.section_count.min(max_sections as u16) {
         let section = M8Section::read_from(&mut file)?;
         println!(
@@ -274,6 +281,7 @@ fn inspect_file(path: &PathBuf, hex: bool, limit: Option<usize>) -> Result<()> {
             section.size,
             section.flags
         );
+        sections.push(section);
     }
 
     if limit.is_some() && max_sections < header.section_count as usize {
@@ -281,6 +289,34 @@ fn inspect_file(path: &PathBuf, hex: bool, limit: Option<usize>) -> Result<()> {
             "... {} more sections",
             header.section_count as usize - max_sections
         );
+    }
+
+    // If this is a tight MEM8 container with WAVE / MQNT sections, display wave & Marqant summary
+    file.seek(SeekFrom::Start(0))?;
+    let mut all_bytes = Vec::new();
+    file.read_to_end(&mut all_bytes)?;
+    if let Some(wave) = st::m8_consciousness::extract_m8_wave_header(&all_bytes) {
+        println!();
+        println!("Wave & BitNet b1.58 Header:");
+        println!("  Frequency: {:.2} Hz", wave.frequency);
+        println!("  Timestamp: {}", wave.timestamp);
+        println!(
+            "  Emotion:   energy={}‰, complexity={}‰, stability={}‰, focus={}‰",
+            wave.energy_permille,
+            wave.complexity_permille,
+            wave.stability_permille,
+            wave.focus_permille
+        );
+        println!(
+            "  BitNet:    B+=0x{:016x} B-=0x{:016x} (balance={}‰, norm_q8={})",
+            wave.b_pos, wave.b_neg, wave.balance_permille, wave.box_norm_q8
+        );
+    }
+    if let Some(mq) = st::m8_consciousness::extract_m8_marqant_section(&all_bytes, true) {
+        let preview: String = mq.lines().take(5).collect::<Vec<_>>().join("\n  ");
+        println!();
+        println!("Marqant Soul Preview:");
+        println!("  {}", preview);
     }
 
     Ok(())
@@ -405,8 +441,93 @@ fn main() -> Result<()> {
         Commands::Index { file, json } => {
             print_index(&file, json)?;
         }
+        Commands::Pack { path } => {
+            pack_path(&path)?;
+        }
     }
 
+    Ok(())
+}
+
+fn pack_single_m8(file_path: &std::path::Path) -> Result<(usize, usize)> {
+    let raw = std::fs::read(file_path)?;
+    let before = raw.len();
+    if let Ok(mut c) = st::m8_consciousness::DirectoryConsciousness::from_m8_bytes(&raw) {
+        if c.functions.len() > 36 {
+            c.functions.truncate(36);
+        }
+        if let Some(bn) = &mut c.bitnet_summary {
+            if bn.file_summaries.len() > 32 {
+                bn.file_summaries.truncate(32);
+            }
+        }
+        let tight = c.to_tight_m8_bytes()?;
+        let after = tight.len();
+        std::fs::write(file_path, tight)?;
+        return Ok((before, after));
+    }
+    let decoded = st::m8_consciousness::decode_m8_bytes(&raw).unwrap_or_else(|_| raw.clone());
+    let tight = st::m8_consciousness::encode_json_bytes_as_tight_m8(
+        &decoded,
+        42.73,
+        "# Tight MEM8 Capsule",
+    )?;
+    let after = tight.len();
+    std::fs::write(file_path, tight)?;
+    Ok((before, after))
+}
+
+fn pack_recursive(dir: &std::path::Path, stats: &mut (usize, usize, usize)) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let p = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if p.is_dir() {
+            if matches!(name.as_str(), ".git" | "target" | "node_modules") {
+                continue;
+            }
+            let _ = pack_recursive(&p, stats);
+        } else if name == ".m8" || name.ends_with("_consciousness.m8") {
+            if let Ok((before, after)) = pack_single_m8(&p) {
+                stats.0 += 1;
+                stats.1 += before;
+                stats.2 += after;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn pack_path(path: &PathBuf) -> Result<()> {
+    if path.is_file() {
+        let (before, after) = pack_single_m8(path)?;
+        println!(
+            "✅ Packed {}: {} B -> {} B ({:.1}% of original)",
+            path.display(),
+            before,
+            after,
+            (after as f64 / before.max(1) as f64) * 100.0
+        );
+    } else if path.is_dir() {
+        let mut stats = (0usize, 0usize, 0usize);
+        let root_m8 = path.join(".m8");
+        if root_m8.is_file() {
+            if let Ok((before, after)) = pack_single_m8(&root_m8) {
+                stats.0 += 1;
+                stats.1 += before;
+                stats.2 += after;
+            }
+        }
+        pack_recursive(path, &mut stats)?;
+        println!(
+            "✅ Packed {} .m8 files under {}: {:.1} KiB -> {:.1} KiB ({:.1}% of original)",
+            stats.0,
+            path.display(),
+            stats.1 as f64 / 1024.0,
+            stats.2 as f64 / 1024.0,
+            (stats.2 as f64 / stats.1.max(1) as f64) * 100.0
+        );
+    }
     Ok(())
 }
 

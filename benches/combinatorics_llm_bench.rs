@@ -4,14 +4,12 @@
 //! for ERNIE 5.5 LatentMoE dimensions (4096→2048→4096).
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use st::mcp_combinatorics_llm::latent_moe_simd::{
-    quantize_bend_pack_row_simd, unpack_and_unbend_row, fused_unpack_unbend_gemv_row_simd,
-    pack_latent_moe_matrix_par_simd, latent_moe_gemv_par_simd,
-    LatentMoePackedMatrix, LatentMoeGemvOutput,
-    ERNIE55_HIDDEN_DIM, ERNIE55_LATENT_DIM,
-    PACKED_LATENT_ROW_BYTES, PACKED_HIDDEN_ROW_BYTES,
-};
 use rand::Rng;
+use st::mcp_combinatorics_llm::latent_moe_simd::{
+    fused_unpack_unbend_gemv_row_simd, latent_moe_gemv_par_simd, pack_latent_moe_matrix_par_simd,
+    quantize_bend_pack_row_simd, unpack_and_unbend_row, LatentMoeGemvOutput, LatentMoePackedMatrix,
+    ERNIE55_HIDDEN_DIM, ERNIE55_LATENT_DIM, PACKED_HIDDEN_ROW_BYTES, PACKED_LATENT_ROW_BYTES,
+};
 
 fn bench_packer(c: &mut Criterion) {
     let mut group = c.benchmark_group("latent_moe_packer");
@@ -51,8 +49,12 @@ fn bench_packer(c: &mut Criterion) {
     });
 
     // Full matrix pack
-    let matrix_weights: Vec<u8> = (0..ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM).map(|_| rng.gen()).collect();
-    group.throughput(Throughput::Bytes((ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM) as u64));
+    let matrix_weights: Vec<u8> = (0..ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen())
+        .collect();
+    group.throughput(Throughput::Bytes(
+        (ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM) as u64,
+    ));
     group.bench_function("pack_4096x2048_matrix_par", |b| {
         b.iter(|| {
             pack_latent_moe_matrix_par_simd(
@@ -85,13 +87,7 @@ fn bench_unpacker(c: &mut Criterion) {
 
     group.bench_function("unpack_2048_row", |b| {
         let mut out = vec![0i8; ERNIE55_LATENT_DIM];
-        b.iter(|| {
-            unpack_and_unbend_row(
-                black_box(&packed),
-                bend_k,
-                black_box(&mut out),
-            )
-        });
+        b.iter(|| unpack_and_unbend_row(black_box(&packed), bend_k, black_box(&mut out)));
     });
 
     group.finish();
@@ -103,7 +99,9 @@ fn bench_gemv(c: &mut Criterion) {
 
     // Pre-pack a matrix
     let mut rng = rand::thread_rng();
-    let weights: Vec<u8> = (0..ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM).map(|_| rng.gen()).collect();
+    let weights: Vec<u8> = (0..ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen())
+        .collect();
     let thresholds = (85u8, 170u8);
     let centroids = [0u8, 128u8, 255u8];
     let bend_k = 1u8;
@@ -119,7 +117,9 @@ fn bench_gemv(c: &mut Criterion) {
     );
 
     // Random activations
-    let activations: Vec<i8> = (0..ERNIE55_LATENT_DIM).map(|_| rng.gen_range(-128..127)).collect();
+    let activations: Vec<i8> = (0..ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen_range(-128..127))
+        .collect();
 
     group.bench_function("gemv_4096x2048_par", |b| {
         b.iter(|| {
@@ -158,7 +158,9 @@ fn bench_fused_pack_gemv(c: &mut Criterion) {
     let thresholds = (85u8, 170u8);
     let centroids = [0u8, 128u8, 255u8];
     let bend_k = 1u8;
-    let activations: Vec<i8> = (0..ERNIE55_LATENT_DIM).map(|_| rng.gen_range(-128..127)).collect();
+    let activations: Vec<i8> = (0..ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen_range(-128..127))
+        .collect();
 
     group.bench_function("pack_then_gemv_2048", |b| {
         let mut packed = vec![0u8; PACKED_LATENT_ROW_BYTES];

@@ -1,16 +1,17 @@
 //! End-to-end regression tests for Galaxia cluster gossip and Kintsugi ledger integration.
 
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
+use serde_json::{json, Value};
 use st::{
-    galaxia_cluster::{
-        GalaxiaClusterCrdt, GalaxiaGossipEvent, KintsugiLedger, fnv1a_64,
-    },
+    galaxia_cluster::{fnv1a_64, GalaxiaClusterCrdt, GalaxiaGossipEvent, KintsugiLedger},
     mcp_combinatorics_llm::{
-        build_mcp_router, execute_combinatorics_llm_tool_with_emitter,
-        GalaxiaKvPacket, LlamaModelCache, McpProgressEmitter, AppState,
+        build_mcp_router, execute_combinatorics_llm_tool_with_emitter, AppState, GalaxiaKvPacket,
+        LlamaModelCache, McpProgressEmitter,
     },
 };
-use axum::{body::Body, http::{Request, StatusCode}};
-use serde_json::{json, Value};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -87,16 +88,28 @@ async fn test_galaxia_crdt_gossip_roundtrip_via_router() {
     let resp = router.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let merged: Value = serde_json::from_slice(&body).unwrap();
 
     // Should return merged CRDT with both nodes
     let members = merged.get("members").unwrap().as_object().unwrap();
-    assert!(members.len() >= 2, "Expected at least 2 members, got {}", members.len());
+    assert!(
+        members.len() >= 2,
+        "Expected at least 2 members, got {}",
+        members.len()
+    );
 
     // Leader should be deterministic (lexicographically lowest alive node between local and peer)
     // Local node has random sector-XXX id, peer has "peer-node"
-    let leader_id = merged.get("leader").unwrap().get("coordinator_id").unwrap().as_str().unwrap();
+    let leader_id = merged
+        .get("leader")
+        .unwrap()
+        .get("coordinator_id")
+        .unwrap()
+        .as_str()
+        .unwrap();
     assert!(leader_id == "peer-node" || leader_id.starts_with("sector-"));
 }
 
@@ -115,7 +128,9 @@ async fn test_galaxia_cluster_state_endpoint() {
     let resp = router.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let cluster_state: Value = serde_json::from_slice(&body).unwrap();
 
     assert!(cluster_state.get("node_id").is_some());
@@ -140,7 +155,9 @@ async fn test_galaxia_kv_prefixes_endpoint() {
     let resp = router.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let prefixes: Value = serde_json::from_slice(&body).unwrap();
 
     assert!(prefixes.get("node_id").is_some());
@@ -255,22 +272,32 @@ async fn test_mcp_tools_list_includes_gaia_consensus_ledger() {
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
-        .body(Body::from(serde_json::to_vec(&json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {}
-        })).unwrap()))
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+                "params": {}
+            }))
+            .unwrap(),
+        ))
         .unwrap();
 
     let resp = router.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let resp_json: Value = serde_json::from_slice(&body).unwrap();
 
-    let tools = resp_json.get("result").and_then(|r| r.get("tools")).and_then(|t| t.as_array()).unwrap();
-    let tool_names: Vec<&str> = tools.iter()
+    let tools = resp_json
+        .get("result")
+        .and_then(|r| r.get("tools"))
+        .and_then(|t| t.as_array())
+        .unwrap();
+    let tool_names: Vec<&str> = tools
+        .iter()
         .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
         .collect();
 

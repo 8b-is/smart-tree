@@ -181,23 +181,26 @@ impl ConsciousnessManager {
         Self { state, save_path }
     }
 
-    /// Load consciousness from file or create default
+    /// Load consciousness from file or create default (supports tight MEM8, Marqant, Zlib, or legacy JSON)
     fn load_or_default(path: &Path, silent: bool) -> ConsciousnessState {
         if path.exists() {
-            match fs::read_to_string(path) {
-                Ok(content) => match serde_json::from_str(&content) {
-                    Ok(state) => {
-                        if !silent {
-                            eprintln!("🧠 Restored consciousness from {}", path.display());
+            match fs::read(path) {
+                Ok(raw) => {
+                    let decoded = crate::m8_consciousness::decode_m8_bytes(&raw).unwrap_or(raw);
+                    match serde_json::from_slice(&decoded) {
+                        Ok(state) => {
+                            if !silent {
+                                eprintln!("🧠 Restored consciousness from {}", path.display());
+                            }
+                            return state;
                         }
-                        return state;
-                    }
-                    Err(e) => {
-                        if !silent {
-                            eprintln!("⚠️ Failed to parse consciousness: {}", e);
+                        Err(e) => {
+                            if !silent {
+                                eprintln!("⚠️ Failed to parse consciousness: {}", e);
+                            }
                         }
                     }
-                },
+                }
                 Err(e) => {
                     if !silent {
                         eprintln!("⚠️ Failed to read consciousness: {}", e);
@@ -219,6 +222,13 @@ impl ConsciousnessManager {
         self.save_internal(true)
     }
 
+    fn encode_tight_state(&self) -> Result<Vec<u8>> {
+        let compact_json =
+            serde_json::to_vec(&self.state).context("Failed to serialize consciousness")?;
+        let summary_md = self.get_summary();
+        crate::m8_consciousness::encode_json_bytes_as_tight_m8(&compact_json, 42.73, &summary_md)
+    }
+
     fn save_internal(&mut self, silent: bool) -> Result<()> {
         self.state.last_saved = Utc::now();
         if let Ok(cwd) = std::env::current_dir() {
@@ -231,10 +241,9 @@ impl ConsciousnessManager {
             }
         }
 
-        let json = serde_json::to_string_pretty(&self.state)
-            .context("Failed to serialize consciousness")?;
+        let tight_bytes = self.encode_tight_state()?;
 
-        fs::write(&self.save_path, json).context("Failed to write consciousness file")?;
+        fs::write(&self.save_path, tight_bytes).context("Failed to write consciousness file")?;
 
         if !silent {
             eprintln!("💾 Saved consciousness to {}", self.save_path.display());
@@ -251,10 +260,11 @@ impl ConsciousnessManager {
             ));
         }
 
-        let content =
-            fs::read_to_string(&self.save_path).context("Failed to read consciousness file")?;
+        let raw = fs::read(&self.save_path).context("Failed to read consciousness file")?;
+        let decoded = crate::m8_consciousness::decode_m8_bytes(&raw)
+            .context("Failed to decode consciousness file")?;
 
-        self.state = serde_json::from_str(&content).context("Failed to parse consciousness")?;
+        self.state = serde_json::from_slice(&decoded).context("Failed to parse consciousness")?;
 
         // Check relevance before displaying
         let relevance = self.check_relevance();
@@ -283,10 +293,11 @@ impl ConsciousnessManager {
             ));
         }
 
-        let content =
-            fs::read_to_string(&self.save_path).context("Failed to read consciousness file")?;
+        let raw = fs::read(&self.save_path).context("Failed to read consciousness file")?;
+        let decoded = crate::m8_consciousness::decode_m8_bytes(&raw)
+            .context("Failed to decode consciousness file")?;
 
-        self.state = serde_json::from_str(&content).context("Failed to parse consciousness")?;
+        self.state = serde_json::from_slice(&decoded).context("Failed to parse consciousness")?;
 
         // Check relevance
         let relevance = self.check_relevance();
@@ -520,8 +531,8 @@ impl Drop for ConsciousnessManager {
     fn drop(&mut self) {
         // Best effort save on drop - silent to avoid duplicate messages
         self.state.last_saved = chrono::Utc::now();
-        if let Ok(json) = serde_json::to_string_pretty(&self.state) {
-            let _ = std::fs::write(&self.save_path, json);
+        if let Ok(tight_bytes) = self.encode_tight_state() {
+            let _ = std::fs::write(&self.save_path, tight_bytes);
         }
     }
 }

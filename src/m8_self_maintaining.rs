@@ -779,11 +779,19 @@ impl SelfMaintainingConsciousness {
         Ok(subdirs)
     }
 
-    /// Save consciousness to .m8 file
+    /// Save consciousness to .m8 file in tight MEM8 format
     fn save_consciousness(&self, path: &Path, consciousness: &M8Consciousness) -> Result<()> {
         let m8_path = path.join(".m8");
-        let json = serde_json::to_string_pretty(consciousness)?;
-        fs::write(m8_path, json)?;
+        let compact_json = serde_json::to_vec(consciousness)?;
+        let tight_bytes = crate::m8_consciousness::encode_json_bytes_as_tight_m8(
+            &compact_json,
+            consciousness.header.frequency,
+            &format!(
+                "# {:.2}Hz — {}",
+                consciousness.header.frequency, consciousness.essence
+            ),
+        )?;
+        fs::write(m8_path, tight_bytes)?;
         Ok(())
     }
 

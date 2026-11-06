@@ -1039,11 +1039,21 @@ fn which_binary(name: &str) -> Option<PathBuf> {
 fn print_install_success(status_cmd: &str, logs_cmd: &str) {
     let _ = crate::completions::maintain_service_completions(true);
     println!();
-    println!("Smart Tree daemon installed and running!");
+    println!("Smart Tree daemon installed and running (same server as `st up`)!");
     println!("  Shell Completions: Auto-maintained (Fish, Zsh, Bash + live folder/MEM|8 cache)");
     println!();
-    println!("  Dashboard:  http://localhost:{}", DAEMON_PORT);
-    println!("  Token:      /var/lib/smart-tree/daemon.token");
+    println!(
+        "  Dashboard:  http://localhost:{}/ (automagic, no local token)",
+        DAEMON_PORT
+    );
+    println!(
+        "  MCP (HTTP): http://localhost:{}/mcp + /mcp/sse",
+        DAEMON_PORT
+    );
+    println!("  MCP (stdio): st --mcp");
+    println!(
+        "  Token:      ~/.st/daemon.token (needed only when externally bound; `st --show-token`)"
+    );
     println!();
     println!("  Status:     {}", status_cmd);
     println!("  Logs:       {}", logs_cmd);

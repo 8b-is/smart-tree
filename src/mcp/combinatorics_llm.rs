@@ -42,8 +42,8 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 
 /// Number of concurrent primary radix sequence slots (`0..8`) maintained inside each session.
 pub const MAX_SEQS_PER_SESSION: usize = 8;
@@ -4710,7 +4710,6 @@ async fn galaxia_gossip_sse_handler(State(state): State<Arc<AppState>>) -> Respo
 }
 
 pub fn build_mcp_router(state: Arc<AppState>) -> axum::Router {
-
     async fn handle_mcp_post(
         State(state): State<Arc<AppState>>,
         headers: HeaderMap,
