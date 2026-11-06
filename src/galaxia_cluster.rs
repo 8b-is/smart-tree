@@ -1,23 +1,15 @@
-use crate::{
-    gaia_omni::{run_gaia_omni_mode, GaiaOmniParams},
-    kernels::{
-        run_erdos_renyi_scanning, run_erdos_steiner_pruning, run_moser_tardos_splitting,
-        run_ramsey_clique_analysis, run_szemeredi_compression,
-    },
-    model_cache::{fnv1a_64, GalaxiaKvPacket, LlamaModelCache, McpProgressEmitter},
-    ErdosRenyiParams, ErdosSteinerParams, MoserTardosParams, RamseyCliqueParams, SzemerediParams,
+use crate::mcp_combinatorics_llm::{
+    GalaxiaKvPacket, LlamaModelCache,
 };
-use base64::{engine::general_purpose::STANDARD as BASE64_STD, Engine as _};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{Arc, RwLock},
     time::Duration,
 };
 use tokio::sync::broadcast;
-use tokio_stream::StreamExt;
 
 // ============================================================================
 // 1. State-CRDT Semilattice & Monotonic Term Leader Election Types
@@ -100,11 +92,11 @@ pub struct LeaderLease {
 impl LeaderLease {
     #[inline]
     pub fn is_dominated_by(&self, other: &Self) -> bool {
-        (
-            other.term,
-            other.elected_at_lamport,
-            &other.coordinator_id,
-        ) > (self.term, self.elected_at_lamport, &self.coordinator_id)
+        // Prefer higher term, then earlier election (lower lamport), then lexicographically lower coordinator_id
+        // This matches elect_next_coordinator which picks highest incarnation then lowest node_id
+        use std::cmp::Reverse;
+        (other.term, Reverse(other.elected_at_lamport), Reverse(&other.coordinator_id))
+            > (self.term, Reverse(self.elected_at_lamport), Reverse(&self.coordinator_id))
     }
 }
 
@@ -155,11 +147,7 @@ impl GalaxiaClusterCrdt {
         }
     }
 
-    pub fn merge(
-        &mut self,
-        remote: &GalaxiaClusterCrdt,
-        self_node_id: &str,
-    ) -> CrdtMergeOutcome {
+    pub fn merge(&mut self, remote: &GalaxiaClusterCrdt, self_node_id: &str) -> CrdtMergeOutcome {
         let mut outcome = CrdtMergeOutcome::default();
 
         if remote.cluster_lamport > self.cluster_lamport {
@@ -227,7 +215,9 @@ impl GalaxiaClusterCrdt {
             .unwrap_or_default();
 
         for (peer_id, rec) in &self.members {
-            if peer_id == self_node_id || rec.status == MemberStatus::Dead || rec.base_url.is_empty()
+            if peer_id == self_node_id
+                || rec.status == MemberStatus::Dead
+                || rec.base_url.is_empty()
             {
                 continue;
             }
@@ -389,7 +379,9 @@ impl GalaxiaGossipBus {
                 );
             }
             let snapshot = guard.clone();
-            let _ = self.tx.send(GalaxiaGossipEvent::CrdtStateSync { crdt: snapshot });
+            let _ = self
+                .tx
+                .send(GalaxiaGossipEvent::CrdtStateSync { crdt: snapshot });
         }
     }
 
@@ -409,7 +401,9 @@ impl GalaxiaGossipBus {
         let outcome = guard.merge(remote, &self.node_id);
         if outcome.state_changed {
             let snapshot = guard.clone();
-            let _ = self.tx.send(GalaxiaGossipEvent::CrdtStateSync { crdt: snapshot });
+            let _ = self
+                .tx
+                .send(GalaxiaGossipEvent::CrdtStateSync { crdt: snapshot });
         }
         outcome
     }
@@ -500,7 +494,9 @@ impl GalaxiaGossipBus {
         if let Ok(mut guard) = self.crdt.write() {
             if guard.mark_peer_status(peer_url_or_id, MemberStatus::Suspect) {
                 let snapshot = guard.clone();
-                let _ = self.tx.send(GalaxiaGossipEvent::CrdtStateSync { crdt: snapshot });
+                let _ = self
+                    .tx
+                    .send(GalaxiaGossipEvent::CrdtStateSync { crdt: snapshot });
             }
         }
     }
@@ -525,5 +521,63 @@ impl GalaxiaGossipBus {
                 }
             }
         })
+    }
+}
+
+// ============================================================================
+// 3. FNV-1a 64-bit hash for Kintsugi seals
+// ============================================================================
+
+pub fn fnv1a_64(data: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &byte in data {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+// ============================================================================
+// 4. Kintsugi Ledger: Proof-of-Admissibility Certificate Store
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KintsugiEvent {
+    pub lap_index: u64,
+    pub consensus_payload: Value,
+    pub wave_memory_seal: u64,
+    pub sector_id: String,
+    pub timestamp_ms: u64,
+}
+
+pub struct KintsugiLedger {
+    pub events: Vec<KintsugiEvent>,
+}
+
+impl KintsugiLedger {
+    pub fn new() -> Self {
+        Self { events: Vec::new() }
+    }
+
+    pub fn finalize_event(
+        &mut self,
+        lap: u64,
+        payload: Value,
+        mem8_state: &[u8],
+        sector_id: &str,
+    ) -> KintsugiEvent {
+        let seal = fnv1a_64(mem8_state);
+        let event = KintsugiEvent {
+            lap_index: lap,
+            consensus_payload: payload,
+            wave_memory_seal: seal,
+            sector_id: sector_id.to_string(),
+            timestamp_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+        };
+        self.events.push(event.clone());
+        event
     }
 }

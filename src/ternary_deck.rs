@@ -910,7 +910,11 @@ fn solve_quadratic_roots(q1: f64, q0: f64) -> Vec<ComplexRoot> {
         let im = 0.5 * (-disc).sqrt();
         let mag = (re * re + im * im).sqrt();
         vec![
-            ComplexRoot { re, im, magnitude: mag },
+            ComplexRoot {
+                re,
+                im,
+                magnitude: mag,
+            },
             ComplexRoot {
                 re,
                 im: -im,

@@ -70,9 +70,7 @@ fn test_ernie55_multi_router_stable_latent_moe_full_4096_2048_4096_forward() {
     let routed_experts: Vec<LatentExpert5Trit> =
         (0..num_routed_experts).map(build_expert).collect();
 
-    let sample_x: Vec<f32> = (0..d_model)
-        .map(|i| ((i as f32) * 0.013).sin())
-        .collect();
+    let sample_x: Vec<f32> = (0..d_model).map(|i| ((i as f32) * 0.013).sin()).collect();
     let (x_q, x_s) =
         st::mcp_combinatorics_llm::latent_moe_layer::quantize_activations_sym_i8(&sample_x);
     let sel_before = router.route_token(&x_q, x_s);

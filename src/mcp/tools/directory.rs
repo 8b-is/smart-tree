@@ -14,7 +14,7 @@ use crate::formatters::{
     hex::HexFormatter,
     json::JsonFormatter,
     quantum::QuantumFormatter,
-    quantum_semantic::QuantumSemanticFormatter,
+    // quantum_semantic::QuantumSemanticFormatter, // Removed: requires tree-sitter
     semantic::SemanticFormatter,
     stats::StatsFormatter,
     summary::SummaryFormatter,
@@ -136,7 +136,7 @@ pub async fn analyze_directory(args: Value, ctx: Arc<McpContext>) -> Result<Valu
             }
             "quantum" => Box::new(QuantumFormatter::new()),
             "semantic" => Box::new(SemanticFormatter::new(path_display_mode, mcp_no_emoji)),
-            "quantum-semantic" => Box::new(QuantumSemanticFormatter::new()),
+            "quantum-semantic" => Box::new(SemanticFormatter::new(path_display_mode, mcp_no_emoji)),
             "summary" => Box::new(SummaryFormatter::new(!mcp_no_emoji)),
             "summary-ai" => Box::new(SummaryAiFormatter::new(mcp_compress)),
             _ => return Err(anyhow::anyhow!("Invalid mode: {}", args.mode)),

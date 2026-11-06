@@ -91,11 +91,11 @@ mod resources;
 mod rink;
 pub mod session;
 pub mod smart_background_searcher;
-pub mod smart_edit;
+// pub mod smart_edit; // Removed: requires tree-sitter
 mod smart_edit_diff_viewer;
 pub mod smart_project_detector;
 mod sse;
-pub mod symbol;
+// pub mod symbol; // Removed: requires crabcc
 mod theme_tools;
 mod tools;
 mod tools_consolidated;

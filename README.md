@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-11.3.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-21.0.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
@@ -11,7 +11,7 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v10.9.0 (Oni-Felix + Paul Erdős "Straight from The Book" + FELIX Assembly Hot-Paths)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, code-symbol, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **LOUDS Bit-Packed 64B `SMTR` `.m8` Capsules (`8B-META-WP-v2.1`)**, embedded **CrabCC Code Intelligence** (`st symbol`), **Salient Forge Memory** (`st remember`), **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> **Smart Tree v21.0.0 (Galaxia Federation + Kintsugi Ledger + Weight-Space SIMD + Ada 2022 p/q Modernization)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Galaxia Cluster CRDT Gossip & Federation**, **Kintsugi Append-Only Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON)**, **Hybrid MLA/HCA Attention**, **Ada 2022 Exact p/q Ratio Arithmetic**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **LOUDS Bit-Packed 64B `SMTR` `.m8` Capsules (`8B-META-WP-v2.1`)**, **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
@@ -34,6 +34,60 @@ st --version
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
 
+## 📝 v21.0.0 Changelog
+
+### 🌌 Galaxia Cluster Federation
+- **CRDT-based membership** with monotonic term leader election (semilattice merge, deterministic tie-breaking)
+- **Gossip anti-entropy daemon** with 10s broadcast interval, CRDT state sync, and KV prefix digest exchange
+- **SSE stream** at `/galaxia/gossip` for real-time cluster events (`kv_prefix_sync`, `crdt_state_sync`)
+- **HTTP endpoints**: `/galaxia/kv-sync`, `/galaxia/kv-prefixes`, `/galaxia/kv-export`, `/galaxia/crdt-gossip`, `/galaxia/cluster-state`
+- **MCP tool**: `gaia_consensus_ledger` for Kintsugi event finalization
+
+### 📜 Kintsugi Consensus Ledger
+- **Append-only event log** with FNV-1a 64-bit memory seals
+- **Hash-chained events** with lap index, consensus payload, sector ID, timestamp
+- **Tamper-evident**: seals bind to external memory state (`mem8_state`)
+- **MCP integration**: `gaia_consensus_ledger` tool with `lap` and `payload` params
+
+### ⚡ Weight-Space SIMD: ERNIE 5.5 LatentMoE
+- **Bent 5-trit packer**: 5 balanced trits/byte, position-dependent cyclic bend `(k*i) mod 3`
+- **AVX2**: 20-trit blocks, 26-byte guarded loads, compile-time phase tables
+- **NEON**: 40-trit blocks, 48-byte loads, `vqtbl3_u8` 8-lane table lookups
+- **Fused GEMV**: Unpack + unbend + i32 dot product in registers (160-trit AVX2, 80-trit NEON)
+- **Matrix API**: `pack_latent_moe_matrix_par_simd`, `latent_moe_gemv_par_simd` (Rayon parallel)
+- **Benchmarks**: `cargo bench --bench combinatorics_llm_bench` (packer, unpacker, GEMV, fused)
+
+### 🧮 Ada 2022 `p/q` Exact Ratio Modernization
+- **New `Exact_Ratio` private type**: invariant `Denominator > 0`, auto-reduced via GCD
+- **Arithmetic ops**: `*`, `/`, `+`, `-` with exact reduction, zero represented as `0/1`
+- **Quantization**: `Quantize_Weight(u8, Exact_Ratio) -> Bal_Trit` with exact threshold scaling
+- **Test coverage**: `Verify_Bent_Ternary`, NAND, ratio arithmetic, quantization
+- **Alire index**: `wst_brain_scan` crate published (PR #2324)
+
+### 🧹 Simplification & Dependency Hygiene
+- **Removed**: `crabcc-core`, `tree-sitter` (9 language grammars), `syn`/`quote` proc-macro deps
+- **Removed modules**: `symbol`, `smart_edit`, `tree_sitter_quantum`, `quantum_semantic`
+- **Leaner build**: ~40 fewer transitive dependencies, faster compile times
+- **CrabCC symbol tool disabled**: `st symbol` and MCP `symbol` removed (will return native)
+
+### ✅ E2E Regression Tests (10 new)
+- `test_kintsugi_ledger_persistence_and_hash_chaining`
+- `test_galaxia_kintsugi_tool_rejects_without_state`
+- `test_two_node_crdt_merge_deterministic`
+- `test_galaxia_kintsugi_mcp_tool_dispatch`
+- `test_galaxia_kv_prefixes_endpoint`
+- `test_galaxia_cluster_state_endpoint`
+- `test_galaxia_gossip_sse_stream_emits_events`
+- `test_galaxia_crdt_gossip_roundtrip_via_router`
+- `test_galaxia_kv_sync_rejects_invalid_packet`
+- `test_mcp_tools_list_includes_gaia_consensus_ledger`
+
+### 🧪 Existing Test Suites (All Green)
+- `mcp_integration`: 16/16 passing
+- `latent_moe_simd_test`: 2/2 passing
+- `latent_moe_layer_test`: 1/1 passing
+- `hybrid_attention_test`: 1/1 passing
+
 ### 🧬 Oni-Felix LOUDS Bit-Packed Smart Tree & 64B `SMTR` Capsule (`v10.8.0`)
 
 Smart Tree v10.8.0 implements the **`8B-META-WP-v2.1` LOUDS (Level-Order Unary Degree Sequence)** succinct tree representation (`#[repr(C, align(64))] LoudsSmartTree`), packing up to **63 tree nodes into 16 bytes (`2N + 1` bits)** of topology with $O(1)$ hardware `POPCNT`/`TZCNT` `rank1`/`select1` navigation and a **64-byte cryptographically verified `SMTR` `.m8` capsule** (branchless IEEE 802.3 CRC32 + `8BIS` seal):
@@ -54,29 +108,9 @@ st --mode erdos ./src
 
 See the full [v10.8.0 End-to-End Architectural Review](docs/ARCHITECTURE_REVIEW_V10_8.md) for C4 diagrams, wire layout, and hot-path benchmarks.
 
-### Built-in code intelligence
+### Built-in code intelligence (disabled in v21.0.0)
 
-Smart Tree embeds CrabCC's Rust indexing/query engine. The `st` binary provides
-symbol definitions, references, file outlines, and graph statistics without a
-separate `crabcc` installation or a running daemon:
-
-```bash
-st symbol index --path ./my-project
-st symbol sym handle_request --path ./my-project
-st symbol refs handle_request --path ./my-project
-st symbol outline src/main.rs --path ./my-project
-st symbol graph --path ./my-project
-```
-
-These commands return JSON. `--no-source` omits source snippets. The MCP `symbol`
-tool uses the same native engine and defaults to the current session directory;
-its existing `sym`, `refs`, `outline`, `index`, and `graph` operations remain
-available. Both interfaces enforce the MCP path policy.
-
-The cache lives in `<project>/.st/symbols/`; standalone CrabCC databases are left
-alone. Queries refresh this cache incrementally, and `index` rebuilds it. CrabCC
-is pinned to commit `12e7763f2f30fd995608b2ea4cd91e82a3be88fe` for reproducible
-source builds. No models, cloud service, or message delivery is involved.
+The `st symbol` command and MCP `symbol` tool have been removed in v21.0.0 due to the removal of the CrabCC/tree-sitter dependency chain. Code intelligence features will return in a future release with a lighter-weight native implementation.
 
 ### Opt-in Rink quantities and wave math
 

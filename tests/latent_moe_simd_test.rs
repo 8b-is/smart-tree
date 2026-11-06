@@ -29,13 +29,8 @@ fn test_ernie55_latent_moe_4096_to_2048_simd_bent_5trit_kernel() {
                 bend_k,
                 &mut out_scalar,
             );
-            let sse_simd = quantize_bend_pack_row_simd(
-                &weights,
-                thresholds,
-                centroids,
-                bend_k,
-                &mut out_simd,
-            );
+            let sse_simd =
+                quantize_bend_pack_row_simd(&weights, thresholds, centroids, bend_k, &mut out_simd);
 
             assert_eq!(
                 sse_simd, sse_scalar,
@@ -127,8 +122,7 @@ fn test_fused_unpack_unbend_gemv_410b_latent_moe_row_and_i8_min_safety() {
                 .map(|(&t, &x)| (t as i32) * (x as i32))
                 .sum();
 
-            let dot_scalar =
-                fused_unpack_unbend_gemv_row_scalar(&packed_row, &activations, bend_k);
+            let dot_scalar = fused_unpack_unbend_gemv_row_scalar(&packed_row, &activations, bend_k);
             let dot_simd = fused_unpack_unbend_gemv_row_simd(&packed_row, &activations, bend_k);
 
             assert_eq!(
@@ -161,15 +155,8 @@ fn test_fused_unpack_unbend_gemv_410b_latent_moe_row_and_i8_min_safety() {
         .collect();
     let vec_acts: Vec<i8> = (0..cols).map(|i| ((i * 17) as u8) as i8).collect();
 
-    let packed_mat = pack_latent_moe_matrix_par_simd(
-        &mat_weights,
-        rows,
-        cols,
-        thresholds,
-        centroids,
-        1,
-        0.75,
-    );
+    let packed_mat =
+        pack_latent_moe_matrix_par_simd(&mat_weights, rows, cols, thresholds, centroids, 1, 0.75);
     let gemv_out = latent_moe_gemv_par_simd(&packed_mat, &vec_acts, 1.0 / 127.0);
     assert_eq!(gemv_out.raw_integer_dots.len(), rows);
     assert_eq!(gemv_out.scaled_outputs.len(), rows);

@@ -1,6 +1,6 @@
 name = "wst_brain_scan"
 description = "Weight-Space-Time brain scanner and bent balanced-ternary verification deck"
-version = "0.1.0"
+version = "21.0.0"
 licenses = "MIT"
 authors = ["8b.is"]
 maintainers = ["8b.is <hello@8b.is>"]

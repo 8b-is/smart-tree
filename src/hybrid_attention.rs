@@ -87,8 +87,7 @@ impl LowRankQueryGate {
         let q_latent = q_lat_gemv.scaled_outputs;
 
         let (qlat_quant, qlat_scale) = quantize_activations_sym_i8(&q_latent);
-        let gate_gemv =
-            latent_moe_gemv_par_simd(&self.w_gate_from_latent, &qlat_quant, qlat_scale);
+        let gate_gemv = latent_moe_gemv_par_simd(&self.w_gate_from_latent, &qlat_quant, qlat_scale);
 
         let gate_probs: Vec<f32> = gate_gemv
             .scaled_outputs
@@ -432,10 +431,8 @@ impl Ernie55HybridAttentionLayer {
             .compute_query_latent_and_gate(&x_quant, x_scale);
 
         let (qlat_quant, qlat_scale) = quantize_activations_sym_i8(&q_latent);
-        let q_core =
-            latent_moe_gemv_par_simd(&self.w_q_up, &qlat_quant, qlat_scale).scaled_outputs;
-        let kv_latent =
-            latent_moe_gemv_par_simd(&self.w_kv_down, &x_quant, x_scale).scaled_outputs;
+        let q_core = latent_moe_gemv_par_simd(&self.w_q_up, &qlat_quant, qlat_scale).scaled_outputs;
+        let kv_latent = latent_moe_gemv_par_simd(&self.w_kv_down, &x_quant, x_scale).scaled_outputs;
 
         let (mut head_outputs, total_hist, attended_entries, dsa_positions) = match kv_store {
             HybridKvStore::Hca(hca_cache) => {
@@ -486,12 +483,7 @@ impl Ernie55HybridAttentionLayer {
                     self.num_heads,
                     self.head_dim,
                 );
-                (
-                    heads,
-                    mla_cache.entries.len(),
-                    attended_count,
-                    selected_pos,
-                )
+                (heads, mla_cache.entries.len(), attended_count, selected_pos)
             }
         };
 

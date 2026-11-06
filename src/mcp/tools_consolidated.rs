@@ -99,7 +99,7 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
             "the-book"
         }
         "semantic" | "semantics" => "semantic",
-        "quantum-semantic" | "quantum_semantic" | "quantum" => "quantum-semantic",
+        "quantum" => "quantum",
         "size_breakdown" | "size" | "sizes" => "size_breakdown",
         "ai_tools" | "ai" => "ai_tools",
         "security" | "custodian" => return handle_security(Some(params), ctx).await,
@@ -795,37 +795,6 @@ pub fn get_consolidated_tools() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "symbol",
-            "description": "🦀 CODE SYMBOL & CALL GRAPH INTELLIGENCE (Unified CrabCC + Smart Tree AST) — Built-in CrabCC symbol definition lookup (with source code & docstrings), cross-file call-graph references, file symbol outlines, and repo indexing.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "operation": {
-                        "type": "string",
-                        "enum": ["sym", "refs", "outline", "index", "graph"],
-                        "description": "Symbol operation: 'sym' (find definition + source code), 'refs' (find call-graph references), 'outline' (list all symbols in a file), 'index' (rebuild index), 'graph' (dependency stats)"
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Symbol name to look up (for 'sym' and 'refs', e.g. 'quantize_ternary', 'fold_spectrum')"
-                    },
-                    "file": {
-                        "type": "string",
-                        "description": "File path to outline (for 'outline', e.g. 'rust/alexiai/src/server.rs')"
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Repository root path (default: current MCP session directory)"
-                    },
-                    "include_source": {
-                        "type": "boolean",
-                        "description": "Include actual source code lines & docstrings around definitions/references (default: true)"
-                    }
-                },
-                "required": ["operation"]
-            }
-        }),
-        json!({
             "name": "security",
             "description": "🛡️ CUSTODIAN SECURITY SCANNER — AST & supply-chain threat detection, risk scoring, and suspicious capability analysis across any directory or repository.",
             "inputSchema": {
@@ -1035,7 +1004,6 @@ pub async fn dispatch_consolidated_tool(
             super::tools::handle_tools_call(json!({ "name": "ask_user", "arguments": params }), ctx)
                 .await?
         }
-        "symbol" | "crabcc" => handle_symbol(params, ctx).await?,
         "security" | "custodian" => handle_security(params, ctx).await?,
         "ontology" | "sovereign_ontology" => handle_ontology(params, ctx).await?,
         "partner" | "wa" | "wastream" | "discord" => handle_partner(params, ctx).await?,
@@ -1052,6 +1020,7 @@ pub async fn dispatch_consolidated_tool(
                     &tool_name,
                     args,
                     &model_cache,
+                    None,
                 )
             })
             .await
@@ -1208,22 +1177,6 @@ pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
             operation
         )),
     }
-}
-
-/// CrabCC runs inside Smart Tree; no separate executable is required.
-pub async fn handle_symbol(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let mut params = params.unwrap_or(json!({}));
-    super::helpers::normalize_path_args(&mut params, &ctx);
-    let cwd = ctx
-        .cwd
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Session path lock poisoned"))?
-        .clone();
-    let config = ctx.config.clone();
-    let result = tokio::task::spawn_blocking(move || super::symbol::execute(params, &cwd, &config))
-        .await
-        .context("Symbol worker failed")??;
-    Ok(json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&result)?}]}))
 }
 
 /// Consolidated security scanner tool — runs Smart Tree's built-in Custodian AST & supply-chain scanner in-memory.

@@ -6,7 +6,9 @@ use st::mcp_combinatorics_llm::{
         HCA_COMPRESSION_BLOCK_SIZE, HCA_HEAD_DIM, MLA_HEAD_DIM, PACKED_QUERY_LATENT_ROW_BYTES,
     },
     latent_moe_layer::MHC_STREAMS,
-    latent_moe_simd::{pack_latent_moe_matrix_par_simd, ERNIE55_HIDDEN_DIM, PACKED_HIDDEN_ROW_BYTES},
+    latent_moe_simd::{
+        pack_latent_moe_matrix_par_simd, ERNIE55_HIDDEN_DIM, PACKED_HIDDEN_ROW_BYTES,
+    },
 };
 
 #[test]
@@ -24,10 +26,7 @@ fn test_ernie55_hybrid_mla_256_dsa_and_hca_128x_512_attention_module() {
         AttentionLayerKind::Hca128xCompressed512.head_dim(),
         HCA_HEAD_DIM
     );
-    assert_eq!(
-        AttentionLayerKind::MlaDsaSparse256.head_dim(),
-        MLA_HEAD_DIM
-    );
+    assert_eq!(AttentionLayerKind::MlaDsaSparse256.head_dim(), MLA_HEAD_DIM);
 
     assert_eq!(PACKED_QUERY_LATENT_ROW_BYTES, 205);
     assert_eq!(PACKED_HIDDEN_ROW_BYTES, 820);
@@ -82,10 +81,18 @@ fn test_ernie55_hybrid_mla_256_dsa_and_hca_128x_512_attention_module() {
 
     let mut hca_store = HybridKvStore::Hca(hca_cache);
     let mut streams: [Vec<f32>; MHC_STREAMS] = [
-        (0..ERNIE55_HIDDEN_DIM).map(|i| ((i as f32) * 0.01).cos()).collect(),
-        (0..ERNIE55_HIDDEN_DIM).map(|i| ((i as f32) * 0.02).sin()).collect(),
-        (0..ERNIE55_HIDDEN_DIM).map(|i| ((i as f32) * 0.03).cos()).collect(),
-        (0..ERNIE55_HIDDEN_DIM).map(|i| ((i as f32) * 0.04).sin()).collect(),
+        (0..ERNIE55_HIDDEN_DIM)
+            .map(|i| ((i as f32) * 0.01).cos())
+            .collect(),
+        (0..ERNIE55_HIDDEN_DIM)
+            .map(|i| ((i as f32) * 0.02).sin())
+            .collect(),
+        (0..ERNIE55_HIDDEN_DIM)
+            .map(|i| ((i as f32) * 0.03).cos())
+            .collect(),
+        (0..ERNIE55_HIDDEN_DIM)
+            .map(|i| ((i as f32) * 0.04).sin())
+            .collect(),
     ];
 
     let hca_tel = hca_layer.forward_mhc_step(&mut streams, &mut hca_store);

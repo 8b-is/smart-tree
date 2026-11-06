@@ -325,8 +325,7 @@ pub fn scan_ernie55_weight_space_time(
     let hca_entries_per_layer = (seq_len / 128) + hca_window_tokens.min(seq_len);
     let hybrid_kv_entries =
         (mla_layers as u64) * seq_len + (hca_layers as u64) * hca_entries_per_layer;
-    let kv_compression_ratio =
-        (dense_kv_entries as f64) / (hybrid_kv_entries.max(1) as f64);
+    let kv_compression_ratio = (dense_kv_entries as f64) / (hybrid_kv_entries.max(1) as f64);
 
     // 2. WEIGHT AXIS: Multi-Router LatentMoE (512 routed top-10 + 1 shared in 2048-d latent space)
     //    Packing a 2048-d latent expert row at 5 trits/byte (1.6 bits/trit): ceil(2048 / 5) = 410 bytes
@@ -391,9 +390,9 @@ pub fn scan_ernie55_weight_space_time(
         hca_128x_compressed_layers: hca_layers,
         kv_cache_entries_at_128k_dense: dense_kv_entries,
         kv_cache_entries_at_128k_hybrid: hybrid_kv_entries,
-        kv_cache_compression_ratio,
-        latent_moe_active_experts: 11,  // top-10 routed + 1 shared
-        latent_moe_total_experts: 513,  // 512 routed + 1 shared
+        kv_cache_compression_ratio: kv_compression_ratio,
+        latent_moe_active_experts: 11, // top-10 routed + 1 shared
+        latent_moe_total_experts: 513, // 512 routed + 1 shared
         multi_router_agreement_gain: multi_router_gain,
         ternary_packed_expert_row_bytes,
         critical_path_43_layer_us: critical_path_us,
@@ -445,9 +444,6 @@ mod tests {
         assert_eq!(diff.declared_layers, 6);
         assert_eq!(diff.named_skips.len(), 4);
         assert!(!diff.ada_2022_lane.executed);
-        assert!(diff
-            .named_skips
-            .iter()
-            .any(|skip| skip.layer == "ada_2022"));
+        assert!(diff.named_skips.iter().any(|skip| skip.layer == "ada_2022"));
     }
 }

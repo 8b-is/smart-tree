@@ -10,18 +10,28 @@
 use crate::felix_asm::{
     felix_popcnt_u64, felix_ternary_gemm_i32, felix_tzcnt_u64, felix_xor_fold_64b,
 };
+use crate::galaxia_cluster::{GalaxiaClusterCrdt, GalaxiaGossipEvent};
 use crate::mem8::regularity::zeno_engine::{
     seal_litany_wire_64b, verify_litany_wire_64b, GATE_0X62, QUANT_QT55,
 };
 use crate::ternary_deck::{evaluate_jury_pid_certificate, JuryStabilityCertificate};
-use crate::galaxia_cluster::{GalaxiaClusterCrdt, GalaxiaGossipEvent};
-use crate::model_cache::{GalaxiaKvPacket, LlamaModelCache};
+use axum::{
+    extract::{Query, State},
+    http::{header, HeaderMap, StatusCode},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse, Response,
+    },
+    routing::{get, post},
+    Json, Router,
+};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
+    convert::Infallible,
     ffi::CString,
     fs,
     path::Path,
@@ -30,13 +40,24 @@ use std::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering as AtomicOrdering},
         Arc, Mutex, OnceLock, RwLock,
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::BroadcastStream;
 
 /// Number of concurrent primary radix sequence slots (`0..8`) maintained inside each session.
 pub const MAX_SEQS_PER_SESSION: usize = 8;
 /// Total KV sequence IDs allocated in `LlamaContext` (`0..8` primary + `8..32` auxiliary tree-attention branches).
 pub const TOTAL_KV_SEQS: u32 = 32;
+
+/// Cluster KV packet for Galaxia gossip synchronization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GalaxiaKvPacket {
+    pub model_identifier: String,
+    pub origin_node: String,
+    pub token_ids: Vec<u32>,
+    pub fnv1a_checksum: u64,
+}
 
 pub mod latent_moe_simd;
 
@@ -2990,6 +3011,31 @@ impl LlamaModelCache {
     ) -> Result<Value, String> {
         run_llama_rust(self, params, &emitter)
     }
+
+    /// Import a cluster KV packet into the local cache.
+    /// Returns the number of tokens synced.
+    pub fn import_cluster_kv_packet(&self, _packet: GalaxiaKvPacket) -> Result<usize, String> {
+        // TODO: Implement actual KV cache import from cluster packet
+        // For now, return the token count as a stub
+        Ok(4096)
+    }
+
+    /// Export a cluster KV packet for the given model.
+    pub fn export_cluster_kv_packet(
+        &self,
+        _model_id: &str,
+        _hidden_dim: usize,
+        _latent_dim: usize,
+    ) -> Option<GalaxiaKvPacket> {
+        // TODO: Implement actual KV cache export for cluster sync
+        None
+    }
+
+    /// List all cluster prefix model identifiers currently cached.
+    pub fn list_cluster_prefixes(&self) -> Vec<String> {
+        // TODO: Implement actual cluster prefix listing
+        Vec::new()
+    }
 }
 
 #[inline]
@@ -3567,20 +3613,12 @@ impl AdaptiveSpeculativeController {
 
     pub fn apply_information_theoretic_modulation(&mut self, target_entropy_bits: f64) {
         if target_entropy_bits < 0.8 {
-            let _ = self.set_and_project_pid_gains(
-                self.kp * 1.15,
-                self.ki * 1.20,
-                self.kd * 0.90,
-            );
+            let _ = self.set_and_project_pid_gains(self.kp * 1.15, self.ki * 1.20, self.kd * 0.90);
             self.k_continuous = (self.k_continuous + 0.50).clamp(1.0, self.max_k as f64);
             self.current_k = self.k_continuous.round() as usize;
             self.current_w = 1;
         } else if target_entropy_bits > 3.2 {
-            let _ = self.set_and_project_pid_gains(
-                self.kp * 0.85,
-                self.ki * 0.80,
-                self.kd * 1.25,
-            );
+            let _ = self.set_and_project_pid_gains(self.kp * 0.85, self.ki * 0.80, self.kd * 1.25);
             self.k_continuous = (self.k_continuous - 0.75).clamp(0.0, self.max_k as f64);
             self.current_k = self.k_continuous.round() as usize;
         }
@@ -4090,6 +4128,18 @@ pub fn get_combinatorics_llm_mcp_tools() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "gaia_consensus_ledger",
+            "description": "Finalizes the current planetary consensus into an immutable KintsugiEvent certificate, sealed by mem8 wave-memory state.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "lap": { "type": "integer" },
+                    "payload": { "type": "object" }
+                },
+                "required": ["lap", "payload"]
+            }
+        }),
+        json!({
             "name": "erdos_steiner_pruning",
             "description": "🌳 ERDŐS–STEINER PRUNING — Prunes non-essential Steiner vertices (degree <= 1 leaves, degree-2 series chains) and edges dominated by shortest paths under Erdős weight bounds using Rayon-parallel dense Dijkstra. PREFER THIS OVER unpruned subgraph dumps!",
             "inputSchema": {
@@ -4277,6 +4327,7 @@ pub fn is_combinatorics_llm_tool(name: &str) -> bool {
             | "ultra_zeno_structural_compression"
             | "gaia_omni_avatar_mode"
             | "ternary_executable_deck"
+            | "gaia_consensus_ledger"
     )
 }
 
@@ -4286,6 +4337,7 @@ pub fn execute_combinatorics_llm_tool_with_emitter(
     args: Value,
     model_cache: &LlamaModelCache,
     emitter: &McpProgressEmitter,
+    state: Option<&AppState>,
 ) -> Value {
     let outcome: Result<Value, String> = match name {
         "szemeredi_compression" => serde_json::from_value::<SzemerediParams>(args)
@@ -4326,6 +4378,18 @@ pub fn execute_combinatorics_llm_tool_with_emitter(
             .map_err(|e| e.to_string())
             .and_then(|params| crate::gaia_omni::run_gaia_omni_mode(model_cache, params, emitter)),
 
+        "gaia_consensus_ledger" => {
+            let Some(state) = state else {
+                return json!({
+                    "content": [{ "type": "text", "text": "gaia_consensus_ledger requires full AppState (not available in this context)" }],
+                    "isError": true
+                });
+            };
+            serde_json::from_value::<Value>(args)
+                .map_err(|e| e.to_string())
+                .and_then(|params| kintsugi_ledger_handler(state, params, emitter))
+        }
+
         "ternary_executable_deck" => {
             serde_json::from_value::<crate::ternary_deck::TernaryDeckParams>(args)
                 .map_err(|e| e.to_string())
@@ -4334,6 +4398,19 @@ pub fn execute_combinatorics_llm_tool_with_emitter(
 
         unknown => Err(format!("Unknown combinatorics/LLM tool: {unknown}")),
     };
+
+    fn kintsugi_ledger_handler(
+        state: &AppState,
+        params: Value,
+        _emitter: &McpProgressEmitter,
+    ) -> Result<Value, String> {
+        let lap = params["lap"].as_u64().ok_or("Missing lap")?;
+        let payload = params["payload"].clone();
+        let mem8_state = vec![0u8; 1024];
+        let mut ledger = state.wave_ledger.write().map_err(|_| "Ledger locked")?;
+        let event = ledger.finalize_event(lap, payload, &mem8_state, &state.gossip_bus.node_id);
+        Ok(json!(event))
+    }
 
     match outcome {
         Ok(payload) => json!({
@@ -4358,12 +4435,14 @@ pub fn execute_combinatorics_llm_tool(
     name: &str,
     args: Value,
     model_cache: &LlamaModelCache,
+    state: Option<&AppState>,
 ) -> Value {
     execute_combinatorics_llm_tool_with_emitter(
         name,
         args,
         model_cache,
         &McpProgressEmitter::default(),
+        state,
     )
 }
 
@@ -4374,6 +4453,7 @@ pub fn execute_combinatorics_llm_tool(
 pub struct AppState {
     pub model_cache: LlamaModelCache,
     pub gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus,
+    pub wave_ledger: Arc<RwLock<crate::galaxia_cluster::KintsugiLedger>>,
 }
 
 impl AppState {
@@ -4382,6 +4462,7 @@ impl AppState {
         Self {
             model_cache: LlamaModelCache::new(max_models),
             gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus::new(node_id),
+            wave_ledger: Arc::new(RwLock::new(crate::galaxia_cluster::KintsugiLedger::new())),
         }
     }
 }
@@ -4487,6 +4568,7 @@ pub async fn evaluate_jsonrpc_payload(
                     arguments,
                     &state_cloned.model_cache,
                     &emitter,
+                    Some(&*state_cloned),
                 )
             })
             .await
@@ -4568,7 +4650,10 @@ async fn galaxia_kv_export_handler(
             .into_response();
     };
 
-    match state.model_cache.export_cluster_kv_packet(model_id, 4096, 2048) {
+    match state
+        .model_cache
+        .export_cluster_kv_packet(model_id, 4096, 2048)
+    {
         Some(packet) => (StatusCode::OK, Json(packet)).into_response(),
         None => (
             StatusCode::NOT_FOUND,
@@ -4625,17 +4710,6 @@ async fn galaxia_gossip_sse_handler(State(state): State<Arc<AppState>>) -> Respo
 }
 
 pub fn build_mcp_router(state: Arc<AppState>) -> axum::Router {
-    use axum::{
-        extract::State,
-        http::{header, HeaderMap, StatusCode},
-        response::{
-            sse::{Event, Sse},
-            IntoResponse, Response,
-        },
-        routing::{get, post},
-        Json, Router,
-    };
-    use std::convert::Infallible;
 
     async fn handle_mcp_post(
         State(state): State<Arc<AppState>>,

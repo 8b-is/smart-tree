@@ -1,6 +1,6 @@
 //! Brzozowski-derivative GBNF / JSON-Schema constrained sampler automaton.
-//! 
-//! Compiles MCP/OpenAI JSON Schema to GBNF, and parses GBNF into a DAG for 
+//!
+//! Compiles MCP/OpenAI JSON Schema to GBNF, and parses GBNF into a DAG for
 //! O(1) Brzozowski byte-derivative transitions during speculative decoding.
 
 use serde_json::Value;
@@ -71,9 +71,7 @@ fn build_schema_rule(
                 "string".to_string()
             };
             let rule_name = next_rule_name(hint, counter);
-            let body = format!(
-                "\"[\" ws ({item_rule} (ws \",\" ws {item_rule})*)? ws \"]\""
-            );
+            let body = format!("\"[\" ws ({item_rule} (ws \",\" ws {item_rule})*)? ws \"]\"");
             rules.push((rule_name.clone(), body));
             Ok(rule_name)
         }
@@ -162,7 +160,10 @@ pub enum GbnfExpr {
     Empty,
     Fail,
     Literal(Vec<u8>),
-    CharClass { ranges: Vec<(u8, u8)>, negated: bool },
+    CharClass {
+        ranges: Vec<(u8, u8)>,
+        negated: bool,
+    },
     RuleRef(usize),
     Seq(Vec<GbnfExpr>),
     Alt(Vec<GbnfExpr>),
@@ -256,7 +257,9 @@ impl GrammarState {
 }
 
 fn is_nullable(expr: &GbnfExpr, rules: &[GbnfExpr], depth: usize) -> bool {
-    if depth > 64 { return false; }
+    if depth > 64 {
+        return false;
+    }
     match expr {
         GbnfExpr::Empty | GbnfExpr::Star(_) => true,
         GbnfExpr::Fail | GbnfExpr::CharClass { .. } => false,
@@ -268,19 +271,29 @@ fn is_nullable(expr: &GbnfExpr, rules: &[GbnfExpr], depth: usize) -> bool {
 }
 
 fn derive_byte(expr: &GbnfExpr, rules: &[GbnfExpr], b: u8, depth: usize) -> GbnfExpr {
-    if depth > 64 { return GbnfExpr::Fail; }
+    if depth > 64 {
+        return GbnfExpr::Fail;
+    }
     match expr {
         GbnfExpr::Empty | GbnfExpr::Fail => GbnfExpr::Fail,
         GbnfExpr::Literal(bytes) => match bytes.split_first() {
             Some((&first, rest)) if first == b => {
-                if rest.is_empty() { GbnfExpr::Empty } else { GbnfExpr::Literal(rest.to_vec()) }
+                if rest.is_empty() {
+                    GbnfExpr::Empty
+                } else {
+                    GbnfExpr::Literal(rest.to_vec())
+                }
             }
             _ => GbnfExpr::Fail,
         },
         GbnfExpr::CharClass { ranges, negated } => {
             let in_range = ranges.iter().any(|&(lo, hi)| b >= lo && b <= hi);
             let matched = if *negated { !in_range } else { in_range };
-            if matched { GbnfExpr::Empty } else { GbnfExpr::Fail }
+            if matched {
+                GbnfExpr::Empty
+            } else {
+                GbnfExpr::Fail
+            }
         }
         GbnfExpr::RuleRef(id) => derive_byte(&rules[*id], rules, b, depth + 1),
         GbnfExpr::Star(inner) => {
@@ -291,12 +304,16 @@ fn derive_byte(expr: &GbnfExpr, rules: &[GbnfExpr], b: u8, depth: usize) -> Gbnf
             let mut next_choices = Vec::new();
             for c in choices {
                 let dc = derive_byte(c, rules, b, depth + 1);
-                if dc != GbnfExpr::Fail { next_choices.push(dc); }
+                if dc != GbnfExpr::Fail {
+                    next_choices.push(dc);
+                }
             }
             simplify_alt(next_choices)
         }
         GbnfExpr::Seq(items) => {
-            if items.is_empty() { return GbnfExpr::Fail; }
+            if items.is_empty() {
+                return GbnfExpr::Fail;
+            }
             let first = &items[0];
             let rest = &items[1..];
             let d_first = derive_byte(first, rules, b, depth + 1);
@@ -339,11 +356,15 @@ fn simplify_alt(choices: Vec<GbnfExpr>) -> GbnfExpr {
             GbnfExpr::Fail => {}
             GbnfExpr::Alt(sub) => {
                 for s in sub {
-                    if !flat.contains(&s) { flat.push(s); }
+                    if !flat.contains(&s) {
+                        flat.push(s);
+                    }
                 }
             }
             other => {
-                if !flat.contains(&other) { flat.push(other); }
+                if !flat.contains(&other) {
+                    flat.push(other);
+                }
             }
         }
     }
@@ -360,47 +381,78 @@ fn parse_rule_rhs(src: &str, name_to_id: &HashMap<String, usize>) -> Result<Gbnf
     parse_alt(bytes, &mut pos, name_to_id)
 }
 
-fn parse_alt(bytes: &[u8], pos: &mut usize, name_to_id: &HashMap<String, usize>) -> Result<GbnfExpr, String> {
+fn parse_alt(
+    bytes: &[u8],
+    pos: &mut usize,
+    name_to_id: &HashMap<String, usize>,
+) -> Result<GbnfExpr, String> {
     let mut branches = vec![parse_seq(bytes, pos, name_to_id)?];
     loop {
         skip_spaces(bytes, pos);
         if *pos < bytes.len() && bytes[*pos] == b'|' {
             *pos += 1;
             branches.push(parse_seq(bytes, pos, name_to_id)?);
-        } else { break; }
+        } else {
+            break;
+        }
     }
     Ok(simplify_alt(branches))
 }
 
-fn parse_seq(bytes: &[u8], pos: &mut usize, name_to_id: &HashMap<String, usize>) -> Result<GbnfExpr, String> {
+fn parse_seq(
+    bytes: &[u8],
+    pos: &mut usize,
+    name_to_id: &HashMap<String, usize>,
+) -> Result<GbnfExpr, String> {
     let mut items = Vec::new();
     loop {
         skip_spaces(bytes, pos);
-        if *pos >= bytes.len() || bytes[*pos] == b'|' || bytes[*pos] == b')' { break; }
+        if *pos >= bytes.len() || bytes[*pos] == b'|' || bytes[*pos] == b')' {
+            break;
+        }
         let atom = parse_atom(bytes, pos, name_to_id)?;
         skip_spaces(bytes, pos);
         let quantified = if *pos < bytes.len() {
             match bytes[*pos] {
-                b'*' => { *pos += 1; GbnfExpr::Star(Box::new(atom)) }
-                b'+' => { *pos += 1; GbnfExpr::Seq(vec![atom.clone(), GbnfExpr::Star(Box::new(atom))]) }
-                b'?' => { *pos += 1; simplify_alt(vec![atom, GbnfExpr::Empty]) }
+                b'*' => {
+                    *pos += 1;
+                    GbnfExpr::Star(Box::new(atom))
+                }
+                b'+' => {
+                    *pos += 1;
+                    GbnfExpr::Seq(vec![atom.clone(), GbnfExpr::Star(Box::new(atom))])
+                }
+                b'?' => {
+                    *pos += 1;
+                    simplify_alt(vec![atom, GbnfExpr::Empty])
+                }
                 _ => atom,
             }
-        } else { atom };
+        } else {
+            atom
+        };
         items.push(quantified);
     }
     Ok(simplify_seq(items))
 }
 
-fn parse_atom(bytes: &[u8], pos: &mut usize, name_to_id: &HashMap<String, usize>) -> Result<GbnfExpr, String> {
+fn parse_atom(
+    bytes: &[u8],
+    pos: &mut usize,
+    name_to_id: &HashMap<String, usize>,
+) -> Result<GbnfExpr, String> {
     skip_spaces(bytes, pos);
-    if *pos >= bytes.len() { return Ok(GbnfExpr::Empty); }
+    if *pos >= bytes.len() {
+        return Ok(GbnfExpr::Empty);
+    }
     match bytes[*pos] {
         b'(' => {
             *pos += 1;
             let inner = parse_alt(bytes, pos, name_to_id)?;
             skip_spaces(bytes, pos);
-            if *pos < bytes.len() && bytes[*pos] == b')' { *pos += 1; }
+            if *pos < bytes.len() && bytes[*pos] == b')' {
+                *pos += 1;
+            }
             Ok(inner)
         }
         b'"' => {
@@ -409,16 +461,32 @@ fn parse_atom(bytes: &[u8], pos: &mut usize, name_to_id: &HashMap<String, usize>
             while *pos < bytes.len() && bytes[*pos] != b'"' {
                 if bytes[*pos] == b'\\' && *pos + 1 < bytes.len() {
                     *pos += 1;
-                    lit.push(match bytes[*pos] { b'n'=>b'\n', b'r'=>b'\r', b't'=>b'\t', b'"'=>b'"', b'\\'=>b'\\', other=>other });
-                } else { lit.push(bytes[*pos]); }
+                    lit.push(match bytes[*pos] {
+                        b'n' => b'\n',
+                        b'r' => b'\r',
+                        b't' => b'\t',
+                        b'"' => b'"',
+                        b'\\' => b'\\',
+                        other => other,
+                    });
+                } else {
+                    lit.push(bytes[*pos]);
+                }
                 *pos += 1;
             }
-            if *pos < bytes.len() && bytes[*pos] == b'"' { *pos += 1; }
+            if *pos < bytes.len() && bytes[*pos] == b'"' {
+                *pos += 1;
+            }
             Ok(GbnfExpr::Literal(lit))
         }
         b'[' => {
             *pos += 1;
-            let negated = if *pos < bytes.len() && bytes[*pos] == b'^' { *pos += 1; true } else { false };
+            let negated = if *pos < bytes.len() && bytes[*pos] == b'^' {
+                *pos += 1;
+                true
+            } else {
+                false
+            };
             let mut ranges = Vec::new();
             while *pos < bytes.len() && bytes[*pos] != b']' {
                 let start_b = parse_class_byte(bytes, pos);
@@ -426,16 +494,29 @@ fn parse_atom(bytes: &[u8], pos: &mut usize, name_to_id: &HashMap<String, usize>
                     *pos += 1;
                     let end_b = parse_class_byte(bytes, pos);
                     ranges.push((start_b.min(end_b), start_b.max(end_b)));
-                } else { ranges.push((start_b, start_b)); }
+                } else {
+                    ranges.push((start_b, start_b));
+                }
             }
-            if *pos < bytes.len() && bytes[*pos] == b']' { *pos += 1; }
+            if *pos < bytes.len() && bytes[*pos] == b']' {
+                *pos += 1;
+            }
             Ok(GbnfExpr::CharClass { ranges, negated })
         }
         _ => {
             let start = *pos;
-            while *pos < bytes.len() && (bytes[*pos].is_ascii_alphanumeric() || bytes[*pos] == b'-' || bytes[*pos] == b'_') { *pos += 1; }
+            while *pos < bytes.len()
+                && (bytes[*pos].is_ascii_alphanumeric()
+                    || bytes[*pos] == b'-'
+                    || bytes[*pos] == b'_')
+            {
+                *pos += 1;
+            }
             let ident = String::from_utf8_lossy(&bytes[start..*pos]).to_string();
-            let id = name_to_id.get(&ident).copied().ok_or_else(|| format!("Undefined GBNF rule: '{ident}'"))?;
+            let id = name_to_id
+                .get(&ident)
+                .copied()
+                .ok_or_else(|| format!("Undefined GBNF rule: '{ident}'"))?;
             Ok(GbnfExpr::RuleRef(id))
         }
     }
@@ -444,7 +525,12 @@ fn parse_atom(bytes: &[u8], pos: &mut usize, name_to_id: &HashMap<String, usize>
 fn parse_class_byte(bytes: &[u8], pos: &mut usize) -> u8 {
     if bytes[*pos] == b'\\' && *pos + 1 < bytes.len() {
         *pos += 1;
-        let b = match bytes[*pos] { b'n'=>b'\n', b'r'=>b'\r', b't'=>b'\t', other=>other };
+        let b = match bytes[*pos] {
+            b'n' => b'\n',
+            b'r' => b'\r',
+            b't' => b'\t',
+            other => other,
+        };
         *pos += 1;
         b
     } else {
@@ -455,5 +541,7 @@ fn parse_class_byte(bytes: &[u8], pos: &mut usize) -> u8 {
 }
 
 fn skip_spaces(bytes: &[u8], pos: &mut usize) {
-    while *pos < bytes.len() && (bytes[*pos] == b' ' || bytes[*pos] == b'\t') { *pos += 1; }
+    while *pos < bytes.len() && (bytes[*pos] == b' ' || bytes[*pos] == b'\t') {
+        *pos += 1;
+    }
 }

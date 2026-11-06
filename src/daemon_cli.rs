@@ -22,7 +22,7 @@ use crate::formatters::{
     mermaid::{MermaidFormatter, MermaidStyle},
     projects::ProjectsFormatter,
     quantum::QuantumFormatter,
-    quantum_semantic::QuantumSemanticFormatter,
+    // quantum_semantic::QuantumSemanticFormatter, // Removed: requires tree-sitter
     semantic::SemanticFormatter,
     smart::SmartFormatter,
     stats::StatsFormatter,
@@ -459,7 +459,7 @@ fn format_output(
             formatter.format(writer, nodes, stats, root_path)?;
         }
         "quantumsemantic" => {
-            let formatter = QuantumSemanticFormatter::new();
+            let formatter = SemanticFormatter::new(path_display, no_emoji);
             formatter.format(writer, nodes, stats, root_path)?;
         }
         "summary" => {

@@ -121,11 +121,7 @@ pub fn quantize_bend_pack_row_simd(
             // SAFETY: AVX2 runtime support is verified above.
             unsafe {
                 return quantize_bend_pack_row_avx2(
-                    weights,
-                    thresholds,
-                    centroids,
-                    bend_k,
-                    packed_out,
+                    weights, thresholds, centroids, bend_k, packed_out,
                 );
             }
         }
@@ -137,11 +133,7 @@ pub fn quantize_bend_pack_row_simd(
             // SAFETY: NEON runtime support is verified above.
             unsafe {
                 return quantize_bend_pack_row_neon(
-                    weights,
-                    thresholds,
-                    centroids,
-                    bend_k,
-                    packed_out,
+                    weights, thresholds, centroids, bend_k, packed_out,
                 );
             }
         }
@@ -284,18 +276,18 @@ unsafe fn quantize_bend_pack_row_avx2(
 
     // Mask out bytes 10..16 of each 128-bit lane so only the 20 active weights contribute to SSE
     let active_20_mask = _mm256_setr_epi8(
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, 0, 0, 0, 0, 0, 0,
     );
 
     // Align 2 groups of 5 trits per 128-bit lane into 8-byte blocks for `_mm256_maddubs_epi16`
     let group_shuf = _mm256_setr_epi8(
-        0, 1, 2, 3, 4, -1, -1, -1, 5, 6, 7, 8, 9, -1, -1, -1,
-        0, 1, 2, 3, 4, -1, -1, -1, 5, 6, 7, 8, 9, -1, -1, -1,
+        0, 1, 2, 3, 4, -1, -1, -1, 5, 6, 7, 8, 9, -1, -1, -1, 0, 1, 2, 3, 4, -1, -1, -1, 5, 6, 7,
+        8, 9, -1, -1, -1,
     );
     let pow3_weights = _mm256_setr_epi8(
-        1, 3, 9, 27, 81, 0, 0, 0, 1, 3, 9, 27, 81, 0, 0, 0,
-        1, 3, 9, 27, 81, 0, 0, 0, 1, 3, 9, 27, 81, 0, 0, 0,
+        1, 3, 9, 27, 81, 0, 0, 0, 1, 3, 9, 27, 81, 0, 0, 0, 1, 3, 9, 27, 81, 0, 0, 0, 1, 3, 9, 27,
+        81, 0, 0, 0,
     );
     let ones_16 = _mm256_set1_epi16(1);
 
@@ -806,11 +798,7 @@ const fn build_neon_gemv_idx<const LEN: usize>(start_m: usize) -> [u8; LEN] {
 /// against a signed `i8` activation vector `activations`, reversing the `(k * i) mod 3`
 /// cyclic bend in registers and returning the exact balanced-trit dot product:
 ///   `dot = \sum_{i=0}^{D-1} t_i * activations[i]` where `t_i in {-1, 0, +1}`.
-pub fn fused_unpack_unbend_gemv_row_simd(
-    packed_row: &[u8],
-    activations: &[i8],
-    bend_k: u8,
-) -> i32 {
+pub fn fused_unpack_unbend_gemv_row_simd(packed_row: &[u8], activations: &[i8], bend_k: u8) -> i32 {
     let dim = activations.len();
     let required_bytes = (dim + 4) / 5;
     assert!(
@@ -999,7 +987,7 @@ unsafe fn fused_unpack_unbend_gemv_row_avx2(
         let r_idx = r_base as usize;
         for m in 0..5usize {
             let inv_p = _mm256_loadu_si256(
-                AVX2_PLANAR_UNBEND_32[k_mod3][r_idx][m].as_ptr() as *const __m256i,
+                AVX2_PLANAR_UNBEND_32[k_mod3][r_idx][m].as_ptr() as *const __m256i
             );
             let sum = _mm256_add_epi8(planes[m], inv_p);
             let ge3 = _mm256_cmpeq_epi8(_mm256_max_epu8(sum, v3), sum);

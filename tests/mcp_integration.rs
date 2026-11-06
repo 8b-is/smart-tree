@@ -854,14 +854,12 @@ async fn test_ternary_executable_deck_mcp_tool() {
 #[test]
 fn test_adaptive_speculative_controller_enforces_jury_non_oscillatory_certificate() {
     use mcp_combinatorics_llm::{
-        model_cache::AdaptiveSpeculativeController,
-        ternary_deck::evaluate_jury_pid_certificate,
+        model_cache::AdaptiveSpeculativeController, ternary_deck::evaluate_jury_pid_certificate,
     };
 
     // 1. Prove that the unconstrained heuristic gains (3.20, 0.45, 0.90) violate Jury Condition 2
     //    for the EWMA plant (a = 0.65, b = 0.35): -P(-1) = -0.3575 < 0, spectral_radius > 1.0
-    let raw_heuristic_cert =
-        evaluate_jury_pid_certificate(0.65, 0.35, 3.20, 0.45, 0.90).unwrap();
+    let raw_heuristic_cert = evaluate_jury_pid_certificate(0.65, 0.35, 3.20, 0.45, 0.90).unwrap();
     assert!(
         !raw_heuristic_cert.cond2_alternating_minus_one_holds,
         "Raw heuristic gains must fail Jury Condition 2 at z = -1"
@@ -888,10 +886,7 @@ fn test_adaptive_speculative_controller_enforces_jury_non_oscillatory_certificat
         ctrl.jury_certificate.spectral_radius
     );
     assert!(
-        ctrl.jury_certificate
-            .roots
-            .iter()
-            .all(|r| r.re >= -0.20),
+        ctrl.jury_certificate.roots.iter().all(|r| r.re >= -0.20),
         "All projected closed-loop poles must satisfy Re(z) >= -0.20 to prevent Nyquist chattering"
     );
 

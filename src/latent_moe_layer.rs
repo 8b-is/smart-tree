@@ -21,11 +21,7 @@ pub const MHC_STREAMS: usize = 4;
 /// Dynamically quantizes an `f32` activation slice into signed `i8` in `[-127, 127]`
 /// so `i8::MIN (-128)` is avoided and returns `(quantized_i8, dequant_scale)`.
 pub fn quantize_activations_sym_i8(input: &[f32]) -> (Vec<i8>, f32) {
-    let max_abs = input
-        .iter()
-        .copied()
-        .map(f32::abs)
-        .fold(0.0f32, f32::max);
+    let max_abs = input.iter().copied().map(f32::abs).fold(0.0f32, f32::max);
 
     if max_abs <= 1e-12 {
         return (vec![0i8; input.len()], 0.0);
@@ -167,10 +163,8 @@ impl MultiRouterGate {
         ranked.truncate(self.top_k);
 
         let selected_experts: Vec<usize> = ranked.iter().map(|&(e, _)| e).collect();
-        let selected_unbiased: Vec<f32> = selected_experts
-            .iter()
-            .map(|&e| joint_scores[e])
-            .collect();
+        let selected_unbiased: Vec<f32> =
+            selected_experts.iter().map(|&e| joint_scores[e]).collect();
 
         let sum_unbiased: f32 = selected_unbiased.iter().sum::<f32>().max(1e-12);
         let expert_weights: Vec<f32> = selected_experts
@@ -201,8 +195,8 @@ impl MultiRouterGate {
             }
         }
 
-        let target_count = (self.total_tokens_routed as f32)
-            * (self.top_k as f32 / (self.num_experts as f32));
+        let target_count =
+            (self.total_tokens_routed as f32) * (self.top_k as f32 / (self.num_experts as f32));
 
         for (b, &cnt) in self
             .load_balance_bias
@@ -242,8 +236,8 @@ impl LatentExpert5Trit {
         let d_lat = self.gate_proj.rows;
         assert_eq!(h_lat_quant.len(), self.gate_proj.cols);
 
-        let gate_step = 0.5
-            * ((self.gate_proj.centroids[2] as f32) - (self.gate_proj.centroids[0] as f32));
+        let gate_step =
+            0.5 * ((self.gate_proj.centroids[2] as f32) - (self.gate_proj.centroids[0] as f32));
         let gate_scale = self.gate_proj.routing_scalar_alpha * gate_step * h_lat_scale;
 
         let up_step =

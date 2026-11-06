@@ -40,15 +40,16 @@ async fn main() -> Result<()> {
 
     // Code intelligence is entirely local and in-process. It needs neither a
     // running daemon nor startup network checks, and stdout stays valid JSON.
-    if let Some(st::cli::Cmd::Symbol(command)) = &cli.cmd {
-        let result = st::mcp::symbol::execute(
-            command.parameters(),
-            &std::env::current_dir()?,
-            &st::mcp::load_config()?,
-        )?;
-        println!("{}", serde_json::to_string_pretty(&result)?);
-        return Ok(());
-    }
+    // Symbol command removed (requires crabcc dependency)
+    // if let Some(st::cli::Cmd::Symbol(command)) = &cli.cmd {
+    //     let result = st::mcp::symbol::execute(
+    //         command.parameters(),
+    //         &std::env::current_dir()?,
+    //         &st::mcp::load_config()?,
+    //     )?;
+    //     println!("{}", serde_json::to_string_pretty(&result)?);
+    //     return Ok(());
+    // }
 
     // Antigravity (agy) lifecycle hooks must output strict JSON on stdout with
     // zero startup banners, update checks, or daemon auto-start delays.

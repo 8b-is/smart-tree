@@ -28,9 +28,9 @@ pub mod formatters; // Home to all the different ways we can display the tree (C
 pub mod gaia_omni; // Gaia Omni planetary superorganism mode with control/holonomy feedback
 pub mod galaxia_cluster; // Galaxia cluster CRDT and federation protocol
 pub mod grammar; // GBNF/JSON-Schema constrained automaton
-pub mod hybrid_attention; // ERNIE 5.5 Hybrid MLA-256 + HCA-512 Latent-Gated Sparse Attention
 pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod hub;
+pub mod hybrid_attention; // ERNIE 5.5 Hybrid MLA-256 + HCA-512 Latent-Gated Sparse Attention
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
 pub mod interest_calculator; // The scoring engine that determines what's interesting
 pub mod latent_moe_layer; // ERNIE 5.5 Multi-Router Stable LatentMoE layer
@@ -51,7 +51,7 @@ pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features wit
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
 pub mod ternary_deck; // Executable 5-card ternary verification deck
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
-pub mod tree_sitter_quantum;
+// pub mod tree_sitter_quantum; // Removed: requires crabcc/tree-sitter dependencies
 pub mod ultra_zeno; // UltraZeno M1-M2-M3 Information Bottleneck & System 1/2 Cognitive Engine
 pub mod universal_chat_scanner; // Finds conversations everywhere!
 pub mod universal_format_detector; // Detects format by structure! // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
