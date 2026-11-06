@@ -351,7 +351,11 @@ impl GalaxiaGossipBus {
         Self::with_config(node_id, base_url, GossipConfig::default())
     }
 
-    pub fn with_config(node_id: impl Into<String>, base_url: impl Into<String>, config: GossipConfig) -> Self {
+    pub fn with_config(
+        node_id: impl Into<String>,
+        base_url: impl Into<String>,
+        config: GossipConfig,
+    ) -> Self {
         let id_str = node_id.into();
         let url_str = base_url.into();
         let (tx, _) = broadcast::channel(128);
@@ -389,13 +393,23 @@ impl GalaxiaGossipBus {
         };
 
         // Check blocklist first (takes precedence)
-        if self.config.blocklist.iter().any(|b| host.contains(b) || b == "*") {
+        if self
+            .config
+            .blocklist
+            .iter()
+            .any(|b| host.contains(b) || b == "*")
+        {
             return false;
         }
 
         // Check allowlist (if configured, only allow listed hosts)
         if !self.config.allowlist.is_empty() {
-            if !self.config.allowlist.iter().any(|a| host.contains(a) || a == "*") {
+            if !self
+                .config
+                .allowlist
+                .iter()
+                .any(|a| host.contains(a) || a == "*")
+            {
                 return false;
             }
         }
@@ -428,7 +442,8 @@ impl GalaxiaGossipBus {
             // Check IPv6 unique local addresses (fc00::/7)
             if let std::net::IpAddr::V6(ipv6) = ip {
                 let octets = ipv6.octets();
-                if octets[0] & 0xfe == 0xfc { // fc00::/7
+                if octets[0] & 0xfe == 0xfc {
+                    // fc00::/7
                     return false;
                 }
             }
@@ -530,7 +545,10 @@ impl GalaxiaGossipBus {
     ) -> Result<CrdtMergeOutcome, String> {
         // Validate peer URL against gossip configuration
         if !self.is_peer_allowed(peer_url) {
-            return Err(format!("Peer URL '{}' blocked by gossip configuration", peer_url));
+            return Err(format!(
+                "Peer URL '{}' blocked by gossip configuration",
+                peer_url
+            ));
         }
 
         let url = format!("{}/galaxia/crdt-gossip", peer_url.trim_end_matches('/'));
@@ -756,13 +774,13 @@ pub struct PersistentKintsugiLedger {
 impl PersistentKintsugiLedger {
     pub fn new(store: Option<Box<dyn AppendOnlyStore>>) -> Result<Self, String> {
         let mut ledger = KintsugiLedger::new();
-        
+
         // Load existing events from store if available
         if let Some(ref store) = store {
             let events = store.read_all()?;
             ledger.events = events;
         }
-        
+
         Ok(Self { ledger, store })
     }
 
@@ -773,13 +791,15 @@ impl PersistentKintsugiLedger {
         mem8_state: &[u8],
         sector_id: &str,
     ) -> Result<KintsugiEvent, String> {
-        let event = self.ledger.finalize_event(lap, payload, mem8_state, sector_id);
-        
+        let event = self
+            .ledger
+            .finalize_event(lap, payload, mem8_state, sector_id);
+
         // Persist to store if available
         if let Some(ref mut store) = self.store {
             store.append(&event)?;
         }
-        
+
         Ok(event)
     }
 

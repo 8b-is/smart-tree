@@ -295,7 +295,7 @@ full-bui = ["full", "bui"]
 full-voice = ["full"]
 
 [profile.release]
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
 strip = true
 opt-level = 3

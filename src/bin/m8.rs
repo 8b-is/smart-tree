@@ -90,11 +90,20 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum PersonaCommands {
-    /// Train a tight .m8 Life Persona from diaries, notes, local drives, or synced Google Drive folders
+    /// Train a new .m8 Life Persona from a directory or file (up to 250,000+ episodes)
     Train {
-        /// Name of the persona (e.g., "Grandmother's Diaries")
+        /// Name of the persona (e.g., "Grandmother's Diaries" or "Nate")
         name: String,
         /// Directory or file path containing their writings
+        path: PathBuf,
+        /// Specialty lens: life-biographer, history-documenter, code-analyst, or readme-expert
+        #[arg(short, long, default_value = "life-biographer")]
+        specialty: String,
+    },
+    /// Train all 3 built-in workspace specialists (History Documenter, Code Analyst, README Expert)
+    Specialties {
+        /// Workspace path to train specialists on (defaults to current directory)
+        #[arg(default_value = ".")]
         path: PathBuf,
     },
     /// List all trained .m8 Life Personas in ~/.st/personas/
@@ -471,12 +480,19 @@ fn main() -> Result<()> {
             pack_path(&path)?;
         }
         Commands::Persona { action } => match action {
-            PersonaCommands::Train { name, path } => {
+            PersonaCommands::Train {
+                name,
+                path,
+                specialty,
+            } => {
+                let spec = st::mem8::persona::PersonaSpecialty::from_str_loose(&specialty);
                 let (persona, m8_path, size) =
-                    st::mem8::persona::LifePersona::train_from_path(&name, &path)?;
+                    st::mem8::persona::LifePersona::train_with_specialty(&name, &path, spec)?;
                 println!(
-                    "🧬 Trained Life Persona '{}' ({})",
-                    persona.name, persona.slug
+                    "{} Trained Persona '{}' ({})",
+                    persona.specialty.badge(),
+                    persona.name,
+                    persona.slug
                 );
                 println!("   📂 Source:      {}", persona.source_path);
                 println!(
@@ -497,15 +513,35 @@ fn main() -> Result<()> {
                     size as f64 / 1024.0
                 );
             }
+            PersonaCommands::Specialties { path } => {
+                println!(
+                    "⚡ Training 3 Specialist Souls (History Documenter, Code Analyst, README Expert) on {}...",
+                    path.display()
+                );
+                for res in st::mem8::persona::LifePersona::train_workspace_specialties(&path) {
+                    match res {
+                        Ok(s) => println!(
+                            "  ✓ {} (`persona:{}`) — {} episodes, {} words ({:.1} KiB)",
+                            s.specialty.badge(),
+                            s.slug,
+                            s.episode_count,
+                            s.total_words,
+                            s.m8_size_bytes as f64 / 1024.0
+                        ),
+                        Err(e) => eprintln!("  ✗ Specialist training error: {e}"),
+                    }
+                }
+            }
             PersonaCommands::List => {
                 let list = st::mem8::persona::LifePersona::list_all()?;
                 if list.is_empty() {
                     println!("No trained .m8 personas yet. Run `m8 persona train <name> <path>`!");
                 } else {
-                    println!("🧬 Trained MEM8 Life Personas (~/.st/personas/):");
+                    println!("🧬 Trained MEM8 Life & Specialist Personas (~/.st/personas/):");
                     for p in list {
                         println!(
-                            "  • {} (`persona:{}`) — {} episodes, {} words ({:.1} KiB) from {}",
+                            "  • [{}] {} (`persona:{}`) — {} episodes, {} words ({:.1} KiB) from {}",
+                            p.specialty.badge(),
                             p.name,
                             p.slug,
                             p.episode_count,

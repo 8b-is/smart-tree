@@ -2902,7 +2902,9 @@ impl LlamaModelCache {
         n_gpu_layers: u32,
     ) -> Result<(), String> {
         let model = self.get_or_load_model(model_path, n_gpu_layers)?;
-        let mut named = self.named_models.write()
+        let mut named = self
+            .named_models
+            .write()
             .map_err(|_| "Named models lock poisoned".to_string())?;
         named.insert(name.to_string(), Arc::clone(&model.1));
         Ok(())
@@ -2910,22 +2912,21 @@ impl LlamaModelCache {
 
     /// Get a preloaded named model by name
     pub fn get_named_model(&self, name: &str) -> Option<Arc<CachedGgufModel>> {
-        self.named_models.read()
-            .ok()?
-            .get(name)
-            .cloned()
+        self.named_models.read().ok()?.get(name).cloned()
     }
 
     /// List all preloaded named models
     pub fn list_named_models(&self) -> Vec<String> {
-        self.named_models.read()
+        self.named_models
+            .read()
             .map(|m| m.keys().cloned().collect())
             .unwrap_or_default()
     }
 
     /// Remove a named model
     pub fn remove_named_model(&self, name: &str) -> bool {
-        self.named_models.write()
+        self.named_models
+            .write()
             .map(|mut m| m.remove(name).is_some())
             .unwrap_or(false)
     }
@@ -4498,18 +4499,26 @@ pub struct AppState {
 impl AppState {
     pub fn new(max_models: usize) -> Self {
         let node_id = format!("sector-{}", rand::random::<u64>() % 1000);
-        
+
         // Configure gossip bus with secure defaults
         let gossip_config = crate::galaxia_cluster::GossipConfig {
             allowlist: vec![],
-            blocklist: vec!["localhost".to_string(), "127.0.0.1".to_string(), "0.0.0.0".to_string()],
+            blocklist: vec![
+                "localhost".to_string(),
+                "127.0.0.1".to_string(),
+                "0.0.0.0".to_string(),
+            ],
             allow_private_ips: false,
             allow_loopback: false,
         };
-        
+
         Self {
             model_cache: LlamaModelCache::new(max_models),
-            gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus::with_config(node_id, "", gossip_config),
+            gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus::with_config(
+                node_id,
+                "",
+                gossip_config,
+            ),
             wave_ledger: Arc::new(RwLock::new(crate::galaxia_cluster::KintsugiLedger::new())),
         }
     }

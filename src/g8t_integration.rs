@@ -85,83 +85,86 @@ pub const fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
 /// All divisions are exact reduced fractions via Stein's Binary GCD.
 pub const fn st_golf_qwave_marine_jitter_pq_u64(packed_peaks: u64) -> u64 {
     const Q8_SCALE: u64 = 256;
-    
+
     let f0 = packed_peaks & 0xFFFF;
     let p0 = (f0 >> 8) & 0xFF;
     let a0 = f0 & 0xFF;
-    
+
     let p0_clamped = if p0 < 25 { 25 } else { p0 };
     let a0_clamped = if a0 < 1 { 1 } else { a0 };
-    
+
     let mut ema_p_num = (p0_clamped as i64) * Q8_SCALE as i64;
     let mut ema_p_den = 1i64;
-    
+
     let mut ema_a_num = (a0_clamped as i64) * Q8_SCALE as i64;
     let mut ema_a_den = 1i64;
-    
+
     let mut total_salience_num = 32767i64;
     let mut total_salience_den = 1i64;
-    
+
     let mut shift: u32 = 16;
     while shift < 64 {
         let frame = (packed_peaks >> shift) & 0xFFFF;
         let pt = (frame >> 8) & 0xFF;
         let at = frame & 0xFF;
-        
+
         let pt_clamped = if pt < 25 { 25 } else { pt };
         let at_clamped = if at < 1 { 1 } else { at };
-        
+
         let period_q8_num = (pt_clamped as i64) * Q8_SCALE as i64;
         let period_q8_den = 1i64;
-        
+
         let amp_q8_num = (at_clamped as i64) * Q8_SCALE as i64;
         let amp_q8_den = 1i64;
-        
+
         ema_p_num = ema_p_num * 7 + period_q8_num;
         ema_p_den = ema_p_den * 8;
-        
+
         ema_a_num = ema_a_num * 7 + amp_q8_num;
         ema_a_den = ema_a_den * 8;
-        
+
         let g1 = gcd_u64(ema_p_num.unsigned_abs() as u64, ema_p_den as u64) as i64;
         ema_p_num = ema_p_num / g1;
         ema_p_den = ema_p_den / g1;
-        
+
         let g2 = gcd_u64(ema_a_num.unsigned_abs() as u64, ema_a_den as u64) as i64;
         ema_a_num = ema_a_num / g2;
         ema_a_den = ema_a_den / g2;
-        
+
         let period_minus_ema_p = (period_q8_num * ema_p_den - ema_p_num * period_q8_den).abs();
         let period_minus_ema_p_den = period_q8_den * ema_p_den;
-        
+
         let amp_minus_ema_a = (amp_q8_num * ema_a_den - ema_a_num * amp_q8_den).abs();
         let amp_minus_ema_a_den = amp_q8_den * ema_a_den;
-        
+
         let ja_num = amp_minus_ema_a;
         let ja_den = amp_minus_ema_a_den * 4;
-        
+
         let jp_ja_num = period_minus_ema_p * ja_den + ja_num * period_minus_ema_p_den;
         let jp_ja_den = period_minus_ema_p_den * ja_den;
-        
+
         let denom_num = 256 * jp_ja_den + jp_ja_num;
         let denom_den = jp_ja_den;
-        
+
         let inc_num = 8_388_352i64 * denom_den;
         let inc_den = denom_num as u64;
-        
+
         total_salience_num = total_salience_num * inc_den as i64 + inc_num * total_salience_den;
         total_salience_den = total_salience_den * inc_den as i64;
-        
-        let g3 = gcd_u64(total_salience_num.unsigned_abs() as u64, total_salience_den as u64) as i64;
+
+        let g3 = gcd_u64(
+            total_salience_num.unsigned_abs() as u64,
+            total_salience_den as u64,
+        ) as i64;
         total_salience_num /= g3;
         total_salience_den /= g3;
-        
+
         shift += 16;
     }
-    
+
     let result_num = total_salience_num / 4;
     let result_den = total_salience_den;
-    
+
     (result_num / result_den) as u64
 }
 

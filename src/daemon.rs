@@ -29,17 +29,17 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
+use futures_util;
 use num_cpus;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::sync::RwLock;
 use tokio::sync::Semaphore;
-use futures_util;
 
 // LLM Proxy integration
 use crate::proxy::memory::ProxyMemory;
@@ -290,7 +290,7 @@ pub struct DaemonState {
     pub recall_view: context_memory::RecallView,
     /// Compact persistent security scan and certificate history.
     pub scan_memory: Arc<std::sync::Mutex<crate::magiscanner::memory::ScanMemory>>,
-    
+
     /// Parallel compute pool for sovereign model inference
     pub compute_pool: Arc<ComputePool>,
 }
@@ -311,7 +311,10 @@ pub struct ComputePool {
 
 impl ComputePool {
     /// Create a new compute pool with the given number of workers
-    pub fn new(worker_count: usize, model_cache: Arc<crate::mcp::combinatorics_llm::LlamaModelCache>) -> Self {
+    pub fn new(
+        worker_count: usize,
+        model_cache: Arc<crate::mcp::combinatorics_llm::LlamaModelCache>,
+    ) -> Self {
         Self {
             semaphore: Semaphore::new(worker_count),
             worker_count,
@@ -348,7 +351,9 @@ impl ComputePool {
         self.active_jobs.fetch_add(1, Ordering::Relaxed);
 
         let result = async {
-            let _model = self.model_cache.get_named_model(model_name)
+            let _model = self
+                .model_cache
+                .get_named_model(model_name)
                 .ok_or_else(|| anyhow::anyhow!("Model '{}' not loaded", model_name))?;
 
             // For now, use the existing llama_rust inference
@@ -369,10 +374,12 @@ impl ComputePool {
             };
 
             let emitter = crate::mcp::combinatorics_llm::McpProgressEmitter::default();
-            let result = crate::mcp::combinatorics_llm::run_llama_rust(&self.model_cache, params, &emitter);
-            
+            let result =
+                crate::mcp::combinatorics_llm::run_llama_rust(&self.model_cache, params, &emitter);
+
             match result {
-                Ok(v) => v.get("content")
+                Ok(v) => v
+                    .get("content")
                     .and_then(|c| c.as_array())
                     .and_then(|a| a.first())
                     .and_then(|c| c.get("text"))
@@ -381,7 +388,8 @@ impl ComputePool {
                     .ok_or_else(|| anyhow::anyhow!("No text in response")),
                 Err(e) => Err(anyhow::anyhow!("Inference error: {}", e)),
             }
-        }.await;
+        }
+        .await;
 
         self.active_jobs.fetch_sub(1, Ordering::Relaxed);
         self.completed_jobs.fetch_add(1, Ordering::Relaxed);
@@ -400,7 +408,8 @@ impl ComputePool {
             let prompt_owned = prompt;
             let tokens_owned = tokens;
             async move {
-                self.infer_with_model(&model_owned, &prompt_owned, tokens_owned).await
+                self.infer_with_model(&model_owned, &prompt_owned, tokens_owned)
+                    .await
             }
         });
         futures_util::future::join_all(futures).await
@@ -544,7 +553,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
 
     // Initialize model cache for sovereign models
     let model_cache = Arc::new(crate::mcp::combinatorics_llm::LlamaModelCache::new(8));
-    
+
     // Preload sovereign models from config
     let st_config = crate::config::StConfig::load()?;
     for (name, path) in &st_config.models.aliases {
@@ -555,13 +564,16 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             }
         }
     }
-    
+
     // Initialize parallel compute pool for sovereign model inference
     let compute_pool = Arc::new(crate::daemon::ComputePool::new(
         num_cpus::get().max(4),
         Arc::clone(&model_cache),
     ));
-    println!("  ⚡ Compute pool: {} workers ready", compute_pool.worker_count());
+    println!(
+        "  ⚡ Compute pool: {} workers ready",
+        compute_pool.worker_count()
+    );
 
     // Initialize collaboration hub
     let collab_hub = create_hub();
@@ -669,9 +681,13 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/memnet/ask", post(memnet_ask_handler))
         .route("/memnet/teach", post(memnet_teach_handler))
         .route("/memnet/share", post(memnet_share_handler))
-        // MEM8 Life Personas (.m8 Soul Trainer & Local Micro-Model)
+        // MEM8 Life Personas (.m8 Soul Trainer & Local Ternary Micro-Model)
         .route("/api/personas", get(personas_list_handler))
         .route("/api/personas/train", post(personas_train_handler))
+        .route(
+            "/api/personas/train-specialties",
+            post(personas_train_specialties_handler),
+        )
         .with_state(Arc::clone(&state))
         // Add MCP before the auth layer so its routes share the same policy.
         .nest_service("/mcp", mcp_router(mcp_context))
@@ -1074,11 +1090,12 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
     <div class="grid">
         <!-- Chat Test -->
         <div class="card">
-            <h2>💬 Test Chat (Local MEM8 Personas & LLM Proxy)</h2>
+            <h2>💬 Test Chat (Local Ternary Model &amp; MEM8 Personas)</h2>
             <div id="chat-messages"></div>
             <div id="chat-input">
                 <select id="model-select">
-                    <optgroup label="🧬 Local MEM8 & Life Personas (Zero API Key)" id="persona-optgroup">
+                    <optgroup label="🔺 Local Ternary &amp; MEM8 Souls (Zero API Key)" id="persona-optgroup">
+                        <option value="burn/mem8-ternary-micro" selected>🔺 Local Ternary Model (SPQT Base-243 · Auto-Soul Router)</option>
                         <option value="burn/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>
                     </optgroup>
                     <optgroup label="Top Coding Models">
@@ -1089,7 +1106,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                         <option value="deepseek/deepseek-v3.2">DeepSeek V3.2</option>
                         <option value="qwen/qwen3-coder">Qwen3 Coder 480B</option>
                     </optgroup>
-                    <optgroup label="Fast & Efficient">
+                    <optgroup label="Fast &amp; Efficient">
                         <option value="anthropic/claude-haiku-4.5">Claude Haiku 4.5</option>
                         <option value="x-ai/grok-code-fast-1">Grok Code Fast</option>
                         <option value="google/gemini-3-flash-preview">Gemini 3 Flash</option>
@@ -1100,26 +1117,37 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                         <option value="z-ai/glm-4.5-air:free">GLM 4.5 Air (Free)</option>
                     </optgroup>
                 </select>
-                <input type="text" id="msg-input" placeholder="Ask a Local Persona or LLM..." onkeypress="if(event.key==='Enter')sendChat()">
+                <input type="text" id="msg-input" placeholder="Ask the Local Ternary Model or a Persona Soul..." onkeypress="if(event.key==='Enter')sendChat()">
                 <button onclick="sendChat()">Send</button>
             </div>
-            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Local MEM8 &amp; Personas run 100% offline · Cloud models use OPENROUTER_API_KEY</p>
+            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Default: <code>candle/mem8-ternary-micro</code> (100% offline SPQT Base-243) · Cloud models use OPENROUTER_API_KEY</p>
         </div>
 
         <!-- Life Personas Studio -->
         <div class="card">
-            <h2>🧬 Life Personas (.m8 Soul Trainer)</h2>
+            <h2>🧬 Life Personas &amp; Specialist Souls (250k+ Episodes)</h2>
             <p style="font-size:0.8rem;color:#888;margin-bottom:0.75rem">
-                Train a tight <code>.m8</code> persona from diaries, local drives, or Google Drive folders
+                Train a tight <code>.m8</code> soul (up to 250,000+ memories) from diaries, drives, or repos
             </p>
             <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem;">
-                <input type="text" id="persona-name" placeholder="Persona Name (e.g. Grandmother's Diaries)" style="padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
                 <div style="display:flex;gap:0.5rem;">
-                    <input type="text" id="persona-path" placeholder="Folder or file path (e.g. ~/Documents/diaries)" style="flex:1;padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
+                    <input type="text" id="persona-name" placeholder="Name (e.g. Nate, Grandma, Code Analyst)" style="flex:1;padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
+                    <select id="persona-specialty" style="padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
+                        <option value="life-biographer">🧬 Life Biographer</option>
+                        <option value="history-documenter">📜 History Documenter</option>
+                        <option value="code-analyst">🔬 Code Analyst</option>
+                        <option value="readme-expert">📖 README Expert</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:0.5rem;">
+                    <input type="text" id="persona-path" placeholder="Folder or file path (e.g. ~/source/standardgalactic/kitbash)" style="flex:1;padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
                     <button onclick="trainPersona()" style="padding:0.6rem 1rem;border-radius:6px;border:none;background:#4ecdc4;color:#1a1a2e;font-weight:bold;cursor:pointer;">Train .m8</button>
                 </div>
+                <button onclick="trainSpecialties()" style="padding:0.45rem 0.75rem;border-radius:6px;border:1px solid rgba(78,205,196,0.4);background:rgba(78,205,196,0.12);color:#4ecdc4;font-size:0.75rem;font-weight:bold;cursor:pointer;">
+                    ⚡ Auto-Train 3 Specialists (📜 History · 🔬 Code · 📖 README) on Path
+                </button>
             </div>
-            <div id="personas-list" style="max-height:140px;overflow-y:auto;font-size:0.8rem;color:#ccc;">
+            <div id="personas-list" style="max-height:150px;overflow-y:auto;font-size:0.8rem;color:#ccc;">
                 Loading trained personas...
             </div>
         </div>
@@ -1152,6 +1180,10 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
         <div class="card">
             <h2>🛡️ Model Safety Scores</h2>
             <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">Based on observed behavior</p>
+            <div class="endpoint">
+                <span>🔺 Local Ternary Model (SPQT Base-243)</span>
+                <span class="score safe">10/10 Sovereign</span>
+            </div>
             <div class="endpoint">
                 <span>🧬 MEM8 Local Persona (.m8)</span>
                 <span class="score safe">10/10 Sovereign</span>
@@ -1267,14 +1299,22 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             messages.scrollTop = messages.scrollHeight;
         }
 
+        function specialtyBadge(spec) {
+            if (spec === 'history-documenter') return '📜';
+            if (spec === 'code-analyst') return '🔬';
+            if (spec === 'readme-expert') return '📖';
+            return '🧬';
+        }
+
         async function loadPersonas() {
             const listEl = document.getElementById('personas-list');
             const optGroup = document.getElementById('persona-optgroup');
+            const currentVal = document.getElementById('model-select').value;
             try {
                 const res = await fetch('/api/personas', { headers: ST_HEADERS });
                 const data = await res.json();
                 const personas = data.personas || [];
-                optGroup.innerHTML = '<option value="burn/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>';
+                optGroup.innerHTML = '<option value="burn/mem8-ternary-micro">🔺 Local Ternary Model (SPQT Base-243 · Auto-Soul Router)</option><option value="burn/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>';
                 if (personas.length === 0) {
                     listEl.innerHTML = '<div style="color:#888;">No trained personas yet. Enter a name and folder path above to train a <code>.m8</code> Soul!</div>';
                     return;
@@ -1282,16 +1322,20 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 let html = '';
                 for (const p of personas) {
                     const kb = (p.m8_size_bytes / 1024).toFixed(1);
-                    optGroup.innerHTML += `<option value="persona:${p.slug}">🧬 Persona: ${p.name} (${p.episode_count} memories)</option>`;
+                    const icon = specialtyBadge(p.specialty);
+                    optGroup.innerHTML += `<option value="persona:${p.slug}">${icon} ${p.name} (${p.episode_count} memories)</option>`;
                     html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid rgba(255,255,255,0.06);">
                         <div>
-                            <strong style="color:#4ecdc4;">${p.name}</strong>
+                            <strong style="color:#4ecdc4;">${icon} ${p.name}</strong>
                             <span style="color:#888;font-size:0.72rem;"> (${p.episode_count} memories · ${p.total_words} words · ${kb} KiB .m8)</span>
                         </div>
                         <button onclick="selectPersona('${p.slug}')" style="padding:2px 8px;border-radius:4px;border:none;background:#27ae60;color:white;font-size:0.72rem;cursor:pointer;">Chat</button>
                     </div>`;
                 }
                 listEl.innerHTML = html;
+                if (currentVal) {
+                    document.getElementById('model-select').value = currentVal;
+                }
             } catch (e) {
                 listEl.innerHTML = `<div style="color:#e74c3c;">Failed to load personas: ${e.message}</div>`;
             }
@@ -1307,18 +1351,20 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
         async function trainPersona() {
             const nameInput = document.getElementById('persona-name');
             const pathInput = document.getElementById('persona-path');
+            const specSelect = document.getElementById('persona-specialty');
             const name = nameInput.value.trim();
             const path = pathInput.value.trim();
+            const specialty = specSelect ? specSelect.value : 'life-biographer';
             if (!name || !path) {
                 addLog('ERROR', 'Please enter both a Persona Name and a Folder/File Path');
                 return;
             }
-            addLog('PERSONA-TRAIN', `Training .m8 persona "${name}" from ${path}...`);
+            addLog('PERSONA-TRAIN', `Training ${specialty} "${name}" from ${path} (up to 250,000+ memories)...`);
             try {
                 const res = await fetch('/api/personas/train', {
                     method: 'POST',
                     headers: ST_HEADERS,
-                    body: JSON.stringify({ name, path })
+                    body: JSON.stringify({ name, path, specialty })
                 });
                 const data = await res.json();
                 if (!res.ok || data.error) {
@@ -1329,6 +1375,28 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 nameInput.value = '';
                 await loadPersonas();
                 selectPersona(data.slug);
+            } catch (e) {
+                addLog('ERROR', e.message);
+            }
+        }
+
+        async function trainSpecialties() {
+            const pathInput = document.getElementById('persona-path');
+            const path = (pathInput.value || '').trim() || '.';
+            addLog('SPECIALISTS-TRAIN', `Training 3 Specialist Souls (History Documenter, Code Analyst, README Expert) on ${path}...`);
+            try {
+                const res = await fetch('/api/personas/train-specialties', {
+                    method: 'POST',
+                    headers: ST_HEADERS,
+                    body: JSON.stringify({ path })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    addLog('ERROR', data.error || 'Specialist training failed');
+                    return;
+                }
+                addLog('SPECIALISTS-READY', `Trained ${(data.trained || []).length} specialist souls on ${path}`);
+                await loadPersonas();
             } catch (e) {
                 addLog('ERROR', e.message);
             }
@@ -2067,6 +2135,13 @@ fn create_directory_info(path: &std::path::Path) -> Option<DirectoryInfo> {
 struct TrainPersonaRequest {
     name: String,
     path: String,
+    #[serde(default)]
+    specialty: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct TrainSpecialtiesRequest {
+    path: String,
 }
 
 async fn personas_list_handler() -> Json<serde_json::Value> {
@@ -2084,8 +2159,11 @@ async fn personas_train_handler(
     let name = req.name.trim().to_string();
     let expanded = shellexpand::tilde(req.path.trim()).to_string();
     let path = PathBuf::from(expanded);
+    let specialty = crate::mem8::persona::PersonaSpecialty::from_str_loose(
+        req.specialty.as_deref().unwrap_or("life-biographer"),
+    );
     let result = tokio::task::spawn_blocking(move || {
-        crate::mem8::persona::LifePersona::train_from_path(&name, &path)
+        crate::mem8::persona::LifePersona::train_with_specialty(&name, &path, specialty)
     })
     .await;
 
@@ -2096,6 +2174,7 @@ async fn personas_train_handler(
                 "status": "ok",
                 "name": persona.name,
                 "slug": persona.slug,
+                "specialty": persona.specialty.slug(),
                 "source_path": persona.source_path,
                 "files_ingested": persona.files_ingested,
                 "total_words": persona.total_words,
@@ -2108,6 +2187,37 @@ async fn personas_train_handler(
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "error": e.to_string() })),
         ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+    }
+}
+
+async fn personas_train_specialties_handler(
+    Json(req): Json<TrainSpecialtiesRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let expanded = shellexpand::tilde(req.path.trim()).to_string();
+    let path = PathBuf::from(expanded);
+    let result = tokio::task::spawn_blocking(move || {
+        crate::mem8::persona::LifePersona::train_workspace_specialties(&path)
+    })
+    .await;
+
+    match result {
+        Ok(results) => {
+            let mut trained = Vec::new();
+            for item in results.into_iter().flatten() {
+                trained.push(item);
+            }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "status": "ok",
+                    "trained": trained,
+                })),
+            )
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
@@ -2130,6 +2240,7 @@ async fn chat_completions(
         ("burn".to_string(), format!("persona:{slug}"))
     } else if let Some((p, m)) = req.model.split_once('/') {
         if p.eq_ignore_ascii_case("burn")
+            || p.eq_ignore_ascii_case("candle")
             || p.eq_ignore_ascii_case("local")
             || p.eq_ignore_ascii_case("persona")
         {
@@ -2143,6 +2254,8 @@ async fn chat_completions(
         let provider = if model_lower.starts_with("persona")
             || model_lower.starts_with("mem8")
             || model_lower.starts_with("burn")
+            || model_lower.starts_with("candle")
+            || model_lower.starts_with("ternary")
         {
             "burn"
         } else if model_lower.starts_with("claude") {
@@ -2340,22 +2453,42 @@ fn memory_error_response(message: String) -> axum::response::Response {
         .into_response()
 }
 
-/// List available models from all providers
+/// List available models from all providers (local ternary & MEM8 personas first)
 async fn list_models(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<serde_json::Value> {
     let state_lock = state.read().await;
 
-    let models: Vec<serde_json::Value> = state_lock
-        .llm_proxy
-        .providers
-        .iter()
-        .map(|p| {
-            serde_json::json!({
-                "id": format!("{}/default", p.name().to_lowercase()),
+    let mut models: Vec<serde_json::Value> = vec![
+        serde_json::json!({
+            "id": "candle/mem8-ternary-micro",
+            "object": "model",
+            "owned_by": "SmartTree-Ternary-SPQT-Base243",
+            "default": true,
+        }),
+        serde_json::json!({
+            "id": "candle/mem8-wave-micro",
+            "object": "model",
+            "owned_by": "SmartTree-MEM8-Wave",
+        }),
+    ];
+
+    if let Ok(personas) = crate::mem8::persona::LifePersona::list_all() {
+        for p in personas {
+            models.push(serde_json::json!({
+                "id": format!("persona:{}", p.slug),
                 "object": "model",
-                "owned_by": p.name(),
-            })
-        })
-        .collect();
+                "owned_by": format!("MEM8-Soul ({})", p.specialty.slug()),
+                "episodes": p.episode_count,
+            }));
+        }
+    }
+
+    for p in &state_lock.llm_proxy.providers {
+        models.push(serde_json::json!({
+            "id": format!("{}/default", p.name().to_lowercase()),
+            "object": "model",
+            "owned_by": p.name(),
+        }));
+    }
 
     Json(serde_json::json!({
         "object": "list",
@@ -2528,7 +2661,10 @@ mod memory_api_tests {
             scan_memory: Arc::new(std::sync::Mutex::new(
                 crate::magiscanner::memory::ScanMemory::open(&security).unwrap(),
             )),
-            compute_pool: Arc::new(ComputePool::new(2, Arc::new(crate::mcp::combinatorics_llm::LlamaModelCache::new(2)))),
+            compute_pool: Arc::new(ComputePool::new(
+                2,
+                Arc::new(crate::mcp::combinatorics_llm::LlamaModelCache::new(2)),
+            )),
         }));
         let app = Router::new()
             .route("/context/remember", post(remember_context))
