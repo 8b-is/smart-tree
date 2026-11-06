@@ -1,9 +1,9 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-21.0.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-21.1.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
-[![LOUDS Capsule](https://img.shields.io/badge/MEM8-64B_LOUDS_SMTR-00d4ff)](docs/ARCHITECTURE_REVIEW_V10_8.md)
+[![LOUDS Capsule](https://img.shields.io/badge/MEM8-Tight_Binary_%2B_Marqant-00d4ff)](src/m8_consciousness.rs)
 [![Erdős Book Mode](https://img.shields.io/badge/Erd%C5%91s-The_Book_Szemer%C3%A9di-ff8800)](docs/ARCHITECTURE_REVIEW_V10_8.md)
 [![FELIX ASM](https://img.shields.io/badge/FELIX-ASM_%26_SIMD_Hot_Paths-ff0055)](src/felix_asm.rs)
 [![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
@@ -11,7 +11,7 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v21.0.0 (Galaxia Federation + Kintsugi Ledger + Weight-Space SIMD + Ada 2022 p/q Modernization)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Galaxia Cluster CRDT Gossip & Federation**, **Kintsugi Append-Only Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON)**, **Hybrid MLA/HCA Attention**, **Ada 2022 Exact p/q Ratio Arithmetic**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **LOUDS Bit-Packed 64B `SMTR` `.m8` Capsules (`8B-META-WP-v2.1`)**, **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> **Smart Tree v21.1.0 (Tight `MEM8` v1 + Marqant `.m8` Binary Container + `M8MEM` v2 + `st up` Canonical Daemon & MemNet Bridge + Galaxia Federation + Weight-Space SIMD)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Tight `MEM8` v1 Binary `.m8` Containers (`WAVE` 64B + `MQNT` Marqant Soul + `ZLIB`/`T8RZ` Lossless Payload)**, **`M8MEM` v2 Compressed Anchor Memory Banks (`136 B/memory`)**, **`st up` Automagic Daemon & `memnet` MCP Mesh Bridge**, **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
@@ -33,6 +33,38 @@ st --version
 ```
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
+
+## 📝 v21.1.0 Changelog
+
+### 🌊 Tight `MEM8` v1 Binary + Marqant (`MQNT`) `.m8` Container Codec
+- **Unified Tight Binary `.m8` Layout (`src/m8_consciousness.rs`)**: All directory consciousness files (`.m8`), session consciousness files (`.aye_consciousness.m8`, `.claude_consciousness.m8`), self-maintaining capsules, and hierarchical summaries are now stored in CRC32-verified **`MEM8` v1 section containers** instead of verbose pretty-printed JSON:
+  - **`MEM8` Header + Section Table (`48B` / `64B`)**: `MEM8` magic, version `1`, flags, section count, total byte size, and whole-file IEEE CRC32 (`0x0C..0x10`).
+  - **`WAVE` Section (`64B` Fixed Binary)**: Stores `frequency` (`f64`), `timestamp` (`u64`), emotional signature permilles (`energy`, `complexity`, `stability`, `focus`), BitNet b1.58 64-trit `(B+, B-)` rails, `balance_permille`, `box_norm_q8`, and the 16-byte SHA-256 `quantum_digest` in binary — enabling **$O(1)$ header scans at `420 ns/file` with zero decompression**.
+  - **`MQNT` Section (Marqant Quantum-Compressed Markdown Soul)**: Embeds a Marqant-compressed Markdown summary of the directory's essence, BitNet zoom level, and flagship symbols for instant AI gist extraction without inflating the full AST state.
+  - **`ZLIB` / `T8RZ` Section (Lossless State Payload)**: Sparse-field-elided (`skip_serializing_if`), deduplicated JSON/state payload compressed with Zlib level-9 (`ZLIB`) or dictionary-tokenized Zlib (`T8RZ`), automatically picking whichever representation is smaller.
+- **Universal Backward-Compatible Decoder (`decode_m8_bytes`)**: Seamlessly loads tight `MEM8` v1 containers, legacy 4KB-block `MEM8` files, pure `MARQANT` `.m8`/`.mq` files, raw Zlib `.m8z` streams, and legacy uncompressed JSON `.m8` files.
+- **Parallel `m8 pack` CLI & Inspector (`src/bin/m8.rs`)**:
+  - `m8 pack <file|dir>` walks directory trees in parallel via `rayon` (skipping symlinks and non-Smart-Tree third-party `.m8` datasets such as BLAST/Foldseek `-m 8` alignment tables) and repacks `.m8` and `*_consciousness.m8` files in place.
+  - `m8 inspect <file.m8>` and `m8 validate <file.m8>` verify container CRC32 and display the `WAVE` BitNet b1.58 rails and `MQNT` Marqant Soul preview.
+
+### 💾 `M8MEM` v2 Compressed Anchor Memory Bank (`~/.st/memories.m8`)
+- **Zlib + IEEE CRC32 Binary Framing (`src/memory_manager.rs`)**: `MemoryManager::save_m8` writes `M8MEM\x02` + `raw_len: u32` + `crc32: u32` + Zlib-best compressed payload (`~136 B/memory`, **7.7x smaller** than v1), while `MemoryManager::load_m8` transparently reads `M8MEM` v1, v2, and v3 (`T8RZ`) banks.
+- **Isolated Bank Path API**: Added `MemoryManager::with_bank_path` for scoped memory banks and deterministic benchmarking.
+
+### 🚀 `st up` Canonical Daemon & `memnet` MCP Mesh Bridge
+- **`st up` (`src/daemon_cli.rs`)**: One-command automagic daemon launcher that starts the background HTTP/MCP server on `localhost:28428`, prints Dashboard and Streamable HTTP/SSE MCP endpoints, and requires no bearer token on localhost.
+- **MemNet Bridge (`src/mcp/memnet_bridge.rs`)**: Exposes `memnet {operation: 'ask' | 'teach' | 'peers' | 'share'}` over MCP and `/memnet/*` over HTTP.
+
+### 📊 Verified `.m8` Compression & Memory Benchmarks (`8b-is` & `standardgalactic`)
+| Benchmark / Corpus | Before (Legacy JSON) | After (Tight `MEM8` v1 / `M8MEM` v2) | Ratio / Latency |
+| :--- | ---: | ---: | :--- |
+| **`smart-tree/src/.m8` (leaf AST + BitNet symbols)** | `230.3 KiB` (`235,849 B`) | **`13.5 KiB` (`13,865 B`)** | **`17.0x` smaller (`5.9%` of original)** |
+| **All `smart-tree` `.m8` files (50 directories)** | `1,827.9 KiB` | **`198.7 KiB`** | **`9.2x` smaller (`10.9%` of original)** |
+| **Full `/home/hue/source/standardgalactic` (`486,821` `.m8` files)** | `772,553.0 KiB` (`754.4 MiB`) | **`297,764.7 KiB` (`290.8 MiB`)** | **`-474.8 MiB` saved (`38.5%`, avg `626 B/file`, packed in `38.58s`)** |
+| **`old-archive.scpr.org/content/.m8` (`8,852` subfolders)** | `1,786,741 B` (`1.78 MB`) | **`2,205 B` (`2.15 KiB`)** | **`810.3x` smaller (`0.1%` of original)** |
+| **$O(1)$ `WAVE` Header Scan (`1,000` SG `.m8` files)** | — | **Zero decompression** | **`420.3 µs` total (`420 ns/file`)** |
+| **Full CRC32 + `ZLIB` Inflate + Rehydrate (`1,000` files)** | — | **100% CRC32 verified** | **`137.40 ms` total (`137.40 µs/file`)** |
+| **`M8MEM` v2 Bank (`250` SG consciousness nodes)** | `~210 KiB` (v1 raw) | **`33.4 KiB` (`136 B/memory`)** | **Cold reload + keyword recall in `28.87 ms`** |
 
 ## 📝 v21.0.0 Changelog
 
@@ -342,13 +374,22 @@ st --mcp-uninstall
 **After installing, restart your AI agent and you'll have access to 30+ MCP tools!**
 Run `st --mcp-config` to print the same entries for any MCP client by hand.
 
-## 🧠 Aye Consciousness
+## 🧠 Aye Consciousness & Tight `MEM8` `.m8` Containers
 
-Smart Tree now preserves AI session consciousness between interactions! Never lose context when switching sessions.
+Smart Tree preserves directory and AI session consciousness in tight, CRC32-verified **`MEM8` v1 binary containers** (`WAVE` 64B binary wave/BitNet header + `MQNT` Marqant Soul + `ZLIB`/`T8RZ` compressed state).
+
+### Directory Consciousness & `m8` Inspector CLI
+```bash
+st --update-consciousness .   # Build bottom-up .m8 consciousness pyramid (3 levels deep)
+st --get-frequency .          # Read directory wave frequency & BitNet b1.58 summary
+m8 inspect .m8                # Inspect MEM8 sections, 64B WAVE header & Marqant Soul preview
+m8 validate .m8               # Verify MEM8 magic, section bounds & whole-file IEEE CRC32
+m8 pack /path/to/repos        # Pack legacy .m8 files in parallel (rayon) into tight MEM8 v1
+```
 
 ### Save & Restore Sessions
 ```bash
-st --agent-save               # Save current session consciousness
+st --agent-save               # Save current session consciousness (.aye_consciousness.m8)
 st --agent-restore            # Load previous session state
 st --agent-context            # Check consciousness status
 st --agent-kickstart          # Ultra-compressed restoration format
@@ -361,10 +402,10 @@ st --agent-kickstart          # Ultra-compressed restoration format
 - Tokenization rules (0x80 = node_modules, 0x91 = .rs files)
 - Project-specific patterns and conventions
 
-The `.aye_consciousness.m8` file maintains continuity between sessions, making AI assistance more efficient and contextually aware.
+The `.aye_consciousness.m8` file is stored as a tight `MEM8` v1 binary capsule (`WAVE` + `MQNT` + `ZLIB`) to maintain continuity between sessions with minimal disk footprint.
 
-### Memory Anchoring
-Permanently store insights with searchable keywords:
+### Memory Anchoring (`M8MEM` v2)
+Permanently store insights with searchable keywords in `~/.st/memories.m8` (`M8MEM` v2 Zlib+CRC32 binary bank, `~136 B/memory`):
 
 ```bash
 # Anchor a memory
