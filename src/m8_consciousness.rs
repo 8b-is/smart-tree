@@ -185,6 +185,29 @@ impl DirectoryConsciousness {
             })
             .collect();
         child_dirs.sort();
+        let total_child_dirs = child_dirs.len();
+        let reuse_existing_child_m8 = total_child_dirs > 32;
+        if total_child_dirs > 128 {
+            let parent_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
+            let step = (total_child_dirs / 128).max(1);
+            let mut sampled = Vec::with_capacity(130);
+            for (idx, p) in child_dirs.into_iter().enumerate() {
+                let is_self_named = p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n == parent_name)
+                    .unwrap_or(false);
+                if is_self_named || idx % step == 0 || sampled.len() < 64 {
+                    sampled.push(p);
+                }
+            }
+            sampled.truncate(128);
+            child_dirs = sampled;
+        }
 
         let mut child_map = HashMap::new();
         let mut child_summaries = HashMap::new();
@@ -198,7 +221,8 @@ impl DirectoryConsciousness {
             else {
                 continue;
             };
-            if current_depth < max_depth {
+            let has_existing_m8 = child_path.join(".m8").is_file();
+            if current_depth < max_depth && !(reuse_existing_child_m8 && has_existing_m8) {
                 if let Ok(child_c) =
                     Self::build_bottom_up_pyramid(&child_path, current_depth + 1, max_depth)
                 {
@@ -213,7 +237,7 @@ impl DirectoryConsciousness {
                     }
                     child_m8_objects.insert(child_name, child_c);
                 }
-            } else if child_path.join(".m8").is_file() {
+            } else if has_existing_m8 {
                 if let Ok(child_c) = Self::load(&child_path) {
                     child_map.insert(child_name.clone(), child_c.frequency);
                     let child_gist = child_c
@@ -329,7 +353,7 @@ impl DirectoryConsciousness {
             let mut body_line = String::new();
             let mut in_frontmatter = false;
             for (idx, raw) in content.lines().take(80).enumerate() {
-                let line = raw.trim();
+                let line = raw.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
                 if idx == 0 && line == "---" {
                     in_frontmatter = true;
                     continue;
@@ -692,6 +716,33 @@ impl DirectoryConsciousness {
 
         // Strip deterministically-derived redundant fields before compact serialization
         let mut compact_self = self.clone();
+        if compact_self.quantum_digest.len() <= 16 {
+            // Stored in binary inside the 64-byte WAVE header (`wave_meta.quantum_digest`)
+            compact_self.quantum_digest.clear();
+        }
+        if compact_self.child_summaries.len() > 64 || compact_self.children.len() > 64 {
+            let mut keys: Vec<String> = compact_self
+                .children
+                .keys()
+                .chain(compact_self.child_summaries.keys())
+                .cloned()
+                .collect();
+            keys.sort();
+            keys.dedup();
+            keys.sort_by_key(|k| {
+                let s = compact_self
+                    .child_summaries
+                    .get(k)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                let is_generic = s.is_empty() || s.starts_with("General purpose directory - mixed");
+                (is_generic, k.clone())
+            });
+            keys.truncate(64);
+            let keep: std::collections::HashSet<String> = keys.into_iter().collect();
+            compact_self.children.retain(|k, _| keep.contains(k));
+            compact_self.child_summaries.retain(|k, _| keep.contains(k));
+        }
         if let Some(bn) = &mut compact_self.bitnet_summary {
             if bn.pooled_wave_b3 == bn.pooled_wave.trits_9() {
                 bn.pooled_wave_b3.clear();
@@ -791,6 +842,13 @@ impl DirectoryConsciousness {
     pub fn from_m8_bytes(raw: &[u8]) -> Result<Self> {
         let decoded = decode_m8_bytes(raw)?;
         if let Ok(mut consciousness) = serde_json::from_slice::<Self>(&decoded) {
+            if consciousness.quantum_digest.is_empty() {
+                if let Some(wave) = extract_m8_wave_header(raw) {
+                    if wave.quantum_digest != [0u8; 16] {
+                        consciousness.quantum_digest = wave.quantum_digest.to_vec();
+                    }
+                }
+            }
             consciousness.rehydrate_derived_fields();
             return Ok(consciousness);
         }
@@ -1169,19 +1227,22 @@ pub fn encode_tight_m8_container(
     direct_enc.write_all(raw_payload)?;
     let direct_zlib = direct_enc.finish()?;
 
-    let tokenized = crate::mem8::token_codec::encode(raw_payload);
-    let mut tok_enc = ZlibEncoder::new(Vec::new(), Compression::best());
-    tok_enc.write_all(&tokenized)?;
-    let tok_zlib = tok_enc.finish()?;
-
     let (data_sec_id, data_sec_flags, data_sec_bytes): (&[u8; 4], u8, Vec<u8>) =
-        if direct_zlib.len() <= 4 + tok_zlib.len() {
+        if raw_payload.len() < 8192 {
             (b"ZLIB", 0x01, direct_zlib)
         } else {
-            let mut t8rz = Vec::with_capacity(4 + tok_zlib.len());
-            t8rz.extend_from_slice(&(raw_payload.len() as u32).to_le_bytes());
-            t8rz.extend_from_slice(&tok_zlib);
-            (b"T8RZ", 0x03, t8rz)
+            let tokenized = crate::mem8::token_codec::encode(raw_payload);
+            let mut tok_enc = ZlibEncoder::new(Vec::new(), Compression::best());
+            tok_enc.write_all(&tokenized)?;
+            let tok_zlib = tok_enc.finish()?;
+            if direct_zlib.len() <= 4 + tok_zlib.len() {
+                (b"ZLIB", 0x01, direct_zlib)
+            } else {
+                let mut t8rz = Vec::with_capacity(4 + tok_zlib.len());
+                t8rz.extend_from_slice(&(raw_payload.len() as u32).to_le_bytes());
+                t8rz.extend_from_slice(&tok_zlib);
+                (b"T8RZ", 0x03, t8rz)
+            }
         };
 
     let section_count: u16 = if include_mqnt { 3 } else { 2 };
@@ -1642,5 +1703,149 @@ mod tests {
         assert!(root_c.essence.contains("Rolls up 2 subfolders"));
         assert!(root_c.child_summaries["alpha"].contains("Alpha Engine"));
         assert!(root_c.child_summaries["beta"].contains("beta-core"));
+    }
+
+    #[test]
+    fn test_standardgalactic_tight_m8_and_memory_benchmarks() {
+        let sg_root = Path::new("/home/hue/source/standardgalactic");
+        if !sg_root.is_dir() {
+            return;
+        }
+
+        // Collect up to 1,000 .m8 files from standardgalactic
+        let mut m8_paths = Vec::new();
+        for fixed in [
+            sg_root.join(".m8"),
+            sg_root.join("standardgalactic/.m8"),
+            sg_root.join("standardgalactic/Music/.m8"),
+            sg_root.join("standardgalactic/art/.m8"),
+            sg_root.join("old-archive.scpr.org/content/.m8"),
+        ] {
+            if fixed.is_file() {
+                m8_paths.push(fixed);
+            }
+        }
+        if let Ok(entries) = fs::read_dir(sg_root) {
+            for entry in entries.flatten() {
+                if m8_paths.len() >= 1000 {
+                    break;
+                }
+                let p = entry.path().join(".m8");
+                if p.is_file() && !m8_paths.contains(&p) {
+                    m8_paths.push(p);
+                }
+            }
+        }
+        assert!(
+            !m8_paths.is_empty(),
+            "Expected .m8 files in standardgalactic"
+        );
+
+        let raw_blobs: Vec<Vec<u8>> = m8_paths.iter().filter_map(|p| fs::read(p).ok()).collect();
+        let total_packed_bytes: usize = raw_blobs.iter().map(|b| b.len()).sum();
+
+        // 1. O(1) WAVE header scan benchmark (zero decompression)
+        let t0 = std::time::Instant::now();
+        let mut valid_headers = 0usize;
+        for blob in &raw_blobs {
+            assert_eq!(&blob[0..4], b"MEM8");
+            let hdr = extract_m8_wave_header(blob).expect("valid WAVE header");
+            assert!((20.0..=200.0).contains(&hdr.frequency));
+            valid_headers += 1;
+        }
+        let wave_elapsed = t0.elapsed();
+
+        // 2. Full CRC32 + decompression + DirectoryConsciousness rehydration benchmark
+        let t1 = std::time::Instant::now();
+        let mut total_decoded_bytes = 0usize;
+        let mut loaded_nodes = Vec::with_capacity(raw_blobs.len());
+        for blob in &raw_blobs {
+            let decoded = decode_m8_bytes(blob).expect("CRC32 + ZLIB decode must succeed");
+            total_decoded_bytes += decoded.len();
+            let c = DirectoryConsciousness::from_m8_bytes(blob)
+                .expect("DirectoryConsciousness::from_m8_bytes must succeed");
+            assert_eq!(c.quantum_digest.len(), 16);
+            loaded_nodes.push(c);
+        }
+        let decode_elapsed = t1.elapsed();
+
+        // 3. M8MEM v2 Anchor Memory test seeded with 250 standardgalactic nodes
+        let temp_dir = TempDir::new().unwrap();
+        let m8mem_path = temp_dir.path().join("memories.m8");
+        let t2 = std::time::Instant::now();
+        let mut mem_mgr =
+            crate::memory_manager::MemoryManager::with_bank_path(m8mem_path.clone()).unwrap();
+        let seed_count = loaded_nodes.len().min(250);
+        let mut anchored_count = 0usize;
+        let mut quarantined_count = 0usize;
+        for (idx, node) in loaded_nodes.iter().take(seed_count).enumerate() {
+            let dir_path = m8_paths[idx]
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| format!("/home/hue/source/standardgalactic/{}", idx));
+            let repo_name = m8_paths[idx]
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("repo")
+                .to_string();
+            let clean_essence = node.essence.replace('\u{feff}', "");
+            match mem_mgr.anchor_silent(
+                "consciousness",
+                vec![repo_name.clone(), "standardgalactic".to_string()],
+                &format!("sg/{}: {}", repo_name, clean_essence),
+                &dir_path,
+            ) {
+                Ok(_) => anchored_count += 1,
+                Err(_) => quarantined_count += 1,
+            }
+        }
+        let anchor_elapsed = t2.elapsed();
+        let m8mem_bytes = fs::metadata(&m8mem_path).unwrap().len();
+
+        let t3 = std::time::Instant::now();
+        let mut reloaded_mgr =
+            crate::memory_manager::MemoryManager::with_bank_path(m8mem_path).unwrap();
+        let recalled = reloaded_mgr
+            .find(&["standardgalactic".to_string()])
+            .unwrap();
+        let recall_elapsed = t3.elapsed();
+        assert_eq!(recalled.len(), anchored_count);
+        assert!(anchored_count > 200);
+
+        println!(
+            "\n=== StandardGalactic Tight .m8 & Memory Benchmark ({} files) ===",
+            raw_blobs.len()
+        );
+        println!(
+            "  Packed MEM8 size (1,000 files):  {:.1} KiB (avg {} B/file)",
+            total_packed_bytes as f64 / 1024.0,
+            total_packed_bytes / raw_blobs.len()
+        );
+        println!(
+            "  Decoded JSON payload size:       {:.1} KiB",
+            total_decoded_bytes as f64 / 1024.0
+        );
+        println!(
+            "  O(1) WAVE header scan (1,000):   {:?} ({} ns/file, {} valid)",
+            wave_elapsed,
+            wave_elapsed.as_nanos() / raw_blobs.len() as u128,
+            valid_headers
+        );
+        println!(
+            "  Full CRC32 + ZLIB + rehydrate:   {:?} ({:.2} µs/file)",
+            decode_elapsed,
+            decode_elapsed.as_secs_f64() * 1e6 / raw_blobs.len() as f64
+        );
+        println!(
+            "  M8MEM v2 bank ({} anchored, {} AiGuardian-quarantined): {:.1} KiB ({} B/memory, anchor={:?}, reload+recall={:?}, recalled={})",
+            anchored_count,
+            quarantined_count,
+            m8mem_bytes as f64 / 1024.0,
+            m8mem_bytes / anchored_count.max(1) as u64,
+            anchor_elapsed,
+            recall_elapsed,
+            recalled.len()
+        );
     }
 }

@@ -75,6 +75,19 @@ impl MemoryManager {
         Ok(Self { bank_path, bank })
     }
 
+    /// Create or open a `MemoryManager` backed by a specific `.m8` bank file path
+    pub fn with_bank_path(bank_path: PathBuf) -> Result<Self> {
+        if let Some(parent) = bank_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let bank = if bank_path.exists() {
+            Self::load_m8(&bank_path)?
+        } else {
+            MemoryBank::default()
+        };
+        Ok(Self { bank_path, bank })
+    }
+
     /// Return all anchored memories in the bank
     pub fn memories(&self) -> &[Memory] {
         &self.bank.memories

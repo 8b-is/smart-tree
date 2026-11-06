@@ -477,28 +477,33 @@ fn pack_single_m8(file_path: &std::path::Path) -> Result<(usize, usize)> {
     Ok((before, after))
 }
 
-fn pack_recursive(dir: &std::path::Path, stats: &mut (usize, usize, usize)) -> Result<()> {
+fn collect_m8_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) -> Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
+        let ft = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+        if ft.is_symlink() {
+            continue;
+        }
         let p = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        if p.is_dir() {
+        if ft.is_dir() {
             if matches!(name.as_str(), ".git" | "target" | "node_modules") {
                 continue;
             }
-            let _ = pack_recursive(&p, stats);
-        } else if name == ".m8" || name.ends_with("_consciousness.m8") {
-            if let Ok((before, after)) = pack_single_m8(&p) {
-                stats.0 += 1;
-                stats.1 += before;
-                stats.2 += after;
-            }
+            let _ = collect_m8_files(&p, out);
+        } else if ft.is_file() && (name == ".m8" || name.ends_with("_consciousness.m8")) {
+            out.push(p);
         }
     }
     Ok(())
 }
 
 fn pack_path(path: &PathBuf) -> Result<()> {
+    use rayon::prelude::*;
+
     if path.is_file() {
         let (before, after) = pack_single_m8(path)?;
         println!(
@@ -509,16 +514,16 @@ fn pack_path(path: &PathBuf) -> Result<()> {
             (after as f64 / before.max(1) as f64) * 100.0
         );
     } else if path.is_dir() {
-        let mut stats = (0usize, 0usize, 0usize);
-        let root_m8 = path.join(".m8");
-        if root_m8.is_file() {
-            if let Ok((before, after)) = pack_single_m8(&root_m8) {
-                stats.0 += 1;
-                stats.1 += before;
-                stats.2 += after;
-            }
-        }
-        pack_recursive(path, &mut stats)?;
+        let mut files = Vec::new();
+        collect_m8_files(path, &mut files)?;
+        let stats: (usize, usize, usize) = files
+            .par_iter()
+            .filter_map(|p| pack_single_m8(p).ok())
+            .map(|(b, a)| (1usize, b, a))
+            .reduce(
+                || (0, 0, 0),
+                |acc, x| (acc.0 + x.0, acc.1 + x.1, acc.2 + x.2),
+            );
         println!(
             "✅ Packed {} .m8 files under {}: {:.1} KiB -> {:.1} KiB ({:.1}% of original)",
             stats.0,
