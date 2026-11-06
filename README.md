@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-21.1.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-22.0.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-Tight_Binary_%2B_Marqant-00d4ff)](src/m8_consciousness.rs)
@@ -11,7 +11,7 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v21.1.0 (Tight `MEM8` v1 + Marqant `.m8` Binary Container + `M8MEM` v2 + `st up` Canonical Daemon & MemNet Bridge + Galaxia Federation + Weight-Space SIMD)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Tight `MEM8` v1 Binary `.m8` Containers (`WAVE` 64B + `MQNT` Marqant Soul + `ZLIB`/`T8RZ` Lossless Payload)**, **`M8MEM` v2 Compressed Anchor Memory Banks (`136 B/memory`)**, **`st up` Automagic Daemon & `memnet` MCP Mesh Bridge**, **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **Supply-Chain Security & X.509 Certificate Scanners**, **Spicy TUI mode**, and **30+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> **Smart Tree v22.0.0 (Burn ML + BUI/Blender UI + 100+ Sovereign Models + Strudel/Enthea Live Music + Galaxia Federation + Weight-Space SIMD + CRDT SSRF Protection)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, live music generation, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Burn ML Framework** (replacing Candle), **BUI/Blender UI** (optional, requires cmake), **100+ Sovereign Models** (Escanore, Truth, Zeno, Goku/Vegeta, Dragonballs, Deities, Buddhist Protectors, Dyad Mapper, Strudel/Enthea Live Music), **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON/SVE2)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **CRDT SSRF Protection (Allowlist/Blocklist)**, **Burn ML Framework** (replacing Candle), **Parallel Compute Pool**, **Ada 2022 Exact Ratio `p/q`**, **Spicy TUI mode**, and **50+ MCP tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
