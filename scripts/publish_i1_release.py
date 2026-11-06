@@ -52,11 +52,21 @@ def publish(source, root):
     root.mkdir(parents=True, exist_ok=True)
     destination = root / build
     if destination.exists():
-        if destination.is_symlink() or {p.name for p in destination.iterdir()} != names:
-            raise ValueError('Existing immutable release has different files')
-        for name in names:
-            if sha256(destination / name) != sha256(source / name):
-                raise ValueError(f'Refusing to change an immutable release: {name}')
+        if destination.is_symlink():
+            raise ValueError('Existing release path is a symlink')
+        existing_files = {p.name for p in destination.iterdir() if p.is_file()}
+        # All previously published archives/metadata (except manifest.json which gains new target assets)
+        # must remain byte-for-byte identical.
+        for name in existing_files - {'manifest.json'}:
+            if name in names and sha256(destination / name) != sha256(source / name):
+                raise ValueError(f'Refusing to change an immutable release file: {name}')
+        for name in sorted(names):
+            if name == 'manifest.json' or not (destination / name).exists():
+                with tempfile.NamedTemporaryFile(dir=destination, prefix=f'.{name}.', delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+                shutil.copyfile(source / name, tmp_path)
+                tmp_path.chmod(0o644)
+                os.replace(tmp_path, destination / name)
     else:
         stage = Path(tempfile.mkdtemp(prefix='.publish-', dir=root))
         try:

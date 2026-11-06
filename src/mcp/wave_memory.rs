@@ -368,12 +368,21 @@ impl WaveMemoryManager {
             valence.is_finite() && arousal.is_finite(),
             "Memory emotion must be finite"
         );
+        let guardian = crate::ai_guardian::AiGuardian::new();
+        let (sanitized_content, trust) = guardian.sanitize_memory_text(&content, &origin);
+        if trust == crate::ai_guardian::MemoryTrustLevel::Quarantined {
+            anyhow::bail!(
+                "🛡️ AiGuardian blocked anchoring untrusted/prompt-injection payload in wave memory: {}",
+                sanitized_content
+            );
+        }
         let id = uuid::Uuid::new_v4().to_string();
-        let (x, y, z) = AnchoredMemory::calculate_coordinates(&content, &keywords, memory_type);
+        let (x, y, z) =
+            AnchoredMemory::calculate_coordinates(&sanitized_content, &keywords, memory_type);
 
         let memory = AnchoredMemory {
             id: id.clone(),
-            content,
+            content: sanitized_content,
             keywords: keywords.clone(),
             memory_type,
             valence: valence.clamp(-1.0, 1.0),

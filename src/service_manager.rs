@@ -1037,8 +1037,10 @@ fn which_binary(name: &str) -> Option<PathBuf> {
 
 /// Print the post-install success banner.
 fn print_install_success(status_cmd: &str, logs_cmd: &str) {
+    let _ = crate::completions::maintain_service_completions(true);
     println!();
     println!("Smart Tree daemon installed and running!");
+    println!("  Shell Completions: Auto-maintained (Fish, Zsh, Bash + live folder/MEM|8 cache)");
     println!();
     println!("  Dashboard:  http://localhost:{}", DAEMON_PORT);
     println!("  Token:      /var/lib/smart-tree/daemon.token");

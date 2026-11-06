@@ -194,29 +194,64 @@ else
     fi
 fi
 
-# 3. Construct Download URL
-# Note: Artifacts include version in filename
-archive_name="${BINARY_NAME}-${VERSION}-${arch}-${os}.tar.gz"
-download_url="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$archive_name"
-
-# 4. Download and Extract
+# 3. Download and Extract (Prefer signed i1.is release catalogue, fallback to GitHub Releases)
+target_triple="${arch}-${os}"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 
-print_info "Downloading from $download_url"
-if ! curl --progress-bar --fail -L "$download_url" -o "$tmp_dir/$archive_name"; then
-    print_error "Download failed. Please check the URL and your network."
+downloaded=false
+archive_name="st-${target_triple}.tar.gz"
+
+if [[ -z "${I1_SKIP:-}" ]]; then
+    print_info "Checking signed release catalogue at https://i1.is/releases/smart-tree/latest.json ..."
+    if curl --silent --fail -L "https://i1.is/releases/smart-tree/latest.json" -o "$tmp_dir/latest.json" 2>/dev/null; then
+        i1_build_id=$(grep -o '"build_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$tmp_dir/latest.json" | head -n1 | sed 's/.*"build_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        i1_tag=$(grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' "$tmp_dir/latest.json" | head -n1 | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        if [[ -n "$i1_build_id" && ( -z "${VERSION:-}" || "$VERSION" == "$i1_tag" || "$VERSION" == "latest" ) ]]; then
+            i1_url="https://i1.is/releases/smart-tree/${i1_build_id}/${archive_name}"
+            print_info "Downloading signed bundle from $i1_url"
+            if curl --progress-bar --fail -L "$i1_url" -o "$tmp_dir/$archive_name"; then
+                if curl --silent --fail -L "${i1_url}.sha256" -o "$tmp_dir/${archive_name}.sha256" 2>/dev/null; then
+                    if command_exists sha256sum; then
+                        (cd "$tmp_dir" && sha256sum -c "${archive_name}.sha256" >/dev/null)
+                    elif command_exists shasum; then
+                        (cd "$tmp_dir" && shasum -a 256 -c "${archive_name}.sha256" >/dev/null)
+                    fi
+                fi
+                downloaded=true
+            fi
+        fi
+    fi
 fi
 
-print_info "Extracting the binary..."
+if [[ "$downloaded" == "false" ]]; then
+    for candidate in \
+        "${BINARY_NAME}-${target_triple}.tar.gz" \
+        "smart-tree-${target_triple}.tar.gz" \
+        "${BINARY_NAME}-${VERSION}-${target_triple}.tar.gz"; do
+        download_url="https://github.com/$GITHUB_REPO/releases/download/$VERSION/$candidate"
+        print_info "Trying GitHub release asset: $download_url"
+        if curl --progress-bar --fail -L "$download_url" -o "$tmp_dir/$candidate"; then
+            archive_name="$candidate"
+            downloaded=true
+            break
+        fi
+    done
+fi
+
+if [[ "$downloaded" == "false" ]]; then
+    print_error "Download failed for target ${target_triple} (${VERSION}). Please check https://i1.is/#smart-tree or GitHub Releases."
+fi
+
+print_info "Extracting the binary bundle..."
 tar -xzf "$tmp_dir/$archive_name" -C "$tmp_dir"
 
-# 5. Install the binary
+# 5. Install the binary (and companion binaries std, m8, n8x if present)
 print_info "Installing to $INSTALL_DIR..."
 binary_path="$tmp_dir/$BINARY_NAME"
 if [[ ! -f "$binary_path" ]]; then
     # Sometimes the binary is in a subdirectory, e.g. target/release/
-    found_binary=$(find "$tmp_dir" -type f -name $BINARY_NAME | head -n 1)
+    found_binary=$(find "$tmp_dir" -type f -name "$BINARY_NAME" | head -n 1)
     if [[ -z "$found_binary" ]]; then
         print_error "Could not find the '$BINARY_NAME' binary in the downloaded archive."
     fi
@@ -225,9 +260,23 @@ fi
 
 if [[ -w "$INSTALL_DIR" ]]; then
     mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
+    chmod 0755 "$INSTALL_DIR/$BINARY_NAME"
+    for extra_bin in std m8 n8x; do
+        if [[ -f "$tmp_dir/$extra_bin" ]]; then
+            mv "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
+            chmod 0755 "$INSTALL_DIR/$extra_bin"
+        fi
+    done
 else
     print_info "Need sudo access to install to $INSTALL_DIR"
     sudo mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
+    sudo chmod 0755 "$INSTALL_DIR/$BINARY_NAME"
+    for extra_bin in std m8 n8x; do
+        if [[ -f "$tmp_dir/$extra_bin" ]]; then
+            sudo mv "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
+            sudo chmod 0755 "$INSTALL_DIR/$extra_bin"
+        fi
+    done
 fi
 
 # 6. Verify Installation

@@ -6,9 +6,23 @@ use std::{
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=BUILD_ID");
+    println!("cargo:rerun-if-env-changed=ST_BUILD_ID");
     println!("cargo:rerun-if-env-changed=CUDA_PATH");
     println!("cargo:rerun-if-env-changed=CMAKE_CUDA_ARCHITECTURES");
     println!("cargo:rerun-if-env-changed=MLX_C_LIB_DIR");
+
+    if let Ok(build_id) = env::var("ST_BUILD_ID") {
+        let trimmed = build_id.trim();
+        if !trimmed.is_empty() {
+            println!("cargo:rustc-env=ST_BUILD_ID={trimmed}");
+        }
+    } else if let Ok(build_id) = fs::read_to_string("BUILD_ID") {
+        let trimmed = build_id.trim();
+        if !trimmed.is_empty() {
+            println!("cargo:rustc-env=ST_BUILD_ID={trimmed}");
+        }
+    }
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();

@@ -296,26 +296,24 @@ mod unix {
             trusted(&dir.join(name))?;
         }
         let current = binary_version(&dir.join("st"), &state)?;
-        // Bandwidth-saving Secure DNS Ed25519 check (_smart-tree.i1.is TXT, keytag=3313)
-        let dns_verified = crate::updater::query_secure_dns_version().await.ok();
-        if let Some(ref dns_rel) = dns_verified {
-            if stable(&dns_rel.version)? <= stable(&current)? {
-                println!(
-                    "No newer stable release advertised via Secure DNS (v{}); daemon unchanged",
-                    dns_rel.version
-                );
-                return Ok(());
-            }
+        // Mandatory DNSSEC RRSIG (RFC 4034/8080, rtype=46, alg=15, keytag=3313) + ST-DNS-v1 Ed25519 check (_smart-tree.i1.is TXT)
+        let dns_rel = crate::updater::query_secure_dns_version_strict_dnssec()
+            .await
+            .context("Refusing automatic update: DNSSEC RRSIG + Ed25519 (_smart-tree.i1.is, keytag=3313) verification failed")?;
+        if stable(&dns_rel.version)? <= stable(&current)? {
+            println!(
+                "No newer stable release advertised via DNSSEC-verified Secure DNS (v{}, keytag={}); daemon unchanged",
+                dns_rel.version, dns_rel.key_tag
+            );
+            return Ok(());
         }
         let release: Release = serde_json::from_slice(&body(&client, FEED, 1024 * 1024).await?)?;
         if stable(&release.tag_name)? <= stable(&current)? {
             println!("No newer stable release; daemon unchanged");
             return Ok(());
         }
-        if let Some(ref dns_rel) = dns_verified {
-            if release.tag_name.trim_start_matches('v') != dns_rel.version.trim_start_matches('v') {
-                bail!("Release catalogue version disagrees with Ed25519-signed Secure DNS record");
-            }
+        if release.tag_name.trim_start_matches('v') != dns_rel.version.trim_start_matches('v') {
+            bail!("Release catalogue version disagrees with DNSSEC-verified Secure DNS record");
         }
         let os = if cfg!(target_os = "macos") {
             "apple-darwin"
@@ -333,7 +331,7 @@ mod unix {
             || url.host_str() != Some("i1.is")
             || !url.path().starts_with("/releases/smart-tree/")
             || !url.username().is_empty()
-            || url.password().is_some()
+            || !url.password().is_some()
             || url.port().is_some()
         {
             bail!("Untrusted asset URL");
@@ -343,8 +341,14 @@ mod unix {
             .digest
             .strip_prefix("sha256:")
             .context("Release lacks SHA-256 digest")?;
-        if hex::decode(expected)? != Sha256::digest(&bytes).as_slice() {
+        let actual_digest = Sha256::digest(&bytes);
+        if hex::decode(expected)? != actual_digest.as_slice() {
             bail!("Release checksum mismatch");
+        }
+        if name == "st-x86_64-unknown-linux-gnu.tar.gz"
+            && hex::decode(&dns_rel.sha256)? != actual_digest.as_slice()
+        {
+            bail!("Release checksum disagrees with DNSSEC-verified _smart-tree.i1.is TXT sha256");
         }
         // Suppress repeated installation of a build that failed its health check.
         if fs::read_to_string(state.join("rejected-digest"))
@@ -394,13 +398,20 @@ mod unix {
         // Removing pending commits the transaction. Retain old binaries for inspection.
         fs::remove_file(txn.join("pending"))?;
         sync_dir(&txn)?;
+        // Refresh the independent .auto-update/worker binary so subsequent runs have the updated logic
+        let worker_new = state.join("worker.new");
+        let _ = fs::remove_file(&worker_new);
+        if copy_sync(&dir.join("st"), &worker_new).is_ok() {
+            let _ = fs::rename(&worker_new, state.join("worker"));
+            let _ = sync_dir(&state);
+        }
         fs::write(
             state.join("last-success"),
             format!("{} {}\n", release.tag_name, expected),
         )?;
         println!(
-            "Updated all four binaries to {} and verified the restarted daemon",
-            release.tag_name
+            "Updated all four binaries to {} (DNSSEC RRSIG keytag={} verified) and verified the restarted daemon",
+            release.tag_name, dns_rel.key_tag
         );
         Ok(())
     }

@@ -858,8 +858,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["best", "yolo", "submit", "leaderboard"],
-                        "description": "Action: 'best' (Top 1-3 fastest Rust functions by exact rational p/q cycles/op), 'yolo' (ONLY the #1 fastest raw drop-in Rust function + 1-line receipt), 'submit' (publish + hardware-benchmark a Rust function with partnership attribution), 'leaderboard' (live Speed & Foken FKN scoreboard)",
+                        "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize"],
+                        "description": "Action: 'best' (Top 1-3 fastest Rust functions by exact rational p/q cycles/op), 'yolo' (ONLY the #1 fastest raw drop-in Rust function + 1-line receipt), 'submit' (publish + hardware-benchmark a Rust function with partnership attribution), 'leaderboard' (live Speed & Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board of slowest routines), 'golf' (prove 64-vector equivalence & submit golfed routines to drop cycles/op), 'optimize' (audit repo & generate g8t.md)",
                         "default": "best"
                     },
                     "query": {

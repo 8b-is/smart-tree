@@ -1097,8 +1097,8 @@ EXAMPLES:
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["best", "yolo", "submit", "leaderboard"],
-                    "description": "Action: 'best' (Top 1-3 fastest functions), 'yolo' (#1 fastest drop-in code only), 'submit' (publish + benchmark Rust function), 'leaderboard' (live Foken FKN scoreboard)",
+                    "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize"],
+                    "description": "Action: 'best' (Top 1-3 fastest functions), 'yolo' (#1 fastest drop-in code only), 'submit' (publish + benchmark Rust function), 'leaderboard' (live Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board), 'golf' (prove 64-vector equivalence & drop cycles/op on routines), 'optimize' (audit repo & generate g8t.md)",
                     "default": "best"
                 },
                 "query": {

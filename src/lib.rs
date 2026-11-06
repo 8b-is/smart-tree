@@ -14,8 +14,10 @@
 // Declare the public modules that form the `st` library.
 pub mod activity_logger; // Transparent activity logging in JSONL format
 pub mod ai_guardian; // AI Guardian - Protects AI from prompt injection attacks
+pub mod bitnet_m8; // Sovereign BitNet b1.58 (B+/B- NO-FLOAT) built-in hierarchical code & repo summarizer
 pub mod cli; // Command-line argument definitions (extracted from main.rs)
 pub mod cli_commands; // Modular CLI subcommand and flag handlers (extracted from main.rs)
+pub mod completions; // Self-maintaining shell autocomplete (Fish, Zsh, Bash) with live folder & MEM|8 descriptions
 pub mod compression_manager; // Smart global compression for all outputs
 pub mod config; // Unified configuration: API keys, models, daemon settings
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
@@ -151,6 +153,9 @@ pub mod file_history;
 
 // MEM8 - Wave-based cognitive architecture for consciousness simulation
 pub mod mem8;
+
+// MEMNET - Local network folder/drive sharing, ESP32/LoRa/BLE/WiFi routing, Wave Q&A offload & Ultrasonic Chirp modem
+pub mod memnet;
 
 // MEM8 Lite - Minimal wave types for hot directory tracking (self-contained)
 pub mod mem8_lite;

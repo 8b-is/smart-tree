@@ -218,11 +218,23 @@ pub fn analyze_pq_mode(
         .max(1);
     let ambient_density_pq = RationalPQ::new_reduced(m as u64, max_directed_edges);
 
-    // Compute exact undirected degree sequence for Molloy-Reed kappa = sum(k^2) / sum(k)
+    // Compute exact undirected degree sequence deg(v) (where sum_{v in V} deg(v) = 2|E|)
+    // for Molloy-Reed percolation ratio kappa = <k^2>/<k> = sum_{v in V} deg(v)^2 / sum_{v in V} deg(v)
+    let mut undir_deg = vec![0u64; n];
+    for u in 0..n {
+        let start = graph.row_ptr[u] as usize;
+        let end = graph.row_ptr[u + 1] as usize;
+        for &v_sym in &graph.col_idx[start..end] {
+            let v = v_sym as usize;
+            if u != v && v < n {
+                undir_deg[u] += 1;
+                undir_deg[v] += 1;
+            }
+        }
+    }
     let mut sum_deg = 0u64;
     let mut sum_deg_sq = 0u64;
-    for u in 0..n {
-        let deg = (graph.row_ptr[u + 1] - graph.row_ptr[u]) as u64;
+    for &deg in &undir_deg {
         sum_deg += deg;
         sum_deg_sq += deg * deg;
     }
