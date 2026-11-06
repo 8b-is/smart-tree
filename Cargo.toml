@@ -148,6 +148,7 @@ whoami = "1.5"
 dashmap = "6.1"
 libc = "0.2"
 fuzzy-matcher = "0.3"  # Used by MCP smart_background_searcher
+num_cpus = "1.16"
 
 # PTY support for web dashboard terminal (always included)
 portable-pty = "0.8"
@@ -177,11 +178,10 @@ artem = "2.0"
 # Dashboard GUI - REMOVED (replaced by web-dashboard)
 # egui, eframe, egui_extras, winit removed - use web-dashboard instead
 
-# Local LLM support (candle)
-candle-core = { version = "0.8", optional = true }
-candle-transformers = { version = "0.8", optional = true }
-candle-nn = { version = "0.8", optional = true }
-hf-hub = { version = "0.4", optional = true }
+# Local LLM support (burn - simplified from candle)
+burn-core = { package = "burn", version = "0.23.0-pre.1", optional = true, features = ["flex", "wgpu", "autodiff", "train"] }
+burn-import = { version = "0.22.0", optional = true }
+burn-ndarray = { package = "burn-flex", version = "0.23.0-pre.1", optional = true }
 tokenizers = { version = "0.21", optional = true }
 marqant = "1.1.8"
 
@@ -258,8 +258,8 @@ metal = ["mlx-ffi"]
 cuda = []
 mlx-ffi = []
 
-# Local LLM inference
-candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
+# Local LLM inference (burn - simplified from candle)
+burn = ["burn-core", "burn-import", "burn-ndarray", "tokenizers"]
 
 # Voice transcription/TTS via liquid-rust (requires models)
 # Note: Enable when liquid-rust dependency is uncommented above
@@ -278,8 +278,8 @@ sve2 = []
 
 # Terminal UI (tui) and Web dashboard are now always built-in
 
-# Full features (includes candle for local LLM, google drive & gmail sync, and voice)
-full = ["candle", "google", "voice"]
+# Full features (includes burn for local LLM, google drive & gmail sync, and voice)
+full = ["burn", "google", "voice"]
 
 # Full with voice alias
 full-voice = ["full"]

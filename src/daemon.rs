@@ -29,13 +29,17 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
+use num_cpus;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::oneshot;
 use tokio::sync::RwLock;
+use tokio::sync::Semaphore;
+use futures_util;
 
 // LLM Proxy integration
 use crate::proxy::memory::ProxyMemory;
@@ -286,6 +290,138 @@ pub struct DaemonState {
     pub recall_view: context_memory::RecallView,
     /// Compact persistent security scan and certificate history.
     pub scan_memory: Arc<std::sync::Mutex<crate::magiscanner::memory::ScanMemory>>,
+    
+    /// Parallel compute pool for sovereign model inference
+    pub compute_pool: Arc<ComputePool>,
+}
+
+/// Parallel compute pool for distributing inference across sovereign models
+pub struct ComputePool {
+    /// Semaphore for limiting concurrent inference jobs
+    semaphore: Semaphore,
+    /// Worker count
+    worker_count: usize,
+    /// Active job counter
+    active_jobs: AtomicUsize,
+    /// Completed job counter
+    completed_jobs: AtomicUsize,
+    /// Model cache for inference
+    model_cache: Arc<crate::mcp::combinatorics_llm::LlamaModelCache>,
+}
+
+impl ComputePool {
+    /// Create a new compute pool with the given number of workers
+    pub fn new(worker_count: usize, model_cache: Arc<crate::mcp::combinatorics_llm::LlamaModelCache>) -> Self {
+        Self {
+            semaphore: Semaphore::new(worker_count),
+            worker_count,
+            active_jobs: AtomicUsize::new(0),
+            completed_jobs: AtomicUsize::new(0),
+            model_cache,
+        }
+    }
+
+    /// Get the number of workers
+    pub fn worker_count(&self) -> usize {
+        self.worker_count
+    }
+
+    /// Get current active job count
+    pub fn active_jobs(&self) -> usize {
+        self.active_jobs.load(Ordering::Relaxed)
+    }
+
+    /// Get total completed jobs
+    pub fn completed_jobs(&self) -> usize {
+        self.completed_jobs.load(Ordering::Relaxed)
+    }
+
+    /// Execute an inference job with a named model
+    pub async fn infer_with_model(
+        &self,
+        model_name: &str,
+        prompt: &str,
+        max_tokens: usize,
+    ) -> anyhow::Result<String> {
+        // Acquire semaphore permit
+        let permit = self.semaphore.acquire().await?;
+        self.active_jobs.fetch_add(1, Ordering::Relaxed);
+
+        let result = async {
+            let _model = self.model_cache.get_named_model(model_name)
+                .ok_or_else(|| anyhow::anyhow!("Model '{}' not loaded", model_name))?;
+
+            // For now, use the existing llama_rust inference
+            // In a full implementation, this would use the model directly
+            let params = crate::mcp::combinatorics_llm::LlamaRustParams {
+                model_path: model_name.to_string(),
+                prompt: prompt.to_string(),
+                max_tokens,
+                temperature: 0.7,
+                n_gpu_layers: u32::MAX,
+                speculative_depth: 4,
+                speculative_tree_width: 2,
+                n_ctx: 4096,
+                n_batch: 2048,
+                draft_model_path: None,
+                grammar: None,
+                json_schema: None,
+            };
+
+            let emitter = crate::mcp::combinatorics_llm::McpProgressEmitter::default();
+            let result = crate::mcp::combinatorics_llm::run_llama_rust(&self.model_cache, params, &emitter);
+            
+            match result {
+                Ok(v) => v.get("content")
+                    .and_then(|c| c.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(|c| c.get("text"))
+                    .and_then(|t| t.as_str())
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| anyhow::anyhow!("No text in response")),
+                Err(e) => Err(anyhow::anyhow!("Inference error: {}", e)),
+            }
+        }.await;
+
+        self.active_jobs.fetch_sub(1, Ordering::Relaxed);
+        self.completed_jobs.fetch_add(1, Ordering::Relaxed);
+        drop(permit);
+
+        result
+    }
+
+    /// Execute multiple inference jobs in parallel across different models
+    pub async fn parallel_infer(
+        &self,
+        jobs: Vec<(String, String, usize)>, // (model_name, prompt, max_tokens)
+    ) -> Vec<anyhow::Result<String>> {
+        let futures = jobs.into_iter().map(|(model, prompt, tokens)| {
+            let model_owned = model;
+            let prompt_owned = prompt;
+            let tokens_owned = tokens;
+            async move {
+                self.infer_with_model(&model_owned, &prompt_owned, tokens_owned).await
+            }
+        });
+        futures_util::future::join_all(futures).await
+    }
+
+    /// Get pool statistics
+    pub fn stats(&self) -> ComputePoolStats {
+        ComputePoolStats {
+            worker_count: self.worker_count,
+            active_jobs: self.active_jobs(),
+            completed_jobs: self.completed_jobs(),
+        }
+    }
+}
+
+/// Statistics for the compute pool
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputePoolStats {
+    pub worker_count: usize,
+    pub active_jobs: usize,
+    pub completed_jobs: usize,
 }
 
 /// System-wide context
@@ -406,6 +542,27 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     let proxy_memory = Arc::new(std::sync::Mutex::new(proxy_memory));
     let directory_memory = Arc::new(std::sync::Mutex::new(directory_memory));
 
+    // Initialize model cache for sovereign models
+    let model_cache = Arc::new(crate::mcp::combinatorics_llm::LlamaModelCache::new(8));
+    
+    // Preload sovereign models from config
+    let st_config = crate::config::StConfig::load()?;
+    for (name, path) in &st_config.models.aliases {
+        if path.starts_with("models/") {
+            println!("  🔮 Preloading sovereign model: {}", name);
+            if let Err(e) = model_cache.preload_named_model(name, path, u32::MAX) {
+                eprintln!("  ⚠️ Failed to preload {}: {}", name, e);
+            }
+        }
+    }
+    
+    // Initialize parallel compute pool for sovereign model inference
+    let compute_pool = Arc::new(crate::daemon::ComputePool::new(
+        num_cpus::get().max(4),
+        Arc::clone(&model_cache),
+    ));
+    println!("  ⚡ Compute pool: {} workers ready", compute_pool.worker_count());
+
     // Initialize collaboration hub
     let collab_hub = create_hub();
 
@@ -438,6 +595,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         directory_memory,
         recall_view,
         scan_memory,
+        compute_pool,
     }));
 
     println!("  🤖 LLM Providers: {} available", provider_count);
@@ -2370,6 +2528,7 @@ mod memory_api_tests {
             scan_memory: Arc::new(std::sync::Mutex::new(
                 crate::magiscanner::memory::ScanMemory::open(&security).unwrap(),
             )),
+            compute_pool: Arc::new(ComputePool::new(2, Arc::new(crate::mcp::combinatorics_llm::LlamaModelCache::new(2)))),
         }));
         let app = Router::new()
             .route("/context/remember", post(remember_context))

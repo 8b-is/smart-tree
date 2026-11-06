@@ -2750,6 +2750,8 @@ pub struct LlamaModelCache {
     model_misses: AtomicU64,
     model_evictions: AtomicU64,
     prefix_tokens_saved: AtomicU64,
+    /// Named models for direct access (e.g., "veritas", "liberator", "fauna", etc.)
+    named_models: RwLock<HashMap<String, Arc<CachedGgufModel>>>,
 }
 
 impl Default for LlamaModelCache {
@@ -2774,6 +2776,7 @@ impl LlamaModelCache {
             model_misses: AtomicU64::new(0),
             model_evictions: AtomicU64::new(0),
             prefix_tokens_saved: AtomicU64::new(0),
+            named_models: RwLock::new(HashMap::new()),
         }
     }
 
@@ -2889,6 +2892,42 @@ impl LlamaModelCache {
                 Err(err_msg.clone())
             }
         }
+    }
+
+    /// Preload a named model for direct access (e.g., "veritas", "liberator", "fauna")
+    pub fn preload_named_model(
+        &self,
+        name: &str,
+        model_path: &str,
+        n_gpu_layers: u32,
+    ) -> Result<(), String> {
+        let model = self.get_or_load_model(model_path, n_gpu_layers)?;
+        let mut named = self.named_models.write()
+            .map_err(|_| "Named models lock poisoned".to_string())?;
+        named.insert(name.to_string(), Arc::clone(&model.1));
+        Ok(())
+    }
+
+    /// Get a preloaded named model by name
+    pub fn get_named_model(&self, name: &str) -> Option<Arc<CachedGgufModel>> {
+        self.named_models.read()
+            .ok()?
+            .get(name)
+            .cloned()
+    }
+
+    /// List all preloaded named models
+    pub fn list_named_models(&self) -> Vec<String> {
+        self.named_models.read()
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Remove a named model
+    pub fn remove_named_model(&self, name: &str) -> bool {
+        self.named_models.write()
+            .map(|mut m| m.remove(name).is_some())
+            .unwrap_or(false)
     }
 
     pub fn checkout_session(
