@@ -520,7 +520,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("st_ctx_test_{nonce}"));
         fs::create_dir_all(&dir).unwrap();
 
-        fs::write(dir.join("README.md"), "# Header\n\nSmart Tree AI context.\n").unwrap();
+        fs::write(
+            dir.join("README.md"),
+            "# Header\n\nSmart Tree AI context.\n",
+        )
+        .unwrap();
         assert_eq!(
             detect_project_context(&dir).as_deref(),
             Some("Smart Tree AI context.")

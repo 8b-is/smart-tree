@@ -5930,7 +5930,7 @@ checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
 
 [[package]]
 name = "smart-tree"
-version = "11.3.1"
+version = "11.3.2"
 dependencies = [
  "anyhow",
  "argon2",
@@ -6032,6 +6032,7 @@ dependencies = [
  "walkdir",
  "which",
  "whoami",
+ "wst_brain_scan",
  "x509-parser",
  "yup-oauth2",
 ]
@@ -7863,6 +7864,13 @@ name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
+
+[[package]]
+name = "wst_brain_scan"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "x509-parser"

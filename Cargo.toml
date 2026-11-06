@@ -1,10 +1,10 @@
 [workspace]
-members = ["expert_prompt_engineer", "st-protocol"]
+members = ["crates/wst_brain_scan", "expert_prompt_engineer", "st-protocol"]
 exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "11.3.2"
+version = "11.3.3"
 edition = "2021"
 build = "build.rs"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
@@ -245,6 +245,7 @@ name = "import-claude-memories"
 path = "src/bin/import_claude_memories.rs"
 
 [dev-dependencies]
+wst_brain_scan = { path = "crates/wst_brain_scan" }
 tempfile = "3.10"
 assert_cmd = "2.0"
 predicates = "3.1"

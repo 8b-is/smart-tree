@@ -1,0 +1,13 @@
+name = "wst_brain_scan"
+description = "Weight-Space-Time brain scanner and bent balanced-ternary verification deck"
+version = "0.1.0"
+licenses = "MIT"
+authors = ["8b.is"]
+maintainers = ["8b.is <hello@8b.is>"]
+maintainers-logins = ["8b-is"]
+website = "https://8b.is"
+project-files = ["wst_brain_scan.gpr"]
+tags = ["ternary", "verification", "wst", "demoscene", "ada2022"]
+
+[[depends-on]]
+gnat = ">=12"

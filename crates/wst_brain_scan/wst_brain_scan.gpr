@@ -1,0 +1,10 @@
+project WST_Brain_Scan is
+   for Source_Dirs use ("ada");
+   for Object_Dir use "obj";
+   for Main use ("wst_brain_scan_test.adb");
+   for Create_Missing_Dirs use "True";
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnata", "-gnatwa");
+   end Compiler;
+end WST_Brain_Scan;
