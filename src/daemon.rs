@@ -1079,7 +1079,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             <div id="chat-input">
                 <select id="model-select">
                     <optgroup label="🧬 Local MEM8 & Life Personas (Zero API Key)" id="persona-optgroup">
-                        <option value="candle/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>
+                        <option value="burn/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>
                     </optgroup>
                     <optgroup label="Top Coding Models">
                         <option value="anthropic/claude-opus-4.5">Claude Opus 4.5</option>
@@ -1274,7 +1274,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 const res = await fetch('/api/personas', { headers: ST_HEADERS });
                 const data = await res.json();
                 const personas = data.personas || [];
-                optGroup.innerHTML = '<option value="candle/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>';
+                optGroup.innerHTML = '<option value="burn/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>';
                 if (personas.length === 0) {
                     listEl.innerHTML = '<div style="color:#888;">No trained personas yet. Enter a name and folder path above to train a <code>.m8</code> Soul!</div>';
                     return;
@@ -2127,13 +2127,13 @@ async fn chat_completions(
     // Parse provider from model name (e.g., "anthropic/claude-3" or just "gpt-4")
     // Smart routing: detect provider from model name if no explicit prefix
     let (provider_name, model_name) = if let Some(slug) = req.model.strip_prefix("persona:") {
-        ("candle".to_string(), format!("persona:{slug}"))
+        ("burn".to_string(), format!("persona:{slug}"))
     } else if let Some((p, m)) = req.model.split_once('/') {
-        if p.eq_ignore_ascii_case("candle")
+        if p.eq_ignore_ascii_case("burn")
             || p.eq_ignore_ascii_case("local")
             || p.eq_ignore_ascii_case("persona")
         {
-            ("candle".to_string(), m.to_string())
+            ("burn".to_string(), m.to_string())
         } else {
             (p.to_string(), m.to_string())
         }
@@ -2142,9 +2142,9 @@ async fn chat_completions(
         let model_lower = req.model.to_lowercase();
         let provider = if model_lower.starts_with("persona")
             || model_lower.starts_with("mem8")
-            || model_lower.starts_with("candle")
+            || model_lower.starts_with("burn")
         {
-            "candle"
+            "burn"
         } else if model_lower.starts_with("claude") {
             "openrouter" // Route Claude through OpenRouter (works with OPENROUTER_API_KEY)
         } else if model_lower.starts_with("gpt")

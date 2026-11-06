@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub mod claude;
 // Re-export for backward compatibility - `proxy::anthropic::AnthropicProvider` still works
 pub use claude as anthropic;
-pub mod candle;
+// pub mod candle; // Removed - replaced with burn
 pub mod google;
 pub mod grok;
 pub mod memory;
@@ -165,8 +165,8 @@ impl Default for LlmProxy {
             proxy.add_provider(Box::new(zai::ZaiProvider::default()));
         }
 
-        // Always add Candle provider (it will check for feature at runtime/compile time)
-        proxy.add_provider(Box::new(candle::CandleProvider::default()));
+        // Candle provider removed - replaced with burn
+        // proxy.add_provider(Box::new(candle::CandleProvider::default()));
 
         proxy
     }
