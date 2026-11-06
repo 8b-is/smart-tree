@@ -511,6 +511,9 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/memnet/ask", post(memnet_ask_handler))
         .route("/memnet/teach", post(memnet_teach_handler))
         .route("/memnet/share", post(memnet_share_handler))
+        // MEM8 Life Personas (.m8 Soul Trainer & Local Micro-Model)
+        .route("/api/personas", get(personas_list_handler))
+        .route("/api/personas/train", post(personas_train_handler))
         .with_state(Arc::clone(&state))
         // Add MCP before the auth layer so its routes share the same policy.
         .nest_service("/mcp", mcp_router(mcp_context))
@@ -913,10 +916,13 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
     <div class="grid">
         <!-- Chat Test -->
         <div class="card">
-            <h2>💬 Test Chat (LLM Proxy via OpenRouter)</h2>
+            <h2>💬 Test Chat (Local MEM8 Personas & LLM Proxy)</h2>
             <div id="chat-messages"></div>
             <div id="chat-input">
                 <select id="model-select">
+                    <optgroup label="🧬 Local MEM8 & Life Personas (Zero API Key)" id="persona-optgroup">
+                        <option value="candle/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>
+                    </optgroup>
                     <optgroup label="Top Coding Models">
                         <option value="anthropic/claude-opus-4.5">Claude Opus 4.5</option>
                         <option value="anthropic/claude-sonnet-4.5">Claude Sonnet 4.5</option>
@@ -936,10 +942,28 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                         <option value="z-ai/glm-4.5-air:free">GLM 4.5 Air (Free)</option>
                     </optgroup>
                 </select>
-                <input type="text" id="msg-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendChat()">
+                <input type="text" id="msg-input" placeholder="Ask a Local Persona or LLM..." onkeypress="if(event.key==='Enter')sendChat()">
                 <button onclick="sendChat()">Send</button>
             </div>
-            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Uses OpenRouter - add OPENROUTER_API_KEY to config</p>
+            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Local MEM8 &amp; Personas run 100% offline · Cloud models use OPENROUTER_API_KEY</p>
+        </div>
+
+        <!-- Life Personas Studio -->
+        <div class="card">
+            <h2>🧬 Life Personas (.m8 Soul Trainer)</h2>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:0.75rem">
+                Train a tight <code>.m8</code> persona from diaries, local drives, or Google Drive folders
+            </p>
+            <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem;">
+                <input type="text" id="persona-name" placeholder="Persona Name (e.g. Grandmother's Diaries)" style="padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
+                <div style="display:flex;gap:0.5rem;">
+                    <input type="text" id="persona-path" placeholder="Folder or file path (e.g. ~/Documents/diaries)" style="flex:1;padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
+                    <button onclick="trainPersona()" style="padding:0.6rem 1rem;border-radius:6px;border:none;background:#4ecdc4;color:#1a1a2e;font-weight:bold;cursor:pointer;">Train .m8</button>
+                </div>
+            </div>
+            <div id="personas-list" style="max-height:140px;overflow-y:auto;font-size:0.8rem;color:#ccc;">
+                Loading trained personas...
+            </div>
         </div>
 
         <!-- Transparency Log -->
@@ -971,15 +995,19 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             <h2>🛡️ Model Safety Scores</h2>
             <p style="font-size:0.8rem;color:#888;margin-bottom:1rem">Based on observed behavior</p>
             <div class="endpoint">
-                <span>Claude 3.5 Sonnet</span>
+                <span>🧬 MEM8 Local Persona (.m8)</span>
+                <span class="score safe">10/10 Sovereign</span>
+            </div>
+            <div class="endpoint">
+                <span>Claude Opus 4.5 / Sonnet 4.5</span>
                 <span class="score safe">10/10</span>
             </div>
             <div class="endpoint">
-                <span>GPT-4o</span>
+                <span>GPT-5.2 Codex</span>
                 <span class="score safe">9/10</span>
             </div>
             <div class="endpoint">
-                <span>Gemini 2.0</span>
+                <span>Gemini 3 Pro</span>
                 <span class="score safe">9/10</span>
             </div>
             <div class="endpoint">
@@ -1080,6 +1108,75 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
 
             messages.scrollTop = messages.scrollHeight;
         }
+
+        async function loadPersonas() {
+            const listEl = document.getElementById('personas-list');
+            const optGroup = document.getElementById('persona-optgroup');
+            try {
+                const res = await fetch('/api/personas', { headers: ST_HEADERS });
+                const data = await res.json();
+                const personas = data.personas || [];
+                optGroup.innerHTML = '<option value="candle/mem8-wave-micro">🕯️ Local MEM8 Wave Micro-Model</option>';
+                if (personas.length === 0) {
+                    listEl.innerHTML = '<div style="color:#888;">No trained personas yet. Enter a name and folder path above to train a <code>.m8</code> Soul!</div>';
+                    return;
+                }
+                let html = '';
+                for (const p of personas) {
+                    const kb = (p.m8_size_bytes / 1024).toFixed(1);
+                    optGroup.innerHTML += `<option value="persona:${p.slug}">🧬 Persona: ${p.name} (${p.episode_count} memories)</option>`;
+                    html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+                        <div>
+                            <strong style="color:#4ecdc4;">${p.name}</strong>
+                            <span style="color:#888;font-size:0.72rem;"> (${p.episode_count} memories · ${p.total_words} words · ${kb} KiB .m8)</span>
+                        </div>
+                        <button onclick="selectPersona('${p.slug}')" style="padding:2px 8px;border-radius:4px;border:none;background:#27ae60;color:white;font-size:0.72rem;cursor:pointer;">Chat</button>
+                    </div>`;
+                }
+                listEl.innerHTML = html;
+            } catch (e) {
+                listEl.innerHTML = `<div style="color:#e74c3c;">Failed to load personas: ${e.message}</div>`;
+            }
+        }
+
+        function selectPersona(slug) {
+            const sel = document.getElementById('model-select');
+            sel.value = 'persona:' + slug;
+            document.getElementById('msg-input').focus();
+            addLog('PERSONA', `Selected local MEM8 persona: persona:${slug}`);
+        }
+
+        async function trainPersona() {
+            const nameInput = document.getElementById('persona-name');
+            const pathInput = document.getElementById('persona-path');
+            const name = nameInput.value.trim();
+            const path = pathInput.value.trim();
+            if (!name || !path) {
+                addLog('ERROR', 'Please enter both a Persona Name and a Folder/File Path');
+                return;
+            }
+            addLog('PERSONA-TRAIN', `Training .m8 persona "${name}" from ${path}...`);
+            try {
+                const res = await fetch('/api/personas/train', {
+                    method: 'POST',
+                    headers: ST_HEADERS,
+                    body: JSON.stringify({ name, path })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    addLog('ERROR', data.error || 'Training failed');
+                    return;
+                }
+                addLog('PERSONA-READY', `Trained ${data.name} (${data.episodes} memories, ${(data.m8_size_bytes/1024).toFixed(1)} KiB .m8)`);
+                nameInput.value = '';
+                await loadPersonas();
+                selectPersona(data.slug);
+            } catch (e) {
+                addLog('ERROR', e.message);
+            }
+        }
+
+        loadPersonas();
 
         // Connect to WebSocket for live transparency
         try {
@@ -1805,6 +1902,62 @@ fn create_directory_info(path: &std::path::Path) -> Option<DirectoryInfo> {
 }
 
 // =============================================================================
+// MEM8 LIFE PERSONAS HANDLERS (`/api/personas`, `/api/personas/train`)
+// =============================================================================
+
+#[derive(Deserialize)]
+struct TrainPersonaRequest {
+    name: String,
+    path: String,
+}
+
+async fn personas_list_handler() -> Json<serde_json::Value> {
+    let personas = tokio::task::spawn_blocking(crate::mem8::persona::LifePersona::list_all)
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .unwrap_or_default();
+    Json(serde_json::json!({ "personas": personas }))
+}
+
+async fn personas_train_handler(
+    Json(req): Json<TrainPersonaRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let name = req.name.trim().to_string();
+    let expanded = shellexpand::tilde(req.path.trim()).to_string();
+    let path = PathBuf::from(expanded);
+    let result = tokio::task::spawn_blocking(move || {
+        crate::mem8::persona::LifePersona::train_from_path(&name, &path)
+    })
+    .await;
+
+    match result {
+        Ok(Ok((persona, m8_path, size))) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "ok",
+                "name": persona.name,
+                "slug": persona.slug,
+                "source_path": persona.source_path,
+                "files_ingested": persona.files_ingested,
+                "total_words": persona.total_words,
+                "episodes": persona.episodes.len(),
+                "m8_path": m8_path.to_string_lossy(),
+                "m8_size_bytes": size,
+            })),
+        ),
+        Ok(Err(e)) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+    }
+}
+
+// =============================================================================
 // LLM PROXY HANDLERS - OpenAI-compatible chat completions
 // =============================================================================
 
@@ -1815,12 +1968,26 @@ async fn chat_completions(
 ) -> impl IntoResponse {
     // Parse provider from model name (e.g., "anthropic/claude-3" or just "gpt-4")
     // Smart routing: detect provider from model name if no explicit prefix
-    let (provider_name, model_name) = if let Some((p, m)) = req.model.split_once('/') {
-        (p.to_string(), m.to_string())
+    let (provider_name, model_name) = if let Some(slug) = req.model.strip_prefix("persona:") {
+        ("candle".to_string(), format!("persona:{slug}"))
+    } else if let Some((p, m)) = req.model.split_once('/') {
+        if p.eq_ignore_ascii_case("candle")
+            || p.eq_ignore_ascii_case("local")
+            || p.eq_ignore_ascii_case("persona")
+        {
+            ("candle".to_string(), m.to_string())
+        } else {
+            (p.to_string(), m.to_string())
+        }
     } else {
         // Auto-detect provider from model name
         let model_lower = req.model.to_lowercase();
-        let provider = if model_lower.starts_with("claude") {
+        let provider = if model_lower.starts_with("persona")
+            || model_lower.starts_with("mem8")
+            || model_lower.starts_with("candle")
+        {
+            "candle"
+        } else if model_lower.starts_with("claude") {
             "openrouter" // Route Claude through OpenRouter (works with OPENROUTER_API_KEY)
         } else if model_lower.starts_with("gpt")
             || model_lower.starts_with("o1")

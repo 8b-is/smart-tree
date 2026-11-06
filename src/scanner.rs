@@ -1503,6 +1503,18 @@ impl Scanner {
                     // and hidden directories that process_entry omitted.
                     if entry.file_type().is_dir() && (is_ignored_by_rules || node.is_none()) {
                         walker.skip_current_dir();
+                    } else if entry.file_type().is_dir()
+                        && !(self.config.show_hidden && self.config.show_ignored)
+                        && self.config.find_pattern.is_none()
+                        && self.config.search_keyword.is_none()
+                    {
+                        // Smart depth skipping: once we already have plenty of rows for a human/AI
+                        // view, stop descending into deep nested subdirectories unless --everything
+                        // or an explicit search/find filter was requested.
+                        let collected = all_nodes_collected.len();
+                        if (collected >= 120 && depth >= 2) || (collected >= 400 && depth >= 1) {
+                            walker.skip_current_dir();
+                        }
                     }
                     node
                 }

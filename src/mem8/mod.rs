@@ -10,6 +10,7 @@ pub mod git_temporal;
 pub mod integration;
 mod native_block;
 pub(crate) mod path_serde;
+pub mod persona;
 pub mod reactive;
 pub mod record_store;
 pub mod regularity;

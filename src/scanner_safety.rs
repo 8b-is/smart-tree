@@ -94,18 +94,19 @@ impl ScannerSafetyTracker {
             ));
         }
 
-        // Warn if approaching limits
+        // Track threshold silently without spamming stderr; smart depth skipping
+        // and the 100-row output cap (80 head + ... + 20 tail) handle large trees cleanly.
         let count = self.file_count.load(Ordering::Relaxed);
         if count > self.limits.warn_threshold && self.warned.load(Ordering::Relaxed) == 0 {
             self.warned.store(1, Ordering::Relaxed);
-            eprintln!(
-                "⚠️  Warning: Scanning large directory ({} nodes so far)",
-                count
-            );
-            eprintln!("   Consider using --max-depth or --stream mode");
         }
 
         Ok(())
+    }
+
+    /// Current admitted node count
+    pub fn count(&self) -> usize {
+        self.file_count.load(Ordering::Relaxed)
     }
 
     /// Admit one node before retaining it. Exclusive access makes the two

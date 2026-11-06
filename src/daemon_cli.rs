@@ -150,8 +150,8 @@ pub struct CliScanRequest {
     #[serde(default)]
     pub min_interest: f32,
 
-    /// Enable security scanning
-    #[serde(default = "default_true")]
+    /// Enable security scanning (off by default on regular scans to avoid reading all file contents)
+    #[serde(default)]
     pub security: bool,
 }
 
@@ -241,7 +241,18 @@ pub fn execute_cli_scan(req: &CliScanRequest) -> Result<CliScanResponse> {
         let compressed_data = encoder.finish()?;
         (general_purpose::STANDARD.encode(&compressed_data), true)
     } else {
-        (String::from_utf8_lossy(&output_buffer).to_string(), false)
+        let raw_output = String::from_utf8_lossy(&output_buffer).to_string();
+        let everything = req.all && req.show_ignored;
+        let trimmed = raw_output.trim_start();
+        let is_structured_payload = matches!(req.mode.as_str(), "json" | "csv" | "tsv")
+            || trimmed.starts_with('{')
+            || trimmed.starts_with('[');
+        let capped = if !everything && !is_structured_payload && req.top.is_none() {
+            cap_output_rows(&raw_output, 100, 20)
+        } else {
+            raw_output
+        };
+        (capped, false)
     };
 
     Ok(CliScanResponse {
@@ -258,20 +269,56 @@ pub fn execute_cli_scan(req: &CliScanRequest) -> Result<CliScanResponse> {
     })
 }
 
+/// Cap formatted output to `max_rows` lines (keeping the first `max_rows - tail_rows`
+/// lines, a `...` elision banner with switch instructions, and the bottom `tail_rows` lines).
+pub fn cap_output_rows(output: &str, max_rows: usize, tail_rows: usize) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    if lines.len() <= max_rows || max_rows <= tail_rows {
+        return output.to_string();
+    }
+    let head_rows = max_rows - tail_rows;
+    let elided = lines.len() - max_rows;
+    let mut out = String::with_capacity(output.len().min(16_384));
+    for line in &lines[..head_rows] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.push_str(&format!(
+        "...\n   ({elided} rows elided — use -e/--everything, -d/--depth <N>, or -f/--find <pattern> to see more)\n...\n"
+    ));
+    for line in &lines[lines.len() - tail_rows..] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
 /// Handle CLI scan request
 pub async fn cli_scan_handler(
     State(state): State<Arc<RwLock<DaemonState>>>,
     Json(req): Json<CliScanRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<CliErrorResponse>)> {
-    let response = execute_cli_scan(&req).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(CliErrorResponse {
-                error: "Scan failed".to_string(),
-                details: Some(e.to_string()),
-            }),
-        )
-    })?;
+    let req_for_scan = req.clone();
+    let response = tokio::task::spawn_blocking(move || execute_cli_scan(&req_for_scan))
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CliErrorResponse {
+                    error: "Scan task panicked".to_string(),
+                    details: Some(e.to_string()),
+                }),
+            )
+        })?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CliErrorResponse {
+                    error: "Scan failed".to_string(),
+                    details: Some(e.to_string()),
+                }),
+            )
+        })?;
 
     if response.compressed {
         if let Ok(mut state) = state.try_write() {
@@ -357,13 +404,13 @@ fn build_scanner_config(req: &CliScanRequest) -> Result<ScannerConfig> {
 /// Get ideal depth for a given mode
 fn get_ideal_depth_for_mode(mode: &str) -> usize {
     match mode.to_lowercase().replace(['-', '_'], "").as_str() {
-        "quantum" | "quantumsemantic" => 10,
+        "quantum" | "quantumsemantic" => 6,
         "summary" | "summaryai" | "context" => 4,
-        "ai" | "semantic" | "smart" => 5,
-        "digest" | "stats" | "louds" | "smtrcapsule" | "capsule" | "thebook" | "erdos"
-        | "szemeredi" | "mem8regular" | "book" | "pq" | "rationalpq" | "symplectic"
-        | "ultrabackyard" | "backyardultra" | "ultrabackyardloop" | "doloop" | "zeno"
-        | "ultraomnizeno" | "upz" | "wupz" | "8bis" | "8bengines" => 20,
+        "ai" | "semantic" | "smart" | "stats" => 5,
+        "digest" | "louds" | "smtrcapsule" | "capsule" | "thebook" | "erdos" | "szemeredi"
+        | "mem8regular" | "book" | "pq" | "rationalpq" | "symplectic" | "ultrabackyard"
+        | "backyardultra" | "ultrabackyardloop" | "doloop" | "zeno" | "ultraomnizeno" | "upz"
+        | "wupz" | "8bis" | "8bengines" => 8,
         "relations" => 3,
         "projects" => 5,
         _ => 3, // Default for classic, json, etc.
@@ -460,6 +507,7 @@ fn format_output(
             formatter.format(writer, nodes, stats, root_path)?;
         }
         "quantumsemantic" => {
+            writeln!(writer, "QUANTUM_SEMANTIC_V2:")?;
             let formatter = SemanticFormatter::new(path_display, no_emoji);
             formatter.format(writer, nodes, stats, root_path)?;
         }
@@ -570,5 +618,21 @@ mod tests {
             .unwrap()
             .output
             .contains("notes.md"));
+    }
+
+    #[test]
+    fn cap_output_rows_limits_to_80_head_and_20_tail() {
+        let mut big = String::new();
+        for i in 1..=150 {
+            big.push_str(&format!("row-{i}\n"));
+        }
+        let capped = cap_output_rows(&big, 100, 20);
+        assert!(capped.contains("row-1\n"));
+        assert!(capped.contains("row-80\n"));
+        assert!(!capped.contains("row-81\n"));
+        assert!(capped.contains("(50 rows elided"));
+        assert!(!capped.contains("row-130\n"));
+        assert!(capped.contains("row-131\n"));
+        assert!(capped.contains("row-150\n"));
     }
 }

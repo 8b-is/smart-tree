@@ -80,6 +80,32 @@ enum Commands {
         /// Path to a .m8 file or directory tree
         path: PathBuf,
     },
+
+    /// Train, list, or converse with a MEM8 Life Persona (.m8 Soul)
+    Persona {
+        #[command(subcommand)]
+        action: PersonaCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum PersonaCommands {
+    /// Train a tight .m8 Life Persona from diaries, notes, local drives, or synced Google Drive folders
+    Train {
+        /// Name of the persona (e.g., "Grandmother's Diaries")
+        name: String,
+        /// Directory or file path containing their writings
+        path: PathBuf,
+    },
+    /// List all trained .m8 Life Personas in ~/.st/personas/
+    List,
+    /// Ask or converse with a trained .m8 Life Persona locally
+    Ask {
+        /// Persona name or slug
+        name: String,
+        /// Question or prompt
+        prompt: String,
+    },
 }
 
 // MEM8 Format Constants
@@ -444,6 +470,57 @@ fn main() -> Result<()> {
         Commands::Pack { path } => {
             pack_path(&path)?;
         }
+        Commands::Persona { action } => match action {
+            PersonaCommands::Train { name, path } => {
+                let (persona, m8_path, size) =
+                    st::mem8::persona::LifePersona::train_from_path(&name, &path)?;
+                println!(
+                    "🧬 Trained Life Persona '{}' ({})",
+                    persona.name, persona.slug
+                );
+                println!("   📂 Source:      {}", persona.source_path);
+                println!(
+                    "   📚 Ingested:    {} files, {} words, {} episodic memories",
+                    persona.files_ingested,
+                    persona.total_words,
+                    persona.episodes.len()
+                );
+                println!(
+                    "   🎵 Voice:       {:.1} words/sentence, warmth={:.2}, expressiveness={:.2}",
+                    persona.voice.avg_sentence_words,
+                    persona.voice.warmth,
+                    persona.voice.expressiveness
+                );
+                println!(
+                    "   💾 Saved Soul:  {} ({:.1} KiB tight MEM8 + MQNT container)",
+                    m8_path.display(),
+                    size as f64 / 1024.0
+                );
+            }
+            PersonaCommands::List => {
+                let list = st::mem8::persona::LifePersona::list_all()?;
+                if list.is_empty() {
+                    println!("No trained .m8 personas yet. Run `m8 persona train <name> <path>`!");
+                } else {
+                    println!("🧬 Trained MEM8 Life Personas (~/.st/personas/):");
+                    for p in list {
+                        println!(
+                            "  • {} (`persona:{}`) — {} episodes, {} words ({:.1} KiB) from {}",
+                            p.name,
+                            p.slug,
+                            p.episode_count,
+                            p.total_words,
+                            p.m8_size_bytes as f64 / 1024.0,
+                            p.source_path
+                        );
+                    }
+                }
+            }
+            PersonaCommands::Ask { name, prompt } => {
+                let persona = st::mem8::persona::LifePersona::load(&name)?;
+                println!("{}", persona.respond_locally(&prompt));
+            }
+        },
     }
 
     Ok(())

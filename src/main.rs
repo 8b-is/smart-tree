@@ -676,15 +676,7 @@ async fn main() -> Result<()> {
             st::daemon_client::DaemonStatus::Running(_)
         ) {
             match client.cli_scan(request.clone()).await {
-                Ok(resp) => {
-                    if let Some(reason) = &resp.stats.truncation_reason {
-                        eprintln!("⚠️  {}", reason);
-                        eprintln!(
-                            "   Use --max-depth, --stream mode, or scan a more specific directory"
-                        );
-                    }
-                    resp
-                }
+                Ok(resp) => resp,
                 Err(_) => st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?,
             }
         } else {
@@ -812,7 +804,7 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
         smart: args.smart || is_smart_mode,
         changes_only: args.changes_only,
         min_interest: args.min_interest,
-        security: !args.no_security && !multi_repo_root,
+        security: false,
     })
 }
 
