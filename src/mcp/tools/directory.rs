@@ -20,7 +20,8 @@ use crate::formatters::{
     summary::SummaryFormatter,
     summary_ai::SummaryAiFormatter,
     tsv::TsvFormatter,
-    Formatter, PathDisplayMode,
+    Formatter,
+    PathDisplayMode,
 };
 use crate::mcp::helpers::{
     scan_with_config, should_use_default_ignores, validate_and_convert_path, validate_directory,

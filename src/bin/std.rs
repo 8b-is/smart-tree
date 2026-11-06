@@ -1,7 +1,10 @@
 //! STD - Smart Tree Daemon
 //!
-//! Persistent daemon providing context, security, and API services.
-//! Listens on Unix socket using the ST binary protocol.
+//! Legacy unified daemon: Unix socket (ST binary protocol) + the canonical
+//! HTTP server on 127.0.0.1:28428 (MCP HTTP, dashboard, LLM proxy).
+//! New users should prefer the canonical entry points:
+//! `st up` (background + automagic), `st --serve` (foreground),
+//! `st service` (system service). This binary remains for socket clients.
 //!
 //! ## Usage
 //!
@@ -808,7 +811,9 @@ async fn main() -> Result<()> {
             start_unified_daemon(config).await
         }
         "--help" | "-h" => {
-            println!("STD - Smart Tree Daemon (Unified)");
+            println!("STD - Smart Tree Daemon (legacy unified socket daemon)");
+            println!("Canonical server is now `st up` / `st --serve` / `st service` —");
+            println!("same HTTP server on 127.0.0.1:28428, this binary just adds the Unix socket.");
             println!();
             println!("Usage: std <command>");
             println!();
@@ -818,11 +823,16 @@ async fn main() -> Result<()> {
             println!("  status   Check daemon status");
             println!("  restart  Restart the daemon");
             println!();
+            println!("Prefer:");
+            println!("  st up              Background, prints dashboard/MCP URLs, no local token");
+            println!("  st --serve         Foreground unified HTTP server");
+            println!();
             println!("HTTP Endpoints (port 28428):");
+            println!("  http://localhost:28428/      - Dashboard (automagic, no local token)");
             println!("  /cli/scan   - CLI thin-client scanning");
             println!("  /v1/*       - LLM Proxy (OpenAI-compatible)");
-            println!("  /mcp/*      - HTTP MCP protocol");
-            println!("  /dash       - Web dashboard");
+            println!("  /mcp        - HTTP MCP (Streamable) + /mcp/sse");
+            println!("  /memnet/*   - MemNet bridge (peers/ask/teach/share)");
             Ok(())
         }
         _ => {

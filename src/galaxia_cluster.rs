@@ -1,6 +1,4 @@
-use crate::mcp_combinatorics_llm::{
-    GalaxiaKvPacket, LlamaModelCache,
-};
+use crate::mcp_combinatorics_llm::{GalaxiaKvPacket, LlamaModelCache};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -95,8 +93,15 @@ impl LeaderLease {
         // Prefer higher term, then earlier election (lower lamport), then lexicographically lower coordinator_id
         // This matches elect_next_coordinator which picks highest incarnation then lowest node_id
         use std::cmp::Reverse;
-        (other.term, Reverse(other.elected_at_lamport), Reverse(&other.coordinator_id))
-            > (self.term, Reverse(self.elected_at_lamport), Reverse(&self.coordinator_id))
+        (
+            other.term,
+            Reverse(other.elected_at_lamport),
+            Reverse(&other.coordinator_id),
+        ) > (
+            self.term,
+            Reverse(self.elected_at_lamport),
+            Reverse(&self.coordinator_id),
+        )
     }
 }
 

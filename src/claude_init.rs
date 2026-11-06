@@ -814,11 +814,18 @@ impl McpInstaller {
                 None
             };
 
-            // Build the Smart Tree MCP server config
+            // Build stdio + HTTP Smart Tree MCP server configs.
+            // stdio always works; HTTP is the local `st up` daemon entry.
+            // Localhost trusts local callers, so HTTP carries no secret.
             let st_config = json!({
                 "command": self.st_binary_path.to_string_lossy(),
                 "args": ["--mcp"],
                 "env": {}
+            });
+            let st_http_config = json!({
+                "type": "http",
+                "url": "http://localhost:28428/mcp",
+                "_note": "Run `st up` first. Localhost trusted, no token."
             });
 
             // Update or create mcpServers section
@@ -829,8 +836,9 @@ impl McpInstaller {
             // Check if already installed
             let already_installed = config["mcpServers"].get("smart-tree").is_some();
 
-            // Add/update Smart Tree entry
+            // Add/update both Smart Tree entries
             config["mcpServers"]["smart-tree"] = st_config;
+            config["mcpServers"]["smart-tree-http"] = st_http_config;
 
             // Write updated config with pretty formatting
             if let Ok(formatted) = serde_json::to_string_pretty(&config) {
@@ -904,7 +912,7 @@ impl McpInstaller {
             let was_removed = if let Some(servers) =
                 config.get_mut("mcpServers").and_then(|s| s.as_object_mut())
             {
-                servers.remove("smart-tree").is_some()
+                servers.remove("smart-tree").is_some() | servers.remove("smart-tree-http").is_some()
             } else {
                 false
             };

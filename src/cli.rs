@@ -74,15 +74,31 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub terminal: bool,
 
-    /// Launch web dashboard (browser-based terminal + file browser)
-    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
+    /// Launch the PTY web dashboard (browser terminal + file browser).
+    /// Separate port so it never collides with the HTTP daemon (28428).
+    #[arg(
+        long,
+        exclusive = true,
+        alias = "pty-dashboard",
+        help_heading = "Interactive Modes"
+    )]
     pub dashboard: bool,
 
-    /// Open browser automatically when starting dashboard
-    #[arg(long, requires = "dashboard", help_heading = "Interactive Modes")]
+    /// PTY dashboard port (default 28429, distinct from daemon 28428)
+    #[arg(
+        long,
+        value_name = "PORT",
+        default_value = "28429",
+        requires = "dashboard",
+        help_heading = "Interactive Modes"
+    )]
+    pub dashboard_port: u16,
+
+    /// Open browser automatically (works with --dashboard and with --up)
+    #[arg(long, help_heading = "Interactive Modes")]
     pub open_browser: bool,
 
-    /// Network CIDR allow-list for dashboard (e.g., 192.168.1.0/24)
+    /// Network CIDR allow-list for the PTY dashboard (e.g., 192.168.1.0/24)
     #[arg(
         long,
         value_name = "CIDR",
@@ -91,18 +107,43 @@ pub struct Cli {
     )]
     pub allow: Vec<String>,
 
-    /// Start HTTP daemon (MCP over HTTP, LLM proxy, The Custodian)
-    #[arg(long, alias = "daemon", help_heading = "Interactive Modes")]
+    /// Canonical local HTTP server (foreground): MCP HTTP (/mcp + /mcp/sse),
+    /// dashboard (/), LLM proxy, The Custodian — all on 127.0.0.1:28428.
+    /// Localhost needs no token (same trust boundary as stdio MCP).
+    /// `st up` is the background equivalent; `st service` is the system one.
+    #[arg(
+        long,
+        alias = "serve",
+        alias = "daemon",
+        help_heading = "Interactive Modes"
+    )]
     pub http_daemon: bool,
 
     // =========================================================================
-    // MCP SERVER (via Daemon)
+    // MCP SERVER — two transports, one brain. Both are local + token-free.
     // =========================================================================
-    /// Run as MCP server for AI assistants (auto-starts daemon)
-    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    /// Run the stdio MCP server (foreground, one client, no daemon/token needed)
+    #[arg(
+        long,
+        exclusive = true,
+        alias = "mcp-stdio",
+        help_heading = "MCP Server"
+    )]
     pub mcp: bool,
 
-    /// Install Smart Tree as MCP server in AI agents (Claude Desktop, Antigravity/agy, Gemini)
+    /// Print ready-to-paste MCP-HTTP client config (Streamable HTTP + SSE,
+    /// no token required on localhost) and exit
+    #[arg(
+        long,
+        alias = "mcp-config",
+        alias = "mcp-http-config",
+        alias = "mcp-http",
+        exclusive = true,
+        help_heading = "MCP Server"
+    )]
+    pub mcp_print_config: bool,
+
+    /// Install Smart Tree as MCP server in AI agents (stdio + HTTP entries)
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp_install: bool,
 
@@ -114,14 +155,23 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp_status: bool,
 
-    // =========================================================================
-    // DAEMON CONTROL
-    // =========================================================================
     /// Set the log level
     #[arg(long, value_enum, help_heading = "Daemon Control")]
     pub log_level: Option<LogLevel>,
 
-    /// Start the Smart Tree daemon
+    // =========================================================================
+    // DAEMON CONTROL — canonical server: `st up` / `st --serve` / `st service`
+    // =========================================================================
+    /// Start the canonical daemon in the background, update .mcp.json, and
+    /// print dashboard/MCP URLs. The one command that makes everything work.
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub up: bool,
+
+    /// Print the daemon auth token + path (only needed when externally bound)
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub show_token: bool,
+
+    /// Start the Smart Tree daemon in the background (alias of `st up`)
     #[arg(long, exclusive = true, help_heading = "Daemon Control")]
     pub daemon_start: bool,
 

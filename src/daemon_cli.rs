@@ -30,7 +30,8 @@ use crate::formatters::{
     summary_ai::SummaryAiFormatter,
     tsv::TsvFormatter,
     waste::WasteFormatter,
-    Formatter, PathDisplayMode,
+    Formatter,
+    PathDisplayMode,
 };
 use crate::{parse_size, Scanner, ScannerConfig, TreeStats};
 use anyhow::{Context, Result};

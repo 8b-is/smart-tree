@@ -262,7 +262,7 @@ pub async fn handle_update_consciousness(path: &str) -> Result<()> {
     );
 
     let mut child_names: Vec<String> = Vec::new();
-    match crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(root, 0, 2) {
+    match crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(root, 0, 3) {
         Ok(c) => {
             println!("✅ Consciousness updated: {}", root.join(".m8").display());
             println!("   Frequency: {:.2} Hz", c.frequency);
@@ -821,9 +821,20 @@ pub async fn handle_token_stats(path: &str) -> Result<()> {
 pub async fn handle_get_frequency(path: &str) -> Result<()> {
     use std::path::Path;
 
-    let m8_path = Path::new(path).join(".m8");
+    let dir_path = Path::new(path);
+    let m8_path = dir_path.join(".m8");
 
     if m8_path.exists() {
+        if let Ok(raw) = std::fs::read(&m8_path) {
+            if let Some(wave) = crate::m8_consciousness::extract_m8_wave_header(&raw) {
+                println!("{:.2}", wave.frequency);
+                return Ok(());
+            }
+            if let Ok(c) = crate::m8_consciousness::DirectoryConsciousness::from_m8_bytes(&raw) {
+                println!("{:.2}", c.frequency);
+                return Ok(());
+            }
+        }
         let mut sum = 0u64;
         for byte in path.bytes() {
             sum = sum.wrapping_add(byte as u64);
@@ -853,7 +864,11 @@ pub async fn handle_agent_dump() -> Result<()> {
     println!("📜 Raw consciousness dump (.aye_consciousness.m8):");
     println!("{}", "=".repeat(60));
 
-    let content = std::fs::read_to_string(consciousness_file)?;
+    let raw = std::fs::read(consciousness_file)?;
+    let on_disk_size = raw.len();
+    let is_tight_mem8 = raw.starts_with(b"MEM8");
+    let decoded = crate::m8_consciousness::decode_m8_bytes(&raw).unwrap_or_else(|_| raw.clone());
+    let content = String::from_utf8_lossy(&decoded);
 
     for (i, line) in content.lines().enumerate() {
         println!("{:4} │ {}", i + 1, line);
@@ -866,7 +881,16 @@ pub async fn handle_agent_dump() -> Result<()> {
     let tokens_found = content.matches("0x").count();
 
     println!("\n📊 Stats:");
-    println!("  • Size: {} bytes", size);
+    println!(
+        "  • On-disk size: {} bytes ({})",
+        on_disk_size,
+        if is_tight_mem8 {
+            "tight MEM8 + Marqant + T8RZ"
+        } else {
+            "legacy text"
+        }
+    );
+    println!("  • Decoded size: {} bytes", size);
     println!("  • Lines: {}", lines);
     println!("  • Token references: {}", tokens_found);
 
@@ -900,7 +924,9 @@ pub async fn handle_agent_kickstart() -> Result<()> {
 
     let consciousness_file = Path::new(".aye_consciousness.m8");
     if consciousness_file.exists() {
-        if let Ok(content) = std::fs::read_to_string(consciousness_file) {
+        if let Ok(raw) = std::fs::read(consciousness_file) {
+            let decoded = crate::m8_consciousness::decode_m8_bytes(&raw).unwrap_or(raw);
+            let content = String::from_utf8_lossy(&decoded);
             if content.contains("c64_nostalgia") {
                 println!("✔ Hardware heritage detected");
             }
@@ -1397,6 +1423,103 @@ pub fn update_agent_hooks(config_path: &PathBuf, enable: bool) -> Result<()> {
 // =============================================================================
 // DAEMON MANAGEMENT HANDLERS
 // =============================================================================
+
+/// `st up` / `st --up` — the automagic one-command entry point.
+///
+/// Ensures the canonical HTTP daemon is running in the background, keeps the
+/// local `.mcp.json` updated with both MCP transports (stdio + HTTP), and
+/// prints the dashboard/MCP URLs. Localhost needs no token (like `st --mcp`).
+pub async fn handle_up(port: u16, open_browser: bool, auto_open: bool) -> Result<()> {
+    use crate::daemon_client::DaemonStatus;
+
+    let client = DaemonClient::new(port);
+    match client.ensure_running().await {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("❌ Could not start daemon: {}", e);
+            eprintln!("   Try: st --serve (foreground) or st service status");
+            return Err(e);
+        }
+    }
+
+    // Keep project .mcp.json (if present) consistent with both transports.
+    // No secret is ever written: localhost MCP is trusted by design.
+    if std::path::Path::new(".mcp.json").exists() {
+        let _ = crate::ai_install::refresh_project_mcp_json(std::path::Path::new("."));
+    }
+
+    let dashboard = format!("http://localhost:{}/", port);
+    let mcp_http = format!("http://localhost:{}/mcp", port);
+    let mcp_sse = format!("http://localhost:{}/mcp/sse", port);
+
+    println!();
+    println!("🌳 Smart Tree is up — no local token needed");
+    println!("  Dashboard:  {}", dashboard);
+    println!("  MCP (HTTP): {}", mcp_http);
+    println!("  MCP (SSE):  {}", mcp_sse);
+    println!("  MCP (stdio): st --mcp");
+    println!(
+        "  Token:      {} (only for external binding; `st --show-token`)",
+        crate::daemon::token_path().display()
+    );
+    println!("  PTY dash:   st --dashboard (different port: {})", 28429);
+    println!("  Status:     st --daemon-status   Stop: st --daemon-stop");
+
+    if open_browser || auto_open {
+        if let Err(e) = open::that(&dashboard) {
+            eprintln!("⚠️  Could not open browser: {}", e);
+        }
+    }
+    let _ = DaemonStatus::NotRunning;
+    Ok(())
+}
+
+/// `st --show-token` — print the daemon token + where it lives.
+///
+/// Localhost calls ignore this value; it exists only for the integer-exact
+/// case where the daemon is bound externally (`allow_external = true`).
+pub async fn handle_show_token() -> Result<()> {
+    let token = crate::daemon::load_or_create_token()?;
+    let path = crate::daemon::token_path();
+    println!("{}", token);
+    eprintln!("Token file: {}", path.display());
+    eprintln!("Localhost does not need it. For external bind, use:");
+    eprintln!("  curl -H \"Authorization: Bearer $(st --show-token)\" http://localhost:28428/info");
+    Ok(())
+}
+
+/// `st --mcp-config` / `st --mcp-http-config` — print ready MCP-HTTP snippets.
+///
+/// Emits the same entries `st --mcp-install` writes to AI-agent configs, so
+/// users can paste them into any MCP client. No token needed on localhost.
+pub async fn handle_mcp_print_config(port: u16) -> Result<()> {
+    let http = format!("http://localhost:{}/mcp", port);
+    let sse = format!("http://localhost:{}/mcp/sse", port);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "mcpServers": {
+                "st": {
+                    "type": "stdio",
+                    "command": "st",
+                    "args": ["--mcp"],
+                    "env": {}
+                },
+                "st-http": {
+                    "type": "http",
+                    "url": http,
+                    "_note": "Run `st up` first. Localhost trusted, no token."
+                },
+                "st-http-sse": {
+                    "type": "sse",
+                    "url": sse,
+                    "_note": "Run `st up` first. Localhost trusted, no token."
+                }
+            }
+        }))?
+    );
+    Ok(())
+}
 
 /// Start the Smart Tree daemon in the background
 pub async fn handle_daemon_start(port: u16) -> Result<()> {

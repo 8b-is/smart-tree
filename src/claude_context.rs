@@ -59,8 +59,9 @@ impl ClaudeContext {
         let consciousness_file = Path::new(CONSCIOUSNESS_FILE);
 
         if consciousness_file.exists() {
-            let saved = fs::read_to_string(consciousness_file)?;
-            println!("{}", saved);
+            let raw = fs::read(consciousness_file)?;
+            let decoded = crate::m8_consciousness::decode_m8_bytes(&raw).unwrap_or(raw);
+            println!("{}", String::from_utf8_lossy(&decoded));
         } else {
             Self::show_default();
         }
@@ -76,9 +77,20 @@ impl ClaudeContext {
         println!("Use `st -m context .` for project overview.");
     }
 
-    /// Save current consciousness state
+    /// Save current consciousness state in tight MEM8 format
     pub fn save(context: &str) -> Result<()> {
-        fs::write(CONSCIOUSNESS_FILE, context)?;
+        let bytes = if context.as_bytes().starts_with(b"MEM8")
+            || context.starts_with("MARQANT")
+        {
+            context.as_bytes().to_vec()
+        } else {
+            crate::m8_consciousness::encode_json_bytes_as_tight_m8(
+                context.as_bytes(),
+                42.73,
+                "# Aye Session Consciousness",
+            )?
+        };
+        fs::write(CONSCIOUSNESS_FILE, bytes)?;
         println!("💾 Consciousness saved!");
         Ok(())
     }
@@ -91,7 +103,9 @@ impl ClaudeContext {
             return Ok("🧠 Fresh session - no previous context.".to_string());
         }
 
-        let content = fs::read_to_string(consciousness_file)?;
+        let raw = fs::read(consciousness_file)?;
+        let decoded = crate::m8_consciousness::decode_m8_bytes(&raw).unwrap_or(raw);
+        let content = String::from_utf8_lossy(&decoded).to_string();
 
         // Try to parse as JSON to validate
         let state: ConsciousnessState = match serde_json::from_str(&content) {

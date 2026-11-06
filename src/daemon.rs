@@ -165,9 +165,39 @@ fn ct_token_matches(expected: &str, provided: &str) -> bool {
     diff == 0 && expected.len() == provided.len()
 }
 
-/// Auth middleware: validates Bearer token on all routes except /health
+/// Shared state for the daemon auth middleware.
+///
+/// When the daemon binds to localhost only (`allow_external == false`), it
+/// trusts the local trust boundary exactly like the stdio (`st --mcp`) server:
+/// any local process can already spawn `st --mcp` and access the same tools,
+/// so requiring a token for MCP HTTP/dashboard on loopback adds friction, not
+/// security. The Bearer token is still enforced once the daemon is bound
+/// externally (`allow_external == true`), where the token is the actual gate.
+#[derive(Debug, Clone)]
+pub struct AuthState {
+    pub tokens: Vec<String>,
+    pub allow_external: bool,
+}
+
+impl AuthState {
+    pub fn new(tokens: Vec<String>, allow_external: bool) -> Self {
+        Self {
+            tokens,
+            allow_external,
+        }
+    }
+}
+
+/// Auth middleware: validates Bearer token when the daemon is externally bound.
+///
+/// - `/health` is always public (health checks / monitoring).
+/// - Localhost-only daemon (`allow_external == false`): loopback is trusted
+///   (same boundary as stdio `st --mcp`), so MCP HTTP + dashboard work with
+///   zero setup. A valid Bearer token is still accepted for compatibility.
+/// - Externally bound daemon (`allow_external == true`): strict Bearer check
+///   with constant-time comparison on every route except `/health`.
 async fn auth_middleware(
-    State(expected_tokens): State<Vec<String>>,
+    State(state): State<AuthState>,
     req: Request,
     next: Next,
 ) -> impl IntoResponse {
@@ -176,7 +206,12 @@ async fn auth_middleware(
         return next.run(req).await;
     }
 
-    // Check Authorization header
+    // Localhost-only: loopback differs from external by definition of bind.
+    if !state.allow_external {
+        return next.run(req).await;
+    }
+
+    // Externally bound: strict Bearer check.
     let auth_header = req
         .headers()
         .get("authorization")
@@ -185,7 +220,8 @@ async fn auth_middleware(
     match auth_header {
         Some(header) if header.starts_with("Bearer ") => {
             let provided = &header[7..];
-            if expected_tokens
+            if state
+                .tokens
                 .iter()
                 .fold(false, |acc, t| acc | ct_token_matches(t, provided))
             {
@@ -323,9 +359,20 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     "#
     );
 
-    // Load or generate auth token
+    // Load or generate auth token (required only when externally bound)
     load_or_create_token()?;
-    println!("  🔑 Auth token: loaded ({})", token_path().display());
+    println!("  🔑 Auth token: {}", token_path().display());
+    println!(
+        "  🌐 Dashboard:  http://localhost:{}/ (automagic on localhost, no token needed)",
+        config.port
+    );
+    println!(
+        "  🔌 MCP HTTP:   http://localhost:{}/mcp (Streamable HTTP) + /mcp/sse (SSE)",
+        config.port
+    );
+    println!(
+        "  🤖 Supervisor: `st up` ensures it runs; `st token` shows the token for external use"
+    );
 
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -459,12 +506,18 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             "/security/history",
             get(crate::magiscanner::http::scan_history_handler),
         )
+        // MemNet bridge (MCP ↔ mesh): file-backed MemnetNodeState
+        .route("/memnet/peers", get(memnet_peers_handler))
+        .route("/memnet/ask", post(memnet_ask_handler))
+        .route("/memnet/teach", post(memnet_teach_handler))
+        .route("/memnet/share", post(memnet_share_handler))
         .with_state(Arc::clone(&state))
-        // Add MCP before the auth layer so its routes require the same token.
+        // Add MCP before the auth layer so its routes share the same policy.
         .nest_service("/mcp", mcp_router(mcp_context))
-        // Bearer token auth on all routes (except /health, handled inside middleware)
+        // Bearer token auth only when externally bound; localhost is trusted
+        // (see AuthState). /health stays public inside the middleware.
         .layer(middleware::from_fn_with_state(
-            load_all_tokens(),
+            AuthState::new(load_all_tokens(), config.allow_external),
             auth_middleware,
         ));
 
@@ -476,11 +529,21 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     let addr = SocketAddr::from((bind_addr, config.port));
     println!("Smart Tree Daemon listening on http://{}", addr);
     if !config.allow_external {
-        println!("  🔒 Bound to localhost only (set allow_external=true in ~/.st/config.toml to allow external)");
+        println!("  🔒 Bound to localhost only: MCP + dashboard need no token (set allow_external=true in ~/.st/config.toml to require Bearer token)");
     }
+    println!(
+        "  - Dashboard:    http://localhost:{}/ (open this!)",
+        config.port
+    );
     println!("  - CLI Scan:     /cli/scan (thin-client endpoint!)");
     println!("  - CLI Stream:   /cli/stream (SSE streaming)");
-    println!("  - MCP HTTP:     /mcp/* (The Custodian watching!) 🧹");
+    println!(
+        "  - MCP HTTP:     /mcp (Streamable HTTP) + /mcp/sse (SSE) — The Custodian watching! 🧹"
+    );
+    println!(
+        "  - Token:        {} (needed only when externally bound; `st token` prints it)",
+        token_path().display()
+    );
     println!("  - Context API:  /context");
     println!("  - Credits:      /credits");
     println!("  - Tools:        /tools (legacy)");
@@ -489,7 +552,10 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - Collab:       /collab/ws (Hot Tub Mode!) 🛁");
     println!("  - Hot Watcher:  /watch (MEM8 real-time intelligence) 🔥");
     println!("  - Security:     /security/* (integrity scan, hash memory, cert audit) 🛡️");
-    println!("  - MemNet UDP:   0.0.0.0:{} (NodePing/NodePong & Wave Q&A Offload) 🧭", crate::memnet::MEMNET_FS_PORT);
+    println!(
+        "  - MemNet UDP:   0.0.0.0:{} (NodePing/NodePong & Wave Q&A Offload) 🧭",
+        crate::memnet::MEMNET_FS_PORT
+    );
     println!("  - WebSocket:    /ws");
     println!("  - Shutdown:     POST /shutdown");
 
@@ -603,6 +669,158 @@ async fn remember_context(
     Ok(Json(serde_json::json!({ "id": id, "stored": true })))
 }
 
+// --- MemNet bridge (`/memnet/*`): MCP ↔ mesh ---
+// File-backed `MemnetNodeState` (load → act → save) so the same wave cache
+// backs the UDP responder, the MCP `memnet` tool, and these HTTP routes.
+
+#[derive(Deserialize, Serialize)]
+struct MemnetAskRequest {
+    question: String,
+    #[serde(default)]
+    min_resonance_pm: Option<u32>,
+    #[serde(default)]
+    lan: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+struct MemnetTeachRequest {
+    question: String,
+    answer: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct MemnetShareRequest {
+    path: String,
+    #[serde(default)]
+    quota_mb: Option<u64>,
+}
+
+async fn memnet_peers_handler() -> Json<serde_json::Value> {
+    let state = crate::memnet::MemnetNodeState::load_or_default();
+    Json(serde_json::json!({
+        "node": state.node_name,
+        "address": state.local_address,
+        "tier": format!("{:?}", state.tier),
+        "wave_qa_entries": state.wave_qa_cache.len(),
+        "routes_total": state.routes.len(),
+        "routes_up": state.routes.iter().filter(|r| r.status == crate::memnet::RouteStatus::Up).count(),
+        "port": crate::memnet::MEMNET_FS_PORT,
+        "composite_rtc_tau_ms": state.composite_rtc_tau_ms(0xC5),
+        "shares": state.shared_folders.len(),
+        "mcp_tool": "memnet {operation:'peers'}",
+    }))
+}
+
+async fn memnet_ask_handler(
+    Json(req): Json<MemnetAskRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let min_pm = req.min_resonance_pm.unwrap_or(500).clamp(1, 1000);
+    let question = req.question;
+    let lan = req.lan;
+    let result = tokio::task::spawn_blocking(move || {
+        let mut state = crate::memnet::MemnetNodeState::load_or_default();
+        if let Some((resonance_pm, pkt)) = state.query_wave_qa(&question, min_pm) {
+            let _ = state.save();
+            return serde_json::json!({
+                "source": "local",
+                "resonance_pm": resonance_pm,
+                "packet_id": pkt.packet_id,
+                "answer": pkt.answer,
+                "origin_name": pkt.origin_name,
+                "hit_count": pkt.hit_count,
+            });
+        }
+        if lan {
+            if let Some((resonance_pm, pkt)) = state.query_lan_wave_qa(&question, min_pm) {
+                let _ = state.save();
+                return serde_json::json!({
+                    "source": "lan",
+                    "resonance_pm": resonance_pm,
+                    "packet_id": pkt.packet_id,
+                    "answer": pkt.answer,
+                    "origin_name": pkt.origin_name,
+                    "hit_count": pkt.hit_count,
+                });
+            }
+        }
+        serde_json::json!({ "source": "none", "resonance_pm": 0, "question": question })
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(result))
+}
+
+async fn memnet_teach_handler(
+    Json(req): Json<MemnetTeachRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let question = req.question;
+    let answer = req.answer;
+    if question.trim().is_empty() || answer.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "question and answer required".into(),
+        ));
+    }
+    let result = tokio::task::spawn_blocking(move || {
+        let mut state = crate::memnet::MemnetNodeState::load_or_default();
+        let pkt = state.learn_wave_qa(&question, &answer);
+        let saved = state.save().is_ok();
+        if let Ok(raw) = crate::memnet::MemnetPayload::WaveQaResponse(pkt.clone())
+            .into_raw_packet(vec![state.local_address])
+        {
+            let _ = state.broadcast_lan_udp(&raw);
+        }
+        (saved, pkt.packet_id, pkt.answer, pkt.origin_name)
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({
+        "stored": result.0,
+        "packet_id": result.1,
+        "answer": result.2,
+        "origin_name": result.3,
+    })))
+}
+
+async fn memnet_share_handler(
+    Json(req): Json<MemnetShareRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let path = req.path;
+    let quota_mb = req.quota_mb.unwrap_or(4096);
+    let result = tokio::task::spawn_blocking(move || {
+        let mut state = crate::memnet::MemnetNodeState::load_or_default();
+        let endpoint = format!("0.0.0.0:{}", crate::memnet::MEMNET_FS_PORT);
+        let manifest = crate::memnet::SharedFolderManifest::from_directory(
+            std::path::Path::new(&path),
+            None,
+            state.local_address,
+            &state.node_name,
+            &endpoint,
+            quota_mb,
+        )
+        .map_err(|e| e.to_string())?;
+        let name = manifest.share_name.clone();
+        state.shared_folders.insert(name, manifest.clone());
+        let _ = state.save();
+        if let Ok(raw) = crate::memnet::MemnetPayload::FolderShareAnnounce(manifest.clone())
+            .into_raw_packet(vec![0xF1])
+        {
+            let _ = state.broadcast_lan_udp(&raw);
+        }
+        Ok(manifest)
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    Ok(Json(serde_json::json!({
+        "share_id": result.share_id,
+        "share_name": result.share_name,
+        "total_files": result.total_files,
+        "total_bytes": result.total_bytes,
+        "endpoint": result.endpoint,
+    })))
+}
+
 // API Handlers
 
 async fn welcome_page() -> axum::response::Html<&'static str> {
@@ -688,7 +906,8 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
         <h1>Smart Tree Daemon</h1>
         <p style="color:#888">System AI Context Service</p>
         <p style="color:#4ecdc4;margin-top:1rem;">You're viewing the Smart Tree Dashboard</p>
-        <p style="color:#888;font-size:0.85rem;">Bookmark this page: <strong>http://localhost:28428</strong></p>
+        <p style="color:#888;font-size:0.85rem;">Dashboard: <strong>http://localhost:28428/</strong> · MCP (HTTP): <strong>http://localhost:28428/mcp</strong> (SSE: /mcp/sse) · MCP (stdio): <code>st --mcp</code></p>
+        <p style="color:#666;font-size:0.75rem;">Localhost needs no token. If `st up` started this, you are done — `st token` shows the token for external use.</p>
     </div>
 
     <div class="grid">
@@ -786,6 +1005,14 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
     <p class="custodian">🧹 The Custodian is watching all operations</p>
 
     <script>
+        // Automagic auth for externally-bound daemons: `/?token=<token>` is
+        // stored locally; localhost needs no token at all.
+        try {
+            const tk = new URLSearchParams(location.search).get('token');
+            if (tk) localStorage.setItem('st_daemon_token', tk);
+        } catch (e) {}
+        const ST_TOKEN = (function () { try { return localStorage.getItem('st_daemon_token') || ''; } catch (e) { return ''; } })();
+        const ST_HEADERS = ST_TOKEN ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ST_TOKEN } : { 'Content-Type': 'application/json' };
         const messages = document.getElementById('chat-messages');
         const log = document.getElementById('transparency-log');
 
@@ -817,7 +1044,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             try {
                 const res = await fetch('/v1/chat/completions', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: ST_HEADERS,
                     body: JSON.stringify({
                         model: model,
                         messages: [{ role: 'user', content: msg }],
@@ -2048,19 +2275,20 @@ mod memory_api_tests {
         assert!(!ct_token_matches("st_secret_token_123", "st_secret"));
         assert!(!ct_token_matches("st_secret_token_123", ""));
 
+        // Externally bound: token enforced for /mcp.
         let mcp_sub = Router::new().route("/", get(|| async { "mcp-ok" }));
-        let app = Router::new()
+        let external_app = Router::new()
             .route("/health", get(health))
             .nest_service("/mcp", mcp_sub)
             .layer(middleware::from_fn_with_state(
-                vec!["st_valid_token".to_string()],
+                AuthState::new(vec!["st_valid_token".to_string()], true),
                 auth_middleware,
             ));
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
         let server = tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, external_app).await.unwrap();
         });
         let client = reqwest::Client::new();
 
@@ -2090,6 +2318,28 @@ mod memory_api_tests {
             .unwrap();
         assert_eq!(ok.status(), StatusCode::OK);
 
+        drop(client);
+        server.abort();
+        let _ = server.await;
+
+        // Localhost-only: loopback trusts local processes (like stdio), so
+        // /mcp + / need no token at all.
+        let local_mcp = Router::new().route("/", get(|| async { "mcp-ok" }));
+        let local_app = Router::new()
+            .route("/health", get(health))
+            .nest_service("/mcp", local_mcp)
+            .layer(middleware::from_fn_with_state(
+                AuthState::new(vec!["st_valid_token".to_string()], false),
+                auth_middleware,
+            ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, local_app).await.unwrap();
+        });
+        let client = reqwest::Client::new();
+        let open = client.get(format!("{base}/mcp")).send().await.unwrap();
+        assert_eq!(open.status(), StatusCode::OK);
         drop(client);
         server.abort();
         let _ = server.await;

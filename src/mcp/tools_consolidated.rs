@@ -665,6 +665,7 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "required": ["path1", "path2"]
             }
         }),
+        super::memnet_bridge::memnet_tool_definition(),
         json!({
             "name": "sse",
             "description": "Watch directory with Server-Sent Events",
@@ -967,6 +968,7 @@ pub async fn dispatch_consolidated_tool(
         "context" => handle_context(params, ctx).await?,
         "memory" => handle_memory(params, ctx).await?,
         "compare" => handle_compare(params, ctx).await?,
+        "memnet" | "mesh" | "memnet_bridge" => super::memnet_bridge::handle_memnet(params).await?,
         "sse" => handle_sse(params, ctx).await?,
         "feedback" => handle_feedback(params, ctx).await?,
         "server_info" => {

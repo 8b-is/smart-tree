@@ -16,7 +16,7 @@ pub mod regularity;
 pub mod safety;
 pub mod simd;
 pub mod spatial_audio;
-mod token_codec;
+pub mod token_codec;
 pub mod wave;
 
 // Re-export original memindex types with namespace

@@ -290,14 +290,14 @@ impl BitNetWave64 {
             let h = fnv64_1a(tok.as_bytes());
             // Weight identifier tokens and domain keywords more strongly
             let weight: i32 = if idx < 4 { 3 } else { 1 };
-            for bit in 0..64usize {
+            for (bit, acc_slot) in pos_acc.iter_mut().enumerate() {
                 let shifted = h.rotate_left(bit as u32);
                 // Universal NAND-shift gate `~(h & (h >> 1))`
                 let nand_gate = !(shifted & (shifted >> 1));
                 let sel = (shifted ^ (nand_gate >> 3)) & 0x3;
                 match sel {
-                    0 => pos_acc[bit] += weight,
-                    1 => pos_acc[bit] -= weight,
+                    0 => *acc_slot += weight,
+                    1 => *acc_slot -= weight,
                     _ => {} // 0 trit (sparsity!)
                 }
             }
@@ -314,12 +314,12 @@ impl BitNetWave64 {
         }
         let mut acc = [0i32; 64];
         for child in children {
-            for bit in 0..64usize {
+            for (bit, acc_slot) in acc.iter_mut().enumerate() {
                 let mask = 1u64 << bit;
                 if (child.b_pos & mask) != 0 {
-                    acc[bit] += 1;
+                    *acc_slot += 1;
                 } else if (child.b_neg & mask) != 0 {
-                    acc[bit] -= 1;
+                    *acc_slot -= 1;
                 }
             }
         }
@@ -402,11 +402,14 @@ pub struct FunctionConsciousness {
     pub file: String,
     pub line: usize,
     pub signature: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub docstring: String,
     pub domain: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub bitnet_gist: String,
     pub salience_permille: u16,
     pub wave: BitNetWave64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub wave_b3: String,
 }
 
@@ -417,6 +420,7 @@ pub struct FileCodeSummary {
     pub domain: String,
     pub symbol_count: usize,
     pub gist: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub top_symbols: Vec<String>,
 }
 
@@ -426,15 +430,19 @@ pub struct BitNetDirectorySummary {
     /// `"leaf-code"`, `"project-root"`, or `"workspace-org"`
     pub zoom_level: String,
     /// `"BitNet-b1.58-Ternary-NO-FLOAT (B+/B- Kleene 64-trit)"`
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub engine: String,
     /// Synthesized natural-language gist for this directory's zoom level
     pub synthesized_gist: String,
     /// Dominant architectural domains `(domain_id, score_permille)`
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dominant_domains: Vec<(String, u16)>,
     /// Pooled 64-trit `(B+, B-)` BitNet wave across this directory and its children
     pub pooled_wave: BitNetWave64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub pooled_wave_b3: String,
     /// Total functions/structs across this directory (or rolled up from child `.m8` files)
+    #[serde(default)]
     pub total_symbols_rolled_up: usize,
     /// Per-file code gists (populated at `leaf-code` and `project-root` levels)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -552,7 +560,7 @@ pub fn analyze_leaf_code_directory(
         }
 
         // Sort file symbols by salience so top functions appear first
-        file_symbols.sort_by(|a, b| b.salience_permille.cmp(&a.salience_permille));
+        file_symbols.sort_by_key(|b| std::cmp::Reverse(b.salience_permille));
 
         // Synthesize file-level BitNet gist
         let mut file_tokens = tokenize_identifier_and_text(&fname);
@@ -595,17 +603,20 @@ pub fn analyze_leaf_code_directory(
             top_symbols: top_syms,
         });
 
-        // Keep up to 28 highest-salience symbols per file so `src/.m8` has rich coverage
-        // (especially for flagship files like `memnet.rs` and `completions.rs`)
-        for sym in file_symbols.into_iter().take(28) {
+        // Keep up to 6 highest-salience symbols per file so `.m8` stays tight while preserving flagship coverage
+        for sym in file_symbols.into_iter().take(6) {
             all_functions.push(sym);
         }
     }
 
-    // Prioritize flagship files and high-salience functions
-    all_functions.sort_by(|a, b| b.salience_permille.cmp(&a.salience_permille));
-    if all_functions.len() > 260 {
-        all_functions.truncate(260);
+    // Prioritize flagship files and high-salience functions (tight top-36 cap)
+    all_functions.sort_by_key(|b| std::cmp::Reverse(b.salience_permille));
+    if all_functions.len() > 36 {
+        all_functions.truncate(36);
+    }
+    file_summaries.sort_by_key(|b| std::cmp::Reverse(b.symbol_count));
+    if file_summaries.len() > 32 {
+        file_summaries.truncate(32);
     }
 
     (all_functions, file_summaries)
@@ -771,7 +782,11 @@ pub fn synthesize_bitnet_directory_summary(
     // 1. Collect waves and domain tallies from local functions OR child `.m8` pyramids
     let mut waves: Vec<BitNetWave64> = Vec::new();
     let mut domain_scores: BTreeMap<String, u32> = BTreeMap::new();
-    let mut total_symbols = local_functions.len();
+    let mut total_symbols = local_files
+        .iter()
+        .map(|f| f.symbol_count)
+        .sum::<usize>()
+        .max(local_functions.len());
     let mut flagship_symbols: Vec<String> = Vec::new();
 
     for f in local_functions.iter().take(18) {
@@ -824,7 +839,7 @@ pub fn synthesize_bitnet_directory_summary(
         .into_iter()
         .map(|(k, v)| (k, (v.min(9999)) as u16))
         .collect();
-    dominant_domains.sort_by(|a, b| b.1.cmp(&a.1));
+    dominant_domains.sort_by_key(|b| std::cmp::Reverse(b.1));
     dominant_domains.truncate(5);
 
     let dom_list: String = dominant_domains

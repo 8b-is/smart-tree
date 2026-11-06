@@ -261,7 +261,7 @@ fi
 if [[ -w "$INSTALL_DIR" ]]; then
     mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
     chmod 0755 "$INSTALL_DIR/$BINARY_NAME"
-    for extra_bin in std m8 n8x; do
+    for extra_bin in std m8 n8x mq; do
         if [[ -f "$tmp_dir/$extra_bin" ]]; then
             mv "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
             chmod 0755 "$INSTALL_DIR/$extra_bin"
@@ -271,7 +271,7 @@ else
     print_info "Need sudo access to install to $INSTALL_DIR"
     sudo mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
     sudo chmod 0755 "$INSTALL_DIR/$BINARY_NAME"
-    for extra_bin in std m8 n8x; do
+    for extra_bin in std m8 n8x mq; do
         if [[ -f "$tmp_dir/$extra_bin" ]]; then
             sudo mv "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
             sudo chmod 0755 "$INSTALL_DIR/$extra_bin"

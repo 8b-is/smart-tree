@@ -510,9 +510,10 @@ async fn main() -> Result<()> {
     }
 
     if cli.dashboard {
-        // Launch web dashboard
+        // Launch the PTY web dashboard on its own port (28429 by default),
+        // so it can run alongside the HTTP daemon (28428) without a clash.
         return run_web_dashboard(
-            cli.scan_opts.sse_port,
+            cli.dashboard_port,
             cli.open_browser,
             cli.allow.clone(),
             InMemoryLogStore::new(),
@@ -523,6 +524,18 @@ async fn main() -> Result<()> {
     if cli.http_daemon {
         // Launch HTTP daemon with MCP, LLM proxy, The Custodian
         return run_daemon(cli.scan_opts.sse_port).await;
+    }
+
+    if cli.up {
+        return handle_up(cli.scan_opts.sse_port, cli.open_browser, is_interactive_tty).await;
+    }
+
+    if cli.show_token {
+        return handle_show_token().await;
+    }
+
+    if cli.mcp_print_config {
+        return handle_mcp_print_config(cli.scan_opts.sse_port).await;
     }
 
     // Handle security commands

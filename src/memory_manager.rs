@@ -75,6 +75,19 @@ impl MemoryManager {
         Ok(Self { bank_path, bank })
     }
 
+    /// Create or open a `MemoryManager` backed by a specific `.m8` bank file path
+    pub fn with_bank_path(bank_path: PathBuf) -> Result<Self> {
+        if let Some(parent) = bank_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let bank = if bank_path.exists() {
+            Self::load_m8(&bank_path)?
+        } else {
+            MemoryBank::default()
+        };
+        Ok(Self { bank_path, bank })
+    }
+
     /// Return all anchored memories in the bank
     pub fn memories(&self) -> &[Memory] {
         &self.bank.memories
@@ -575,14 +588,15 @@ impl MemoryManager {
             }
         }
 
-        // 4. Check .aye_consciousness.m8 or .claude_consciousness.m8
+        // 4. Check .aye_consciousness.m8 or .claude_consciousness.m8 (supports tight MEM8 or legacy JSON)
         for c_file in [".aye_consciousness.m8", ".claude_consciousness.m8"] {
             let c_path = dir.join(c_file);
             if !c_path.is_file() {
                 continue;
             }
-            if let Ok(content) = fs::read_to_string(&c_path) {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Ok(raw) = fs::read(&c_path) {
+                let decoded = crate::m8_consciousness::decode_m8_bytes(&raw).unwrap_or(raw);
+                if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&decoded) {
                     if let Some(focus) = val
                         .get("project_context")
                         .and_then(|pc| pc.get("current_focus"))
@@ -731,71 +745,78 @@ impl MemoryManager {
         Ok(())
     }
 
-    /// Save as binary .m8 format
+    /// Save as tight binary .m8 format (`M8MEM` v2 with token_codec + Zlib compression & CRC32)
     fn save_m8(&self, path: &Path) -> Result<()> {
+        use flate2::{write::ZlibEncoder, Compression};
         use std::io::Write;
 
-        let mut buffer = Vec::new();
+        let mut records_buf = Vec::new();
 
-        // Magic header: "M8MEM" (5 bytes)
-        buffer.write_all(b"M8MEM")?;
-
-        // Version byte
-        buffer.push(0x01);
-
-        // Number of memories (4 bytes, little-endian)
-        buffer.write_all(&(self.bank.memories.len() as u32).to_le_bytes())?;
-
-        // Total recalls (4 bytes)
-        buffer.write_all(&(self.bank.total_recalls as u32).to_le_bytes())?;
-
-        // Last accessed timestamp (8 bytes)
-        buffer.write_all(&self.bank.last_accessed.timestamp().to_le_bytes())?;
-
-        // Write each memory
+        // Encode each memory into the inner record stream
         for memory in &self.bank.memories {
             // Type length (1 byte) + type
-            buffer.push(memory.anchor_type.len() as u8);
-            buffer.write_all(memory.anchor_type.as_bytes())?;
+            let type_bytes = memory.anchor_type.as_bytes();
+            let type_len = type_bytes.len().min(u8::MAX as usize);
+            records_buf.push(type_len as u8);
+            records_buf.extend_from_slice(&type_bytes[..type_len]);
 
             // Keywords count (1 byte)
-            buffer.push(memory.keywords.len() as u8);
-            for keyword in &memory.keywords {
-                buffer.push(keyword.len() as u8);
-                buffer.write_all(keyword.as_bytes())?;
+            let kw_count = memory.keywords.len().min(u8::MAX as usize);
+            records_buf.push(kw_count as u8);
+            for keyword in memory.keywords.iter().take(kw_count) {
+                let kw_bytes = keyword.as_bytes();
+                let kw_len = kw_bytes.len().min(u8::MAX as usize);
+                records_buf.push(kw_len as u8);
+                records_buf.extend_from_slice(&kw_bytes[..kw_len]);
             }
 
             // Context length (2 bytes) + context
             let context_bytes = memory.context.as_bytes();
-            buffer.write_all(&(context_bytes.len() as u16).to_le_bytes())?;
-            buffer.write_all(context_bytes)?;
+            let ctx_len = context_bytes.len().min(u16::MAX as usize);
+            records_buf.extend_from_slice(&(ctx_len as u16).to_le_bytes());
+            records_buf.extend_from_slice(&context_bytes[..ctx_len]);
 
             // Origin length (1 byte) + origin
-            buffer.push(memory.origin.len() as u8);
-            buffer.write_all(memory.origin.as_bytes())?;
+            let origin_bytes = memory.origin.as_bytes();
+            let orig_len = origin_bytes.len().min(u8::MAX as usize);
+            records_buf.push(orig_len as u8);
+            records_buf.extend_from_slice(&origin_bytes[..orig_len]);
 
             // Frequency (8 bytes)
-            buffer.write_all(&memory.frequency.to_le_bytes())?;
+            records_buf.extend_from_slice(&memory.frequency.to_le_bytes());
 
             // Timestamp (8 bytes)
-            buffer.write_all(&memory.timestamp.timestamp().to_le_bytes())?;
+            records_buf.extend_from_slice(&memory.timestamp.timestamp().to_le_bytes());
         }
 
-        // Calculate checksum (simple XOR for now)
-        let checksum = buffer.iter().fold(0u8, |acc, &b| acc ^ b);
-        buffer.push(checksum);
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
+        encoder.write_all(&records_buf)?;
+        let compressed = encoder.finish()?;
+        let crc = crc32fast::hash(&records_buf);
+
+        let mut buffer = Vec::with_capacity(30 + compressed.len());
+        // Magic header: "M8MEM" (5 bytes) + Version 0x02 (tight Zlib-best + CRC32)
+        buffer.extend_from_slice(b"M8MEM");
+        buffer.push(0x02);
+        buffer.extend_from_slice(&(self.bank.memories.len() as u32).to_le_bytes());
+        buffer.extend_from_slice(&(self.bank.total_recalls as u32).to_le_bytes());
+        buffer.extend_from_slice(&self.bank.last_accessed.timestamp().to_le_bytes());
+        buffer.extend_from_slice(&(records_buf.len() as u32).to_le_bytes());
+        buffer.extend_from_slice(&crc.to_le_bytes());
+        buffer.extend_from_slice(&compressed);
 
         fs::write(path, buffer)?;
         Ok(())
     }
 
-    /// Load from binary .m8 format
+    /// Load from binary .m8 format (supports v2 tight Zlib `M8MEM\x02`, v3 tokenized `M8MEM\x03`, and legacy `M8MEM\x01`)
     fn load_m8(path: &Path) -> Result<MemoryBank> {
+        use flate2::read::ZlibDecoder;
         use std::io::Cursor;
         use std::io::Read;
 
         let data = fs::read(path)?;
-        let mut cursor = Cursor::new(data);
+        let mut cursor = Cursor::new(data.as_slice());
 
         // Check magic header
         let mut magic = [0u8; 5];
@@ -807,7 +828,7 @@ impl MemoryManager {
         // Version
         let mut version = [0u8; 1];
         cursor.read_exact(&mut version)?;
-        if version[0] != 0x01 {
+        if version[0] != 0x01 && version[0] != 0x02 && version[0] != 0x03 {
             return Err(anyhow::anyhow!("Unsupported .m8 version"));
         }
 
@@ -827,52 +848,83 @@ impl MemoryManager {
         let last_accessed =
             DateTime::from_timestamp(i64::from_le_bytes(last_accessed), 0).unwrap_or_else(Utc::now);
 
+        let decompressed_records: Vec<u8>;
+        let mut records_cursor: Cursor<&[u8]> = if version[0] == 0x02 || version[0] == 0x03 {
+            let mut raw_len_bytes = [0u8; 4];
+            cursor.read_exact(&mut raw_len_bytes)?;
+            let raw_len = u32::from_le_bytes(raw_len_bytes) as usize;
+
+            let mut crc_bytes = [0u8; 4];
+            cursor.read_exact(&mut crc_bytes)?;
+            let expected_crc = u32::from_le_bytes(crc_bytes);
+
+            let pos = cursor.position() as usize;
+            let mut decoder = ZlibDecoder::new(&data[pos..]);
+            let mut inflated = Vec::with_capacity(raw_len);
+            decoder.read_to_end(&mut inflated)?;
+            decompressed_records = if version[0] == 0x03 {
+                crate::mem8::token_codec::decode(&inflated, raw_len)?
+            } else if inflated.len() == raw_len && crc32fast::hash(&inflated) == expected_crc {
+                inflated
+            } else {
+                crate::mem8::token_codec::decode(&inflated, raw_len)?
+            };
+            anyhow::ensure!(
+                crc32fast::hash(&decompressed_records) == expected_crc,
+                "M8MEM CRC32 mismatch"
+            );
+            Cursor::new(decompressed_records.as_slice())
+        } else {
+            let pos = cursor.position() as usize;
+            Cursor::new(&data[pos..])
+        };
+
         // Read memories
         let mut memories = Vec::with_capacity(mem_count);
 
         for _ in 0..mem_count {
             // Type
             let mut type_len = [0u8; 1];
-            cursor.read_exact(&mut type_len)?;
+            records_cursor.read_exact(&mut type_len)?;
             let mut anchor_type = vec![0u8; type_len[0] as usize];
-            cursor.read_exact(&mut anchor_type)?;
+            records_cursor.read_exact(&mut anchor_type)?;
             let anchor_type = String::from_utf8_lossy(&anchor_type).to_string();
 
             // Keywords
             let mut keyword_count = [0u8; 1];
-            cursor.read_exact(&mut keyword_count)?;
+            records_cursor.read_exact(&mut keyword_count)?;
             let mut keywords = Vec::with_capacity(keyword_count[0] as usize);
 
             for _ in 0..keyword_count[0] {
                 let mut kw_len = [0u8; 1];
-                cursor.read_exact(&mut kw_len)?;
+                records_cursor.read_exact(&mut kw_len)?;
                 let mut keyword = vec![0u8; kw_len[0] as usize];
-                cursor.read_exact(&mut keyword)?;
+                records_cursor.read_exact(&mut keyword)?;
                 keywords.push(String::from_utf8_lossy(&keyword).to_string());
             }
 
             // Context
             let mut context_len = [0u8; 2];
-            cursor.read_exact(&mut context_len)?;
+            records_cursor.read_exact(&mut context_len)?;
             let mut context = vec![0u8; u16::from_le_bytes(context_len) as usize];
-            cursor.read_exact(&mut context)?;
+            records_cursor.read_exact(&mut context)?;
             let context = String::from_utf8_lossy(&context).to_string();
 
             // Origin
             let mut origin_len = [0u8; 1];
-            cursor.read_exact(&mut origin_len)?;
+            records_cursor.read_exact(&mut origin_len)?;
             let mut origin = vec![0u8; origin_len[0] as usize];
-            cursor.read_exact(&mut origin)?;
+            records_cursor.read_exact(&mut origin)?;
             let origin = String::from_utf8_lossy(&origin).to_string();
 
             // Frequency
             let mut frequency = [0u8; 8];
-            cursor.read_exact(&mut frequency)?;
+            records_cursor.read_exact(&mut frequency)?;
             let frequency = f64::from_le_bytes(frequency);
 
             // Timestamp
             let mut timestamp = [0u8; 8];
-            cursor.read_exact(&mut timestamp)?;
+            records_cursor.read_exact(&mut timestamp)?;
             let timestamp =
                 DateTime::from_timestamp(i64::from_le_bytes(timestamp), 0).unwrap_or_else(Utc::now);
 

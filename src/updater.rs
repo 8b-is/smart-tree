@@ -154,7 +154,7 @@ fn build_dns_txt_query_packet(qname: &str, tx_id: u16) -> Vec<u8> {
     pkt.extend_from_slice(&encode_canonical_dns_name(qname));
     pkt.extend_from_slice(&16u16.to_be_bytes()); // QTYPE = 16 (TXT)
     pkt.extend_from_slice(&1u16.to_be_bytes()); // QCLASS = 1 (IN)
-    // EDNS0 OPT pseudo-RR (RFC 6891 + RFC 3225 DO=1 bit):
+                                                // EDNS0 OPT pseudo-RR (RFC 6891 + RFC 3225 DO=1 bit):
     pkt.push(0); // Root domain name
     pkt.extend_from_slice(&41u16.to_be_bytes()); // TYPE = 41 (OPT)
     pkt.extend_from_slice(&1232u16.to_be_bytes()); // UDP payload size = 1232
@@ -273,9 +273,9 @@ pub fn verify_dnssec_rrsig_for_txt(
     let pubkey_bytes =
         hex::decode(I1_HARMONY_ED25519_PUBKEY_HEX).expect("valid pinned Ed25519 pubkey hex");
     let peer_pub = UnparsedPublicKey::new(&ED25519, &pubkey_bytes);
-    peer_pub
-        .verify(&signed_data, signature)
-        .map_err(|_| anyhow::anyhow!("RFC 4034 / RFC 8080 DNSSEC RRSIG Ed25519 verification failed"))
+    peer_pub.verify(&signed_data, signature).map_err(|_| {
+        anyhow::anyhow!("RFC 4034 / RFC 8080 DNSSEC RRSIG Ed25519 verification failed")
+    })
 }
 
 /// Parse TXT record strings (and optional DNSSEC RRSIG records) from a raw RFC 1035 DNS response packet
