@@ -168,6 +168,12 @@ pub async fn probe_local_pq_models() -> (Vec<LocalPqModelSeat>, usize, u64) {
     // 2. Standalone 8b-is p/q checkpoints & pilots on disk
     let candidate_paths = [
         (
+            "st-deepseek-pqm-4gaia (Pure-Rust 4gaia PQM Safetensors)",
+            "Tier 1 (4gaia Rust Checkpoint)",
+            "4gaia Symplectic PQM + Lloyd-Max 1.58b + SPQT Base-243 (28 layers)",
+            "/home/hue/source/8b-is/training-pipeline/out/pqm/st-deepseek-pqm-4gaia/model.safetensors",
+        ),
+        (
             "sim-pqm (A161330 Snowflake Safetensors)",
             "Tier 1 (8b-is Checkpoint)",
             "PQM W_hat = T*(p/q)*2^m (6 layers)",
@@ -500,13 +506,26 @@ pub fn recall_local_m8_context(target_path: &Path, query: &str) -> Vec<String> {
     contexts
 }
 
-/// Query local Ollama (`aye-deepseek-pqm:latest`) or fallback to built-in `BurnProvider`.
+/// Query in-binary `st-deepseek-pqm-4gaia` engine (default) or optional Ollama / `BurnProvider`.
 pub async fn synthesize_with_local_pq_model(
     model_name: &str,
     prompt: &str,
     recalled_waves: &[String],
     purity_pq: &str,
 ) -> Result<String> {
+    // Default path: run 100% directly out of `smart-tree` in-binary over `model.safetensors` + `.m8`!
+    if model_name.starts_with("in-binary")
+        || model_name.contains("4gaia")
+        || model_name == "st-deepseek-pqm"
+    {
+        return crate::pq_trainer::run_in_binary_4gaia_pqm_inference(
+            prompt,
+            recalled_waves,
+            purity_pq,
+        )
+        .await;
+    }
+
     let conditioned = condition_mem8_prompt(prompt);
     let mut full_prompt = format!(
         "{conditioned}\n\n[Sovereign p/q Purity: {purity_pq} | OEIS A161330 Snowflake Active]\n"
@@ -547,6 +566,14 @@ pub async fn synthesize_with_local_pq_model(
                 }
             }
         }
+    }
+
+    // Fallback to in-binary 4gaia PQM engine if available before BurnProvider
+    if let Ok(gaia_out) =
+        crate::pq_trainer::run_in_binary_4gaia_pqm_inference(prompt, recalled_waves, purity_pq)
+            .await
+    {
+        return Ok(gaia_out);
     }
 
     // Offline zero-cloud fallback: built-in BurnProvider (SPQT Base-243 + LifePersona)

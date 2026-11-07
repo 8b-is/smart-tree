@@ -44,6 +44,7 @@ pub mod mega_hidden_cascade; // Mega-Scale Hidden Dimension (1M+) & Dyadic Atten
 pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
 pub mod memory_manager; // Real memory management for consciousness!
 pub mod pq_healer; // Sovereign 3-tier local p/q + SPQT ternary + Salient .m8 code healer (st pq-fix)
+pub mod pq_trainer; // Pure-Rust 4gaia Sovereign p/q + A161330 + Salient .m8 trainer (st pq-train)
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
 pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
 pub mod scanner; // The heart of directory traversal and file metadata collection. // For intelligently detecting project context (e.g., Rust, Node.js).

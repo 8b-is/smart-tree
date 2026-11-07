@@ -800,6 +800,38 @@ pub enum Cmd {
     /// 3-tier Sovereign local p/q + SPQT ternary + Salient .m8 code healer and model readiness probe
     #[command(alias = "heal", alias = "fix", alias = "pq-heal")]
     PqFix(PqFixCommand),
+
+    /// Pure-Rust 4gaia Sovereign p/q + OEIS A161330 + Salient .m8 trainer & DeepSeek Ollama registrar
+    #[command(alias = "train-pq", alias = "gaia-train", alias = "pqm-train")]
+    PqTrain(PqTrainCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct PqTrainCommand {
+    /// Model slug/tag for the trained in-binary 4gaia PQM checkpoint (default: st-deepseek-pqm-4gaia)
+    #[arg(long, default_value = "st-deepseek-pqm-4gaia")]
+    pub tag: String,
+    /// Optional prompt to run immediately through the in-binary 4gaia PQM forward pass after training
+    #[arg(long, short = 'q')]
+    pub ask: Option<String>,
+    /// Also export/register a Modelfile to an external Ollama server (default: false; runs 100% in-binary)
+    #[arg(long)]
+    pub export_ollama: bool,
+    /// Base DeepSeek model if `--export-ollama` is used (default: cheet-deepseek-v2:16b)
+    #[arg(long, default_value = "cheet-deepseek-v2:16b")]
+    pub base_model: String,
+    /// Number of Transformer projection matrices to train & quantize with 4gaia PQM (default: 28)
+    #[arg(long, default_value_t = 28)]
+    pub layers: usize,
+    /// Number of 4gaia Symplectic Störmer–Verlet Leapfrog steps per layer (default: 32)
+    #[arg(long, default_value_t = 32)]
+    pub steps: usize,
+    /// Output directory for model.safetensors, manifest.json, and diet JSONL
+    #[arg(long)]
+    pub out_dir: Option<PathBuf>,
+    /// Emit structured JSON report
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Clone, clap::Args)]
@@ -813,11 +845,11 @@ pub struct PqFixCommand {
     /// Run `cargo check` verification gate on the target crate/workspace
     #[arg(long)]
     pub verify: bool,
-    /// Optional question or code-repair prompt for Tier-2 local p/q model synthesis
+    /// Optional question or code-repair prompt for Tier-2 in-binary 4gaia p/q synthesis
     #[arg(long, short = 'q')]
     pub ask: Option<String>,
-    /// Local p/q model name on Ollama (default: aye-deepseek-pqm:latest)
-    #[arg(long, default_value = "aye-deepseek-pqm:latest")]
+    /// Model engine to use (default: in-binary:st-deepseek-pqm-4gaia; or an Ollama model name)
+    #[arg(long, default_value = "in-binary:st-deepseek-pqm-4gaia")]
     pub model: String,
     /// Emit structured JSON report
     #[arg(long)]

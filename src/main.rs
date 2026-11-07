@@ -221,6 +221,9 @@ async fn main() -> Result<()> {
     if let Some(st::cli::Cmd::PqFix(pq_cmd)) = &cli.cmd {
         return st::pq_healer::handle_pq_fix_command(pq_cmd).await;
     }
+    if let Some(st::cli::Cmd::PqTrain(train_cmd)) = &cli.cmd {
+        return st::pq_trainer::handle_pq_train_command(train_cmd).await;
+    }
 
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {
@@ -490,6 +493,9 @@ async fn main() -> Result<()> {
                     }
                 }
                 return Ok(());
+            }
+            st::cli::Cmd::PqTrain(ref train_cmd) => {
+                return st::pq_trainer::handle_pq_train_command(train_cmd).await;
             }
         }
     }
