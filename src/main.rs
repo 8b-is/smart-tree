@@ -218,6 +218,9 @@ async fn main() -> Result<()> {
     if let Some(st::cli::Cmd::Memnet(memnet_cmd)) = &cli.cmd {
         return st::cli_commands::handle_memnet_command(memnet_cmd);
     }
+    if let Some(st::cli::Cmd::PqFix(pq_cmd)) = &cli.cmd {
+        return st::pq_healer::handle_pq_fix_command(pq_cmd).await;
+    }
 
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {
@@ -412,9 +415,10 @@ async fn main() -> Result<()> {
             st::cli::Cmd::Symbol(_)
             | st::cli::Cmd::G8t(_)
             | st::cli::Cmd::Memnet(_)
-            | st::cli::Cmd::Completions(_) => {
+            | st::cli::Cmd::Completions(_)
+            | st::cli::Cmd::PqFix(_) => {
                 unreachable!(
-                    "symbol, g8t, memnet, and completions commands return before daemon startup"
+                    "symbol, g8t, memnet, completions, and pq-fix commands return before daemon startup"
                 )
             }
             st::cli::Cmd::Sync(sync_cmd) => {

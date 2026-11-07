@@ -796,6 +796,32 @@ pub enum Cmd {
     /// Self-maintaining shell autocomplete (Fish, Zsh, Bash) with live folder consciousness & MEM|8 memory descriptions
     #[command(alias = "autocomplete", alias = "complete")]
     Completions(CompletionsCommand),
+
+    /// 3-tier Sovereign local p/q + SPQT ternary + Salient .m8 code healer and model readiness probe
+    #[command(alias = "heal", alias = "fix", alias = "pq-heal")]
+    PqFix(PqFixCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct PqFixCommand {
+    /// Target file or directory to scan and heal (default: current directory)
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
+    /// Apply deterministic Tier-0 p/q and total_cmp fixes directly to disk
+    #[arg(long)]
+    pub apply: bool,
+    /// Run `cargo check` verification gate on the target crate/workspace
+    #[arg(long)]
+    pub verify: bool,
+    /// Optional question or code-repair prompt for Tier-2 local p/q model synthesis
+    #[arg(long, short = 'q')]
+    pub ask: Option<String>,
+    /// Local p/q model name on Ollama (default: aye-deepseek-pqm:latest)
+    #[arg(long, default_value = "aye-deepseek-pqm:latest")]
+    pub model: String,
+    /// Emit structured JSON report
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Clone, clap::Args)]
