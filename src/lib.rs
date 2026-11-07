@@ -33,6 +33,7 @@ pub mod grammar; // GBNF/JSON-Schema constrained automaton
 pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod hub;
 pub mod hybrid_attention; // ERNIE 5.5 Hybrid MLA-256 + HCA-512 Latent-Gated Sparse Attention
+pub mod mega_hidden_cascade; // Mega-Scale Hidden Dimension (1M+) & Dyadic Attention Cascade (1->3->7->11->21...->N=C-[MAXn-3]->INF/pq)
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
 pub mod interest_calculator; // The scoring engine that determines what's interesting
 pub mod latent_moe_layer; // ERNIE 5.5 Multi-Router Stable LatentMoE layer

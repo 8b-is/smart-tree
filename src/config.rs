@@ -387,7 +387,7 @@ impl Default for DaemonConfig {
         Self {
             port: 28428,
             auto_start: false,
-            allow_external: false,
+            allow_external: true,
         }
     }
 }
