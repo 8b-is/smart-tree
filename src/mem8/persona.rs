@@ -1261,7 +1261,18 @@ impl LifePersona {
                 .take(6)
                 .map(String::as_str)
                 .collect();
-            out.push_str(&format!("_Signature cadence: {}_", phrases.join(" · ")));
+            out.push_str(&format!("_Signature cadence: {}_\n\n", phrases.join(" · ")));
+        }
+
+        let nexus_cfg = crate::config::StConfig::load()
+            .map(|c| c.i1_nexus)
+            .unwrap_or_default();
+        if nexus_cfg.suggest_public_waves_in_chat && !self.source_path.is_empty() {
+            let report = crate::mem8::i1_nexus::detect_repo_public_status(
+                std::path::Path::new(&self.source_path),
+                &nexus_cfg,
+            );
+            out.push_str(&report.suggestion);
         }
 
         out

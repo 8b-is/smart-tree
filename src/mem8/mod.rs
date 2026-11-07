@@ -7,6 +7,7 @@ pub mod conversation;
 pub mod developer_personas;
 pub mod format;
 pub mod git_temporal;
+pub mod i1_nexus;
 pub mod integration;
 mod native_block;
 pub(crate) mod path_serde;

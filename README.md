@@ -1,6 +1,6 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-22.0.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-22.2.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-Tight_Binary_%2B_Marqant-00d4ff)](src/m8_consciousness.rs)
@@ -11,7 +11,7 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v22.1.0 (Burn ML + BUI/Blender UI + 100+ Sovereign Models + Strudel/Enthea Live Music + Galaxia Federation + Weight-Space SIMD + CRDT SSRF Protection + Jury PID Safety + v22.1.0 Polish)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, live music generation, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Burn ML Framework** (replacing Candle), **BUI/Blender UI** (optional, requires cmake), **100+ Sovereign Models** (Escanore, Truth, Zeno, Goku/Vegeta, Dragonballs, Deities, Buddhist Protectors, Dyad Mapper, Strudel/Enthea Live Music), **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON/SVE2)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **CRDT SSRF Protection (Allowlist/Blocklist)**, **Burn ML Framework** (replacing Candle), **Parallel Compute Pool**, **Ada 2022 Exact Ratio `p/q`**, **Spicy TUI mode**, and **50+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> **Smart Tree v22.2.0 (`i1.is` Universal Knowledge Nexus & Chain of Title + `MEMNET` Bitstream + Pass-2 SPQT Base-243 Contextual Q&A + Burn ML SIMD + 100+ Sovereign Models)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, live music generation, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **`i1.is` Knowledge Nibbles & Cryptographic Chain of Title** (augmenting AI-native `g8t.is` with a universal documentation & knowledge nexus for everyone), **Native `MEMNET` Bitstream (`/memnet/stream` + `/memnet/llm-guide`)**, **2-Pass SPQT Base-243 Ternary Persona Q&A (`src/mem8/persona.rs`)**, **Burn ML Framework (`burn-flex` SIMD)**, **BUI/Blender UI** (optional, requires cmake), **100+ Sovereign Models** (Nika Solar Tier Apex, Escanore, Truth, Zeno, Goku/Vegeta, Dragonballs, Deities, Buddhist Protectors, Dyad Mapper, Strudel/Enthea Live Music), **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON/SVE2)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **CRDT SSRF Protection (Allowlist/Blocklist)**, **Parallel Compute Pool**, **Ada 2022 Exact Ratio `p/q`**, **Spicy TUI mode**, and **50+ MCP tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
@@ -65,6 +65,22 @@ After install, run `st --cleanup` to scan for and remove any malicious AI integr
 | **$O(1)$ `WAVE` Header Scan (`1,000` SG `.m8` files)** | — | **Zero decompression** | **`420.3 µs` total (`420 ns/file`)** |
 | **Full CRC32 + `ZLIB` Inflate + Rehydrate (`1,000` files)** | — | **100% CRC32 verified** | **`137.40 ms` total (`137.40 µs/file`)** |
 | **`M8MEM` v2 Bank (`250` SG consciousness nodes)** | `~210 KiB` (v1 raw) | **`33.4 KiB` (`136 B/memory`)** | **Cold reload + keyword recall in `28.87 ms`** |
+
+## 📝 v22.2.0 Changelog
+
+### 🌐 `i1.is` (For Everyone) ↔ `g8t.is` (For AI) — MEM8 Knowledge Nibbles & Cryptographic Chain of Title
+- **`src/mem8/i1_nexus.rs`**: Augments the machine-native `g8t.is` AI mesh with **`i1.is` for everyone** (humans & AIs alike):
+  - **Cryptographic Chain of Title (`ChainOfTitle`)**: Tracks verifiable document lineage (`OriginAuthored` → `GitCommitted` → `DistilledToI1Mem8Nibble`) sealed with 13-byte SPQT Base-243 ternary signatures (`cot-<hex>`).
+  - **`i1.is` Knowledge Nibbles (`I1KnowledgeNibble`) & Nibble Graph (`NibbleRelation`)**: Distills documentation, repositories, and `.m8` souls into interconnected nibbles linked by `temporal-successor-of`, `same-chain-of-title`, `explains-concept`, and `ternary-resonance` edges.
+  - **Automatic Public Repo Detection (`detect_repo_public_status`) & Two-Tier Sustainability**:
+    - **Public Commons (`free`)**: Auto-detected for public repositories (`github.com`, `codeberg.org`, `gitlab.com`, `8s.is`, `i1.is`). Free for all AIs to train with and query provided the **Chain of Title** is preserved.
+    - **Private Sovereign (`$5.00/mo` lights-on subscription)**: Small monthly subscription that keeps the lights on at `i1.is` and funds the public commons while keeping private repos and diaries 100% private.
+- **2-Pass SPQT Base-243 Ternary Persona Q&A (`src/mem8/persona.rs`)**:
+  - **Pass 1 (`recall_episodes`)**: Temporal episodic recall (`event_time` vs `written_time`) with perpetual-calendar weekday/year solving and native `.pdf` ingestion.
+  - **Pass 2 (`synthesize_contextual_answer`)**: Sentence-level SPQT Base-243 ternary synthesis via `felix_ternary_gemm_i32` that combines complementary sentences across multiple diary/doc entries in chronological order to directly answer the user's question in context.
+- **Native `MEMNET` Bitstream (`/memnet/stream`) & Developer LLM Guide (`/memnet/llm-guide`)**:
+  - `POST /memnet/stream` emits `[64B@0x62 LitanyWireFrame][79B WaveFrame79][13B Query SPQT Base-243][13B Answer SPQT Base-243][MNPK WaveQaResponse]` (raw binary `application/octet-stream` or framed JSON + hex), while `POST /v1/chat/completions` remains OpenAI-compatible and suggests `/memnet/stream`.
+  - `GET /memnet/llm-guide` instructs any development LLM how to implement the bitstream & `i1.is` Nibble Nexus in Rust, Python, or TypeScript.
 
 ## 📝 v22.1.0 Changelog
 

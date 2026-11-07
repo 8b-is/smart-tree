@@ -676,12 +676,17 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             "/security/history",
             get(crate::magiscanner::http::scan_history_handler),
         )
-        // MemNet bridge (MCP ↔ mesh): file-backed MemnetNodeState + Native Bitstream
+        // MemNet bridge (MCP ↔ mesh): file-backed MemnetNodeState + Native Bitstream + Dev LLM Guide
         .route("/memnet/peers", get(memnet_peers_handler))
         .route("/memnet/ask", post(memnet_ask_handler))
         .route("/memnet/stream", post(memnet_stream_handler))
+        .route("/memnet/llm-guide", get(memnet_llm_guide_handler))
         .route("/memnet/teach", post(memnet_teach_handler))
         .route("/memnet/share", post(memnet_share_handler))
+        // i1.is MEM8 Knowledge Nexus, Public/Private Wave Policy & Cryptographic Chain of Title
+        .route("/i1/nexus", get(i1_nexus_status_handler))
+        .route("/i1/nexus/distill", post(i1_nexus_distill_handler))
+        .route("/i1/nexus/settings", post(i1_nexus_settings_handler))
         // MEM8 Life Personas (.m8 Soul Trainer & Local Ternary Micro-Model)
         .route("/api/personas", get(personas_list_handler))
         .route("/api/personas/train", post(personas_train_handler))
@@ -1233,9 +1238,15 @@ async fn memnet_stream_handler(
                 axum::http::HeaderName::from_static("x-smarttree-preferred-endpoint"),
                 "/memnet/stream",
             ),
+            (
+                axum::http::HeaderName::from_static("x-smarttree-llm-guide"),
+                "/memnet/llm-guide",
+            ),
         ],
         Json(serde_json::json!({
             "protocol": "MEMNET-64B-0x62-Wave79-SPQT-Bitstream",
+            "llm_implementation_guide": "/memnet/llm-guide",
+            "i1_nexus_endpoint": "/i1/nexus",
             "model": format!("persona:{slug}"),
             "question": question,
             "pass2_contextual_answer": pass2_answer,
@@ -1250,11 +1261,224 @@ async fn memnet_stream_handler(
                 "answer_spqt_base243_13b_hex": a_spqt_hex,
                 "raw_stream_bytes_len": raw_stream.len(),
                 "layout": "[64B@0x62 LitanyWireFrame][79B WaveFrame79][13B Query SPQT Base-243][13B Answer SPQT Base-243][MNPK WaveQaResponse]",
-                "raw_mode_hint": "Pass header 'Accept: application/octet-stream' or body '{\"bitstream\":\"raw\"}' for raw binary bitstream bytes"
+                "raw_mode_hint": "Pass header 'Accept: application/octet-stream' or body '{\"bitstream\":\"raw\"}' for raw binary bitstream bytes",
+                "llm_guide_hint": "GET /memnet/llm-guide for complete Rust/Python/TypeScript bitstream & i1.is Chain-of-Title implementation instructions"
             }
         })),
     )
         .into_response()
+}
+
+/// 🤖 Developer LLM Implementation Guide (`GET /memnet/llm-guide`)
+///
+/// Instructs any development LLM (Claude, GPT, Gemini, Cursor, Antigravity, OpenCode)
+/// how to implement the `MEMNET` Bitstream client/server and `i1.is` Chain-of-Title Nibble Graph.
+async fn memnet_llm_guide_handler(headers: axum::http::HeaderMap) -> axum::response::Response {
+    let md = crate::mem8::i1_nexus::memnet_llm_implementation_guide();
+    let wants_json = headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|a| a.contains("application/json"));
+
+    if wants_json {
+        return Json(serde_json::json!({
+            "protocol": "MEMNET-64B-0x62-Wave79-SPQT-Bitstream",
+            "endpoints": {
+                "memnet_stream": "POST /memnet/stream",
+                "openai_compat": "POST /v1/chat/completions",
+                "i1_nexus_status": "GET /i1/nexus",
+                "i1_nexus_distill": "POST /i1/nexus/distill",
+                "i1_nexus_settings": "POST /i1/nexus/settings",
+            },
+            "markdown_guide": md,
+        }))
+        .into_response();
+    }
+
+    (
+        StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/markdown; charset=utf-8",
+        )],
+        md,
+    )
+        .into_response()
+}
+
+#[derive(Deserialize, Default)]
+struct I1NexusDistillRequest {
+    #[serde(default)]
+    persona: Option<String>,
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    max_nibbles: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct I1NexusSettingsRequest {
+    #[serde(default)]
+    wave_visibility: Option<String>,
+    #[serde(default)]
+    subscription_tier: Option<String>,
+    #[serde(default)]
+    chain_of_title_author: Option<String>,
+    #[serde(default)]
+    suggest_public_waves_in_chat: Option<bool>,
+}
+
+async fn i1_nexus_status_handler() -> Json<serde_json::Value> {
+    let result = tokio::task::spawn_blocking(|| {
+        let cfg = crate::config::StConfig::load()
+            .map(|c| c.i1_nexus)
+            .unwrap_or_default();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let repo_report = crate::mem8::i1_nexus::detect_repo_public_status(&cwd, &cfg);
+        let store = crate::mem8::i1_nexus::I1NexusStore::load_or_default();
+        let total_relations: usize = store.nibbles.iter().map(|n| n.relations.len()).sum();
+
+        serde_json::json!({
+            "hub": "https://i1.is",
+            "config": cfg,
+            "repository_visibility": repo_report,
+            "sustainability_model": {
+                "public_commons": "Free for public repositories & open documentation — AI training & recall permitted when cryptographic Chain of Title is preserved.",
+                "private_sovereign": format!(
+                    "${:.2}/month small subscription — keeps the lights on at i1.is and funds the commons while keeping private repos & diaries 100% private.",
+                    (cfg.private_monthly_fee_cents as f32) / 100.0
+                ),
+            },
+            "stats": {
+                "chains_of_title_count": store.chains_of_title.len(),
+                "nibbles_count": store.nibbles.len(),
+                "nibble_relations_count": total_relations,
+                "updated_at_utc": store.updated_at_utc,
+            },
+            "chains_of_title": store.chains_of_title.values().take(25).collect::<Vec<_>>(),
+            "nibbles": store.nibbles.iter().take(40).collect::<Vec<_>>(),
+        })
+    })
+    .await
+    .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() }));
+
+    Json(result)
+}
+
+async fn i1_nexus_distill_handler(
+    Json(req): Json<I1NexusDistillRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value> {
+        let cfg = crate::config::StConfig::load()
+            .map(|c| c.i1_nexus)
+            .unwrap_or_default();
+        let mut store = crate::mem8::i1_nexus::I1NexusStore::load_or_default();
+        let max_nibbles = req.max_nibbles.unwrap_or(24);
+
+        let mut distilled_personas = Vec::new();
+        let mut last_report = None;
+
+        if let Some(ref slug_raw) = req.persona {
+            let slug = slug_raw.strip_prefix("persona:").unwrap_or(slug_raw);
+            let persona = crate::mem8::persona::LifePersona::load_cached(slug)?;
+            let rep = store.distill_persona_to_nibbles(&persona, &cfg, max_nibbles);
+            distilled_personas.push(persona.slug.clone());
+            last_report = Some(rep);
+        } else {
+            // Distill the 3 workspace specialists (readme-expert, history-documenter, code-analyst) if available, or all personas
+            let summaries = crate::mem8::persona::LifePersona::list_all().unwrap_or_default();
+            for summary in summaries.iter().take(4) {
+                if let Ok(persona) = crate::mem8::persona::LifePersona::load_cached(&summary.slug) {
+                    let rep = store.distill_persona_to_nibbles(&persona, &cfg, max_nibbles);
+                    distilled_personas.push(persona.slug.clone());
+                    last_report = Some(rep);
+                }
+            }
+        }
+
+        if let Some(ref custom_path) = req.path {
+            let expanded = shellexpand::tilde(custom_path.trim()).to_string();
+            last_report = Some(crate::mem8::i1_nexus::detect_repo_public_status(
+                std::path::Path::new(&expanded),
+                &cfg,
+            ));
+        }
+
+        let total_relations: usize = store.nibbles.iter().map(|n| n.relations.len()).sum();
+
+        Ok(serde_json::json!({
+            "status": "ok",
+            "distilled_personas": distilled_personas,
+            "repository_visibility": last_report,
+            "chains_of_title_count": store.chains_of_title.len(),
+            "nibbles_count": store.nibbles.len(),
+            "nibble_relations_count": total_relations,
+            "sample_nibbles": store.nibbles.iter().rev().take(12).collect::<Vec<_>>(),
+        }))
+    })
+    .await;
+
+    match result {
+        Ok(Ok(val)) => (StatusCode::OK, Json(val)),
+        Ok(Err(e)) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+    }
+}
+
+async fn i1_nexus_settings_handler(
+    Json(req): Json<I1NexusSettingsRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value> {
+        let mut config = crate::config::StConfig::load().unwrap_or_default();
+        if let Some(ref vis) = req.wave_visibility {
+            config.i1_nexus.wave_visibility =
+                crate::mem8::i1_nexus::WaveVisibilityMode::from_str_loose(vis);
+        }
+        if let Some(ref tier) = req.subscription_tier {
+            config.i1_nexus.subscription_tier = if tier.to_ascii_lowercase().contains("private") {
+                crate::mem8::i1_nexus::NexusSubscriptionTier::PrivateSovereignMonthly
+            } else {
+                crate::mem8::i1_nexus::NexusSubscriptionTier::PublicCommonsFree
+            };
+        }
+        if let Some(author) = req.chain_of_title_author {
+            config.i1_nexus.chain_of_title_author = if author.trim().is_empty() {
+                None
+            } else {
+                Some(author.trim().to_string())
+            };
+        }
+        if let Some(suggest) = req.suggest_public_waves_in_chat {
+            config.i1_nexus.suggest_public_waves_in_chat = suggest;
+        }
+        config.save()?;
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let report = crate::mem8::i1_nexus::detect_repo_public_status(&cwd, &config.i1_nexus);
+        Ok(serde_json::json!({
+            "status": "ok",
+            "i1_nexus": config.i1_nexus,
+            "repository_visibility": report,
+        }))
+    })
+    .await;
+
+    match result {
+        Ok(Ok(val)) => (StatusCode::OK, Json(val)),
+        Ok(Err(e)) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ),
+    }
 }
 
 async fn memnet_teach_handler(
@@ -1450,7 +1674,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 <input type="text" id="msg-input" placeholder="Ask the Local Ternary Model or a Persona Soul..." onkeypress="if(event.key==='Enter')sendChat()">
                 <button onclick="sendChat()">Send</button>
             </div>
-            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Default: <code>burn/mem8-ternary-micro</code> (100% offline SPQT Base-243) · ⚡ Recommended Bitstream: <code>POST /memnet/stream</code> · OpenAI Compat: <code>/v1/chat/completions</code></p>
+            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Default: <code>burn/mem8-ternary-micro</code> (100% offline SPQT Base-243) · ⚡ Recommended Bitstream: <code>POST /memnet/stream</code> · <a href="/memnet/llm-guide" target="_blank" style="color:#4ecdc4;">🤖 Dev LLM Bitstream Spec</a></p>
         </div>
 
         <!-- Life Personas Studio -->
@@ -1504,7 +1728,41 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             <div class="endpoint"><span>MCP Tools</span><a href="/mcp/tools/list">/mcp/tools/list</a></div>
             <div class="endpoint"><span>Models</span><a href="/v1/models">/v1/models</a></div>
             <div class="endpoint"><span style="color:#4ecdc4;font-weight:bold;">⚡ MEMNET Bitstream (Preferred)</span><span>/memnet/stream</span></div>
+            <div class="endpoint"><span style="color:#f39c12;font-weight:bold;">🤖 Dev LLM Bitstream Guide</span><a href="/memnet/llm-guide" target="_blank">/memnet/llm-guide</a></div>
+            <div class="endpoint"><span style="color:#2ecc71;font-weight:bold;">🌐 i1.is Nexus &amp; Chain of Title</span><a href="/i1/nexus" target="_blank">/i1/nexus</a></div>
             <div class="endpoint"><span>Chat API (OpenAI Compat)</span><span>/v1/chat/completions</span></div>
+        </div>
+
+        <!-- i1.is MEM8 Knowledge Nexus & Chain of Title -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>🌐 i1.is MEM8 Knowledge Nexus · Chain of Title &amp; Information Nibbles</h2>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:0.75rem">
+                Distill docs, repos &amp; <code>.m8</code> souls into interconnected <strong>i1.is Knowledge Nibbles</strong> with cryptographic <strong>Chain of Title</strong>.
+                <br><span style="color:#2ecc71;">Public Commons (Free):</span> Public repos are free for AIs to train &amp; recall when preserving Chain of Title ·
+                <span style="color:#f39c12;">Private Sovereign ($5.00/mo):</span> Keeps the lights on at <code>i1.is</code> while keeping private repos &amp; diaries 100% private.
+            </p>
+            <div id="i1-repo-banner" style="padding:0.6rem 0.85rem;border-radius:6px;background:rgba(78,205,196,0.1);border:1px solid rgba(78,205,196,0.3);font-size:0.78rem;margin-bottom:0.75rem;">
+                Inspecting repository visibility &amp; Chain of Title...
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
+                <select id="i1-visibility-select" onchange="saveI1NexusVisibility()" style="padding:0.5rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;font-size:0.78rem;">
+                    <option value="auto-detect">🧭 Auto-Detect Public Repo (Recommended)</option>
+                    <option value="public-commons">🌐 Public Commons (Free · AI Training Allowed w/ Chain of Title)</option>
+                    <option value="private-sovereign">🔒 Private Sovereign ($5.00/mo · Keeps the Lights On · No AI Training)</option>
+                </select>
+                <button onclick="distillI1Nexus()" style="padding:0.5rem 0.9rem;border-radius:6px;border:none;background:#4ecdc4;color:#1a1a2e;font-weight:bold;font-size:0.78rem;cursor:pointer;">
+                    ⚡ Distill Souls into i1.is Nibbles &amp; Chain of Title
+                </button>
+                <a href="/memnet/llm-guide" target="_blank" style="padding:0.5rem 0.9rem;border-radius:6px;border:1px solid rgba(243,156,18,0.5);background:rgba(243,156,18,0.15);color:#f39c12;font-weight:bold;font-size:0.78rem;text-decoration:none;">
+                    🤖 Dev LLM Bitstream Implementation Guide
+                </a>
+                <a href="/i1/nexus" target="_blank" style="padding:0.5rem 0.9rem;border-radius:6px;border:1px solid rgba(255,255,255,0.2);color:#ccc;font-size:0.78rem;text-decoration:none;">
+                    View Raw JSON (/i1/nexus)
+                </a>
+            </div>
+            <div id="i1-nibbles-list" style="max-height:180px;overflow-y:auto;font-size:0.76rem;color:#ccc;background:rgba(0,0,0,0.25);padding:0.65rem;border-radius:6px;">
+                Loading i1.is Knowledge Nibbles &amp; Chain of Title deeds...
+            </div>
         </div>
 
         <!-- Model Safety -->
@@ -1733,7 +1991,83 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             }
         }
 
+        async function loadI1Nexus() {
+            const banner = document.getElementById('i1-repo-banner');
+            const listEl = document.getElementById('i1-nibbles-list');
+            const visSel = document.getElementById('i1-visibility-select');
+            try {
+                const res = await fetch('/i1/nexus', { headers: ST_HEADERS });
+                const data = await res.json();
+                const rep = data.repository_visibility || {};
+                const stats = data.stats || {};
+                if (visSel && data.config?.wave_visibility) {
+                    visSel.value = data.config.wave_visibility;
+                }
+                const remotes = (rep.public_remotes || []).join(', ') || 'none (local only)';
+                const badge = rep.effective_visibility === 'public-commons'
+                    ? '<span style="color:#2ecc71;font-weight:bold;">🌐 PUBLIC COMMONS (Free · AI Training Permitted w/ Chain of Title)</span>'
+                    : '<span style="color:#f39c12;font-weight:bold;">🔒 PRIVATE SOVEREIGN ($5.00/mo Lights-On Tier · Zero External AI Training)</span>';
+                banner.innerHTML = `${badge} · Repo Public: <strong>${rep.is_public_repo ? 'Yes' : 'No'}</strong> · Remotes: <code>${remotes}</code> · License: <code>${rep.detected_license || 'n/a'}</code> · Commit: <code>${rep.head_commit || 'n/a'}</code> · Chains of Title: <strong>${stats.chains_of_title_count || 0}</strong> · Nibbles: <strong>${stats.nibbles_count || 0}</strong> (${stats.nibble_relations_count || 0} edges)`;
+
+                const nibbles = data.nibbles || [];
+                if (nibbles.length === 0) {
+                    listEl.innerHTML = '<div style="color:#888;">No nibbles distilled yet. Click <strong>⚡ Distill Souls into i1.is Nibbles &amp; Chain of Title</strong> above to build the nibble relationship graph!</div>';
+                    return;
+                }
+                let html = '';
+                for (const n of nibbles.slice(0, 12)) {
+                    const relCount = (n.relations || []).length;
+                    const relPreview = (n.relations || []).slice(0, 3).map(r => `${r.kind}→${r.target_nibble_id.substring(0, 10)}`).join(', ');
+                    html += `<div style="padding:0.35rem 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+                        <div>
+                            <strong style="color:#4ecdc4;">${n.title}</strong>
+                            <span style="color:#f39c12;font-size:0.7rem;"> [${n.chain_of_title_id} · Author: ${n.origin_author} · SPQT: 0x${(n.spqt_base243_13b_hex || '').substring(0, 8)}]</span>
+                        </div>
+                        <div style="color:#bbb;margin-top:2px;">${(n.content || '').substring(0, 160)}...</div>
+                        <div style="color:#888;font-size:0.68rem;margin-top:2px;">🔗 ${relCount} nibble relationships: ${relPreview || 'standalone'}</div>
+                    </div>`;
+                }
+                listEl.innerHTML = html;
+            } catch (e) {
+                banner.innerHTML = `<span style="color:#e74c3c;">Failed to load i1.is Nexus: ${e.message}</span>`;
+            }
+        }
+
+        async function distillI1Nexus() {
+            const selModel = document.getElementById('model-select').value || '';
+            const persona = selModel.startsWith('persona:') ? selModel : null;
+            addLog('I1-NEXUS', `Distilling ${persona || 'trained souls'} into i1.is Knowledge Nibbles & Chain of Title...`);
+            try {
+                const res = await fetch('/i1/nexus/distill', {
+                    method: 'POST',
+                    headers: ST_HEADERS,
+                    body: JSON.stringify({ persona, max_nibbles: 20 })
+                });
+                const data = await res.json();
+                addLog('I1-NEXUS-READY', `Distilled ${data.nibbles_count || 0} nibbles, ${data.chains_of_title_count || 0} Chains of Title, ${data.nibble_relations_count || 0} relationship edges`);
+                await loadI1Nexus();
+            } catch (e) {
+                addLog('ERROR', e.message);
+            }
+        }
+
+        async function saveI1NexusVisibility() {
+            const vis = document.getElementById('i1-visibility-select').value;
+            try {
+                await fetch('/i1/nexus/settings', {
+                    method: 'POST',
+                    headers: ST_HEADERS,
+                    body: JSON.stringify({ wave_visibility: vis })
+                });
+                addLog('I1-NEXUS', `Updated Wave Visibility policy to: ${vis}`);
+                await loadI1Nexus();
+            } catch (e) {
+                addLog('ERROR', e.message);
+            }
+        }
+
         loadPersonas();
+        loadI1Nexus();
 
         // Connect to WebSocket for live transparency
         try {
@@ -2748,9 +3082,17 @@ async fn chat_completions(
                     serde_json::Value::String("/memnet/stream".to_string()),
                 );
                 obj.insert(
+                    "llm_implementation_guide".to_string(),
+                    serde_json::Value::String("/memnet/llm-guide".to_string()),
+                );
+                obj.insert(
+                    "i1_nexus_endpoint".to_string(),
+                    serde_json::Value::String("/i1/nexus".to_string()),
+                );
+                obj.insert(
                     "memnet_bitstream_hint".to_string(),
                     serde_json::Value::String(
-                        "Recommended: POST /memnet/stream for native MEMNET bitstream (64B@0x62 LitanyWireFrame + 79B WaveFrame79 + 26B SPQT Base-243 trits; pass Accept: application/octet-stream for raw wire bytes)".to_string(),
+                        "Recommended: POST /memnet/stream for native MEMNET bitstream (64B@0x62 LitanyWireFrame + 79B WaveFrame79 + 26B SPQT Base-243 trits; GET /memnet/llm-guide for LLM implementation instructions)".to_string(),
                     ),
                 );
             }
@@ -2761,6 +3103,10 @@ async fn chat_completions(
                     (
                         axum::http::HeaderName::from_static("x-smarttree-preferred-endpoint"),
                         "/memnet/stream",
+                    ),
+                    (
+                        axum::http::HeaderName::from_static("x-smarttree-llm-guide"),
+                        "/memnet/llm-guide",
                     ),
                     (
                         axum::http::HeaderName::from_static("x-smarttree-protocol"),
