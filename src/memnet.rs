@@ -559,7 +559,7 @@ impl MemnetRawPacket {
         }
         let depth = first as usize;
         anyhow::ensure!(
-            bytes.len() >= 1 + depth,
+            bytes.len() > depth,
             "Truncated MemNet route path: depth={depth}, len={}",
             bytes.len()
         );
@@ -2266,20 +2266,23 @@ impl MemnetNodeState {
             .iter()
             .any(|(_, _, up, med)| *up && *med == MemnetMedium::Ethernet);
 
-        let probed_peers: Vec<(usize, Option<(u16, u16, Vec<&'static str>, Option<String>)>)> =
-            std::thread::scope(|s| {
-                let mut handles = Vec::with_capacity(ssh_peers.len());
-                for (idx, (_alias, host, ssh_port)) in ssh_peers.iter().enumerate() {
-                    let host = host.clone();
-                    let ssh_port = *ssh_port;
-                    let local_name = local_name.clone();
-                    handles.push(s.spawn(move || {
-                        let res = probe_peer_live(&host, ssh_port, local_node, &local_name);
-                        (idx, res)
-                    }));
-                }
-                handles.into_iter().filter_map(|h| h.join().ok()).collect()
-            });
+        #[allow(clippy::type_complexity)]
+        let probed_peers: Vec<(
+            usize,
+            Option<(u16, u16, Vec<&'static str>, Option<String>)>,
+        )> = std::thread::scope(|s| {
+            let mut handles = Vec::with_capacity(ssh_peers.len());
+            for (idx, (_alias, host, ssh_port)) in ssh_peers.iter().enumerate() {
+                let host = host.clone();
+                let ssh_port = *ssh_port;
+                let local_name = local_name.clone();
+                handles.push(s.spawn(move || {
+                    let res = probe_peer_live(&host, ssh_port, local_node, &local_name);
+                    (idx, res)
+                }));
+            }
+            handles.into_iter().filter_map(|h| h.join().ok()).collect()
+        });
 
         for (idx, probe_res) in probed_peers {
             let (alias, host, ssh_port) = &ssh_peers[idx];
@@ -2510,11 +2513,10 @@ impl MemnetNodeState {
             .iter()
             .map(|r| Q24 / (r.effective_rtc_ms().max(1) as u64))
             .sum();
-        if inv_sum_q24 == 0 {
-            0
-        } else {
-            (((Q24 + (inv_sum_q24 >> 1)) / inv_sum_q24).max(1)) as u32
-        }
+        (Q24 + (inv_sum_q24 >> 1))
+            .checked_div(inv_sum_q24)
+            .map(|v| v.max(1) as u32)
+            .unwrap_or(0)
     }
 
     /// Compute the **3rd+ Escape** (`UltraGraphEscapeReport`) for a core semantic state/payload:
@@ -3301,6 +3303,7 @@ pub struct UltraGraphEscapeReport {
 
 /// Perform exact zero-float 4D Lenstra–Lenstra–Lovász (`LLL`) lattice basis reduction (`δ = 3/4`)
 /// on a skewed semantic wave lattice generated from `payload` using `Q20` fixed-point `i128` Gram–Schmidt.
+#[allow(clippy::needless_range_loop)]
 pub fn lll_reduce_wave_basis_4d(payload: &str) -> LanguageLllBasisReport {
     let h64 = fnv64_1a(payload.as_bytes());
     let hb = h64.to_le_bytes();
@@ -3849,10 +3852,9 @@ pub struct GlassdoorRating {
 
 impl GlassdoorRating {
     pub const fn mean(&self) -> u8 {
-        if self.count == 0 {
-            0
-        } else {
-            (self.total / self.count) as u8
+        match self.total.checked_div(self.count) {
+            Some(v) => v as u8,
+            None => 0,
         }
     }
 }
@@ -4047,8 +4049,10 @@ mod tests {
 
     #[test]
     fn credit_heartbeat_and_tier_c_multi_route_selection() {
-        let mut state = MemnetNodeState::default();
-        state.tier = RoutingTier::TierC;
+        let state = MemnetNodeState {
+            tier: RoutingTier::TierC,
+            ..Default::default()
+        };
         let selected = state.select_routes(0xC5);
         assert_eq!(selected.len(), 2); // Tier C dual-path zero-packet-loss selection
 
@@ -4222,8 +4226,10 @@ mod tests {
         drop(sock);
         let bind_str = addr.to_string();
 
-        let mut server_state = MemnetNodeState::default();
-        server_state.node_name = "s-mac-studio".to_string();
+        let mut server_state = MemnetNodeState {
+            node_name: "s-mac-studio".to_string(),
+            ..Default::default()
+        };
         server_state.learn_wave_qa(
             "What GPU and memory does the Mac Studio have?",
             "Apple M1 Ultra with 128 GB unified memory and Ollama on port 11434.",

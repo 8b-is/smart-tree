@@ -227,10 +227,10 @@ fn test_erdos_steiner_pruning_and_disconnect_cancellation() {
 fn test_moser_tardos_parallel_mis_disjointness_and_reproducibility() {
     // Construct a 3-CNF formula with 40 variables and 30 clauses
     let mut bad_events = Vec::new();
-    for i in 1..=30 {
-        let v1 = i as i32;
-        let v2 = ((i % 40) + 1) as i32;
-        let v3 = (((i + 7) % 40) + 1) as i32;
+    for i in 1i32..=30 {
+        let v1 = i;
+        let v2 = (i % 40) + 1;
+        let v3 = ((i + 7) % 40) + 1;
         bad_events.push(vec![v1, -v2, v3]);
     }
 

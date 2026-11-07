@@ -16,7 +16,7 @@ fn test_ernie55_latent_moe_4096_to_2048_simd_bent_5trit_kernel() {
     //    and all cyclic bend multipliers k in {0, 1, 2}
     for &dim in &[ERNIE55_LATENT_DIM, ERNIE55_HIDDEN_DIM, 2053usize] {
         let weights: Vec<u8> = (0..dim).map(|i| ((i * 41 + 17) & 0xFF) as u8).collect();
-        let packed_len = (dim + 4) / 5;
+        let packed_len = dim.div_ceil(5);
 
         for bend_k in 0u8..=2u8 {
             let mut out_scalar = vec![0u8; packed_len];
@@ -99,7 +99,7 @@ fn test_fused_unpack_unbend_gemv_410b_latent_moe_row_and_i8_min_safety() {
             .map(|i| ((i * 97 + 31) & 0xFF) as u8 as i8)
             .collect();
 
-        let packed_len = (dim + 4) / 5;
+        let packed_len = dim.div_ceil(5);
         if dim == ERNIE55_LATENT_DIM {
             assert_eq!(packed_len, PACKED_LATENT_ROW_BYTES); // 410 bytes
         }

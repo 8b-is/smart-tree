@@ -13,7 +13,7 @@ pub const ERNIE55_NUM_HEADS: usize = 64;
 /// Low-rank query latent dimension (d_model / 4 = 4096 / 4 = 1024).
 pub const ERNIE55_QUERY_LATENT_DIM: usize = 1024;
 /// Packed 5-trit byte stride for a 1024-d query-latent gate row: ceil(1024 / 5) = 205 bytes.
-pub const PACKED_QUERY_LATENT_ROW_BYTES: usize = (ERNIE55_QUERY_LATENT_DIM + 4) / 5;
+pub const PACKED_QUERY_LATENT_ROW_BYTES: usize = ERNIE55_QUERY_LATENT_DIM.div_ceil(5);
 
 /// Head dimension for full-context MLA layers (1 in 7 layers).
 pub const MLA_HEAD_DIM: usize = 256;
@@ -40,7 +40,7 @@ pub enum AttentionLayerKind {
 impl AttentionLayerKind {
     #[inline]
     pub const fn for_layer(layer_idx: usize) -> Self {
-        if (layer_idx + 1) % 7 == 0 {
+        if (layer_idx + 1).is_multiple_of(7) {
             Self::MlaDsaSparse256
         } else {
             Self::Hca128xCompressed512
@@ -100,7 +100,7 @@ impl LowRankQueryGate {
 
         let gate_rows = self.w_gate_from_latent.rows;
         let packed_gate_bytes = self.w_gate_from_latent.packed_data.len();
-        let full_equiv_bytes = gate_rows * ((self.w_q_down.cols + 4) / 5);
+        let full_equiv_bytes = gate_rows * self.w_q_down.cols.div_ceil(5);
         let reduction_pct = if full_equiv_bytes > 0 {
             (1.0 - (packed_gate_bytes as f64) / (full_equiv_bytes as f64)) * 100.0
         } else {
@@ -162,12 +162,11 @@ impl VirtualHeadAttentionMixer {
 
         let mut virtual_bottleneck = vec![vec![0.0f32; head_dim]; self.rank];
         for (j, head_vec) in head_outputs.iter().enumerate() {
-            for r in 0..self.rank {
+            for (r, bottleneck_row) in virtual_bottleneck.iter_mut().enumerate().take(self.rank) {
                 let v_jr = self.v_proj[j][r];
                 if v_jr.abs() <= 1e-12 {
                     continue;
                 }
-                let bottleneck_row = &mut virtual_bottleneck[r];
                 for (dst, &val) in bottleneck_row.iter_mut().zip(head_vec.iter()) {
                     *dst += v_jr * val;
                 }
@@ -175,12 +174,11 @@ impl VirtualHeadAttentionMixer {
         }
 
         for (h, head_vec) in head_outputs.iter_mut().enumerate() {
-            for r in 0..self.rank {
+            for (r, bottleneck_row) in virtual_bottleneck.iter().enumerate().take(self.rank) {
                 let u_hr = self.u_proj[h][r];
                 if u_hr.abs() <= 1e-12 {
                     continue;
                 }
-                let bottleneck_row = &virtual_bottleneck[r];
                 for (dst, &b_val) in head_vec.iter_mut().zip(bottleneck_row.iter()) {
                     *dst += u_hr * b_val;
                 }
@@ -241,7 +239,7 @@ impl HcaCompressedKvCache {
             let inv_block = 1.0 / (self.block_size as f32);
 
             for entry in self.staging_block.drain(..) {
-                for (dst, val) in summary.iter_mut().zip(entry.kv_latent.into_iter()) {
+                for (dst, val) in summary.iter_mut().zip(entry.kv_latent) {
                     *dst += val * inv_block;
                 }
             }
@@ -384,6 +382,7 @@ pub struct Ernie55HybridAttentionLayer {
 }
 
 impl Ernie55HybridAttentionLayer {
+    #[allow(clippy::needless_range_loop)]
     pub fn forward_mhc_step(
         &self,
         streams: &mut [Vec<f32>; MHC_STREAMS],

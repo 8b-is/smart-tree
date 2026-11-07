@@ -670,6 +670,7 @@ pub struct KintsugiEvent {
     pub timestamp_ms: u64,
 }
 
+#[derive(Default)]
 pub struct KintsugiLedger {
     pub events: Vec<KintsugiEvent>,
 }

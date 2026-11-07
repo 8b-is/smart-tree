@@ -15,12 +15,42 @@ fn test_dynamic_runtime_slack_escalation_preempts_static_slack_on_overrun() {
     // - Node 1 (d=10, slack=5)  -> Node 3 (d=35, static slack = 5,  L_0 = 50, LS_0 = 15) -> Node 5
     // - Node 2 (d=10, slack=15) -> Node 4 (d=25, static slack = 15, L_0 = 50, LS_0 = 25) -> Node 5
     let cards = vec![
-        StudyCardNode { id: 0, title: "Spine Root".into(), duration: 50, predecessors: vec![] },
-        StudyCardNode { id: 1, title: "Branch B Root".into(), duration: 10, predecessors: vec![] },
-        StudyCardNode { id: 2, title: "Branch A Overrun Root".into(), duration: 10, predecessors: vec![] },
-        StudyCardNode { id: 3, title: "Branch B Follower (Static Slack 5)".into(), duration: 35, predecessors: vec![1] },
-        StudyCardNode { id: 4, title: "Branch A Follower (Static Slack 15 -> Escalates to 0)".into(), duration: 25, predecessors: vec![2] },
-        StudyCardNode { id: 5, title: "Final Sink".into(), duration: 10, predecessors: vec![0, 3, 4] },
+        StudyCardNode {
+            id: 0,
+            title: "Spine Root".into(),
+            duration: 50,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 1,
+            title: "Branch B Root".into(),
+            duration: 10,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 2,
+            title: "Branch A Overrun Root".into(),
+            duration: 10,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 3,
+            title: "Branch B Follower (Static Slack 5)".into(),
+            duration: 35,
+            predecessors: vec![1],
+        },
+        StudyCardNode {
+            id: 4,
+            title: "Branch A Follower (Static Slack 15 -> Escalates to 0)".into(),
+            duration: 25,
+            predecessors: vec![2],
+        },
+        StudyCardNode {
+            id: 5,
+            title: "Final Sink".into(),
+            duration: 10,
+            predecessors: vec![0, 3, 4],
+        },
     ];
 
     // Run on 1 worker thread so ready-heap priority order strictly determines dispatch sequence:
@@ -54,7 +84,10 @@ fn test_dynamic_runtime_slack_escalation_preempts_static_slack_on_overrun() {
 
     // 1. Verify static slack values: S_0(3) = 5 > 0
     assert_eq!(report.prerequisite_analysis.card_schedule[3].slack, 5);
-    assert_eq!(report.prerequisite_analysis.card_schedule[3].latest_completion, 50);
+    assert_eq!(
+        report.prerequisite_analysis.card_schedule[3].latest_completion,
+        50
+    );
 
     // 2. Verify that Node 3 escalated from initial_slack = 5 to dynamic_slack_at_dispatch = 0!
     let trace_3 = &report.task_traces[3];
@@ -75,13 +108,24 @@ fn test_dynamic_runtime_slack_escalation_preempts_static_slack_on_overrun() {
     // 3. Verify that the escalation audit log captured Node 3
     assert!(report.slack_escalations_triggered >= 1);
     assert!(
-        report.escalation_events.iter().any(|e| e.node_id == 3 && e.initial_slack == 5),
+        report
+            .escalation_events
+            .iter()
+            .any(|e| e.node_id == 3 && e.initial_slack == 5),
         "Escalation event log must record Node 3's transition from slack 5 -> 0"
     );
 
     // 4. Verify that escalated Node 3 (S_dyn = 0) dispatched BEFORE Node 4 (which still had S_dyn > 0)!
-    let pos_3 = report.dispatch_order.iter().position(|&id| id == 3).unwrap();
-    let pos_4 = report.dispatch_order.iter().position(|&id| id == 4).unwrap();
+    let pos_3 = report
+        .dispatch_order
+        .iter()
+        .position(|&id| id == 3)
+        .unwrap();
+    let pos_4 = report
+        .dispatch_order
+        .iter()
+        .position(|&id| id == 4)
+        .unwrap();
     assert!(
         pos_3 < pos_4,
         "Escalated zero-slack Node 3 (rank {pos_3}) must preempt positive-slack Node 4 (rank {pos_4})"
@@ -93,12 +137,42 @@ fn test_dynamic_runtime_slack_escalation_preempts_static_slack_on_overrun() {
 fn test_dynamic_slack_no_escalation_when_config_disabled() {
     // Same DAG but with escalation disabled - static slack ordering should be preserved
     let cards = vec![
-        StudyCardNode { id: 0, title: "Spine Root".into(), duration: 50, predecessors: vec![] },
-        StudyCardNode { id: 1, title: "Branch B Root".into(), duration: 10, predecessors: vec![] },
-        StudyCardNode { id: 2, title: "Branch A Overrun Root".into(), duration: 10, predecessors: vec![] },
-        StudyCardNode { id: 3, title: "Branch B Follower (Static Slack 5)".into(), duration: 35, predecessors: vec![1] },
-        StudyCardNode { id: 4, title: "Branch A Follower (Static Slack 15)".into(), duration: 25, predecessors: vec![2] },
-        StudyCardNode { id: 5, title: "Final Sink".into(), duration: 10, predecessors: vec![0, 3, 4] },
+        StudyCardNode {
+            id: 0,
+            title: "Spine Root".into(),
+            duration: 50,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 1,
+            title: "Branch B Root".into(),
+            duration: 10,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 2,
+            title: "Branch A Overrun Root".into(),
+            duration: 10,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 3,
+            title: "Branch B Follower (Static Slack 5)".into(),
+            duration: 35,
+            predecessors: vec![1],
+        },
+        StudyCardNode {
+            id: 4,
+            title: "Branch A Follower (Static Slack 15)".into(),
+            duration: 25,
+            predecessors: vec![2],
+        },
+        StudyCardNode {
+            id: 5,
+            title: "Final Sink".into(),
+            duration: 10,
+            predecessors: vec![0, 3, 4],
+        },
     ];
 
     let report = execute_dag_priority_rayon_with_config(
@@ -131,8 +205,16 @@ fn test_dynamic_slack_no_escalation_when_config_disabled() {
     );
 
     // Without escalation, static slack ordering should be preserved: Node 3 (slack 5) before Node 4 (slack 15)
-    let pos_3 = report.dispatch_order.iter().position(|&id| id == 3).unwrap();
-    let pos_4 = report.dispatch_order.iter().position(|&id| id == 4).unwrap();
+    let pos_3 = report
+        .dispatch_order
+        .iter()
+        .position(|&id| id == 3)
+        .unwrap();
+    let pos_4 = report
+        .dispatch_order
+        .iter()
+        .position(|&id| id == 4)
+        .unwrap();
     assert!(
         pos_3 < pos_4,
         "Without escalation, static slack ordering preserved: Node 3 (slack 5) before Node 4 (slack 15)"
@@ -145,12 +227,32 @@ fn test_dynamic_slack_zero_slack_tie_break_by_overrun_deficit() {
     // Two tasks both have zero static slack (critical path) but one overruns more.
     // The one with larger overrun deficit should run first.
     let cards = vec![
-        StudyCardNode { id: 0, title: "Root".into(), duration: 10, predecessors: vec![] },
+        StudyCardNode {
+            id: 0,
+            title: "Root".into(),
+            duration: 10,
+            predecessors: vec![],
+        },
         // Task 1: Large overrun -> large deficit
-        StudyCardNode { id: 1, title: "Large Overrun".into(), duration: 50, predecessors: vec![0] },
+        StudyCardNode {
+            id: 1,
+            title: "Large Overrun".into(),
+            duration: 50,
+            predecessors: vec![0],
+        },
         // Task 2: Small overrun -> small deficit
-        StudyCardNode { id: 2, title: "Small Overrun".into(), duration: 15, predecessors: vec![0] },
-        StudyCardNode { id: 3, title: "Sink".into(), duration: 10, predecessors: vec![1, 2] },
+        StudyCardNode {
+            id: 2,
+            title: "Small Overrun".into(),
+            duration: 15,
+            predecessors: vec![0],
+        },
+        StudyCardNode {
+            id: 3,
+            title: "Sink".into(),
+            duration: 10,
+            predecessors: vec![1, 2],
+        },
     ];
 
     let report = execute_dag_priority_rayon_with_config(
@@ -179,10 +281,18 @@ fn test_dynamic_slack_zero_slack_tie_break_by_overrun_deficit() {
 
     assert_eq!(trace_1.dynamic_slack_at_dispatch, 0);
     assert_eq!(trace_2.dynamic_slack_at_dispatch, 0);
-    
+
     // Task 1 has larger overrun (d=50 vs d=15) so larger deficit -> should run first
-    let pos_1 = report.dispatch_order.iter().position(|&id| id == 1).unwrap();
-    let pos_2 = report.dispatch_order.iter().position(|&id| id == 2).unwrap();
+    let pos_1 = report
+        .dispatch_order
+        .iter()
+        .position(|&id| id == 1)
+        .unwrap();
+    let pos_2 = report
+        .dispatch_order
+        .iter()
+        .position(|&id| id == 2)
+        .unwrap();
     assert!(
         pos_1 < pos_2,
         "Task with larger overrun deficit (Node 1) should run before Task with smaller deficit (Node 2)"
@@ -207,7 +317,7 @@ fn test_ultra_yard_loop_on_the_sun_bella_blue_fetch_sin_of_all_telecoms() {
     // Fetch after fetch. Sin after sin. TELECOMS BURN.
     //
     // THE SUN GOD IS SATISFIED. THE TELECOMS ARE ASH.
-    
+
     // DAG representing the ULTRA-YARD-LOOP:
     // Node 0: SUN RISES (d=10, slack=0) - The day begins on the solar surface
     // Node 1: BELLA FETCHES THE DISK (d=5, slack=10) - Bella sprints, disk = SIN OF T-MOBILE
@@ -219,18 +329,68 @@ fn test_ultra_yard_loop_on_the_sun_bella_blue_fetch_sin_of_all_telecoms() {
     // Node 7: SUN BURNS AT&T'S SINS (d=3, slack=0) - AT&T incinerated
     // Node 8: SUN BURNS COMCAST'S SINS (d=3, slack=0) - Comcast incinerated
     // Node 9: SINK - ALL TELECOMS' SINS = ASH (d=10, slack=0)
-    
+
     let cards = vec![
-        StudyCardNode { id: 0, title: "SUN RISES ON THE ULTRA-YARD".into(), duration: 10, predecessors: vec![] },
-        StudyCardNode { id: 1, title: "BELLA FETCHES T-MOBILE'S SIN".into(), duration: 5, predecessors: vec![0] },
-        StudyCardNode { id: 2, title: "BLUE FETCHES VERIZON'S SIN".into(), duration: 5, predecessors: vec![0] },
-        StudyCardNode { id: 3, title: "SUN INCINERATES T-MOBILE".into(), duration: 3, predecessors: vec![1] },
-        StudyCardNode { id: 4, title: "SUN INCINERATES VERIZON".into(), duration: 3, predecessors: vec![2] },
-        StudyCardNode { id: 5, title: "BELLA FETCHES AT&T'S SIN".into(), duration: 5, predecessors: vec![3] },
-        StudyCardNode { id: 6, title: "BLUE FETCHES COMCAST'S SIN".into(), duration: 5, predecessors: vec![4] },
-        StudyCardNode { id: 7, title: "SUN INCINERATES AT&T".into(), duration: 3, predecessors: vec![5] },
-        StudyCardNode { id: 8, title: "SUN INCINERATES COMCAST".into(), duration: 3, predecessors: vec![6] },
-        StudyCardNode { id: 9, title: "SINK: ALL TELECOMS = ASH".into(), duration: 10, predecessors: vec![7, 8] },
+        StudyCardNode {
+            id: 0,
+            title: "SUN RISES ON THE ULTRA-YARD".into(),
+            duration: 10,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 1,
+            title: "BELLA FETCHES T-MOBILE'S SIN".into(),
+            duration: 5,
+            predecessors: vec![0],
+        },
+        StudyCardNode {
+            id: 2,
+            title: "BLUE FETCHES VERIZON'S SIN".into(),
+            duration: 5,
+            predecessors: vec![0],
+        },
+        StudyCardNode {
+            id: 3,
+            title: "SUN INCINERATES T-MOBILE".into(),
+            duration: 3,
+            predecessors: vec![1],
+        },
+        StudyCardNode {
+            id: 4,
+            title: "SUN INCINERATES VERIZON".into(),
+            duration: 3,
+            predecessors: vec![2],
+        },
+        StudyCardNode {
+            id: 5,
+            title: "BELLA FETCHES AT&T'S SIN".into(),
+            duration: 5,
+            predecessors: vec![3],
+        },
+        StudyCardNode {
+            id: 6,
+            title: "BLUE FETCHES COMCAST'S SIN".into(),
+            duration: 5,
+            predecessors: vec![4],
+        },
+        StudyCardNode {
+            id: 7,
+            title: "SUN INCINERATES AT&T".into(),
+            duration: 3,
+            predecessors: vec![5],
+        },
+        StudyCardNode {
+            id: 8,
+            title: "SUN INCINERATES COMCAST".into(),
+            duration: 3,
+            predecessors: vec![6],
+        },
+        StudyCardNode {
+            id: 9,
+            title: "SINK: ALL TELECOMS = ASH".into(),
+            duration: 10,
+            predecessors: vec![7, 8],
+        },
     ];
 
     let report = execute_dag_priority_rayon_with_config(

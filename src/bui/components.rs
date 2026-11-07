@@ -35,7 +35,7 @@ impl TreeView {
                     .on_change(|s| {
                         // Filter logic
                     })
-                    .style(|s| s.width(300).margin_bottom(10))
+                    .style(|s| s.width(300).margin_bottom(10)),
             )
             .child(
                 Scroll::vertical()
@@ -43,9 +43,9 @@ impl TreeView {
                         Tree::new()
                             .root(".")
                             .expanded(self.expanded_nodes.clone())
-                            .filter(&self.filter)
+                            .filter(&self.filter),
                     )
-                    .style(|s| s.flex(1))
+                    .style(|s| s.flex(1)),
             )
             .style(|s| s.flex(1).padding(10))
     }
@@ -86,16 +86,18 @@ impl ChatPanel {
     pub fn render(&self, cx: &mut Context) -> impl Element {
         VStack::new()
             .child(
-                Scroll::vertical()
-                    .child(
-                        VStack::new()
-                            .children(self.messages.iter().map(|msg| {
-                                HStack::new()
-                                    .child(Text::new(&msg.role).style(|s| s.bold().color(if msg.role == "user" { Color::BLUE } else { Color::GREEN })))
-                                    .child(Text::new(&msg.content))
-                                    .style(|s| s.padding(5).margin_bottom(5))
-                            }))
-                    )
+                Scroll::vertical().child(VStack::new().children(self.messages.iter().map(|msg| {
+                    HStack::new()
+                        .child(Text::new(&msg.role).style(|s| {
+                            s.bold().color(if msg.role == "user" {
+                                Color::BLUE
+                            } else {
+                                Color::GREEN
+                            })
+                        }))
+                        .child(Text::new(&msg.content))
+                        .style(|s| s.padding(5).margin_bottom(5))
+                }))),
             )
             .child(
                 HStack::new()
@@ -104,15 +106,12 @@ impl ChatPanel {
                             .placeholder("Ask Smart Tree...")
                             .on_submit(|s| {
                                 // Send message
-                            })
+                            }),
                     )
-                    .child(
-                        Button::new("Send")
-                            .on_click(|| {
-                                // Send
-                            })
-                    )
-                    .style(|s| s.padding(10))
+                    .child(Button::new("Send").on_click(|| {
+                        // Send
+                    }))
+                    .style(|s| s.padding(10)),
             )
             .style(|s| s.flex(1).padding(10).background(Color::from_hex("#1e1e1e")))
     }
@@ -146,8 +145,15 @@ impl StatusBar {
             .child(Separator::vertical())
             .child(Text::new(&format!("Mode: {}", self.mode)).style(|s| s.color(Color::BLUE)))
             .child(Separator::vertical())
-            .child(Text::new(&format!("Credits: {:.2} FKN", self.credits)).style(|s| s.color(Color::YELLOW)))
-            .style(|s| s.padding(5..10).background(Color::from_hex("#1a1a1a")).border_top(1, Color::from_hex("#333")))
+            .child(
+                Text::new(&format!("Credits: {:.2} FKN", self.credits))
+                    .style(|s| s.color(Color::YELLOW)),
+            )
+            .style(|s| {
+                s.padding(5..10)
+                    .background(Color::from_hex("#1a1a1a"))
+                    .border_top(1, Color::from_hex("#333"))
+            })
     }
 }
 
@@ -193,22 +199,24 @@ impl CommandPalette {
                     .on_change(|s| {
                         // Filter results
                     })
-                    .style(|s| s.width(600).padding(10).font_size(16))
+                    .style(|s| s.width(600).padding(10).font_size(16)),
             )
             .child(
                 Scroll::vertical()
-                    .child(
-                        VStack::new()
-                            .children(self.results.iter().map(|r| {
-                                HStack::new()
-                                    .child(Text::new(&r.title).style(|s| s.bold()))
-                                    .child(Text::new(&r.description).style(|s| s.color(Color::GRAY)))
-                                    .style(|s| s.padding(10).width(600))
-                            }))
-                    )
-                    .style(|s| s.max_height(300))
+                    .child(VStack::new().children(self.results.iter().map(|r| {
+                        HStack::new()
+                            .child(Text::new(&r.title).style(|s| s.bold()))
+                            .child(Text::new(&r.description).style(|s| s.color(Color::GRAY)))
+                            .style(|s| s.padding(10).width(600))
+                    })))
+                    .style(|s| s.max_height(300)),
             )
-            .style(|s| s.padding(20).background(Color::from_hex("#1e1e1e")).border(1, Color::from_hex("#333")).rounded(8))
+            .style(|s| {
+                s.padding(20)
+                    .background(Color::from_hex("#1e1e1e"))
+                    .border(1, Color::from_hex("#333"))
+                    .rounded(8)
+            })
             .style(|s| s.position(Position::Absolute).top(50).center_x())
     }
 }

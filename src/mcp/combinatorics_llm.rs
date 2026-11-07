@@ -3771,7 +3771,6 @@ pub fn project_gains_into_jury_polytope(
         Err(_) => {
             // Construct a minimal valid certificate for the safe anchor
             use crate::ternary_deck::CharacteristicOrder;
-            use crate::ternary_deck::ComplexRoot;
             JuryStabilityCertificate {
                 effective_order: CharacteristicOrder::ThirdOrderPid,
                 cubic_coefficients: [1.0, 0.0, 0.0, 0.0],

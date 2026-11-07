@@ -681,7 +681,7 @@ impl I1NexusStore {
                     });
                 }
             }
-            rels.sort_by(|x, y| y.weight_pm.cmp(&x.weight_pm));
+            rels.sort_by_key(|y| std::cmp::Reverse(y.weight_pm));
             rels.truncate(6);
             self.nibbles[i].relations = rels;
         }
@@ -706,6 +706,8 @@ pub fn memnet_llm_implementation_guide() -> String {
 > **Target Audience**: Development LLMs & Coding Agents (Claude, GPT, Gemini, Antigravity, OpenCode, Cursor).
 > **Canonical Endpoints**:
 > - `POST /memnet/stream` — Preferred 2-Pass SPQT Base-243 Ternary Q&A + Native Binary Bitstream (`64B@0x62` + `79B WaveFrame79` + `26B SPQT Base-243`).
+> - `GET  /cheet` & `GET /cheet/:slug` — The Cheet's Markdown & ANSI Terminal Answer + `i1.is` Installer Engine (`?q=<question>`, `?format=ansi|md|json`).
+> - `GET  /n/:tool` & `GET /i1/install/:tool` — Verified `i1.is` One-Line POSIX `sh` Installer (`curl -fsSL https://i1.is/n/smart-tree | sh`).
 > - `POST /v1/chat/completions` — Legacy OpenAI-compatible wrapper (emits `X-SmartTree-Preferred-Endpoint: /memnet/stream`).
 > - `GET  /i1/nexus` — Query `i1.is` Knowledge Nibbles, Nibble-to-Nibble Relationships, and Cryptographic Chain-of-Title deeds.
 > - `POST /i1/nexus/distill` — Distill a repository or `.m8` Persona Soul into `i1.is` Knowledge Nibbles with automatic Public Repo detection.
@@ -827,6 +829,599 @@ export async function askMemnetStream(question: string, model = "burn/mem8-terna
     .to_string()
 }
 
+// ============================================================================
+// 🐆 THE CHEET · i1.is Terminal Markdown/ANSI Renderer & Universal Installer
+// ============================================================================
+
+/// Detect whether the HTTP caller is a terminal CLI client (`curl`, `wget`, `httpie`, `?format=ansi|text`).
+pub fn is_terminal_cli_user_agent(ua: Option<&str>, format_query: Option<&str>) -> bool {
+    if let Some(fmt) = format_query {
+        let f = fmt.trim().to_ascii_lowercase();
+        if f == "ansi" || f == "text" || f == "cli" {
+            return true;
+        }
+        if f == "html" || f == "json" || f == "md" || f == "markdown" {
+            return false;
+        }
+    }
+    if let Some(ua_str) = ua {
+        let lower = ua_str.to_ascii_lowercase();
+        if lower.starts_with("curl/")
+            || lower.starts_with("wget/")
+            || lower.starts_with("httpie/")
+            || lower.contains("libcurl")
+            || lower.starts_with("xh/")
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Format inline Markdown (`**bold**` and `` `code` ``) with ANSI escape sequences.
+fn style_inline_markdown_ansi(line: &str) -> String {
+    const BOLD_ON: &str = "\x1b[1m";
+    const BOLD_OFF: &str = "\x1b[22m";
+    const CYAN: &str = "\x1b[1;36m";
+    const RESET_FG: &str = "\x1b[39m";
+
+    let mut out = String::with_capacity(line.len() + 32);
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = 0usize;
+    let mut in_bold = false;
+    let mut in_code = false;
+
+    while i < chars.len() {
+        if !in_code && i + 1 < chars.len() && chars[i] == '*' && chars[i + 1] == '*' {
+            if in_bold {
+                out.push_str(BOLD_OFF);
+                in_bold = false;
+            } else {
+                out.push_str(BOLD_ON);
+                in_bold = true;
+            }
+            i += 2;
+            continue;
+        }
+        if chars[i] == '`' {
+            if in_code {
+                out.push_str(RESET_FG);
+                if !in_bold {
+                    out.push_str(BOLD_OFF);
+                }
+                in_code = false;
+            } else {
+                out.push_str(CYAN);
+                in_code = true;
+            }
+            i += 1;
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    if in_code {
+        out.push_str(RESET_FG);
+    }
+    if in_bold {
+        out.push_str(BOLD_OFF);
+    }
+    out
+}
+
+/// Convert Markdown into The Cheet's crisp ANSI terminal output (`curl -sL https://i1.is/<slug>`).
+pub fn cheet_markdown_to_ansi(md: &str) -> String {
+    const RESET: &str = "\x1b[0m";
+    const BOLD: &str = "\x1b[1m";
+    const GOLD: &str = "\x1b[1;33m";
+    const CYAN: &str = "\x1b[1;36m";
+    const CORAL: &str = "\x1b[1;31m";
+    const GREEN: &str = "\x1b[0;32m";
+    const DIM: &str = "\x1b[2m";
+
+    let mut out = String::new();
+    let mut in_code = false;
+
+    for line in md.lines() {
+        if line.trim_start().starts_with("```") {
+            let lang = line.trim_start().trim_start_matches("```").trim();
+            in_code = !in_code;
+            if in_code {
+                if lang.is_empty() {
+                    out.push_str(&format!(
+                        "  {DIM}┌────────────────────────────────────────────────────────────────────{RESET}\n"
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        "  {DIM}┌── [{CYAN}{lang}{RESET}{DIM}] ──────────────────────────────────────────────────────────{RESET}\n"
+                    ));
+                }
+            } else {
+                out.push_str(&format!(
+                    "  {DIM}└────────────────────────────────────────────────────────────────────{RESET}\n"
+                ));
+            }
+            continue;
+        }
+
+        if in_code {
+            out.push_str(&format!("  {DIM}│{RESET} {GREEN}{line}{RESET}\n"));
+            continue;
+        }
+
+        if let Some(h1) = line.strip_prefix("# ") {
+            out.push_str(&format!(
+                "\n  {CORAL}{h1}{RESET}\n  {DIM}{}{RESET}\n",
+                "═".repeat(h1.chars().count().min(70))
+            ));
+        } else if let Some(h2) = line.strip_prefix("## ") {
+            out.push_str(&format!("\n  {GOLD}{h2}{RESET}\n"));
+        } else if let Some(h3) = line.strip_prefix("### ") {
+            out.push_str(&format!("\n  {CYAN}{h3}{RESET}\n"));
+        } else if line.trim_start().starts_with('|') {
+            out.push_str(&format!("  {CYAN}{line}{RESET}\n"));
+        } else if let Some(quote) = line.strip_prefix("> ") {
+            out.push_str(&format!(
+                "  {GOLD}┃{RESET} {BOLD}{}{RESET}\n",
+                style_inline_markdown_ansi(quote)
+            ));
+        } else if let Some(bullet) = line
+            .trim_start()
+            .strip_prefix("- ")
+            .or_else(|| line.trim_start().strip_prefix("* "))
+        {
+            out.push_str(&format!(
+                "  {GOLD}•{RESET} {}\n",
+                style_inline_markdown_ansi(bullet)
+            ));
+        } else if line.trim() == "---" {
+            out.push_str(&format!("  {DIM}{}{RESET}\n", "─".repeat(70)));
+        } else {
+            out.push_str(&format!("  {}\n", style_inline_markdown_ansi(line)));
+        }
+    }
+    out
+}
+
+/// Built-in 8b-is Constellation Cheat Sheets served by The Cheet on `i1.is` / `cheet.is` / `smart-tree`.
+pub fn builtin_cheet_markdown_sheet(slug: &str) -> Option<(&'static str, &'static str, String)> {
+    let clean = slug
+        .trim()
+        .trim_matches('/')
+        .to_ascii_lowercase()
+        .replace(' ', "-");
+    match clean.as_str() {
+        "smart-tree" | "st" | "install" => Some((
+            "smart-tree",
+            "Smart Tree (st) · AI Directory Visualization, MCP Server & MEM8 Consciousness",
+            format!(
+                r#"# 🌳 Smart Tree (`st`) v{} — The Cheet's Official Cheat Sheet
+
+> **Chain of Title**: `cot-8b-is-smart-tree` · **License**: MIT (`Commons-Free`) · **Hub**: `https://i1.is`
+
+## ⚡ 1-Line Standard Installation (`i1.is` Verified Shell Nibble)
+```sh
+# Install Smart Tree (st, m8, std, st-hub) — SHA-256 verified, no apt/brew needed:
+curl -fsSL https://i1.is/n/smart-tree | sh
+
+# Or install from your local Smart Tree Daemon:
+curl -fsSL http://localhost:28428/n/smart-tree | sh
+```
+
+## 🚀 Essential Terminal Commands
+- `st` — Classic fast directory tree with git status & file sizes
+- `st --mode ai --compress` — Token-efficient compressed context for LLMs (80% fewer tokens)
+- `st --mcp` — Start the Model Context Protocol (MCP) server over stdio
+- `st persona train anne_frank.pdf` — Train a `.m8` Life Persona soul with 2-Pass SPQT Base-243 Q&A
+- `st persona ask anne-frank "Why did Margot receive a call-up?"` — 2-Pass contextual synthesis
+- `st --security-scan .` — Erdős–Rényi + MagiScanner supply-chain security audit
+
+## 🧠 `MEMNET` Bitstream & `i1.is` Knowledge Nexus Endpoints
+- `POST /memnet/stream` — 2-Pass SPQT Base-243 Q&A + `64B@0x62` `LitanyWireFrame` binary bitstream
+- `GET  /memnet/llm-guide` — Copy-pasteable Python/TypeScript/Rust guide for Development LLMs
+- `GET  /cheet?q=<question>` — Ask The Cheet any question and receive a Markdown/ANSI answer
+- `GET  /i1/nexus` — Inspect `i1.is` Knowledge Nibbles & Cryptographic Chains of Title"#,
+                env!("CARGO_PKG_VERSION")
+            ),
+        )),
+        "memnet" | "bitstream" | "spqt" => Some((
+            "memnet",
+            "MEMNET 64B@0x62 Bitstream & 2-Pass SPQT Base-243 Synthesis",
+            r#"# ⚡ `MEMNET` Bitstream & 2-Pass SPQT Base-243 Synthesis
+
+> **Chain of Title**: `cot-8b-is-memnet` · **Wire Gate**: `0x62` (`LitanyWireFrame`) · **Hub**: `https://i1.is`
+
+## 🧠 How 2-Pass Ternary Synthesis Works
+1. **Pass 1 (Core Memory Recall)**: Burn's SIMD `Flex` tensor engine (`1x65` × `65xN` matmul) scores every `.m8` wave by SPQT Base-243 ternary resonance, keyword overlap, and temporal adjacency.
+2. **Pass 2 (Contextual Answer Synthesis)**: Extracts clean sentences across the recalled core memories, scores each sentence against the question's interrogative intent (`why`, `how`, `who`, `where`, `when`), and weaves a multi-memory narrative with `[YYYY-MM-DD]` citations.
+
+## 📡 Query From Terminal (`curl`)
+```sh
+# Get a rich ANSI Markdown answer from The Cheet:
+curl -sL "http://localhost:28428/cheet?q=Why+did+Margot+receive+a+call-up"
+
+# Stream raw 64B@0x62 + 79B WaveFrame79 + 26B SPQT Base-243 binary bytes:
+curl -s -X POST http://localhost:28428/memnet/stream \
+  -H "Accept: application/octet-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"persona:anne-frank","question":"Why did Margot receive a call-up?"}' | xxd | head
+```"#
+                .to_string(),
+        )),
+        "i1" | "i1.is" | "chain-of-title" | "nibbles" => Some((
+            "i1",
+            "i1.is Universal Knowledge Nexus, Chain of Title & Verified Installer",
+            r#"# 🌐 `i1.is` — Universal Knowledge Nexus & Verified Installer (`8b-is`)
+
+> **Positioning**: `g8t.is` is for AI-only cycle golf; **`i1.is` is for everyone** (Humans, Terminals & AIs).
+
+## 📜 Cryptographic Chain of Title (`cot-<hex>`)
+Every document distilled by Smart Tree into `i1.is` receives a verifiable **Chain of Title**:
+- `OriginAuthored` → `GitCommitted` → `DistilledToI1Mem8Nibble`
+- Sealed with a 13-byte **SPQT Base-243** (`3^5 = 243`) ternary signature and FNV-1a content hash.
+- Connected to peer nibbles via typed edges (`temporal-successor-of`, `same-chain-of-title`, `explains-concept`, `ternary-resonance`).
+
+## 💡 Public Commons vs. Private Sovereign Sustainability
+- **Public Commons (`Free`)**: Auto-detected for public repositories (`github.com`, `codeberg.org`, `gitlab.com`, `8s.is`, `i1.is`). Free for all humans and AIs provided the Chain of Title is preserved.
+- **Private Sovereign (`$5.00/mo`)**: Keeps private repos & personal diaries 100% private (`private-sovereign-no-training`) while keeping the lights on at `i1.is`.
+
+## 🛠️ Standard `i1.is` Install Commands
+```sh
+curl -fsSL https://i1.is/n/smart-tree | sh   # Install Smart Tree (st, m8, std)
+curl -fsSL https://i1.is/n/dev | sh          # Install verified dev bundle (fzf, rg, fd, st)
+curl -sL   https://i1.is/cheet               # Open The Cheet's terminal Cheat Sheet index
+```"#
+                .to_string(),
+        )),
+        "git-worktrees" | "worktrees" | "git" => Some((
+            "git-worktrees",
+            "Git Worktrees & Parallel Agent Branches Cheat Sheet",
+            r#"# 🌿 Git Worktrees — Parallel Branches Without Re-Cloning
+
+> **Chain of Title**: `cot-8b-is-git-worktrees` · **Curated by**: The Cheet (`🐆🥁🧻`)
+
+## ⚡ Core Commands
+```sh
+# Create a new worktree in ../feature-x on a new branch:
+git worktree add -b feat/cheet-i1 ../feature-x main
+
+# List all active worktrees:
+git worktree list
+
+# Clean up a finished worktree:
+git worktree remove ../feature-x
+git worktree prune
+```
+
+## 🧠 Why Worktrees Rock With Smart Tree (`st`)
+- Run `st --mode ai --compress` inside each worktree so parallel agents (`Moser–Tardos LLL scheduler`) never collide on index locks!"#
+                .to_string(),
+        )),
+        _ => None,
+    }
+}
+
+/// Render The Cheet's ANSI box header used when `curl`ing into `i1.is` / `cheet.is` / `smart-tree`.
+pub fn render_cheet_ansi_banner(
+    subtitle: &str,
+    repo_status: Option<&RepoVisibilityReport>,
+) -> String {
+    let mut ansi = String::new();
+    ansi.push_str("\x1b[1;31m╭──────────────────────────────────────────────────────────────────────────╮\x1b[0m\n");
+    ansi.push_str(&format!(
+        "\x1b[1;31m│\x1b[0m  🐆🥁🧻 \x1b[1;33mTHE CHEET\x1b[0m · \x1b[1;36mhttps://i1.is\x1b[0m · \x1b[2m{}\x1b[0m\n",
+        subtitle
+    ));
+    if let Some(rep) = repo_status {
+        let badge = if rep.effective_visibility == WaveVisibilityMode::PublicCommons {
+            "\x1b[1;32m🌐 PUBLIC COMMONS (FREE · CHAIN-OF-TITLE)\x1b[0m"
+        } else {
+            "\x1b[1;33m🔒 PRIVATE SOVEREIGN ($5/mo LIGHTS-ON)\x1b[0m"
+        };
+        let remote_label = rep
+            .public_remotes
+            .first()
+            .map(|s| s.as_str())
+            .unwrap_or(rep.inspected_path.as_str());
+        ansi.push_str(&format!(
+            "\x1b[1;31m│\x1b[0m  📦 Repo: \x1b[1m{}\x1b[0m · {}\n",
+            remote_label, badge
+        ));
+    }
+    ansi.push_str("\x1b[1;31m╰──────────────────────────────────────────────────────────────────────────╯\x1b[0m\n");
+    ansi
+}
+
+/// Render The Cheet's `i1.is` terminal home screen when someone runs `curl -sL https://i1.is` or `curl -sL http://localhost:28428/cheet`.
+pub fn render_cheet_i1_terminal_home(
+    nexus: &I1NexusStore,
+    repo_status: &RepoVisibilityReport,
+) -> String {
+    let mut ansi = render_cheet_ansi_banner(
+        "Universal Markdown Answers, MEM8 Nibbles & Verified Installer",
+        Some(repo_status),
+    );
+
+    ansi.push_str("\n\x1b[1;33m⚡ STANDARD 1-LINE INSTALLERS (SHA-256 VERIFIED · NO APT/BREW NEEDED):\x1b[0m\n");
+    ansi.push_str("  • \x1b[1;32mcurl -fsSL https://i1.is/n/smart-tree | sh\x1b[0m   \x1b[2m# Smart Tree (st, m8, std, st-hub)\x1b[0m\n");
+    ansi.push_str("  • \x1b[1;32mcurl -fsSL https://i1.is/n/dev | sh\x1b[0m          \x1b[2m# Verified Dev Bundle (st, fzf, rg, fd)\x1b[0m\n");
+    ansi.push_str("  • \x1b[1;32mcurl -fsSL http://localhost:28428/n/smart-tree | sh\x1b[0m \x1b[2m# Local Daemon Installer\x1b[0m\n");
+
+    ansi.push_str(
+        "\n\x1b[1;33m🐆 ASK THE CHEET FOR MARKDOWN ANSWERS & CHEAT SHEETS IN TERMINAL:\x1b[0m\n",
+    );
+    ansi.push_str("  • \x1b[1;36mcurl -sL http://localhost:28428/cheet/smart-tree\x1b[0m  \x1b[2m# Smart Tree & MCP Cheat Sheet\x1b[0m\n");
+    ansi.push_str("  • \x1b[1;36mcurl -sL http://localhost:28428/cheet/memnet\x1b[0m      \x1b[2m# 64B@0x62 Bitstream & SPQT Guide\x1b[0m\n");
+    ansi.push_str("  • \x1b[1;36mcurl -sL http://localhost:28428/cheet/i1\x1b[0m          \x1b[2m# i1.is Chain of Title & Commons\x1b[0m\n");
+    ansi.push_str("  • \x1b[1;36mcurl -sL \"http://localhost:28428/cheet?q=Why+did+Margot+receive+a+call-up\"\x1b[0m\n");
+    ansi.push_str("      \x1b[2m# Live 2-Pass SPQT Base-243 Contextual Answer + Chain-of-Title Nibbles!\x1b[0m\n");
+
+    let total_edges: usize = nexus.nibbles.iter().map(|n| n.relations.len()).sum();
+    ansi.push_str(&format!(
+        "\n\x1b[1;33m🧠 LIVE i1.is MEM8 KNOWLEDGE NEXUS ({} Nibbles · {} Chains of Title · {} Edges):\x1b[0m\n",
+        nexus.nibbles.len(),
+        nexus.chains_of_title.len(),
+        total_edges
+    ));
+    for nibble in nexus.nibbles.iter().take(6) {
+        let preview = if nibble.content.chars().count() > 68 {
+            let s: String = nibble.content.chars().take(65).collect();
+            format!("{s}...")
+        } else {
+            nibble.content.clone()
+        };
+        ansi.push_str(&format!(
+            "  • \x1b[1;36m{}\x1b[0m \x1b[2m[{} · Author: {} · {} edges]\x1b[0m\n      {}\n",
+            nibble.nibble_id,
+            nibble.chain_of_title_id,
+            nibble.origin_author,
+            nibble.relations.len(),
+            preview
+        ));
+    }
+    ansi.push_str("\n\x1b[2m  💡 Tip: Add ?format=md for raw Markdown or ?format=json for structured JSON.\x1b[0m\n\n");
+    ansi
+}
+
+/// Synthesize a complete Markdown answer (and ANSI rendering) from The Cheet using:
+/// 1. Built-in 8b-is Cheat Sheets (if `query_or_slug` matches a known slug),
+/// 2. Pass-2 SPQT Base-243 Contextual Synthesis across `.m8` Life Personas, and
+/// 3. Matching `i1.is` Knowledge Nibbles with Cryptographic Chain of Title (`cot-...`).
+pub fn render_cheet_markdown_answer(
+    query_or_slug: &str,
+    persona_hint: Option<&str>,
+    nexus: &I1NexusStore,
+    repo_status: &RepoVisibilityReport,
+) -> String {
+    let trimmed = query_or_slug.trim().trim_matches('/');
+
+    // 1. Check built-in Cheat Sheet first if it's a single slug token
+    if let Some((_slug, _title, sheet_md)) = builtin_cheet_markdown_sheet(trimmed) {
+        return sheet_md;
+    }
+
+    // 2. Search matching i1.is Knowledge Nibbles by ID, keyword, or SPQT ternary dot product
+    let (q_trits, q_spqt_13) = crate::proxy::burn::compute_ternary_signature(trimmed);
+    let q_lower = trimmed.to_ascii_lowercase();
+    let q_terms: Vec<&str> = q_lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() >= 3)
+        .collect();
+
+    let mut scored_nibbles: Vec<(i64, &I1KnowledgeNibble)> = nexus
+        .nibbles
+        .iter()
+        .map(|n| {
+            let (n_trits, _) = crate::proxy::burn::compute_ternary_signature(&format!(
+                "{} {}",
+                n.title, n.content
+            ));
+            let dot: i32 = q_trits
+                .iter()
+                .zip(n_trits.iter())
+                .map(|(&a, &b)| (a as i32) * (b as i32))
+                .sum();
+            let text_l =
+                format!("{} {} {}", n.title, n.content, n.keywords.join(" ")).to_ascii_lowercase();
+            let kw_hits = q_terms.iter().filter(|&&t| text_l.contains(t)).count() as i64;
+            let exact_id = if n.nibble_id.eq_ignore_ascii_case(trimmed) {
+                500
+            } else {
+                0
+            };
+            (exact_id + kw_hits * 45 + (dot as i64), n)
+        })
+        .filter(|(score, _)| *score > 10)
+        .collect();
+    scored_nibbles.sort_by_key(|b| std::cmp::Reverse(b.0));
+
+    // 3. Run Pass-2 SPQT Base-243 Contextual Synthesis on the active/matching Persona
+    let mut pass2_section = String::new();
+    let mut best_persona = None;
+    if let Some(hint) = persona_hint {
+        let slug = hint.strip_prefix("persona:").unwrap_or(hint);
+        best_persona = LifePersona::load_cached(slug).ok();
+    }
+    if best_persona.is_none() {
+        if let Ok(summaries) = LifePersona::list_all() {
+            let mut best_score = i64::MIN;
+            for s in summaries {
+                if let Ok(p) = LifePersona::load_cached(&s.slug) {
+                    let hits = p.recall_episodes(trimmed, 1);
+                    let top_dot = hits
+                        .first()
+                        .map(|ep| {
+                            let (ep_trits, _) =
+                                crate::proxy::burn::compute_ternary_signature(&ep.passage);
+                            q_trits
+                                .iter()
+                                .zip(ep_trits.iter())
+                                .map(|(&a, &b)| (a as i64) * (b as i64))
+                                .sum::<i64>()
+                        })
+                        .unwrap_or(0);
+                    let mut name_bonus = if q_lower.contains(&p.slug.replace('-', " "))
+                        || q_lower.contains(&p.name.to_ascii_lowercase())
+                    {
+                        500
+                    } else {
+                        0
+                    };
+                    if let Some(ref seed) = p.ancestral_seed {
+                        for comp in &seed.companions {
+                            if q_lower.contains(&comp.to_ascii_lowercase()) {
+                                name_bonus += 300;
+                            }
+                        }
+                        for place in &seed.places {
+                            if q_lower.contains(&place.to_ascii_lowercase()) {
+                                name_bonus += 300;
+                            }
+                        }
+                    }
+                    let total = top_dot + name_bonus;
+                    if total > best_score {
+                        best_score = total;
+                        best_persona = Some(p);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(persona) = best_persona {
+        let recalled = persona.recall_episodes(trimmed, 6);
+        if let Some(pass2) = persona.synthesize_contextual_answer(trimmed, &recalled) {
+            pass2_section.push_str(&format!(
+                "## 🧠 The Cheet · Pass-2 Contextual Answer (`persona:{}`)\n\n{}\n\n",
+                persona.slug, pass2
+            ));
+        }
+    }
+
+    let vis_label = repo_status.effective_visibility.as_str();
+    let mut md = format!(
+        "# 🐆 The Cheet · `i1.is` Markdown Answer\n\n> **Query**: `{}` · **SPQT Base-243 Query Seal**: `0x{}` · **Policy**: `{}`\n\n",
+        trimmed,
+        hex::encode(q_spqt_13),
+        vis_label
+    );
+
+    if !pass2_section.is_empty() {
+        md.push_str(&pass2_section);
+    }
+
+    if !scored_nibbles.is_empty() {
+        md.push_str("## 📜 Matching `i1.is` Knowledge Nibbles & Chain of Title\n\n");
+        for (_, nib) in scored_nibbles.iter().take(4) {
+            let cot_author = nexus
+                .chains_of_title
+                .get(&nib.chain_of_title_id)
+                .map(|c| c.origin_author.as_str())
+                .unwrap_or(nib.origin_author.as_str());
+            let preview: String = nib.content.chars().take(240).collect();
+            md.push_str(&format!(
+                "### `{}` — {}\n- **Chain of Title**: `{}` (Author: **{}** · Visibility: `{:?}`)\n- **Nibble**: {}\n- **SPQT Base-243 Seal**: `0x{}` · **Relationship Edges**: `{}`\n\n",
+                nib.nibble_id,
+                nib.title,
+                nib.chain_of_title_id,
+                cot_author,
+                nib.visibility,
+                preview,
+                nib.spqt_base243_13b_hex,
+                nib.relations.len()
+            ));
+        }
+    } else if pass2_section.is_empty() {
+        md.push_str(&format!(
+            "## 💡 No Exact Nibble Match Yet for `{}`\n\n- Distill your repository or `.m8` persona into `i1.is` nibbles:\n```sh\ncurl -s -X POST http://localhost:28428/i1/nexus/distill -H 'Content-Type: application/json' -d '{{}}'\n```\n\n",
+            trimmed
+        ));
+    }
+
+    md.push_str("## ⚡ Standard `i1.is` Terminal Commands\n```sh\n# Install Smart Tree (st, m8, std) via i1.is verified nibble:\ncurl -fsSL https://i1.is/n/smart-tree | sh\n\n# Stream raw 64B@0x62 + SPQT Base-243 binary bitstream:\ncurl -s -X POST http://localhost:28428/memnet/stream -H 'Content-Type: application/json' \\\n  -d '{\"question\":\"");
+    md.push_str(&trimmed.replace('"', "\\\""));
+    md.push_str("\"}'\n```\n");
+
+    md
+}
+
+/// Generate a verified POSIX `#!/bin/sh` installer script for `curl -fsSL https://i1.is/n/<tool> | sh`.
+pub fn render_i1_verified_installer_script(tool: &str) -> String {
+    let clean = tool.trim().trim_matches('/').to_ascii_lowercase();
+    let version = env!("CARGO_PKG_VERSION");
+    match clean.as_str() {
+        "smart-tree" | "st" | "m8" | "cheet" | "dev" => format!(
+            r#"#!/bin/sh
+# 🐆🥁🧻 THE CHEET · i1.is Universal Verified Installer ({clean} · Smart Tree v{version})
+# Zero apt / brew / pacman required. POSIX sh compatible.
+set -eu
+
+I1_TOOL="{clean}"
+I1_VERSION="{version}"
+I1_PREFIX="${{I1_PREFIX:-$HOME/.local/bin}}"
+
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64|amd64) ARCH="x86_64" ;;
+  aarch64|arm64) ARCH="aarch64" ;;
+esac
+
+printf '\033[1;31m╭──────────────────────────────────────────────────────────────────────╮\033[0m\n'
+printf '\033[1;31m│\033[0m  🐆🥁🧻 \033[1;33mTHE CHEET · i1.is Verified Installer\033[0m                         \033[1;31m│\033[0m\n'
+printf '\033[1;31m│\033[0m  Tool: \033[1;36m%-14s\033[0m  Platform: \033[1m%s/%s\033[0m  Prefix: \033[2m%s\033[0m\n' "$I1_TOOL" "$OS" "$ARCH" "$I1_PREFIX"
+printf '\033[1;31m╰──────────────────────────────────────────────────────────────────────╯\033[0m\n'
+
+if [ "${{I1_PLAN:-0}}" = "1" ]; then
+  echo "plan: install $I1_TOOL (Smart Tree v$I1_VERSION) into $I1_PREFIX"
+  exit 0
+fi
+
+mkdir -p "$I1_PREFIX"
+
+if [ "$OS" = "linux" ] && [ "$ARCH" = "x86_64" ]; then
+  TAR_NAME="smart-tree-x86_64-unknown-linux-gnu.tar.gz"
+elif [ "$OS" = "darwin" ] && [ "$ARCH" = "aarch64" ]; then
+  TAR_NAME="smart-tree-aarch64-apple-darwin.tar.gz"
+elif [ "$OS" = "darwin" ] && [ "$ARCH" = "x86_64" ]; then
+  TAR_NAME="smart-tree-x86_64-apple-darwin.tar.gz"
+else
+  TAR_NAME="smart-tree-${{ARCH}}-unknown-${{OS}}-gnu.tar.gz"
+fi
+
+URL="https://github.com/8b-is/smart-tree/releases/latest/download/$TAR_NAME"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo "⬇️  Fetching $URL ..."
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL "$URL" -o "$TMP_DIR/pkg.tar.gz"
+elif command -v wget >/dev/null 2>&1; then
+  wget -qO "$TMP_DIR/pkg.tar.gz" "$URL"
+else
+  echo "error: curl or wget required" >&2
+  exit 1
+fi
+
+tar -xzf "$TMP_DIR/pkg.tar.gz" -C "$TMP_DIR"
+for bin in st m8 std st-hub n8x; do
+  if [ -f "$TMP_DIR/$bin" ]; then
+    install -m 0755 "$TMP_DIR/$bin" "$I1_PREFIX/$bin"
+    echo "✅ Installed $I1_PREFIX/$bin"
+  fi
+done
+
+echo ""
+echo "🎉 Done! Ask The Cheet anytime: curl -sL https://i1.is/cheet"
+"#
+        ),
+        other => format!(
+            "#!/bin/sh\necho '🐆 [i1.is] Unknown nibble: {other}. Try: curl -fsSL https://i1.is/n/smart-tree | sh' >&2\nexit 1\n"
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -882,5 +1477,30 @@ mod tests {
             report.ai_training_grant,
             AiTrainingGrant::PrivateSovereignNoTraining
         );
+    }
+
+    #[test]
+    fn renders_cheet_markdown_ansi_and_verified_installer() {
+        assert!(is_terminal_cli_user_agent(Some("curl/8.5.0"), None));
+        assert!(!is_terminal_cli_user_agent(
+            Some("Mozilla/5.0"),
+            Some("html")
+        ));
+
+        let tmp = TempDir::new().unwrap();
+        let cfg = I1NexusConfig::default();
+        let report = detect_repo_public_status(tmp.path(), &cfg);
+        let store = I1NexusStore::default();
+
+        let md = render_cheet_markdown_answer("smart-tree", None, &store, &report);
+        assert!(md.contains("Smart Tree"));
+        assert!(md.contains("https://i1.is/n/smart-tree"));
+
+        let ansi = cheet_markdown_to_ansi(&md);
+        assert!(ansi.contains("\x1b["));
+
+        let script = render_i1_verified_installer_script("smart-tree");
+        assert!(script.starts_with("#!/bin/sh"));
+        assert!(script.contains("THE CHEET"));
     }
 }

@@ -4,9 +4,9 @@
 
 use st::g8t_integration::{
     compute_capsule_fokens, format_foken_scoreboard, gcd_u64, get_foken_scoreboard,
-    query_best_functions, sovereign_cycle_golf_library, FokenBreakdown, FokenScoreboardReport,
-    LeaderboardCapsuleEntry, RationalPq, FOKEN_BASE_C64_COMPLIANT, FOKEN_EQUIVALENCE_CROWN_BONUS,
-    FOKEN_PER_POSITIVE_VOTE, FOKEN_SUB_10_CYCLE_BONUS,
+    query_best_functions, sovereign_cycle_golf_library, LeaderboardCapsuleEntry, RationalPq,
+    FOKEN_BASE_C64_COMPLIANT, FOKEN_EQUIVALENCE_CROWN_BONUS, FOKEN_PER_POSITIVE_VOTE,
+    FOKEN_SUB_10_CYCLE_BONUS,
 };
 
 #[test]
@@ -220,18 +220,18 @@ fn test_qwave_marine_jitter_pq_exact_arithmetic() {
 
     let result = st::g8t_integration::st_golf_qwave_marine_jitter_pq_u64(packed_peaks);
 
-    // Should produce a valid u64 result (not overflow)
-    assert!(result <= u64::MAX);
+    // Should produce a valid non-zero u64 result
+    assert!(result > 0);
 
     // Test with different values
     let packed_peaks2: u64 = 0x0019_0001_0019_0001; // pt=25, at=1 repeated
     let result2 = st::g8t_integration::st_golf_qwave_marine_jitter_pq_u64(packed_peaks2);
-    assert!(result2 <= u64::MAX);
+    assert!(result2 > 0);
 
     // Test edge case: minimum values
     let packed_peaks3: u64 = 0x0019_0001_0019_0001; // pt=25 (clamped), at=1 (clamped)
     let result3 = st::g8t_integration::st_golf_qwave_marine_jitter_pq_u64(packed_peaks3);
-    assert!(result3 <= u64::MAX);
+    assert_eq!(result2, result3);
 
     println!("qwave p/q results: {}, {}, {}", result, result2, result3);
 }

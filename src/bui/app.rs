@@ -6,7 +6,7 @@
 use blenderui::prelude::*;
 
 #[cfg(feature = "bui")]
-use crate::bui::components::{TreeView, ChatPanel, StatusBar, CommandPalette};
+use crate::bui::components::{ChatPanel, CommandPalette, StatusBar, TreeView};
 
 #[cfg(feature = "bui")]
 pub struct BuiApp {
@@ -33,16 +33,14 @@ impl BuiApp {
 
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let app = Application::new()?;
-        
-        self.window = Some(Window::new(
-            WindowOptions {
-                title: "Smart Tree - BUI".into(),
-                width: 1200,
-                height: 800,
-                theme: self.theme.to_blenderui_theme(),
-                ..Default::default()
-            }
-        )?);
+
+        self.window = Some(Window::new(WindowOptions {
+            title: "Smart Tree - BUI".into(),
+            width: 1200,
+            height: 800,
+            theme: self.theme.to_blenderui_theme(),
+            ..Default::default()
+        })?);
 
         // Build UI
         self.build_ui()?;
@@ -52,13 +50,14 @@ impl BuiApp {
 
     fn build_ui(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let window = self.window.as_mut().unwrap();
-        
+
         window.set_content(|cx| {
             VStack::new()
                 .child(self.tree_view.render(cx))
-                .child(Split::horizontal()
-                    .left(self.chat_panel.render(cx))
-                    .right(self.command_palette.render(cx))
+                .child(
+                    Split::horizontal()
+                        .left(self.chat_panel.render(cx))
+                        .right(self.command_palette.render(cx)),
                 )
                 .child(self.status_bar.render(cx))
                 .style(|s| s.flex(1).padding(10))

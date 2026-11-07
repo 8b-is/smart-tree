@@ -899,7 +899,7 @@ pub fn complete_memories(prefix: &str) -> Vec<(String, String)> {
 
     if let Ok(mgr) = MemoryManager::new() {
         let mut memories: Vec<&Memory> = mgr.memories().iter().collect();
-        memories.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        memories.sort_by_key(|b| std::cmp::Reverse(b.timestamp));
 
         // 1. Individual keywords from anchored memories with context + Hz + origin
         for mem in &memories {
@@ -1355,7 +1355,7 @@ fn refresh_completion_cache_for_home_owned(
         }
     }
 
-    sync_orgs.sort_by(|a, b| b.repo_count.cmp(&a.repo_count));
+    sync_orgs.sort_by_key(|b| std::cmp::Reverse(b.repo_count));
 
     let now_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

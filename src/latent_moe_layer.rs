@@ -247,7 +247,7 @@ impl LatentExpert5Trit {
         let mut intermediate = vec![0.0f32; d_lat];
         let stride = self.gate_proj.packed_row_stride_bytes;
 
-        for r in 0..d_lat {
+        for (r, inter_val) in intermediate.iter_mut().enumerate().take(d_lat) {
             let row_slice = r * stride..(r + 1) * stride;
             let k_gate = if self.gate_proj.bend_k == 0 {
                 0
@@ -273,7 +273,7 @@ impl LatentExpert5Trit {
 
             let g_val = (dot_g as f32) * gate_scale;
             let u_val = (dot_u as f32) * up_scale;
-            intermediate[r] = situ_activation(g_val) * u_val;
+            *inter_val = situ_activation(g_val) * u_val;
         }
 
         let (inter_quant, inter_scale) = quantize_activations_sym_i8(&intermediate);
@@ -432,6 +432,7 @@ impl Ernie55LatentMoeLayer {
 
     /// Executes the full layer over the 4 parallel Manifold-Constrained Hyper-Connection (`mHC`)
     /// residual streams `streams: &mut [[f32; d_model]; 4]`.
+    #[allow(clippy::needless_range_loop)]
     pub fn forward_mhc_streams(
         &self,
         streams: &mut [Vec<f32>; MHC_STREAMS],

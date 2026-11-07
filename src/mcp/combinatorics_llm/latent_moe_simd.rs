@@ -14,9 +14,9 @@ pub const ERNIE55_HIDDEN_DIM: usize = 4096;
 /// ERNIE 5.5 Flash Base LatentMoE bottleneck & expert intermediate dimension (d_latent = 2048).
 pub const ERNIE55_LATENT_DIM: usize = 2048;
 /// Packed 5-trit byte length for a 2048-d LatentMoE row: ceil(2048 / 5) = 410 bytes.
-pub const PACKED_LATENT_ROW_BYTES: usize = (ERNIE55_LATENT_DIM + 4) / 5;
+pub const PACKED_LATENT_ROW_BYTES: usize = ERNIE55_LATENT_DIM.div_ceil(5);
 /// Packed 5-trit byte length for a 4096-d projection row: ceil(4096 / 5) = 820 bytes.
-pub const PACKED_HIDDEN_ROW_BYTES: usize = (ERNIE55_HIDDEN_DIM + 4) / 5;
+pub const PACKED_HIDDEN_ROW_BYTES: usize = ERNIE55_HIDDEN_DIM.div_ceil(5);
 
 // ============================================================================
 // 1. Compile-Time SIMD Bend Phase Tables: r_{i0 + j} = (r_base + k * j) mod 3
@@ -107,7 +107,7 @@ pub fn quantize_bend_pack_row_simd(
     bend_k: u8,
     packed_out: &mut [u8],
 ) -> u64 {
-    let expected_bytes = (weights.len() + 4) / 5;
+    let expected_bytes = weights.len().div_ceil(5);
     assert!(
         packed_out.len() >= expected_bytes,
         "packed_out too small: need {expected_bytes} bytes for {} weights, got {}",
@@ -639,7 +639,7 @@ pub fn unpack_and_unbend_row(
     out_balanced_trits: &mut [i8],
 ) -> usize {
     let total_trits = out_balanced_trits.len();
-    let required_bytes = (total_trits + 4) / 5;
+    let required_bytes = total_trits.div_ceil(5);
     assert!(packed_bytes.len() >= required_bytes);
 
     let k_mod3 = bend_k % 3;
@@ -722,7 +722,7 @@ pub fn pack_latent_moe_matrix_par_simd(
     routing_scalar_alpha: f32,
 ) -> LatentMoePackedMatrix {
     assert_eq!(weights.len(), rows * cols);
-    let row_stride = (cols + 4) / 5;
+    let row_stride = cols.div_ceil(5);
     let mut packed_data = vec![0u8; rows * row_stride];
 
     let total_sse: u64 = weights
@@ -919,7 +919,7 @@ const fn build_neon_gemv_idx<const LEN: usize>(start_m: usize) -> [u8; LEN] {
 ///   `dot = \sum_{i=0}^{D-1} t_i * activations[i]` where `t_i in {-1, 0, +1}`.
 pub fn fused_unpack_unbend_gemv_row_simd(packed_row: &[u8], activations: &[i8], bend_k: u8) -> i32 {
     let dim = activations.len();
-    let required_bytes = (dim + 4) / 5;
+    let required_bytes = dim.div_ceil(5);
     assert!(
         packed_row.len() >= required_bytes,
         "packed_row too short: need {required_bytes} bytes for {dim} activations, got {}",
@@ -1122,12 +1122,10 @@ unsafe fn fused_unpack_unbend_gemv_row_avx2(
         let mut sum_ux_16 = _mm256_setzero_si256();
         let mut sum_x_16 = _mm256_setzero_si256();
 
-        for chunk_j in 0..5usize {
+        for (chunk_j, chunk_masks) in AVX2_GEMV_INTERLEAVE_MASKS.iter().enumerate() {
             let mut u_vec = _mm256_setzero_si256();
-            for plane_m in 0..5usize {
-                let mask = _mm256_loadu_si256(
-                    AVX2_GEMV_INTERLEAVE_MASKS[chunk_j][plane_m].as_ptr() as *const __m256i,
-                );
+            for (plane_m, mask_arr) in chunk_masks.iter().enumerate() {
+                let mask = _mm256_loadu_si256(mask_arr.as_ptr() as *const __m256i);
                 u_vec = _mm256_or_si256(u_vec, _mm256_shuffle_epi8(planes[plane_m], mask));
             }
 

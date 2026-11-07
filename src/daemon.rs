@@ -687,6 +687,13 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/i1/nexus", get(i1_nexus_status_handler))
         .route("/i1/nexus/distill", post(i1_nexus_distill_handler))
         .route("/i1/nexus/settings", post(i1_nexus_settings_handler))
+        // 🎸 The Cheet's Markdown & ANSI Terminal Interface + Standard i1.is Verified Installers
+        .route("/cheet", get(cheet_i1_handler).post(cheet_i1_post_handler))
+        .route("/cheet/:slug", get(cheet_slug_handler))
+        .route("/i1", get(cheet_i1_handler).post(cheet_i1_post_handler))
+        .route("/i1/:slug", get(cheet_slug_handler))
+        .route("/n/:tool", get(i1_installer_handler))
+        .route("/i1/install/:tool", get(i1_installer_handler))
         // MEM8 Life Personas (.m8 Soul Trainer & Local Ternary Micro-Model)
         .route("/api/personas", get(personas_list_handler))
         .route("/api/personas/train", post(personas_train_handler))
@@ -1552,9 +1559,186 @@ async fn memnet_share_handler(
     })))
 }
 
+#[derive(Deserialize, Default)]
+struct CheetQueryParams {
+    #[serde(default)]
+    q: Option<String>,
+    #[serde(default)]
+    question: Option<String>,
+    #[serde(default)]
+    persona: Option<String>,
+    #[serde(default)]
+    format: Option<String>,
+}
+
+/// 🎸 The Cheet's Terminal & Markdown Answer Interface (`GET /cheet`, `GET /i1`)
+async fn cheet_i1_handler(
+    headers: axum::http::HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<CheetQueryParams>,
+) -> axum::response::Response {
+    let query = params
+        .q
+        .or(params.question)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let persona_hint = params.persona.clone();
+    let format_hint = params
+        .format
+        .clone()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let user_agent = headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok());
+    let is_cli =
+        crate::mem8::i1_nexus::is_terminal_cli_user_agent(user_agent, params.format.as_deref());
+    let wants_json = format_hint == "json"
+        || headers
+            .get(axum::http::header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|a| a.contains("application/json"));
+    let wants_raw_md = format_hint == "md" || format_hint == "markdown";
+
+    let work = tokio::task::spawn_blocking(move || {
+        let cfg = crate::config::StConfig::load()
+            .map(|c| c.i1_nexus)
+            .unwrap_or_default();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let repo_report = crate::mem8::i1_nexus::detect_repo_public_status(&cwd, &cfg);
+        let store = crate::mem8::i1_nexus::I1NexusStore::load_or_default();
+
+        if let Some(q) = query {
+            let md = crate::mem8::i1_nexus::render_cheet_markdown_answer(
+                &q,
+                persona_hint.as_deref(),
+                &store,
+                &repo_report,
+            );
+            let ansi = format!(
+                "{}\n{}",
+                crate::mem8::i1_nexus::render_cheet_ansi_banner(
+                    "The Cheet · 2-Pass SPQT Base-243 & Chain-of-Title Answer",
+                    Some(&repo_report),
+                ),
+                crate::mem8::i1_nexus::cheet_markdown_to_ansi(&md)
+            );
+            (Some(q), md, ansi)
+        } else {
+            let ansi = crate::mem8::i1_nexus::render_cheet_i1_terminal_home(&store, &repo_report);
+            let md = crate::mem8::i1_nexus::render_cheet_markdown_answer(
+                "smart-tree",
+                None,
+                &store,
+                &repo_report,
+            );
+            (None, md, ansi)
+        }
+    })
+    .await;
+
+    let (query_opt, md, ansi) = match work {
+        Ok(res) => res,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    };
+
+    if wants_json {
+        return Json(serde_json::json!({
+            "interface": "the-cheet-8b-is",
+            "hub": "https://i1.is",
+            "query": query_opt,
+            "markdown": md,
+            "ansi": ansi,
+            "install_standard": "curl -fsSL https://i1.is/n/smart-tree | sh",
+        }))
+        .into_response();
+    }
+
+    if wants_raw_md || (!is_cli && format_hint != "ansi") {
+        return (
+            StatusCode::OK,
+            [(
+                axum::http::header::CONTENT_TYPE,
+                "text/markdown; charset=utf-8",
+            )],
+            md,
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )],
+        ansi,
+    )
+        .into_response()
+}
+
+/// 🎸 `POST /cheet` / `POST /i1` — Ask The Cheet in Markdown/ANSI or JSON
+async fn cheet_i1_post_handler(
+    headers: axum::http::HeaderMap,
+    Json(params): Json<CheetQueryParams>,
+) -> axum::response::Response {
+    cheet_i1_handler(headers, axum::extract::Query(params)).await
+}
+
+/// 🎸 `GET /cheet/:slug` / `GET /i1/:slug` — Cheat Sheet or Topic Lookup via The Cheet
+async fn cheet_slug_handler(
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(slug): axum::extract::Path<String>,
+    axum::extract::Query(mut params): axum::extract::Query<CheetQueryParams>,
+) -> axum::response::Response {
+    if params.q.is_none() && params.question.is_none() {
+        params.q = Some(slug);
+    }
+    cheet_i1_handler(headers, axum::extract::Query(params)).await
+}
+
+/// 📦 `GET /n/:tool` / `GET /i1/install/:tool` — Verified `i1.is` 1-Line POSIX Installer
+async fn i1_installer_handler(
+    axum::extract::Path(tool): axum::extract::Path<String>,
+) -> axum::response::Response {
+    let script = crate::mem8::i1_nexus::render_i1_verified_installer_script(&tool);
+    (
+        StatusCode::OK,
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "text/x-shellscript; charset=utf-8",
+            ),
+            (
+                axum::http::HeaderName::from_static("x-i1-chain-of-title"),
+                "cot-8b-is-verified-installer",
+            ),
+        ],
+        script,
+    )
+        .into_response()
+}
+
 // API Handlers
 
-async fn welcome_page() -> axum::response::Html<&'static str> {
+async fn welcome_page(
+    headers: axum::http::HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<CheetQueryParams>,
+) -> axum::response::Response {
+    let user_agent = headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok());
+    let is_cli =
+        crate::mem8::i1_nexus::is_terminal_cli_user_agent(user_agent, params.format.as_deref());
+    if is_cli || params.q.is_some() || params.question.is_some() || params.format.is_some() {
+        return cheet_i1_handler(headers, axum::extract::Query(params)).await;
+    }
+
     axum::response::Html(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -1728,6 +1912,8 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             <div class="endpoint"><span>MCP Tools</span><a href="/mcp/tools/list">/mcp/tools/list</a></div>
             <div class="endpoint"><span>Models</span><a href="/v1/models">/v1/models</a></div>
             <div class="endpoint"><span style="color:#4ecdc4;font-weight:bold;">⚡ MEMNET Bitstream (Preferred)</span><span>/memnet/stream</span></div>
+            <div class="endpoint"><span style="color:#f39c12;font-weight:bold;">🎸 The Cheet (Markdown/ANSI curl)</span><a href="/cheet" target="_blank">/cheet</a></div>
+            <div class="endpoint"><span style="color:#2ecc71;font-weight:bold;">📦 Standard i1.is Installer</span><a href="/n/smart-tree" target="_blank">/n/smart-tree</a></div>
             <div class="endpoint"><span style="color:#f39c12;font-weight:bold;">🤖 Dev LLM Bitstream Guide</span><a href="/memnet/llm-guide" target="_blank">/memnet/llm-guide</a></div>
             <div class="endpoint"><span style="color:#2ecc71;font-weight:bold;">🌐 i1.is Nexus &amp; Chain of Title</span><a href="/i1/nexus" target="_blank">/i1/nexus</a></div>
             <div class="endpoint"><span>Chat API (OpenAI Compat)</span><span>/v1/chat/completions</span></div>
@@ -1753,6 +1939,12 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 <button onclick="distillI1Nexus()" style="padding:0.5rem 0.9rem;border-radius:6px;border:none;background:#4ecdc4;color:#1a1a2e;font-weight:bold;font-size:0.78rem;cursor:pointer;">
                     ⚡ Distill Souls into i1.is Nibbles &amp; Chain of Title
                 </button>
+                <a href="/cheet" target="_blank" style="padding:0.5rem 0.9rem;border-radius:6px;border:1px solid rgba(78,205,196,0.5);background:rgba(78,205,196,0.15);color:#4ecdc4;font-weight:bold;font-size:0.78rem;text-decoration:none;">
+                    🎸 The Cheet Markdown Interface (/cheet)
+                </a>
+                <a href="/n/smart-tree" target="_blank" style="padding:0.5rem 0.9rem;border-radius:6px;border:1px solid rgba(46,204,113,0.5);background:rgba(46,204,113,0.15);color:#2ecc71;font-weight:bold;font-size:0.78rem;text-decoration:none;">
+                    📦 Verified i1.is Installer (/n/smart-tree)
+                </a>
                 <a href="/memnet/llm-guide" target="_blank" style="padding:0.5rem 0.9rem;border-radius:6px;border:1px solid rgba(243,156,18,0.5);background:rgba(243,156,18,0.15);color:#f39c12;font-weight:bold;font-size:0.78rem;text-decoration:none;">
                     🤖 Dev LLM Bitstream Implementation Guide
                 </a>
@@ -2084,6 +2276,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
 </body>
 </html>"#,
     )
+    .into_response()
 }
 
 async fn health() -> &'static str {

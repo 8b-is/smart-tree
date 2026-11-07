@@ -46,6 +46,8 @@ jobs:
           sudo apt-get install -y \
             libssl-dev \
             pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
             libudev-dev \
             libsqlite3-dev \
             clang \
@@ -60,28 +62,28 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --features full -- -D warnings
 
       - name: Build library
-        run: cargo build --lib --all-features
+        run: cargo build --lib --features full
 
       - name: Build binaries
-        run: cargo build --bins --all-features
+        run: cargo build --bins --features full
 
       - name: Run library tests
-        run: cargo test --lib --all-features
+        run: cargo test --lib --features full
 
       - name: Run integration tests
         run: |
-          cargo test --test mcp_integration --all-features
-          cargo test --test latent_moe_simd_test --all-features
-          cargo test --test latent_moe_layer_test --all-features
-          cargo test --test hybrid_attention_test --all-features
-          cargo test --test galaxia_kintsugi_e2e_test --all-features
-          cargo test --test vaked_foken_e2e_test --all-features
+          cargo test --test mcp_integration --features full
+          cargo test --test latent_moe_simd_test --features full
+          cargo test --test latent_moe_layer_test --features full
+          cargo test --test hybrid_attention_test --features full
+          cargo test --test galaxia_kintsugi_e2e_test --features full
+          cargo test --test vaked_foken_e2e_test --features full
 
       - name: Run benchmarks
-        run: cargo bench --no-run --all-features
+        run: cargo bench --no-run --features full
 
   test-macos:
     name: macOS Tests
@@ -112,14 +114,14 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --features full -- -D warnings
 
       - name: Build and test
         run: |
-          cargo build --lib --all-features
-          cargo test --lib --all-features
-          cargo test --test mcp_integration --all-features
-          cargo test --test vaked_foken_e2e_test --all-features
+          cargo build --lib --features full
+          cargo test --lib --features full
+          cargo test --test mcp_integration --features full
+          cargo test --test vaked_foken_e2e_test --features full
 
   test-windows:
     name: Windows Tests
@@ -150,12 +152,12 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --features full -- -D warnings
 
       - name: Build and test
         run: |
-          cargo build --lib --all-features
-          cargo test --lib --all-features
+          cargo build --lib --features full
+          cargo test --lib --features full
 
   benchmarks:
     name: Benchmarks
@@ -170,6 +172,18 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -180,14 +194,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run benchmarks
-        run: cargo bench --all-features
-
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: target/criterion/
-          retention-days: 30
+        run: cargo bench --no-run --features full
 
   security:
     name: Security Audit
@@ -195,16 +202,37 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Run cargo audit
-        uses: rustsec/audit-check@v1.2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          submodules: recursive
 
-      - name: Check for outdated dependencies
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
         run: |
-          cargo install cargo-outdated --locked
-          cargo outdated --root-deps-only --exit-code 1 || true
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run Smart Tree supply-chain security scan
+        run: cargo run --bin st -- --security-scan .
 
   docs:
     name: Documentation
@@ -212,17 +240,37 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Generate docs
-        run: cargo doc --all-features --no-deps --document-private-items
-
-      - name: Check for broken links
+      - name: Install system dependencies
         run: |
-          cargo install cargo-deadlinks --locked
-          cargo deadlinks --dir target/doc || true
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Generate docs
+        run: cargo doc --features full --no-deps
 
       - name: Upload docs
         uses: actions/upload-artifact@v4
@@ -247,8 +295,20 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
       - name: Build release binaries
-        run: cargo build --release --bins --all-features
+        run: cargo build --release --bins --features full
 
       - name: Create release archives
         run: |

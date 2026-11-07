@@ -63,7 +63,13 @@ pub struct MegaHiddenCascade {
 
 impl MegaHiddenCascade {
     /// Constructs the layered attention cascade from 1 to $N = C - [\text{MAX}n - 3]$.
-    pub fn new(hidden_size: usize, channel_capacity_c: usize, max_n: usize, p: u64, q: u64) -> Self {
+    pub fn new(
+        hidden_size: usize,
+        channel_capacity_c: usize,
+        max_n: usize,
+        p: u64,
+        q: u64,
+    ) -> Self {
         let actual_hidden = hidden_size.max(MEGA_HIDDEN_DIM_1M);
         let terminal_n = channel_capacity_c.saturating_sub(max_n.saturating_sub(3));
 

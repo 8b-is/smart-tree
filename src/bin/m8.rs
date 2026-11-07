@@ -9,7 +9,7 @@ use crc32fast::Hasher;
 use serde_json::json;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(
@@ -614,7 +614,7 @@ fn collect_m8_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) -> Result<()>
     Ok(())
 }
 
-fn pack_path(path: &PathBuf) -> Result<()> {
+fn pack_path(path: &Path) -> Result<()> {
     use rayon::prelude::*;
 
     if path.is_file() {

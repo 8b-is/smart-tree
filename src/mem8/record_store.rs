@@ -510,6 +510,7 @@ impl RecordStore {
             cursor += rec_len;
         }
 
+        #[allow(clippy::type_complexity)]
         let decoded: Result<Vec<(String, Vec<u8>, Option<Wave>)>> = spans
             .par_iter()
             .map(|&(offset, start, len)| {
@@ -741,7 +742,8 @@ fn decode_record_from_slice(
 ) -> Result<(Record, Option<Wave>)> {
     let (frame, location, wave) = if native {
         ensure!(
-            slice.len() >= native_block::PAIR_SIZE && slice.len() % native_block::PAIR_SIZE == 0,
+            slice.len() >= native_block::PAIR_SIZE
+                && slice.len().is_multiple_of(native_block::PAIR_SIZE),
             "Short MEM8 continuation block"
         );
         let first_pair: &[u8; native_block::PAIR_SIZE] =

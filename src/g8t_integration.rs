@@ -123,11 +123,11 @@ pub const fn st_golf_qwave_marine_jitter_pq_u64(packed_peaks: u64) -> u64 {
         ema_a_num = ema_a_num * 7 + amp_q8_num;
         ema_a_den = ema_a_den * 8;
 
-        let g1 = gcd_u64(ema_p_num.unsigned_abs() as u64, ema_p_den as u64) as i64;
+        let g1 = gcd_u64(ema_p_num.unsigned_abs(), ema_p_den as u64) as i64;
         ema_p_num = ema_p_num / g1;
         ema_p_den = ema_p_den / g1;
 
-        let g2 = gcd_u64(ema_a_num.unsigned_abs() as u64, ema_a_den as u64) as i64;
+        let g2 = gcd_u64(ema_a_num.unsigned_abs(), ema_a_den as u64) as i64;
         ema_a_num = ema_a_num / g2;
         ema_a_den = ema_a_den / g2;
 
@@ -152,10 +152,7 @@ pub const fn st_golf_qwave_marine_jitter_pq_u64(packed_peaks: u64) -> u64 {
         total_salience_num = total_salience_num * inc_den as i64 + inc_num * total_salience_den;
         total_salience_den = total_salience_den * inc_den as i64;
 
-        let g3 = gcd_u64(
-            total_salience_num.unsigned_abs() as u64,
-            total_salience_den as u64,
-        ) as i64;
+        let g3 = gcd_u64(total_salience_num.unsigned_abs(), total_salience_den as u64) as i64;
         total_salience_num /= g3;
         total_salience_den /= g3;
 

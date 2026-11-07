@@ -3,13 +3,14 @@
 //! Measures throughput of the bent 5-trit packer and fused unpack-unbend-GEMV
 //! for ERNIE 5.5 LatentMoE dimensions (4096→2048→4096).
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use rand::Rng;
 use st::mcp_combinatorics_llm::latent_moe_simd::{
     fused_unpack_unbend_gemv_row_simd, latent_moe_gemv_par_simd, pack_latent_moe_matrix_par_simd,
-    quantize_bend_pack_row_simd, unpack_and_unbend_row, LatentMoeGemvOutput, LatentMoePackedMatrix,
-    ERNIE55_HIDDEN_DIM, ERNIE55_LATENT_DIM, PACKED_HIDDEN_ROW_BYTES, PACKED_LATENT_ROW_BYTES,
+    quantize_bend_pack_row_simd, unpack_and_unbend_row, ERNIE55_HIDDEN_DIM, ERNIE55_LATENT_DIM,
+    PACKED_LATENT_ROW_BYTES,
 };
+use std::hint::black_box;
 
 fn bench_packer(c: &mut Criterion) {
     let mut group = c.benchmark_group("latent_moe_packer");
@@ -123,26 +124,23 @@ fn bench_gemv(c: &mut Criterion) {
 
     group.bench_function("gemv_4096x2048_par", |b| {
         b.iter(|| {
-            let mut output = LatentMoeGemvOutput::new(ERNIE55_HIDDEN_DIM);
             latent_moe_gemv_par_simd(
                 black_box(&packed_matrix),
                 black_box(&activations),
-                black_box(&mut output),
+                black_box(1.0f32),
             )
         });
     });
 
     // Single row GEMV
-    let row_packed = &packed_matrix.packed_data[0..PACKED_HIDDEN_ROW_BYTES];
+    let row_packed = &packed_matrix.packed_data[0..PACKED_LATENT_ROW_BYTES];
     group.throughput(Throughput::Elements(ERNIE55_LATENT_DIM as u64));
     group.bench_function("gemv_single_row_2048", |b| {
-        let mut out = 0i32;
         b.iter(|| {
             fused_unpack_unbend_gemv_row_simd(
                 black_box(row_packed),
-                bend_k,
                 black_box(&activations),
-                black_box(&mut out),
+                bend_k,
             )
         });
     });
@@ -164,7 +162,6 @@ fn bench_fused_pack_gemv(c: &mut Criterion) {
 
     group.bench_function("pack_then_gemv_2048", |b| {
         let mut packed = vec![0u8; PACKED_LATENT_ROW_BYTES];
-        let mut out = 0i32;
         b.iter(|| {
             quantize_bend_pack_row_simd(
                 black_box(&weights),
@@ -173,12 +170,7 @@ fn bench_fused_pack_gemv(c: &mut Criterion) {
                 bend_k,
                 black_box(&mut packed),
             );
-            fused_unpack_unbend_gemv_row_simd(
-                black_box(&packed),
-                bend_k,
-                black_box(&activations),
-                black_box(&mut out),
-            )
+            fused_unpack_unbend_gemv_row_simd(black_box(&packed), black_box(&activations), bend_k)
         });
     });
 

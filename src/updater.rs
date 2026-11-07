@@ -279,6 +279,7 @@ pub fn verify_dnssec_rrsig_for_txt(
 }
 
 /// Parse TXT record strings (and optional DNSSEC RRSIG records) from a raw RFC 1035 DNS response packet
+#[allow(clippy::type_complexity)]
 fn parse_dns_txt_and_rrsig_response(
     pkt: &[u8],
     expected_tx_id: u16,

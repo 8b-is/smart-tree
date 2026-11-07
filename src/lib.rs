@@ -33,7 +33,6 @@ pub mod grammar; // GBNF/JSON-Schema constrained automaton
 pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod hub;
 pub mod hybrid_attention; // ERNIE 5.5 Hybrid MLA-256 + HCA-512 Latent-Gated Sparse Attention
-pub mod mega_hidden_cascade; // Mega-Scale Hidden Dimension (1M+) & Dyadic Attention Cascade (1->3->7->11->21...->N=C-[MAXn-3]->INF/pq)
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
 pub mod interest_calculator; // The scoring engine that determines what's interesting
 pub mod latent_moe_layer; // ERNIE 5.5 Multi-Router Stable LatentMoE layer
@@ -41,6 +40,7 @@ pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
 pub mod m8_consciousness; // Bottom-up hierarchical .m8 directory consciousness pyramid
 pub mod m8_context_aware; // Context-aware progressive loading
 pub mod magiscanner; // Deep file security scanning, hash memory, cert trust
+pub mod mega_hidden_cascade; // Mega-Scale Hidden Dimension (1M+) & Dyadic Attention Cascade (1->3->7->11->21...->N=C-[MAXn-3]->INF/pq)
 pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
 pub mod memory_manager; // Real memory management for consciousness!
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
@@ -55,12 +55,12 @@ pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion 
 pub mod ternary_deck; // Executable 5-card ternary verification deck
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
                    // pub mod tree_sitter_quantum; // Removed: requires crabcc/tree-sitter dependencies
+pub mod bui; // Blender UI (BUI) integration
+pub mod dag_scheduler;
 pub mod ultra_zeno; // UltraZeno M1-M2-M3 Information Bottleneck & System 1/2 Cognitive Engine
 pub mod universal_chat_scanner; // Finds conversations everywhere!
 pub mod universal_format_detector; // Detects format by structure! // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
-pub mod wild_perf; // Wild Linker-inspired zero-unsafe, zero-alloc & lock-free multi-core tricks!
-pub mod bui; // Blender UI (BUI) integration
-pub mod dag_scheduler; // Dynamic slack priority Rayon DAG scheduler
+pub mod wild_perf; // Wild Linker-inspired zero-unsafe, zero-alloc & lock-free multi-core tricks! // Dynamic slack priority Rayon DAG scheduler
 
 // The `mcp` module for Model Context Protocol integration.
 // MCP stands for Model Context Protocol, enabling AI assistant integration.

@@ -12,16 +12,16 @@
 //! - Causal dependency verification
 
 use crate::{
-    g8t_integration::RationalPq,
-    ultra_zeno::{UltraZenoParams, run_ultra_zeno_engine},
     mcp::combinatorics_llm::{
-        LlamaModelCache, McpProgressEmitter, ErdosRenyiParams, ErdosSteinerParams,
-        MoserTardosParams, RamseyCliqueParams, SzemerediParams,
         run_erdos_renyi_scanning, run_erdos_steiner_pruning, run_moser_tardos_splitting,
-        run_ramsey_clique_analysis, run_szemeredi_compression, run_llama_rust,
-        LlamaRustParams, MlxQuantParams,
+        run_ramsey_clique_analysis, run_szemeredi_compression, ErdosRenyiParams,
+        ErdosSteinerParams, McpProgressEmitter, MoserTardosParams, RamseyCliqueParams,
+        SzemerediParams,
     },
-    ternary_deck::{evaluate_prerequisite_deck, evaluate_ternary_lane, StudyCardNode, CardCompletionMetrics, PrerequisiteDeckReport},
+    ternary_deck::{
+        evaluate_prerequisite_deck, evaluate_ternary_lane, CardCompletionMetrics,
+        PrerequisiteDeckReport, StudyCardNode,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -158,13 +158,8 @@ pub struct DagScheduleExecutionReport<T> {
 #[derive(Clone, Copy, Debug)]
 enum NodeLifecycle {
     Pending,
-    Running {
-        start_units: u64,
-    },
-    Completed {
-        start_units: u64,
-        finish_units: u64,
-    },
+    Running { start_units: u64 },
+    Completed { start_units: u64, finish_units: u64 },
 }
 
 struct SharedQueueState {
@@ -188,6 +183,7 @@ impl SharedQueueState {
     /// dynamic latest completion `\hat{L}(v)`, effective dynamic slack `S_dyn(v)`,
     /// and deadline overrun deficit `\delta(v)` across the DAG at wall-clock time `now_units`,
     /// then rebuilds `self.ready_heap` so newly escalated zero-slack branches preempt waiting tasks.
+    #[allow(clippy::too_many_arguments)]
     fn recalculate_dynamic_slack_and_reheapify(
         &mut self,
         now_units: u64,
@@ -267,11 +263,11 @@ impl SharedQueueState {
             let l0 = static_schedule[v].latest_completion;
             let l_hat = self.dynamic_latest_completion[v];
 
-            let slack_vs_Shift = l_hat.saturating_sub(c_hat);
+            let slack_vs_shift = l_hat.saturating_sub(c_hat);
             let slack_vs_nominal = l0.saturating_sub(c_hat);
 
             let eff_slack = if config.escalate_on_nominal_deadline_breach {
-                slack_vs_nominal.min(slack_vs_Shift)
+                slack_vs_nominal.min(slack_vs_shift)
             } else {
                 // When escalation is disabled, keep dynamic slack at static value
                 static_schedule[v].slack
@@ -282,7 +278,11 @@ impl SharedQueueState {
             self.overrun_deficit[v] = deficit;
 
             let s0 = static_schedule[v].slack;
-            if config.escalate_on_nominal_deadline_breach && s0 > 0 && eff_slack == 0 && !self.escalated_flags[v] {
+            if config.escalate_on_nominal_deadline_breach
+                && s0 > 0
+                && eff_slack == 0
+                && !self.escalated_flags[v]
+            {
                 self.escalated_flags[v] = true;
                 self.escalation_events.push(SlackEscalationEvent {
                     node_id: v,
@@ -298,7 +298,7 @@ impl SharedQueueState {
         }
 
         // 4. Rebuild `self.ready_heap` in O(K) so escalated tasks jump to the front
-        if self.ready_heap.len() >= 1 {
+        if !self.ready_heap.is_empty() {
             let mut updated_tasks = Vec::with_capacity(self.ready_heap.len());
             for mut task in self.ready_heap.drain() {
                 let v = task.id;
@@ -480,8 +480,9 @@ where
                                 );
                             }
                             if let Some(task) = guard.ready_heap.pop() {
-                                guard.node_lifecycle[task.id] =
-                                    NodeLifecycle::Running { start_units: now_units };
+                                guard.node_lifecycle[task.id] = NodeLifecycle::Running {
+                                    start_units: now_units,
+                                };
                                 break (task, now_ns, now_units);
                             }
                         }
@@ -549,8 +550,7 @@ where
                         // 3. Unlock successors whose predecessor counter reaches 0
                         let mut newly_ready = Vec::new();
                         for &succ in &successors[v] {
-                            let prev =
-                                remaining_preds[succ].fetch_sub(1, AtomicOrdering::AcqRel);
+                            let prev = remaining_preds[succ].fetch_sub(1, AtomicOrdering::AcqRel);
                             if prev == 1 {
                                 let sm = &deck_report.card_schedule[succ];
                                 newly_ready.push(PrioritizedReadyTask {
@@ -715,11 +715,21 @@ pub struct PriorityDagPipelineParams {
     pub seed: u64,
 }
 
-fn default_graph_vertices() -> usize { 96 }
-fn default_edge_prob() -> f64 { 0.14 }
-fn default_max_workers() -> usize { 4 }
-fn default_ns_per_unit() -> u64 { DEFAULT_NS_PER_SCHEDULE_UNIT }
-fn default_seed() -> u64 { 0x7C24_2080_DA60_0001 }
+fn default_graph_vertices() -> usize {
+    96
+}
+fn default_edge_prob() -> f64 {
+    0.14
+}
+fn default_max_workers() -> usize {
+    4
+}
+fn default_ns_per_unit() -> u64 {
+    DEFAULT_NS_PER_SCHEDULE_UNIT
+}
+fn default_seed() -> u64 {
+    0x7C24_2080_DA60_0001
+}
 
 pub fn run_priority_dag_mcp_pipeline(
     params: PriorityDagPipelineParams,
@@ -869,7 +879,8 @@ pub fn run_priority_dag_mcp_pipeline(
                     json!({ "ramsey": ramsey, "moser_tardos": lll })
                 }
                 6 => {
-                    let mut pid = crate::mcp::combinatorics_llm::AdaptiveSpeculativeController::new(4, 2);
+                    let mut pid =
+                        crate::mcp::combinatorics_llm::AdaptiveSpeculativeController::new(4, 2);
                     pid.record_verification_outcome(4, 3, 5);
                     serde_json::to_value(pid.stats()).map_err(|e| e.to_string())?
                 }

@@ -3292,6 +3292,7 @@ fn sync_repository(
     })
 }
 
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod sync_tests {
     use super::*;
