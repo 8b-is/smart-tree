@@ -1,11 +1,14 @@
 //! 🤖 Burn & SPQT Base-243 Ternary Local LLM Provider
 //!
-//! "Bringing AI home with Rust-native ternary & wave models!" - The Cheet 😺
+//! "Bringing AI home with Rust-native Burn SIMD tensors + SPQT Base-243 ternary & wave models!" - The Cheet 😺
 
 use crate::mem8::persona::{LifePersona, PersonaSpecialty};
 use crate::proxy::{LlmProvider, LlmRequest, LlmResponse};
 use anyhow::Result;
 use async_trait::async_trait;
+
+#[cfg(feature = "burn")]
+use burn_core::tensor::Tensor;
 
 #[derive(Default)]
 pub struct BurnProvider {
@@ -21,7 +24,7 @@ impl BurnProvider {
 }
 
 /// Project text into a 65-trit (`{-1, 0, +1}`) SPQT Base-243 ternary signature (13 packed base-243 bytes)
-fn compute_ternary_signature(text: &str) -> ([i8; 65], [u8; 13]) {
+pub fn compute_ternary_signature(text: &str) -> ([i8; 65], [u8; 13]) {
     let mut accum = [0i32; 65];
     for (idx, word) in text.split_whitespace().enumerate() {
         let mut h = 0x811c_9dc5u32;
@@ -57,12 +60,32 @@ fn compute_ternary_signature(text: &str) -> ([i8; 65], [u8; 13]) {
     (trits, packed)
 }
 
-/// Integer ternary dot product between two 65-trit (`{-1, 0, +1}`) vectors
+/// Compute ternary resonance between two 65-trit (`{-1, 0, +1}`) vectors.
+/// When the `burn` feature is enabled, executes a `Tensor<Flex, 2>` SIMD matmul on Burn's `Flex` backend.
 fn ternary_dot(a: &[i8; 65], b: &[i8; 65]) -> i32 {
-    a.iter()
-        .zip(b.iter())
-        .map(|(&x, &y)| (x as i32) * (y as i32))
-        .sum()
+    #[cfg(feature = "burn")]
+    {
+        let device = Default::default();
+        let a_f32: [f32; 65] = std::array::from_fn(|i| a[i] as f32);
+        let b_f32: [f32; 65] = std::array::from_fn(|i| b[i] as f32);
+        let ta = Tensor::<1>::from_floats(a_f32, &device);
+        let tb = Tensor::<1>::from_floats(b_f32, &device);
+        let dot_tensor = ta.reshape([1, 65]).matmul(tb.reshape([65, 1]));
+        let data = dot_tensor.into_data();
+        let val = data
+            .as_slice::<f32>()
+            .ok()
+            .and_then(|v| v.first().copied())
+            .unwrap_or(0.0);
+        val.round() as i32
+    }
+    #[cfg(not(feature = "burn"))]
+    {
+        a.iter()
+            .zip(b.iter())
+            .map(|(&x, &y)| (x as i32) * (y as i32))
+            .sum()
+    }
 }
 
 /// Detect which specialist domain a prompt leans toward
@@ -182,16 +205,13 @@ impl LlmProvider for BurnProvider {
                                     score += 16.0;
                                 }
                             }
-                            for token in [
-                                "jody",
-                                "grandma",
-                                "chenterra",
-                                "platoro",
-                                "fred",
-                                "sheltie",
-                                "miniature horse",
-                            ] {
-                                if lower_prompt.contains(token) {
+                            for place in &seed.places {
+                                if lower_prompt.contains(&place.to_ascii_lowercase()) {
+                                    score += 12.0;
+                                }
+                            }
+                            for comp in &seed.companions {
+                                if lower_prompt.contains(&comp.to_ascii_lowercase()) {
                                     score += 12.0;
                                 }
                             }

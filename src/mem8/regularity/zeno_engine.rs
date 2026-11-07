@@ -61,6 +61,24 @@ pub struct LitanyWireFrame {
 const _: [(); 64] = [(); core::mem::size_of::<LitanyWireFrame>()];
 const _: [(); 64] = [(); core::mem::align_of::<LitanyWireFrame>()];
 
+impl LitanyWireFrame {
+    /// Serialize the 64-byte `#[repr(C, align(64))]` wire frame to a canonical 64-byte array.
+    #[inline(always)]
+    pub fn to_bytes_64(&self) -> [u8; 64] {
+        let mut out = [0u8; 64];
+        out[0..32].copy_from_slice(&self.frame32);
+        out[32..40].copy_from_slice(&self.bfp64_pos.to_le_bytes());
+        out[40..48].copy_from_slice(&self.bfp64_neg.to_le_bytes());
+        out[48..52].copy_from_slice(&self.ratio_p.to_le_bytes());
+        out[52..56].copy_from_slice(&self.ratio_q.to_le_bytes());
+        out[56..59].copy_from_slice(&self.spqt_root);
+        out[59] = self.qt_mask;
+        out[60..62].copy_from_slice(&self.lanes_active.to_le_bytes());
+        out[62..64].copy_from_slice(&self.wire_seal16.to_le_bytes());
+        out
+    }
+}
+
 /// Broadcast an 8-bit quantization mask across all 8 bytes of a 64-bit word.
 #[inline(always)]
 pub const fn qt_broadcast_mask(qt: u8) -> u64 {

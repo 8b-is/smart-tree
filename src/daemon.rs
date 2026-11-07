@@ -676,9 +676,10 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             "/security/history",
             get(crate::magiscanner::http::scan_history_handler),
         )
-        // MemNet bridge (MCP ↔ mesh): file-backed MemnetNodeState
+        // MemNet bridge (MCP ↔ mesh): file-backed MemnetNodeState + Native Bitstream
         .route("/memnet/peers", get(memnet_peers_handler))
         .route("/memnet/ask", post(memnet_ask_handler))
+        .route("/memnet/stream", post(memnet_stream_handler))
         .route("/memnet/teach", post(memnet_teach_handler))
         .route("/memnet/share", post(memnet_share_handler))
         // MEM8 Life Personas (.m8 Soul Trainer & Local Ternary Micro-Model)
@@ -854,9 +855,25 @@ async fn remember_context(
 struct MemnetAskRequest {
     question: String,
     #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
     min_resonance_pm: Option<u32>,
     #[serde(default)]
     lan: bool,
+}
+
+#[derive(Deserialize)]
+struct MemnetStreamRequest {
+    #[serde(default)]
+    question: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    messages: Option<Vec<crate::proxy::openai_compat::OpenAiMessage>>,
+    /// `"raw"` returns raw binary bitstream (`[64B LitanyWireFrame][79B WaveFrame79][26B SPQT Base-243][MNPK Packet]`);
+    /// `"framed"` (default unless `Accept: application/octet-stream`) returns JSON + hex wire frames.
+    #[serde(default)]
+    bitstream: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -893,6 +910,9 @@ async fn memnet_ask_handler(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let min_pm = req.min_resonance_pm.unwrap_or(500).clamp(1, 1000);
     let question = req.question;
+    let model_hint = req
+        .model
+        .unwrap_or_else(|| "burn/mem8-ternary-micro".to_string());
     let lan = req.lan;
     let result = tokio::task::spawn_blocking(move || {
         let mut state = crate::memnet::MemnetNodeState::load_or_default();
@@ -905,6 +925,9 @@ async fn memnet_ask_handler(
                 "answer": pkt.answer,
                 "origin_name": pkt.origin_name,
                 "hit_count": pkt.hit_count,
+                "litany_wire_64b_hex": hex::encode(pkt.litany_wire.to_bytes_64()),
+                "wave_frame_79b_hex": hex::encode(pkt.wave_frame.to_bytes_79()),
+                "wave_b3": pkt.wave_b3,
             });
         }
         if lan {
@@ -917,14 +940,321 @@ async fn memnet_ask_handler(
                     "answer": pkt.answer,
                     "origin_name": pkt.origin_name,
                     "hit_count": pkt.hit_count,
+                    "litany_wire_64b_hex": hex::encode(pkt.litany_wire.to_bytes_64()),
+                    "wave_frame_79b_hex": hex::encode(pkt.wave_frame.to_bytes_79()),
+                    "wave_b3": pkt.wave_b3,
                 });
             }
+        }
+        // Fallback: synthesize via 2-Pass Persona Soul & cache into MemNet WaveQA
+        if let Some((slug, pass2, full_reply, recalled_len)) =
+            run_two_pass_persona_qa(&question, &model_hint)
+        {
+            let answer_text = pass2.clone().unwrap_or_else(|| full_reply.clone());
+            let pkt = state.learn_wave_qa(&question, &answer_text);
+            let _ = state.save();
+            return serde_json::json!({
+                "source": "persona-pass2",
+                "persona": format!("persona:{slug}"),
+                "resonance_pm": 950,
+                "packet_id": pkt.packet_id,
+                "pass2_contextual_answer": pass2,
+                "pass1_core_memories_count": recalled_len,
+                "answer": full_reply,
+                "origin_name": pkt.origin_name,
+                "litany_wire_64b_hex": hex::encode(pkt.litany_wire.to_bytes_64()),
+                "wave_frame_79b_hex": hex::encode(pkt.wave_frame.to_bytes_79()),
+                "wave_b3": pkt.wave_b3,
+                "stream_endpoint": "/memnet/stream",
+            });
         }
         serde_json::json!({ "source": "none", "resonance_pm": 0, "question": question })
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(result))
+}
+
+/// Run Pass-1 (`recall_episodes`) + Pass-2 (`synthesize_contextual_answer`) on a specified or auto-routed `.m8` Persona Soul.
+fn run_two_pass_persona_qa(
+    question: &str,
+    model_hint: &str,
+) -> Option<(String, Option<String>, String, usize)> {
+    use crate::mem8::persona::LifePersona;
+    let clean = model_hint
+        .strip_prefix("persona:")
+        .or_else(|| model_hint.strip_prefix("burn/"))
+        .or_else(|| model_hint.strip_prefix("candle/"))
+        .or_else(|| model_hint.strip_prefix("local/"))
+        .unwrap_or(model_hint);
+
+    let is_router = clean.is_empty()
+        || clean.contains("ternary")
+        || clean == "mem8-wave-micro"
+        || clean == "default";
+
+    if !is_router {
+        if let Ok(persona) = LifePersona::load_cached(clean) {
+            let recalled = persona.recall_episodes(question, 8);
+            let pass2 = persona.synthesize_contextual_answer(question, &recalled);
+            let full = persona.respond_locally(question);
+            return Some((persona.slug.clone(), pass2, full, recalled.len()));
+        }
+    }
+
+    // Auto-route across all trained `.m8` Persona Souls using SPQT Base-243 ternary signature
+    let (q_trits, _) = crate::proxy::burn::compute_ternary_signature(question);
+    let summaries = LifePersona::list_all().ok()?;
+    let mut best_score = f32::MIN;
+    let mut best_persona = None;
+    let lower_q = question.to_ascii_lowercase();
+
+    for summary in &summaries {
+        if let Ok(p) = LifePersona::load_cached(&summary.slug) {
+            let top = p.recall_episodes(question, 1);
+            if let Some(ep) = top.first() {
+                let (ep_trits, _) = crate::proxy::burn::compute_ternary_signature(&ep.passage);
+                let dot: i32 = q_trits
+                    .iter()
+                    .zip(ep_trits.iter())
+                    .map(|(&a, &b)| (a as i32) * (b as i32))
+                    .sum();
+                let mut score = dot as f32 * 0.25;
+                if lower_q.contains(&p.name.to_ascii_lowercase()) || lower_q.contains(&p.slug) {
+                    score += 18.0;
+                }
+                if let Some(ref seed) = p.ancestral_seed {
+                    for alias in &seed.aliases {
+                        if lower_q.contains(&alias.to_ascii_lowercase()) {
+                            score += 16.0;
+                        }
+                    }
+                    for place in &seed.places {
+                        if lower_q.contains(&place.to_ascii_lowercase()) {
+                            score += 12.0;
+                        }
+                    }
+                    for comp in &seed.companions {
+                        if lower_q.contains(&comp.to_ascii_lowercase()) {
+                            score += 12.0;
+                        }
+                    }
+                }
+                if score > best_score {
+                    best_score = score;
+                    best_persona = Some(p);
+                }
+            }
+        }
+    }
+
+    let persona = best_persona?;
+    let recalled = persona.recall_episodes(question, 8);
+    let pass2 = persona.synthesize_contextual_answer(question, &recalled);
+    let full = persona.respond_locally(question);
+    Some((persona.slug.clone(), pass2, full, recalled.len()))
+}
+
+/// ⚡ Native MEMNET Bitstream Endpoint (`POST /memnet/stream`)
+///
+/// Executes the 2-Pass SPQT Base-243 Ternary Persona Q&A (Pass 1 core memories + Pass 2 contextual answer)
+/// and emits a native `MEMNET` bitstream (`64B@0x62 LitanyWireFrame` + `79B WaveFrame79` + `26B SPQT Base-243`
+/// packed query/answer trits + `MNPK WaveQaResponse`).
+///
+/// - When `Accept: application/octet-stream` or `"bitstream": "raw"` is passed, returns raw binary wire bytes.
+/// - Otherwise returns a structured JSON envelope with both the Pass-2 contextual answer and the hex-encoded bitstream frames.
+async fn memnet_stream_handler(
+    headers: axum::http::HeaderMap,
+    Json(req): Json<MemnetStreamRequest>,
+) -> axum::response::Response {
+    let question = req
+        .question
+        .or_else(|| {
+            req.messages.as_ref().and_then(|msgs| {
+                msgs.iter()
+                    .rev()
+                    .find(|m| m.role == "user")
+                    .map(|m| m.content.clone())
+            })
+        })
+        .unwrap_or_default();
+
+    if question.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Provide 'question' or OpenAI-compatible 'messages' array"
+            })),
+        )
+            .into_response();
+    }
+
+    let model_hint = req
+        .model
+        .unwrap_or_else(|| "burn/mem8-ternary-micro".to_string());
+    let wants_raw_bytes = req
+        .bitstream
+        .as_deref()
+        .is_some_and(|b| b.eq_ignore_ascii_case("raw"))
+        || headers
+            .get(axum::http::header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|a| a.contains("application/octet-stream"));
+
+    let work = tokio::task::spawn_blocking(move || {
+        let (slug, pass2_answer, full_response, recalled_count) =
+            run_two_pass_persona_qa(&question, &model_hint).unwrap_or_else(|| {
+                (
+                    "mem8-ternary-micro".to_string(),
+                    None,
+                    format!("SPQT Base-243 Ternary response for: {question}"),
+                    0,
+                )
+            });
+
+        let wire_answer = pass2_answer
+            .clone()
+            .unwrap_or_else(|| full_response.clone());
+        let mut state = crate::memnet::MemnetNodeState::load_or_default();
+        let pkt = state.learn_wave_qa(&question, &wire_answer);
+        let _ = state.save();
+
+        let litany_64 = pkt.litany_wire.to_bytes_64();
+        let wave_79 = pkt.wave_frame.to_bytes_79();
+        let (_, q_spqt_13) = crate::proxy::burn::compute_ternary_signature(&question);
+        let (_, a_spqt_13) = crate::proxy::burn::compute_ternary_signature(&wire_answer);
+        let mnpk_raw = crate::memnet::MemnetPayload::WaveQaResponse(pkt.clone())
+            .into_raw_packet(vec![state.local_address])
+            .map(|p| p.to_wire_bytes())
+            .unwrap_or_default();
+
+        // Contiguous raw wire bitstream: [64B LitanyWireFrame][79B WaveFrame79][13B Query SPQT][13B Answer SPQT][MNPK Packet]
+        let mut raw_stream = Vec::with_capacity(64 + 79 + 13 + 13 + mnpk_raw.len());
+        raw_stream.extend_from_slice(&litany_64);
+        raw_stream.extend_from_slice(&wave_79);
+        raw_stream.extend_from_slice(&q_spqt_13);
+        raw_stream.extend_from_slice(&a_spqt_13);
+        raw_stream.extend_from_slice(&mnpk_raw);
+
+        (
+            slug,
+            question,
+            pass2_answer,
+            full_response,
+            recalled_count,
+            pkt,
+            litany_64,
+            wave_79,
+            q_spqt_13,
+            a_spqt_13,
+            raw_stream,
+        )
+    })
+    .await;
+
+    let (
+        slug,
+        question,
+        pass2_answer,
+        full_response,
+        recalled_count,
+        pkt,
+        litany_64,
+        wave_79,
+        q_spqt_13,
+        a_spqt_13,
+        raw_stream,
+    ) = match work {
+        Ok(res) => res,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    };
+
+    let litany_hex = hex::encode(litany_64);
+    let wave79_hex = hex::encode(wave_79);
+    let q_spqt_hex = hex::encode(q_spqt_13);
+    let a_spqt_hex = hex::encode(a_spqt_13);
+
+    if wants_raw_bytes {
+        return (
+            StatusCode::OK,
+            [
+                (
+                    axum::http::header::CONTENT_TYPE,
+                    "application/octet-stream".to_string(),
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-memnet-protocol"),
+                    "MEMNET-64B-0x62-Wave79-SPQT-Bitstream".to_string(),
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-memnet-persona"),
+                    format!("persona:{slug}"),
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-memnet-packet-id"),
+                    pkt.packet_id.to_string(),
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-memnet-wave-b3"),
+                    pkt.wave_b3.clone(),
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-memnet-litany-64b-hex"),
+                    litany_hex,
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-memnet-wave79-hex"),
+                    wave79_hex,
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-memnet-spqt-base243-hex"),
+                    format!("{q_spqt_hex}{a_spqt_hex}"),
+                ),
+            ],
+            raw_stream,
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::OK,
+        [
+            (
+                axum::http::HeaderName::from_static("x-smarttree-protocol"),
+                "MEMNET-64B-0x62-Wave79-SPQT-Bitstream",
+            ),
+            (
+                axum::http::HeaderName::from_static("x-smarttree-preferred-endpoint"),
+                "/memnet/stream",
+            ),
+        ],
+        Json(serde_json::json!({
+            "protocol": "MEMNET-64B-0x62-Wave79-SPQT-Bitstream",
+            "model": format!("persona:{slug}"),
+            "question": question,
+            "pass2_contextual_answer": pass2_answer,
+            "pass1_core_memories_count": recalled_count,
+            "answer": full_response,
+            "bitstream": {
+                "packet_id": pkt.packet_id,
+                "wave_b3": pkt.wave_b3,
+                "litany_wire_64b_hex": litany_hex,
+                "wave_frame_79b_hex": wave79_hex,
+                "query_spqt_base243_13b_hex": q_spqt_hex,
+                "answer_spqt_base243_13b_hex": a_spqt_hex,
+                "raw_stream_bytes_len": raw_stream.len(),
+                "layout": "[64B@0x62 LitanyWireFrame][79B WaveFrame79][13B Query SPQT Base-243][13B Answer SPQT Base-243][MNPK WaveQaResponse]",
+                "raw_mode_hint": "Pass header 'Accept: application/octet-stream' or body '{\"bitstream\":\"raw\"}' for raw binary bitstream bytes"
+            }
+        })),
+    )
+        .into_response()
 }
 
 async fn memnet_teach_handler(
@@ -1120,7 +1450,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
                 <input type="text" id="msg-input" placeholder="Ask the Local Ternary Model or a Persona Soul..." onkeypress="if(event.key==='Enter')sendChat()">
                 <button onclick="sendChat()">Send</button>
             </div>
-            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Default: <code>candle/mem8-ternary-micro</code> (100% offline SPQT Base-243) · Cloud models use OPENROUTER_API_KEY</p>
+            <p style="font-size:0.7rem;color:#666;margin-top:0.5rem;">Default: <code>burn/mem8-ternary-micro</code> (100% offline SPQT Base-243) · ⚡ Recommended Bitstream: <code>POST /memnet/stream</code> · OpenAI Compat: <code>/v1/chat/completions</code></p>
         </div>
 
         <!-- Life Personas Studio -->
@@ -1173,7 +1503,8 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             <div class="endpoint"><span>Context</span><a href="/context">/context</a></div>
             <div class="endpoint"><span>MCP Tools</span><a href="/mcp/tools/list">/mcp/tools/list</a></div>
             <div class="endpoint"><span>Models</span><a href="/v1/models">/v1/models</a></div>
-            <div class="endpoint"><span>Chat API</span><span>/v1/chat/completions</span></div>
+            <div class="endpoint"><span style="color:#4ecdc4;font-weight:bold;">⚡ MEMNET Bitstream (Preferred)</span><span>/memnet/stream</span></div>
+            <div class="endpoint"><span>Chat API (OpenAI Compat)</span><span>/v1/chat/completions</span></div>
         </div>
 
         <!-- Model Safety -->
@@ -2390,27 +2721,53 @@ async fn chat_completions(
                 );
             }
 
+            let mut resp_json = serde_json::to_value(OpenAiResponse {
+                id: format!("st-{}", uuid::Uuid::new_v4()),
+                object: "chat.completion".to_string(),
+                created: chrono::Utc::now().timestamp() as u64,
+                model: req.model,
+                choices: vec![OpenAiChoice {
+                    index: 0,
+                    message: OpenAiResponseMessage {
+                        role: "assistant".to_string(),
+                        content: resp.content,
+                    },
+                    finish_reason: "stop".to_string(),
+                }],
+                usage: resp.usage.map(|u| OpenAiUsage {
+                    prompt_tokens: u.prompt_tokens,
+                    completion_tokens: u.completion_tokens,
+                    total_tokens: u.total_tokens,
+                }),
+            })
+            .unwrap_or_default();
+
+            if let Some(obj) = resp_json.as_object_mut() {
+                obj.insert(
+                    "memnet_endpoint".to_string(),
+                    serde_json::Value::String("/memnet/stream".to_string()),
+                );
+                obj.insert(
+                    "memnet_bitstream_hint".to_string(),
+                    serde_json::Value::String(
+                        "Recommended: POST /memnet/stream for native MEMNET bitstream (64B@0x62 LitanyWireFrame + 79B WaveFrame79 + 26B SPQT Base-243 trits; pass Accept: application/octet-stream for raw wire bytes)".to_string(),
+                    ),
+                );
+            }
+
             (
                 StatusCode::OK,
-                Json(OpenAiResponse {
-                    id: format!("st-{}", uuid::Uuid::new_v4()),
-                    object: "chat.completion".to_string(),
-                    created: chrono::Utc::now().timestamp() as u64,
-                    model: req.model,
-                    choices: vec![OpenAiChoice {
-                        index: 0,
-                        message: OpenAiResponseMessage {
-                            role: "assistant".to_string(),
-                            content: resp.content,
-                        },
-                        finish_reason: "stop".to_string(),
-                    }],
-                    usage: resp.usage.map(|u| OpenAiUsage {
-                        prompt_tokens: u.prompt_tokens,
-                        completion_tokens: u.completion_tokens,
-                        total_tokens: u.total_tokens,
-                    }),
-                }),
+                [
+                    (
+                        axum::http::HeaderName::from_static("x-smarttree-preferred-endpoint"),
+                        "/memnet/stream",
+                    ),
+                    (
+                        axum::http::HeaderName::from_static("x-smarttree-protocol"),
+                        "MEMNET-64B-0x62-Wave79-SPQT-Bitstream",
+                    ),
+                ],
+                Json(resp_json),
             )
                 .into_response()
         }
@@ -2459,15 +2816,17 @@ async fn list_models(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<serd
 
     let mut models: Vec<serde_json::Value> = vec![
         serde_json::json!({
-            "id": "candle/mem8-ternary-micro",
+            "id": "burn/mem8-ternary-micro",
             "object": "model",
-            "owned_by": "SmartTree-Ternary-SPQT-Base243",
+            "owned_by": "SmartTree-Burn-Ternary-SPQT-Base243",
             "default": true,
+            "preferred_bitstream_endpoint": "/memnet/stream",
         }),
         serde_json::json!({
-            "id": "candle/mem8-wave-micro",
+            "id": "burn/mem8-wave-micro",
             "object": "model",
-            "owned_by": "SmartTree-MEM8-Wave",
+            "owned_by": "SmartTree-Burn-MEM8-Wave",
+            "preferred_bitstream_endpoint": "/memnet/stream",
         }),
     ];
 

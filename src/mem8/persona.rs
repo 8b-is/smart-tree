@@ -1083,9 +1083,11 @@ impl LifePersona {
     }
 
     /// Generate a grounded local response directly from the `.m8` Persona Soul (zero API keys)
-    /// with temporal memory awareness (`event_time` vs `written_time`) and first-person diary recall.
+    /// using a 2-Pass SPQT Base-243 Ternary architecture:
+    /// - **Pass 1 (`recall_episodes`)**: retrieves core episodic memories with temporal ordering (`event_time` vs `written_time`).
+    /// - **Pass 2 (`synthesize_contextual_answer`)**: scores and synthesizes the exact answering sentences across recalled memories to directly answer the user's question in context.
     pub fn respond_locally(&self, prompt: &str) -> String {
-        let recalled = self.recall_episodes(prompt, 5);
+        let recalled = self.recall_episodes(prompt, 8);
         let warmth_tone = if self.voice.warmth >= 0.15 {
             "warm and reflective"
         } else if self.voice.warmth <= -0.15 {
@@ -1128,7 +1130,17 @@ impl LifePersona {
             ));
         }
 
-        if let Some(primary) = recalled.first() {
+        // Pass 2: Contextual Question-Answering Synthesis over Pass-1 core memories
+        if let Some(synthesized) = self.synthesize_contextual_answer(prompt, &recalled) {
+            out.push_str(&format!(
+                "💡 **Contextual Answer (SPQT Base-243 Pass-2 Synthesis):**\n{}\n\n",
+                synthesized
+            ));
+        }
+
+        let core_memories: Vec<&PersonaEpisode> = recalled.iter().copied().take(5).collect();
+
+        if let Some(primary) = core_memories.first() {
             let temporal_badge = format_temporal_badge(primary);
             let lead_header = match (self.specialty, primary.author_role) {
                 (_, AuthorRole::PrimaryDiary) => format!(
@@ -1184,7 +1196,7 @@ impl LifePersona {
             ));
         }
 
-        if recalled.len() > 1 {
+        if core_memories.len() > 1 {
             let section_heading = match self.specialty {
                 PersonaSpecialty::HistoryDocumenter => {
                     "**Timeline & connected historical entries:**\n"
@@ -1200,7 +1212,8 @@ impl LifePersona {
             out.push_str(section_heading);
 
             // Order supporting memories chronologically when temporal anchors exist
-            let mut supporting: Vec<&PersonaEpisode> = recalled.iter().skip(1).copied().collect();
+            let mut supporting: Vec<&PersonaEpisode> =
+                core_memories.iter().skip(1).copied().collect();
             if self.specialty == PersonaSpecialty::LifeBiographer
                 || self.specialty == PersonaSpecialty::HistoryDocumenter
             {
@@ -1252,6 +1265,303 @@ impl LifePersona {
         }
 
         out
+    }
+
+    /// **Pass 2 — SPQT Base-243 Ternary Contextual Question-Answering Synthesis**.
+    ///
+    /// After Pass 1 (`recall_episodes`) retrieves the top candidate episodic memories, Pass 2:
+    /// 1. Decomposes the user's question into focus query tokens and a 10-trit interrogative intent signature
+    ///    packed into 2 SPQT Base-243 bytes (`spqt_pack_5trits` / `spqt_unpack_5trits`).
+    /// 2. Splits the recalled episodes into candidate sentences and evaluates each sentence via
+    ///    `felix_ternary_gemm_i32` over a 10-feature alignment vector (rewarding query token hits,
+    ///    novel query token coverage across multiple episodes, interrogative intent alignment,
+    ///    first-person diary voice, and temporal anchors).
+    /// 3. Selects up to 4 complementary sentences across episodes, orders them chronologically
+    ///    by `temporal_order`, and synthesizes a cohesive contextual answer in the persona's voice.
+    pub fn synthesize_contextual_answer(
+        &self,
+        prompt: &str,
+        recalled: &[&PersonaEpisode],
+    ) -> Option<String> {
+        if recalled.is_empty() {
+            return None;
+        }
+
+        let lower_q = prompt.to_ascii_lowercase();
+        let asks_when = lower_q.contains("when")
+            || lower_q.contains("what date")
+            || lower_q.contains("what year")
+            || lower_q.contains("what day")
+            || lower_q.contains("timeline");
+        let asks_who = lower_q.contains("who")
+            || lower_q.contains("friend")
+            || lower_q.contains("family")
+            || lower_q.contains("teacher")
+            || lower_q.contains("mother")
+            || lower_q.contains("father");
+        let asks_where = lower_q.contains("where")
+            || lower_q.contains("place")
+            || lower_q.contains("house")
+            || lower_q.contains("room")
+            || lower_q.contains("town");
+        let asks_why_how =
+            lower_q.contains("why") || lower_q.contains("how") || lower_q.contains("because");
+        let asks_what = lower_q.contains("what")
+            || lower_q.contains("tell")
+            || lower_q.contains("describe")
+            || lower_q.contains("explain")
+            || (!asks_when && !asks_who && !asks_where && !asks_why_how);
+
+        // Pack 10-trit interrogative intent weights into 2 SPQT Base-243 bytes
+        let b0 = spqt_pack_5trits([
+            1, // f0: lexical query overlap
+            1, // f1: novel token coverage across multi-part questions
+            if asks_when { 1 } else { 0 },
+            if asks_who { 1 } else { 0 },
+            if asks_where { 1 } else { 0 },
+        ]);
+        let b1 = spqt_pack_5trits([
+            if asks_why_how { 1 } else { 0 },
+            if asks_what { 1 } else { 0 },
+            if self.specialty == PersonaSpecialty::LifeBiographer {
+                1
+            } else {
+                0
+            },
+            1,  // f8: vivid/narrative sentence completeness
+            -1, // f9: boilerplate/fragment penalty
+        ]);
+        let u0 = spqt_unpack_5trits(b0);
+        let u1 = spqt_unpack_5trits(b1);
+        let q_trits: [i8; 10] = [
+            u0[0], u0[1], u0[2], u0[3], u0[4], u1[0], u1[1], u1[2], u1[3], u1[4],
+        ];
+
+        // Extract meaningful query focus tokens
+        let mut query_tokens: Vec<String> = Vec::new();
+        for raw in prompt.split(|c: char| !c.is_alphanumeric()) {
+            let w = raw.to_ascii_lowercase();
+            if w.len() >= 3
+                && !is_stopword(&w)
+                && !matches!(
+                    w.as_str(),
+                    "what"
+                        | "when"
+                        | "where"
+                        | "who"
+                        | "why"
+                        | "how"
+                        | "did"
+                        | "does"
+                        | "tell"
+                        | "write"
+                        | "wrote"
+                        | "written"
+                        | "diary"
+                        | "remember"
+                        | "entry"
+                        | "entries"
+                )
+                && !query_tokens.contains(&w)
+            {
+                query_tokens.push(w);
+            }
+        }
+
+        struct CandidateSentence<'a> {
+            ep: &'a PersonaEpisode,
+            ep_rank: usize,
+            sent_idx: usize,
+            text: String,
+            matched_tokens: Vec<String>,
+            static_features: [i16; 10],
+        }
+
+        let mut candidates: Vec<CandidateSentence<'_>> = Vec::new();
+        for (ep_rank, &ep) in recalled.iter().take(8).enumerate() {
+            for (sent_idx, sentence) in split_into_clean_sentences(&ep.passage)
+                .into_iter()
+                .enumerate()
+            {
+                let word_count = sentence.split_whitespace().count();
+                if word_count < 4 {
+                    continue;
+                }
+                let lower_s = sentence.to_ascii_lowercase();
+                let mut matched = Vec::new();
+                for qt in &query_tokens {
+                    if lower_s.contains(qt.as_str()) {
+                        matched.push(qt.clone());
+                    }
+                }
+
+                let f0 = ((matched.len() as i16) * 45).min(240)
+                    + (8i16.saturating_sub(ep_rank as i16) * 6);
+                let has_time_cue = ep.event_time.is_some()
+                    || lower_s.contains("19")
+                    || lower_s.contains("20")
+                    || lower_s.contains("morning")
+                    || lower_s.contains("evening")
+                    || lower_s.contains("night")
+                    || lower_s.contains("sunday")
+                    || lower_s.contains("monday")
+                    || lower_s.contains("tuesday")
+                    || lower_s.contains("wednesday")
+                    || lower_s.contains("thursday")
+                    || lower_s.contains("friday")
+                    || lower_s.contains("saturday");
+                let f2 = if has_time_cue { 70 } else { 0 };
+
+                let cap_interior = sentence
+                    .split_whitespace()
+                    .skip(1)
+                    .filter(|w| {
+                        let clean = w.trim_matches(|c: char| !c.is_alphabetic());
+                        clean.len() >= 2
+                            && clean.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                            && clean != "I"
+                    })
+                    .count() as i16;
+                let f3 = (cap_interior * 25).min(120);
+
+                let has_place_prep = lower_s.contains(" in ")
+                    || lower_s.contains(" at ")
+                    || lower_s.contains(" to ")
+                    || lower_s.contains(" from ")
+                    || lower_s.contains(" home")
+                    || lower_s.contains(" room")
+                    || lower_s.contains(" annex");
+                let f4 = if has_place_prep { 65 } else { 0 };
+
+                let has_causal = lower_s.contains("because")
+                    || lower_s.contains("so ")
+                    || lower_s.contains("since ")
+                    || lower_s.contains("therefore")
+                    || lower_s.contains("wanted")
+                    || lower_s.contains("decided");
+                let f5 = if has_causal { 75 } else { 0 };
+
+                let f6 = if (7..=42).contains(&word_count) {
+                    60
+                } else {
+                    20
+                };
+
+                let has_fp = lower_s.contains(" i ")
+                    || lower_s.starts_with("i ")
+                    || lower_s.contains(" my ")
+                    || lower_s.contains(" we ")
+                    || lower_s.contains(" our ");
+                let f7 = if has_fp || ep.author_role == AuthorRole::PrimaryDiary {
+                    65
+                } else {
+                    15
+                };
+
+                let f8 = ((ep.valence.abs() + ep.arousal) * 30.0) as i16;
+                let is_boilerplate = lower_s.contains("all rights reserved")
+                    || lower_s.contains("copyright")
+                    || word_count > 75;
+                let f9 = if is_boilerplate { 160 } else { 0 };
+
+                candidates.push(CandidateSentence {
+                    ep,
+                    ep_rank,
+                    sent_idx,
+                    text: sentence,
+                    matched_tokens: matched,
+                    static_features: [f0, 0, f2, f3, f4, f5, f6, f7, f8, f9],
+                });
+            }
+        }
+
+        if candidates.is_empty() {
+            return None;
+        }
+
+        // Greedy SPQT Base-243 ternary coverage selection across up to 3 complementary sentences
+        let mut selected_indices: Vec<usize> = Vec::new();
+        let mut covered_tokens: Vec<String> = Vec::new();
+
+        for _step in 0..3 {
+            let mut best_idx = None;
+            let mut best_score = i32::MIN;
+
+            for (idx, cand) in candidates.iter().enumerate() {
+                if selected_indices.contains(&idx) {
+                    continue;
+                }
+                let novel_hits = cand
+                    .matched_tokens
+                    .iter()
+                    .filter(|t| !covered_tokens.contains(t))
+                    .count() as i16;
+                // After the first sentence, require at least 1 novel query token hit (or top episode rank if query had <=1 token)
+                if !selected_indices.is_empty() && novel_hits == 0 && query_tokens.len() > 1 {
+                    continue;
+                }
+                let mut feats = cand.static_features;
+                feats[1] = (novel_hits * 75).min(240);
+                let score = crate::felix_asm::felix_ternary_gemm_i32(&feats, &q_trits);
+                if score > best_score {
+                    best_score = score;
+                    best_idx = Some(idx);
+                }
+            }
+
+            if let Some(chosen) = best_idx {
+                for tok in &candidates[chosen].matched_tokens {
+                    if !covered_tokens.contains(tok) {
+                        covered_tokens.push(tok.clone());
+                    }
+                }
+                selected_indices.push(chosen);
+            } else {
+                break;
+            }
+        }
+
+        if selected_indices.is_empty() {
+            return None;
+        }
+
+        // Order selected sentences chronologically when temporal anchors exist, preserving intra-episode sentence order
+        selected_indices.sort_by(|&a, &b| {
+            let ca = &candidates[a];
+            let cb = &candidates[b];
+            let ta = if ca.ep.temporal_order > 0 {
+                ca.ep.temporal_order
+            } else {
+                i32::MAX
+            };
+            let tb = if cb.ep.temporal_order > 0 {
+                cb.ep.temporal_order
+            } else {
+                i32::MAX
+            };
+            ta.cmp(&tb)
+                .then_with(|| ca.ep_rank.cmp(&cb.ep_rank))
+                .then_with(|| ca.sent_idx.cmp(&cb.sent_idx))
+        });
+
+        let mut parts: Vec<String> = Vec::new();
+        let mut last_badge = String::new();
+        for idx in selected_indices {
+            let cand = &candidates[idx];
+            let badge = match (&cand.ep.event_time, &cand.ep.era) {
+                (Some(ev), _) => format!("**[{ev}]** "),
+                (None, Some(era)) => format!("**[{era}]** "),
+                (None, None) => String::new(),
+            };
+            if !badge.is_empty() && badge != last_badge {
+                last_badge = badge.clone();
+                parts.push(format!("{badge}{}", cand.text));
+            } else {
+                parts.push(cand.text.clone());
+            }
+        }
+
+        Some(parts.join(" "))
     }
 
     /// Build a grounding system prompt for augmenting an external or local LLM
@@ -1306,6 +1616,114 @@ fn format_temporal_badge(ep: &PersonaEpisode) -> String {
         (None, None, Some(era)) => format!(" [{era}]"),
         (None, None, None) => String::new(),
     }
+}
+
+/// Split an episodic passage into clean sentences, stripping leading diary date headers
+/// so Pass 2 can prepend a structured temporal badge cleanly.
+fn split_into_clean_sentences(passage: &str) -> Vec<String> {
+    let normalized = passage.replace('\n', " ");
+    let mut raw_sentences = Vec::new();
+    let mut current = String::new();
+    let chars: Vec<char> = normalized.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        let ch = chars[i];
+        current.push(ch);
+        if matches!(ch, '.' | '!' | '?') {
+            // Avoid splitting on common abbreviations like "Mr.", "Mrs.", "Dr.", "Wed.", "Thurs."
+            let trimmed = current.trim_end();
+            let last_word = trimmed
+                .rsplit(|c: char| c.is_whitespace())
+                .next()
+                .unwrap_or("");
+            let is_abbrev = matches!(
+                last_word,
+                "Mr."
+                    | "Mrs."
+                    | "Ms."
+                    | "Dr."
+                    | "St."
+                    | "Jr."
+                    | "Sr."
+                    | "Mon."
+                    | "Tue."
+                    | "Tues."
+                    | "Wed."
+                    | "Thu."
+                    | "Thur."
+                    | "Thurs."
+                    | "Fri."
+                    | "Sat."
+                    | "Sun."
+                    | "Jan."
+                    | "Feb."
+                    | "Mar."
+                    | "Apr."
+                    | "Aug."
+                    | "Sep."
+                    | "Sept."
+                    | "Oct."
+                    | "Nov."
+                    | "Dec."
+            );
+            let next_is_space_or_end = i + 1 == len || chars[i + 1].is_whitespace();
+            if !is_abbrev && next_is_space_or_end {
+                let clean = strip_leading_date_header(current.trim());
+                if !clean.is_empty() {
+                    raw_sentences.push(clean);
+                }
+                current.clear();
+            }
+        }
+        i += 1;
+    }
+
+    let tail = strip_leading_date_header(current.trim());
+    if !tail.is_empty() {
+        raw_sentences.push(tail);
+    }
+    raw_sentences
+}
+
+/// Strip leading diary date/salutation headers (e.g. `"SATURDAY, JUNE 20, 1942 "` or `"January 3 Thurs. "`)
+/// from the front of a sentence when the temporal badge already carries the date.
+fn strip_leading_date_header(sentence: &str) -> String {
+    let mut s = sentence.trim();
+    let tokens: Vec<&str> = s.split_whitespace().collect();
+    if tokens.len() >= 5 {
+        let t0 = tokens[0].trim_matches(|c: char| !c.is_alphabetic());
+        let t1 = tokens[1].trim_matches(|c: char| !c.is_alphabetic());
+        let t2 = tokens[2].trim_matches(|c: char| !c.is_ascii_digit());
+        let t3 = tokens[3].trim_matches(|c: char| !c.is_ascii_digit());
+        // Pattern A: "SATURDAY, JUNE 20, 1942 <rest>"
+        if parse_weekday(&t0.to_ascii_lowercase()).is_some()
+            && parse_month_name(&t1.to_ascii_lowercase()).is_some()
+            && t2.parse::<u8>().is_ok()
+            && t3.len() == 4
+            && t3.parse::<u16>().is_ok()
+        {
+            let prefix_end = tokens[..4].join(" ").len();
+            if s.len() > prefix_end {
+                s = s[prefix_end..].trim_start_matches(|c: char| c.is_whitespace() || c == ',');
+            }
+        } else if parse_month_name(&t0.to_ascii_lowercase()).is_some()
+            && tokens[1]
+                .trim_matches(|c: char| !c.is_ascii_digit())
+                .parse::<u8>()
+                .is_ok()
+            && parse_weekday(&t2.to_ascii_lowercase()).is_some()
+        {
+            // Pattern B: "January 3 Thurs. <rest>"
+            let prefix_end = tokens[..3].join(" ").len();
+            if s.len() > prefix_end {
+                s = s[prefix_end..]
+                    .trim_start_matches(|c: char| c.is_whitespace() || c == '.' || c == ',');
+            }
+        }
+    }
+    s.trim().to_string()
 }
 
 /// Pack 5 trits (`{-1, 0, +1}`) into a single SPQT Base-243 (`3^5 = 243`) byte.
@@ -2558,5 +2976,38 @@ mod tests {
         let reply = persona.respond_locally("What did you bake in your diary in January 1963?");
         assert!(reply.contains("I remember writing in my diary"));
         assert!(reply.contains("1963-01-03 (Thu)"));
+        assert!(reply.contains("Contextual Answer (SPQT Base-243 Pass-2 Synthesis)"));
+    }
+
+    #[test]
+    fn pass2_contextual_synthesis_combines_multiple_diary_entries() {
+        let tmp = TempDir::new().unwrap();
+        let diary = tmp.path().join("diary_1942.md");
+        fs::write(
+            &diary,
+            "SATURDAY, JUNE 20, 1942\n\n\
+             Dearest Kitty, Hello, I founded the Little Dipper Minus Two Ping-Pong club with my girlfriends \
+             and we always went to the nearest ice-cream parlor afterward.\n\n\
+             SUNDAY, JUNE 21, 1942\n\n\
+             Dearest Kitty, Mr. Keesing, the old fogey who teaches math, was annoyed with me for talking so much \
+             and assigned me an extra essay called A Chatterbox.",
+        )
+        .unwrap();
+
+        let (persona, _, _) = LifePersona::train_from_path("Anne Frank", tmp.path()).unwrap();
+        let recalled = persona.recall_episodes(
+            "What did you write about the Ping-Pong club and Mr. Keesing Chatterbox essay?",
+            8,
+        );
+        let synth = persona
+            .synthesize_contextual_answer(
+                "What did you write about the Ping-Pong club and Mr. Keesing Chatterbox essay?",
+                &recalled,
+            )
+            .expect("Pass 2 should synthesize an answer");
+        assert!(synth.contains("1942-06-20 (Sat)"));
+        assert!(synth.contains("Ping-Pong"));
+        assert!(synth.contains("1942-06-21 (Sun)"));
+        assert!(synth.contains("Chatterbox"));
     }
 }
