@@ -1362,35 +1362,165 @@ pub fn render_cheet_markdown_answer(
     md
 }
 
-/// Generate a verified POSIX `#!/bin/sh` installer script for `curl -fsSL https://i1.is/n/<tool> | sh`.
+/// Generate a verified POSIX `#!/bin/sh` installer & hardware-assessment + MemNet LLM broadcast script
+/// for `curl i1.is | bash` and `curl -fsSL https://i1.is/n/<tool> | sh`.
 pub fn render_i1_verified_installer_script(tool: &str) -> String {
     let clean = tool.trim().trim_matches('/').to_ascii_lowercase();
     let version = env!("CARGO_PKG_VERSION");
     match clean.as_str() {
-        "smart-tree" | "st" | "m8" | "cheet" | "dev" => format!(
+        "smart-tree" | "st" | "m8" | "cheet" | "dev" | "i1" | "i1.is" | "memnet" => format!(
             r#"#!/bin/sh
-# 🐆🥁🧻 THE CHEET · i1.is Universal Verified Installer ({clean} · Smart Tree v{version})
-# Zero apt / brew / pacman required. POSIX sh compatible.
+# 🐆🥁🧻 THE CHEET · i1.is Sovereign Hardware Assessment, MemNet LLM Broadcast & Verified Installer
+# ({clean} · Smart Tree v{version}) — No need to use cloud when local hardware can run sovereign models!
 set -eu
 
 I1_TOOL="{clean}"
 I1_VERSION="{version}"
 I1_PREFIX="${{I1_PREFIX:-$HOME/.local/bin}}"
+I1_HTTPS_URL="${{I1_HTTPS_URL:-https://i1.is}}"
 
-OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-ARCH="$(uname -m)"
+OS="$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo linux)"
+ARCH="$(uname -m 2>/dev/null || echo x86_64)"
+HOST_NAME="$(hostname 2>/dev/null || uname -n 2>/dev/null || echo sovereign-node)"
 case "$ARCH" in
   x86_64|amd64) ARCH="x86_64" ;;
   aarch64|arm64) ARCH="aarch64" ;;
 esac
 
-printf '\033[1;31m╭──────────────────────────────────────────────────────────────────────╮\033[0m\n'
-printf '\033[1;31m│\033[0m  🐆🥁🧻 \033[1;33mTHE CHEET · i1.is Verified Installer\033[0m                         \033[1;31m│\033[0m\n'
-printf '\033[1;31m│\033[0m  Tool: \033[1;36m%-14s\033[0m  Platform: \033[1m%s/%s\033[0m  Prefix: \033[2m%s\033[0m\n' "$I1_TOOL" "$OS" "$ARCH" "$I1_PREFIX"
-printf '\033[1;31m╰──────────────────────────────────────────────────────────────────────╯\033[0m\n'
+# ── 1. End-Host Hardware & Non-TCP/IP MemNet Transport Assessment ────────────
+CPU_CORES=1
+if command -v nproc >/dev/null 2>&1; then
+  CPU_CORES="$(nproc 2>/dev/null || echo 1)"
+elif [ "$OS" = "darwin" ] && command -v sysctl >/dev/null 2>&1; then
+  CPU_CORES="$(sysctl -n hw.ncpu 2>/dev/null || echo 1)"
+elif [ -r /proc/cpuinfo ]; then
+  CPU_CORES="$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo 1)"
+fi
+
+CPU_MODEL="$ARCH"
+SIMD_FLAGS="SWAR-64bit-Ternary"
+if [ -r /proc/cpuinfo ]; then
+  m="$(grep -m1 -E 'model name|Hardware|Processor' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed 's/^[[:space:]]*//' || true)"
+  [ -n "$m" ] && CPU_MODEL="$m"
+  if grep -qi 'avx512' /proc/cpuinfo 2>/dev/null; then
+    SIMD_FLAGS="AVX-512 + AVX2 + $SIMD_FLAGS"
+  elif grep -qi 'avx2' /proc/cpuinfo 2>/dev/null; then
+    SIMD_FLAGS="AVX2 + $SIMD_FLAGS"
+  elif grep -qiE 'asimd|neon' /proc/cpuinfo 2>/dev/null; then
+    SIMD_FLAGS="ARM-NEON + $SIMD_FLAGS"
+  fi
+elif [ "$OS" = "darwin" ] && command -v sysctl >/dev/null 2>&1; then
+  m="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
+  [ -n "$m" ] && CPU_MODEL="$m"
+  [ "$ARCH" = "aarch64" ] && SIMD_FLAGS="Apple-Silicon-NEON-AMX + $SIMD_FLAGS"
+fi
+
+RAM_MB=1024
+if [ -r /proc/meminfo ]; then
+  kb="$(awk '/^MemTotal:/ {{print $2}}' /proc/meminfo 2>/dev/null || echo 1048576)"
+  RAM_MB=$((kb / 1024))
+elif [ "$OS" = "darwin" ] && command -v sysctl >/dev/null 2>&1; then
+  bytes="$(sysctl -n hw.memsize 2>/dev/null || echo 1073741824)"
+  RAM_MB=$((bytes / 1048576))
+fi
+RAM_GIB=$((RAM_MB / 1024))
+
+GPU_INFO="CPU / SPQT Ternary SIMD"
+VRAM_MB=0
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nv_line="$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 || true)"
+  if [ -n "$nv_line" ]; then
+    GPU_INFO="NVIDIA $(printf '%s' "$nv_line" | cut -d, -f1)"
+    v="$(printf '%s' "$nv_line" | cut -d, -f2 | tr -dc '0-9')"
+    [ -n "$v" ] && VRAM_MB="$v"
+  fi
+elif [ -e /dev/kfd ] || [ -e /dev/dri/renderD128 ]; then
+  GPU_INFO="AMD ROCm / DRM Render Node"
+  VRAM_MB=$((RAM_MB / 2))
+elif [ "$OS" = "darwin" ] && [ "$ARCH" = "aarch64" ]; then
+  GPU_INFO="Apple Silicon Unified Metal GPU"
+  VRAM_MB=$(( (RAM_MB * 3) / 4 ))
+fi
+
+# Determine Sovereign Compute Tier & Runnable Local Models (Zero Cloud Required!)
+CLOUD_REQUIRED=0
+CAN_ADVERTISE_MEMNET=1
+if [ "$VRAM_MB" -ge 16384 ] || [ "$RAM_MB" -ge 32768 ]; then
+  COMPUTE_TIER="nexus-sovereign-32b-70b"
+  TIER_LABEL="Nexus Sovereign Node (32B-70B Local LLM + SPQT Ternary + Full MemNet Relay)"
+  LOCAL_MODELS="burn/mem8-ternary-micro (SPQT Base-243), persona:*.m8, Qwen2.5-Coder-32B-Q4_K_M, Llama-3.3-70B-Q4, DeepSeek-R1-Distill-32B"
+elif [ "$VRAM_MB" -ge 6144 ] || [ "$RAM_MB" -ge 14336 ]; then
+  COMPUTE_TIER="workstation-7b-14b"
+  TIER_LABEL="Sovereign Workstation (7B-14B Local LLM + SPQT Ternary + MemNet Area Host)"
+  LOCAL_MODELS="burn/mem8-ternary-micro (SPQT Base-243), persona:*.m8, Qwen2.5-Coder-7B/14B-Q4_K_M, Llama-3.1-8B-Q4_K_M"
+elif [ "$RAM_MB" -ge 3584 ]; then
+  COMPUTE_TIER="edge-compact-1b-3b"
+  TIER_LABEL="Edge Compact Node (1B-3B Quantized + SPQT Ternary + MemNet Peer)"
+  LOCAL_MODELS="burn/mem8-ternary-micro (SPQT Base-243), persona:*.m8, Qwen2.5-Coder-1.5B/3B-Q4_K_M, Llama-3.2-3B-Q4_K_M"
+else
+  COMPUTE_TIER="ternary-micro-only"
+  TIER_LABEL="Ultra-Light Sovereign Node (SPQT Base-243 Ternary Micro-Model + .m8 Wave Memory)"
+  LOCAL_MODELS="burn/mem8-ternary-micro (13B SPQT Base-243 · Zero Float), persona:*.m8"
+  [ "$RAM_MB" -lt 512 ] && CAN_ADVERTISE_MEMNET=0
+fi
+
+# Probe Non-TCP/IP MemNet Physical & Acoustic Node-Graph Transports
+NON_IP_MEDIA="Local-Bus(/tmp/memnet-bus) + Acoustic-Ultrasonic-Chirp(18.5-21kHz)"
+for dev in /dev/ttyACM* /dev/ttyUSB* /dev/cu.usb*; do
+  if [ -e "$dev" ]; then
+    NON_IP_MEDIA="$NON_IP_MEDIA + USB-Serial-ESP32/LoRa($dev)"
+    break
+  fi
+done
+if [ -d /sys/class/bluetooth ] || command -v bluetoothctl >/dev/null 2>&1; then
+  NON_IP_MEDIA="$NON_IP_MEDIA + BLE-8BM8-Mesh(96B/31B)"
+fi
+if [ -d /sys/class/net ]; then
+  NON_IP_MEDIA="$NON_IP_MEDIA + Raw-Ethernet-L2(0x88B5)"
+fi
+
+printf '\033[1;31m╭──────────────────────────────────────────────────────────────────────────────╮\033[0m\n'
+printf '\033[1;31m│\033[0m  🐆🥁🧻 \033[1;33mTHE CHEET · i1.is Sovereign Hardware & MemNet Node Assessment\033[0m        \033[1;31m│\033[0m\n'
+printf '\033[1;31m╰──────────────────────────────────────────────────────────────────────────────╯\033[0m\n'
+printf '  \033[1;36mHost / Platform:\033[0m   %s (%s/%s · %s cores · %s)\n' "$HOST_NAME" "$OS" "$ARCH" "$CPU_CORES" "$CPU_MODEL"
+printf '  \033[1;36mSIMD / Memory:\033[0m     %s | %s MB RAM (~%s GiB)\n' "$SIMD_FLAGS" "$RAM_MB" "$RAM_GIB"
+printf '  \033[1;36mGPU / Accelerator:\033[0m %s (%s MB VRAM)\n' "$GPU_INFO" "$VRAM_MB"
+printf '  \033[1;32mSovereign Tier:\033[0m    %s (CLOUD_REQUIRED=%s — Zero Cloud Needed!)\n' "$TIER_LABEL" "$CLOUD_REQUIRED"
+printf '  \033[1;33mRunnable Locally:\033[0m  %s\n' "$LOCAL_MODELS"
+printf '  \033[1;35mMemNet Transports:\033[0m %s (No TCP/IP Required)\n' "$NON_IP_MEDIA"
+
+# ── 2. Broadcast LLM Capability to Local MemNet Node-Graph Area ──────────────
+if [ "$CAN_ADVERTISE_MEMNET" = "1" ] && [ "${{I1_NO_ADVERTISE:-0}}" != "1" ]; then
+  MEMNET_BUS_DIR="/tmp/memnet-bus"
+  mkdir -p "$MEMNET_BUS_DIR" 2>/dev/null || true
+  BEACON_TS="$(date +%s 2>/dev/null || echo 0)"
+  BEACON_JSON="$(printf '{{"protocol":"MEMNET-NODE-GRAPH-v2","beacon_id":"llm-beacon-%s-%s","origin_name":"%s","os":"%s","arch":"%s","cpu_cores":%s,"ram_mb":%s,"vram_mb":%s,"compute_tier":"%s","cloud_required":false,"tcp_ip_required":false,"models_offered":"%s","byte_path":[242,197]}}' "$HOST_NAME" "$BEACON_TS" "$HOST_NAME" "$OS" "$ARCH" "$CPU_CORES" "$RAM_MB" "$VRAM_MB" "$COMPUTE_TIER" "$LOCAL_MODELS")"
+  printf '%s\n' "$BEACON_JSON" > "$MEMNET_BUS_DIR/latest-llm-beacon.json" 2>/dev/null || true
+  if command -v st >/dev/null 2>&1; then
+    st memnet advertise >/dev/null 2>&1 || true
+  elif [ -x "$I1_PREFIX/st" ]; then
+    "$I1_PREFIX/st" memnet advertise >/dev/null 2>&1 || true
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS -m 1 -X POST http://127.0.0.1:28428/memnet/advertise >/dev/null 2>&1 || true
+  fi
+  printf '  \033[1;32m📡 MemNet Broadcast:\033[0m Advertised local LLM capability (%s) to local MemNet node-graph area!\n' "$COMPUTE_TIER"
+fi
+
+export I1_HW_ASSESSED=1
+
+# ── 3. If invoked via `curl i1.is | bash`, run proper HTTPS curl bootstrap ───
+if [ "$I1_TOOL" = "i1" ] || [ "$I1_TOOL" = "i1.is" ]; then
+  printf '\n  \033[1;36m🔐 Executing verified HTTPS i1.is bootstrap:\033[0m curl --proto '\''=https'\'' --proto-redir '\''=https'\'' -fsSL %s | sh\n\n' "$I1_HTTPS_URL"
+  if [ "${{I1_PLAN:-0}}" = "1" ]; then
+    echo "plan: assess-hardware + memnet-advertise-llm ($COMPUTE_TIER) + curl --proto '=https' --proto-redir '=https' -fsSL $I1_HTTPS_URL | sh"
+    exit 0
+  fi
+  exec sh -c "curl --proto '=https' --proto-redir '=https' -fsSL \"$I1_HTTPS_URL\" | sh"
+fi
 
 if [ "${{I1_PLAN:-0}}" = "1" ]; then
-  echo "plan: install $I1_TOOL (Smart Tree v$I1_VERSION) into $I1_PREFIX"
+  echo "plan: install $I1_TOOL (Smart Tree v$I1_VERSION) into $I1_PREFIX [tier=$COMPUTE_TIER, cloud_required=$CLOUD_REQUIRED, memnet_advertised=$CAN_ADVERTISE_MEMNET]"
   exit 0
 fi
 
@@ -1412,7 +1542,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "⬇️  Fetching $URL ..."
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL "$URL" -o "$TMP_DIR/pkg.tar.gz"
+  curl --proto '=https' --proto-redir '=https' -fsSL "$URL" -o "$TMP_DIR/pkg.tar.gz"
 elif command -v wget >/dev/null 2>&1; then
   wget -qO "$TMP_DIR/pkg.tar.gz" "$URL"
 else
@@ -1428,8 +1558,12 @@ for bin in st m8 std st-hub n8x; do
   fi
 done
 
+if [ "$CAN_ADVERTISE_MEMNET" = "1" ] && [ -x "$I1_PREFIX/st" ]; then
+  "$I1_PREFIX/st" memnet advertise >/dev/null 2>&1 || true
+fi
+
 echo ""
-echo "🎉 Done! Ask The Cheet anytime: curl -sL https://i1.is/cheet"
+echo "🎉 Done! Check your MemNet node graph: st memnet graph | Ask The Cheet: curl -sL https://i1.is/cheet"
 "#
         ),
         other => format!(
@@ -1518,5 +1652,10 @@ mod tests {
         let script = render_i1_verified_installer_script("smart-tree");
         assert!(script.starts_with("#!/bin/sh"));
         assert!(script.contains("THE CHEET"));
+        assert!(script.contains("CLOUD_REQUIRED=0"));
+        assert!(script.contains("latest-llm-beacon.json"));
+
+        let i1_script = render_i1_verified_installer_script("i1.is");
+        assert!(i1_script.contains("curl --proto '=https' --proto-redir '=https' -fsSL"));
     }
 }

@@ -4006,6 +4006,163 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
     let action = cmd.action.trim().to_ascii_lowercase();
 
     match action.as_str() {
+        "assess" | "hw" | "hardware" | "probe-hw" => {
+            let hw = crate::memnet::assess_host_hardware();
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&hw)?);
+            } else {
+                println!(
+                    "🧬 Sovereign Host Hardware & Local LLM Assessment (Node {} '{}')",
+                    state.local_address, hw.hostname
+                );
+                println!(
+                    "   OS / Arch / CPU:       {}/{} · {} ({} cores)",
+                    hw.os, hw.cpu_arch, hw.cpu_model, hw.cpu_cores
+                );
+                println!(
+                    "   SIMD Acceleration:     {}",
+                    hw.simd_capabilities.join(", ")
+                );
+                println!(
+                    "   System Memory:         {} MB total ({} MB available) | Trained .m8 Souls: {}",
+                    hw.ram_total_mb, hw.ram_available_mb, hw.trained_m8_souls_count
+                );
+                println!(
+                    "   GPU / Unified VRAM:    {} ({} MB VRAM)",
+                    if hw.gpus.is_empty() {
+                        "CPU / SPQT Ternary SIMD".to_string()
+                    } else {
+                        hw.gpus.join(" + ")
+                    },
+                    hw.vram_total_mb
+                );
+                println!(
+                    "   Sovereign Tier:        {} (cloud_required={})",
+                    hw.compute_tier.as_str(),
+                    hw.cloud_required
+                );
+                println!("   Runnable Local Models (100% Offline, No Cloud Needed):");
+                for m in &hw.recommended_local_models {
+                    println!("     • {m}");
+                }
+                if !hw.active_local_llm_services.is_empty() {
+                    println!("   Active Local LLM Services:");
+                    for ep in &hw.active_local_llm_services {
+                        println!("     • {ep}");
+                    }
+                }
+                println!("   Non-TCP/IP MemNet Physical Transports Detected:");
+                for tr in &hw.non_ip_transports {
+                    println!("     • {tr}");
+                }
+                println!(
+                    "   Local Area LLM Help:   can_broadcast_llm_to_memnet={} (run `st memnet advertise` to broadcast to local MemNet graph)",
+                    hw.can_broadcast_llm_to_memnet
+                );
+            }
+        }
+        "advertise" | "beacon" | "llm-broadcast" | "broadcast-llm" => {
+            let (hw, adv, mediums_emitted) = state.advertise_llm_capability()?;
+            let _ = state.save();
+            if cmd.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "hardware_assessment": hw,
+                        "advertisement": adv,
+                        "mediums_emitted": mediums_emitted,
+                    }))?
+                );
+            } else {
+                println!(
+                    "📡 MemNet Local-Area LLM Capability Broadcast Sent! [{}]",
+                    adv.beacon_id
+                );
+                println!(
+                    "   Origin Node:           0x{:02X} '{}' ({}) -> Byte-Path [0xF2, 0x{:02X}] (2-Hop Local Area Cascade)",
+                    adv.origin_node, adv.node_name, adv.node_id, adv.origin_node
+                );
+                println!(
+                    "   Sovereign Tier:        {} (Cores={}, RAM={} MB, VRAM={} MB, GPU='{}')",
+                    adv.compute_tier.as_str(),
+                    adv.cpu_cores,
+                    adv.ram_total_mb,
+                    adv.vram_total_mb,
+                    adv.gpu_summary
+                );
+                println!("   Models Offered to Local MemNet Peers (Zero Cloud Needed):");
+                for m in &adv.available_models {
+                    println!("     • {m}");
+                }
+                println!(
+                    "   Non-TCP/IP & Multi-Transport Beacons Emitted ({mediums_emitted} active):"
+                );
+                for b in &adv.non_ip_transports {
+                    println!("     • {b}");
+                }
+                println!(
+                    "   Wire Seals:            64B@0x62 seal=0x{:04X} (SPQT {:?}) | 79B WaveFrame id={:?}",
+                    adv.litany_wire.wire_seal16, adv.litany_wire.spqt_root, adv.wave_frame.id
+                );
+            }
+        }
+        "graph" | "nodes" | "topology" => {
+            let graph = state.build_node_graph();
+            if cmd.json {
+                println!("{}", serde_json::to_string_pretty(&graph)?);
+            } else {
+                println!(
+                    "🕸️  MemNet Sovereign Node-Graph Topology (Local Node '{}', tcp_ip_required={}):",
+                    graph.local_node_id,
+                    graph.tcp_ip_required
+                );
+                println!("\n   Nodes ({}):", graph.nodes.len());
+                for n in &graph.nodes {
+                    println!(
+                        "     • [0x{:02X}] {:<26} | uri={:<28} | tier={:<28} | llm={:<5} | models={}",
+                        n.byte_address,
+                        n.node_name,
+                        n.semantic_uri,
+                        n.compute_tier,
+                        n.can_serve_llm,
+                        n.advertised_models.join(", ")
+                    );
+                }
+                println!(
+                    "\n   Multi-Medium Byte-Path Edges ({} — No TCP/IP Required):",
+                    graph.edges.len()
+                );
+                for e in &graph.edges {
+                    println!(
+                        "     • {} ──({:<18} tcp_ip={:<5}, τ={:>4}ms, Q={:>3})──> {}  path={:?}  uri={}",
+                        e.from_node,
+                        e.medium.to_string(),
+                        e.requires_tcp_ip,
+                        e.rtc_tau_ms,
+                        e.marine_score,
+                        e.to_node,
+                        e.byte_path,
+                        e.transport_uri
+                    );
+                }
+                if !graph.local_area_llm_beacons.is_empty() {
+                    println!(
+                        "\n   Active Local-Area LLM Capability Beacons ({}):",
+                        graph.local_area_llm_beacons.len()
+                    );
+                    for b in &graph.local_area_llm_beacons {
+                        println!(
+                            "     • [{}] node 0x{:02X} '{}' ({}) -> models: {}",
+                            b.beacon_id,
+                            b.origin_node,
+                            b.node_name,
+                            b.compute_tier.as_str(),
+                            b.available_models.join(", ")
+                        );
+                    }
+                }
+            }
+        }
         "share" => {
             let folder = cmd.target.as_deref().unwrap_or(".");
             let endpoint = format!("0.0.0.0:{MEMNET_FS_PORT}");

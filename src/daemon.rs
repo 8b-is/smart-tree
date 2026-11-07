@@ -761,8 +761,14 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             "/security/history",
             get(crate::magiscanner::http::scan_history_handler),
         )
-        // MemNet bridge (MCP ↔ mesh): file-backed MemnetNodeState + Native Bitstream + Dev LLM Guide
+        // MemNet bridge (MCP ↔ mesh): file-backed MemnetNodeState + Native Bitstream + Dev LLM Guide + Node-Graph
         .route("/memnet/peers", get(memnet_peers_handler))
+        .route("/memnet/assess", get(memnet_assess_handler))
+        .route(
+            "/memnet/advertise",
+            post(memnet_advertise_handler).get(memnet_advertise_handler),
+        )
+        .route("/memnet/graph", get(memnet_graph_handler))
         .route("/memnet/ask", post(memnet_ask_handler))
         .route("/memnet/stream", post(memnet_stream_handler))
         .route("/memnet/llm-guide", get(memnet_llm_guide_handler))
@@ -1679,6 +1685,42 @@ async fn memnet_share_handler(
     })))
 }
 
+async fn memnet_assess_handler() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let hw = tokio::task::spawn_blocking(crate::memnet::assess_host_hardware)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::to_value(hw).unwrap_or_default()))
+}
+
+async fn memnet_advertise_handler() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let (hw, adv, mediums_emitted) = tokio::task::spawn_blocking(|| {
+        let mut state = crate::memnet::MemnetNodeState::load_or_default();
+        let res = state
+            .advertise_llm_capability()
+            .map_err(|e| e.to_string())?;
+        let _ = state.save();
+        Ok::<_, String>(res)
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(serde_json::json!({
+        "hardware_assessment": hw,
+        "advertisement": adv,
+        "mediums_emitted": mediums_emitted,
+    })))
+}
+
+async fn memnet_graph_handler() -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let graph = tokio::task::spawn_blocking(|| {
+        let mut state = crate::memnet::MemnetNodeState::load_or_default();
+        state.build_node_graph()
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::to_value(graph).unwrap_or_default()))
+}
+
 #[derive(Deserialize, Default)]
 struct CheetQueryParams {
     #[serde(default)]
@@ -1689,6 +1731,8 @@ struct CheetQueryParams {
     persona: Option<String>,
     #[serde(default)]
     format: Option<String>,
+    #[serde(default)]
+    script: Option<String>,
 }
 
 /// 🎸 The Cheet's Terminal & Markdown Answer Interface (`GET /cheet`, `GET /i1`)
@@ -1696,17 +1740,40 @@ async fn cheet_i1_handler(
     headers: axum::http::HeaderMap,
     axum::extract::Query(params): axum::extract::Query<CheetQueryParams>,
 ) -> axum::response::Response {
+    let format_hint = params
+        .format
+        .clone()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if format_hint == "sh"
+        || format_hint == "bash"
+        || format_hint == "script"
+        || params.script.as_deref() == Some("1")
+        || params.script.as_deref() == Some("true")
+    {
+        let script = crate::mem8::i1_nexus::render_i1_verified_installer_script("i1.is");
+        return (
+            StatusCode::OK,
+            [
+                (
+                    axum::http::header::CONTENT_TYPE,
+                    "text/x-shellscript; charset=utf-8",
+                ),
+                (
+                    axum::http::HeaderName::from_static("x-i1-chain-of-title"),
+                    "cot-8b-is-verified-installer",
+                ),
+            ],
+            script,
+        )
+            .into_response();
+    }
     let query = params
         .q
         .or(params.question)
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
     let persona_hint = params.persona.clone();
-    let format_hint = params
-        .format
-        .clone()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
     let user_agent = headers
         .get(axum::http::header::USER_AGENT)
         .and_then(|v| v.to_str().ok());

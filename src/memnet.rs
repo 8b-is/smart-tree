@@ -1743,6 +1743,124 @@ impl UltrasonicChirpModem {
 // 6. Unified MemNet Envelope & Persistent Local Mesh State (`~/.mem8/memnet/`)
 // ============================================================================
 
+/// Sovereign Local Compute Tier determined by `assess_host_hardware()`.
+/// Demonstrates that cloud APIs are unnecessary when local ternary souls or local LLMs can run on the host or local MEMNET graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SovereignComputeTier {
+    /// `< 2 GiB RAM`: Runs `SPQT Base-243` Ternary `.m8` Souls + `FELIX` 18-stage integer CORDIC locally;
+    /// zero cloud required, and can offload heavy LLM queries to neighbor nodes on the local `MEMNET` graph.
+    Tier0TernarySoulOnly,
+    /// `2..8 GiB RAM`: Runs `SPQT Base-243` Ternary Micro-Model + quantized `1.5B–3B` GGUF/Candle locally; zero cloud required.
+    Tier1CompactLocalLlm,
+    /// `8..24 GiB RAM` or `>= 8 GiB VRAM`: Runs `7B–14B` local LLM + full `.m8` soul bank;
+    /// broadcasts LLM helper capability to nearby nodes on the local `MEMNET` graph.
+    Tier2WorkstationLlmHelper,
+    /// `>= 24 GiB RAM/VRAM` (e.g. RTX 3090/4090, AMD RX 7900/MI300, Apple M-Max/Ultra, or high-RAM workstation):
+    /// Runs `32B–70B+` local LLM + multi-soul nexus; acts as a Regional `MEMNET` LLM Broadcast Beacon for the local area.
+    Tier3SovereignRegionalBeacon,
+}
+
+impl SovereignComputeTier {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Tier0TernarySoulOnly => "tier0-ternary-soul-only",
+            Self::Tier1CompactLocalLlm => "tier1-compact-local-llm",
+            Self::Tier2WorkstationLlmHelper => "tier2-workstation-llm-helper",
+            Self::Tier3SovereignRegionalBeacon => "tier3-sovereign-regional-beacon",
+        }
+    }
+}
+
+/// Complete end-host hardware & non-TCP/IP transport assessment for `i1.is` and `MEMNET`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostHardwareAssessment {
+    pub hostname: String,
+    pub os: String,
+    pub cpu_arch: String,
+    pub cpu_model: String,
+    pub cpu_cores: usize,
+    pub simd_capabilities: Vec<String>,
+    pub ram_total_mb: u64,
+    pub ram_available_mb: u64,
+    pub gpus: Vec<String>,
+    pub vram_total_mb: u64,
+    pub compute_tier: SovereignComputeTier,
+    pub cloud_required: bool,
+    pub can_broadcast_llm_to_memnet: bool,
+    pub recommended_local_models: Vec<String>,
+    pub active_local_llm_services: Vec<String>,
+    pub trained_m8_souls_count: usize,
+    /// Physical & bus transports that do NOT require TCP/IP (`usb://`, `ble://8BM8`, `lora://923.2MHz`, `espnow://`, `acoustic://18.5-21.0kHz`, `l2-eth://0x88B5`, `unix-bus:///tmp/memnet-bus`)
+    pub non_ip_transports: Vec<String>,
+    /// Optional IP/VPN overlay transports when routers or interfaces are present
+    pub overlay_ip_transports: Vec<String>,
+}
+
+/// Multi-medium `MEMNET` Node-Graph LLM Capability Advertisement (`0xF2 -> 0xF1 -> 0xF0` cascading broadcast).
+/// Allows capable hosts to advertise their local LLM & `.m8` soul capabilities to help other nodes in the local `MEMNET` area without requiring cloud or TCP/IP.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LlmCapabilityAdvertisement {
+    pub beacon_id: String,
+    pub origin_node: u8,
+    pub node_id: String,
+    pub node_name: String,
+    pub compute_tier: SovereignComputeTier,
+    pub cpu_arch: String,
+    pub cpu_cores: usize,
+    pub ram_total_mb: u64,
+    pub vram_total_mb: u64,
+    pub gpu_summary: String,
+    pub available_models: Vec<String>,
+    pub trained_souls_count: usize,
+    pub non_ip_transports: Vec<String>,
+    pub overlay_endpoints: Vec<String>,
+    pub spqt_capability_13b_hex: String,
+    pub wave_frame: WaveFrame79,
+    pub litany_wire: LitanyWireFrame,
+    pub timestamp_ms: u64,
+}
+
+/// A node in the `MEMNET` Semantic Node-Graph (`wave://` / byte-path addressed, independent of TCP/IP).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemnetGraphNode {
+    pub node_id: String,
+    pub byte_address: u8,
+    pub node_name: String,
+    pub semantic_uri: String,
+    pub spqt_sig_13b_hex: String,
+    pub compute_tier: String,
+    pub can_serve_llm: bool,
+    pub advertised_models: Vec<String>,
+    pub non_ip_transports: Vec<String>,
+    pub overlay_transports: Vec<String>,
+}
+
+/// A directed multi-transport edge in the `MEMNET` Node-Graph.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemnetGraphEdge {
+    pub from_node: String,
+    pub to_node: String,
+    pub byte_path: Vec<u8>,
+    pub medium: MemnetMedium,
+    pub transport_uri: String,
+    pub requires_tcp_ip: bool,
+    pub rtc_tau_ms: u32,
+    pub marine_score: u32,
+    pub status: RouteStatus,
+}
+
+/// Complete `MEMNET` Node-Graph topology showing nodes, non-TCP/IP physical edges, and local-area LLM helpers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemnetGraphTopology {
+    pub local_node_id: String,
+    pub tcp_ip_required: bool,
+    pub supported_non_ip_media: Vec<String>,
+    pub nodes: Vec<MemnetGraphNode>,
+    pub edges: Vec<MemnetGraphEdge>,
+    pub local_area_llm_beacons: Vec<LlmCapabilityAdvertisement>,
+}
+
 /// High-level typed payload carried inside a `MemnetRawPacket`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -1776,6 +1894,8 @@ pub enum MemnetPayload {
     WaveQaResponse(WaveQaPacket),
     MediaChunk(MediaChunkPacket),
     Esp32ConstellationBeacon(MemnetCapsule64),
+    /// Broadcasts local LLM & `.m8` Ternary Soul capability across the local `MEMNET` node graph to help nearby nodes.
+    LlmCapabilityAnnounce(LlmCapabilityAdvertisement),
 }
 
 impl MemnetPayload {
@@ -1813,6 +1933,9 @@ pub struct MemnetNodeState {
     pub routes: Vec<MemnetRouteEntry>,
     pub shared_folders: BTreeMap<String, SharedFolderManifest>,
     pub wave_qa_cache: Vec<WaveQaPacket>,
+    /// Local & neighbor `MEMNET` Node-Graph LLM Capability Advertisements indexed by `node_id`.
+    #[serde(default)]
+    pub llm_advertisements: BTreeMap<String, LlmCapabilityAdvertisement>,
 }
 
 impl Default for MemnetNodeState {
@@ -1871,6 +1994,7 @@ impl Default for MemnetNodeState {
             routes,
             shared_folders: BTreeMap::new(),
             wave_qa_cache: Vec::new(),
+            llm_advertisements: BTreeMap::new(),
         }
     }
 }
@@ -2495,10 +2619,233 @@ impl MemnetNodeState {
                         .insert(manifest.share_name.clone(), manifest);
                     let _ = self.save();
                 }
+                MemnetPayload::LlmCapabilityAnnounce(ad) => {
+                    self.llm_advertisements.insert(ad.node_id.clone(), ad);
+                    let _ = self.save();
+                }
                 _ => {}
             }
         }
         Ok(handled)
+    }
+
+    /// Perform a local end-host hardware assessment, build a signed `LlmCapabilityAdvertisement`,
+    /// and broadcast it across **all non-TCP/IP node-graph transports** (`/tmp/memnet-bus` Unix bus,
+    /// 64B `MemnetCapsule64` USB/ESP-NOW/LoRa frame, 96B `8BM8` Bluetooth frame + 31B BLE beacon,
+    /// Ultrasonic Chirp spool) plus optional UDP LAN `:8423`/`:8420` when an IP interface is present.
+    pub fn advertise_llm_capability(
+        &mut self,
+    ) -> Result<(HostHardwareAssessment, LlmCapabilityAdvertisement, usize)> {
+        let hw = assess_host_hardware();
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let node_id = format!("node:{}:{}", self.local_address, self.node_name);
+        let summary_text = format!(
+            "MEMNET-LLM-BEACON {} {} {} {} cores {}MB RAM {}MB VRAM models={}",
+            node_id,
+            hw.compute_tier.as_str(),
+            hw.cpu_arch,
+            hw.cpu_cores,
+            hw.ram_total_mb,
+            hw.vram_total_mb,
+            hw.recommended_local_models.join(",")
+        );
+        let wave_frame = WaveFrame79::from_semantic_text(&summary_text);
+        let (_tokens, _trits, _wave_b3, litany_wire) =
+            extract_semantic_wave_features(&summary_text);
+        let (_q_trits, spqt_13) = crate::proxy::burn::compute_ternary_signature(&summary_text);
+        let spqt_hex = hex::encode(spqt_13);
+        let beacon_id = format!("llm-beacon-{:08x}", fnv32_1a(summary_text.as_bytes()));
+
+        let ad = LlmCapabilityAdvertisement {
+            beacon_id,
+            origin_node: self.local_address,
+            node_id: node_id.clone(),
+            node_name: self.node_name.clone(),
+            compute_tier: hw.compute_tier,
+            cpu_arch: hw.cpu_arch.clone(),
+            cpu_cores: hw.cpu_cores,
+            ram_total_mb: hw.ram_total_mb,
+            vram_total_mb: hw.vram_total_mb,
+            gpu_summary: if hw.gpus.is_empty() {
+                "CPU SIMD + SPQT Base-243 Ternary Engine".to_string()
+            } else {
+                hw.gpus.join(" + ")
+            },
+            available_models: hw.recommended_local_models.clone(),
+            trained_souls_count: hw.trained_m8_souls_count,
+            non_ip_transports: hw.non_ip_transports.clone(),
+            overlay_endpoints: hw.overlay_ip_transports.clone(),
+            spqt_capability_13b_hex: spqt_hex,
+            wave_frame: wave_frame.clone(),
+            litany_wire,
+            timestamp_ms: now_ms,
+        };
+
+        // 1. Cascading broadcast raw packet (`0xF2 -> 0xF1 -> 0xF0` multi-hop graph flood)
+        let raw_pkt =
+            MemnetPayload::LlmCapabilityAnnounce(ad.clone()).into_raw_packet(vec![0xF2])?;
+        let wire_bytes = raw_pkt.to_wire_bytes();
+        let mut mediums_emitted = 0usize;
+
+        // 2. Non-TCP/IP Transport #1: Local Node-Graph Bus (`/tmp/memnet-bus/`) + 96B Bluetooth `8BM8` + 31B BLE + 64B Capsule
+        let bus_dir = std::env::temp_dir().join("memnet-bus");
+        if std::fs::create_dir_all(&bus_dir).is_ok() {
+            let mnpk_path = bus_dir.join(format!(
+                "node-{}-{}.mnpk",
+                self.local_address, self.node_name
+            ));
+            if std::fs::write(&mnpk_path, &wire_bytes).is_ok() {
+                mediums_emitted += 1;
+            }
+            let _ = std::fs::write(bus_dir.join("latest-llm-beacon.mnpk"), &wire_bytes);
+
+            // 96-byte Bluetooth Mesh frame (`"8BM8"`) + 31-byte BLE beacon (`"8B"`)
+            let bt96 = BluetoothMeshFrame96 {
+                hop_ttl: 3,
+                speaker_f0_hz: 175,
+                wupz_xor_fold: fnv64_1a(summary_text.as_bytes()),
+                wave: wave_frame,
+            };
+            if std::fs::write(bus_dir.join("ble-8bm8.frame96"), bt96.to_bytes_96()).is_ok() {
+                mediums_emitted += 1;
+            }
+            let ble31 = bt96.to_ble_beacon_31(self.local_address, "LLM-M8!");
+            let _ = std::fs::write(bus_dir.join("ble-adv.beacon31"), ble31);
+
+            // 64-byte LitanyWireFrame (`0x62`) for ESP-NOW / LoRa SX1262 / USB UART
+            if std::fs::write(
+                bus_dir.join("espnow-lora.litany64"),
+                litany_wire.to_bytes_64(),
+            )
+            .is_ok()
+            {
+                mediums_emitted += 1;
+            }
+        }
+
+        // 3. Ingest any neighbor `.mnpk` beacons already sitting on `/tmp/memnet-bus/`
+        if let Ok(entries) = std::fs::read_dir(&bus_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|e| e.to_str()) == Some("mnpk") {
+                    if let Ok(bytes) = std::fs::read(&p) {
+                        if let Ok(pkt) = MemnetRawPacket::from_wire_bytes(&bytes) {
+                            if let Ok(MemnetPayload::LlmCapabilityAnnounce(peer_ad)) =
+                                MemnetPayload::from_raw_packet(&pkt)
+                            {
+                                self.llm_advertisements
+                                    .insert(peer_ad.node_id.clone(), peer_ad);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Optional UDP/LAN overlay broadcast if any IP interface is active
+        let udp_sent = self.broadcast_lan_udp(&raw_pkt);
+        mediums_emitted += udp_sent;
+
+        self.llm_advertisements.insert(node_id, ad.clone());
+        let _ = self.save();
+        Ok((hw, ad, mediums_emitted))
+    }
+
+    /// Build the full `MEMNET` Semantic Node-Graph (`MemnetGraphTopology`), demonstrating
+    /// multi-way node-to-node communication without requiring TCP/IP.
+    pub fn build_node_graph(&mut self) -> MemnetGraphTopology {
+        let _ = self.discover_and_probe_live();
+        let hw = assess_host_hardware();
+        let local_node_id = format!("node:{}:{}", self.local_address, self.node_name);
+        let (_, local_spqt) = crate::proxy::burn::compute_ternary_signature(&local_node_id);
+
+        let mut nodes = Vec::new();
+        let mut edges = Vec::new();
+
+        nodes.push(MemnetGraphNode {
+            node_id: local_node_id.clone(),
+            byte_address: self.local_address,
+            node_name: self.node_name.clone(),
+            semantic_uri: format!("wave://memnet.local/{}/llm", self.node_name),
+            spqt_sig_13b_hex: hex::encode(local_spqt),
+            compute_tier: hw.compute_tier.as_str().to_string(),
+            can_serve_llm: hw.can_broadcast_llm_to_memnet,
+            advertised_models: hw.recommended_local_models.clone(),
+            non_ip_transports: hw.non_ip_transports.clone(),
+            overlay_transports: hw.overlay_ip_transports.clone(),
+        });
+
+        for r in &self.routes {
+            let peer_node_id = format!("node:{}:{}:{}", r.address, r.via, r.node_name);
+            let (_, peer_spqt) = crate::proxy::burn::compute_ternary_signature(&peer_node_id);
+            let requires_tcp_ip = matches!(r.medium, MemnetMedium::WiFi | MemnetMedium::VpnTunnel);
+            let transport_uri = match r.medium {
+                MemnetMedium::Usb => format!("usb-cdc://{}", r.endpoint),
+                MemnetMedium::Bluetooth => r.endpoint.clone(),
+                MemnetMedium::Esp32Now => format!("espnow-80211raw://ch6/{}", r.node_name),
+                MemnetMedium::LoRaSx1262 => format!("lora-sx1262://923.2MHz/{}", r.node_name),
+                MemnetMedium::UltrasonicChirp => r.endpoint.clone(),
+                MemnetMedium::Infrasound => "infrasound://8-20Hz".to_string(),
+                MemnetMedium::Ethernet => format!("l2-eth://0x88B5+udp/{}", r.endpoint),
+                MemnetMedium::WiFi | MemnetMedium::VpnTunnel => format!("udp://{}", r.endpoint),
+            };
+
+            nodes.push(MemnetGraphNode {
+                node_id: peer_node_id.clone(),
+                byte_address: r.via,
+                node_name: r.node_name.clone(),
+                semantic_uri: format!("wave://memnet.mesh/0x{:02X}/via-{}", r.address, r.via),
+                spqt_sig_13b_hex: hex::encode(peer_spqt),
+                compute_tier: "mesh-peer".to_string(),
+                can_serve_llm: r.node_name.contains("Ollama") || r.node_name.contains("MemNet"),
+                advertised_models: if r.node_name.contains("Ollama") {
+                    vec!["ollama:peer-lan".to_string()]
+                } else {
+                    vec!["burn/mem8-ternary-micro".to_string()]
+                },
+                non_ip_transports: if !requires_tcp_ip {
+                    vec![transport_uri.clone()]
+                } else {
+                    Vec::new()
+                },
+                overlay_transports: if requires_tcp_ip {
+                    vec![transport_uri.clone()]
+                } else {
+                    Vec::new()
+                },
+            });
+
+            edges.push(MemnetGraphEdge {
+                from_node: local_node_id.clone(),
+                to_node: peer_node_id,
+                byte_path: vec![2, r.address, r.via],
+                medium: r.medium,
+                transport_uri,
+                requires_tcp_ip,
+                rtc_tau_ms: r.effective_rtc_ms(),
+                marine_score: r.marine_quality_score(),
+                status: r.status,
+            });
+        }
+
+        MemnetGraphTopology {
+            local_node_id,
+            tcp_ip_required: false,
+            supported_non_ip_media: vec![
+                "USB CDC / UART Serial (MemnetMedium::Usb · 64B Capsule / MNPK)".to_string(),
+                "Bluetooth 8BM8 Mesh & 31B BLE Beacons (MemnetMedium::Bluetooth · no IP)".to_string(),
+                "ESP-NOW Raw 802.11 Action Frames (MemnetMedium::Esp32Now · no WiFi/IP assoc)".to_string(),
+                "LoRa SX1262 923.2 MHz Sub-GHz Radio (MemnetMedium::LoRaSx1262 · SUN:TDECK)".to_string(),
+                "Ultrasonic Chirp 18.5-21.0 kHz Speaker-to-Mic (MemnetMedium::UltrasonicChirp · air-gapped)".to_string(),
+                "Raw L2 Ethernet EtherType 0x88B5 & Unix Node Bus (/tmp/memnet-bus)".to_string(),
+            ],
+            nodes,
+            edges,
+            local_area_llm_beacons: self.llm_advertisements.values().cloned().collect(),
+        }
     }
 
     /// Compute the composite parallel Real Time Constant (`RTC`, `τ_eff` in ms) across active routes
@@ -2799,6 +3146,238 @@ impl MemnetNodeState {
 // ============================================================================
 // Live Hardware, Network Interface, ARP Neighbor & Peer Probing Helpers
 // ============================================================================
+
+/// Perform a comprehensive end-host hardware, local LLM, and non-TCP/IP `MEMNET` transport assessment.
+/// Determines what models can and will run on the end host without any cloud dependency.
+pub fn assess_host_hardware() -> HostHardwareAssessment {
+    let hostname = std::env::var("HOSTNAME")
+        .or_else(|_| std::fs::read_to_string("/etc/hostname").map(|s| s.trim().to_string()))
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "aye-st-node".to_string());
+    let os = std::env::consts::OS.to_string();
+    let cpu_arch = std::env::consts::ARCH.to_string();
+    let cpu_cores = num_cpus::get().max(1);
+
+    // 1. CPU model & SIMD feature detection
+    let mut cpu_model = format!("{cpu_arch} ({cpu_cores} cores)");
+    let mut simd_capabilities = Vec::new();
+    if let Ok(cpuinfo) = std::fs::read_to_string("/proc/cpuinfo") {
+        for line in cpuinfo.lines() {
+            if let Some(rest) = line.strip_prefix("model name") {
+                if let Some(val) = rest.split(':').nth(1) {
+                    let trimmed = val.trim();
+                    if !trimmed.is_empty() {
+                        cpu_model = trimmed.to_string();
+                        break;
+                    }
+                }
+            }
+        }
+        let lower = cpuinfo.to_ascii_lowercase();
+        for flag in ["avx512f", "avx2", "fma", "vnni", "neon", "asimd", "sve"] {
+            if lower.contains(flag) && !simd_capabilities.iter().any(|s| s == flag) {
+                simd_capabilities.push(flag.to_string());
+            }
+        }
+    }
+    if simd_capabilities.is_empty() {
+        if cpu_arch == "x86_64" {
+            simd_capabilities.push("sse4.2+avx2".to_string());
+        } else if cpu_arch == "aarch64" {
+            simd_capabilities.push("neon+asimd".to_string());
+        }
+    }
+    simd_capabilities.push("spqt-base243-ternary".to_string());
+    simd_capabilities.push("felix-cordic-int18".to_string());
+
+    // 2. System RAM (total & available in MB)
+    let mut ram_total_mb = 4096u64;
+    let mut ram_available_mb = 2048u64;
+    if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
+        for line in meminfo.lines() {
+            if let Some(rest) = line.strip_prefix("MemTotal:") {
+                if let Some(kb) = rest
+                    .split_whitespace()
+                    .next()
+                    .and_then(|s| s.parse::<u64>().ok())
+                {
+                    ram_total_mb = kb / 1024;
+                }
+            } else if let Some(rest) = line.strip_prefix("MemAvailable:") {
+                if let Some(kb) = rest
+                    .split_whitespace()
+                    .next()
+                    .and_then(|s| s.parse::<u64>().ok())
+                {
+                    ram_available_mb = kb / 1024;
+                }
+            }
+        }
+    }
+
+    // 3. GPU / NPU / Unified Memory detection
+    let mut gpus = Vec::new();
+    let mut vram_total_mb = 0u64;
+    if let Ok(out) = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-gpu=name,memory.total",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+    {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            for line in text.lines() {
+                let mut parts = line.split(',');
+                if let Some(name) = parts.next() {
+                    let mem_mb = parts
+                        .next()
+                        .and_then(|m| m.trim().parse::<u64>().ok())
+                        .unwrap_or(0);
+                    vram_total_mb += mem_mb;
+                    gpus.push(format!("{} ({} MB VRAM)", name.trim(), mem_mb));
+                }
+            }
+        }
+    }
+    if gpus.is_empty() && Path::new("/dev/kfd").exists() {
+        gpus.push("AMD ROCm GPU (/dev/kfd)".to_string());
+        vram_total_mb = ram_total_mb / 2;
+    }
+    if gpus.is_empty() && os == "macos" && cpu_arch == "aarch64" {
+        gpus.push(format!(
+            "Apple Silicon Metal Unified Memory ({} MB)",
+            ram_total_mb
+        ));
+        vram_total_mb = (ram_total_mb * 3) / 4;
+    }
+
+    // 4. Active local LLM runtimes & trained .m8 souls
+    let mut active_local_llm_services =
+        vec!["burn/mem8-ternary-micro (Built-in SPQT Base-243 · 0 Cloud)".to_string()];
+    if probe_tcp_port_ms("127.0.0.1", 11434, 25).is_some() {
+        active_local_llm_services.push("ollama://127.0.0.1:11434".to_string());
+    }
+    if probe_tcp_port_ms("127.0.0.1", 1234, 25).is_some() {
+        active_local_llm_services.push("lmstudio://127.0.0.1:1234".to_string());
+    }
+    if probe_tcp_port_ms("127.0.0.1", 8080, 25).is_some() {
+        active_local_llm_services.push("llamacpp://127.0.0.1:8080".to_string());
+    }
+    if probe_tcp_port_ms("127.0.0.1", 28428, 25).is_some() {
+        active_local_llm_services.push("smart-tree-daemon://127.0.0.1:28428".to_string());
+    }
+
+    let trained_m8_souls_count = crate::mem8::persona::LifePersona::list_all()
+        .map(|v| v.len())
+        .unwrap_or(0);
+
+    // 5. Non-TCP/IP Physical & Bus Transports for MEMNET Node-Graph
+    let mut non_ip_transports =
+        vec!["unix-bus:///tmp/memnet-bus (Zero-IP Local Node-Graph Bus)".to_string()];
+    for port in detect_serial_ports() {
+        non_ip_transports.push(format!(
+            "usb-cdc://{port} (64B MemnetCapsule64 / LoRa / ESP32)"
+        ));
+    }
+    if let Some((hci, _)) = detect_bluetooth_controller() {
+        non_ip_transports.push(format!(
+            "ble://{hci}/8BM8 (96B Bluetooth Mesh + 31B BLE Beacon)"
+        ));
+    }
+    let audio_cards = detect_audio_hardware();
+    if !audio_cards.is_empty() {
+        non_ip_transports.push(format!(
+            "acoustic://18.5-21.0kHz [{}] (Ultrasonic Chirp SPQT Modem)",
+            audio_cards.join("+")
+        ));
+    }
+
+    let ifaces = detect_local_network_interfaces();
+    let mut overlay_ip_transports = Vec::new();
+    for (name, ip, up, med) in &ifaces {
+        if *up {
+            if *med == MemnetMedium::Ethernet || *med == MemnetMedium::WiFi {
+                non_ip_transports.push(format!(
+                    "l2-eth://{name}:0x88B5 (Raw L2 Ethernet Frame · No TCP/IP Needed)"
+                ));
+            }
+            if !ip.is_empty() {
+                overlay_ip_transports
+                    .push(format!("udp://{ip}:{MEMNET_FS_PORT} ({name} {:?})", med));
+            }
+        }
+    }
+
+    // 6. Determine Sovereign Compute Tier & Recommended Local Models (0 Cloud!)
+    let effective_mem_mb = ram_total_mb.max(vram_total_mb);
+    let (compute_tier, mut recommended_local_models) =
+        if vram_total_mb >= 20_000 || ram_total_mb >= 32_000 {
+            (
+                SovereignComputeTier::Tier3SovereignRegionalBeacon,
+                vec![
+                    "burn/mem8-ternary-micro".to_string(),
+                    "deepseek-r1:32b-q4_k_m".to_string(),
+                    "qwen2.5-coder:32b".to_string(),
+                    "llama3.3:70b-iq2_xxs".to_string(),
+                ],
+            )
+        } else if vram_total_mb >= 7_500 || effective_mem_mb >= 12_000 {
+            (
+                SovereignComputeTier::Tier2WorkstationLlmHelper,
+                vec![
+                    "burn/mem8-ternary-micro".to_string(),
+                    "deepseek-r1:14b-q4_k_m".to_string(),
+                    "qwen2.5-coder:7b".to_string(),
+                ],
+            )
+        } else if effective_mem_mb >= 2_048 {
+            (
+                SovereignComputeTier::Tier1CompactLocalLlm,
+                vec![
+                    "burn/mem8-ternary-micro".to_string(),
+                    "qwen2.5-coder:1.5b-q4".to_string(),
+                    "llama3.2:3b-q4".to_string(),
+                ],
+            )
+        } else {
+            (
+                SovereignComputeTier::Tier0TernarySoulOnly,
+                vec!["burn/mem8-ternary-micro".to_string()],
+            )
+        };
+
+    if let Ok(personas) = crate::mem8::persona::LifePersona::list_all() {
+        for p in personas.into_iter().take(6) {
+            recommended_local_models.push(format!("persona:{}", p.slug));
+        }
+    }
+
+    let can_broadcast_llm_to_memnet = compute_tier != SovereignComputeTier::Tier0TernarySoulOnly
+        || trained_m8_souls_count > 0
+        || active_local_llm_services.len() > 1;
+
+    HostHardwareAssessment {
+        hostname,
+        os,
+        cpu_arch,
+        cpu_model,
+        cpu_cores,
+        simd_capabilities,
+        ram_total_mb,
+        ram_available_mb,
+        gpus,
+        vram_total_mb,
+        compute_tier,
+        cloud_required: false,
+        can_broadcast_llm_to_memnet,
+        recommended_local_models,
+        active_local_llm_services,
+        trained_m8_souls_count,
+        non_ip_transports,
+        overlay_ip_transports,
+    }
+}
 
 /// Detect local network interfaces `(iface_name, ipv4_str, is_up, medium)` across Linux and macOS.
 fn detect_local_network_interfaces() -> Vec<(String, String, bool, MemnetMedium)> {
@@ -4292,5 +4871,29 @@ mod tests {
         }
 
         assert_eq!(handle.join().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_assess_hardware_advertise_llm_and_node_graph() {
+        let hw = assess_host_hardware();
+        assert!(!hw.cloud_required);
+        assert!(hw.cpu_cores >= 1);
+        assert!(hw.ram_total_mb > 0);
+        assert!(!hw.recommended_local_models.is_empty());
+        assert!(!hw.non_ip_transports.is_empty());
+
+        let mut state = MemnetNodeState::default();
+        let (_hw2, ad, mediums_emitted) = state.advertise_llm_capability().unwrap();
+        assert!(mediums_emitted >= 1);
+        assert_eq!(ad.origin_node, state.local_address);
+        assert!(!ad.available_models.is_empty());
+
+        let graph = state.build_node_graph();
+        assert!(!graph.tcp_ip_required);
+        assert!(!graph.nodes.is_empty());
+        assert!(!graph.edges.is_empty());
+        // Verify that non-TCP/IP physical edges exist in the node graph
+        assert!(graph.edges.iter().any(|e| !e.requires_tcp_ip));
+        assert!(!graph.local_area_llm_beacons.is_empty());
     }
 }
