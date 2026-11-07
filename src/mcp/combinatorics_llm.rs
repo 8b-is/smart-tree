@@ -28,11 +28,12 @@ use axum::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+#[cfg(unix)]
+use std::ffi::CString;
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
     convert::Infallible,
-    ffi::CString,
     fs,
     path::Path,
     process::Command,

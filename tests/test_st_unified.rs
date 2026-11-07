@@ -436,11 +436,10 @@ fn test_unicode_filenames() -> Result<()> {
 #[test]
 fn test_symlinks() -> Result<()> {
     // Symlinks - the infinite loop generator's best friend!
-    let temp_dir = create_test_directory()?;
-
     #[cfg(unix)]
     {
         use std::os::unix::fs::symlink;
+        let temp_dir = create_test_directory()?;
         symlink(
             temp_dir.path().join("src/main.rs"),
             temp_dir.path().join("main_link.rs"),

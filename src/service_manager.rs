@@ -180,7 +180,7 @@ fn escalate_privileges(args: &[&str]) -> Result<bool> {
         if !status.success() {
             anyhow::bail!("Elevated command failed");
         }
-        return Ok(true);
+        Ok(true)
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]

@@ -815,7 +815,7 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
                 &format!(
                     "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
                     archive_path.display(),
-                    &temp_dir.display()
+                    temp_dir.display()
                 ),
             ])
             .output()
