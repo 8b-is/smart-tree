@@ -11135,7 +11135,7 @@ dependencies = [
 
 [[package]]
 name = "smart-tree"
-version = "22.2.1"
+version = "22.2.2"
 dependencies = [
  "anyhow",
  "argon2",

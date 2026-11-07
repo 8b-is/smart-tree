@@ -2704,19 +2704,66 @@ fn sync_git(dir: &std::path::Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
-fn is_ignorable_untracked_smart_tree_status_line(line: &str) -> bool {
-    let Some(rest) = line.strip_prefix("?? ") else {
-        return false;
-    };
-    let rel = rest.trim().trim_matches('"');
+fn is_smart_tree_artifact_rel_path(rel: &str) -> bool {
     rel == ".st"
         || rel.starts_with(".st/")
+        || rel.ends_with("/.st")
+        || rel.contains("/.st/")
         || rel == ".m8"
         || rel.ends_with("/.m8")
         || rel == ".aye_consciousness.m8"
         || rel.ends_with("/.aye_consciousness.m8")
         || rel == ".claude_consciousness.m8"
         || rel.ends_with("/.claude_consciousness.m8")
+}
+
+fn is_ignorable_untracked_smart_tree_status_line(line: &str) -> bool {
+    if let Some(rest) = line.strip_prefix("?? ") {
+        let rel = rest.trim().trim_matches('"');
+        return is_smart_tree_artifact_rel_path(rel)
+            || rel.ends_with(".pyc")
+            || rel == "__pycache__"
+            || rel.ends_with("/__pycache__")
+            || rel.contains("__pycache__/");
+    }
+    if let Some(rest) = line
+        .strip_prefix(" M ")
+        .or_else(|| line.strip_prefix("M  "))
+        .or_else(|| line.strip_prefix("MM "))
+        .or_else(|| line.strip_prefix("M "))
+    {
+        let rel = rest.trim().trim_matches('"');
+        return is_smart_tree_artifact_rel_path(rel);
+    }
+    false
+}
+
+fn restore_dirty_smart_tree_artifacts(dir: &std::path::Path) {
+    let Ok(raw) = sync_git(
+        dir,
+        &[
+            "status",
+            "--porcelain",
+            "--untracked-files=no",
+            "--ignore-submodules=none",
+        ],
+    ) else {
+        return;
+    };
+    let dirty_artifacts: Vec<String> = raw
+        .lines()
+        .filter_map(|line| {
+            line.strip_prefix(" M ")
+                .or_else(|| line.strip_prefix("M  "))
+                .or_else(|| line.strip_prefix("MM "))
+                .or_else(|| line.strip_prefix("M "))
+                .map(|rest| rest.trim().trim_matches('"').to_string())
+        })
+        .filter(|rel| is_smart_tree_artifact_rel_path(rel))
+        .collect();
+    for rel in dirty_artifacts {
+        let _ = sync_git(dir, &["checkout", "--", &rel]);
+    }
 }
 
 fn non_ignorable_porcelain_status(dir: &std::path::Path) -> Result<String> {
@@ -3282,6 +3329,7 @@ fn sync_repository(
         });
     }
     if before != target {
+        restore_dirty_smart_tree_artifacts(dir);
         // Merge the inspected commit, avoiding a second implicit fetch by `pull`.
         sync_git(
             dir,
@@ -3900,9 +3948,16 @@ mod sync_tests {
     #[test]
     fn untracked_smart_tree_metadata_does_not_block_sync() {
         let f = Fixture::new();
+        Fixture::commit(&f.publisher, ".claude_consciousness.m8");
+        git(&f.publisher, &["push"]);
+        assert!(matches!(
+            f.sync(None, true).unwrap(),
+            RepoSyncOutcome::Updated(_)
+        ));
         std::fs::create_dir_all(f.local.join(".st")).unwrap();
         std::fs::write(f.local.join(".st/alexiai_version.txt"), "1.0").unwrap();
         std::fs::write(f.local.join(".m8"), "consciousness").unwrap();
+        std::fs::write(f.local.join(".claude_consciousness.m8"), "local-refresh").unwrap();
         f.advance();
         let target = git(&f.publisher, &["rev-parse", "HEAD"]);
         assert_eq!(
