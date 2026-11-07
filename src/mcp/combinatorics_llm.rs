@@ -11,6 +11,7 @@ use crate::felix_asm::{
     felix_popcnt_u64, felix_ternary_gemm_i32, felix_tzcnt_u64, felix_xor_fold_64b,
 };
 use crate::galaxia_cluster::{GalaxiaClusterCrdt, GalaxiaGossipEvent};
+pub use crate::mcp::ternary_deck;
 use crate::mem8::regularity::zeno_engine::{
     seal_litany_wire_64b, verify_litany_wire_64b, GATE_0X62, QUANT_QT55,
 };
@@ -4875,7 +4876,6 @@ pub mod kernels {
 pub use crate::gaia_omni;
 pub use crate::hybrid_attention;
 pub use crate::latent_moe_layer;
-pub use crate::ternary_deck;
 pub use crate::ultra_zeno;
 
 /// Public `model_cache` namespace re-exporting the KV radix pool, speculative drafters, and PID controller.

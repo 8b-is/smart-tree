@@ -99,6 +99,7 @@ mod smart_edit_diff_viewer;
 pub mod smart_project_detector;
 mod sse;
 // pub mod symbol; // Removed: requires crabcc
+pub mod ternary_deck;
 mod theme_tools;
 mod tools;
 mod tools_consolidated;

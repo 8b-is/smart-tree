@@ -177,11 +177,80 @@ fn bench_fused_pack_gemv(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_ternary_simd_kernels(c: &mut Criterion) {
+    use st::mcp_combinatorics_llm::ternary_deck::{
+        compute_ternary_sse_scalar, compute_ternary_sse_simd, pack_4trits_row_scalar,
+        pack_4trits_row_simd, pack_5trits_row_scalar, pack_5trits_row_simd,
+    };
+
+    let mut group = c.benchmark_group("ternary_4k_simd_vs_scalar");
+    let width = 3840usize;
+    let row_trits: Vec<u8> = (0..width).map(|i| (i % 3) as u8).collect();
+
+    let mut out_4trit = vec![0u8; width / 4];
+    group.bench_function("pack_4trits_3840_scalar", |b| {
+        b.iter(|| {
+            black_box(pack_4trits_row_scalar(
+                black_box(&row_trits),
+                &mut out_4trit,
+            ))
+        })
+    });
+    group.bench_function("pack_4trits_3840_simd", |b| {
+        b.iter(|| black_box(pack_4trits_row_simd(black_box(&row_trits), &mut out_4trit)))
+    });
+
+    let mut out_5trit = vec![0u8; width / 5];
+    group.bench_function("pack_5trits_3840_scalar", |b| {
+        b.iter(|| {
+            black_box(pack_5trits_row_scalar(
+                black_box(&row_trits),
+                &mut out_5trit,
+            ))
+        })
+    });
+    group.bench_function("pack_5trits_3840_simd", |b| {
+        b.iter(|| black_box(pack_5trits_row_simd(black_box(&row_trits), &mut out_5trit)))
+    });
+
+    // 64 rows of a 4K frame: enough to be honest about the u64 accumulator
+    // without making the bench run for minutes.
+    let pixels: Vec<u8> = (0..(3840 * 64)).map(|i| (i * 37 % 256) as u8).collect();
+    let thresholds = (64u8, 180u8);
+    let centroids = [16u8, 122u8, 235u8];
+
+    group.bench_function("quantizer_sse_u64_scalar", |b| {
+        b.iter(|| {
+            black_box(compute_ternary_sse_scalar(
+                black_box(&pixels),
+                thresholds,
+                centroids,
+            ))
+        })
+    });
+    group.bench_function("quantizer_sse_u64_simd", |b| {
+        b.iter(|| {
+            black_box(compute_ternary_sse_simd(
+                black_box(&pixels),
+                thresholds,
+                centroids,
+            ))
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_packer,
     bench_unpacker,
     bench_gemv,
-    bench_fused_pack_gemv
+    bench_fused_pack_gemv,
+    bench_ramsey_stack_vs_heap,
+    bench_szemeredi_rayon_bitset,
+    bench_moser_tardos_luby_mis,
+    bench_xor_fold_gaia_b158_1mib,
+    bench_ternary_simd_kernels
 );
 criterion_main!(benches);
