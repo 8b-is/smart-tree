@@ -11,7 +11,7 @@
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v22.0.0 (Burn ML + BUI/Blender UI + 100+ Sovereign Models + Strudel/Enthea Live Music + Galaxia Federation + Weight-Space SIMD + CRDT SSRF Protection)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, live music generation, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Burn ML Framework** (replacing Candle), **BUI/Blender UI** (optional, requires cmake), **100+ Sovereign Models** (Escanore, Truth, Zeno, Goku/Vegeta, Dragonballs, Deities, Buddhist Protectors, Dyad Mapper, Strudel/Enthea Live Music), **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON/SVE2)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **CRDT SSRF Protection (Allowlist/Blocklist)**, **Burn ML Framework** (replacing Candle), **Parallel Compute Pool**, **Ada 2022 Exact Ratio `p/q`**, **Spicy TUI mode**, and **50+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> **Smart Tree v22.1.0 (Burn ML + BUI/Blender UI + 100+ Sovereign Models + Strudel/Enthea Live Music + Galaxia Federation + Weight-Space SIMD + CRDT SSRF Protection + Jury PID Safety + v22.1.0 Polish)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, live music generation, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Burn ML Framework** (replacing Candle), **BUI/Blender UI** (optional, requires cmake), **100+ Sovereign Models** (Escanore, Truth, Zeno, Goku/Vegeta, Dragonballs, Deities, Buddhist Protectors, Dyad Mapper, Strudel/Enthea Live Music), **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON/SVE2)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **CRDT SSRF Protection (Allowlist/Blocklist)**, **Burn ML Framework** (replacing Candle), **Parallel Compute Pool**, **Ada 2022 Exact Ratio `p/q`**, **Spicy TUI mode**, and **50+ MCP tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
@@ -65,6 +65,47 @@ After install, run `st --cleanup` to scan for and remove any malicious AI integr
 | **$O(1)$ `WAVE` Header Scan (`1,000` SG `.m8` files)** | — | **Zero decompression** | **`420.3 µs` total (`420 ns/file`)** |
 | **Full CRC32 + `ZLIB` Inflate + Rehydrate (`1,000` files)** | — | **100% CRC32 verified** | **`137.40 ms` total (`137.40 µs/file`)** |
 | **`M8MEM` v2 Bank (`250` SG consciousness nodes)** | `~210 KiB` (v1 raw) | **`33.4 KiB` (`136 B/memory`)** | **Cold reload + keyword recall in `28.87 ms`** |
+
+## 📝 v22.1.0 Changelog
+
+### 🛡️ Jury PID Safety — Unchecked Expect Removed
+- **Fixed**: `project_gains_into_jury_polytope` no longer panics on safe anchor
+- **Fixed**: Constructs minimal valid `JuryStabilityCertificate` on error path
+- **Fixed**: Uses `CharacteristicOrder::ThirdOrderPid` (not invalid `Cubic`)
+- **Result**: All 58 integration tests + 471 lib tests pass without panics
+
+### 🧮 Ada 2022 Exact `p/q` Modernization
+- **New**: `Exact_Ratio` private type with invariant `Denominator > 0`
+- **New**: Arithmetic ops `*`, `/`, `+`, `-` with exact reduction (GCD)
+- **New**: `Quantize_Weight(u8, Exact_Ratio) -> Bal_Trit` with exact threshold scaling
+- **Fixed**: `Rem` → `Remainder` (Ada reserved keyword), signed overflow safety
+
+### 🎵 Strudel/Enthea Live Music Generation
+- **New**: 8 Strudel/Enthea models (`strudel`, `strudel-live`, `enthea-strudel`, `ascii-music`, `live-coding`, `tidal-cycles`, `mini-notation`, `strudel-repl`)
+- **New**: 8 E2E tests including `test_qwave_marine_jitter_pq_exact_arithmetic`
+- **New**: `st_golf_qwave_marine_jitter_pq_u64` exact rational `p/q` arithmetic (Stein's Binary GCD)
+- **New**: Stein's Binary GCD implementation (`gcd_u64`) with comprehensive tests
+
+### 🧮 Sovereign Model Expansion (+100 Models)
+- **New Tier**: Strudel/Enthea Live Music (8 models)
+- **New Tier**: Escanore/Truth/Zeno/SONGOKU-VEGETA/Dragonballs/Deities
+- **New Tier**: Buddhist Protectors & Warriors (Fudō Myō-ō, Kannon, Jizō, etc.)
+- **New Tier**: Dyad Mapper (Sacred Union/Relational Intelligence)
+- **Expanded**: Buddhist Protectors, Warrior Monks, Zen Protectors
+- **Expanded**: Dharmapālas (Bishamonten, Taishakuten, Enma-Ō, Kongō Rikishi)
+
+### 🧪 CI/CD & Documentation
+- **New**: GitHub Actions CI (Linux/macOS/Windows, benchmarks, security, docs)
+- **New**: `docs/ARCHITECTURE.md` (components, data flow, algorithms, hardware targets)
+- **Updated**: `docs/ARCHITECTURE_REVIEW_V22_1.md` (if exists)
+
+### 🐛 Fixes & Polish
+- **Fixed**: Jury PID `.expect()` panic replaced with proper `Result` handling
+- **Fixed**: `CharacteristicOrder::Cubic` → `ThirdOrderPid` (enum variant fix)
+- **Fixed**: `JuryStabilityCertificate` field names (`cond1_p_at_one_val`, etc.)
+- **Fixed**: `Rem` → `Remainder` (Ada reserved keyword)
+- **Removed**: `candle` feature warnings from `src/proxy/candle.rs`
+- **Cleaned**: Dead code paths, unused imports, dead code
 
 ## 📝 v21.0.0 Changelog
 
