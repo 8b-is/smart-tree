@@ -627,7 +627,26 @@ impl I1NexusStore {
         let trits_vec: Vec<[i8; 65]> = self
             .nibbles
             .iter()
-            .map(|nib| compute_ternary_signature(&nib.content).0)
+            .map(|nib| {
+                if let Ok(bytes) = hex::decode(&nib.spqt_base243_13b_hex) {
+                    if bytes.len() == 13 {
+                        let mut b13 = [0u8; 13];
+                        b13.copy_from_slice(&bytes);
+                        return crate::proxy::burn::unpack_spqt_base243_65(&b13);
+                    }
+                }
+                compute_ternary_signature(&nib.content).0
+            })
+            .collect();
+        let acts_vec: Vec<[i16; 65]> = trits_vec
+            .iter()
+            .map(|t| {
+                let mut a = [0i16; 65];
+                for k in 0..65 {
+                    a[k] = t[k] as i16;
+                }
+                a
+            })
             .collect();
 
         for i in 0..n {
@@ -638,11 +657,8 @@ impl I1NexusStore {
                 }
                 let a = &self.nibbles[i];
                 let b = &self.nibbles[j];
-                let dot: i16 = trits_vec[i]
-                    .iter()
-                    .zip(trits_vec[j].iter())
-                    .map(|(&x, &y)| (x as i16) * (y as i16))
-                    .sum();
+                let dot =
+                    crate::felix_asm::felix_ternary_gemm_i32(&acts_vec[i], &trits_vec[j]) as i16;
 
                 let shared_kw = a.keywords.iter().filter(|k| b.keywords.contains(k)).count() as u16;
 

@@ -1065,18 +1065,70 @@ pub const fn felix_cordic_atan2_u32(y: i32, x: i32) -> u32 {
     angle
 }
 
+/// Hardware inline-assembly strong Kleene balanced-ternary NAND gate:
+/// $\text{NAND}(a, b) = -\min(a, b)$ over $\{-1, 0, +1\}$.
+///
+/// - `aarch64`: 3-instruction branchless `cmp` + `csel` + `neg` (`core::arch::asm!`).
+/// - `x86_64`: 4-instruction branchless `mov` + `cmp` + `cmovg` + `neg` (`core::arch::asm!`).
+#[inline(always)]
+pub fn felix_kleene_nand_trit_asm(a: i8, b: i8) -> i8 {
+    let ai = (a as i32).clamp(-1, 1);
+    let bi = (b as i32).clamp(-1, 1);
+
+    #[cfg(target_arch = "aarch64")]
+    {
+        let out: i32;
+        // SAFETY: Pure register-to-register AArch64 base instructions (`cmp`, `csel`, `neg`)
+        // computing `-min(ai, bi)` with zero memory access and zero conditional branches.
+        unsafe {
+            core::arch::asm!(
+                "cmp {a:w}, {b:w}",
+                "csel {out:w}, {a:w}, {b:w}, lt",
+                "neg {out:w}, {out:w}",
+                a = in(reg) ai,
+                b = in(reg) bi,
+                out = lateout(reg) out,
+                options(pure, nomem, nostack),
+            );
+        }
+        out as i8
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        let mut out = ai;
+        // SAFETY: Pure register-to-register x86_64 CMOV + NEG sequence (`cmp`, `cmovg`, `neg`).
+        unsafe {
+            core::arch::asm!(
+                "cmp {out:e}, {b:e}",
+                "cmovg {out:e}, {b:e}",
+                "neg {out:e}",
+                out = inout(reg) out,
+                b = in(reg) bi,
+                options(pure, nomem, nostack),
+            );
+        }
+        out as i8
+    }
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    {
+        (-ai.min(bi)) as i8
+    }
+}
+
 /// Bit-exact 1.58-bit (`{-1, 0, +1}`) integer GEMM dot-product (`8b-is-engine/crates/ternary`).
 ///
-/// Computes $\sum_i \text{acts}[i] \cdot \text{trits}[i]$ in exact `i32` integer arithmetic using
-/// 4-way unrolled branchless sign/zero bitmasks (`0` multiplications, `0` branches, `0` floats).
+/// Computes $\sum_i \text{acts}[i] \cdot \text{sgn}(\text{trits}[i])$ in exact `i32` integer arithmetic:
+/// - `aarch64`: 8-lane NEON vectorization (`vld1q_s16` + `vld1_s8` + `vmovl_s8` + branchless sign-masking
+///   `vcgtq_s16`/`vcltq_s16` + pairwise 32-bit accumulation `vpadalq_s16` + `vaddvq_s32`).
+/// - `x86_64`: 8-lane SSE2 vectorization (`_mm_loadu_si128` + `_mm_cmpgt_epi16` + `_mm_madd_epi16` `PMADDWD`).
+/// - Portable tail & fallback: 4-way unrolled branchless sign/zero bitmasks (`0` multiplications, `0` branches, `0` floats).
 /// Produces the exact same `i32` sum across AArch64, x86_64, RISC-V, and WASM.
 #[inline(always)]
 pub fn felix_ternary_gemm_i32(acts: &[i16], trits: &[i8]) -> i32 {
     let n = acts.len().min(trits.len());
-    let mut acc0 = 0i32;
-    let mut acc1 = 0i32;
-    let mut acc2 = 0i32;
-    let mut acc3 = 0i32;
+    let mut i = 0usize;
 
     #[inline(always)]
     const fn trit_mul_branchless(a: i16, t: i8) -> i32 {
@@ -1087,7 +1139,78 @@ pub fn felix_ternary_gemm_i32(acts: &[i16], trits: &[i8]) -> i32 {
         ((ai ^ neg_mask).wrapping_sub(neg_mask)) & nz_mask
     }
 
-    let mut i = 0usize;
+    #[cfg(target_arch = "aarch64")]
+    let mut total: i32 = unsafe {
+        use core::arch::aarch64::*;
+        let pa = acts.as_ptr();
+        let pt = trits.as_ptr();
+        let zero16 = vdupq_n_s16(0);
+        let ones16 = vdupq_n_s16(1);
+        let neg_ones16 = vdupq_n_s16(-1);
+        let mut acc32 = vdupq_n_s32(0);
+
+        while i + 8 <= n {
+            let va = vld1q_s16(pa.add(i));
+            let vt8 = vld1_s8(pt.add(i));
+            let vt16 = vmovl_s8(vt8);
+            // Normalize any non-zero trit to exact {-1, 0, +1} in 16-bit lanes
+            let pos_mask = vcgtq_s16(vt16, zero16);
+            let neg_mask = vcltq_s16(vt16, zero16);
+            let unit_trit = vorrq_s16(
+                vandq_s16(vreinterpretq_s16_u16(pos_mask), ones16),
+                vandq_s16(vreinterpretq_s16_u16(neg_mask), neg_ones16),
+            );
+            acc32 = vmlal_s16(acc32, vget_low_s16(va), vget_low_s16(unit_trit));
+            acc32 = vmlal_high_s16(acc32, va, unit_trit);
+            i += 8;
+        }
+        vaddvq_s32(acc32)
+    };
+
+    #[cfg(target_arch = "x86_64")]
+    let mut total: i32 = unsafe {
+        use core::arch::x86_64::*;
+        let pa = acts.as_ptr();
+        let pt = trits.as_ptr();
+        let zero16 = _mm_setzero_si128();
+        let ones16 = _mm_set1_epi16(1);
+        let neg_ones16 = _mm_set1_epi16(-1);
+        let mut acc32 = _mm_setzero_si128();
+
+        while i + 8 <= n {
+            let va = _mm_loadu_si128(pa.add(i) as *const __m128i);
+            let mut t_buf = [0i16; 8];
+            let mut k = 0usize;
+            while k < 8 {
+                t_buf[k] = *pt.add(i + k) as i16;
+                k += 1;
+            }
+            let vt16 = _mm_loadu_si128(t_buf.as_ptr() as *const __m128i);
+            let pos_mask = _mm_cmpgt_epi16(vt16, zero16);
+            let neg_mask = _mm_cmplt_epi16(vt16, zero16);
+            let unit_trit = _mm_or_si128(
+                _mm_and_si128(pos_mask, ones16),
+                _mm_and_si128(neg_mask, neg_ones16),
+            );
+            // FELIX|PHOENIX Tier-2 lowering: PMADDWD (`_mm_madd_epi16`) pairs 2x i16 products into i32
+            let prod32 = _mm_madd_epi16(va, unit_trit);
+            acc32 = _mm_add_epi32(acc32, prod32);
+            i += 8;
+        }
+        let mut lanes = [0i32; 4];
+        _mm_storeu_si128(lanes.as_mut_ptr() as *mut __m128i, acc32);
+        lanes[0]
+            .wrapping_add(lanes[1])
+            .wrapping_add(lanes[2].wrapping_add(lanes[3]))
+    };
+
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    let mut total = 0i32;
+
+    let mut acc0 = 0i32;
+    let mut acc1 = 0i32;
+    let mut acc2 = 0i32;
+    let mut acc3 = 0i32;
     while i + 4 <= n {
         acc0 = acc0.wrapping_add(trit_mul_branchless(acts[i], trits[i]));
         acc1 = acc1.wrapping_add(trit_mul_branchless(acts[i + 1], trits[i + 1]));
@@ -1095,14 +1218,24 @@ pub fn felix_ternary_gemm_i32(acts: &[i16], trits: &[i8]) -> i32 {
         acc3 = acc3.wrapping_add(trit_mul_branchless(acts[i + 3], trits[i + 3]));
         i += 4;
     }
-    let mut total = acc0
-        .wrapping_add(acc1)
+    total = total
+        .wrapping_add(acc0.wrapping_add(acc1))
         .wrapping_add(acc2.wrapping_add(acc3));
     while i < n {
         total = total.wrapping_add(trit_mul_branchless(acts[i], trits[i]));
         i += 1;
     }
     total
+}
+
+/// Fused `quantTernP/Q` Block32 unpack + SIMD `felix_ternary_gemm_i32` kernel.
+/// Unpacks 32 balanced trits + 4-bit E2M1 scale nibble from 7 wire bytes and computes
+/// the 32-lane dot product in hardware NEON / SSE2 (`PMADDWD`).
+#[inline(always)]
+pub fn felix_quant_tern_pq_gemm32_i32(acts: &[i16; 32], wire: &[u8; 7]) -> (i32, u8) {
+    let (trits, q_nibble) = felix_quant_tern_pq_unpack32(wire);
+    let dot = felix_ternary_gemm_i32(acts, &trits);
+    (dot, q_nibble)
 }
 
 /// Branchless ternary select (`tsel` Tier-2 FELIX|PHOENIX macro):
@@ -1485,11 +1618,46 @@ mod tests {
         // 45 deg = 2^32 / 8 = 536_870_912
         assert!((q1 as i64 - 536_870_912).abs() < 200_000);
 
-        // Verify bit-exact 1.58-bit ternary GEMM
+        // Verify bit-exact 1.58-bit ternary GEMM (short + 37-element SIMD/tail)
         let acts = [100i16, -50, 25, 10, -30, 7];
         let trits = [1i8, -1, 0, 1, 1, -1];
         // 100*(1) + (-50)*(-1) + 25*(0) + 10*(1) + (-30)*(1) + 7*(-1) = 100 + 50 + 0 + 10 - 30 - 7 = 123
         assert_eq!(felix_ternary_gemm_i32(&acts, &trits), 123);
+
+        let mut acts37 = [0i16; 37];
+        let mut trits37 = [0i8; 37];
+        let mut ref_sum37 = 0i32;
+        for idx in 0..37 {
+            acts37[idx] = ((idx as i16) * 17) - 250;
+            trits37[idx] = match idx % 3 {
+                0 => -1,
+                1 => 0,
+                _ => 1,
+            };
+            ref_sum37 += (acts37[idx] as i32) * (trits37[idx] as i32);
+        }
+        assert_eq!(felix_ternary_gemm_i32(&acts37, &trits37), ref_sum37);
+
+        // Verify hardware inline-assembly Kleene NAND truth table (-min(a, b))
+        for a in [-1i8, 0, 1] {
+            for b in [-1i8, 0, 1] {
+                assert_eq!(felix_kleene_nand_trit_asm(a, b), -a.min(b));
+            }
+        }
+
+        // Verify quantTernP/Q Block32 pack -> unpack -> fused GEMM32
+        let mut block_trits = [0i8; 32];
+        let mut block_acts = [0i16; 32];
+        let mut expected_block_dot = 0i32;
+        for idx in 0..32 {
+            block_trits[idx] = (idx as i8 % 3) - 1;
+            block_acts[idx] = (idx as i16 + 1) * 10;
+            expected_block_dot += (block_acts[idx] as i32) * (block_trits[idx] as i32);
+        }
+        let wire7 = felix_quant_tern_pq_pack32(&block_trits, 0x05);
+        let (gemm32_dot, q_nib) = felix_quant_tern_pq_gemm32_i32(&block_acts, &wire7);
+        assert_eq!(gemm32_dot, expected_block_dot);
+        assert_eq!(q_nib, 0x05);
 
         // Verify Slicing-by-4 IEEE 802.3 CRC32 (standard check value 0xCBF43926 for "123456789")
         assert_eq!(felix_crc32_ieee(b"123456789"), 0xCBF4_3926);

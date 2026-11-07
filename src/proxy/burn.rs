@@ -7,9 +7,6 @@ use crate::proxy::{LlmProvider, LlmRequest, LlmResponse};
 use anyhow::Result;
 use async_trait::async_trait;
 
-#[cfg(feature = "burn")]
-use burn_core::tensor::Tensor;
-
 #[derive(Default)]
 pub struct BurnProvider {
     _model_path: Option<String>,
@@ -60,32 +57,32 @@ pub fn compute_ternary_signature(text: &str) -> ([i8; 65], [u8; 13]) {
     (trits, packed)
 }
 
-/// Compute ternary resonance between two 65-trit (`{-1, 0, +1}`) vectors.
-/// When the `burn` feature is enabled, executes a `Tensor<Flex, 2>` SIMD matmul on Burn's `Flex` backend.
+/// Unpack a 13-byte SPQT Base-243 (`3^5 = 243`) signature back into 65 balanced trits (`{-1, 0, +1}`).
+#[inline(always)]
+pub fn unpack_spqt_base243_65(packed: &[u8; 13]) -> [i8; 65] {
+    let mut out = [0i8; 65];
+    for (chunk_idx, &b) in packed.iter().enumerate() {
+        let mut v = b.min(242);
+        let base = chunk_idx * 5;
+        for k in 0..5 {
+            out[base + k] = (v % 3) as i8 - 1;
+            v /= 3;
+        }
+    }
+    out
+}
+
+/// Compute ternary resonance between two 65-trit (`{-1, 0, +1}`) vectors using
+/// zero-heap hardware SIMD `felix_ternary_gemm_i32` (NEON on AArch64, SSE2 `PMADDWD` on x86_64).
+#[inline(always)]
 fn ternary_dot(a: &[i8; 65], b: &[i8; 65]) -> i32 {
-    #[cfg(feature = "burn")]
-    {
-        let device = Default::default();
-        let a_f32: [f32; 65] = std::array::from_fn(|i| a[i] as f32);
-        let b_f32: [f32; 65] = std::array::from_fn(|i| b[i] as f32);
-        let ta = Tensor::<1>::from_floats(a_f32, &device);
-        let tb = Tensor::<1>::from_floats(b_f32, &device);
-        let dot_tensor = ta.reshape([1, 65]).matmul(tb.reshape([65, 1]));
-        let data = dot_tensor.into_data();
-        let val = data
-            .as_slice::<f32>()
-            .ok()
-            .and_then(|v| v.first().copied())
-            .unwrap_or(0.0);
-        val.round() as i32
+    let mut acts = [0i16; 65];
+    let mut i = 0usize;
+    while i < 65 {
+        acts[i] = a[i] as i16;
+        i += 1;
     }
-    #[cfg(not(feature = "burn"))]
-    {
-        a.iter()
-            .zip(b.iter())
-            .map(|(&x, &y)| (x as i32) * (y as i32))
-            .sum()
-    }
+    crate::felix_asm::felix_ternary_gemm_i32(&acts, b)
 }
 
 /// Detect which specialist domain a prompt leans toward
