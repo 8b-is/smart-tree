@@ -274,6 +274,7 @@ fn install_user_completions_for_home(
     Ok(written)
 }
 
+#[cfg_attr(not(unix), allow(unused_variables))]
 fn atomic_write_file(dst: &Path, content: &[u8], owner: Option<(u32, u32)>) -> Result<()> {
     let Some(parent) = dst.parent() else {
         anyhow::bail!("No parent directory for {}", dst.display());

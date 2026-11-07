@@ -289,6 +289,7 @@ async fn stats(State(hub): State<Arc<Hub>>) -> ApiResult {
     Ok(Json(value))
 }
 
+#[cfg_attr(not(unix), allow(unused_variables))]
 fn filesystem_space(path: &std::path::Path) -> Value {
     #[cfg(unix)]
     {

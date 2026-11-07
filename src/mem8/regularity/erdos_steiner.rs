@@ -76,10 +76,7 @@ impl PartialOrd for DijkstraState {
 }
 impl Ord for DijkstraState {
     fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .cost
-            .partial_cmp(&self.cost)
-            .unwrap_or(Ordering::Equal)
+        other.cost.total_cmp(&self.cost)
     }
 }
 
@@ -254,11 +251,7 @@ pub fn prune_context_erdos_steiner(
         }
     }
 
-    bridges.sort_unstable_by(|a, b| {
-        a.total_cost
-            .partial_cmp(&b.total_cost)
-            .unwrap_or(Ordering::Equal)
-    });
+    bridges.sort_unstable_by(|a, b| a.total_cost.total_cmp(&b.total_cost));
 
     // Disjoint-Set (Union-Find) over Voronoi regions to extract Steiner MST
     let mut uf_parent: Vec<ClusterId> = (0..=(max_cid as ClusterId)).collect();
@@ -326,10 +319,7 @@ pub fn prune_context_erdos_steiner(
     }
 
     // Sort strictly by (Erdős Number ASC, Resistance Distance ASC)
-    candidates.sort_unstable_by(|a, b| {
-        a.1.cmp(&b.1)
-            .then_with(|| a.2.partial_cmp(&b.2).unwrap_or(Ordering::Equal))
-    });
+    candidates.sort_unstable_by(|a, b| a.1.cmp(&b.1).then_with(|| a.2.total_cmp(&b.2)));
 
     let mut selected_nodes = Vec::new();
     let mut tokens_used = exact_bridge_symbols.len() * cfg.tokens_per_symbol;

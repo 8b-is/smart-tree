@@ -214,24 +214,6 @@ pub fn is_trusted_internal_lan_ip(ip: std::net::IpAddr) -> bool {
     }
 }
 
-/// Returns `true` if the HTTP `Host` header refers to localhost, `.local` mDNS, or an internal LAN IP.
-fn host_is_local_or_lan(host_header: &str) -> bool {
-    let host = host_header
-        .trim()
-        .strip_prefix('[')
-        .and_then(|s| s.split(']').next())
-        .unwrap_or_else(|| host_header.split(':').next().unwrap_or(host_header))
-        .trim()
-        .to_ascii_lowercase();
-    if host == "localhost" || host.ends_with(".local") || host.ends_with(".lan") {
-        return true;
-    }
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        return is_trusted_internal_lan_ip(ip);
-    }
-    false
-}
-
 /// Auth middleware: validates Bearer token only for untrusted public WAN origins.
 ///
 /// - `/health` and `/quantssl/*` CA/status routes are always public.
@@ -269,20 +251,8 @@ async fn auth_middleware(
         .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
         .is_some_and(|ip| !is_trusted_internal_lan_ip(ip));
 
-    if !forwarded_untrusted {
-        if peer_is_lan == Some(true) {
-            return next.run(req).await;
-        }
-        if peer_is_lan.is_none() {
-            let host_ok = req
-                .headers()
-                .get("host")
-                .and_then(|v| v.to_str().ok())
-                .is_some_and(host_is_local_or_lan);
-            if host_ok {
-                return next.run(req).await;
-            }
-        }
+    if !forwarded_untrusted && peer_is_lan == Some(true) {
+        return next.run(req).await;
     }
 
     // Check `?token=<token>` query parameter for browser convenience

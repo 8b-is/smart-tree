@@ -11,7 +11,6 @@
 //! 6. Ramsey-theoretic monochromatic cliques ($K_3$ / $K_4$ colored Red/Blue/Green)
 
 use super::types::{CsrSymbolGraph, EdgeKind, SymbolId};
-use std::cmp::Ordering;
 
 /// Bitflags representing static AST capability hazards per symbol (`0..N`)
 #[repr(transparent)]
@@ -432,7 +431,7 @@ pub fn scan_erdos_renyi_shadow_graph(
                 .iter()
                 .map(|&sym| (sym, eigen_centrality[sym as usize]))
                 .collect();
-            pivots.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+            pivots.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
             pivots.truncate(5);
 
             let comp_spec_rad = estimate_component_spectral_radius(graph, &root_vertices[r]);
@@ -475,7 +474,7 @@ pub fn scan_erdos_renyi_shadow_graph(
             * (1.0 + a.combined_hazards.distinct_capabilities() as f64);
         let score_b = (b.erdos_log_surprise_nats + b.cyclomatic_excess.max(0) as f64)
             * (1.0 + b.combined_hazards.distinct_capabilities() as f64);
-        score_b.partial_cmp(&score_a).unwrap_or(Ordering::Equal)
+        score_b.total_cmp(&score_a)
     });
 
     // 6. Classify Global Erdős–Rényi Phase Regime
@@ -934,9 +933,7 @@ fn detect_tarjan_scc_anomalies(
                                     (sym, c)
                                 })
                                 .collect();
-                            pivots.sort_unstable_by(|a, b| {
-                                b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal)
-                            });
+                            pivots.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
                             pivots.truncate(5);
 
                             out_anomalies.push(ComponentAnomaly {

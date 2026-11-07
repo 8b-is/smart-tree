@@ -2377,6 +2377,7 @@ pub fn run_mlx_quant(
     }))
 }
 
+#[cfg(unix)]
 unsafe fn try_mlx_c_ffi(
     params: &MlxQuantParams,
     scheme: &str,
@@ -2436,6 +2437,16 @@ unsafe fn try_mlx_c_ffi(
     );
     libc::dlclose(handle);
     Ok(rc)
+}
+
+#[cfg(not(unix))]
+unsafe fn try_mlx_c_ffi(
+    params: &MlxQuantParams,
+    scheme: &str,
+    cb_state: &mut FfiCallbackState<'_>,
+) -> Result<i32, ()> {
+    let _ = (params, scheme, cb_state);
+    Err(())
 }
 
 fn directory_size(path: &Path) -> u64 {

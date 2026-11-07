@@ -1,4 +1,5 @@
 //! Opt-in, supervised updates. A separate OS job survives daemon restarts.
+#[cfg_attr(not(unix), allow(unused_imports))]
 use anyhow::{bail, Context, Result};
 
 #[cfg(unix)]

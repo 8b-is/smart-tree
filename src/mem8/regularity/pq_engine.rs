@@ -407,11 +407,7 @@ pub fn analyze_pq_mode(
         })
         .collect();
 
-    phase_space_orbitals.sort_by(|a, b| {
-        b.local_hamiltonian_h
-            .partial_cmp(&a.local_hamiltonian_h)
-            .unwrap_or(Ordering::Equal)
-    });
+    phase_space_orbitals.sort_by(|a, b| b.local_hamiltonian_h.total_cmp(&a.local_hamiltonian_h));
     phase_space_orbitals.truncate(8);
 
     PqModeReport {

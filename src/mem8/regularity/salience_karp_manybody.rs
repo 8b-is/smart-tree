@@ -27,7 +27,6 @@ use super::types::{ClusterId, CsrSymbolGraph, Mem8BookArchive, SymbolId};
 use crate::felix_asm::felix_dot64_f32;
 use crate::scanner::FileNode;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::time::UNIX_EPOCH;
 
 /// Regime classification for whether observable recency ($d_T$) is a valid proxy for
@@ -211,12 +210,7 @@ fn compute_salience_ontology(
 
     // Sort by Relational Distance d_R (ascending relational distance = most salient first)
     let mut relational_order = file_indices.clone();
-    relational_order.sort_by(|&a, &b| {
-        rel_dist[a]
-            .partial_cmp(&rel_dist[b])
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| a.cmp(&b))
-    });
+    relational_order.sort_by(|&a, &b| rel_dist[a].total_cmp(&rel_dist[b]).then_with(|| a.cmp(&b)));
 
     let mut temporal_rank = vec![0usize; n];
     for (rk, &sym) in temporal_order.iter().enumerate() {
@@ -460,7 +454,7 @@ fn compute_manybody_dft_strang(
         })
         .collect();
 
-    dominant_salience_orbitals.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    dominant_salience_orbitals.sort_by(|a, b| b.1.total_cmp(&a.1));
     dominant_salience_orbitals.truncate(5);
 
     // Coherence inner product |<\Psi(0) | \Psi(h)>|

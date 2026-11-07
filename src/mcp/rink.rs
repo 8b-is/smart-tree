@@ -265,6 +265,7 @@ struct QueryDir(PathBuf);
 impl QueryDir {
     fn create(interpret: bool, definitions: Option<&str>) -> Result<Self> {
         let path = std::env::temp_dir().join(format!("st-rink-{}", uuid::Uuid::new_v4()));
+        #[allow(unused_mut)]
         let mut builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
         {

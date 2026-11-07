@@ -132,7 +132,7 @@ enum IpClass {
 }
 
 fn classify_ip(ip: &str) -> Option<IpClass> {
-    let parts: Vec<u8> = ip.split('.').filter_map(|p| p.parse().ok()).collect();
+    let parts: Vec<u8> = ip.split('.').filter_map(|p| p.parse::<u8>().ok()).collect();
     if parts.len() != 4 {
         return None;
     }

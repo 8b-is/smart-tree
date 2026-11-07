@@ -3609,7 +3609,7 @@ fn detect_bluetooth_controller() -> Option<(String, bool)> {
     }
     #[cfg(target_os = "macos")]
     {
-        return Some(("CoreBluetooth".to_string(), true));
+        Some(("CoreBluetooth".to_string(), true))
     }
     #[cfg(not(target_os = "macos"))]
     {

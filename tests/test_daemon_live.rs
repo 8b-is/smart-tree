@@ -1,6 +1,7 @@
 //! Live daemon integration test
 //!
 //! Starts the daemon, sends protocol frames, validates responses.
+#![cfg(unix)]
 
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;

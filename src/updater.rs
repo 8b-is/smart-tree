@@ -622,6 +622,7 @@ fn create_temp_dir() -> Result<PathBuf> {
     let base = env::temp_dir();
     let unique_name = format!("st-update-{}", uuid::Uuid::new_v4());
     let temp_dir = base.join(unique_name);
+    #[allow(unused_mut)]
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
@@ -652,6 +653,7 @@ fn find_install_dir() -> Result<PathBuf> {
 }
 
 /// Check if we need elevated permissions
+#[cfg_attr(not(unix), allow(unused_variables))]
 fn needs_sudo(install_dir: &Path) -> bool {
     #[cfg(unix)]
     {

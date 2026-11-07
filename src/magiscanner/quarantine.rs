@@ -1,5 +1,6 @@
 use sha2::{Digest, Sha256};
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -61,8 +62,11 @@ pub fn quarantine_file(
     }
 
     // chmod 000 — no access for anyone
-    let permissions = fs::Permissions::from_mode(0o000);
-    fs::set_permissions(&quarantine_path, permissions)?;
+    #[cfg(unix)]
+    {
+        let permissions = fs::Permissions::from_mode(0o000);
+        fs::set_permissions(&quarantine_path, permissions)?;
+    }
 
     // Try to set xattr (best effort, don't fail if not supported)
     set_xattr_best_effort(
@@ -93,8 +97,11 @@ pub fn release_file(quarantine_path: &Path, original_path: &Path) -> Result<(), 
     }
 
     // First make readable so we can move it
-    let permissions = fs::Permissions::from_mode(0o644);
-    fs::set_permissions(quarantine_path, permissions)?;
+    #[cfg(unix)]
+    {
+        let permissions = fs::Permissions::from_mode(0o644);
+        fs::set_permissions(quarantine_path, permissions)?;
+    }
 
     // Ensure parent directory exists
     if let Some(parent) = original_path.parent() {
@@ -108,8 +115,11 @@ pub fn release_file(quarantine_path: &Path, original_path: &Path) -> Result<(), 
     }
 
     // Set reasonable permissions
-    let permissions = fs::Permissions::from_mode(0o644);
-    fs::set_permissions(original_path, permissions)?;
+    #[cfg(unix)]
+    {
+        let permissions = fs::Permissions::from_mode(0o644);
+        fs::set_permissions(original_path, permissions)?;
+    }
 
     Ok(())
 }
@@ -123,8 +133,11 @@ pub fn delete_quarantined(quarantine_path: &Path) -> Result<(), QuarantineError>
     }
 
     // Make accessible so we can delete
-    let permissions = fs::Permissions::from_mode(0o600);
-    fs::set_permissions(quarantine_path, permissions)?;
+    #[cfg(unix)]
+    {
+        let permissions = fs::Permissions::from_mode(0o600);
+        fs::set_permissions(quarantine_path, permissions)?;
+    }
     fs::remove_file(quarantine_path)?;
 
     Ok(())

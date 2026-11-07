@@ -373,11 +373,7 @@ pub fn analyze_ramsey_and_erdos_hajnal(
     }
 
     // Sort cliques by descending Ramsey surprise
-    all_cliques.sort_by(|a, b| {
-        b.ramsey_surprise_nats
-            .partial_cmp(&a.ramsey_surprise_nats)
-            .unwrap_or(Ordering::Equal)
-    });
+    all_cliques.sort_by(|a, b| b.ramsey_surprise_nats.total_cmp(&a.ramsey_surprise_nats));
     all_cliques.dedup_by(|a, b| a.color == b.color && a.vertices == b.vertices);
 
     // 4. Mine Erdős-Hajnal Pure & Almost-Pure Bi-Cliques (Rödl / Fox-Sudakov extraction)
