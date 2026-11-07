@@ -1177,8 +1177,17 @@ pub async fn handle_memory_find(keywords_str: &str) -> Result<()> {
 pub async fn handle_memory_stats() -> Result<()> {
     use crate::memory_manager::MemoryManager;
 
-    let manager = MemoryManager::new()?;
+    let mut manager = MemoryManager::new()?;
+    let wa_report = manager.ingest_wa_stream().ok();
     println!("📊 {}", manager.stats());
+    if let Some(wa) = wa_report {
+        println!("\n📡 wa-stream ---> smart-tree Live Bridge:");
+        println!("• Pipeline:                {}", wa.pipeline);
+        println!("• Total wa-stream scanned: {} messages", wa.total_wa_messages_scanned);
+        println!("• Anchored in memories.m8: {} memories (+{} newly anchored)", wa.total_wa_memories_in_m8, wa.newly_anchored_to_m8);
+        println!("• Outbox records:          {}", wa.outbox_count);
+        println!("• Smart Tree mirror:       {}", wa.st_mirror_path);
+    }
 
     let salient = crate::salient::global_salient_stats();
     if salient.total_stores > 0 {

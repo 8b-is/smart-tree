@@ -1061,8 +1061,8 @@ EXAMPLES:
             "properties": {
                 "operation": {
                     "type": "string",
-                    "enum": ["status", "inbox", "outbox", "send", "slash", "ask"],
-                    "description": "Partner operation: 'status', 'inbox', 'outbox', 'send', 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask'",
+                    "enum": ["status", "inbox", "outbox", "send", "slash", "ask", "wa-stream", "ingest", "sync"],
+                    "description": "Partner operation: 'status', 'inbox', 'outbox', 'send', 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask', 'wa-stream'/'ingest'/'sync' (bridge wa-stream ---> smart-tree MEM|8 wave memory)",
                     "default": "status"
                 },
                 "text": {

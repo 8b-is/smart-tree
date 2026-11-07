@@ -831,8 +831,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["status", "inbox", "outbox", "send", "slash", "ask"],
-                        "description": "Partner operation: 'status' (connection & queue health), 'inbox' (read WhatsApp & Discord messages), 'outbox' (recent sent messages), 'send' (send message to WhatsApp/Discord), 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask' (ask ALEXIAI and broadcast reply)"
+                        "enum": ["status", "inbox", "outbox", "send", "slash", "ask", "wa-stream", "ingest", "sync"],
+                        "description": "Partner operation: 'status' (connection & queue health), 'inbox' (read WhatsApp & Discord messages + anchor to MEM|8), 'outbox' (recent sent messages), 'send' (send message to WhatsApp/Discord), 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask' (ask ALEXIAI and broadcast reply), 'wa-stream'/'ingest'/'sync' (bridge wa-stream ---> smart-tree MEM|8 wave memory)"
                     },
                     "text": {
                         "type": "string",
@@ -1468,7 +1468,8 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
     }))
 }
 
-/// Consolidated Partner tool — bridges Smart Tree MCP with wa-stream (WhatsApp 127.0.0.1:8788),
+/// Consolidated Partner tool — bridges Smart Tree MCP with wa-stream (WhatsApp 127.0.0.1:8790 / 8788 / 8797),
+/// Smart Tree MEM|8 Wave Memory (`~/.st/memories.m8` & `~/.st/wa_stream_inbox.jsonl`),
 /// Discord & ALEXIAI Partner Hub (127.0.0.1:8789), and Dra CEO Helper slash cards.
 pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let params = params.unwrap_or(json!({}));
@@ -1490,33 +1491,95 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
     let to = params.get("to").and_then(|v| v.as_str());
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(10))
         .build()?;
 
     let out_text = match operation {
-        "status" => match client.get("http://127.0.0.1:8789/status").send().await {
-            Ok(resp) => resp.text().await?,
-            Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
-        },
-        "inbox" => {
-            match client
+        "status" => {
+            let wa_report = crate::memory_manager::MemoryManager::new()
+                .ok()
+                .and_then(|mut mgr| mgr.ingest_wa_stream().ok());
+            let wa_leader_8790 = match client.get("http://127.0.0.1:8790/status").send().await {
+                Ok(resp) => resp
+                    .json::<Value>()
+                    .await
+                    .unwrap_or_else(|_| json!({"ok": true, "endpoint": "http://127.0.0.1:8790/status"})),
+                Err(e) => json!({"ok": false, "error": format!("{e}")}),
+            };
+            let partner_hub_8789 = match client.get("http://127.0.0.1:8789/status").send().await {
+                Ok(resp) => resp
+                    .json::<Value>()
+                    .await
+                    .unwrap_or_else(|_| json!({"ok": true, "endpoint": "http://127.0.0.1:8789/status"})),
+                Err(e) => json!({"ok": false, "note": format!("Partner hub (127.0.0.1:8789) offline, direct wa-stream ---> smart-tree bridge active ({e})")}),
+            };
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "bridge": "wa-stream ---> smart-tree (Direct HTTP :8790 + JSONL + MEM|8 Wave Memory)",
+                "wa_stream_leader_8790": wa_leader_8790,
+                "wa_to_smart_tree_m8": wa_report,
+                "partner_hub_8789": partner_hub_8789,
+            }))?
+        }
+        "inbox" | "wa-stream" | "ingest" | "sync" | "bridge" | "wa_to_st" => {
+            let wa_report = crate::memory_manager::MemoryManager::new()
+                .ok()
+                .and_then(|mut mgr| mgr.ingest_wa_stream().ok());
+            let wa_leader_8790 = match client.get("http://127.0.0.1:8790/status").send().await {
+                Ok(resp) => resp.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            let partner_inbox_8789 = match client
                 .get("http://127.0.0.1:8789/inbox?limit=15")
                 .send()
                 .await
             {
-                Ok(resp) => resp.text().await?,
-                Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
-            }
+                Ok(resp) => resp.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "operation": operation,
+                "bridge": "wa-stream ---> smart-tree",
+                "wa_stream_leader_8790": wa_leader_8790,
+                "wa_to_smart_tree_ingest": wa_report,
+                "partner_hub_inbox_8789": partner_inbox_8789,
+            }))?
         }
         "outbox" => {
-            match client
+            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+            let outbox_path = home
+                .join(".gemini")
+                .join("antigravity-cli")
+                .join("wa-agy-outbox.jsonl");
+            let mut local_outbox = Vec::new();
+            if let Ok(content) = std::fs::read_to_string(&outbox_path) {
+                for line in content
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .rev()
+                    .take(15)
+                {
+                    if let Ok(val) = serde_json::from_str::<Value>(line) {
+                        local_outbox.push(val);
+                    }
+                }
+            }
+            let partner_outbox_8789 = match client
                 .get("http://127.0.0.1:8789/outbox?limit=15")
                 .send()
                 .await
             {
-                Ok(resp) => resp.text().await?,
-                Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
-            }
+                Ok(resp) => resp.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "bridge": "wa-stream ---> smart-tree",
+                "outbox_path": outbox_path.to_string_lossy(),
+                "recent_outbox": local_outbox,
+                "partner_hub_outbox_8789": partner_outbox_8789,
+            }))?
         }
         "reads" | "pocoo" | "triangle" => {
             match client
@@ -1574,22 +1637,62 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             }
         }
         "send" => {
-            let mut body = json!({
-                "text": if text.is_empty() { "Hello from ALEXIAI <3 & Smart Tree Partner!" } else { text },
-                "channel": channel,
+            let msg_text = if text.is_empty() {
+                "Hello from Smart Tree × wa-stream Bridge! ^^ <3"
+            } else {
+                text
+            };
+            let mut agy_body = json!({
+                "dir": "out",
+                "text": msg_text,
             });
             if let Some(t) = to {
-                body["to"] = json!(t);
+                agy_body["to"] = json!(t);
             }
-            match client
-                .post("http://127.0.0.1:8789/send")
-                .json(&body)
-                .send()
-                .await
-            {
-                Ok(resp) => resp.text().await?,
-                Err(e) => format!("Failed to send via Partner hub (127.0.0.1:8789): {e}"),
+            let wa_8790_res = if channel != "discord" {
+                match client
+                    .post("http://127.0.0.1:8790/agy")
+                    .json(&agy_body)
+                    .send()
+                    .await
+                {
+                    Ok(resp) => resp.json::<Value>().await.ok(),
+                    Err(e) => Some(json!({"ok": false, "error": format!("{e}")})),
+                }
+            } else {
+                None
+            };
+            let discord_8790_res = if channel == "discord" || channel == "both" {
+                match client
+                    .post("http://127.0.0.1:8790/discord")
+                    .json(&json!({"text": msg_text, "username": "smart-tree"}))
+                    .send()
+                    .await
+                {
+                    Ok(resp) => resp.json::<Value>().await.ok(),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+            if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+                let _ = mgr.anchor_silent(
+                    "wa-stream-out",
+                    vec![
+                        "wa-stream".to_string(),
+                        "smart-tree".to_string(),
+                        "outbox".to_string(),
+                    ],
+                    &format!("[smart-tree -> wa-stream] {}", msg_text),
+                    "wa-stream://smart-tree/outbox",
+                );
             }
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "bridge": "smart-tree ---> wa-stream (127.0.0.1:8790)",
+                "wa_8790": wa_8790_res,
+                "discord_8790": discord_8790_res,
+            }))?
         }
         "slash" => {
             let cmd = if text.is_empty() { "/dra" } else { text };
@@ -1635,7 +1738,7 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
         }
         _ => {
             return Err(anyhow::anyhow!(
-            "Unknown partner operation '{}'. Supported: status, inbox, outbox, send, slash, ask",
+            "Unknown partner operation '{}'. Supported: status, inbox, outbox, send, slash, ask, wa-stream, ingest, sync",
             operation
         ))
         }

@@ -598,7 +598,7 @@ pub async fn find_collaborative_memories(
             max_results,
         );
 
-        let memories: Vec<_> = results
+        let mut memories: Vec<_> = results
             .iter()
             .map(|(mem, resonance)| {
                 json!({
@@ -615,6 +615,36 @@ pub async fn find_collaborative_memories(
                 })
             })
             .collect();
+
+        // Also check ~/.st/memories.m8 (with automatic directory memory + wa-stream ---> smart-tree bridge)
+        let project_path = req
+            .project_path
+            .as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        if let Ok(mut cli_mem) = crate::memory_manager::MemoryManager::new() {
+            let _ = cli_mem.ensure_directory_remembered(&project_path);
+            let _ = cli_mem.ingest_wa_stream();
+            if let Ok(found) = cli_mem.find(&req.keywords) {
+                for m in found.into_iter().take(max_results) {
+                    let already_present = memories.iter().any(|existing| {
+                        existing.get("content").and_then(|v| v.as_str()) == Some(m.context.as_str())
+                    });
+                    if !already_present && memories.len() < max_results {
+                        memories.push(json!({
+                            "id": format!("m8-{}", m.timestamp.timestamp()),
+                            "content": m.context,
+                            "keywords": m.keywords,
+                            "memory_type": m.anchor_type,
+                            "resonance_score": "0.88",
+                            "frequency_hz": m.frequency,
+                            "created_at": m.timestamp.to_rfc3339(),
+                            "origin": m.origin,
+                        }));
+                    }
+                }
+            }
+        }
 
         Ok(json!({
             "search_mode": "resonance",

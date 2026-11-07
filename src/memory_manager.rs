@@ -22,6 +22,34 @@ pub struct Memory {
     pub frequency: f64, // Wave frequency of this memory
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WaStreamMessage {
+    pub ts: u64,
+    pub id: String,
+    pub from: String,
+    pub text: String,
+    #[serde(default)]
+    pub jid: Option<String>,
+    #[serde(default)]
+    pub is_dm: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WaStreamIngestReport {
+    pub ok: bool,
+    pub pipeline: String,
+    pub inbox_path: String,
+    pub history_path: String,
+    pub outbox_path: String,
+    pub st_mirror_path: String,
+    pub m8_bank_path: String,
+    pub total_wa_messages_scanned: usize,
+    pub newly_anchored_to_m8: usize,
+    pub total_wa_memories_in_m8: usize,
+    pub outbox_count: usize,
+    pub latest_messages: Vec<WaStreamMessage>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MemoryBank {
     pub memories: Vec<Memory>,
@@ -199,6 +227,7 @@ impl MemoryManager {
 
         let truncated_origin = Self::truncate_utf8(&dir_str, 255);
         let _ = self.ensure_ssh_connections_remembered();
+        let _ = self.ingest_wa_stream();
 
         let (keywords, context) = Self::synthesize_directory_memory(&canon)?;
         let truncated_context = Self::truncate_utf8(&context, 4096);
@@ -237,6 +266,304 @@ impl MemoryManager {
         }
         self.anchor_silent("infrastructure", keywords, &summary, &origin)
             .ok()
+    }
+
+    /// Bridge `wa-stream ---> smart-tree`:
+    /// Reads live inbound/historical WhatsApp messages from `~/.gemini/antigravity-cli/wa-agy-inbox.jsonl`,
+    /// `wa-agy-history.jsonl`, and `~/.st/wa_stream_inbox.jsonl`, mirrors deduplicated messages into
+    /// `~/.st/wa_stream_inbox.jsonl`, and anchors them into Smart Tree's `MEM|8` wave memory (`~/.st/memories.m8`).
+    pub fn ingest_wa_stream(&mut self) -> Result<WaStreamIngestReport> {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let agy_dir = std::env::var("WA_AGY_DIR")
+            .ok()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".gemini").join("antigravity-cli"));
+        let inbox_path = agy_dir.join("wa-agy-inbox.jsonl");
+        let history_path = agy_dir.join("wa-agy-history.jsonl");
+        let outbox_path = agy_dir.join("wa-agy-outbox.jsonl");
+        let st_dir = self
+            .bank_path
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".st"));
+        let _ = fs::create_dir_all(&st_dir);
+        let st_mirror_path = st_dir.join("wa_stream_inbox.jsonl");
+
+        let mut seen_ids = std::collections::HashSet::new();
+        let mut messages: Vec<WaStreamMessage> = Vec::new();
+
+        for path in [&st_mirror_path, &history_path, &inbox_path] {
+            if !path.is_file() {
+                continue;
+            }
+            if let Ok(content) = fs::read_to_string(path) {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        let ts = val.get("ts").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let from = val
+                            .get("from")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("wa-stream")
+                            .trim()
+                            .to_string();
+                        let text = val
+                            .get("text")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
+                        if text.is_empty() {
+                            continue;
+                        }
+                        let id = val
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.trim().is_empty())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| {
+                                let mut h = 0xcbf29ce484222325u64;
+                                for b in format!("{}:{}:{}", ts, from, text).bytes() {
+                                    h ^= b as u64;
+                                    h = h.wrapping_mul(0x100000001b3);
+                                }
+                                format!("wa-{:016x}", h)
+                            });
+                        if seen_ids.insert(id.clone()) {
+                            let jid = val
+                                .get("jid")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            let is_dm = val.get("isDm").and_then(|v| v.as_bool()).unwrap_or(false);
+                            messages.push(WaStreamMessage {
+                                ts,
+                                id,
+                                from,
+                                text,
+                                jid,
+                                is_dm,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        messages.sort_by_key(|m| m.ts);
+
+        // Mirror deduplicated stream into ~/.st/wa_stream_inbox.jsonl
+        if !messages.is_empty() {
+            let mut mirror_buf = String::new();
+            for m in messages.iter().rev().take(500).collect::<Vec<_>>().into_iter().rev() {
+                if let Ok(line) = serde_json::to_string(m) {
+                    mirror_buf.push_str(&line);
+                    mirror_buf.push('\n');
+                }
+            }
+            let _ = fs::write(&st_mirror_path, mirror_buf);
+        }
+
+        let outbox_count = if outbox_path.is_file() {
+            fs::read_to_string(&outbox_path)
+                .map(|c| c.lines().filter(|l| !l.trim().is_empty()).count())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        let guardian = crate::ai_guardian::AiGuardian::new();
+        let mut newly_anchored = 0usize;
+        let mut dirty = false;
+
+        // Anchor the most recent 64 wa-stream messages into MEM|8 wave memory
+        let start_idx = messages.len().saturating_sub(64);
+        for msg in &messages[start_idx..] {
+            let origin = Self::truncate_utf8(
+                &format!("wa-stream://{}#{}", msg.from, msg.id),
+                255,
+            )
+            .to_string();
+            if self.bank.memories.iter().any(|m| m.origin == origin) {
+                continue;
+            }
+            let raw_context = format!("[wa-stream · {} · id={}] {}", msg.from, msg.id, msg.text);
+            let (sanitized, trust) = guardian.sanitize_memory_text(&raw_context, &origin);
+            if trust == crate::ai_guardian::MemoryTrustLevel::Quarantined {
+                continue;
+            }
+            let keywords = Self::extract_wa_keywords(&msg.from, &msg.text);
+            let mut freq_sum = 0u64;
+            for b in sanitized.bytes() {
+                freq_sum = freq_sum.wrapping_add(b as u64);
+            }
+            let frequency = 20.0 + ((freq_sum % 200) as f64);
+            let timestamp = chrono::DateTime::from_timestamp_millis(msg.ts as i64)
+                .unwrap_or_else(Utc::now);
+
+            self.bank.memories.push(Memory {
+                timestamp,
+                anchor_type: "wa-stream".to_string(),
+                keywords,
+                context: Self::truncate_utf8(&sanitized, 4096).to_string(),
+                origin,
+                frequency,
+            });
+            newly_anchored += 1;
+            dirty = true;
+        }
+
+        // Also maintain a rolling digest memory of the latest 15 wa-stream messages
+        if !messages.is_empty() {
+            let digest_origin = "wa-stream://120363413133092554@g.us/rolling-digest".to_string();
+            let tail_start = messages.len().saturating_sub(15);
+            let mut digest_lines = vec![format!(
+                "wa-stream ---> smart-tree Live Bridge ({} total messages, {} outbox):",
+                messages.len(),
+                outbox_count
+            )];
+            let mut digest_keywords = vec![
+                "wa-stream".to_string(),
+                "whatsapp".to_string(),
+                "smart-tree".to_string(),
+                "inbox".to_string(),
+                "partner".to_string(),
+                "8b-is".to_string(),
+            ];
+            for m in &messages[tail_start..] {
+                let flat_text = m.text.replace('\n', " ");
+                let preview = Self::truncate_utf8(&flat_text, 180);
+                digest_lines.push(format!("• [{}] {}: {}", m.id, m.from, preview));
+                for kw in Self::extract_wa_keywords(&m.from, &m.text).into_iter().take(6) {
+                    if !digest_keywords.contains(&kw) && digest_keywords.len() < 48 {
+                        digest_keywords.push(kw);
+                    }
+                }
+            }
+            let digest_context = Self::truncate_utf8(&digest_lines.join("\n"), 4096).to_string();
+            let (sanitized_digest, trust) =
+                guardian.sanitize_memory_text(&digest_context, &digest_origin);
+            if trust != crate::ai_guardian::MemoryTrustLevel::Quarantined {
+                if let Some(existing) = self
+                    .bank
+                    .memories
+                    .iter_mut()
+                    .find(|m| m.origin == digest_origin)
+                {
+                    if existing.context != sanitized_digest {
+                        existing.context = sanitized_digest;
+                        existing.keywords = digest_keywords;
+                        existing.timestamp = Utc::now();
+                        dirty = true;
+                    }
+                } else {
+                    self.bank.memories.push(Memory {
+                        timestamp: Utc::now(),
+                        anchor_type: "wa-stream".to_string(),
+                        keywords: digest_keywords,
+                        context: sanitized_digest,
+                        origin: digest_origin,
+                        frequency: 108.0,
+                    });
+                    newly_anchored += 1;
+                    dirty = true;
+                }
+            }
+        }
+
+        if dirty {
+            let _ = self.save();
+        }
+
+        let total_wa_memories_in_m8 = self
+            .bank
+            .memories
+            .iter()
+            .filter(|m| m.anchor_type == "wa-stream" || m.origin.starts_with("wa-stream://"))
+            .count();
+
+        let latest_start = messages.len().saturating_sub(15);
+        let latest_messages = messages[latest_start..].to_vec();
+
+        Ok(WaStreamIngestReport {
+            ok: true,
+            pipeline: "wa-stream ---> smart-tree (MEM|8 Wave Memory + ~/.st/wa_stream_inbox.jsonl)"
+                .to_string(),
+            inbox_path: inbox_path.to_string_lossy().to_string(),
+            history_path: history_path.to_string_lossy().to_string(),
+            outbox_path: outbox_path.to_string_lossy().to_string(),
+            st_mirror_path: st_mirror_path.to_string_lossy().to_string(),
+            m8_bank_path: self.bank_path.to_string_lossy().to_string(),
+            total_wa_messages_scanned: messages.len(),
+            newly_anchored_to_m8: newly_anchored,
+            total_wa_memories_in_m8,
+            outbox_count,
+            latest_messages,
+        })
+    }
+
+    pub fn extract_wa_keywords(from: &str, text: &str) -> Vec<String> {
+        let mut kw = vec![
+            "wa-stream".to_string(),
+            "whatsapp".to_string(),
+            from.trim().to_ascii_lowercase(),
+        ];
+        if text.contains("youtu.be") || text.contains("youtube.com") || text.contains("/youtube-full") {
+            kw.push("youtube".to_string());
+        }
+        if text.contains("wikipedia.org") {
+            kw.push("wikipedia".to_string());
+        }
+        if text.contains("github.com") {
+            kw.push("github".to_string());
+        }
+        if text.contains("codeberg.org") {
+            kw.push("codeberg".to_string());
+        }
+        for token in text
+            .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
+            .map(|s| s.trim_matches(|c: char| c == '-' || c == '_'))
+            .filter(|s| s.len() >= 4 && s.len() <= 36)
+        {
+            let low = token.to_ascii_lowercase();
+            if matches!(
+                low.as_str(),
+                "http"
+                    | "https"
+                    | "that"
+                    | "this"
+                    | "with"
+                    | "from"
+                    | "have"
+                    | "will"
+                    | "your"
+                    | "they"
+                    | "their"
+                    | "what"
+                    | "when"
+                    | "where"
+                    | "which"
+                    | "there"
+                    | "into"
+                    | "more"
+                    | "some"
+                    | "only"
+                    | "also"
+                    | "than"
+                    | "then"
+            ) {
+                continue;
+            }
+            if !kw.contains(&low) {
+                kw.push(low);
+            }
+            if kw.len() >= 24 {
+                break;
+            }
+        }
+        kw
     }
 
     pub fn parse_ssh_config_summary(content: &str) -> Option<(Vec<String>, String)> {
@@ -1073,5 +1400,19 @@ Host i1.is i1
         );
         assert!(err.is_err());
         assert!(mgr.memories().is_empty());
+    }
+
+    #[test]
+    fn test_wa_stream_keyword_extraction() {
+        let kw = MemoryManager::extract_wa_keywords(
+            "8b-is",
+            "FELIX | PHOENIX Ada/SPARK 6-instruction NAND-SSA TCB https://github.com/8b-is/smart-tree",
+        );
+        assert!(kw.contains(&"wa-stream".to_string()));
+        assert!(kw.contains(&"whatsapp".to_string()));
+        assert!(kw.contains(&"8b-is".to_string()));
+        assert!(kw.contains(&"github".to_string()));
+        assert!(kw.contains(&"felix".to_string()));
+        assert!(kw.contains(&"phoenix".to_string()));
     }
 }
