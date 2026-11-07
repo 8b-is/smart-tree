@@ -1680,7 +1680,9 @@ fn next_attestation_epoch_and_nonce() -> (u64, u64) {
     let rdtsc_mix = read_hardware_cycle_counter().rotate_left(13);
     let nonce = (now_ns ^ rdtsc_mix).wrapping_add(seq.wrapping_mul(0x9E37_79B9_7F4A_7C15));
     let non_zero_nonce = if nonce == 0 {
-        (now_ns.rotate_left(17) ^ rdtsc_mix.rotate_right(9) ^ seq.wrapping_mul(0xD6E8_FD9D_50A5_5A4D))
+        (now_ns.rotate_left(17)
+            ^ rdtsc_mix.rotate_right(9)
+            ^ seq.wrapping_mul(0xD6E8_FD9D_50A5_5A4D))
             | (seq.wrapping_shl(1) | 1)
     } else {
         nonce
