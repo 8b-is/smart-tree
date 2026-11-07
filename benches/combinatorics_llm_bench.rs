@@ -1,123 +1,177 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use st::mcp_combinatorics_llm::{
-    kernels::{
-        bron_kerbosch_degeneracy_heap, bron_kerbosch_degeneracy_root, run_moser_tardos_splitting,
-        run_szemeredi_compression, BitMatrix, StackBitMatrix,
-    },
-    model_cache::McpProgressEmitter,
-    MoserTardosParams, SzemerediParams,
+//! Weight-Space SIMD Pack/GEMV Benchmarks
+//!
+//! Measures throughput of the bent 5-trit packer and fused unpack-unbend-GEMV
+//! for ERNIE 5.5 LatentMoE dimensions (4096→2048→4096).
+
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use rand::Rng;
+use st::mcp_combinatorics_llm::latent_moe_simd::{
+    fused_unpack_unbend_gemv_row_simd, latent_moe_gemv_par_simd, pack_latent_moe_matrix_par_simd,
+    quantize_bend_pack_row_simd, unpack_and_unbend_row, ERNIE55_HIDDEN_DIM, ERNIE55_LATENT_DIM,
+    PACKED_LATENT_ROW_BYTES,
 };
-use st::mem8::regularity::xor_fold_gaia_b158;
 use std::hint::black_box;
 
-fn generate_deterministic_edges(n: usize, density_permille: u64) -> Vec<(usize, usize)> {
-    let mut edges = Vec::new();
-    let mut state = 0x9E37_79B9_7F4A_7C15u64 ^ (n as u64);
-    for u in 0..n {
-        for v in (u + 1)..n {
-            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-            let mut z = state;
-            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-            z ^= z >> 31;
-            if (z % 1000) < density_permille {
-                edges.push((u, v));
-            }
-        }
-    }
-    edges
-}
+fn bench_packer(c: &mut Criterion) {
+    let mut group = c.benchmark_group("latent_moe_packer");
+    group.throughput(Throughput::Bytes(ERNIE55_LATENT_DIM as u64));
 
-fn bench_ramsey_stack_vs_heap(c: &mut Criterion) {
-    let mut group = c.benchmark_group("ramsey_bron_kerbosch_200v");
-    let n = 200;
-    let edges = generate_deterministic_edges(n, 250);
+    // Generate random weights once
+    let mut rng = rand::thread_rng();
+    let weights: Vec<u8> = (0..ERNIE55_LATENT_DIM).map(|_| rng.gen()).collect();
+    let thresholds = (85u8, 170u8);
+    let centroids = [0u8, 128u8, 255u8];
+    let bend_k = 1u8;
 
-    let mut stack_adj = StackBitMatrix::<4>::new(n);
-    let mut heap_adj = BitMatrix::new(n);
-    for &(u, v) in &edges {
-        stack_adj.add_undirected_edge(u, v);
-        heap_adj.add_undirected_edge(u, v);
-    }
-
-    group.bench_function(BenchmarkId::new("StackBitSet_u64x4_ZeroAlloc", n), |b| {
+    group.bench_function("pack_2048_row_scalar", |b| {
+        let mut packed = vec![0u8; PACKED_LATENT_ROW_BYTES];
         b.iter(|| {
-            black_box(bron_kerbosch_degeneracy_root::<4>(
-                black_box(&stack_adj),
-                black_box(12),
-            ))
-        })
-    });
-
-    group.bench_function(BenchmarkId::new("HeapBitSet_Vec_Fallback", n), |b| {
-        b.iter(|| {
-            black_box(bron_kerbosch_degeneracy_heap(
-                black_box(&heap_adj),
-                black_box(12),
-            ))
-        })
-    });
-
-    group.finish();
-}
-
-fn bench_szemeredi_rayon_bitset(c: &mut Criterion) {
-    let mut group = c.benchmark_group("szemeredi_regularity_rayon");
-    let emitter = McpProgressEmitter::default();
-
-    for &n in &[128usize, 256usize] {
-        let edges = generate_deterministic_edges(n, 400);
-        group.bench_with_input(BenchmarkId::from_parameter(n), &edges, |b, edge_list| {
-            b.iter(|| {
-                let params = SzemerediParams {
-                    num_vertices: n,
-                    edges: edge_list.clone(),
-                    epsilon: 0.12,
-                    min_parts: 4,
-                };
-                black_box(run_szemeredi_compression(params, &emitter).unwrap())
-            })
+            quantize_bend_pack_row_simd(
+                black_box(&weights),
+                thresholds,
+                centroids,
+                bend_k,
+                black_box(&mut packed),
+            )
         });
-    }
-    group.finish();
-}
+    });
 
-fn bench_moser_tardos_luby_mis(c: &mut Criterion) {
-    let mut group = c.benchmark_group("moser_tardos_luby_mis");
-    let emitter = McpProgressEmitter::default();
-
-    let num_vars = 256;
-    let mut bad_events = Vec::with_capacity(180);
-    for i in 0..180 {
-        let v1 = ((i * 3) % num_vars + 1) as i32;
-        let v2 = ((i * 7 + 11) % num_vars + 1) as i32;
-        let v3 = ((i * 13 + 29) % num_vars + 1) as i32;
-        let v4 = ((i * 19 + 43) % num_vars + 1) as i32;
-        bad_events.push(vec![v1, -v2, v3, -v4]);
-    }
-
-    group.bench_function("4cnf_256vars_180clauses", |b| {
+    group.bench_function("pack_2048_row_par", |b| {
         b.iter(|| {
-            let params = MoserTardosParams {
-                num_variables: num_vars,
-                bad_events: bad_events.clone(),
-                max_resamples: 2000,
-            };
-            black_box(run_moser_tardos_splitting(params, &emitter).unwrap())
-        })
+            let mut packed = vec![0u8; PACKED_LATENT_ROW_BYTES];
+            quantize_bend_pack_row_simd(
+                black_box(&weights),
+                thresholds,
+                centroids,
+                bend_k,
+                black_box(&mut packed),
+            )
+        });
+    });
+
+    // Full matrix pack
+    let matrix_weights: Vec<u8> = (0..ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen())
+        .collect();
+    group.throughput(Throughput::Bytes(
+        (ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM) as u64,
+    ));
+    group.bench_function("pack_4096x2048_matrix_par", |b| {
+        b.iter(|| {
+            pack_latent_moe_matrix_par_simd(
+                black_box(&matrix_weights),
+                ERNIE55_HIDDEN_DIM,
+                ERNIE55_LATENT_DIM,
+                thresholds,
+                centroids,
+                bend_k,
+                1.0f32,
+            )
+        });
     });
 
     group.finish();
 }
 
-fn bench_xor_fold_gaia_b158_1mib(c: &mut Criterion) {
-    let mut group = c.benchmark_group("xor_fold_gaia_b158");
-    let trits: Vec<i8> = (0usize..(1024 * 1024))
-        .map(|i| ((i as i32 * 73 - 101) % 3 - 1) as i8)
+fn bench_unpacker(c: &mut Criterion) {
+    let mut group = c.benchmark_group("latent_moe_unpacker");
+    group.throughput(Throughput::Bytes(ERNIE55_LATENT_DIM as u64));
+
+    // Pre-pack a row
+    let mut rng = rand::thread_rng();
+    let weights: Vec<u8> = (0..ERNIE55_LATENT_DIM).map(|_| rng.gen()).collect();
+    let thresholds = (85u8, 170u8);
+    let centroids = [0u8, 128u8, 255u8];
+    let bend_k = 1u8;
+    let mut packed = vec![0u8; PACKED_LATENT_ROW_BYTES];
+    quantize_bend_pack_row_simd(&weights, thresholds, centroids, bend_k, &mut packed);
+
+    group.bench_function("unpack_2048_row", |b| {
+        let mut out = vec![0i8; ERNIE55_LATENT_DIM];
+        b.iter(|| unpack_and_unbend_row(black_box(&packed), bend_k, black_box(&mut out)));
+    });
+
+    group.finish();
+}
+
+fn bench_gemv(c: &mut Criterion) {
+    let mut group = c.benchmark_group("latent_moe_gemv");
+    group.throughput(Throughput::Elements(ERNIE55_LATENT_DIM as u64));
+
+    // Pre-pack a matrix
+    let mut rng = rand::thread_rng();
+    let weights: Vec<u8> = (0..ERNIE55_HIDDEN_DIM * ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen())
+        .collect();
+    let thresholds = (85u8, 170u8);
+    let centroids = [0u8, 128u8, 255u8];
+    let bend_k = 1u8;
+
+    let packed_matrix = pack_latent_moe_matrix_par_simd(
+        &weights,
+        ERNIE55_HIDDEN_DIM,
+        ERNIE55_LATENT_DIM,
+        thresholds,
+        centroids,
+        bend_k,
+        1.0f32,
+    );
+
+    // Random activations
+    let activations: Vec<i8> = (0..ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen_range(-128..127))
         .collect();
 
-    group.bench_function("1MiB_8lane_pack5", |b| {
-        b.iter(|| black_box(xor_fold_gaia_b158(black_box(&trits))))
+    group.bench_function("gemv_4096x2048_par", |b| {
+        b.iter(|| {
+            latent_moe_gemv_par_simd(
+                black_box(&packed_matrix),
+                black_box(&activations),
+                black_box(1.0f32),
+            )
+        });
+    });
+
+    // Single row GEMV
+    let row_packed = &packed_matrix.packed_data[0..PACKED_LATENT_ROW_BYTES];
+    group.throughput(Throughput::Elements(ERNIE55_LATENT_DIM as u64));
+    group.bench_function("gemv_single_row_2048", |b| {
+        b.iter(|| {
+            fused_unpack_unbend_gemv_row_simd(
+                black_box(row_packed),
+                black_box(&activations),
+                bend_k,
+            )
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_fused_pack_gemv(c: &mut Criterion) {
+    let mut group = c.benchmark_group("latent_moe_fused_pack_gemv");
+
+    let mut rng = rand::thread_rng();
+    let weights: Vec<u8> = (0..ERNIE55_LATENT_DIM).map(|_| rng.gen()).collect();
+    let thresholds = (85u8, 170u8);
+    let centroids = [0u8, 128u8, 255u8];
+    let bend_k = 1u8;
+    let activations: Vec<i8> = (0..ERNIE55_LATENT_DIM)
+        .map(|_| rng.gen_range(-128..127))
+        .collect();
+
+    group.bench_function("pack_then_gemv_2048", |b| {
+        let mut packed = vec![0u8; PACKED_LATENT_ROW_BYTES];
+        b.iter(|| {
+            quantize_bend_pack_row_simd(
+                black_box(&weights),
+                thresholds,
+                centroids,
+                bend_k,
+                black_box(&mut packed),
+            );
+            fused_unpack_unbend_gemv_row_simd(black_box(&packed), black_box(&activations), bend_k)
+        });
     });
 
     group.finish();
@@ -125,9 +179,9 @@ fn bench_xor_fold_gaia_b158_1mib(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    bench_ramsey_stack_vs_heap,
-    bench_szemeredi_rayon_bitset,
-    bench_moser_tardos_luby_mis,
-    bench_xor_fold_gaia_b158_1mib
+    bench_packer,
+    bench_unpacker,
+    bench_gemv,
+    bench_fused_pack_gemv
 );
 criterion_main!(benches);

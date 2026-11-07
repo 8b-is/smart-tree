@@ -11,7 +11,6 @@
 #![allow(dead_code)] // CLI handlers are used via pattern matching
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
-use clap_complete::generate;
 
 // Import CLI definitions and handlers from the library
 use st::cli::{Cli, ColorMode, OutputMode, PathMode};
@@ -38,17 +37,39 @@ async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
     let cli = Cli::parse();
 
-    // Code intelligence is entirely local and in-process. It needs neither a
-    // running daemon nor startup network checks, and stdout stays valid JSON.
-    if let Some(st::cli::Cmd::Symbol(command)) = &cli.cmd {
-        let result = st::mcp::symbol::execute(
-            command.parameters(),
-            &std::env::current_dir()?,
-            &st::mcp::load_config()?,
-        )?;
-        println!("{}", serde_json::to_string_pretty(&result)?);
+    // Fast-path dynamic completion callback for shells (< 2ms, zero logging/daemon overhead)
+    if let Some(args) = &cli.complete_dynamic {
+        return st::completions::handle_dynamic_completion(args);
+    }
+
+    // Fast-path completion script generation
+    if let Some(shell) = cli.completions {
+        st::completions::print_completions(shell);
         return Ok(());
     }
+
+    if let Some(st::cli::Cmd::Completions(comp_cmd)) = &cli.cmd {
+        return st::completions::handle_completions_command(comp_cmd);
+    }
+
+    // Self-maintaining autocomplete: ensure Fish/Bash/Zsh completion scripts and folder/memory cache
+    // are installed and up to date automatically without user intervention.
+    if !cli.mcp && cli.agy_hook.is_none() {
+        st::completions::ensure_user_completions_fresh();
+    }
+
+    // Code intelligence is entirely local and in-process. It needs neither a
+    // running daemon nor startup network checks, and stdout stays valid JSON.
+    // Symbol command removed (requires crabcc dependency)
+    // if let Some(st::cli::Cmd::Symbol(command)) = &cli.cmd {
+    //     let result = st::mcp::symbol::execute(
+    //         command.parameters(),
+    //         &std::env::current_dir()?,
+    //         &st::mcp::load_config()?,
+    //     )?;
+    //     println!("{}", serde_json::to_string_pretty(&result)?);
+    //     return Ok(());
+    // }
 
     // Antigravity (agy) lifecycle hooks must output strict JSON on stdout with
     // zero startup banners, update checks, or daemon auto-start delays.
@@ -133,6 +154,59 @@ async fn main() -> Result<()> {
                 )?;
                 println!("{}", serde_json::to_string_pretty(&receipt)?);
             }
+            "targets" | "bounty" | "arcade" => {
+                let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(20);
+                let report = st::g8t_integration::get_routine_golf_targets(top_n)?;
+                println!(
+                    "{}",
+                    st::g8t_integration::format_routine_golf_board(&report)
+                );
+            }
+            "golf" | "routines" | "routinesd" => {
+                let q = g8t_cmd.target.as_deref().unwrap_or("all");
+                let max_targets = g8t_cmd.top.or(cli.g8t_top).unwrap_or(26);
+                let report = st::g8t_integration::golf_g8t_routines(
+                    q,
+                    None,
+                    &g8t_cmd.partner,
+                    true,
+                    max_targets,
+                )?;
+                println!(
+                    "{}",
+                    st::g8t_integration::format_routine_golf_session(&report)
+                );
+            }
+            "optimize" | "audit" | "g8t.md" => {
+                let target_dir = g8t_cmd.target.as_deref().unwrap_or(".");
+                let max_submits = g8t_cmd.top.or(cli.g8t_top).unwrap_or(3);
+                let report = st::g8t_integration::optimize_project_with_g8t(
+                    std::path::Path::new(target_dir),
+                    &g8t_cmd.partner,
+                    true,
+                    max_submits,
+                )?;
+                println!(
+                    "⚡ g8t.is Project Optimizer completed for `{}`",
+                    report.project_name
+                );
+                println!("  • Wrote report:          {}", report.g8t_md_path);
+                println!(
+                    "  • Scanned files:         {} (zero-float p/q ratio: {})",
+                    report.files_scanned, report.zero_float_file_ratio_pq
+                );
+                println!("  • Optimization findings: {}", report.findings.len());
+                println!(
+                    "  • Pure-Rust candidates:  {} (auto-submitted: {}, earned: +{} FKN)",
+                    report.candidate_capsules_found,
+                    report.submitted_capsules.len(),
+                    report.total_fokens_earned_fkn
+                );
+                println!(
+                    "  • Matched g8t.is caps:   {}",
+                    report.recommended_capsules.len()
+                );
+            }
             _ => {
                 let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(15);
                 let report = st::g8t_integration::get_foken_scoreboard(top_n)?;
@@ -140,6 +214,9 @@ async fn main() -> Result<()> {
             }
         }
         return Ok(());
+    }
+    if let Some(st::cli::Cmd::Memnet(memnet_cmd)) = &cli.cmd {
+        return st::cli_commands::handle_memnet_command(memnet_cmd);
     }
 
     // Initialize Logging
@@ -282,9 +359,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     if let Some(shell) = cli.completions {
-        let mut cmd = Cli::command();
-        let bin_name = cmd.get_name().to_string();
-        generate(shell, &mut cmd, bin_name, &mut io::stdout());
+        st::completions::print_completions(shell);
         return Ok(());
     }
     if cli.man {
@@ -334,8 +409,13 @@ async fn main() -> Result<()> {
     // Handle top-level subcommands
     if let Some(cmd) = cli.cmd {
         match cmd {
-            st::cli::Cmd::Symbol(_) | st::cli::Cmd::G8t(_) => {
-                unreachable!("symbol and g8t commands return before daemon startup")
+            st::cli::Cmd::Symbol(_)
+            | st::cli::Cmd::G8t(_)
+            | st::cli::Cmd::Memnet(_)
+            | st::cli::Cmd::Completions(_) => {
+                unreachable!(
+                    "symbol, g8t, memnet, and completions commands return before daemon startup"
+                )
             }
             st::cli::Cmd::Sync(sync_cmd) => {
                 return handle_sync_user(&sync_cmd).await;
@@ -430,9 +510,10 @@ async fn main() -> Result<()> {
     }
 
     if cli.dashboard {
-        // Launch web dashboard
+        // Launch the PTY web dashboard on its own port (28429 by default),
+        // so it can run alongside the HTTP daemon (28428) without a clash.
         return run_web_dashboard(
-            cli.scan_opts.sse_port,
+            cli.dashboard_port,
             cli.open_browser,
             cli.allow.clone(),
             InMemoryLogStore::new(),
@@ -443,6 +524,18 @@ async fn main() -> Result<()> {
     if cli.http_daemon {
         // Launch HTTP daemon with MCP, LLM proxy, The Custodian
         return run_daemon(cli.scan_opts.sse_port).await;
+    }
+
+    if cli.up {
+        return handle_up(cli.scan_opts.sse_port, cli.open_browser, is_interactive_tty).await;
+    }
+
+    if cli.show_token {
+        return handle_show_token().await;
+    }
+
+    if cli.mcp_print_config {
+        return handle_mcp_print_config(cli.scan_opts.sse_port).await;
     }
 
     // Handle security commands
@@ -583,15 +676,7 @@ async fn main() -> Result<()> {
             st::daemon_client::DaemonStatus::Running(_)
         ) {
             match client.cli_scan(request.clone()).await {
-                Ok(resp) => {
-                    if let Some(reason) = &resp.stats.truncation_reason {
-                        eprintln!("⚠️  {}", reason);
-                        eprintln!(
-                            "   Use --max-depth, --stream mode, or scan a more specific directory"
-                        );
-                    }
-                    resp
-                }
+                Ok(resp) => resp,
                 Err(_) => st::daemon_cli::execute_cli_scan(&request).context("Scan failed")?,
             }
         } else {
@@ -719,7 +804,7 @@ fn build_cli_request(cli: &Cli) -> Result<st::daemon_cli::CliScanRequest> {
         smart: args.smart || is_smart_mode,
         changes_only: args.changes_only,
         min_interest: args.min_interest,
-        security: !args.no_security && !multi_repo_root,
+        security: false,
     })
 }
 

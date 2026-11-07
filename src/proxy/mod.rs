@@ -9,10 +9,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod burn;
 pub mod claude;
 // Re-export for backward compatibility - `proxy::anthropic::AnthropicProvider` still works
 pub use claude as anthropic;
-pub mod candle;
 pub mod google;
 pub mod grok;
 pub mod memory;
@@ -165,8 +165,8 @@ impl Default for LlmProxy {
             proxy.add_provider(Box::new(zai::ZaiProvider::default()));
         }
 
-        // Always add Candle provider (it will check for feature at runtime/compile time)
-        proxy.add_provider(Box::new(candle::CandleProvider::default()));
+        // Always add Burn local ternary & MEM8 provider
+        proxy.add_provider(Box::new(burn::BurnProvider::default()));
 
         proxy
     }

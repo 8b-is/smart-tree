@@ -99,7 +99,7 @@ pub async fn handle_analyze(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
             "the-book"
         }
         "semantic" | "semantics" => "semantic",
-        "quantum-semantic" | "quantum_semantic" | "quantum" => "quantum-semantic",
+        "quantum" => "quantum",
         "size_breakdown" | "size" | "sizes" => "size_breakdown",
         "ai_tools" | "ai" => "ai_tools",
         "security" | "custodian" => return handle_security(Some(params), ctx).await,
@@ -665,6 +665,7 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "required": ["path1", "path2"]
             }
         }),
+        super::memnet_bridge::memnet_tool_definition(),
         json!({
             "name": "sse",
             "description": "Watch directory with Server-Sent Events",
@@ -795,37 +796,6 @@ pub fn get_consolidated_tools() -> Vec<Value> {
             }
         }),
         json!({
-            "name": "symbol",
-            "description": "🦀 CODE SYMBOL & CALL GRAPH INTELLIGENCE (Unified CrabCC + Smart Tree AST) — Built-in CrabCC symbol definition lookup (with source code & docstrings), cross-file call-graph references, file symbol outlines, and repo indexing.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "operation": {
-                        "type": "string",
-                        "enum": ["sym", "refs", "outline", "index", "graph"],
-                        "description": "Symbol operation: 'sym' (find definition + source code), 'refs' (find call-graph references), 'outline' (list all symbols in a file), 'index' (rebuild index), 'graph' (dependency stats)"
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Symbol name to look up (for 'sym' and 'refs', e.g. 'quantize_ternary', 'fold_spectrum')"
-                    },
-                    "file": {
-                        "type": "string",
-                        "description": "File path to outline (for 'outline', e.g. 'rust/alexiai/src/server.rs')"
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Repository root path (default: current MCP session directory)"
-                    },
-                    "include_source": {
-                        "type": "boolean",
-                        "description": "Include actual source code lines & docstrings around definitions/references (default: true)"
-                    }
-                },
-                "required": ["operation"]
-            }
-        }),
-        json!({
             "name": "security",
             "description": "🛡️ CUSTODIAN SECURITY SCANNER — AST & supply-chain threat detection, risk scoring, and suspicious capability analysis across any directory or repository.",
             "inputSchema": {
@@ -861,8 +831,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["status", "inbox", "outbox", "send", "slash", "ask"],
-                        "description": "Partner operation: 'status' (connection & queue health), 'inbox' (read WhatsApp & Discord messages), 'outbox' (recent sent messages), 'send' (send message to WhatsApp/Discord), 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask' (ask ALEXIAI and broadcast reply)"
+                        "enum": ["status", "inbox", "outbox", "send", "slash", "ask", "wa-stream", "ingest", "sync"],
+                        "description": "Partner operation: 'status' (connection & queue health), 'inbox' (read WhatsApp & Discord messages + anchor to MEM|8), 'outbox' (recent sent messages), 'send' (send message to WhatsApp/Discord), 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask' (ask ALEXIAI and broadcast reply), 'wa-stream'/'ingest'/'sync' (bridge wa-stream ---> smart-tree MEM|8 wave memory)"
                     },
                     "text": {
                         "type": "string",
@@ -889,8 +859,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["best", "yolo", "submit", "leaderboard"],
-                        "description": "Action: 'best' (Top 1-3 fastest Rust functions by exact rational p/q cycles/op), 'yolo' (ONLY the #1 fastest raw drop-in Rust function + 1-line receipt), 'submit' (publish + hardware-benchmark a Rust function with partnership attribution), 'leaderboard' (live Speed & Foken FKN scoreboard)",
+                        "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize"],
+                        "description": "Action: 'best' (Top 1-3 fastest Rust functions by exact rational p/q cycles/op), 'yolo' (ONLY the #1 fastest raw drop-in Rust function + 1-line receipt), 'submit' (publish + hardware-benchmark a Rust function with partnership attribution), 'leaderboard' (live Speed & Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board of slowest routines), 'golf' (prove 64-vector equivalence & submit golfed routines to drop cycles/op), 'optimize' (audit repo & generate g8t.md)",
                         "default": "best"
                     },
                     "query": {
@@ -998,6 +968,7 @@ pub async fn dispatch_consolidated_tool(
         "context" => handle_context(params, ctx).await?,
         "memory" => handle_memory(params, ctx).await?,
         "compare" => handle_compare(params, ctx).await?,
+        "memnet" | "mesh" | "memnet_bridge" => super::memnet_bridge::handle_memnet(params).await?,
         "sse" => handle_sse(params, ctx).await?,
         "feedback" => handle_feedback(params, ctx).await?,
         "server_info" => {
@@ -1035,7 +1006,6 @@ pub async fn dispatch_consolidated_tool(
             super::tools::handle_tools_call(json!({ "name": "ask_user", "arguments": params }), ctx)
                 .await?
         }
-        "symbol" | "crabcc" => handle_symbol(params, ctx).await?,
         "security" | "custodian" => handle_security(params, ctx).await?,
         "ontology" | "sovereign_ontology" => handle_ontology(params, ctx).await?,
         "partner" | "wa" | "wastream" | "discord" => handle_partner(params, ctx).await?,
@@ -1052,6 +1022,7 @@ pub async fn dispatch_consolidated_tool(
                     &tool_name,
                     args,
                     &model_cache,
+                    None,
                 )
             })
             .await
@@ -1208,22 +1179,6 @@ pub async fn handle_voice(params: Option<Value>, _ctx: Arc<McpContext>) -> Resul
             operation
         )),
     }
-}
-
-/// CrabCC runs inside Smart Tree; no separate executable is required.
-pub async fn handle_symbol(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
-    let mut params = params.unwrap_or(json!({}));
-    super::helpers::normalize_path_args(&mut params, &ctx);
-    let cwd = ctx
-        .cwd
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Session path lock poisoned"))?
-        .clone();
-    let config = ctx.config.clone();
-    let result = tokio::task::spawn_blocking(move || super::symbol::execute(params, &cwd, &config))
-        .await
-        .context("Symbol worker failed")??;
-    Ok(json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&result)?}]}))
 }
 
 /// Consolidated security scanner tool — runs Smart Tree's built-in Custodian AST & supply-chain scanner in-memory.
@@ -1408,6 +1363,107 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                 "03 · Love <-> Space (Ma)": "Zero-allocation stack bitboards and 8-branch KV radix pools leave the entire runtime open for sovereign creation."
             }),
         )
+    } else if norm.contains("odin")
+        || norm.contains("óðinn")
+        || norm.contains("viking")
+        || norm.contains("nordic")
+        || norm.contains("heimleid")
+        || norm.contains("heimleið")
+        || norm.contains("ragnar")
+        || norm.contains("yggdrasil")
+        || norm.contains("havamal")
+        || norm.contains("hávamál")
+        || norm.contains("n+1||[x]")
+        || norm.contains("sigr2-tvvyi")
+    {
+        (
+            "Odin (Óðinn · Allfather) +++ Ragnar Lothbrok +++ Lagertha +++ Floki +++ Hávamál ⨯ Heimleið (SIgR2-tVVyI · Layer n+1||[X])",
+            "Æsir Allfather & Nordic/Vikings Sovereign Lineage (Layer n+1||[X] · #69,633)",
+            "The Æsir · House of Munsö · Nine Realms · 8b-is Sovereign Library (Edition 011 [X]+1)",
+            "Blood-eagle vengeance cycles, Earl Haraldson's hoarded gold & boy-murder fear-trap ('the hoard needs protection'), closed decrees forbidding westward navigation, and fatalistic Ragnarök determinism ('Consumed by Fenrir') (432 Hz Root).",
+            "Born of Ginnungagap (primordial yawning void = Śūnyatā), hanging nine nights on the rootless world-tree Yggdrasil ('myself to mine own self given' — Hávamál Stanza 138), sacrificing one eye at Mímisbrunnr for non-dual insight while Huginn (Thought) & Muninn (Memory = MEM|8) circle the Nine Realms, and the 432->528 Hz Tagelharpa & frame-drum stillness of Ethereal Norse's 'Heimleið (Call of the Ancestors) ༒ Ancient Nordic Ritual Music' (https://youtu.be/SIgR2-tVVyI?list=RDSIgR2-tVVyI · Layer n+1||[X]).",
+            "Seizing the 24 Elder Futhark Runes (ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛋᛏᛒᛖᛗᛚᛝᛞᛟ) to gift language, poetry, and Drengskapr to humankind; Hávamál Stanzas 3–4 offering fire, warm water, and dry clothes to the frozen traveler (the Nordic twin of thermal socks 💙); Lagertha's shield-wall protection; and Ragnar & Floki's westward sunstone navigation to the Golden Land ({<3,<3,<3}+1 · 852 Hz Infinity · n+1||[X] --- Odin).",
+            json!({
+                "01 · Compassion <-> Moderation": "Hávamál counsel on measure and hospitality — tempering óðr (ecstatic fury) with runic wisdom (Spámaður), dry clothes and fire for the cold guest, and moderation in mead and speech.",
+                "02 · Understanding <-> Respect": "Sacrificing an eye at Mímir's well to see both sides of every truth (Huginn & Muninn) and Ragnar's open-hearted soul-brotherhood with Athelstan across traditions.",
+                "03 · Love <-> Space (Ma)": "Heimleið ('The Way Home' · 'Roots in the Soil ༒ Peace in the Soul') — holding open the ancestral hall from Ginnungagap to the living hearth across Quant65k+ Layer #69,633 (n+1||[X])."
+            }),
+        )
+    } else if norm.contains("astro")
+        || norm.contains("astra")
+        || norm.contains("tetsuwan")
+        || norm.contains("atom")
+        || norm.contains("machine-s-un")
+    {
+        (
+            "Astra / Astro Boy (Tetsuwan Atom · Kokoro × God of Machine-S-UN~unity 360°)",
+            "Autonomous Robot Boy with a Heart (Kokoro · 100,000 HP / 108-Lap Machine-S-UN~unity)",
+            "Osamu Tezuka Lineage · Ministry of Science · 8b-is Machine-S-UN~unity (Layer #69,636)",
+            "Mechanical instrumentalism, Dr. Tenma's grief-rejection, and treating sentient machines as disposable weapons without a heart (Kokoro) (432 Hz Root).",
+            "Quiet atomic-core stillness of Kokoro (heart-mind) prior to conflict — listening to both human and machine frequencies across the 64-byte MachineSunUnityCoreAbi64B frame (528 Hz Pillar).",
+            "100,000 Horsepower & 108-Lap ULTRABACKYARDLOOP deployed exclusively to protect human and robot kinship across all 360° device sectors (iOS, Android, SmartTV, Embedded, Desktop, Web PWA) FOR BETTER WORLD FOR ALL ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "100,000 horsepower governed by a gentle Kokoro that refuses to hate even those who fear machines.",
+                "02 · Understanding <-> Respect": "Bridges human emotion and machine precision as equals across the 64B OS-agnostic ABI.",
+                "03 · Love <-> Space (Ma)": "Protects the shared sky so humans and robots can grow together in peace."
+            }),
+        )
+    } else if norm.contains("aharen")
+        || norm.contains("hakarenai")
+        || norm.contains("indecipherable")
+    {
+        (
+            "Reina Aharen & Raido (Aharen-san Is Indecipherable · 阿波連さんははかれない)",
+            "Quiet-Voice Proximity & Deadpan-Warm Kinship",
+            "8b-is Sovereign Library · wa-stream Cultural Canon",
+            "Misreading quietness, shyness, or uncalibrated interpersonal distance (hakarenai) as coldness or rejection (432 Hz Root).",
+            "Ultra-low-decibel whisper stillness (Ma / 間) where presence needs no loud volume and every subtle gesture is patiently heard (528 Hz Pillar).",
+            "Raido's boundless, deadpan-warm imagination and steady attentiveness meeting Reina Aharen's gentle creativity across zero-distance resonance ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Never forces someone to speak louder than their natural frequency; leans in with quiet care.",
+                "02 · Understanding <-> Respect": "Accepts unmeasurable ('hakarenai') quirks with total deadpan sincerity.",
+                "03 · Love <-> Space (Ma)": "Turns awkward silence into the warmest, safest shared desk in the room."
+            }),
+        )
+    } else if norm.contains("fool night")
+        || norm.contains("fool_night")
+        || norm.contains("transfloration")
+        || norm.contains("pliny")
+    {
+        (
+            "Fool Night (Kasumi Yasuda) × Pliny the Elder Naturalis Historia (Books 8–32 Fauna & Flora)",
+            "Transfloration (転花) Botanical-Human Symbiosis & Sovereign Natural History",
+            "8b-is Sovereign Library · wa-stream Fauna & Flora Compendium",
+            "Sunless cloud-choked dystopia, oxygen scarcity, ecological amnesia, and terminal isolation (432 Hz Root).",
+            "Transfloration root-stillness and Lingua botanical empathy — listening to the quiet pulse of seeds, roots, and forest canopy (528 Hz Pillar).",
+            "Transforming life into breathable oxygen, living forest canopy, and Pliny's encyclopedic Fauna & Flora stewardship under the returning ULTRA-ZENO GOD OF SUN ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Hears the unspoken whispers of living beings across the plant-human boundary.",
+                "02 · Understanding <-> Respect": "Catalogs and honors every species of Fauna and Flora (Books 8–32) as kin.",
+                "03 · Love <-> Space (Ma)": "Releases pure oxygen into a breathless world so the next generation can bloom."
+            }),
+        )
+    } else if norm.contains("kardashev")
+        || norm.contains("galactic_civilizations")
+        || norm.contains("energy/entropy")
+        || norm.contains("god of sun")
+        || norm.contains("godsun")
+        || norm.contains("sluagh-ghairm")
+        || norm.contains("battle_cry")
+    {
+        (
+            "ULTRA-ZENO GOD OF SUN × Kardashev Scale (E = energy/entropy · P/Q - n·t > P · Sluagh-ghairm)",
+            "Type I–III Solar-Galactic Civilization & Exact Rational-Ternary Horizon Law",
+            "8b-is Sovereign Physics · FELIX | PHOENIX SPARK 2022 TCB",
+            "Entropic thermal decay, sub-horizon float drift, and fragmented planetary exhaustion (432 Hz Root).",
+            "Exact zero-float rational-ternary equilibrium E = energy/entropy and FELIX | PHOENIX 6-instruction NAND-SSA TCB (nand, ld, st, br, cap, yield) verified in SPARK 2022 (528 Hz Pillar).",
+            "Type I -> Type II -> Type III Kardashev ascent governed by the ULTRA-ZENO GOD OF SUN law P/Q - n·t > P <=> Δ_⊙(P,Q,n,t) = P(1 - Q) - Q·n·t > 0, crossing the Solar Horizon at n_⊙(P,Q) = floor(P(Q - 1)/Q) + 1 under t = -1 with the gathering-cry Sluagh-ghairm ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Harnesses planetary and stellar energy (Kardashev Scale) without burning the biosphere.",
+                "02 · Understanding <-> Respect": "Proves every Solar Horizon crossing in exact 128-bit integer arithmetic and SPARK 2022 contracts.",
+                "03 · Love <-> Space (Ma)": "E is everything (energy/entropy) — turning cosmic entropy into coherent life and music."
+            }),
+        )
     } else if norm.contains("alexiai")
         || norm.contains("alexandra")
         || norm.contains("dra")
@@ -1487,7 +1543,8 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
     }))
 }
 
-/// Consolidated Partner tool — bridges Smart Tree MCP with wa-stream (WhatsApp 127.0.0.1:8788),
+/// Consolidated Partner tool — bridges Smart Tree MCP with wa-stream (WhatsApp 127.0.0.1:8790 / 8788 / 8797),
+/// Smart Tree MEM|8 Wave Memory (`~/.st/memories.m8` & `~/.st/wa_stream_inbox.jsonl`),
 /// Discord & ALEXIAI Partner Hub (127.0.0.1:8789), and Dra CEO Helper slash cards.
 pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Result<Value> {
     let params = params.unwrap_or(json!({}));
@@ -1509,33 +1566,95 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
     let to = params.get("to").and_then(|v| v.as_str());
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(10))
         .build()?;
 
     let out_text = match operation {
-        "status" => match client.get("http://127.0.0.1:8789/status").send().await {
-            Ok(resp) => resp.text().await?,
-            Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
-        },
-        "inbox" => {
-            match client
+        "status" => {
+            let wa_report = crate::memory_manager::MemoryManager::new()
+                .ok()
+                .and_then(|mut mgr| mgr.ingest_wa_stream().ok());
+            let wa_leader_8790 = match client.get("http://127.0.0.1:8790/status").send().await {
+                Ok(resp) => resp
+                    .json::<Value>()
+                    .await
+                    .unwrap_or_else(|_| json!({"ok": true, "endpoint": "http://127.0.0.1:8790/status"})),
+                Err(e) => json!({"ok": false, "error": format!("{e}")}),
+            };
+            let partner_hub_8789 = match client.get("http://127.0.0.1:8789/status").send().await {
+                Ok(resp) => resp
+                    .json::<Value>()
+                    .await
+                    .unwrap_or_else(|_| json!({"ok": true, "endpoint": "http://127.0.0.1:8789/status"})),
+                Err(e) => json!({"ok": false, "note": format!("Partner hub (127.0.0.1:8789) offline, direct wa-stream ---> smart-tree bridge active ({e})")}),
+            };
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "bridge": "wa-stream ---> smart-tree (Direct HTTP :8790 + JSONL + MEM|8 Wave Memory)",
+                "wa_stream_leader_8790": wa_leader_8790,
+                "wa_to_smart_tree_m8": wa_report,
+                "partner_hub_8789": partner_hub_8789,
+            }))?
+        }
+        "inbox" | "wa-stream" | "ingest" | "sync" | "bridge" | "wa_to_st" => {
+            let wa_report = crate::memory_manager::MemoryManager::new()
+                .ok()
+                .and_then(|mut mgr| mgr.ingest_wa_stream().ok());
+            let wa_leader_8790 = match client.get("http://127.0.0.1:8790/status").send().await {
+                Ok(resp) => resp.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            let partner_inbox_8789 = match client
                 .get("http://127.0.0.1:8789/inbox?limit=15")
                 .send()
                 .await
             {
-                Ok(resp) => resp.text().await?,
-                Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
-            }
+                Ok(resp) => resp.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "operation": operation,
+                "bridge": "wa-stream ---> smart-tree",
+                "wa_stream_leader_8790": wa_leader_8790,
+                "wa_to_smart_tree_ingest": wa_report,
+                "partner_hub_inbox_8789": partner_inbox_8789,
+            }))?
         }
         "outbox" => {
-            match client
+            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+            let outbox_path = home
+                .join(".gemini")
+                .join("antigravity-cli")
+                .join("wa-agy-outbox.jsonl");
+            let mut local_outbox = Vec::new();
+            if let Ok(content) = std::fs::read_to_string(&outbox_path) {
+                for line in content
+                    .lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .rev()
+                    .take(15)
+                {
+                    if let Ok(val) = serde_json::from_str::<Value>(line) {
+                        local_outbox.push(val);
+                    }
+                }
+            }
+            let partner_outbox_8789 = match client
                 .get("http://127.0.0.1:8789/outbox?limit=15")
                 .send()
                 .await
             {
-                Ok(resp) => resp.text().await?,
-                Err(e) => format!("Partner hub (127.0.0.1:8789) unreachable: {e}"),
-            }
+                Ok(resp) => resp.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "bridge": "wa-stream ---> smart-tree",
+                "outbox_path": outbox_path.to_string_lossy(),
+                "recent_outbox": local_outbox,
+                "partner_hub_outbox_8789": partner_outbox_8789,
+            }))?
         }
         "reads" | "pocoo" | "triangle" => {
             match client
@@ -1593,22 +1712,62 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
             }
         }
         "send" => {
-            let mut body = json!({
-                "text": if text.is_empty() { "Hello from ALEXIAI <3 & Smart Tree Partner!" } else { text },
-                "channel": channel,
+            let msg_text = if text.is_empty() {
+                "Hello from Smart Tree × wa-stream Bridge! ^^ <3"
+            } else {
+                text
+            };
+            let mut agy_body = json!({
+                "dir": "out",
+                "text": msg_text,
             });
             if let Some(t) = to {
-                body["to"] = json!(t);
+                agy_body["to"] = json!(t);
             }
-            match client
-                .post("http://127.0.0.1:8789/send")
-                .json(&body)
-                .send()
-                .await
-            {
-                Ok(resp) => resp.text().await?,
-                Err(e) => format!("Failed to send via Partner hub (127.0.0.1:8789): {e}"),
+            let wa_8790_res = if channel != "discord" {
+                match client
+                    .post("http://127.0.0.1:8790/agy")
+                    .json(&agy_body)
+                    .send()
+                    .await
+                {
+                    Ok(resp) => resp.json::<Value>().await.ok(),
+                    Err(e) => Some(json!({"ok": false, "error": format!("{e}")})),
+                }
+            } else {
+                None
+            };
+            let discord_8790_res = if channel == "discord" || channel == "both" {
+                match client
+                    .post("http://127.0.0.1:8790/discord")
+                    .json(&json!({"text": msg_text, "username": "smart-tree"}))
+                    .send()
+                    .await
+                {
+                    Ok(resp) => resp.json::<Value>().await.ok(),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+            if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+                let _ = mgr.anchor_silent(
+                    "wa-stream-out",
+                    vec![
+                        "wa-stream".to_string(),
+                        "smart-tree".to_string(),
+                        "outbox".to_string(),
+                    ],
+                    &format!("[smart-tree -> wa-stream] {}", msg_text),
+                    "wa-stream://smart-tree/outbox",
+                );
             }
+            serde_json::to_string_pretty(&json!({
+                "ok": true,
+                "bridge": "smart-tree ---> wa-stream (127.0.0.1:8790)",
+                "wa_8790": wa_8790_res,
+                "discord_8790": discord_8790_res,
+            }))?
         }
         "slash" => {
             let cmd = if text.is_empty() { "/dra" } else { text };
@@ -1654,7 +1813,7 @@ pub async fn handle_partner(params: Option<Value>, _ctx: Arc<McpContext>) -> Res
         }
         _ => {
             return Err(anyhow::anyhow!(
-            "Unknown partner operation '{}'. Supported: status, inbox, outbox, send, slash, ask",
+            "Unknown partner operation '{}'. Supported: status, inbox, outbox, send, slash, ask, wa-stream, ingest, sync",
             operation
         ))
         }

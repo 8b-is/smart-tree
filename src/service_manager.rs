@@ -131,8 +131,11 @@ fn escalate_privileges(args: &[&str]) -> Result<bool> {
 
     #[cfg(target_os = "macos")]
     {
-        // osascript for graphical prompt, or sudo for terminal
-        if env::var("TERM_PROGRAM").is_ok() || env::var("SSH_CONNECTION").is_ok() {
+        // Use sudo only when stdin is an interactive TTY; otherwise use osascript GUI prompt
+        let is_interactive_tty = unsafe { libc::isatty(0) == 1 };
+        if is_interactive_tty
+            && (env::var("TERM_PROGRAM").is_ok() || env::var("SSH_CONNECTION").is_ok())
+        {
             println!("Requesting permission via sudo...");
             let mut cmd = Command::new("sudo");
             cmd.arg(&exe);
@@ -481,20 +484,37 @@ fn macos_install() -> Result<()> {
     run_command("chown", &["root:wheel", LAUNCHD_DAEMON_PLIST])?;
     run_command("chmod", &["644", LAUNCHD_DAEMON_PLIST])?;
 
-    // 7. Load the daemon
-    // On macOS 10.10+, use launchctl bootstrap. Older: launchctl load.
-    let load_result = Command::new("launchctl")
-        .args(["bootstrap", "system", LAUNCHD_DAEMON_PLIST])
+    // 7. Load or restart the daemon so upgrades replace any running instance
+    let kickstart = Command::new("launchctl")
+        .args([
+            "kickstart",
+            "-k",
+            &format!("system/{}", LAUNCHD_DAEMON_LABEL),
+        ])
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status();
 
-    match load_result {
-        Ok(s) if s.success() => {}
-        _ => {
-            // Fallback to legacy load
-            info!("bootstrap failed, trying legacy load...");
-            run_command("launchctl", &["load", "-w", LAUNCHD_DAEMON_PLIST])?;
+    if !kickstart.map(|s| s.success()).unwrap_or(false) {
+        let load_result = Command::new("launchctl")
+            .args(["bootstrap", "system", LAUNCHD_DAEMON_PLIST])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status();
+
+        match load_result {
+            Ok(s) if s.success() => {}
+            _ => {
+                info!("bootstrap failed, trying legacy load...");
+                let _ = run_command("launchctl", &["load", "-w", LAUNCHD_DAEMON_PLIST]);
+                let _ = Command::new("launchctl")
+                    .args([
+                        "kickstart",
+                        "-k",
+                        &format!("system/{}", LAUNCHD_DAEMON_LABEL),
+                    ])
+                    .status();
+            }
         }
     }
 
@@ -954,7 +974,16 @@ fn install_binary() -> Result<PathBuf> {
     let current_exe = env::current_exe().context("Failed to get current executable path")?;
 
     #[cfg(unix)]
-    let install_path = PathBuf::from("/usr/local/bin/st");
+    let install_path = {
+        let helper_dir = PathBuf::from("/Library/PrivilegedHelperTools/is.8b.smart-tree");
+        if cfg!(target_os = "macos") && helper_dir.is_dir() {
+            let usr_local = PathBuf::from("/usr/local/bin/st");
+            let _ = atomic_install_executable(&current_exe, &usr_local);
+            helper_dir.join("st")
+        } else {
+            PathBuf::from("/usr/local/bin/st")
+        }
+    };
 
     #[cfg(windows)]
     let install_path = {
@@ -1037,11 +1066,23 @@ fn which_binary(name: &str) -> Option<PathBuf> {
 
 /// Print the post-install success banner.
 fn print_install_success(status_cmd: &str, logs_cmd: &str) {
+    let _ = crate::completions::maintain_service_completions(true);
     println!();
-    println!("Smart Tree daemon installed and running!");
+    println!("Smart Tree daemon installed and running (same server as `st up`)!");
+    println!("  Shell Completions: Auto-maintained (Fish, Zsh, Bash + live folder/MEM|8 cache)");
     println!();
-    println!("  Dashboard:  http://localhost:{}", DAEMON_PORT);
-    println!("  Token:      /var/lib/smart-tree/daemon.token");
+    println!(
+        "  Dashboard:  http://localhost:{}/ (automagic, no local token)",
+        DAEMON_PORT
+    );
+    println!(
+        "  MCP (HTTP): http://localhost:{}/mcp + /mcp/sse",
+        DAEMON_PORT
+    );
+    println!("  MCP (stdio): st --mcp");
+    println!(
+        "  Token:      ~/.st/daemon.token (needed only when externally bound; `st --show-token`)"
+    );
     println!();
     println!("  Status:     {}", status_cmd);
     println!("  Logs:       {}", logs_cmd);

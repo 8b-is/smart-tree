@@ -388,68 +388,7 @@ impl AiInstaller {
 
     /// Ensure the project has a .mcp.json with st configured
     fn ensure_project_mcp_json(&self) -> Result<()> {
-        let mcp_json_path = self.project_path.join(".mcp.json");
-
-        // stdio MCP configuration (traditional, always works)
-        let st_stdio_config = json!({
-            "type": "stdio",
-            "command": "st",
-            "args": ["--mcp"],
-            "env": {}
-        });
-
-        // HTTP MCP configuration (The Custodian watches here! 🧹)
-        // Uses SSE transport - daemon must be running: st --http-daemon
-        let st_http_config = json!({
-            "type": "sse",
-            "url": "http://localhost:28428/mcp",
-            "_note": "Run 'st --http-daemon' first. The Custodian monitors all operations!"
-        });
-
-        if mcp_json_path.exists() {
-            // Read and update existing config
-            let content = fs::read_to_string(&mcp_json_path).context("Failed to read .mcp.json")?;
-            let mut config: Value =
-                serde_json::from_str(&content).unwrap_or_else(|_| json!({"mcpServers": {}}));
-
-            // Ensure mcpServers exists and has both st and st-http
-            if let Some(obj) = config.as_object_mut() {
-                let servers = obj
-                    .entry("mcpServers".to_string())
-                    .or_insert_with(|| json!({}));
-                if let Some(servers_obj) = servers.as_object_mut() {
-                    let mut updated = false;
-                    if !servers_obj.contains_key("st") {
-                        servers_obj.insert("st".to_string(), st_stdio_config);
-                        updated = true;
-                    }
-                    if !servers_obj.contains_key("st-http") {
-                        servers_obj.insert("st-http".to_string(), st_http_config);
-                        updated = true;
-                    }
-                    if updated {
-                        fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
-                        println!("  ✅ Updated {}", mcp_json_path.display());
-                    }
-                }
-            }
-        } else {
-            // Create new .mcp.json with both st servers
-            let config = json!({
-                "mcpServers": {
-                    "st": st_stdio_config,
-                    "st-http": st_http_config
-                },
-                "_comment": "st: stdio (always works), st-http: HTTP with The Custodian (run 'st --http-daemon' first)"
-            });
-            fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
-            println!(
-                "  ✅ Created {} with st MCP servers (stdio + HTTP)",
-                mcp_json_path.display()
-            );
-        }
-
-        Ok(())
+        refresh_project_mcp_json(&self.project_path)
     }
 
     /// Install hooks
@@ -872,6 +811,74 @@ impl AiInstaller {
 pub fn run_ai_install(scope: InstallScope, target: AiTarget, interactive: bool) -> Result<()> {
     let installer = AiInstaller::new(scope, target, interactive)?;
     installer.install()
+}
+
+/// Create or refresh `<project>/.mcp.json` with both Smart Tree transports:
+/// stdio (`st --mcp`, always works) and local HTTP (`st up` → `/mcp` +
+/// `/mcp/sse`). Localhost needs no token, so no secret is ever written.
+pub fn refresh_project_mcp_json(project_path: &std::path::Path) -> Result<()> {
+    let mcp_json_path = project_path.join(".mcp.json");
+    let st_stdio_config = json!({
+        "type": "stdio",
+        "command": "st",
+        "args": ["--mcp"],
+        "env": {}
+    });
+    let st_http_config = json!({
+        "type": "http",
+        "url": "http://localhost:28428/mcp",
+        "_note": "Run `st up` first. Localhost trusted, no token. The Custodian watches!"
+    });
+    let st_sse_config = json!({
+        "type": "sse",
+        "url": "http://localhost:28428/mcp/sse",
+        "_note": "Run `st up` first. Localhost trusted, no token."
+    });
+
+    if mcp_json_path.exists() {
+        let content = fs::read_to_string(&mcp_json_path).context("Failed to read .mcp.json")?;
+        let mut config: Value =
+            serde_json::from_str(&content).unwrap_or_else(|_| json!({"mcpServers": {}}));
+        if let Some(obj) = config.as_object_mut() {
+            let servers = obj
+                .entry("mcpServers".to_string())
+                .or_insert_with(|| json!({}));
+            if let Some(servers_obj) = servers.as_object_mut() {
+                let mut updated = false;
+                if !servers_obj.contains_key("st") {
+                    servers_obj.insert("st".to_string(), st_stdio_config);
+                    updated = true;
+                }
+                if !servers_obj.contains_key("st-http") {
+                    servers_obj.insert("st-http".to_string(), st_http_config);
+                    updated = true;
+                }
+                if !servers_obj.contains_key("st-http-sse") {
+                    servers_obj.insert("st-http-sse".to_string(), st_sse_config);
+                    updated = true;
+                }
+                if updated {
+                    fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
+                    println!("  ✅ Updated {}", mcp_json_path.display());
+                }
+            }
+        }
+    } else {
+        let config = json!({
+            "mcpServers": {
+                "st": st_stdio_config,
+                "st-http": st_http_config,
+                "st-http-sse": st_sse_config,
+            },
+            "_comment": "st: stdio (always works), st-http: HTTP Streamable, st-http-sse: SSE. Run `st up` first — localhost needs no token."
+        });
+        fs::write(&mcp_json_path, serde_json::to_string_pretty(&config)?)?;
+        println!(
+            "  ✅ Created {} with st MCP servers (stdio + HTTP + SSE)",
+            mcp_json_path.display()
+        );
+    }
+    Ok(())
 }
 
 // =============================================================================

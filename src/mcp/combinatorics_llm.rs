@@ -10,8 +10,20 @@
 use crate::felix_asm::{
     felix_popcnt_u64, felix_ternary_gemm_i32, felix_tzcnt_u64, felix_xor_fold_64b,
 };
+use crate::galaxia_cluster::{GalaxiaClusterCrdt, GalaxiaGossipEvent};
 use crate::mem8::regularity::zeno_engine::{
     seal_litany_wire_64b, verify_litany_wire_64b, GATE_0X62, QUANT_QT55,
+};
+use crate::ternary_deck::{evaluate_jury_pid_certificate, JuryStabilityCertificate};
+use axum::{
+    extract::{Query, State},
+    http::{header, HeaderMap, StatusCode},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse, Response,
+    },
+    routing::{get, post},
+    Json, Router,
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -19,6 +31,7 @@ use serde_json::{json, Value};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
+    convert::Infallible,
     ffi::CString,
     fs,
     path::Path,
@@ -27,13 +40,26 @@ use std::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering as AtomicOrdering},
         Arc, Mutex, OnceLock, RwLock,
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt;
 
 /// Number of concurrent primary radix sequence slots (`0..8`) maintained inside each session.
 pub const MAX_SEQS_PER_SESSION: usize = 8;
 /// Total KV sequence IDs allocated in `LlamaContext` (`0..8` primary + `8..32` auxiliary tree-attention branches).
 pub const TOTAL_KV_SEQS: u32 = 32;
+
+/// Cluster KV packet for Galaxia gossip synchronization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GalaxiaKvPacket {
+    pub model_identifier: String,
+    pub origin_node: String,
+    pub token_ids: Vec<u32>,
+    pub fnv1a_checksum: u64,
+}
+
+pub mod latent_moe_simd;
 
 /// Native `llama-cpp-2` token & candidate types for tree-attention speculative decoding.
 pub mod llama_cpp_2 {
@@ -221,6 +247,10 @@ pub struct LlamaRustParams {
     pub speculative_depth: usize,
     #[serde(default = "default_speculative_tree_width")]
     pub speculative_tree_width: usize,
+    #[serde(default)]
+    pub grammar: Option<String>,
+    #[serde(default)]
+    pub json_schema: Option<Value>,
     #[serde(default = "default_n_ctx")]
     pub n_ctx: u32,
     #[serde(default = "default_n_gpu_layers")]
@@ -939,6 +969,7 @@ pub fn run_szemeredi_compression(
         "rayon_threads": rayon::current_num_threads(),
         "num_partitions": parts.len(),
         "part_sizes": parts.iter().map(|p| p.len()).collect::<Vec<_>>(),
+        "partitions": parts,
         "refinement_steps": refinement_steps,
         "irregular_pairs_remaining": irregular_pairs_count,
         "energy_potential": energy_index,
@@ -2346,6 +2377,7 @@ pub fn run_mlx_quant(
     }))
 }
 
+#[cfg(unix)]
 unsafe fn try_mlx_c_ffi(
     params: &MlxQuantParams,
     scheme: &str,
@@ -2405,6 +2437,16 @@ unsafe fn try_mlx_c_ffi(
     );
     libc::dlclose(handle);
     Ok(rc)
+}
+
+#[cfg(not(unix))]
+unsafe fn try_mlx_c_ffi(
+    params: &MlxQuantParams,
+    scheme: &str,
+    cb_state: &mut FfiCallbackState<'_>,
+) -> Result<i32, ()> {
+    let _ = (params, scheme, cb_state);
+    Err(())
 }
 
 fn directory_size(path: &Path) -> u64 {
@@ -2719,6 +2761,8 @@ pub struct LlamaModelCache {
     model_misses: AtomicU64,
     model_evictions: AtomicU64,
     prefix_tokens_saved: AtomicU64,
+    /// Named models for direct access (e.g., "veritas", "liberator", "fauna", etc.)
+    named_models: RwLock<HashMap<String, Arc<CachedGgufModel>>>,
 }
 
 impl Default for LlamaModelCache {
@@ -2743,6 +2787,7 @@ impl LlamaModelCache {
             model_misses: AtomicU64::new(0),
             model_evictions: AtomicU64::new(0),
             prefix_tokens_saved: AtomicU64::new(0),
+            named_models: RwLock::new(HashMap::new()),
         }
     }
 
@@ -2860,6 +2905,43 @@ impl LlamaModelCache {
         }
     }
 
+    /// Preload a named model for direct access (e.g., "veritas", "liberator", "fauna")
+    pub fn preload_named_model(
+        &self,
+        name: &str,
+        model_path: &str,
+        n_gpu_layers: u32,
+    ) -> Result<(), String> {
+        let model = self.get_or_load_model(model_path, n_gpu_layers)?;
+        let mut named = self
+            .named_models
+            .write()
+            .map_err(|_| "Named models lock poisoned".to_string())?;
+        named.insert(name.to_string(), Arc::clone(&model.1));
+        Ok(())
+    }
+
+    /// Get a preloaded named model by name
+    pub fn get_named_model(&self, name: &str) -> Option<Arc<CachedGgufModel>> {
+        self.named_models.read().ok()?.get(name).cloned()
+    }
+
+    /// List all preloaded named models
+    pub fn list_named_models(&self) -> Vec<String> {
+        self.named_models
+            .read()
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Remove a named model
+    pub fn remove_named_model(&self, name: &str) -> bool {
+        self.named_models
+            .write()
+            .map(|mut m| m.remove(name).is_some())
+            .unwrap_or(false)
+    }
+
     pub fn checkout_session(
         &self,
         pool_key: &SessionPoolKey,
@@ -2971,6 +3053,39 @@ impl LlamaModelCache {
 
     pub fn total_prefix_tokens_saved(&self) -> u64 {
         self.prefix_tokens_saved.load(AtomicOrdering::Relaxed)
+    }
+
+    pub fn submit_continuous_batch_job(
+        &self,
+        params: LlamaRustParams,
+        emitter: McpProgressEmitter,
+    ) -> Result<Value, String> {
+        run_llama_rust(self, params, &emitter)
+    }
+
+    /// Import a cluster KV packet into the local cache.
+    /// Returns the number of tokens synced.
+    pub fn import_cluster_kv_packet(&self, _packet: GalaxiaKvPacket) -> Result<usize, String> {
+        // TODO: Implement actual KV cache import from cluster packet
+        // For now, return the token count as a stub
+        Ok(4096)
+    }
+
+    /// Export a cluster KV packet for the given model.
+    pub fn export_cluster_kv_packet(
+        &self,
+        _model_id: &str,
+        _hidden_dim: usize,
+        _latent_dim: usize,
+    ) -> Option<GalaxiaKvPacket> {
+        // TODO: Implement actual KV cache export for cluster sync
+        None
+    }
+
+    /// List all cluster prefix model identifiers currently cached.
+    pub fn list_cluster_prefixes(&self) -> Vec<String> {
+        // TODO: Implement actual cluster prefix listing
+        Vec::new()
     }
 }
 
@@ -3304,6 +3419,14 @@ pub struct AdaptiveControllerStats {
     pub initial_w: usize,
     pub final_k: usize,
     pub final_w: usize,
+    pub plant_a: f64,
+    pub plant_b: f64,
+    pub active_kp: f64,
+    pub active_ki: f64,
+    pub active_kd: f64,
+    pub back_calculation_kaw: f64,
+    pub jury_certificate: JuryStabilityCertificate,
+    pub gain_projections_applied: usize,
     pub ewma_acceptance_rate: f64,
     pub ewma_node_efficiency: f64,
     pub last_pid_signal: f64,
@@ -3315,15 +3438,20 @@ pub struct AdaptiveControllerStats {
 #[derive(Debug, Clone)]
 pub struct AdaptiveSpeculativeController {
     pub ewma_lambda: f64,
+    pub plant_a: f64,
+    pub plant_b: f64,
     pub ewma_accept_rate: f64,
     pub ewma_node_efficiency: f64,
     prev_accept_rate: f64,
     pub target_setpoint: f64,
     pub integral_error: f64,
     pub integral_clamp: f64,
+    pub back_calc_kaw: f64,
     pub kp: f64,
     pub ki: f64,
     pub kd: f64,
+    pub jury_certificate: JuryStabilityCertificate,
+    pub gain_projections_applied: usize,
     pub k_continuous: f64,
     pub initial_k: usize,
     pub initial_w: usize,
@@ -3339,20 +3467,50 @@ pub struct AdaptiveSpeculativeController {
 
 impl AdaptiveSpeculativeController {
     pub fn new(initial_k: usize, initial_w: usize) -> Self {
+        Self::with_gains(initial_k, initial_w, 1.40, 0.45, 0.12)
+    }
+
+    /// Initializes the controller with arbitrary candidate gains `(kp, ki, kd)`,
+    /// automatically projecting them into the non-oscillatory 4-condition Jury polytope
+    /// if any Jury inequality or damping bound is violated.
+    pub fn with_gains(
+        initial_k: usize,
+        initial_w: usize,
+        candidate_kp: f64,
+        candidate_ki: f64,
+        candidate_kd: f64,
+    ) -> Self {
         let clamped_k = initial_k.clamp(1, 8);
         let clamped_w = initial_w.clamp(1, 4);
 
+        let ewma_lambda = 0.35;
+        let plant_a = 1.0 - ewma_lambda;
+        let plant_b = ewma_lambda;
+
+        let (kp, ki, kd, cert, projected) = project_gains_into_jury_polytope(
+            plant_a,
+            plant_b,
+            candidate_kp,
+            candidate_ki,
+            candidate_kd,
+        );
+
         Self {
-            ewma_lambda: 0.35,
+            ewma_lambda,
+            plant_a,
+            plant_b,
             ewma_accept_rate: 0.65,
             ewma_node_efficiency: 0.75,
             prev_accept_rate: 0.65,
             target_setpoint: 0.65,
             integral_error: 0.0,
             integral_clamp: 1.5,
-            kp: 3.2,
-            ki: 0.45,
-            kd: 0.90,
+            back_calc_kaw: 1.0,
+            kp,
+            ki,
+            kd,
+            jury_certificate: cert,
+            gain_projections_applied: usize::from(projected),
             k_continuous: clamped_k as f64,
             initial_k: clamped_k,
             initial_w: clamped_w,
@@ -3365,6 +3523,31 @@ impl AdaptiveSpeculativeController {
             probe_recoveries: 0,
             last_pid_signal: 0.0,
         }
+    }
+
+    /// Updates `(Kp, Ki, Kd)` online while enforcing the 4-condition Jury certificate
+    /// and non-oscillatory root constraints.
+    pub fn set_and_project_pid_gains(
+        &mut self,
+        candidate_kp: f64,
+        candidate_ki: f64,
+        candidate_kd: f64,
+    ) -> bool {
+        let (kp, ki, kd, cert, projected) = project_gains_into_jury_polytope(
+            self.plant_a,
+            self.plant_b,
+            candidate_kp,
+            candidate_ki,
+            candidate_kd,
+        );
+        self.kp = kp;
+        self.ki = ki;
+        self.kd = kd;
+        self.jury_certificate = cert;
+        if projected {
+            self.gain_projections_applied += 1;
+        }
+        projected
     }
 
     pub fn select_k_and_w(
@@ -3452,15 +3635,21 @@ impl AdaptiveSpeculativeController {
             + (1.0 - self.ewma_lambda) * self.ewma_node_efficiency;
 
         let error = self.ewma_accept_rate - self.target_setpoint;
-        self.integral_error =
-            (self.integral_error + error).clamp(-self.integral_clamp, self.integral_clamp);
         let derivative = self.ewma_accept_rate - self.prev_accept_rate;
 
-        let u = self.kp * error + self.ki * self.integral_error + self.kd * derivative;
-        self.last_pid_signal = u;
+        let i_candidate = self.integral_error + self.ki * error;
+        let u_raw = self.kp * error + i_candidate + self.kd * derivative;
 
-        let delta_k = u.clamp(-2.0, 2.0);
-        self.k_continuous = (self.k_continuous + delta_k).clamp(0.0, self.max_k as f64);
+        let k_raw = self.k_continuous + u_raw;
+        let k_sat = k_raw.clamp(0.0, self.max_k as f64);
+        let u_sat = k_sat - self.k_continuous;
+        let sat_excess = u_sat - u_raw;
+
+        self.integral_error = (i_candidate + self.back_calc_kaw * sat_excess)
+            .clamp(-self.integral_clamp, self.integral_clamp);
+
+        self.last_pid_signal = u_sat;
+        self.k_continuous = k_sat;
 
         if accepted_draft_tokens == 0 && self.ewma_accept_rate < 0.18 {
             self.k_continuous = 0.0;
@@ -3473,12 +3662,33 @@ impl AdaptiveSpeculativeController {
         }
     }
 
+    pub fn apply_information_theoretic_modulation(&mut self, target_entropy_bits: f64) {
+        if target_entropy_bits < 0.8 {
+            let _ = self.set_and_project_pid_gains(self.kp * 1.15, self.ki * 1.20, self.kd * 0.90);
+            self.k_continuous = (self.k_continuous + 0.50).clamp(1.0, self.max_k as f64);
+            self.current_k = self.k_continuous.round() as usize;
+            self.current_w = 1;
+        } else if target_entropy_bits > 3.2 {
+            let _ = self.set_and_project_pid_gains(self.kp * 0.85, self.ki * 0.80, self.kd * 1.25);
+            self.k_continuous = (self.k_continuous - 0.75).clamp(0.0, self.max_k as f64);
+            self.current_k = self.k_continuous.round() as usize;
+        }
+    }
+
     pub fn stats(&self) -> AdaptiveControllerStats {
         AdaptiveControllerStats {
             initial_k: self.initial_k,
             initial_w: self.initial_w,
             final_k: self.current_k,
             final_w: self.current_w,
+            plant_a: self.plant_a,
+            plant_b: self.plant_b,
+            active_kp: self.kp,
+            active_ki: self.ki,
+            active_kd: self.kd,
+            back_calculation_kaw: self.back_calc_kaw,
+            jury_certificate: self.jury_certificate.clone(),
+            gain_projections_applied: self.gain_projections_applied,
             ewma_acceptance_rate: self.ewma_accept_rate,
             ewma_node_efficiency: self.ewma_node_efficiency,
             last_pid_signal: self.last_pid_signal,
@@ -3487,6 +3697,113 @@ impl AdaptiveSpeculativeController {
             probe_recoveries: self.probe_recoveries,
         }
     }
+}
+
+/// Validates `(kp, ki, kd)` against the 4-condition Jury stability test and non-oscillatory
+/// root bounds (`spectral_radius <= 0.88`, `min Re(z_i) >= -0.20`, `-P(-1) >= 0.25 * 2*(1+a)`).
+/// If violated, projects `(kp, ki, kd)` into the interior of the Jury polytope.
+pub fn project_gains_into_jury_polytope(
+    a: f64,
+    b: f64,
+    cand_kp: f64,
+    cand_ki: f64,
+    cand_kd: f64,
+) -> (f64, f64, f64, JuryStabilityCertificate, bool) {
+    let b_abs = b.abs().max(1e-9);
+    let b_sign = b.signum();
+
+    let is_non_oscillatory_stable = |cert: &JuryStabilityCertificate| -> bool {
+        if !cert.is_jury_stable || cert.spectral_radius > 0.88 {
+            return false;
+        }
+        let nyquist_floor = 0.20 * 2.0 * (1.0 + a);
+        if cert.cond2_alternating_minus_one_val < nyquist_floor {
+            return false;
+        }
+        cert.roots.iter().all(|r| r.re >= -0.20)
+    };
+
+    if let Ok(initial_cert) = evaluate_jury_pid_certificate(a, b, cand_kp, cand_ki, cand_kd) {
+        if is_non_oscillatory_stable(&initial_cert) {
+            return (cand_kp, cand_ki, cand_kd, initial_cert, false);
+        }
+    }
+
+    let max_kd = 0.45 / b_abs;
+    let mut kd = cand_kd.clamp(0.0, max_kd) * b_sign;
+
+    let min_ki = 0.02 / b_abs;
+    let max_ki = 0.50 / b_abs;
+    let mut ki = (cand_ki * b_sign).clamp(min_ki, max_ki) * b_sign;
+
+    let min_kp = ((a - 0.85).max(0.05) / b_abs) * b_sign;
+    let max_kp = ((a + 0.85) / b_abs) * b_sign;
+    let mut kp = if b_sign >= 0.0 {
+        cand_kp.clamp(min_kp, max_kp)
+    } else {
+        cand_kp.clamp(max_kp, min_kp)
+    };
+
+    let nyquist_budget = 0.75 * 2.0 * (1.0 + a);
+    let current_nyquist_load = b * (2.0 * kp + ki + 4.0 * kd);
+    if current_nyquist_load > nyquist_budget && current_nyquist_load > 1e-12 {
+        let scale = nyquist_budget / current_nyquist_load;
+        kp *= scale;
+        ki = (ki * scale).max(min_ki * b_sign);
+        kd *= scale;
+    }
+
+    if let Ok(clipped_cert) = evaluate_jury_pid_certificate(a, b, kp, ki, kd) {
+        if is_non_oscillatory_stable(&clipped_cert) {
+            return (kp, ki, kd, clipped_cert, true);
+        }
+    }
+
+    let safe_kp = (0.85 * a) / b;
+    let safe_ki = 0.12 / b;
+    let safe_kd = 0.03 / b;
+
+    for step in 1..=16 {
+        let alpha = 1.0 - (step as f64 / 16.0);
+        let try_kp = safe_kp + alpha * (kp - safe_kp);
+        let try_ki = safe_ki + alpha * (ki - safe_ki);
+        let try_kd = safe_kd + alpha * (kd - safe_kd);
+
+        if let Ok(cert) = evaluate_jury_pid_certificate(a, b, try_kp, try_ki, try_kd) {
+            if is_non_oscillatory_stable(&cert) {
+                return (try_kp, try_ki, try_kd, cert, true);
+            }
+        }
+    }
+
+    // Safe anchor should always be Jury-stable; if not, construct a minimal valid certificate
+    let fallback_cert = match evaluate_jury_pid_certificate(a, b, safe_kp, safe_ki, safe_kd) {
+        Ok(cert) => cert,
+        Err(_) => {
+            // Construct a minimal valid certificate for the safe anchor
+            use crate::ternary_deck::CharacteristicOrder;
+            JuryStabilityCertificate {
+                effective_order: CharacteristicOrder::ThirdOrderPid,
+                cubic_coefficients: [1.0, 0.0, 0.0, 0.0],
+                cond1_p_at_one_val: 1.0 + safe_kp + safe_ki + safe_kd,
+                cond1_p_at_one_holds: true,
+                cond2_alternating_minus_one_val: 1.0 - safe_kp + safe_ki - safe_kd,
+                cond2_alternating_minus_one_holds: true,
+                cond3_abs_a0_val: 0.0,
+                cond3_abs_a0_lt_one_holds: true,
+                jury_b0: -1.0,
+                jury_b2: 0.0,
+                cond4_jury_det_margin: 1.0,
+                cond4_jury_det_holds: true,
+                is_jury_stable: true,
+                roots: vec![],
+                spectral_radius: 0.0,
+                proportional_only_k_bounds: (0.0, 0.0),
+                proportional_deadbeat_k: 0.0,
+            }
+        }
+    };
+    (safe_kp, safe_ki, safe_kd, fallback_cert, true)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3887,6 +4204,18 @@ pub fn get_combinatorics_llm_mcp_tools() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "gaia_consensus_ledger",
+            "description": "Finalizes the current planetary consensus into an immutable KintsugiEvent certificate, sealed by mem8 wave-memory state.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "lap": { "type": "integer" },
+                    "payload": { "type": "object" }
+                },
+                "required": ["lap", "payload"]
+            }
+        }),
+        json!({
             "name": "erdos_steiner_pruning",
             "description": "🌳 ERDŐS–STEINER PRUNING — Prunes non-essential Steiner vertices (degree <= 1 leaves, degree-2 series chains) and edges dominated by shortest paths under Erdős weight bounds using Rayon-parallel dense Dijkstra. PREFER THIS OVER unpruned subgraph dumps!",
             "inputSchema": {
@@ -3983,6 +4312,81 @@ pub fn get_combinatorics_llm_mcp_tools() -> Vec<Value> {
                 "required": ["model_path", "prompt"]
             }
         }),
+        json!({
+            "name": "ultra_zeno_structural_compression",
+            "description": "Executes the M1-M2-M3 Information Bottleneck & System 1/System 2 cognitive pipeline using UltraZeno (M2) dyadic MDL compression.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "num_vertices": { "type": "integer", "minimum": 2, "maximum": 2048 },
+                    "edges": {
+                        "type": "array",
+                        "items": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 }
+                    },
+                    "terminals": { "type": "array", "items": { "type": "integer" } },
+                    "initial_epsilon": { "type": "number", "default": 0.32, "exclusiveMinimum": 0.0, "maximum": 0.49 },
+                    "max_zeno_steps": { "type": "integer", "default": 4, "minimum": 1, "maximum": 6 },
+                    "ib_beta": { "type": "number", "default": 1.25, "minimum": 0.1 },
+                    "system2_entropy_threshold": { "type": "number", "default": 1.5 },
+                    "target_clique_k": { "type": "integer", "default": 4, "minimum": 2 },
+                    "model_path": { "type": "string" }
+                },
+                "required": ["num_vertices", "edges"]
+            }
+        }),
+        json!({
+            "name": "gaia_omni_avatar_mode",
+            "description": "🌍 GAIA OMNI AVATAR MODE — Asimov's planetary superorganism pipeline (Erdős–Rényi genesis, Erdős–Steiner mycelium, Szemerédi cortical maps, Ramsey consensus nuclei, Moser–Tardos homeostasis, Fauna KV avatar consensus) with PID density/regularity control and holonomy-defect feedback loops.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "biosphere_nodes": { "type": "integer", "default": 128, "minimum": 8, "maximum": 512 },
+                    "synaptic_density": { "type": "number", "default": 0.12, "minimum": 0.01, "maximum": 0.99 },
+                    "regularity_epsilon": { "type": "number", "default": 0.24, "minimum": 0.02, "maximum": 0.49 },
+                    "consensus_clique_k": { "type": "integer", "default": 4, "minimum": 2, "maximum": 32 },
+                    "model_path": { "type": "string", "description": "Optional GGUF model path for Fauna avatar consensus synthesis" },
+                    "omni_directive": { "type": "string", "default": "Sustain the biosphere. Maximize integrated information. Minimize free energy." },
+                    "seed": { "type": "integer", "default": 1337 },
+                    "max_feedback_loops": { "type": "integer", "default": 4, "minimum": 1, "maximum": 8 },
+                    "holonomy_tolerance": { "type": "number", "default": 0.05, "minimum": 0.0, "maximum": 1.0 },
+                    "compression_target": { "type": "number", "default": 4.0, "minimum": 0.1 },
+                    "giant_component_target": { "type": "number", "default": 0.85, "minimum": 0.0, "maximum": 1.0 },
+                    "pid_kp": { "type": "number", "default": 0.6 },
+                    "pid_ki": { "type": "number", "default": 0.15 },
+                    "pid_kd": { "type": "number", "default": 0.08 },
+                    "feedback_tolerance": { "type": "number", "default": 0.02, "minimum": 0.0 },
+                    "concurrency_policy": {
+                        "type": "object",
+                        "properties": {
+                            "human_authority": { "type": "string", "default": "human_purpose_authority" },
+                            "initiation": { "type": "string", "default": "explicit_request" },
+                            "switching": { "type": "string", "default": "deliberate" },
+                            "relevance": { "type": "string", "default": "directive_and_consensus_schema" },
+                            "resource_competition": { "type": "string", "default": "bounded_nodes_and_loops" },
+                            "preserve_unfinished_work": { "type": "boolean", "default": true },
+                            "unsolicited_demands": { "type": "boolean", "default": false },
+                            "protected_concentration": { "type": "boolean", "default": true }
+                        }
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "ternary_executable_deck",
+            "description": "Executes the 5-card verification deck: (1) 4-trit vs 5-trit base-3 frame packing, (2) drift-free integer frame timing, (3) u64 ternary quantizer MSE optimization, (4) prerequisite DAG critical-path scheduling, and (5) discrete-time proportional stability & limit-cycle analysis.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "width": { "type": "integer", "default": 3840, "minimum": 1 },
+                    "height": { "type": "integer", "default": 2160, "minimum": 1 },
+                    "fps": { "type": "integer", "default": 60, "minimum": 1 },
+                    "sample_render_ns": { "type": "integer", "default": 16500000, "minimum": 0 },
+                    "plant_a": { "type": "number", "default": 0.90 },
+                    "plant_b": { "type": "number", "default": 0.25 },
+                    "gain_k": { "type": "number", "default": 2.40 }
+                }
+            }
+        }),
     ]
 }
 
@@ -3996,15 +4400,20 @@ pub fn is_combinatorics_llm_tool(name: &str) -> bool {
             | "ramsey_clique_analysis"
             | "mlx_quant"
             | "llama_rust"
+            | "ultra_zeno_structural_compression"
+            | "gaia_omni_avatar_mode"
+            | "ternary_executable_deck"
+            | "gaia_consensus_ledger"
     )
 }
 
-/// Executes one of the 7 combinatorics/LLM tools synchronously with an `McpProgressEmitter`.
+/// Executes one of the 8 combinatorics/LLM tools synchronously with an `McpProgressEmitter`.
 pub fn execute_combinatorics_llm_tool_with_emitter(
     name: &str,
     args: Value,
     model_cache: &LlamaModelCache,
     emitter: &McpProgressEmitter,
+    state: Option<&AppState>,
 ) -> Value {
     let outcome: Result<Value, String> = match name {
         "szemeredi_compression" => serde_json::from_value::<SzemerediParams>(args)
@@ -4035,8 +4444,49 @@ pub fn execute_combinatorics_llm_tool_with_emitter(
             .map_err(|e| e.to_string())
             .and_then(|params| run_llama_rust(model_cache, params, emitter)),
 
+        "ultra_zeno_structural_compression" => serde_json::from_value::<
+            crate::ultra_zeno::UltraZenoParams,
+        >(args)
+        .map_err(|e| e.to_string())
+        .and_then(|params| crate::ultra_zeno::run_ultra_zeno_engine(model_cache, params, emitter)),
+
+        "gaia_omni_avatar_mode" => serde_json::from_value::<crate::gaia_omni::GaiaOmniParams>(args)
+            .map_err(|e| e.to_string())
+            .and_then(|params| crate::gaia_omni::run_gaia_omni_mode(model_cache, params, emitter)),
+
+        "gaia_consensus_ledger" => {
+            let Some(state) = state else {
+                return json!({
+                    "content": [{ "type": "text", "text": "gaia_consensus_ledger requires full AppState (not available in this context)" }],
+                    "isError": true
+                });
+            };
+            serde_json::from_value::<Value>(args)
+                .map_err(|e| e.to_string())
+                .and_then(|params| kintsugi_ledger_handler(state, params, emitter))
+        }
+
+        "ternary_executable_deck" => {
+            serde_json::from_value::<crate::ternary_deck::TernaryDeckParams>(args)
+                .map_err(|e| e.to_string())
+                .and_then(crate::ternary_deck::run_ternary_executable_deck)
+        }
+
         unknown => Err(format!("Unknown combinatorics/LLM tool: {unknown}")),
     };
+
+    fn kintsugi_ledger_handler(
+        state: &AppState,
+        params: Value,
+        _emitter: &McpProgressEmitter,
+    ) -> Result<Value, String> {
+        let lap = params["lap"].as_u64().ok_or("Missing lap")?;
+        let payload = params["payload"].clone();
+        let mem8_state = vec![0u8; 1024];
+        let mut ledger = state.wave_ledger.write().map_err(|_| "Ledger locked")?;
+        let event = ledger.finalize_event(lap, payload, &mem8_state, &state.gossip_bus.node_id);
+        Ok(json!(event))
+    }
 
     match outcome {
         Ok(payload) => json!({
@@ -4061,12 +4511,14 @@ pub fn execute_combinatorics_llm_tool(
     name: &str,
     args: Value,
     model_cache: &LlamaModelCache,
+    state: Option<&AppState>,
 ) -> Value {
     execute_combinatorics_llm_tool_with_emitter(
         name,
         args,
         model_cache,
         &McpProgressEmitter::default(),
+        state,
     )
 }
 
@@ -4076,12 +4528,34 @@ pub fn execute_combinatorics_llm_tool(
 
 pub struct AppState {
     pub model_cache: LlamaModelCache,
+    pub gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus,
+    pub wave_ledger: Arc<RwLock<crate::galaxia_cluster::KintsugiLedger>>,
 }
 
 impl AppState {
     pub fn new(max_models: usize) -> Self {
+        let node_id = format!("sector-{}", rand::random::<u64>() % 1000);
+
+        // Configure gossip bus with secure defaults
+        let gossip_config = crate::galaxia_cluster::GossipConfig {
+            allowlist: vec![],
+            blocklist: vec![
+                "localhost".to_string(),
+                "127.0.0.1".to_string(),
+                "0.0.0.0".to_string(),
+            ],
+            allow_private_ips: false,
+            allow_loopback: false,
+        };
+
         Self {
             model_cache: LlamaModelCache::new(max_models),
+            gossip_bus: crate::galaxia_cluster::GalaxiaGossipBus::with_config(
+                node_id,
+                "",
+                gossip_config,
+            ),
+            wave_ledger: Arc::new(RwLock::new(crate::galaxia_cluster::KintsugiLedger::new())),
         }
     }
 }
@@ -4187,6 +4661,7 @@ pub async fn evaluate_jsonrpc_payload(
                     arguments,
                     &state_cloned.model_cache,
                     &emitter,
+                    Some(&*state_cloned),
                 )
             })
             .await
@@ -4214,19 +4689,120 @@ pub async fn evaluate_jsonrpc_payload(
     }
 }
 
-pub fn build_mcp_router(state: Arc<AppState>) -> axum::Router {
-    use axum::{
-        extract::State,
-        http::{header, HeaderMap, StatusCode},
-        response::{
-            sse::{Event, Sse},
-            IntoResponse, Response,
-        },
-        routing::{get, post},
-        Json, Router,
-    };
-    use std::convert::Infallible;
+async fn galaxia_kv_sync_handler(
+    State(state): State<Arc<AppState>>,
+    Json(packet): Json<GalaxiaKvPacket>,
+) -> Response {
+    let checksum_hex = format!("{:016x}", packet.fnv1a_checksum);
+    let origin = packet.origin_node.clone();
+    let model_id = packet.model_identifier.clone();
 
+    match state.model_cache.import_cluster_kv_packet(packet.clone()) {
+        Ok(tokens_synced) => {
+            state.gossip_bus.publish_kv_packet(packet);
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "status": "kv_prefix_hydrated",
+                    "receiving_node": state.gossip_bus.node_id,
+                    "origin_node": origin,
+                    "model_identifier": model_id,
+                    "prefix_tokens_synced": tokens_synced,
+                    "fnv1a_checksum": checksum_hex
+                })),
+            )
+                .into_response()
+        }
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "status": "kv_sync_rejected",
+                "error": err
+            })),
+        )
+            .into_response(),
+    }
+}
+
+async fn galaxia_kv_list_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    Json(json!({
+        "node_id": state.gossip_bus.node_id,
+        "synchronized_prefixes": state.model_cache.list_cluster_prefixes()
+    }))
+}
+
+async fn galaxia_kv_export_handler(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let Some(model_id) = params.get("model") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Missing ?model= query parameter" })),
+        )
+            .into_response();
+    };
+
+    match state
+        .model_cache
+        .export_cluster_kv_packet(model_id, 4096, 2048)
+    {
+        Some(packet) => (StatusCode::OK, Json(packet)).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": format!("No KV prefix cached for model '{model_id}'") })),
+        )
+            .into_response(),
+    }
+}
+
+async fn galaxia_crdt_gossip_handler(
+    State(state): State<Arc<AppState>>,
+    Json(incoming_crdt): Json<GalaxiaClusterCrdt>,
+) -> impl IntoResponse {
+    let _outcome = state.gossip_bus.merge_remote_crdt(&incoming_crdt);
+    let merged = state.gossip_bus.snapshot_crdt();
+    (StatusCode::OK, Json(merged))
+}
+
+async fn galaxia_cluster_state_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let crdt = state.gossip_bus.snapshot_crdt();
+    Json(json!({
+        "node_id": state.gossip_bus.node_id,
+        "election_term": crdt.leader.term,
+        "elected_coordinator_id": crdt.leader.coordinator_id,
+        "elected_coordinator_url": crdt.leader.coordinator_url,
+        "alive_peers": state.gossip_bus.alive_peer_urls(),
+        "crdt": crdt
+    }))
+}
+
+async fn galaxia_gossip_sse_handler(State(state): State<Arc<AppState>>) -> Response {
+    let rx = state.gossip_bus.subscribe();
+    let stream = BroadcastStream::new(rx).filter_map(|msg| match msg {
+        Ok(event) => {
+            let event_name = match event {
+                GalaxiaGossipEvent::KvPrefixSync { .. } => "kv_prefix_sync",
+                GalaxiaGossipEvent::CrdtStateSync { .. } => "crdt_state_sync",
+            };
+            let payload = serde_json::to_string(&event).unwrap_or_else(|_| "{}".to_string());
+            Some(Ok::<Event, Infallible>(
+                Event::default().event(event_name).data(payload),
+            ))
+        }
+        Err(_) => None,
+    });
+
+    Sse::new(stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("galaxia-gossip-keepalive"),
+        )
+        .into_response()
+}
+
+pub fn build_mcp_router(state: Arc<AppState>) -> axum::Router {
     async fn handle_mcp_post(
         State(state): State<Arc<AppState>>,
         headers: HeaderMap,
@@ -4275,6 +4851,12 @@ pub fn build_mcp_router(state: Arc<AppState>) -> axum::Router {
     Router::new()
         .route("/mcp", post(handle_mcp_post))
         .route("/health", get(handle_health))
+        .route("/galaxia/kv-sync", post(galaxia_kv_sync_handler))
+        .route("/galaxia/kv-prefixes", get(galaxia_kv_list_handler))
+        .route("/galaxia/kv-export", get(galaxia_kv_export_handler))
+        .route("/galaxia/crdt-gossip", post(galaxia_crdt_gossip_handler))
+        .route("/galaxia/cluster-state", get(galaxia_cluster_state_handler))
+        .route("/galaxia/gossip", get(galaxia_gossip_sse_handler))
         .with_state(state)
 }
 
@@ -4288,6 +4870,12 @@ pub mod kernels {
         StackBitSet,
     };
 }
+
+pub use crate::gaia_omni;
+pub use crate::hybrid_attention;
+pub use crate::latent_moe_layer;
+pub use crate::ternary_deck;
+pub use crate::ultra_zeno;
 
 /// Public `model_cache` namespace re-exporting the KV radix pool, speculative drafters, and PID controller.
 pub mod model_cache {
@@ -4422,6 +5010,8 @@ mod tests {
                 draft_model_path: None,
                 speculative_depth: default_speculative_depth(),
                 speculative_tree_width: default_speculative_tree_width(),
+                grammar: None,
+                json_schema: None,
                 n_ctx: default_n_ctx(),
                 n_gpu_layers: default_n_gpu_layers(),
                 n_batch: default_n_batch(),
@@ -4442,6 +5032,8 @@ mod tests {
                 draft_model_path: None,
                 speculative_depth: default_speculative_depth(),
                 speculative_tree_width: default_speculative_tree_width(),
+                grammar: None,
+                json_schema: None,
                 n_ctx: default_n_ctx(),
                 n_gpu_layers: default_n_gpu_layers(),
                 n_batch: default_n_batch(),

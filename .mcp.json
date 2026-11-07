@@ -9,8 +9,13 @@
     "st-http": {
       "type": "http",
       "url": "http://localhost:28428/mcp",
-      "_note": "Run 'st --http-daemon' first. The Custodian monitors all operations! 🧹"
+      "_note": "Run 'st up' first. Localhost trusted, no token. The Custodian watches!"
+    },
+    "st-http-sse": {
+      "type": "sse",
+      "url": "http://localhost:28428/mcp/sse",
+      "_note": "Run 'st up' first. Localhost trusted, no token."
     }
   },
-  "_comment": "st: stdio (always works), st-http: HTTP with The Custodian & LLM proxy"
+  "_comment": "st: stdio (always works), st-http: HTTP Streamable, st-http-sse: SSE. Run `st up` first — localhost needs no token."
 }

@@ -132,6 +132,24 @@ impl M8Converter {
             (M8Format::Json, M8Format::Marqant) => {
                 Self::json_to_marqant(&data, output_path)?;
             }
+            (M8Format::Binary, M8Format::Marqant) => {
+                if let Some(mq) = crate::m8_consciousness::extract_m8_marqant_section(&data, false)
+                {
+                    fs::write(output_path, mq)?;
+                } else {
+                    let decoded = crate::m8_consciousness::decode_m8_bytes(&data)?;
+                    Self::json_to_marqant(&decoded, output_path)?;
+                }
+            }
+            (M8Format::Marqant, M8Format::Binary) => {
+                let decoded = crate::m8_consciousness::decode_m8_bytes(&data)?;
+                let tight = crate::m8_consciousness::encode_json_bytes_as_tight_m8(
+                    &decoded,
+                    42.73,
+                    &String::from_utf8_lossy(&decoded),
+                )?;
+                fs::write(output_path, tight)?;
+            }
 
             _ => {
                 anyhow::bail!(
@@ -146,65 +164,41 @@ impl M8Converter {
         Ok(())
     }
 
-    /// Convert JSON to binary wave format
+    /// Convert JSON to tight MEM8 binary wave format
     fn json_to_binary(json_data: &[u8], output_path: &Path) -> Result<()> {
-        use crate::mem8_binary::M8BinaryFile;
-
         let json_str = String::from_utf8_lossy(json_data);
         let value: serde_json::Value = serde_json::from_str(&json_str)?;
-
-        let mut m8_file = M8BinaryFile::create(output_path)?;
-
-        // Handle different JSON structures
-        if let Some(contexts) = value.get("contexts").and_then(|c| c.as_array()) {
-            for context in contexts {
-                let content = serde_json::to_vec(context)?;
-                let importance =
-                    context.get("score").and_then(|s| s.as_f64()).unwrap_or(0.5) as f32;
-                m8_file.append_block(&content, importance)?;
-            }
-        } else if let Some(array) = value.as_array() {
-            for item in array {
-                let content = serde_json::to_vec(item)?;
-                m8_file.append_block(&content, 0.5)?;
-            }
-        } else {
-            // Single object
-            let content = serde_json::to_vec(&value)?;
-            m8_file.append_block(&content, 1.0)?;
-        }
-
+        let freq = value
+            .get("frequency")
+            .and_then(|f| f.as_f64())
+            .unwrap_or(42.73);
+        let essence = value
+            .get("essence")
+            .and_then(|e| e.as_str())
+            .unwrap_or("Converted M8 consciousness");
+        let compact_bytes = serde_json::to_vec(&value)?;
+        let tight = crate::m8_consciousness::encode_json_bytes_as_tight_m8(
+            &compact_bytes,
+            freq,
+            &format!("# {:.2}Hz — {}", freq, essence),
+        )?;
+        fs::write(output_path, tight)?;
         Ok(())
     }
 
-    /// Convert binary to JSON
+    /// Convert binary MEM8 to JSON (supports both tight MEM8 section containers and legacy 4KB block files)
     fn binary_to_json(binary_data: &[u8], output_path: &Path) -> Result<()> {
-        use crate::mem8_binary::M8BinaryFile;
-
-        // Create temporary file from data
-        let temp_path = "/tmp/temp_convert.m8";
-        fs::write(temp_path, binary_data)?;
-
-        let mut m8_file = M8BinaryFile::open(temp_path)?;
-        let mut contexts = Vec::new();
-
-        // Read all blocks
-        while let Some(block) = m8_file.read_backwards()? {
-            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&block.content) {
-                contexts.push(json);
-            }
+        let decoded = crate::m8_consciousness::decode_m8_bytes(binary_data)?;
+        if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&decoded) {
+            fs::write(output_path, serde_json::to_string_pretty(&value)?)?;
+        } else {
+            let output = serde_json::json!({
+                "format": "m8j",
+                "version": 1,
+                "content": String::from_utf8_lossy(&decoded)
+            });
+            fs::write(output_path, serde_json::to_string_pretty(&output)?)?;
         }
-
-        // Create JSON structure
-        let output = serde_json::json!({
-            "format": "m8j",
-            "version": 1,
-            "contexts": contexts
-        });
-
-        fs::write(output_path, serde_json::to_string_pretty(&output)?)?;
-        fs::remove_file(temp_path)?;
-
         Ok(())
     }
 

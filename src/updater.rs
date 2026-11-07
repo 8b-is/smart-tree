@@ -35,7 +35,7 @@ pub const I1_HARMONY_ED25519_PUBKEY_HEX: &str =
     "0521D00D9088062607E1E394FB3FFDBC2EC640BC495D2B13C6377F58E898A674";
 pub const I1_HARMONY_KEY_TAG: u16 = 3313;
 
-/// Parsed & Ed25519-verified Secure DNS version advertisement (`_smart-tree.i1.is` TXT)
+/// Parsed & Ed25519-verified Secure DNS version advertisement (`_smart-tree.i1.is` TXT + DNSSEC `RRSIG`)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SecureDnsRelease {
     pub version: String,
@@ -43,6 +43,10 @@ pub struct SecureDnsRelease {
     pub sha256: String,
     pub key_tag: u16,
     pub signature_b64: String,
+    /// True when the DNS wire response also carried a valid RFC 4034 / RFC 8080 DNSSEC `RRSIG`
+    /// (`rtype=46`, `type_covered=16`, `alg=15` Ed25519, `keytag=3313`) verified against the pinned `i1.is.` KSK.
+    #[serde(default)]
+    pub dnssec_rrsig_verified: bool,
 }
 
 /// Parse a `v=ST1; ver=...; build=...; sha256=...; keytag=3313; alg=Ed25519; sig=...` TXT record
@@ -118,25 +122,46 @@ pub fn verify_dns_version_txt(txt: &str) -> Result<SecureDnsRelease> {
         sha256,
         key_tag,
         signature_b64: sig_b64,
+        dnssec_rrsig_verified: false,
     })
 }
 
-/// Build a minimal RFC 1035 DNS TXT query packet for `qname` (e.g. `_smart-tree.i1.is`)
+/// Encode a domain name into canonical lowercase RFC 4034 §6.1 DNS wire format.
+fn encode_canonical_dns_name(qname: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(qname.len() + 2);
+    for label in qname.trim_end_matches('.').split('.') {
+        if label.is_empty() {
+            continue;
+        }
+        let lower = label.to_ascii_lowercase();
+        out.push(lower.len() as u8);
+        out.extend_from_slice(lower.as_bytes());
+    }
+    out.push(0);
+    out
+}
+
+/// Build an RFC 1035 + RFC 6891/3225 EDNS0 (`DO=1` DNSSEC OK, `AD=1`) DNS TXT query packet
+/// for `qname` (e.g. `_smart-tree.i1.is`) so authoritative and validating servers return `RRSIG` (type 46).
 fn build_dns_txt_query_packet(qname: &str, tx_id: u16) -> Vec<u8> {
     let mut pkt = Vec::with_capacity(64);
     pkt.extend_from_slice(&tx_id.to_be_bytes());
-    pkt.extend_from_slice(&0x0100u16.to_be_bytes()); // Flags: RD=1 ( standard recursive query )
+    pkt.extend_from_slice(&0x0120u16.to_be_bytes()); // Flags: RD=1 (0x0100) | AD=1 (0x0020)
     pkt.extend_from_slice(&1u16.to_be_bytes()); // QDCOUNT = 1
     pkt.extend_from_slice(&0u16.to_be_bytes()); // ANCOUNT = 0
     pkt.extend_from_slice(&0u16.to_be_bytes()); // NSCOUNT = 0
-    pkt.extend_from_slice(&0u16.to_be_bytes()); // ARCOUNT = 0
-    for label in qname.trim_end_matches('.').split('.') {
-        pkt.push(label.len() as u8);
-        pkt.extend_from_slice(label.as_bytes());
-    }
-    pkt.push(0); // root label
+    pkt.extend_from_slice(&1u16.to_be_bytes()); // ARCOUNT = 1 (EDNS0 OPT with DO=1)
+    pkt.extend_from_slice(&encode_canonical_dns_name(qname));
     pkt.extend_from_slice(&16u16.to_be_bytes()); // QTYPE = 16 (TXT)
     pkt.extend_from_slice(&1u16.to_be_bytes()); // QCLASS = 1 (IN)
+                                                // EDNS0 OPT pseudo-RR (RFC 6891 + RFC 3225 DO=1 bit):
+    pkt.push(0); // Root domain name
+    pkt.extend_from_slice(&41u16.to_be_bytes()); // TYPE = 41 (OPT)
+    pkt.extend_from_slice(&1232u16.to_be_bytes()); // UDP payload size = 1232
+    pkt.push(0); // EXTENDED-RCODE = 0
+    pkt.push(0); // VERSION = 0
+    pkt.extend_from_slice(&0x8000u16.to_be_bytes()); // Z flags: DO=1 (DNSSEC OK)
+    pkt.extend_from_slice(&0u16.to_be_bytes()); // RDLENGTH = 0
     pkt
 }
 
@@ -159,8 +184,106 @@ fn skip_dns_name(pkt: &[u8], mut pos: usize) -> Option<usize> {
     }
 }
 
-/// Parse TXT record strings from a raw RFC 1035 DNS response packet
-fn parse_dns_txt_response(pkt: &[u8], expected_tx_id: u16) -> Option<Vec<String>> {
+/// Verify an RFC 4034 / RFC 8080 DNSSEC `RRSIG` (`rtype=46`, `type_covered=16`, `alg=15` Ed25519, `keytag=3313`)
+/// over a raw `TXT` RDATA slice for `qname` against `I1_HARMONY_ED25519_PUBKEY_HEX`.
+pub fn verify_dnssec_rrsig_for_txt(
+    qname: &str,
+    txt_rdata: &[u8],
+    rrsig_rdata: &[u8],
+    now_epoch_secs: Option<u64>,
+) -> Result<()> {
+    if rrsig_rdata.len() < 19 {
+        bail!("DNSSEC RRSIG RDATA too short");
+    }
+    let type_covered = u16::from_be_bytes([rrsig_rdata[0], rrsig_rdata[1]]);
+    let algorithm = rrsig_rdata[2];
+    let _labels = rrsig_rdata[3];
+    let orig_ttl = u32::from_be_bytes([
+        rrsig_rdata[4],
+        rrsig_rdata[5],
+        rrsig_rdata[6],
+        rrsig_rdata[7],
+    ]);
+    let sig_exp = u32::from_be_bytes([
+        rrsig_rdata[8],
+        rrsig_rdata[9],
+        rrsig_rdata[10],
+        rrsig_rdata[11],
+    ]);
+    let sig_inc = u32::from_be_bytes([
+        rrsig_rdata[12],
+        rrsig_rdata[13],
+        rrsig_rdata[14],
+        rrsig_rdata[15],
+    ]);
+    let key_tag = u16::from_be_bytes([rrsig_rdata[16], rrsig_rdata[17]]);
+
+    if type_covered != 16 {
+        bail!("DNSSEC RRSIG type_covered {} != TXT (16)", type_covered);
+    }
+    if algorithm != 15 {
+        bail!("DNSSEC RRSIG algorithm {} != Ed25519 (15)", algorithm);
+    }
+    if key_tag != I1_HARMONY_KEY_TAG {
+        bail!(
+            "DNSSEC RRSIG keytag {} != expected {}",
+            key_tag,
+            I1_HARMONY_KEY_TAG
+        );
+    }
+    if let Some(now) = now_epoch_secs {
+        // Only enforce wall-clock bounds when clock is plausibly synchronized and inside uint32 epoch range
+        if now >= 1_700_000_000 && now <= u64::from(u32::MAX) {
+            let now32 = now as u32;
+            if now32 < sig_inc || now32 > sig_exp {
+                bail!(
+                    "DNSSEC RRSIG outside validity window [{}..{}] (now={})",
+                    sig_inc,
+                    sig_exp,
+                    now32
+                );
+            }
+        }
+    }
+
+    let signer_end =
+        skip_dns_name(rrsig_rdata, 18).context("Invalid signer_name in DNSSEC RRSIG")?;
+    let rrsig_header = &rrsig_rdata[..signer_end];
+    let signature = &rrsig_rdata[signer_end..];
+    if signature.len() != 64 {
+        bail!(
+            "Invalid Ed25519 DNSSEC RRSIG signature length {}",
+            signature.len()
+        );
+    }
+
+    // RFC 4034 §3.1.8.1: signed_data = RRSIG_RDATA[..signer_end] || RR(1)
+    // where RR(1) = canonical_owner_name || type(16) || class(1) || orig_ttl || rdlength || txt_rdata
+    let owner_wire = encode_canonical_dns_name(qname);
+    let mut signed_data =
+        Vec::with_capacity(rrsig_header.len() + owner_wire.len() + 10 + txt_rdata.len());
+    signed_data.extend_from_slice(rrsig_header);
+    signed_data.extend_from_slice(&owner_wire);
+    signed_data.extend_from_slice(&16u16.to_be_bytes()); // TYPE = TXT (16)
+    signed_data.extend_from_slice(&1u16.to_be_bytes()); // CLASS = IN (1)
+    signed_data.extend_from_slice(&orig_ttl.to_be_bytes());
+    signed_data.extend_from_slice(&(txt_rdata.len() as u16).to_be_bytes());
+    signed_data.extend_from_slice(txt_rdata);
+
+    let pubkey_bytes =
+        hex::decode(I1_HARMONY_ED25519_PUBKEY_HEX).expect("valid pinned Ed25519 pubkey hex");
+    let peer_pub = UnparsedPublicKey::new(&ED25519, &pubkey_bytes);
+    peer_pub.verify(&signed_data, signature).map_err(|_| {
+        anyhow::anyhow!("RFC 4034 / RFC 8080 DNSSEC RRSIG Ed25519 verification failed")
+    })
+}
+
+/// Parse TXT record strings (and optional DNSSEC RRSIG records) from a raw RFC 1035 DNS response packet
+#[allow(clippy::type_complexity)]
+fn parse_dns_txt_and_rrsig_response(
+    pkt: &[u8],
+    expected_tx_id: u16,
+) -> Option<(Vec<(String, Vec<u8>)>, Vec<Vec<u8>>)> {
     if pkt.len() < 12 {
         return None;
     }
@@ -179,7 +302,8 @@ fn parse_dns_txt_response(pkt: &[u8], expected_tx_id: u16) -> Option<Vec<String>
         pos = skip_dns_name(pkt, pos)?;
         pos = pos.checked_add(4)?;
     }
-    let mut out = Vec::new();
+    let mut txts = Vec::new();
+    let mut rrsigs = Vec::new();
     for _ in 0..ancount {
         pos = skip_dns_name(pkt, pos)?;
         if pos + 10 > pkt.len() {
@@ -191,8 +315,8 @@ fn parse_dns_txt_response(pkt: &[u8], expected_tx_id: u16) -> Option<Vec<String>
         if pos + rdlength > pkt.len() {
             break;
         }
+        let rdata = &pkt[pos..pos + rdlength];
         if rtype == 16 {
-            let rdata = &pkt[pos..pos + rdlength];
             let mut rpos = 0;
             let mut joined = String::new();
             while rpos < rdata.len() {
@@ -206,22 +330,30 @@ fn parse_dns_txt_response(pkt: &[u8], expected_tx_id: u16) -> Option<Vec<String>
                 rpos += slen;
             }
             if !joined.is_empty() {
-                out.push(joined);
+                txts.push((joined, rdata.to_vec()));
             }
+        } else if rtype == 46 {
+            rrsigs.push(rdata.to_vec());
         }
         pos += rdlength;
     }
-    if out.is_empty() {
+    if txts.is_empty() {
         None
     } else {
-        Some(out)
+        Some((txts, rrsigs))
     }
 }
 
-/// Query `_smart-tree.i1.is` (and `_smart-tree.8b.is`) via ultra-lightweight UDP DNS (35 bytes out, ~290 bytes back)
-/// and verify the Ed25519 signature (`keytag=3313`). Falls back to HTTPS `/releases/smart-tree/dns-txt` if UDP/53 is blocked.
+/// Query `_smart-tree.i1.is` (and `_smart-tree.8b.is`) via EDNS0 DNSSEC (`DO=1`) UDP DNS
+/// and verify both the RFC 4034/8080 DNSSEC `RRSIG` (`rtype=46`, `alg=15`, `keytag=3313`)
+/// and the inner `ST-DNS-v1` Ed25519 signature (`keytag=3313`).
+/// Falls back to HTTPS `/releases/smart-tree/dns-txt` if UDP/53 is blocked (with `dnssec_rrsig_verified = false`).
 pub async fn query_secure_dns_version() -> Result<SecureDnsRelease> {
     let tx_id: u16 = 0x5431;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs());
     for qname in ["_smart-tree.i1.is", "_smart-tree.8b.is"] {
         let query_pkt = build_dns_txt_query_packet(qname, tx_id);
         for &ns in HARMONY_DNS_SERVERS {
@@ -229,12 +361,21 @@ pub async fn query_secure_dns_version() -> Result<SecureDnsRelease> {
                 let _ = sock.set_read_timeout(Some(Duration::from_millis(750)));
                 let _ = sock.set_write_timeout(Some(Duration::from_millis(750)));
                 if sock.send_to(&query_pkt, ns).is_ok() {
-                    let mut buf = [0u8; 1024];
+                    let mut buf = [0u8; 1500];
                     if let Ok((n, _)) = sock.recv_from(&mut buf) {
-                        if let Some(txts) = parse_dns_txt_response(&buf[..n], tx_id) {
-                            for txt in txts {
+                        if let Some((txts, rrsigs)) =
+                            parse_dns_txt_and_rrsig_response(&buf[..n], tx_id)
+                        {
+                            for (txt, txt_rdata) in txts {
                                 if txt.contains("v=ST1") {
-                                    if let Ok(verified) = verify_dns_version_txt(&txt) {
+                                    if let Ok(mut verified) = verify_dns_version_txt(&txt) {
+                                        let rrsig_ok = rrsigs.iter().any(|rrsig| {
+                                            verify_dnssec_rrsig_for_txt(
+                                                qname, &txt_rdata, rrsig, now,
+                                            )
+                                            .is_ok()
+                                        });
+                                        verified.dnssec_rrsig_verified = rrsig_ok;
                                         return Ok(verified);
                                     }
                                 }
@@ -259,6 +400,20 @@ pub async fn query_secure_dns_version() -> Result<SecureDnsRelease> {
         .text()
         .await?;
     verify_dns_version_txt(&txt)
+}
+
+/// Strictly require an RFC 4034 / RFC 8080 DNSSEC `RRSIG`-verified AND `ST-DNS-v1` Ed25519-verified
+/// response (`keytag=3313`, `alg=15` Ed25519) before allowing unattended automatic updates.
+pub async fn query_secure_dns_version_strict_dnssec() -> Result<SecureDnsRelease> {
+    let rel = query_secure_dns_version().await?;
+    if !rel.dnssec_rrsig_verified {
+        bail!(
+            "Refusing unattended update: response for v{} lacked a verified RFC 4034/8080 DNSSEC RRSIG (keytag={})",
+            rel.version,
+            rel.key_tag
+        );
+    }
+    Ok(rel)
 }
 
 /// Rate limit: check for updates at most once per 24 hours
@@ -467,6 +622,7 @@ fn create_temp_dir() -> Result<PathBuf> {
     let base = env::temp_dir();
     let unique_name = format!("st-update-{}", uuid::Uuid::new_v4());
     let temp_dir = base.join(unique_name);
+    #[allow(unused_mut)]
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
@@ -497,6 +653,7 @@ fn find_install_dir() -> Result<PathBuf> {
 }
 
 /// Check if we need elevated permissions
+#[cfg_attr(not(unix), allow(unused_variables))]
 fn needs_sudo(install_dir: &Path) -> bool {
     #[cfg(unix)]
     {
@@ -922,5 +1079,61 @@ mod tests {
 
         let tampered_sha = txt.replace("a3f5c8e9", "deadbeef");
         assert!(verify_dns_version_txt(&tampered_sha).is_err());
+
+        // Also test full RFC 4034 / RFC 8080 DNSSEC RRSIG (rtype=46, alg=15, keytag=3313) wire verification
+        let mut txt_rdata = Vec::new();
+        txt_rdata.push(txt.len() as u8);
+        txt_rdata.extend_from_slice(txt.as_bytes());
+
+        let mut rrsig_header = Vec::new();
+        rrsig_header.extend_from_slice(&16u16.to_be_bytes()); // type_covered = TXT (16)
+        rrsig_header.push(15); // algorithm = Ed25519 (15)
+        rrsig_header.push(3); // labels = 3 (_smart-tree.i1.is)
+        rrsig_header.extend_from_slice(&60u32.to_be_bytes()); // orig_ttl = 60
+        rrsig_header.extend_from_slice(&2_000_000_000u32.to_be_bytes()); // sig_exp
+        rrsig_header.extend_from_slice(&1_700_000_000u32.to_be_bytes()); // sig_inc
+        rrsig_header.extend_from_slice(&I1_HARMONY_KEY_TAG.to_be_bytes()); // keytag = 3313
+        rrsig_header.extend_from_slice(&encode_canonical_dns_name("i1.is")); // signer_name = i1.is.
+
+        let owner_wire = encode_canonical_dns_name("_smart-tree.i1.is");
+        let mut signed_wire = Vec::new();
+        signed_wire.extend_from_slice(&rrsig_header);
+        signed_wire.extend_from_slice(&owner_wire);
+        signed_wire.extend_from_slice(&16u16.to_be_bytes());
+        signed_wire.extend_from_slice(&1u16.to_be_bytes());
+        signed_wire.extend_from_slice(&60u32.to_be_bytes());
+        signed_wire.extend_from_slice(&(txt_rdata.len() as u16).to_be_bytes());
+        signed_wire.extend_from_slice(&txt_rdata);
+
+        let rrsig_sig = keypair.sign(&signed_wire);
+        let mut rrsig_rdata = rrsig_header.clone();
+        rrsig_rdata.extend_from_slice(rrsig_sig.as_ref());
+
+        verify_dnssec_rrsig_for_txt(
+            "_smart-tree.i1.is",
+            &txt_rdata,
+            &rrsig_rdata,
+            Some(1_800_000_000),
+        )
+        .expect("RFC 4034/8080 DNSSEC RRSIG should verify");
+
+        // Expired or tampered RRSIG must fail
+        assert!(verify_dnssec_rrsig_for_txt(
+            "_smart-tree.i1.is",
+            &txt_rdata,
+            &rrsig_rdata,
+            Some(2_100_000_000),
+        )
+        .is_err());
+        let mut bad_txt_rdata = txt_rdata.clone();
+        let last_idx = bad_txt_rdata.len() - 1;
+        bad_txt_rdata[last_idx] ^= 0x01;
+        assert!(verify_dnssec_rrsig_for_txt(
+            "_smart-tree.i1.is",
+            &bad_txt_rdata,
+            &rrsig_rdata,
+            Some(1_800_000_000),
+        )
+        .is_err());
     }
 }

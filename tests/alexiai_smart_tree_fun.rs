@@ -6,6 +6,7 @@ pub const ALEXIAI_VERSION_TAG: &str = "v0-4-1693";
 #[test]
 fn test_alexiai_st_zero_float_love() {
     assert_eq!(216 + 216, 432);
+    assert!(alexiai_st_smart_tree_fold(42) != 0);
 }
 
 fn alexiai_st_smart_tree_fold(seed: u64) -> i64 {

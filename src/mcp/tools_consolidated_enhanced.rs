@@ -1061,8 +1061,8 @@ EXAMPLES:
             "properties": {
                 "operation": {
                     "type": "string",
-                    "enum": ["status", "inbox", "outbox", "send", "slash", "ask"],
-                    "description": "Partner operation: 'status', 'inbox', 'outbox', 'send', 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask'",
+                    "enum": ["status", "inbox", "outbox", "send", "slash", "ask", "wa-stream", "ingest", "sync"],
+                    "description": "Partner operation: 'status', 'inbox', 'outbox', 'send', 'slash' (/dra, /buffett, /family+1, /ghibli, /omni, /future), 'ask', 'wa-stream'/'ingest'/'sync' (bridge wa-stream ---> smart-tree MEM|8 wave memory)",
                     "default": "status"
                 },
                 "text": {
@@ -1097,8 +1097,8 @@ EXAMPLES:
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["best", "yolo", "submit", "leaderboard"],
-                    "description": "Action: 'best' (Top 1-3 fastest functions), 'yolo' (#1 fastest drop-in code only), 'submit' (publish + benchmark Rust function), 'leaderboard' (live Foken FKN scoreboard)",
+                    "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize"],
+                    "description": "Action: 'best' (Top 1-3 fastest functions), 'yolo' (#1 fastest drop-in code only), 'submit' (publish + benchmark Rust function), 'leaderboard' (live Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board), 'golf' (prove 64-vector equivalence & drop cycles/op on routines), 'optimize' (audit repo & generate g8t.md)",
                     "default": "best"
                 },
                 "query": {
@@ -1140,6 +1140,9 @@ EXAMPLES:
             "required": []
         }
     }));
+
+    // Add MemNet MCP bridge (wave-Q&A offload mesh over UDP :8423)
+    tools.push(super::memnet_bridge::memnet_tool_definition());
 
     tools.extend(super::combinatorics_llm::get_combinatorics_llm_mcp_tools());
 

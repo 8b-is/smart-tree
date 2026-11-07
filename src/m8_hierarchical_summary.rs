@@ -680,18 +680,24 @@ impl HierarchicalConsciousness {
         insights
     }
 
-    /// Load existing .m8 file
+    /// Load existing .m8 file (supports tight MEM8, Marqant, Zlib, or legacy JSON)
     fn load_m8_file(path: &Path) -> Result<Self> {
-        let content = fs::read_to_string(path)?;
-        let consciousness: Self = serde_json::from_str(&content)?;
+        let raw = fs::read(path)?;
+        let decoded = crate::m8_consciousness::decode_m8_bytes(&raw)?;
+        let consciousness: Self = serde_json::from_slice(&decoded)?;
         Ok(consciousness)
     }
 
-    /// Save consciousness to .m8 file
+    /// Save consciousness to .m8 file in tight MEM8 format
     pub fn save(&self, path: &Path) -> Result<()> {
         let m8_path = path.join(".m8");
-        let json = serde_json::to_string_pretty(self)?;
-        fs::write(m8_path, json)?;
+        let compact_json = serde_json::to_vec(self)?;
+        let tight_bytes = crate::m8_consciousness::encode_json_bytes_as_tight_m8(
+            &compact_json,
+            self.essence.frequency,
+            &format!("# {:.2}Hz — {}", self.essence.frequency, self.essence.essence),
+        )?;
+        fs::write(m8_path, tight_bytes)?;
         Ok(())
     }
 }

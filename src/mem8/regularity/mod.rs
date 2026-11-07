@@ -26,6 +26,7 @@ pub mod salience_karp_manybody;
 pub mod types;
 pub mod ultrabackyard;
 pub mod wire;
+pub mod world_field;
 pub mod zeno_engine;
 
 pub use compressor::{compress_symbol_graph_to_mem8, RegularityConfig};
@@ -72,6 +73,11 @@ pub use wire::{
     RegularSuperEdgePod, SuperNodeCentroidPod, SuperNodeMetaPod, MEM8_BOOK_MAGIC,
     MEM8_BOOK_VERSION, SQLITE_WAL_MIGRATION_004_SZEMEREDI,
 };
+pub use world_field::{
+    analyze_semantic_world_engine, AdmissibleManifoldCertificate, CausalDagNode,
+    FieldProposalDelta, LatentFieldPoint, PerceptualHistoryEntry, SemanticWorldEngineReport,
+    SemanticWorldState, WorldActionObservation, WORLD_Q16_ONE,
+};
 pub use zeno_engine::{
     analyze_zeno_omni_engine, bfp64_and_kleene, bfp64_nand_kleene, evaluate_spherepop_witness,
     mulberry32_step_u32, pack_fold_bfp64, pack_word15_to_spqt3b, quantize_groupwise_l2_ternary_pq,
@@ -101,6 +107,7 @@ pub struct TheBookPipelineReport {
     pub manybody_wave_report: ManyBodyDftWaveReport,
     pub pq_report: PqModeReport,
     pub zeno_report: ZenoOmniReport,
+    pub world_field_report: SemanticWorldEngineReport,
     /// Counts of files classified under Paul Erdős's lexicon:
     /// (StraightFromTheBook, Epsilons, LegallyDead, PureNoiseMonoliths)
     pub lexicon_counts: (usize, usize, usize, usize),
@@ -187,6 +194,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     );
     let pq_report = analyze_pq_mode(&graph, &archive, &salience_report, &center_turan_report);
     let zeno_report = analyze_zeno_omni_engine(&graph, &archive, &center_turan_report, &pq_report);
+    let world_field_report = analyze_semantic_world_engine(&graph, 16);
 
     // Classify every node using Paul Erdős's vocabulary
     let mut from_the_book = 0usize;
@@ -218,6 +226,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         manybody_wave_report,
         pq_report,
         zeno_report,
+        world_field_report,
         lexicon_counts: (from_the_book, epsilons, legally_dead, pure_noise),
     }
 }
@@ -416,6 +425,19 @@ mod tests {
         assert_eq!(report.regime, PhaseRegime::AnomalousC2Clique);
         assert!(report.critical_scale_n_two_thirds > 1.0);
         assert!(report.spectral_radius_lambda1 > 0.0);
+        assert!(report.mean_degree_c_den >= 1);
+        assert!(report.molloy_reed_kappa_den >= 1);
+        // 25-node path (deg 1,2,...,2,1) + 5-clique on nodes 25..30 (deg 8 each):
+        // Σ deg(v)² = 2*1 + 23*4 + 5*64 = 414, Σ deg(v) = 2*1 + 23*2 + 5*8 = 88 -> κ = 414/88 = 207/44 > 2
+        assert_eq!(
+            (report.molloy_reed_kappa_num, report.molloy_reed_kappa_den),
+            (207, 44)
+        );
+        assert!(report.percolation_kappa_gt_2);
+        assert!(report.poisoned_leaf_reaches_core);
+        assert!(report
+            .percolation_diagnostic
+            .contains("giant transitive reachability component forms across package boundaries"));
         assert!(!report.anomalies.is_empty());
         assert!(!report.anomalies[0].pivot_symbols.is_empty());
         assert!(report.anomalies[0].directed_scc_cycles >= 1);
@@ -477,6 +499,26 @@ mod tests {
         assert!(report.pq_report.ambient_density_pq.q >= 1);
         assert!(report.pq_report.holder_3_2_to_3_norm >= 0.0);
         assert!((report.pq_report.liouville_jacobian_det - 1.0).abs() < 1e-12);
+        assert!(report.world_field_report.certificate.mass_consistent);
+        assert!(
+            report
+                .world_field_report
+                .certificate
+                .energy_budget_satisfied
+        );
+        assert!(
+            report
+                .world_field_report
+                .certificate
+                .hallucination_free_after_projection
+        );
+        assert!(report.world_field_report.fixed_point_converged);
+        assert_eq!(
+            report
+                .world_field_report
+                .invention_to_memory_repeat_drift_q16,
+            0
+        );
     }
 
     #[test]

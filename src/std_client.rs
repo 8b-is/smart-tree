@@ -7,10 +7,15 @@
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(unix)]
+use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixStream;
+#[cfg(unix)]
+type DaemonStream = tokio::net::UnixStream;
+#[cfg(not(unix))]
+type DaemonStream = tokio::net::TcpStream;
 
 use st_protocol::{Frame, Verb};
 
@@ -24,29 +29,33 @@ pub fn socket_path() -> PathBuf {
 
 /// Check if the STD daemon is running
 pub async fn is_daemon_running() -> bool {
-    let path = socket_path();
-    if !path.exists() {
-        return false;
-    }
-
-    // Try to connect and ping
-    match UnixStream::connect(&path).await {
-        Ok(mut stream) => {
-            let ping = Frame::ping();
-            if stream.write_all(&ping.encode()).await.is_err() {
-                return false;
-            }
-
-            let mut buf = [0u8; 256];
-            match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buf)).await {
-                Ok(Ok(n)) if n > 0 => {
-                    // Got a response - daemon is alive
-                    true
-                }
-                _ => false,
-            }
+    #[cfg(unix)]
+    {
+        let path = socket_path();
+        if !path.exists() {
+            return false;
         }
-        Err(_) => false,
+
+        // Try to connect and ping
+        match DaemonStream::connect(&path).await {
+            Ok(mut stream) => {
+                let ping = Frame::ping();
+                if stream.write_all(&ping.encode()).await.is_err() {
+                    return false;
+                }
+
+                let mut buf = [0u8; 256];
+                matches!(
+                    tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buf)).await,
+                    Ok(Ok(n)) if n > 0
+                )
+            }
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        false
     }
 }
 
@@ -106,6 +115,8 @@ pub async fn start_daemon() -> Result<bool> {
 
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+
         Command::new(&std_path)
             .arg("start")
             .creation_flags(0x00000008) // DETACHED_PROCESS
@@ -129,18 +140,25 @@ pub async fn start_daemon() -> Result<bool> {
 
 /// Client for communicating with the STD daemon
 pub struct StdClient {
-    stream: Option<UnixStream>,
+    stream: Option<DaemonStream>,
 }
 
 impl StdClient {
     /// Connect to the daemon (returns None if not running)
     pub async fn connect() -> Option<Self> {
-        let path = socket_path();
-        match UnixStream::connect(&path).await {
-            Ok(stream) => Some(Self {
-                stream: Some(stream),
-            }),
-            Err(_) => None,
+        #[cfg(unix)]
+        {
+            let path = socket_path();
+            match DaemonStream::connect(&path).await {
+                Ok(stream) => Some(Self {
+                    stream: Some(stream),
+                }),
+                Err(_) => None,
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            None
         }
     }
 

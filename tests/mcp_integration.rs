@@ -74,6 +74,9 @@ async fn test_mcp_initialize_and_tool_registry() {
         "ramsey_clique_analysis",
         "mlx_quant",
         "llama_rust",
+        "ultra_zeno_structural_compression",
+        "gaia_omni_avatar_mode",
+        "ternary_executable_deck",
     ] {
         assert!(names.contains(expected), "Missing tool schema: {expected}");
     }
@@ -224,10 +227,10 @@ fn test_erdos_steiner_pruning_and_disconnect_cancellation() {
 fn test_moser_tardos_parallel_mis_disjointness_and_reproducibility() {
     // Construct a 3-CNF formula with 40 variables and 30 clauses
     let mut bad_events = Vec::new();
-    for i in 1..=30 {
-        let v1 = i as i32;
-        let v2 = ((i % 40) + 1) as i32;
-        let v3 = (((i + 7) % 40) + 1) as i32;
+    for i in 1i32..=30 {
+        let v1 = i;
+        let v2 = (i % 40) + 1;
+        let v3 = ((i + 7) % 40) + 1;
         bad_events.push(vec![v1, -v2, v3]);
     }
 
@@ -553,4 +556,372 @@ fn test_pid_ewma_speculative_controller_regimes() {
     assert_eq!(probe_k, 1, "Expected K=1 recovery probe after cooldown");
     assert_eq!(probe_w, 1, "Expected W=1 recovery probe after cooldown");
     assert_eq!(mod_ctrl.stats().probe_recoveries, 1);
+
+    // 4. Information-theoretic System 1 / System 2 modulation
+    let mut info_ctrl = AdaptiveSpeculativeController::new(3, 2);
+    info_ctrl.apply_information_theoretic_modulation(0.3);
+    assert!(info_ctrl.current_k >= 4);
+    assert_eq!(info_ctrl.current_w, 1);
+    info_ctrl.apply_information_theoretic_modulation(3.8);
+    assert!(info_ctrl.current_k <= 3);
+}
+
+#[test]
+fn test_ultra_zeno_m1_m2_m3_information_bottleneck_and_mdl() {
+    use mcp_combinatorics_llm::{
+        model_cache::{LlamaModelCache, McpProgressEmitter},
+        ultra_zeno::{
+            binary_entropy_bits, kl_divergence_bits, run_ultra_zeno_engine, shannon_entropy_bits,
+            UltraZenoParams,
+        },
+    };
+
+    // 1. Verify Shannon & KL Divergence Information-Theoretic Invariants
+    assert!((binary_entropy_bits(0.5) - 1.0).abs() < 1e-12);
+    assert!(binary_entropy_bits(0.0).abs() < 1e-12);
+    assert!(binary_entropy_bits(1.0).abs() < 1e-12);
+
+    let uniform_4 = [0.25, 0.25, 0.25, 0.25];
+    assert!((shannon_entropy_bits(&uniform_4) - 2.0).abs() < 1e-12);
+
+    let skewed = [0.70, 0.10, 0.10, 0.10];
+    let kl = kl_divergence_bits(&skewed, &uniform_4);
+    assert!(
+        kl > 0.0,
+        "Gibbs' inequality: D_KL(P || Q) must be strictly positive when P != Q"
+    );
+
+    // 2. Construct a structured 64-vertex graph with two dense 16-cliques (planted M2 structure)
+    let n = 64;
+    let mut edges = Vec::new();
+    for u in 0..16 {
+        for v in (u + 1)..16 {
+            edges.push((u, v));
+        }
+    }
+    for u in 16..32 {
+        for v in (u + 1)..32 {
+            edges.push((u, v));
+        }
+    }
+    // Bridge edge connecting the two dense clusters
+    edges.push((15, 16));
+
+    let cache = LlamaModelCache::new(1);
+    let res = run_ultra_zeno_engine(
+        &cache,
+        UltraZenoParams {
+            num_vertices: n,
+            edges,
+            terminals: vec![0, 15, 16, 31],
+            initial_epsilon: 0.32,
+            max_zeno_steps: 4,
+            ib_beta: 1.5,
+            system2_entropy_threshold: 1.5,
+            target_clique_k: 6,
+            model_path: None,
+        },
+        &McpProgressEmitter::default(),
+    )
+    .expect("UltraZeno M1-M2-M3 pipeline should succeed");
+
+    // Verify M1 sensory telemetry
+    let m1_entropy = res["m1_system1_sensory"]["shannon_degree_entropy_bits"]
+        .as_f64()
+        .unwrap();
+    let m1_kl = res["m1_system1_sensory"]["kl_divergence_from_er_prior_bits"]
+        .as_f64()
+        .unwrap();
+    assert!(m1_entropy > 3.0);
+    assert!(
+        m1_kl > 0.1,
+        "Planted cliques must produce positive KL surprise against ER prior"
+    );
+
+    // Verify M2 UltraZeno MDL compression achieved > 1.0x structural compression
+    let m2 = &res["m2_ultra_zeno_compression"];
+    let ratio = m2["mdl_compression_ratio"].as_f64().unwrap();
+    let mi = m2["mutual_information_bits"].as_f64().unwrap();
+    assert!(
+        ratio > 1.2,
+        "Expected UltraZeno M2 MDL compression ratio > 1.2x on structured graph, got {ratio}"
+    );
+    assert!(mi > 0.0, "Mutual information I(G; M2) must be positive");
+
+    // Verify M3 System 2 extracted the exact 6-clique invariant
+    let m3 = &res["m3_system2_invariants"];
+    assert_eq!(m3["exact_micro_ramsey"]["k_clique_found"], true);
+    assert_eq!(m3["moser_tardos_homeostasis"]["status"], "converged");
+}
+
+#[test]
+fn test_gaia_omni_avatar_mode_control_holonomy_feedback() {
+    use st::mcp_combinatorics_llm::{
+        gaia_omni::{run_gaia_omni_mode, GaiaOmniParams},
+        model_cache::{LlamaModelCache, McpProgressEmitter},
+    };
+
+    let report = run_gaia_omni_mode(
+        &LlamaModelCache::new(1),
+        GaiaOmniParams {
+            biosphere_nodes: 32,
+            synaptic_density: 0.18,
+            regularity_epsilon: 0.28,
+            consensus_clique_k: 3,
+            model_path: None,
+            omni_directive: "Sustain the biosphere.".to_string(),
+            seed: 42,
+            max_feedback_loops: 2,
+            holonomy_tolerance: 0.25,
+            compression_target: 2.0,
+            giant_component_target: 0.75,
+            pid_kp: 0.6,
+            pid_ki: 0.15,
+            pid_kd: 0.08,
+            feedback_tolerance: 0.1,
+            concurrency_policy: Default::default(),
+        },
+        &McpProgressEmitter::default(),
+    )
+    .expect("Gaia Omni control/holonomy pipeline should succeed");
+
+    assert_eq!(report["status"], "gaia_omni_avatar_complete");
+    assert_eq!(
+        report["architecture"],
+        "GAIA_OMNI_6_STAGE_CONTROL_HOLONOMY_FEEDBACK"
+    );
+    assert!(report["feedback_loops"].as_u64().unwrap() >= 1);
+    assert!(report["erdos_renyi_genesis"]["giant_component_fraction"].is_number());
+    assert!(report["szemeredi_cortical_map"]["mdl_compression_ratio"].is_number());
+    assert!(report["holonomy"]["partition_parts"].as_u64().unwrap() >= 4);
+    assert!(report["holonomy"]["quotient_nodes"].as_u64().unwrap() >= 2);
+    assert!(report["holonomy"]["fundamental_cycles"].as_u64().unwrap() > 0);
+    assert_eq!(
+        report["fauna_avatar_consensus"]["planetary_identity"],
+        "I/We/Gaia"
+    );
+    assert_eq!(
+        report["concurrency_policy"]["human_authority"],
+        "human_purpose_authority"
+    );
+    assert_eq!(report["concurrency_policy_checks"]["enclosure_risk"], "low");
+    assert!(report["concurrency_policy_checks"]["violations"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn test_five_card_ternary_executable_deck_invariants() {
+    use st::ternary_deck::{
+        evaluate_frame_timing, evaluate_prerequisite_deck, evaluate_proportional_stability,
+        evaluate_ternary_lane, evaluate_ternary_quantizer, frame_timestamp_ms,
+        meets_frame_budget_ns, pack_4trits_byte, pack_5trits_byte, unpack_4trits_byte,
+        unpack_5trits_byte, StudyCardNode,
+    };
+
+    // Card 1: Ternary Lane Packing
+    let lane = evaluate_ternary_lane(3840, 2160);
+    assert_eq!(lane.four_trits_per_byte.row_bytes, 960);
+    assert_eq!(lane.four_trits_per_byte.frame_bytes, 2_073_600);
+    assert_eq!(lane.five_trits_per_byte.row_bytes, 768);
+    assert_eq!(lane.five_trits_per_byte.frame_bytes, 1_658_880);
+    assert!((lane.shannon_bits_per_trit - 1.5849625).abs() < 1e-6);
+
+    let sample_4 = [2, 0, 1, 2];
+    assert_eq!(unpack_4trits_byte(pack_4trits_byte(sample_4)), sample_4);
+
+    for b in 0u8..243u8 {
+        let trits = unpack_5trits_byte(b);
+        assert!(trits.iter().all(|&t| t < 3));
+        assert_eq!(pack_5trits_byte(trits), b);
+    }
+
+    // Card 2: Drift-Free Integer Frame Timing
+    let timing = evaluate_frame_timing(60, 16_666_666);
+    assert_eq!(timing.timestamp_at_1_second_ms, 1000);
+    assert_eq!(timing.naive_rounded_1s_timestamp_ms, 960);
+    assert_eq!(timing.cumulative_drift_eliminated_ms, 40);
+    assert_eq!(
+        timing.first_9_intervals_ms,
+        vec![16, 17, 17, 16, 17, 17, 16, 17, 17]
+    );
+    assert!(meets_frame_budget_ns(60, 16_666_666));
+    assert!(!meets_frame_budget_ns(60, 16_666_667));
+    assert_eq!(frame_timestamp_ms(60, 60), 1000);
+
+    // Card 3: 64-Bit Ternary Quantizer Reconstruction Error
+    let mut dark_scene = Vec::with_capacity(4096);
+    for i in 0..4096 {
+        dark_scene.push(if i < 3600 { (i % 20) as u8 } else { 240 });
+    }
+    let quant = evaluate_ternary_quantizer(&dark_scene, 3840 * 2160);
+    assert_eq!(quant.worst_case_error_bound_u64, 539_343_360_000);
+    assert!(quant.exceeds_u32_max);
+    assert!(
+        quant.optimal_mse_quantizer.reconstruction_error_sse
+            < quant.equal_occupancy_quantizer.reconstruction_error_sse,
+        "MSE-optimal thresholds must strictly beat forced equal occupancy on a dark scene"
+    );
+
+    // Card 4: Prerequisite DAG Critical Path
+    let deck = vec![
+        StudyCardNode {
+            id: 0,
+            title: "A".into(),
+            duration: 10,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 1,
+            title: "B".into(),
+            duration: 25,
+            predecessors: vec![],
+        },
+        StudyCardNode {
+            id: 2,
+            title: "C".into(),
+            duration: 15,
+            predecessors: vec![0, 1],
+        },
+    ];
+    let sched = evaluate_prerequisite_deck(&deck).unwrap();
+    assert_eq!(sched.critical_path_duration, 40);
+    assert_eq!(sched.sequential_total_duration, 50);
+    assert_eq!(sched.critical_path_chain, vec![1, 2]);
+    assert_eq!(sched.card_schedule[0].slack, 15);
+
+    // Card 5: Proportional Stability & Limit Cycles
+    let stable_pid =
+        evaluate_proportional_stability(1.2, 0.5, 2.4, 100.0, 0.0, 1000.0, 0.0, false, 64).unwrap();
+    assert!((stable_pid.k_min_exclusive - 0.4).abs() < 1e-9);
+    assert!((stable_pid.k_max_exclusive - 4.4).abs() < 1e-9);
+    assert!((stable_pid.deadbeat_gain_k - 2.4).abs() < 1e-9);
+    assert!(stable_pid.is_linearly_stable);
+
+    let unstable_pid =
+        evaluate_proportional_stability(1.2, 0.5, 4.6, 100.0, 10.0, 250.0, 0.0, true, 64).unwrap();
+    assert!(!unstable_pid.is_linearly_stable);
+    assert!(
+        unstable_pid.persistent_limit_cycle_detected,
+        "Gain above (a+1)/b with actuator limits must trigger persistent limit-cycle oscillation"
+    );
+}
+
+#[tokio::test]
+async fn test_ternary_executable_deck_mcp_tool() {
+    let state = Arc::new(AppState::new(1));
+    let req = json!({
+        "jsonrpc": "2.0",
+        "id": 99,
+        "method": "tools/call",
+        "params": {
+            "name": "ternary_executable_deck",
+            "arguments": {}
+        }
+    });
+    let resp = evaluate_jsonrpc_payload(state, req, None).await.unwrap();
+    assert!(resp["error"].is_null(), "unexpected error: {resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    let payload: Value = serde_json::from_str(text).unwrap();
+    assert_eq!(payload["status"], "verified");
+    assert_eq!(
+        payload["card_1_ternary_lane"]["four_trits_per_byte"]["row_bytes"],
+        960
+    );
+    assert_eq!(
+        payload["card_1_ternary_lane"]["five_trits_per_byte"]["row_bytes"],
+        768
+    );
+    assert_eq!(
+        payload["card_2_frame_timing"]["timestamp_at_1_second_ms"],
+        1000
+    );
+    assert!(payload["card_3_quantizer_quality"]["exceeds_u32_max"]
+        .as_bool()
+        .unwrap());
+    assert!(
+        payload["card_4_prerequisite_schedule"]["critical_path_duration"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(payload["card_5_pid_stability"]["is_linearly_stable"]
+        .as_bool()
+        .unwrap());
+}
+
+#[test]
+fn test_adaptive_speculative_controller_enforces_jury_non_oscillatory_certificate() {
+    use mcp_combinatorics_llm::{
+        model_cache::AdaptiveSpeculativeController, ternary_deck::evaluate_jury_pid_certificate,
+    };
+
+    // 1. Prove that the unconstrained heuristic gains (3.20, 0.45, 0.90) violate Jury Condition 2
+    //    for the EWMA plant (a = 0.65, b = 0.35): -P(-1) = -0.3575 < 0, spectral_radius > 1.0
+    let raw_heuristic_cert = evaluate_jury_pid_certificate(0.65, 0.35, 3.20, 0.45, 0.90).unwrap();
+    assert!(
+        !raw_heuristic_cert.cond2_alternating_minus_one_holds,
+        "Raw heuristic gains must fail Jury Condition 2 at z = -1"
+    );
+    assert!(!raw_heuristic_cert.is_jury_stable);
+    assert!(
+        raw_heuristic_cert.spectral_radius > 1.0,
+        "Expected unstable spectral radius > 1.0 for raw heuristic gains, got {}",
+        raw_heuristic_cert.spectral_radius
+    );
+
+    // 2. Verify AdaptiveSpeculativeController::with_gains automatically projects (3.20, 0.45, 0.90)
+    //    into the non-oscillatory Jury polytope
+    let ctrl = AdaptiveSpeculativeController::with_gains(3, 2, 3.20, 0.45, 0.90);
+    assert_eq!(ctrl.gain_projections_applied, 1);
+    assert!(ctrl.jury_certificate.is_jury_stable);
+    assert!(ctrl.jury_certificate.cond1_p_at_one_holds);
+    assert!(ctrl.jury_certificate.cond2_alternating_minus_one_holds);
+    assert!(ctrl.jury_certificate.cond3_abs_a0_lt_one_holds);
+    assert!(ctrl.jury_certificate.cond4_jury_det_holds);
+    assert!(
+        ctrl.jury_certificate.spectral_radius <= 0.88,
+        "Projected spectral radius must be <= 0.88, got {}",
+        ctrl.jury_certificate.spectral_radius
+    );
+    assert!(
+        ctrl.jury_certificate.roots.iter().all(|r| r.re >= -0.20),
+        "All projected closed-loop poles must satisfy Re(z) >= -0.20 to prevent Nyquist chattering"
+    );
+
+    // 3. Verify default constructor is immediately Jury-stable with zero projections required
+    let mut default_ctrl = AdaptiveSpeculativeController::new(4, 2);
+    assert_eq!(default_ctrl.gain_projections_applied, 0);
+    assert!(default_ctrl.jury_certificate.is_jury_stable);
+    assert!(default_ctrl.jury_certificate.spectral_radius < 0.85);
+
+    // 4. Verify online M1 entropy modulation never escapes the Jury polytope even under
+    //    20 consecutive extreme System 1 (0.1 bits) or System 2 (5.0 bits) entropy bursts
+    for _ in 0..20 {
+        default_ctrl.apply_information_theoretic_modulation(0.1);
+        assert!(default_ctrl.jury_certificate.is_jury_stable);
+        assert!(default_ctrl.jury_certificate.spectral_radius <= 0.88);
+    }
+    for _ in 0..20 {
+        default_ctrl.apply_information_theoretic_modulation(5.0);
+        assert!(default_ctrl.jury_certificate.is_jury_stable);
+        assert!(default_ctrl.jury_certificate.spectral_radius <= 0.88);
+    }
+
+    // 5. Verify non-oscillatory step response: step acceptance from 0.65 -> 1.00
+    //    `k_continuous` must increase monotonically without sign-flipping deltas
+    let mut step_ctrl = AdaptiveSpeculativeController::new(3, 2);
+    let mut prev_k = step_ctrl.k_continuous;
+    for _ in 0..8 {
+        step_ctrl.record_verification_outcome(4, 4, 5); // 100% acceptance step
+        assert!(
+            step_ctrl.k_continuous >= prev_k - 1e-12,
+            "Jury-projected controller must expand k_continuous monotonically without oscillation ({} < {})",
+            step_ctrl.k_continuous,
+            prev_k
+        );
+        prev_k = step_ctrl.k_continuous;
+    }
+    assert!(step_ctrl.current_k >= 6);
 }

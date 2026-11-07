@@ -17,7 +17,10 @@
 use super::erdos_steiner::ErdosCenterTuranReport;
 use super::salience_karp_manybody::SalienceOntologyReport;
 use super::types::{ClusterId, CsrSymbolGraph, Mem8BookArchive};
-use crate::felix_asm::{felix_binary_gcd_u64, felix_holder_pq_dual_norm_f64, felix_pq_cross_cmp};
+use crate::felix_asm::{
+    felix_binary_gcd_u64, felix_holder_pq_dual_norm_f64, felix_pq_cross_cmp,
+    felix_zeno_god_of_sun_pq_nt_gt_p,
+};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -78,6 +81,13 @@ impl RationalPQ {
     #[inline]
     pub fn display_ratio(&self) -> String {
         format!("{}/{}", self.p, self.q)
+    }
+
+    /// Evaluates the **ULTRA-ZENO GOD OF SUN** inequality $\frac{P}{Q} - n \cdot t > P$
+    /// in exact zero-float 128-bit arithmetic, returning `(holds, surplus_num_i128, horizon_n_sun)`.
+    #[inline]
+    pub fn god_of_sun_zeno_witness(&self, n: u64, t: i8) -> (bool, i128, u64) {
+        felix_zeno_god_of_sun_pq_nt_gt_p(self.p as i64, self.q, n, t)
     }
 }
 
@@ -218,11 +228,23 @@ pub fn analyze_pq_mode(
         .max(1);
     let ambient_density_pq = RationalPQ::new_reduced(m as u64, max_directed_edges);
 
-    // Compute exact undirected degree sequence for Molloy-Reed kappa = sum(k^2) / sum(k)
+    // Compute exact undirected degree sequence deg(v) (where sum_{v in V} deg(v) = 2|E|)
+    // for Molloy-Reed percolation ratio kappa = <k^2>/<k> = sum_{v in V} deg(v)^2 / sum_{v in V} deg(v)
+    let mut undir_deg = vec![0u64; n];
+    for u in 0..n {
+        let start = graph.row_ptr[u] as usize;
+        let end = graph.row_ptr[u + 1] as usize;
+        for &v_sym in &graph.col_idx[start..end] {
+            let v = v_sym as usize;
+            if u != v && v < n {
+                undir_deg[u] += 1;
+                undir_deg[v] += 1;
+            }
+        }
+    }
     let mut sum_deg = 0u64;
     let mut sum_deg_sq = 0u64;
-    for u in 0..n {
-        let deg = (graph.row_ptr[u + 1] - graph.row_ptr[u]) as u64;
+    for &deg in &undir_deg {
         sum_deg += deg;
         sum_deg_sq += deg * deg;
     }
@@ -385,11 +407,7 @@ pub fn analyze_pq_mode(
         })
         .collect();
 
-    phase_space_orbitals.sort_by(|a, b| {
-        b.local_hamiltonian_h
-            .partial_cmp(&a.local_hamiltonian_h)
-            .unwrap_or(Ordering::Equal)
-    });
+    phase_space_orbitals.sort_by(|a, b| b.local_hamiltonian_h.total_cmp(&a.local_hamiltonian_h));
     phase_space_orbitals.truncate(8);
 
     PqModeReport {

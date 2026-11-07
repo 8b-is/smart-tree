@@ -38,6 +38,15 @@ pub struct Cli {
     )]
     pub completions: Option<clap_complete::Shell>,
 
+    /// Internal fast-path dynamic completion provider for shells (folders, memories, memnet-ask, sync-users, symbols)
+    #[arg(
+        long,
+        num_args = 1..=2,
+        value_names = ["KIND", "PREFIX"],
+        hide = true
+    )]
+    pub complete_dynamic: Option<Vec<String>>,
+
     /// Generate the man page
     #[arg(long, exclusive = true, help_heading = "Getting Started")]
     pub man: bool,
@@ -65,15 +74,31 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
     pub terminal: bool,
 
-    /// Launch web dashboard (browser-based terminal + file browser)
-    #[arg(long, exclusive = true, help_heading = "Interactive Modes")]
+    /// Launch the PTY web dashboard (browser terminal + file browser).
+    /// Separate port so it never collides with the HTTP daemon (28428).
+    #[arg(
+        long,
+        exclusive = true,
+        alias = "pty-dashboard",
+        help_heading = "Interactive Modes"
+    )]
     pub dashboard: bool,
 
-    /// Open browser automatically when starting dashboard
-    #[arg(long, requires = "dashboard", help_heading = "Interactive Modes")]
+    /// PTY dashboard port (default 28429, distinct from daemon 28428)
+    #[arg(
+        long,
+        value_name = "PORT",
+        default_value = "28429",
+        requires = "dashboard",
+        help_heading = "Interactive Modes"
+    )]
+    pub dashboard_port: u16,
+
+    /// Open browser automatically (works with --dashboard and with --up)
+    #[arg(long, help_heading = "Interactive Modes")]
     pub open_browser: bool,
 
-    /// Network CIDR allow-list for dashboard (e.g., 192.168.1.0/24)
+    /// Network CIDR allow-list for the PTY dashboard (e.g., 192.168.1.0/24)
     #[arg(
         long,
         value_name = "CIDR",
@@ -82,18 +107,43 @@ pub struct Cli {
     )]
     pub allow: Vec<String>,
 
-    /// Start HTTP daemon (MCP over HTTP, LLM proxy, The Custodian)
-    #[arg(long, alias = "daemon", help_heading = "Interactive Modes")]
+    /// Canonical local HTTP server (foreground): MCP HTTP (/mcp + /mcp/sse),
+    /// dashboard (/), LLM proxy, The Custodian — all on 127.0.0.1:28428.
+    /// Localhost needs no token (same trust boundary as stdio MCP).
+    /// `st up` is the background equivalent; `st service` is the system one.
+    #[arg(
+        long,
+        alias = "serve",
+        alias = "daemon",
+        help_heading = "Interactive Modes"
+    )]
     pub http_daemon: bool,
 
     // =========================================================================
-    // MCP SERVER (via Daemon)
+    // MCP SERVER — two transports, one brain. Both are local + token-free.
     // =========================================================================
-    /// Run as MCP server for AI assistants (auto-starts daemon)
-    #[arg(long, exclusive = true, help_heading = "MCP Server")]
+    /// Run the stdio MCP server (foreground, one client, no daemon/token needed)
+    #[arg(
+        long,
+        exclusive = true,
+        alias = "mcp-stdio",
+        help_heading = "MCP Server"
+    )]
     pub mcp: bool,
 
-    /// Install Smart Tree as MCP server in AI agents (Claude Desktop, Antigravity/agy, Gemini)
+    /// Print ready-to-paste MCP-HTTP client config (Streamable HTTP + SSE,
+    /// no token required on localhost) and exit
+    #[arg(
+        long,
+        alias = "mcp-config",
+        alias = "mcp-http-config",
+        alias = "mcp-http",
+        exclusive = true,
+        help_heading = "MCP Server"
+    )]
+    pub mcp_print_config: bool,
+
+    /// Install Smart Tree as MCP server in AI agents (stdio + HTTP entries)
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp_install: bool,
 
@@ -105,14 +155,23 @@ pub struct Cli {
     #[arg(long, exclusive = true, help_heading = "MCP Server")]
     pub mcp_status: bool,
 
-    // =========================================================================
-    // DAEMON CONTROL
-    // =========================================================================
     /// Set the log level
     #[arg(long, value_enum, help_heading = "Daemon Control")]
     pub log_level: Option<LogLevel>,
 
-    /// Start the Smart Tree daemon
+    // =========================================================================
+    // DAEMON CONTROL — canonical server: `st up` / `st --serve` / `st service`
+    // =========================================================================
+    /// Start the canonical daemon in the background, update .mcp.json, and
+    /// print dashboard/MCP URLs. The one command that makes everything work.
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub up: bool,
+
+    /// Print the daemon auth token + path (only needed when externally bound)
+    #[arg(long, exclusive = true, help_heading = "Daemon Control")]
+    pub show_token: bool,
+
+    /// Start the Smart Tree daemon in the background (alias of `st up`)
     #[arg(long, exclusive = true, help_heading = "Daemon Control")]
     pub daemon_start: bool,
 
@@ -728,19 +787,70 @@ pub enum Cmd {
     /// Query, YOLO-pick, submit, and rank pure-Rust function capsules on https://g8t.is
     #[command(alias = "capsela", alias = "foken")]
     G8t(G8tCommand),
+
+    /// Sovereign MemNet local folder/drive sharing, multi-medium routing (ESP32, WiFi, BLE, LoRa, Ethernet),
+    /// MEM|8 wave packet Q&A LLM offload, audio/video chunk streaming, and Ultrasonic Chirp acoustic modem
+    #[command(alias = "mesh", alias = "chirp")]
+    Memnet(MemnetCommand),
+
+    /// Self-maintaining shell autocomplete (Fish, Zsh, Bash) with live folder consciousness & MEM|8 memory descriptions
+    #[command(alias = "autocomplete", alias = "complete")]
+    Completions(CompletionsCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct CompletionsCommand {
+    /// Action: status, sync (or install/maintain), fish, zsh, bash, powershell, folders, memories
+    #[arg(default_value = "status")]
+    pub action: String,
+    /// Optional prefix filter when testing dynamic folder/memory completions
+    pub prefix: Option<String>,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct MemnetCommand {
+    /// Action: status, assess (or hw), advertise (or beacon), graph (or nodes), share, ls (or shares),
+    /// routes, add-route, escape (or lll / rtc), ask, teach (or learn), stream-chunk, chirp-encode, chirp-decode
+    #[arg(default_value = "status")]
+    pub action: String,
+    /// Primary argument (folder path for share, question for ask/teach, message/file for chirp-encode, wav path for chirp-decode)
+    pub target: Option<String>,
+    /// Secondary argument (answer for teach, endpoint for add-route, output wav path for chirp-encode)
+    pub extra: Option<String>,
+    /// Shared drive space quota in MB offered to local MemNet peers & ESP32s (default: 4096 MB)
+    #[arg(long, default_value_t = 4096)]
+    pub quota_mb: u64,
+    /// Transport medium for add-route or routing (wifi, bluetooth, ethernet, lora, esp32, usb, ultrasonic)
+    #[arg(long, default_value = "wifi")]
+    pub medium: String,
+    /// MemNet node address (0x01..0xEF, default: 0xC5 multi-route)
+    #[arg(long, default_value_t = 0xC5)]
+    pub addr: u8,
+    /// Multi-route via identifier
+    #[arg(long, default_value_t = 25)]
+    pub via: u8,
+    /// Output or input WAV file path for ultrasonic chirp modem
+    #[arg(long, short = 'o')]
+    pub out: Option<PathBuf>,
+    /// Use audible bird-chirp frequencies (1.85–3.15 kHz) instead of ultrasonic (18.5–21.0 kHz)
+    #[arg(long)]
+    pub audible: bool,
+    /// Emit JSON output
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct G8tCommand {
-    /// Action: best (or suggest), yolo, submit (or publish), leaderboard (or scoreboard)
+    /// Action: leaderboard (or scoreboard), targets (or bounty/arcade), golf (or routines/routinesd), best (or suggest), yolo, submit (or publish), optimize
     #[arg(default_value = "leaderboard")]
     pub action: String,
-    /// Query string for best/yolo, or file/source_code for submit
+    /// Query string for best/yolo, routine filter for golf (default: "all"), or file/source_code for submit
     pub target: Option<String>,
     /// Return ONLY the #1 fastest verified Rust function (raw drop-in source + 1-line receipt)
     #[arg(long)]
     pub yolo: bool,
-    /// Partnership attribution for submit (e.g. "Hue + Gemini (0+1)")
+    /// Partnership attribution for submit/golf (e.g. "Hue + Gemini (0+1)")
     #[arg(long, default_value = "Hue + Gemini (0+1)")]
     pub partner: String,
     /// Domain tag for submit
@@ -749,7 +859,7 @@ pub struct G8tCommand {
     /// Optional architecture filter (e.g. "x86_64", "aarch64")
     #[arg(long)]
     pub arch: Option<String>,
-    /// Number of top results to display
+    /// Number of top results to display (or max routines to golf)
     #[arg(long)]
     pub top: Option<usize>,
 }
@@ -827,10 +937,15 @@ pub struct SymbolCommand {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum SymbolOperation {
+    /// Build or refresh the CrabCC AST symbol index for the repository
     Index,
+    /// Find symbol definitions (functions, structs, enums, traits)
     Sym,
+    /// Find all call-sites and references to a symbol
     Refs,
+    /// Show the structural AST outline of a source file
     Outline,
+    /// Summarize the repository symbol dependency graph
     Graph,
 }
 
@@ -936,11 +1051,13 @@ pub enum SortField {
     /// Sort by file type/extension
     #[value(name = "type")]
     Type,
-    /// Legacy aliases for backward compatibility
+    /// Legacy alias: sort alphabetically by name
     #[value(name = "name", alias = "alpha")]
     Name,
+    /// Legacy alias: sort by file size
     #[value(name = "size")]
     Size,
+    /// Legacy alias: sort by modification date
     #[value(name = "date", alias = "modified")]
     Date,
 }
@@ -1008,7 +1125,7 @@ pub enum OutputMode {
     /// LOUDS bit-packed sufficient tree & 64B SMTR .m8 capsule (8B-META-WP-v2.1)
     #[value(alias = "smtr-capsule", alias = "smtr_capsule", alias = "capsule")]
     Louds,
-    /// Paul Erdős ("Straight from The Book") Szemerédi Regularity, Steiner Pruner, Moser-Tardos LLL & Erdős-Rényi Scanner
+    /// Paul Erdős (Straight from The Book) Szemerédi Regularity, Steiner Pruner, Moser-Tardos LLL & Erdős-Rényi Scanner
     #[value(
         name = "the-book",
         alias = "erdos",
@@ -1114,9 +1231,14 @@ pub fn parse_date(date_str: &str) -> Result<SystemTime> {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum LogLevel {
+    /// Only log critical errors
     Error,
+    /// Log warnings and errors
     Warn,
+    /// Standard operational messages (default)
     Info,
+    /// Verbose debugging diagnostics
     Debug,
+    /// Ultra-detailed execution trace
     Trace,
 }

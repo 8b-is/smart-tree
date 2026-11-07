@@ -15,7 +15,7 @@ pub mod marqant;
 pub mod mermaid;
 pub mod projects; // Projects discovery mode - find all your forgotten 3am coding gems!
 pub mod quantum;
-pub mod quantum_semantic;
+// pub mod quantum_semantic; // Removed: requires tree-sitter dependencies
 pub mod relations;
 pub mod relations_formatter;
 pub mod semantic;

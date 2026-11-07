@@ -172,9 +172,11 @@ impl Formatter for TheBookFormatter {
     ) -> Result<()> {
         let report = analyze_the_book_pipeline(nodes);
         let regime_str = match report.security_report.regime {
-            PhaseRegime::SubcriticalForest => "SubcriticalForest (kappa < 2.0)",
-            PhaseRegime::CriticalWindow => "CriticalWindow (2.0 <= kappa <= 3.5)",
-            PhaseRegime::SupercriticalGiant => "SupercriticalGiant (kappa > 3.5)",
+            PhaseRegime::SubcriticalForest => "SubcriticalForest (kappa < 2)",
+            PhaseRegime::CriticalWindow => "CriticalWindow (kappa == 2)",
+            PhaseRegime::SupercriticalGiant => {
+                "SupercriticalGiant (kappa > 2: Giant Transitive Reachability Across Package Boundaries)"
+            }
             PhaseRegime::AnomalousC2Clique => "AnomalousC2Clique (Chernoff / Multi-Hazard Alert)",
         };
 
@@ -239,13 +241,19 @@ impl Formatter for TheBookFormatter {
                 "worktree_buckets": report.worktree_schedule.worktree_buckets,
             },
             "erdos_renyi_percolation": {
+                "complexity": "O(|V| + |E_SHADOW|)",
                 "active_shadow_vertices": report.security_report.active_vertices,
                 "shadow_edges": report.security_report.shadow_edges,
                 "empirical_p": report.security_report.empirical_p,
                 "critical_p_c": report.security_report.critical_p_c,
                 "critical_scale_n_two_thirds": (report.security_report.critical_scale_n_two_thirds * 1000.0).round() / 1000.0,
+                "mean_degree_c_pq": format!("{}/{}", report.security_report.mean_degree_c_num, report.security_report.mean_degree_c_den),
                 "mean_degree_c": (report.security_report.mean_degree_c * 1000.0).round() / 1000.0,
+                "molloy_reed_kappa_pq": format!("{}/{}", report.security_report.molloy_reed_kappa_num, report.security_report.molloy_reed_kappa_den),
                 "molloy_reed_kappa": (report.security_report.molloy_reed_kappa * 1000.0).round() / 1000.0,
+                "percolation_kappa_gt_2": report.security_report.percolation_kappa_gt_2,
+                "poisoned_leaf_reaches_core": report.security_report.poisoned_leaf_reaches_core,
+                "percolation_diagnostic": report.security_report.percolation_diagnostic,
                 "spectral_radius_lambda1": (report.security_report.spectral_radius_lambda1 * 1000.0).round() / 1000.0,
                 "expected_random_lambda1": (report.security_report.expected_random_lambda1 * 1000.0).round() / 1000.0,
                 "giant_component_c1": report.security_report.giant_component_size,
@@ -323,6 +331,7 @@ impl Formatter for TheBookFormatter {
                 "admissibility_ct000_verified": report.zeno_report.eight_b_is_engines.admissibility_ct000_epistemic_overlap_verified,
                 "cpu_isa_profile": report.zeno_report.os_agent_matrix.cpu_isa_profile,
             },
+            "semantic_world_engine": &report.world_field_report,
             "erdos_lexicon": {
                 "straight_from_the_book": report.lexicon_counts.0,
                 "epsilons_utility_helpers": report.lexicon_counts.1,
@@ -490,6 +499,7 @@ impl Formatter for ZenoModeFormatter {
             "upz_wupz_core": zeno.upz_wupz,
             "eight_b_is_engines": zeno.eight_b_is_engines,
             "os_agent_agnostic_matrix": zeno.os_agent_matrix,
+            "semantic_world_engine": &book_report.world_field_report,
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
         Ok(())

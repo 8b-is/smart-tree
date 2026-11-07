@@ -9,7 +9,7 @@ use crc32fast::Hasher;
 use serde_json::json;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(
@@ -73,6 +73,47 @@ enum Commands {
         /// Output in JSON format
         #[arg(short, long)]
         json: bool,
+    },
+
+    /// Tightly pack a .m8 file (or recursively pack all .m8 files in a directory) into MEM8 + Marqant + ZLIB/T8RZ
+    Pack {
+        /// Path to a .m8 file or directory tree
+        path: PathBuf,
+    },
+
+    /// Train, list, or converse with a MEM8 Life Persona (.m8 Soul)
+    Persona {
+        #[command(subcommand)]
+        action: PersonaCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum PersonaCommands {
+    /// Train a new .m8 Life Persona from a directory or file (up to 250,000+ episodes)
+    Train {
+        /// Name of the persona (e.g., "Grandmother's Diaries" or "Nate")
+        name: String,
+        /// Directory or file path containing their writings
+        path: PathBuf,
+        /// Specialty lens: life-biographer, history-documenter, code-analyst, or readme-expert
+        #[arg(short, long, default_value = "life-biographer")]
+        specialty: String,
+    },
+    /// Train all 3 built-in workspace specialists (History Documenter, Code Analyst, README Expert)
+    Specialties {
+        /// Workspace path to train specialists on (defaults to current directory)
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// List all trained .m8 Life Personas in ~/.st/personas/
+    List,
+    /// Ask or converse with a trained .m8 Life Persona locally
+    Ask {
+        /// Persona name or slug
+        name: String,
+        /// Question or prompt
+        prompt: String,
     },
 }
 
@@ -265,6 +306,7 @@ fn inspect_file(path: &PathBuf, hex: bool, limit: Option<usize>) -> Result<()> {
     println!("----  ----------  ----------  -----");
 
     let max_sections = limit.unwrap_or(header.section_count as usize);
+    let mut sections = Vec::new();
     for _i in 0..header.section_count.min(max_sections as u16) {
         let section = M8Section::read_from(&mut file)?;
         println!(
@@ -274,6 +316,7 @@ fn inspect_file(path: &PathBuf, hex: bool, limit: Option<usize>) -> Result<()> {
             section.size,
             section.flags
         );
+        sections.push(section);
     }
 
     if limit.is_some() && max_sections < header.section_count as usize {
@@ -281,6 +324,34 @@ fn inspect_file(path: &PathBuf, hex: bool, limit: Option<usize>) -> Result<()> {
             "... {} more sections",
             header.section_count as usize - max_sections
         );
+    }
+
+    // If this is a tight MEM8 container with WAVE / MQNT sections, display wave & Marqant summary
+    file.seek(SeekFrom::Start(0))?;
+    let mut all_bytes = Vec::new();
+    file.read_to_end(&mut all_bytes)?;
+    if let Some(wave) = st::m8_consciousness::extract_m8_wave_header(&all_bytes) {
+        println!();
+        println!("Wave & BitNet b1.58 Header:");
+        println!("  Frequency: {:.2} Hz", wave.frequency);
+        println!("  Timestamp: {}", wave.timestamp);
+        println!(
+            "  Emotion:   energy={}‰, complexity={}‰, stability={}‰, focus={}‰",
+            wave.energy_permille,
+            wave.complexity_permille,
+            wave.stability_permille,
+            wave.focus_permille
+        );
+        println!(
+            "  BitNet:    B+=0x{:016x} B-=0x{:016x} (balance={}‰, norm_q8={})",
+            wave.b_pos, wave.b_neg, wave.balance_permille, wave.box_norm_q8
+        );
+    }
+    if let Some(mq) = st::m8_consciousness::extract_m8_marqant_section(&all_bytes, true) {
+        let preview: String = mq.lines().take(5).collect::<Vec<_>>().join("\n  ");
+        println!();
+        println!("Marqant Soul Preview:");
+        println!("  {}", preview);
     }
 
     Ok(())
@@ -405,8 +476,176 @@ fn main() -> Result<()> {
         Commands::Index { file, json } => {
             print_index(&file, json)?;
         }
+        Commands::Pack { path } => {
+            pack_path(&path)?;
+        }
+        Commands::Persona { action } => match action {
+            PersonaCommands::Train {
+                name,
+                path,
+                specialty,
+            } => {
+                let spec = st::mem8::persona::PersonaSpecialty::from_str_loose(&specialty);
+                let (persona, m8_path, size) =
+                    st::mem8::persona::LifePersona::train_with_specialty(&name, &path, spec)?;
+                println!(
+                    "{} Trained Persona '{}' ({})",
+                    persona.specialty.badge(),
+                    persona.name,
+                    persona.slug
+                );
+                println!("   📂 Source:      {}", persona.source_path);
+                println!(
+                    "   📚 Ingested:    {} files, {} words, {} episodic memories",
+                    persona.files_ingested,
+                    persona.total_words,
+                    persona.episodes.len()
+                );
+                println!(
+                    "   🎵 Voice:       {:.1} words/sentence, warmth={:.2}, expressiveness={:.2}",
+                    persona.voice.avg_sentence_words,
+                    persona.voice.warmth,
+                    persona.voice.expressiveness
+                );
+                println!(
+                    "   💾 Saved Soul:  {} ({:.1} KiB tight MEM8 + MQNT container)",
+                    m8_path.display(),
+                    size as f64 / 1024.0
+                );
+            }
+            PersonaCommands::Specialties { path } => {
+                println!(
+                    "⚡ Training 3 Specialist Souls (History Documenter, Code Analyst, README Expert) on {}...",
+                    path.display()
+                );
+                for res in st::mem8::persona::LifePersona::train_workspace_specialties(&path) {
+                    match res {
+                        Ok(s) => println!(
+                            "  ✓ {} (`persona:{}`) — {} episodes, {} words ({:.1} KiB)",
+                            s.specialty.badge(),
+                            s.slug,
+                            s.episode_count,
+                            s.total_words,
+                            s.m8_size_bytes as f64 / 1024.0
+                        ),
+                        Err(e) => eprintln!("  ✗ Specialist training error: {e}"),
+                    }
+                }
+            }
+            PersonaCommands::List => {
+                let list = st::mem8::persona::LifePersona::list_all()?;
+                if list.is_empty() {
+                    println!("No trained .m8 personas yet. Run `m8 persona train <name> <path>`!");
+                } else {
+                    println!("🧬 Trained MEM8 Life & Specialist Personas (~/.st/personas/):");
+                    for p in list {
+                        println!(
+                            "  • [{}] {} (`persona:{}`) — {} episodes, {} words ({:.1} KiB) from {}",
+                            p.specialty.badge(),
+                            p.name,
+                            p.slug,
+                            p.episode_count,
+                            p.total_words,
+                            p.m8_size_bytes as f64 / 1024.0,
+                            p.source_path
+                        );
+                    }
+                }
+            }
+            PersonaCommands::Ask { name, prompt } => {
+                let persona = st::mem8::persona::LifePersona::load(&name)?;
+                println!("{}", persona.respond_locally(&prompt));
+            }
+        },
     }
 
+    Ok(())
+}
+
+fn pack_single_m8(file_path: &std::path::Path) -> Result<(usize, usize)> {
+    let raw = std::fs::read(file_path)?;
+    let before = raw.len();
+    if let Ok(mut c) = st::m8_consciousness::DirectoryConsciousness::from_m8_bytes(&raw) {
+        if c.functions.len() > 36 {
+            c.functions.truncate(36);
+        }
+        if let Some(bn) = &mut c.bitnet_summary {
+            if bn.file_summaries.len() > 32 {
+                bn.file_summaries.truncate(32);
+            }
+        }
+        let tight = c.to_tight_m8_bytes()?;
+        let after = tight.len();
+        std::fs::write(file_path, tight)?;
+        return Ok((before, after));
+    }
+    let decoded = st::m8_consciousness::decode_m8_bytes(&raw).unwrap_or_else(|_| raw.clone());
+    let tight = st::m8_consciousness::encode_json_bytes_as_tight_m8(
+        &decoded,
+        42.73,
+        "# Tight MEM8 Capsule",
+    )?;
+    let after = tight.len();
+    std::fs::write(file_path, tight)?;
+    Ok((before, after))
+}
+
+fn collect_m8_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let ft = match entry.file_type() {
+            Ok(ft) => ft,
+            Err(_) => continue,
+        };
+        if ft.is_symlink() {
+            continue;
+        }
+        let p = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if ft.is_dir() {
+            if matches!(name.as_str(), ".git" | "target" | "node_modules") {
+                continue;
+            }
+            let _ = collect_m8_files(&p, out);
+        } else if ft.is_file() && (name == ".m8" || name.ends_with("_consciousness.m8")) {
+            out.push(p);
+        }
+    }
+    Ok(())
+}
+
+fn pack_path(path: &Path) -> Result<()> {
+    use rayon::prelude::*;
+
+    if path.is_file() {
+        let (before, after) = pack_single_m8(path)?;
+        println!(
+            "✅ Packed {}: {} B -> {} B ({:.1}% of original)",
+            path.display(),
+            before,
+            after,
+            (after as f64 / before.max(1) as f64) * 100.0
+        );
+    } else if path.is_dir() {
+        let mut files = Vec::new();
+        collect_m8_files(path, &mut files)?;
+        let stats: (usize, usize, usize) = files
+            .par_iter()
+            .filter_map(|p| pack_single_m8(p).ok())
+            .map(|(b, a)| (1usize, b, a))
+            .reduce(
+                || (0, 0, 0),
+                |acc, x| (acc.0 + x.0, acc.1 + x.1, acc.2 + x.2),
+            );
+        println!(
+            "✅ Packed {} .m8 files under {}: {:.1} KiB -> {:.1} KiB ({:.1}% of original)",
+            stats.0,
+            path.display(),
+            stats.1 as f64 / 1024.0,
+            stats.2 as f64 / 1024.0,
+            (stats.2 as f64 / stats.1.max(1) as f64) * 100.0
+        );
+    }
     Ok(())
 }
 

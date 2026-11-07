@@ -1719,17 +1719,11 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
         // Smart read
         "read" => smart_read(args, ctx_clone.clone()).await,
 
-        // Smart edit tools (delegated to smart_edit module)
-        "smart_edit" => crate::mcp::smart_edit::handle_smart_edit(Some(args)).await,
-        "get_function_tree" | "get_functions" => {
-            crate::mcp::smart_edit::handle_get_function_tree(Some(args)).await
-        }
-        "insert_function" => crate::mcp::smart_edit::handle_insert_function(Some(args)).await,
-        "replace_function" => crate::mcp::smart_edit::handle_replace_function(Some(args)).await,
-        "remove_function" | "delete_function" => {
-            crate::mcp::smart_edit::handle_remove_function(Some(args)).await
-        }
-        "create_file" => crate::mcp::smart_edit::handle_create_file(Some(args)).await,
+        // Smart edit tools (tree-sitter based - disabled without tree-sitter dep)
+        "smart_edit" | "get_function_tree" | "get_functions" | "insert_function"
+        | "replace_function" | "remove_function" | "delete_function" | "create_file" => Err(
+            anyhow::anyhow!("smart_edit requires tree-sitter dependencies (disabled)"),
+        ),
 
         // Context gathering tools (delegated to context_tools module)
         "gather_project_context" => {
@@ -1829,6 +1823,7 @@ pub async fn handle_tools_call(params: Value, ctx: Arc<McpContext>) -> Result<Va
                     &tool_name_owned,
                     args,
                     &model_cache,
+                    None,
                 )
             })
             .await

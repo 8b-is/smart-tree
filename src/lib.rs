@@ -14,8 +14,10 @@
 // Declare the public modules that form the `st` library.
 pub mod activity_logger; // Transparent activity logging in JSONL format
 pub mod ai_guardian; // AI Guardian - Protects AI from prompt injection attacks
+pub mod bitnet_m8; // Sovereign BitNet b1.58 (B+/B- NO-FLOAT) built-in hierarchical code & repo summarizer
 pub mod cli; // Command-line argument definitions (extracted from main.rs)
 pub mod cli_commands; // Modular CLI subcommand and flag handlers (extracted from main.rs)
+pub mod completions; // Self-maintaining shell autocomplete (Fish, Zsh, Bash) with live folder & MEM|8 descriptions
 pub mod compression_manager; // Smart global compression for all outputs
 pub mod config; // Unified configuration: API keys, models, daemon settings
 pub mod content_detector; // Content type detection - "Understanding what's in your directories" - Omni
@@ -25,14 +27,20 @@ pub mod dynamic_tokenizer;
 pub mod feature_flags; // Enterprise-friendly feature control and compliance
 pub mod felix_asm; // FELIX Sovereign Assembly & SIMD Hot-Path Engine (AArch64 NEON + x86_64 AVX2/BMI2/POPCNT)
 pub mod formatters; // Home to all the different ways we can display the tree (Classic, JSON, AI, etc.).
+pub mod gaia_omni; // Gaia Omni planetary superorganism mode with control/holonomy feedback
+pub mod galaxia_cluster; // Galaxia cluster CRDT and federation protocol
+pub mod grammar; // GBNF/JSON-Schema constrained automaton
 pub mod hot_watcher; // Wave-powered real-time directory intelligence (MEM8)
 pub mod hub;
+pub mod hybrid_attention; // ERNIE 5.5 Hybrid MLA-256 + HCA-512 Latent-Gated Sparse Attention
 pub mod inputs; // 🌊 Universal input adapters - QCP, SSE, OpenAPI, MEM8, and more!
 pub mod interest_calculator; // The scoring engine that determines what's interesting
+pub mod latent_moe_layer; // ERNIE 5.5 Multi-Router Stable LatentMoE layer
 pub mod m8_backwards_reader; // Backwards reading - C64 tape style!
 pub mod m8_consciousness; // Bottom-up hierarchical .m8 directory consciousness pyramid
 pub mod m8_context_aware; // Context-aware progressive loading
 pub mod magiscanner; // Deep file security scanning, hash memory, cert trust
+pub mod mega_hidden_cascade; // Mega-Scale Hidden Dimension (1M+) & Dyadic Attention Cascade (1->3->7->11->21...->N=C-[MAXn-3]->INF/pq)
 pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
 pub mod memory_manager; // Real memory management for consciousness!
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
@@ -44,11 +52,15 @@ pub mod scanner_state; // Change detection between scans
 pub mod semantic; // Semantic analysis inspired by Omni's wave-based wisdom!
 pub mod smart; // 🧠 Smart Tools - Context-aware AI collaboration features with 70-90% token reduction!
 pub mod terminal; // 🚀 Smart Tree Terminal Interface - Your coding companion that anticipates your needs!
+pub mod ternary_deck; // Executable 5-card ternary verification deck
 pub mod tokenizer; // Smart tokenization for semantic pattern recognition
-pub mod tree_sitter_quantum;
+                   // pub mod tree_sitter_quantum; // Removed: requires crabcc/tree-sitter dependencies
+pub mod bui; // Blender UI (BUI) integration
+pub mod dag_scheduler;
+pub mod ultra_zeno; // UltraZeno M1-M2-M3 Information Bottleneck & System 1/2 Cognitive Engine
 pub mod universal_chat_scanner; // Finds conversations everywhere!
 pub mod universal_format_detector; // Detects format by structure! // Semantic-aware quantum compression - "AST meets compression!" - Omni // Dynamic pattern learning - "Every project has its own language!" - Omni
-pub mod wild_perf; // Wild Linker-inspired zero-unsafe, zero-alloc & lock-free multi-core tricks!
+pub mod wild_perf; // Wild Linker-inspired zero-unsafe, zero-alloc & lock-free multi-core tricks! // Dynamic slack priority Rayon DAG scheduler
 
 // The `mcp` module for Model Context Protocol integration.
 // MCP stands for Model Context Protocol, enabling AI assistant integration.
@@ -144,6 +156,9 @@ pub mod file_history;
 
 // MEM8 - Wave-based cognitive architecture for consciousness simulation
 pub mod mem8;
+
+// MEMNET - Local network folder/drive sharing, ESP32/LoRa/BLE/WiFi routing, Wave Q&A offload & Ultrasonic Chirp modem
+pub mod memnet;
 
 // MEM8 Lite - Minimal wave types for hot directory tracking (self-contained)
 pub mod mem8_lite;

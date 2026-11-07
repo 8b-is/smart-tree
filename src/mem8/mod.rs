@@ -7,16 +7,18 @@ pub mod conversation;
 pub mod developer_personas;
 pub mod format;
 pub mod git_temporal;
+pub mod i1_nexus;
 pub mod integration;
 mod native_block;
 pub(crate) mod path_serde;
+pub mod persona;
 pub mod reactive;
 pub mod record_store;
 pub mod regularity;
 pub mod safety;
 pub mod simd;
 pub mod spatial_audio;
-mod token_codec;
+pub mod token_codec;
 pub mod wave;
 
 // Re-export original memindex types with namespace

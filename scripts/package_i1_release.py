@@ -43,7 +43,7 @@ def snapshot(args):
     candidates = subprocess.check_output(["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=root).decode().split("\0")
     selected = {"Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "ultra-agent.md"}
     for name in candidates:
-        if name.startswith(("src/", "benches/", "systemd/", "skills/", "st-protocol/src/", "expert_prompt_engineer/src/")) or name in {
+        if name.startswith(("src/", "benches/", "systemd/", "skills/", "crates/wst_brain_scan/", "st-protocol/src/", "expert_prompt_engineer/src/")) or name in {
             "build.rs", "st-protocol/Cargo.toml", "expert_prompt_engineer/Cargo.toml",
         }:
             selected.add(name)
@@ -94,16 +94,23 @@ def binaries(args):
     manifest = json.loads((destination / "manifest.json").read_text())
     source = Path(args.binaries).resolve()
     environment = dict(os.environ, SMART_TREE_NO_UPDATE_CHECK="1")
-    version = subprocess.check_output([str(source / "st"), "--version"], env=environment, text=True)
-    if manifest["build_id"] not in version or f"v{manifest['version']}" not in version:
-        raise ValueError("The binary does not identify this source snapshot")
+    try:
+        version = subprocess.check_output([str(source / "st"), "--version"], env=environment, text=True)
+        if manifest["build_id"] not in version or f"v{manifest['version']}" not in version:
+            raise ValueError("The binary does not identify this source snapshot")
+    except OSError:
+        st_bytes = (source / "st").read_bytes()
+        if manifest["build_id"].encode() not in st_bytes or manifest["version"].encode() not in st_bytes:
+            raise ValueError("The cross-platform binary does not identify this source snapshot")
     files = [(name, (source / name).read_bytes(), True) for name in BINARIES]
     files.append(("BUILD_INFO.json", json.dumps(manifest, indent=2).encode(), False))
     path = destination / f"st-{args.target}.tar.gz"
-    if path.exists():
+    if path.exists() and not getattr(args, "force", False):
         raise ValueError("Refusing to overwrite an immutable binary bundle")
     archive(path, files)
-    manifest["assets"].append(asset(path, manifest["build_id"]))
+    new_asset = asset(path, manifest["build_id"])
+    manifest["assets"] = [a for a in manifest["assets"] if a.get("name") != path.name]
+    manifest["assets"].append(new_asset)
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(path)
 
@@ -117,6 +124,7 @@ add = commands.add_parser("binaries")
 add.add_argument("--release", required=True)
 add.add_argument("--binaries", required=True)
 add.add_argument("--target", required=True, choices=["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"])
+add.add_argument("--force", action="store_true", help="Replace existing target archive if present")
 add.set_defaults(run=binaries)
 arguments = parser.parse_args()
 arguments.run(arguments)

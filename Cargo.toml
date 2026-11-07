@@ -1,10 +1,10 @@
 [workspace]
-members = ["expert_prompt_engineer", "st-protocol"]
+members = ["crates/wst_brain_scan", "expert_prompt_engineer", "st-protocol"]
 exclude = ["marqant"]  # Marqant is a git submodule with its own Cargo.toml
 
 [package]
 name = "smart-tree"
-version = "11.3.1"
+version = "22.2.1"
 edition = "2021"
 build = "build.rs"
 authors = ["8bit-wraith", "Claude", "Omni", "8b-is Team"]
@@ -101,6 +101,8 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 hyper = "1.7"
 http = "1.3"
 tower-http = { version = "0.5", features = ["cors"] }
+scraper = "0.20"
+url = "2.5"
 
 # Text processing
 regex = "1.10"
@@ -119,6 +121,7 @@ x509-parser = "0.16"
 rusqlite = { version = "0.40", features = ["bundled", "fallible_uint"] }
 argon2 = "0.5"
 crc32fast = "1.4"
+md5 = "0.7"
 
 # Secure token storage for proxy OAuth (macOS Keychain / Secret Service / Windows Credential Manager)
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
@@ -145,6 +148,7 @@ whoami = "1.5"
 dashmap = "6.1"
 libc = "0.2"
 fuzzy-matcher = "0.3"  # Used by MCP smart_background_searcher
+num_cpus = "1.16"
 
 # PTY support for web dashboard terminal (always included)
 portable-pty = "0.8"
@@ -156,21 +160,7 @@ ipnet = "2.9"
 # Git operations (will become g8t)
 gix = { version = "0.87", default-features = false, features = ["blocking-network-client", "sha1"] }
 
-# Tree-sitter for smart code editing
-crabcc-core = { git = "https://github.com/8b-is/crabcc.git", rev = "12e7763f2f30fd995608b2ea4cd91e82a3be88fe" }
-tree-sitter = "0.26"
-tree-sitter-language = "0.1"
-tree-sitter-rust = "0.24"
-tree-sitter-python = "0.25"
-tree-sitter-javascript = "0.25"
-tree-sitter-typescript = "0.23"
-tree-sitter-go = "0.25"
-tree-sitter-java = "0.23"
-tree-sitter-c-sharp = "0.23"
-tree-sitter-cpp = "0.23"
-tree-sitter-ruby = "0.23"
-
-# Proc macro support (for tree-sitter)
+# Proc macro support
 syn = { version = "2.0", features = ["full", "parsing"] }
 quote = "1.0"
 cc = "1.2"
@@ -188,13 +178,16 @@ artem = "2.0"
 # Dashboard GUI - REMOVED (replaced by web-dashboard)
 # egui, eframe, egui_extras, winit removed - use web-dashboard instead
 
-# Local LLM support (candle)
-candle-core = { version = "0.8", optional = true }
-candle-transformers = { version = "0.8", optional = true }
-candle-nn = { version = "0.8", optional = true }
-hf-hub = { version = "0.4", optional = true }
+# Local LLM support (burn - simplified from candle)
+burn-core = { package = "burn", version = "0.23.0-pre.1", optional = true, features = ["flex", "wgpu", "autodiff", "train"] }
+burn-import = { version = "0.22.0", optional = true }
+burn-ndarray = { package = "burn-flex", version = "0.23.0-pre.1", optional = true }
 tokenizers = { version = "0.21", optional = true }
 marqant = "1.1.8"
+
+# BUI (Blender UI) GUI framework - REQUIRES cmake to build C++ backend
+# Install cmake first: brew install cmake (macOS) / apt-get install cmake (Linux)
+blenderui = { version = "0.4", optional = true, default-features = false, features = ["slug", "png", "webp", "svg", "gpu", "freetype", "filebrowser"] }
 
 # Voice transcription/TTS (liquid-rust)
 # Note: Requires liquid-rust to be properly set up with its dependencies
@@ -216,6 +209,7 @@ http-body-util = { version = "0.1", optional = true }
 [lib]
 name = "st"
 path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
 
 [[bin]]
 name = "st"
@@ -244,7 +238,11 @@ path = "src/bin/m8.rs"
 name = "import-claude-memories"
 path = "src/bin/import_claude_memories.rs"
 
+# CDYLIB for dyad Flutter FFI integration is built from the main lib with crate-type = ["cdylib"]
+# See [lib] section above
+
 [dev-dependencies]
+wst_brain_scan = { path = "crates/wst_brain_scan" }
 tempfile = "3.10"
 assert_cmd = "2.0"
 predicates = "3.1"
@@ -264,8 +262,8 @@ metal = ["mlx-ffi"]
 cuda = []
 mlx-ffi = []
 
-# Local LLM inference
-candle = ["candle-core", "candle-transformers", "candle-nn", "hf-hub", "tokenizers"]
+# Local LLM inference (burn - simplified from candle)
+burn = ["burn-core", "burn-import", "burn-ndarray", "tokenizers"]
 
 # Voice transcription/TTS via liquid-rust (requires models)
 # Note: Enable when liquid-rust dependency is uncommented above
@@ -279,16 +277,25 @@ google = [
     "http-body-util",
 ]
 
+# ARM SVE2 (Scalable Vector Extension 2) for AArch64
+sve2 = []
+
+# BUI (Blender UI) GUI framework
+bui = ["blenderui"]
+
 # Terminal UI (tui) and Web dashboard are now always built-in
 
-# Full features (includes candle for local LLM, google drive & gmail sync, and voice)
-full = ["candle", "google", "voice"]
+# Full features (includes burn for local LLM, google drive & gmail sync, and voice)
+full = ["burn", "google", "voice"]
+
+# Full with BUI (requires cmake)
+full-bui = ["full", "bui"]
 
 # Full with voice alias
 full-voice = ["full"]
 
 [profile.release]
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
 strip = true
 opt-level = 3

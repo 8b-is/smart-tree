@@ -11,6 +11,7 @@ use crate::mem8_lite::Wave;
 use anyhow::{bail, ensure, Context, Result};
 use bincode::Options;
 use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
+use rayon::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -178,6 +179,139 @@ impl RecordStore {
         self.put_record(key, value, wave, false, false)
     }
 
+    /// Encode and append a batch of records in parallel across all CPU cores (tokenization + Zlib + CRC32 + MEM8 wave blocks)
+    /// and write them sequentially in a single buffered pass without forcing per-record `fdatasync`.
+    pub fn put_batch_with_wave_buffered<T: Serialize + Sync>(
+        &mut self,
+        entries: &[(String, T, Wave)],
+    ) -> Result<()> {
+        ensure!(
+            !self.poisoned,
+            "MEM8 store needs to be reopened after a failed write"
+        );
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let native = self.native;
+        let encoded_frames: Result<Vec<Vec<u8>>> = if entries.len() >= 2 {
+            entries
+                .par_iter()
+                .map(|(key, value, wave)| encode_record_frame(key, value, wave, false, native))
+                .collect()
+        } else {
+            entries
+                .iter()
+                .map(|(key, value, wave)| encode_record_frame(key, value, wave, false, native))
+                .collect()
+        };
+        let encoded_frames = encoded_frames?;
+
+        let start_length = self.length;
+        let write_result = (|| -> std::io::Result<()> {
+            self.file.seek(SeekFrom::Start(start_length))?;
+            let mut writer = std::io::BufWriter::with_capacity(1024 * 1024, &mut self.file);
+            for frame in &encoded_frames {
+                writer.write_all(frame)?;
+            }
+            writer.flush()
+        })();
+        if let Err(error) = write_result {
+            self.poisoned = true;
+            let _ = self.file.set_len(start_length);
+            return Err(error).context("Failed to persist MEM8 record batch");
+        }
+
+        for ((key, _, _), frame) in entries.iter().zip(encoded_frames.iter()) {
+            let location = Location {
+                offset: self.length,
+                length: frame.len() as u64,
+            };
+            if let Some(old) = self.index.insert(key.clone(), location) {
+                self.live_bytes = self.live_bytes.saturating_sub(old.length);
+            }
+            self.live_bytes += location.length;
+            self.length += location.length;
+        }
+
+        if self.length > COMPACT_AFTER
+            && self.length.saturating_sub(self.header_size()) > self.live_bytes.saturating_mul(2)
+        {
+            if let Err(error) = self.compact() {
+                tracing::warn!(%error, "MEM8 consolidation failed; journal remains committed");
+            }
+        }
+        Ok(())
+    }
+
+    /// Parallel batch lookup and decompression across all CPU cores for multiple keys already indexed in this store.
+    pub fn get_many_parallel<T: DeserializeOwned + Send>(
+        &mut self,
+        keys: &[String],
+    ) -> Result<HashMap<String, T>> {
+        ensure!(
+            !self.poisoned,
+            "MEM8 store needs to be reopened after a failed write"
+        );
+        if keys.is_empty() || self.index.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let mut requested_spans: Vec<(String, Location)> = keys
+            .iter()
+            .filter_map(|k| self.index.get(k).copied().map(|loc| (k.clone(), loc)))
+            .collect();
+        if requested_spans.is_empty() {
+            return Ok(HashMap::new());
+        }
+        requested_spans.sort_by_key(|(_, loc)| loc.offset);
+
+        let min_offset = requested_spans
+            .first()
+            .map(|(_, loc)| loc.offset)
+            .unwrap_or(0);
+        let max_end = requested_spans
+            .iter()
+            .map(|(_, loc)| loc.offset.saturating_add(loc.length))
+            .max()
+            .unwrap_or(0);
+        if max_end <= min_offset {
+            return Ok(HashMap::new());
+        }
+
+        let span_len = (max_end - min_offset) as usize;
+        self.file.seek(SeekFrom::Start(min_offset))?;
+        let mut buf = vec![0u8; span_len];
+        self.file.read_exact(&mut buf)?;
+
+        let native = self.native;
+        let decoded: Vec<(String, T)> = if requested_spans.len() >= 2 {
+            requested_spans
+                .par_iter()
+                .filter_map(|(key, loc)| {
+                    let start = (loc.offset - min_offset) as usize;
+                    let end = start + (loc.length as usize);
+                    let slice = buf.get(start..end)?;
+                    let (record, _) = decode_record_from_slice(slice, loc.offset, native).ok()?;
+                    let val: T = codec().deserialize(&record.value).ok()?;
+                    Some((key.clone(), val))
+                })
+                .collect()
+        } else {
+            requested_spans
+                .iter()
+                .filter_map(|(key, loc)| {
+                    let start = (loc.offset - min_offset) as usize;
+                    let end = start + (loc.length as usize);
+                    let slice = buf.get(start..end)?;
+                    let (record, _) = decode_record_from_slice(slice, loc.offset, native).ok()?;
+                    let val: T = codec().deserialize(&record.value).ok()?;
+                    Some((key.clone(), val))
+                })
+                .collect()
+        };
+
+        Ok(decoded.into_iter().collect())
+    }
+
     pub fn flush_sync(&mut self) -> Result<()> {
         self.file
             .sync_data()
@@ -201,39 +335,7 @@ impl RecordStore {
             !self.poisoned,
             "MEM8 store needs to be reopened after a failed write"
         );
-        let record = Record {
-            key: key.to_string(),
-            value: codec().serialize(value)?,
-        };
-        let raw = codec().serialize(&record)?;
-        ensure!(
-            raw.len() as u64 <= MAX_RECORD,
-            "MEM8 record exceeds size limit"
-        );
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
-        encoder.write_all(&token_codec::encode(&raw))?;
-        let compressed = encoder.finish()?;
-        ensure!(
-            compressed.len() as u64 <= MAX_RECORD,
-            "Compressed MEM8 record exceeds size limit"
-        );
-        let mut header = [0u8; FRAME_HEADER];
-        header[..4].copy_from_slice(&(compressed.len() as u32).to_le_bytes());
-        header[4..8].copy_from_slice(&(raw.len() as u32).to_le_bytes());
-        header[8..12].copy_from_slice(&crc32fast::hash(&compressed).to_le_bytes());
-        let header_crc = crc32fast::hash(&header[..12]);
-        header[12..].copy_from_slice(&header_crc.to_le_bytes());
-        let mut frame = Vec::new();
-        if self.native {
-            frame.extend_from_slice(NATIVE_APPLICATION);
-        }
-        frame.extend_from_slice(&header);
-        frame.extend_from_slice(&compressed);
-        let frame = if self.native {
-            native_block::encode(&frame, key_location(key), wave, tombstoned)?
-        } else {
-            frame
-        };
+        let frame = encode_record_frame(key, value, wave, tombstoned, self.native)?;
         let result = (|| -> std::io::Result<()> {
             self.file.seek(SeekFrom::Start(self.length))?;
             self.file.write_all(&frame)?;
@@ -348,22 +450,137 @@ impl RecordStore {
         Ok(())
     }
 
+    /// Single-pass parallel loader that opens a native MEM8 store, replays and verifies all frames
+    /// across CPU cores in one pass, and deserializes live records matching `prefix` without
+    /// decompressing payloads a second time.
+    pub fn open_and_collect_prefix_parallel<T: DeserializeOwned + Send>(
+        path: &Path,
+        prefix: &str,
+    ) -> Result<Vec<(String, T, Option<Wave>)>> {
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        std::fs::create_dir_all(parent)?;
+        let lock = open_private(&path.with_extension("lock"), false)?;
+        lock.try_lock()
+            .context("MEM8 record store is already in use")?;
+        let mut file = open_private(path, false)?;
+        let file_length = file.metadata()?.len();
+        if file_length == 0 {
+            let _ = lock.unlock();
+            return Ok(Vec::new());
+        }
+        if file_length >= 12 {
+            let mut magic = [0; 4];
+            file.seek(SeekFrom::Start(8))?;
+            file.read_exact(&mut magic)?;
+            ensure!(
+                magic == 0x4d454d38u32.to_le_bytes(),
+                "Unsupported native MEM8 format; existing file was preserved"
+            );
+        }
+        file.seek(SeekFrom::Start(0))?;
+        let mut buf = vec![0u8; file_length as usize];
+        file.read_exact(&mut buf)?;
+
+        let mut spans: Vec<(u64, usize, usize)> = Vec::new();
+        let mut cursor = 0usize;
+        let total = buf.len();
+        while cursor < total {
+            if total - cursor < native_block::PAIR_SIZE {
+                break;
+            }
+            let pair: &[u8; native_block::PAIR_SIZE] = buf
+                [cursor..cursor + native_block::PAIR_SIZE]
+                .try_into()
+                .unwrap();
+            let (_, _, payload) = native_block::decode_pair(pair)?;
+            ensure!(
+                payload.starts_with(NATIVE_APPLICATION),
+                "Unsupported MEM8 application payload"
+            );
+            let (compressed, _) = read_header(&mut &payload[4..])?;
+            let bytes = 4 + FRAME_HEADER + compressed as usize;
+            let rec_len = bytes.div_ceil(native_block::PAYLOAD_SIZE) * native_block::PAIR_SIZE;
+            if rec_len > total - cursor {
+                break;
+            }
+            spans.push((cursor as u64, cursor, rec_len));
+            cursor += rec_len;
+        }
+
+        #[allow(clippy::type_complexity)]
+        let decoded: Result<Vec<(String, Vec<u8>, Option<Wave>)>> = spans
+            .par_iter()
+            .map(|&(offset, start, len)| {
+                let (record, wave) =
+                    decode_record_from_slice(&buf[start..start + len], offset, true)?;
+                Ok((record.key, record.value, wave))
+            })
+            .collect();
+        let decoded = decoded?;
+        let _ = lock.unlock();
+
+        let mut latest: HashMap<String, (Vec<u8>, Option<Wave>)> =
+            HashMap::with_capacity(decoded.len());
+        for (key, value, wave) in decoded {
+            latest.insert(key, (value, wave));
+        }
+
+        let mut matching: Vec<(String, Vec<u8>, Option<Wave>)> = latest
+            .into_iter()
+            .filter_map(|(k, (v, w))| {
+                if k.starts_with(prefix) {
+                    Some((k, v, w))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        matching.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let parsed: Vec<(String, T, Option<Wave>)> = matching
+            .into_par_iter()
+            .filter_map(|(k, v, w)| {
+                let inner: T = codec().deserialize(&v).ok()?;
+                Some((k, inner, w))
+            })
+            .collect();
+
+        Ok(parsed)
+    }
+
     fn replay(&mut self, recover_tail: bool) -> Result<()> {
         let file_length = self.file.metadata()?.len();
-        while self.length < file_length {
-            let minimum = if self.native {
-                native_block::PAIR_SIZE
-            } else {
-                FRAME_HEADER
-            } as u64;
-            if file_length - self.length < minimum {
+        if self.length >= file_length {
+            return Ok(());
+        }
+        let unread_len = (file_length - self.length) as usize;
+        self.file.seek(SeekFrom::Start(self.length))?;
+        let mut buf = vec![0u8; unread_len];
+        self.file.read_exact(&mut buf)?;
+
+        let minimum = if self.native {
+            native_block::PAIR_SIZE
+        } else {
+            FRAME_HEADER
+        };
+
+        let mut spans: Vec<(u64, usize, usize)> = Vec::new();
+        let mut cursor = 0usize;
+        let base_offset = self.length;
+
+        while cursor < unread_len {
+            if unread_len - cursor < minimum {
                 break; // Interrupted final header.
             }
-            self.file.seek(SeekFrom::Start(self.length))?;
             let length = if self.native {
-                let mut pair = [0; native_block::PAIR_SIZE];
-                self.file.read_exact(&mut pair)?;
-                let (_, _, payload) = native_block::decode_pair(&pair)?;
+                let pair: &[u8; native_block::PAIR_SIZE] = buf
+                    [cursor..cursor + native_block::PAIR_SIZE]
+                    .try_into()
+                    .unwrap();
+                let (_, _, payload) = native_block::decode_pair(pair)?;
                 ensure!(
                     payload.starts_with(NATIVE_APPLICATION),
                     "Unsupported MEM8 application payload"
@@ -372,23 +589,60 @@ impl RecordStore {
                 let bytes = 4 + FRAME_HEADER + compressed as usize;
                 (bytes.div_ceil(native_block::PAYLOAD_SIZE) * native_block::PAIR_SIZE) as u64
             } else {
-                let (compressed, _) = read_header(&mut self.file)?;
+                let (compressed, _) = read_header(&mut &buf[cursor..cursor + FRAME_HEADER])?;
                 FRAME_HEADER as u64 + u64::from(compressed)
             };
-            if length > file_length - self.length {
+            if length > (unread_len - cursor) as u64 {
                 break; // Interrupted final payload.
             }
-            let record = self.read_record(self.length)?;
-            let location = Location {
-                offset: self.length,
-                length,
-            };
-            if let Some(old) = self.index.insert(record.key, location) {
+            let rec_len = length as usize;
+            let rec_offset = base_offset + cursor as u64;
+            spans.push((rec_offset, cursor, rec_len));
+            cursor += rec_len;
+        }
+
+        let native = self.native;
+        let decoded: Result<Vec<(String, Location)>> = if spans.len() >= 8 {
+            spans
+                .par_iter()
+                .map(|&(offset, start, len)| {
+                    let (record, _) =
+                        decode_record_from_slice(&buf[start..start + len], offset, native)?;
+                    Ok((
+                        record.key,
+                        Location {
+                            offset,
+                            length: len as u64,
+                        },
+                    ))
+                })
+                .collect()
+        } else {
+            spans
+                .iter()
+                .map(|&(offset, start, len)| {
+                    let (record, _) =
+                        decode_record_from_slice(&buf[start..start + len], offset, native)?;
+                    Ok((
+                        record.key,
+                        Location {
+                            offset,
+                            length: len as u64,
+                        },
+                    ))
+                })
+                .collect()
+        };
+        let decoded = decoded?;
+
+        for (key, location) in decoded {
+            if let Some(old) = self.index.insert(key, location) {
                 self.live_bytes -= old.length;
             }
-            self.live_bytes += length;
-            self.length += length;
+            self.live_bytes += location.length;
+            self.length += location.length;
         }
+
         if self.length != file_length {
             ensure!(
                 recover_tail,
@@ -406,65 +660,156 @@ impl RecordStore {
 
     fn read_record(&mut self, offset: u64) -> Result<Record> {
         self.file.seek(SeekFrom::Start(offset))?;
-        let (frame, location) = if self.native {
-            let mut pair = [0; native_block::PAIR_SIZE];
-            self.file.read_exact(&mut pair)?;
-            let (location, _, payload) = native_block::decode_pair(&pair)?;
+        if self.native {
+            let mut first_pair = [0u8; native_block::PAIR_SIZE];
+            self.file.read_exact(&mut first_pair)?;
+            let (_, _, payload) = native_block::decode_pair(&first_pair)?;
             ensure!(
                 payload.starts_with(NATIVE_APPLICATION),
                 "Unsupported MEM8 application payload"
             );
             let (compressed, _) = read_header(&mut &payload[4..])?;
             let expected = 4 + FRAME_HEADER + compressed as usize;
-            let mut frame = payload.to_vec();
-            while frame.len() < expected {
-                ensure!(
-                    frame.len() % native_block::PAYLOAD_SIZE == 0,
-                    "Short MEM8 continuation block"
-                );
-                self.file.read_exact(&mut pair)?;
-                let (next_location, _, payload) = native_block::decode_pair(&pair)?;
-                ensure!(location == next_location, "Mismatched MEM8 continuation");
-                frame.extend_from_slice(payload);
+            let total_bytes =
+                expected.div_ceil(native_block::PAYLOAD_SIZE) * native_block::PAIR_SIZE;
+            let mut buf = vec![0u8; total_bytes];
+            buf[..native_block::PAIR_SIZE].copy_from_slice(&first_pair);
+            if total_bytes > native_block::PAIR_SIZE {
+                self.file.read_exact(&mut buf[native_block::PAIR_SIZE..])?;
             }
-            ensure!(frame.len() == expected, "Invalid MEM8 application length");
-            (frame[4..].to_vec(), Some(location))
+            let (record, _) = decode_record_from_slice(&buf, offset, true)?;
+            Ok(record)
         } else {
-            let mut header = [0; FRAME_HEADER];
+            let mut header = [0u8; FRAME_HEADER];
             self.file.read_exact(&mut header)?;
             let (compressed, _) = read_header(&mut header.as_slice())?;
-            let mut frame = header.to_vec();
-            frame.resize(FRAME_HEADER + compressed as usize, 0);
-            self.file.read_exact(&mut frame[FRAME_HEADER..])?;
-            (frame, None)
-        };
-        let (_, raw_length) = read_header(&mut frame.as_slice())?;
-        let checksum = u32::from_le_bytes(frame[8..12].try_into()?);
-        let compressed = &frame[FRAME_HEADER..];
+            let total_bytes = FRAME_HEADER + compressed as usize;
+            let mut buf = vec![0u8; total_bytes];
+            buf[..FRAME_HEADER].copy_from_slice(&header);
+            self.file.read_exact(&mut buf[FRAME_HEADER..])?;
+            let (record, _) = decode_record_from_slice(&buf, offset, false)?;
+            Ok(record)
+        }
+    }
+}
+
+fn encode_record_frame<T: Serialize>(
+    key: &str,
+    value: &T,
+    wave: &Wave,
+    tombstoned: bool,
+    native: bool,
+) -> Result<Vec<u8>> {
+    let record = Record {
+        key: key.to_string(),
+        value: codec().serialize(value)?,
+    };
+    let raw = codec().serialize(&record)?;
+    ensure!(
+        raw.len() as u64 <= MAX_RECORD,
+        "MEM8 record exceeds size limit"
+    );
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
+    encoder.write_all(&token_codec::encode(&raw))?;
+    let compressed = encoder.finish()?;
+    ensure!(
+        compressed.len() as u64 <= MAX_RECORD,
+        "Compressed MEM8 record exceeds size limit"
+    );
+    let mut header = [0u8; FRAME_HEADER];
+    header[..4].copy_from_slice(&(compressed.len() as u32).to_le_bytes());
+    header[4..8].copy_from_slice(&(raw.len() as u32).to_le_bytes());
+    header[8..12].copy_from_slice(&crc32fast::hash(&compressed).to_le_bytes());
+    let header_crc = crc32fast::hash(&header[..12]);
+    header[12..].copy_from_slice(&header_crc.to_le_bytes());
+    let mut frame = Vec::new();
+    if native {
+        frame.extend_from_slice(NATIVE_APPLICATION);
+    }
+    frame.extend_from_slice(&header);
+    frame.extend_from_slice(&compressed);
+    if native {
+        native_block::encode(&frame, key_location(key), wave, tombstoned)
+    } else {
+        Ok(frame)
+    }
+}
+
+fn decode_record_from_slice(
+    slice: &[u8],
+    offset: u64,
+    native: bool,
+) -> Result<(Record, Option<Wave>)> {
+    let (frame, location, wave) = if native {
         ensure!(
-            crc32fast::hash(compressed) == checksum,
-            "MEM8 record checksum mismatch at byte {offset}"
+            slice.len() >= native_block::PAIR_SIZE
+                && slice.len().is_multiple_of(native_block::PAIR_SIZE),
+            "Short MEM8 continuation block"
         );
-        let mut decoder = ZlibDecoder::new(compressed);
-        let mut tokens = Vec::new();
-        (&mut decoder)
-            .take(u64::from(raw_length) * 3 + 1)
-            .read_to_end(&mut tokens)?;
+        let first_pair: &[u8; native_block::PAIR_SIZE] =
+            slice[..native_block::PAIR_SIZE].try_into().unwrap();
+        let (location, first_wave, payload) = native_block::decode_pair(first_pair)?;
         ensure!(
-            tokens.len() <= raw_length as usize * 3
-                && decoder.total_in() == compressed.len() as u64,
+            payload.starts_with(NATIVE_APPLICATION),
+            "Unsupported MEM8 application payload"
+        );
+        let (compressed, _) = read_header(&mut &payload[4..])?;
+        let expected = 4 + FRAME_HEADER + compressed as usize;
+        let needed_bytes = expected.div_ceil(native_block::PAYLOAD_SIZE) * native_block::PAIR_SIZE;
+        ensure!(
+            slice.len() == needed_bytes,
+            "Invalid MEM8 application length"
+        );
+
+        let mut frame = Vec::with_capacity(needed_bytes);
+        frame.extend_from_slice(payload);
+        for pair in slice[native_block::PAIR_SIZE..]
+            .as_chunks::<{ native_block::PAIR_SIZE }>()
+            .0
+        {
+            let (next_location, _, next_payload) = native_block::decode_pair(pair)?;
+            ensure!(location == next_location, "Mismatched MEM8 continuation");
+            frame.extend_from_slice(next_payload);
+        }
+        ensure!(frame.len() == expected, "Invalid MEM8 application length");
+        (frame[4..].to_vec(), Some(location), Some(first_wave))
+    } else {
+        ensure!(
+            slice.len() >= FRAME_HEADER,
+            "Incomplete token record header"
+        );
+        let (compressed, _) = read_header(&mut &slice[..FRAME_HEADER])?;
+        ensure!(
+            slice.len() == FRAME_HEADER + compressed as usize,
             "Invalid MEM8 record length"
         );
-        let raw = token_codec::decode(&tokens, raw_length as usize)?;
-        let record: Record = codec().deserialize(&raw).context("Invalid stored record")?;
-        if let Some(location) = location {
-            ensure!(
-                key_location(&record.key) == location,
-                "MEM8 record location mismatch"
-            );
-        }
-        Ok(record)
+        (slice.to_vec(), None, None)
+    };
+    let (_, raw_length) = read_header(&mut frame.as_slice())?;
+    let checksum = u32::from_le_bytes(frame[8..12].try_into()?);
+    let compressed = &frame[FRAME_HEADER..];
+    ensure!(
+        crc32fast::hash(compressed) == checksum,
+        "MEM8 record checksum mismatch at byte {offset}"
+    );
+    let mut decoder = ZlibDecoder::new(compressed);
+    let mut tokens = Vec::with_capacity(raw_length as usize);
+    (&mut decoder)
+        .take(u64::from(raw_length) * 3 + 1)
+        .read_to_end(&mut tokens)?;
+    ensure!(
+        tokens.len() <= raw_length as usize * 3 && decoder.total_in() == compressed.len() as u64,
+        "Invalid MEM8 record length"
+    );
+    let raw = token_codec::decode(&tokens, raw_length as usize)?;
+    let record: Record = codec().deserialize(&raw).context("Invalid stored record")?;
+    if let Some(location) = location {
+        ensure!(
+            key_location(&record.key) == location,
+            "MEM8 record location mismatch"
+        );
     }
+    Ok((record, wave))
 }
 
 fn codec() -> impl Options {

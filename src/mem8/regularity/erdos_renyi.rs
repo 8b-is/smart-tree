@@ -11,7 +11,6 @@
 //! 6. Ramsey-theoretic monochromatic cliques ($K_3$ / $K_4$ colored Red/Blue/Green)
 
 use super::types::{CsrSymbolGraph, EdgeKind, SymbolId};
-use std::cmp::Ordering;
 
 /// Bitflags representing static AST capability hazards per symbol (`0..N`)
 #[repr(transparent)]
@@ -61,13 +60,19 @@ impl SymbolHazardFlags {
 }
 
 /// Phase regime classification according to Erdős–Rényi & Molloy–Reed percolation theory
+/// (`O(|V| + |E_SHADOW|)`):
+/// - `*1`: Because dependency graphs have skewed degree distributions, we supplement
+///   `*2` ($\langle k \rangle = c = \frac{2|E_{\text{SHADOW}}|}{|V|}$) with
+///   `*3` ($\kappa = \frac{\langle k^2 \rangle}{\langle k \rangle} = \frac{\sum_{v \in V} \deg(v)^2}{\sum_{v \in V} \deg(v)}$).
+/// - `WHEN \kappa > 2`: a giant transitive reachability component forms across package boundaries
+///   allowing a single poisoned leaf dependency to reach core application state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhaseRegime {
-    /// $\kappa < 2.0$ and $s(C) \le 1$: Clean tree/forest hierarchy
+    /// $\kappa < 2$ ($\sum \deg(v)^2 < 2 \sum \deg(v)$): Subcritical forest hierarchy
     SubcriticalForest,
-    /// $2.0 \le \kappa \le 3.5$ or $|C_1| \approx \Theta(n^{2/3})$: Critical percolation window
+    /// $\kappa = 2$ or critical percolation boundary $|C_1| \approx \Theta(n^{2/3})$
     CriticalWindow,
-    /// $\kappa > 3.5$ with $O(N)$ Giant Component: Supercritical percolation
+    /// $\kappa > 2$ ($\sum \deg(v)^2 > 2 \sum \deg(v)$): Giant transitive reachability component across package boundaries
     SupercriticalGiant,
     /// Localized subgraph violates Erdős–Rényi Chernoff bound ($\Lambda(C) > \tau$) or forms a multi-hazard SCC
     AnomalousC2Clique,
@@ -97,6 +102,7 @@ pub struct ComponentAnomaly {
 }
 
 /// Global Supply-Chain Topological Security Report emitted by `st --security-scan` & `st --mode the-book`
+/// Computed in $O(|V| + |E_{\text{SHADOW}}|)$.
 #[derive(Debug, Clone)]
 pub struct ErdosRenyiSecurityReport {
     pub num_vertices: usize,
@@ -109,10 +115,25 @@ pub struct ErdosRenyiSecurityReport {
     pub empirical_p: f64,
     /// Critical threshold $p_c = 1 / N$
     pub critical_p_c: f64,
-    /// Mean degree $c = \langle k \rangle = 2|E_{\text{shadow}}|/N$
+    /// Mean degree $c = \langle k \rangle = 2|E_{\text{shadow}}|/|V|$ (`*2`)
     pub mean_degree_c: f64,
-    /// Molloy–Reed phase parameter $\kappa = \langle k^2 \rangle / \langle k \rangle$ (Giant component at $\kappa > 2$)
+    /// Exact coprime numerator $p_c$ of $\langle k \rangle = c = \frac{2|E_{\text{SHADOW}}|}{|V|}$ (`*2`)
+    pub mean_degree_c_num: u64,
+    /// Exact coprime denominator $q_c$ of $\langle k \rangle = c = \frac{2|E_{\text{SHADOW}}|}{|V|}$ (`*2`)
+    pub mean_degree_c_den: u64,
+    /// Molloy–Reed phase parameter $\kappa = \langle k^2 \rangle / \langle k \rangle = \frac{\sum_{v \in V} \deg(v)^2}{\sum_{v \in V} \deg(v)}$ (`*3`)
     pub molloy_reed_kappa: f64,
+    /// Exact coprime numerator $p_\kappa$ of $\kappa = \frac{\sum_{v \in V} \deg(v)^2}{\sum_{v \in V} \deg(v)}$ (`*3`)
+    pub molloy_reed_kappa_num: u64,
+    /// Exact coprime denominator $q_\kappa$ of $\kappa = \frac{\sum_{v \in V} \deg(v)^2}{\sum_{v \in V} \deg(v)}$ (`*3`)
+    pub molloy_reed_kappa_den: u64,
+    /// Exact integer threshold check: $\kappa > 2 \iff \sum_{v \in V} \deg(v)^2 > 2 \sum_{v \in V} \deg(v)$
+    /// (`WHEN \kappa > 2 -> giant transitive reachability component across package boundaries`)
+    pub percolation_kappa_gt_2: bool,
+    /// True when $\kappa > 2$ and a poisoned/hazardous leaf dependency can transitively reach core application state
+    pub poisoned_leaf_reaches_core: bool,
+    /// Human-readable percolation theorem diagnostic (`*1`, `*2`, `*3`)
+    pub percolation_diagnostic: String,
     /// Size of the largest connected component $|C_1|$
     pub giant_component_size: usize,
     /// Size of the second-largest component $|C_2|$ (Susceptibility indicator $\chi$)
@@ -213,7 +234,14 @@ pub fn scan_erdos_renyi_shadow_graph(
             empirical_p: 0.0,
             critical_p_c: 1.0,
             mean_degree_c: 0.0,
+            mean_degree_c_num: 0,
+            mean_degree_c_den: 1,
             molloy_reed_kappa: 0.0,
+            molloy_reed_kappa_num: 0,
+            molloy_reed_kappa_den: 1,
+            percolation_kappa_gt_2: false,
+            poisoned_leaf_reaches_core: false,
+            percolation_diagnostic: "Subcritical (< 2 vertices)".to_string(),
             giant_component_size: n,
             second_component_size: 0,
             critical_scale_n_two_thirds: (n as f64).powf(2.0 / 3.0),
@@ -299,6 +327,22 @@ pub fn scan_erdos_renyi_shadow_graph(
         }
     }
 
+    // *2: <k> = c =: 2 |E_SHADOW| / |V| reduced to coprime (mean_degree_c_num, mean_degree_c_den)
+    let raw_c_num = (2 * m_shadow) as u64;
+    let raw_c_den = (active_n as u64).max(1);
+    let gcd_c = crate::felix_asm::felix_binary_gcd_u64(raw_c_num, raw_c_den).max(1);
+    let mean_degree_c_num = if raw_c_num == 0 { 0 } else { raw_c_num / gcd_c };
+    let mean_degree_c_den = if raw_c_num == 0 { 1 } else { raw_c_den / gcd_c };
+
+    // *3: Molloy-Reed percolation ratio kappa = <k^2>/<k> = sum_{v in V} deg(v)^2 / sum_{v in V} deg(v)
+    //     (*1: supplements <k> = c = 2|E_SHADOW|/|V| because dependency graphs have skewed degree distributions)
+    let gcd_k = crate::felix_asm::felix_binary_gcd_u64(sum_k2, sum_k.max(1)).max(1);
+    let molloy_reed_kappa_num = if sum_k == 0 { 0 } else { sum_k2 / gcd_k };
+    let molloy_reed_kappa_den = if sum_k == 0 { 1 } else { sum_k / gcd_k };
+
+    // Exact integer threshold: WHEN kappa > 2 <=> sum_{v in V} deg(v)^2 > 2 * sum_{v in V} deg(v)
+    let percolation_kappa_gt_2 = sum_k > 0 && sum_k2 > 2 * sum_k;
+
     let mean_degree_c = (sum_k as f64) / (active_n as f64);
     let molloy_reed_kappa = if sum_k > 0 {
         (sum_k2 as f64) / (sum_k as f64)
@@ -330,6 +374,7 @@ pub fn scan_erdos_renyi_shadow_graph(
     // 5. Evaluate Component Excess s(C) & Chernoff–Erdős Log-Surprise Lambda(C)
     let mut comp_sizes: Vec<usize> = Vec::new();
     let mut anomalies: Vec<ComponentAnomaly> = Vec::new();
+    let mut poisoned_leaf_reaches_core = false;
 
     for r in 0..n {
         if uf_parent[r] as usize != r {
@@ -347,6 +392,35 @@ pub fn scan_erdos_renyi_shadow_graph(
         let surprise = compute_erdos_chernoff_surprise(n, k, e, empirical_p);
         let haz = comp_haz[r];
 
+        // Check if this component spans package/cluster boundaries and connects a leaf/hazardous
+        // dependency to core application state (cluster <= 1 or root vertex 0) when kappa > 2
+        if percolation_kappa_gt_2 && k >= 3 {
+            let mut has_core = false;
+            let mut has_leaf_or_hazard = haz.is_hazardous();
+            let mut first_cluster: Option<u16> = None;
+            let mut spans_package_boundaries = symbol_to_cluster.is_empty();
+            for &sym in &root_vertices[r] {
+                let idx = sym as usize;
+                let c_id = symbol_to_cluster.get(idx).copied().unwrap_or(1);
+                if let Some(fc) = first_cluster {
+                    if fc != c_id {
+                        spans_package_boundaries = true;
+                    }
+                } else {
+                    first_cluster = Some(c_id);
+                }
+                if idx == 0 || c_id <= 1 {
+                    has_core = true;
+                }
+                if shadow_deg.get(idx).copied().unwrap_or(0) == 1 {
+                    has_leaf_or_hazard = true;
+                }
+            }
+            if spans_package_boundaries && has_core && has_leaf_or_hazard {
+                poisoned_leaf_reaches_core = true;
+            }
+        }
+
         let is_anomalous = surprise >= surprise_threshold_nats
             || cyclomatic_excess >= 2
             || scc_cycles > 0
@@ -357,7 +431,7 @@ pub fn scan_erdos_renyi_shadow_graph(
                 .iter()
                 .map(|&sym| (sym, eigen_centrality[sym as usize]))
                 .collect();
-            pivots.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+            pivots.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
             pivots.truncate(5);
 
             let comp_spec_rad = estimate_component_spectral_radius(graph, &root_vertices[r]);
@@ -400,10 +474,15 @@ pub fn scan_erdos_renyi_shadow_graph(
             * (1.0 + a.combined_hazards.distinct_capabilities() as f64);
         let score_b = (b.erdos_log_surprise_nats + b.cyclomatic_excess.max(0) as f64)
             * (1.0 + b.combined_hazards.distinct_capabilities() as f64);
-        score_b.partial_cmp(&score_a).unwrap_or(Ordering::Equal)
+        score_b.total_cmp(&score_a)
     });
 
     // 6. Classify Global Erdős–Rényi Phase Regime
+    // Whiteboard theorem:
+    // - *1: Because dependency graphs have skewed degree distributions, we supplement
+    //   *2 (<k> = c = 2|E_SHADOW|/|V|) with *3 (kappa = <k^2>/<k> = sum(deg(v)^2)/sum(deg(v))).
+    // - WHEN kappa > 2 (sum_k2 > 2 * sum_k): a giant transitive reachability component forms
+    //   across package boundaries allowing a single poisoned leaf dependency to reach core application state.
     let has_c2_anomaly = anomalies.iter().any(|a| {
         a.erdos_log_surprise_nats > surprise_threshold_nats * 1.25
             || a.combined_hazards.distinct_capabilities() >= 3
@@ -413,12 +492,33 @@ pub fn scan_erdos_renyi_shadow_graph(
 
     let regime = if has_c2_anomaly {
         PhaseRegime::AnomalousC2Clique
-    } else if molloy_reed_kappa < 2.0 && mean_degree_c < 1.0 {
-        PhaseRegime::SubcriticalForest
-    } else if molloy_reed_kappa <= 3.5 || (giant_component_size as f64) <= 1.5 * critical_scale {
+    } else if percolation_kappa_gt_2 {
+        PhaseRegime::SupercriticalGiant
+    } else if (sum_k > 0 && sum_k2 == 2 * sum_k) || raw_c_num >= raw_c_den {
         PhaseRegime::CriticalWindow
     } else {
-        PhaseRegime::SupercriticalGiant
+        PhaseRegime::SubcriticalForest
+    };
+
+    let percolation_diagnostic = if percolation_kappa_gt_2 {
+        format!(
+            "WHEN kappa = {}/{} > 2 (supplementing <k> = c = 2|E_SHADOW|/|V| = {}/{} for skewed degree distribution): a giant transitive reachability component forms across package boundaries allowing a single poisoned leaf dependency to reach core application state (|C_1|={}, reachable={})",
+            molloy_reed_kappa_num,
+            molloy_reed_kappa_den,
+            mean_degree_c_num,
+            mean_degree_c_den,
+            giant_component_size,
+            poisoned_leaf_reaches_core
+        )
+    } else {
+        format!(
+            "Subcritical/bounded percolation: kappa = {}/{} <= 2 (<k> = c = 2|E_SHADOW|/|V| = {}/{}, |C_1|={}) — cross-package reachability remains fragmented",
+            molloy_reed_kappa_num,
+            molloy_reed_kappa_den,
+            mean_degree_c_num,
+            mean_degree_c_den,
+            giant_component_size
+        )
     };
 
     ErdosRenyiSecurityReport {
@@ -429,7 +529,14 @@ pub fn scan_erdos_renyi_shadow_graph(
         empirical_p,
         critical_p_c,
         mean_degree_c,
+        mean_degree_c_num,
+        mean_degree_c_den,
         molloy_reed_kappa,
+        molloy_reed_kappa_num,
+        molloy_reed_kappa_den,
+        percolation_kappa_gt_2,
+        poisoned_leaf_reaches_core,
+        percolation_diagnostic,
         giant_component_size,
         second_component_size,
         critical_scale_n_two_thirds: critical_scale,
@@ -826,9 +933,7 @@ fn detect_tarjan_scc_anomalies(
                                     (sym, c)
                                 })
                                 .collect();
-                            pivots.sort_unstable_by(|a, b| {
-                                b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal)
-                            });
+                            pivots.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
                             pivots.truncate(5);
 
                             out_anomalies.push(ComponentAnomaly {

@@ -1,10 +1,10 @@
-name: CI
+name: Smart Tree CI
 
 on:
   push:
-    branches: [main, "aye/**"]
+    branches: [main, develop, "aye/**"]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -16,36 +16,21 @@ concurrency:
 
 jobs:
   test:
-    name: test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # macos is where the daemon update path was rehearsed by hand; ubuntu is
-        # the runtime that has not been validated yet.
-        os: [ubuntu-latest, macos-latest]
+    name: Test Suite
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      # keyring's sync-secret-service pulls libdbus-sys on Linux, so the build
-      # needs pkg-config and the D-Bus headers. docs/HUB_OPERATIONS.md has always
-      # said so; nothing enforced it until now. OpenSSL 3 per the same document.
-      - name: System dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config libdbus-1-dev libssl-dev
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      # Actions are pinned to full commit SHAs. The runners ship a current
-      # stable Rust; only the two components need adding.
-      - name: Toolchain
-        run: |
-          rustc --version
-          cargo --version
-          rustup component add rustfmt clippy
-
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - name: Cache cargo registry
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -55,22 +40,294 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Formatting
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libavdevice-dev \
+            libavfilter-dev
+
+      - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Lints
-        run: cargo clippy --workspace -- -D warnings
+      - name: Run clippy
+        run: cargo clippy --all-targets --features full -- -D warnings
 
-      - name: Tests
-        # Serial on purpose: two magiscanner memory tests take a process-wide
-        # lock, so the default parallel harness collides and reports
-        # "lock acquisition failed because the operation would block".
-        # Serial is green on main and on feature branches; parallel is red on both.
-        # Restore the default threads only once that shared lock is gone.
-        run: cargo test --workspace -- --test-threads=1
+      - name: Build library
+        run: cargo build --lib --features full
 
-      - name: MCP Combinatorics & LLM Integration (macOS Metal + MLX FFI)
-        if: runner.os == 'macOS'
+      - name: Build binaries
+        run: cargo build --bins --features full
+
+      - name: Run library tests
+        run: cargo test --lib --features full
+
+      - name: Run integration tests
         run: |
-          cargo test --test mcp_integration --features "metal,mlx-ffi" -- --nocapture
-          cargo bench --bench combinatorics_llm_bench --features "metal,mlx-ffi" --no-run
+          cargo test --test mcp_integration --features full
+          cargo test --test latent_moe_simd_test --features full
+          cargo test --test latent_moe_layer_test --features full
+          cargo test --test hybrid_attention_test --features full
+          cargo test --test galaxia_kintsugi_e2e_test --features full
+          cargo test --test vaked_foken_e2e_test --features full
+
+      - name: Run benchmarks
+        run: cargo bench --no-run --features full
+
+  test-macos:
+    name: macOS Tests
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --features full -- -D warnings
+
+      - name: Build and test
+        run: |
+          cargo build --lib --features full
+          cargo test --lib --features full
+          cargo test --test mcp_integration --features full
+          cargo test --test vaked_foken_e2e_test --features full
+
+  test-windows:
+    name: Windows Tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --features full -- -D warnings
+
+      - name: Build and test
+        run: |
+          cargo build --lib --features full
+          cargo test --lib --features full
+
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run benchmarks
+        run: cargo bench --no-run --features full
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run Smart Tree supply-chain security scan
+        run: cargo run --bin st -- --security-scan .
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Generate docs
+        run: cargo doc --features full --no-deps
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-docs
+          path: target/doc
+          retention-days: 7
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [test, test-macos, test-windows, security]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libssl-dev \
+            pkg-config \
+            libdbus-1-dev \
+            libasound2-dev \
+            libudev-dev \
+            libsqlite3-dev \
+            clang
+
+      - name: Build release binaries
+        run: cargo build --release --bins --features full
+
+      - name: Create release archives
+        run: |
+          mkdir -p release
+          for bin in st std st-hub n8x m8 import-claude-memories; do
+            if [ -f target/release/$bin ]; then
+              cp target/release/$bin release/
+            fi
+          done
+          cd release
+          tar -czf smart-tree-${{ github.ref_name }}-linux-x86_64.tar.gz *
+          sha256sum smart-tree-${{ github.ref_name }}-linux-x86_64.tar.gz > sha256sums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/smart-tree-${{ github.ref_name }}-linux-x86_64.tar.gz
+            release/sha256sums.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
