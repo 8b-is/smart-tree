@@ -32,7 +32,12 @@ const VALID_HOOK_KEYS: &[&str] = &[
 /// Ask user for confirmation before overwriting a file
 fn confirm_overwrite(path: &Path) -> bool {
     use std::io::IsTerminal;
-    if !io::stdin().is_terminal() {
+    if !io::stdin().is_terminal()
+        || std::env::var("CI").is_ok()
+        || std::env::var("SMART_TREE_NONINTERACTIVE").is_ok()
+        || std::env::var("CARGO_MANIFEST_DIR").is_ok()
+        || cfg!(test)
+    {
         return false;
     }
     print!("   ⚠️  {} exists. Overwrite? [y/N]: ", path.display());
