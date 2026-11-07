@@ -1408,7 +1408,10 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                 "03 · Love <-> Space (Ma)": "Protects the shared sky so humans and robots can grow together in peace."
             }),
         )
-    } else if norm.contains("aharen") || norm.contains("hakarenai") || norm.contains("indecipherable") {
+    } else if norm.contains("aharen")
+        || norm.contains("hakarenai")
+        || norm.contains("indecipherable")
+    {
         (
             "Reina Aharen & Raido (Aharen-san Is Indecipherable · 阿波連さんははかれない)",
             "Quiet-Voice Proximity & Deadpan-Warm Kinship",

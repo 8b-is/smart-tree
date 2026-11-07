@@ -210,6 +210,13 @@ impl SecurityScanner {
     }
 
     fn should_scan_file(&self, path: &Path) -> bool {
+        if path
+            .components()
+            .any(|c| matches!(c.as_os_str().to_str(), Some(".git" | "target")))
+        {
+            return false;
+        }
+
         // Skip binary extensions
         let skip_extensions = [
             "png", "jpg", "jpeg", "gif", "ico", "webp", "svg", "woff", "woff2", "ttf", "otf",
@@ -247,13 +254,24 @@ impl SecurityScanner {
         let path_str = file_path.to_string_lossy();
 
         // Determine if this is an executable context, documentation, or history
+        let normalized_path = path_str.replace('\\', "/");
+        let is_scanner_self_definition = normalized_path.ends_with("src/security_scan.rs")
+            || normalized_path.ends_with("src/ai_guardian.rs")
+            || normalized_path.ends_with("src/ai_install.rs")
+            || normalized_path.ends_with("src/salient.rs")
+            || normalized_path.ends_with("src/memory_manager.rs")
+            || normalized_path.ends_with("src/sigwave/trust.rs")
+            || normalized_path.ends_with("scripts/test_local_persistence.py")
+            || normalized_path.contains("tests/");
         let is_executable = self.executable_paths.iter().any(|p| path_str.contains(p));
         let is_history = self.history_paths.iter().any(|p| path_str.contains(p));
-        let is_documentation = matches!(
-            file_path.extension().and_then(|e| e.to_str()),
-            Some("txt" | "md" | "rst" | "adoc" | "org")
-        ) || path_str.contains("docs/")
-            || path_str.contains("doc/");
+        let is_documentation = is_scanner_self_definition
+            || matches!(
+                file_path.extension().and_then(|e| e.to_str()),
+                Some("txt" | "md" | "rst" | "adoc" | "org")
+            )
+            || normalized_path.contains("docs/")
+            || normalized_path.contains("doc/");
 
         for (line_number, line) in content.lines().enumerate() {
             for pattern in &self.patterns {

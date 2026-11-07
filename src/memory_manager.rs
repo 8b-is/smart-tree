@@ -357,7 +357,14 @@ impl MemoryManager {
         // Mirror deduplicated stream into ~/.st/wa_stream_inbox.jsonl
         if !messages.is_empty() {
             let mut mirror_buf = String::new();
-            for m in messages.iter().rev().take(500).collect::<Vec<_>>().into_iter().rev() {
+            for m in messages
+                .iter()
+                .rev()
+                .take(500)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+            {
                 if let Ok(line) = serde_json::to_string(m) {
                     mirror_buf.push_str(&line);
                     mirror_buf.push('\n');
@@ -381,11 +388,8 @@ impl MemoryManager {
         // Anchor the most recent 64 wa-stream messages into MEM|8 wave memory
         let start_idx = messages.len().saturating_sub(64);
         for msg in &messages[start_idx..] {
-            let origin = Self::truncate_utf8(
-                &format!("wa-stream://{}#{}", msg.from, msg.id),
-                255,
-            )
-            .to_string();
+            let origin = Self::truncate_utf8(&format!("wa-stream://{}#{}", msg.from, msg.id), 255)
+                .to_string();
             if self.bank.memories.iter().any(|m| m.origin == origin) {
                 continue;
             }
@@ -400,8 +404,8 @@ impl MemoryManager {
                 freq_sum = freq_sum.wrapping_add(b as u64);
             }
             let frequency = 20.0 + ((freq_sum % 200) as f64);
-            let timestamp = chrono::DateTime::from_timestamp_millis(msg.ts as i64)
-                .unwrap_or_else(Utc::now);
+            let timestamp =
+                chrono::DateTime::from_timestamp_millis(msg.ts as i64).unwrap_or_else(Utc::now);
 
             self.bank.memories.push(Memory {
                 timestamp,
@@ -436,7 +440,10 @@ impl MemoryManager {
                 let flat_text = m.text.replace('\n', " ");
                 let preview = Self::truncate_utf8(&flat_text, 180);
                 digest_lines.push(format!("• [{}] {}: {}", m.id, m.from, preview));
-                for kw in Self::extract_wa_keywords(&m.from, &m.text).into_iter().take(6) {
+                for kw in Self::extract_wa_keywords(&m.from, &m.text)
+                    .into_iter()
+                    .take(6)
+                {
                     if !digest_keywords.contains(&kw) && digest_keywords.len() < 48 {
                         digest_keywords.push(kw);
                     }
@@ -510,7 +517,10 @@ impl MemoryManager {
             "whatsapp".to_string(),
             from.trim().to_ascii_lowercase(),
         ];
-        if text.contains("youtu.be") || text.contains("youtube.com") || text.contains("/youtube-full") {
+        if text.contains("youtu.be")
+            || text.contains("youtube.com")
+            || text.contains("/youtube-full")
+        {
             kw.push("youtube".to_string());
         }
         if text.contains("wikipedia.org") {

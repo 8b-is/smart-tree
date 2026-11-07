@@ -1183,8 +1183,14 @@ pub async fn handle_memory_stats() -> Result<()> {
     if let Some(wa) = wa_report {
         println!("\n📡 wa-stream ---> smart-tree Live Bridge:");
         println!("• Pipeline:                {}", wa.pipeline);
-        println!("• Total wa-stream scanned: {} messages", wa.total_wa_messages_scanned);
-        println!("• Anchored in memories.m8: {} memories (+{} newly anchored)", wa.total_wa_memories_in_m8, wa.newly_anchored_to_m8);
+        println!(
+            "• Total wa-stream scanned: {} messages",
+            wa.total_wa_messages_scanned
+        );
+        println!(
+            "• Anchored in memories.m8: {} memories (+{} newly anchored)",
+            wa.total_wa_memories_in_m8, wa.newly_anchored_to_m8
+        );
         println!("• Outbox records:          {}", wa.outbox_count);
         println!("• Smart Tree mirror:       {}", wa.st_mirror_path);
     }
