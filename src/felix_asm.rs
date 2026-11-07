@@ -591,6 +591,36 @@ pub fn felix_pq_cross_cmp(p1: u64, q1: u64, p2: u64, q2: u64) -> core::cmp::Orde
     lhs.cmp(&rhs)
 }
 
+/// **ULTRA-ZENO GOD OF SUN** exact rational-ternary inequality evaluator:
+/// $$\frac{P}{Q} - n \cdot t > P \iff \Delta_{\odot}(P, Q, n, t) = P(1 - Q) - Q \cdot n \cdot t > 0 \quad (Q \ge 1, \; t \in \{-1, 0, +1\})$$
+///
+/// Returns `(holds, surplus_num_i128, horizon_n_sun)` where:
+/// - `holds`: `true` iff $\frac{P}{Q} - n \cdot t > P$ in exact zero-float arithmetic.
+/// - `surplus_num_i128`: exact numerator surplus $\Delta_{\odot} = (P - Q \cdot n \cdot t) - P \cdot Q$ over denominator $Q$.
+/// - `horizon_n_sun`: minimum step $n_{\odot}(P, Q) = \lfloor \max(P, 0)(Q - 1) / Q \rfloor + 1$ under the
+///   Mahākāla Hearth `~NAND = -1` trit ($t = -1$) at which $\frac{P}{Q} - n \cdot t > P$ strictly holds.
+#[inline(always)]
+pub fn felix_zeno_god_of_sun_pq_nt_gt_p(p: i64, q: u64, n: u64, t: i8) -> (bool, i128, u64) {
+    let q_safe = q.max(1) as i128;
+    let p_i128 = p as i128;
+    let n_i128 = n as i128;
+    let t_clamped = (t as i128).clamp(-1, 1);
+
+    let lhs_num = p_i128 - q_safe * n_i128 * t_clamped;
+    let rhs_num = p_i128 * q_safe;
+    let surplus_num = lhs_num - rhs_num;
+
+    let horizon_n_sun = if p <= 0 || q <= 1 {
+        1u64
+    } else {
+        let p_u128 = p as u128;
+        let q_u128 = q as u128;
+        (((p_u128 * (q_u128 - 1)) / q_u128) as u64).saturating_add(1)
+    };
+
+    (surplus_num > 0, surplus_num, horizon_n_sun)
+}
+
 /// Hardware-accelerated 64-lane `f32` vector accumulation (`acc[0..64] += src[0..64]`).
 ///
 /// Used by `compressor.rs` (`build_mem8_book_archive`) to accumulate 256-byte Szemerédi
@@ -1563,6 +1593,15 @@ mod tests {
         assert_eq!(felix_binary_gcd_u64(1071, 462), 21);
         assert_eq!(felix_pq_cross_cmp(1, 3, 2, 6), core::cmp::Ordering::Equal);
         assert_eq!(felix_pq_cross_cmp(3, 4, 2, 3), core::cmp::Ordering::Greater);
+
+        // Verify ULTRA-ZENO GOD OF SUN P/Q - n*t > P exact horizon & surplus
+        let (holds_below, _, n_sun) = felix_zeno_god_of_sun_pq_nt_gt_p(31, 32, 29, -1);
+        assert!(!holds_below);
+        assert_eq!(n_sun, 31); // floor(31 * 31 / 32) + 1 = 30 + 1 = 31
+        let (holds_at_horizon, surplus_at_horizon, _) =
+            felix_zeno_god_of_sun_pq_nt_gt_p(31, 32, n_sun, -1);
+        assert!(holds_at_horizon);
+        assert_eq!(surplus_at_horizon, 31 - 32 * 31 * (-1) - 31 * 32); // 31 > 0
 
         let mut acc = [1.0_f32; 64];
         let src = [2.0_f32; 64];

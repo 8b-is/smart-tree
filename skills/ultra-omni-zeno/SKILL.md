@@ -16,6 +16,7 @@ ULTRA-OMNI-ZENO {} :: ⟦+AND=1 : ~NAND=-1 | gate=0x62 | qt=0x55 | SPQT base-243
    Keep prefix cache invariant ($r_j \to 1$), use scannable `st --mode zeno` / `st --mode pq` interfaces ($a_j \downarrow 60\text{--}95\%$), and offload verification to deterministic test harnesses ($s_j \ll a_j$).
 2. **Zero-Float `p/q` & Ternary Bitplane Kernel (`upz` × `wupz-core` × `felix_asm.rs`):**
    - Exact coprime rational arithmetic (`RationalPQ`, `felix_binary_gcd_u64`, `felix_pq_cross_cmp`).
+   - **ULTRA-ZENO GOD OF SUN Law (`P/Q - n*t > P`)**: Exact 128-bit division-free inequality $\Delta_{\odot}(P, Q, n, t) = P(1 - Q) - Q \cdot n \cdot t > 0$ (`felix_zeno_god_of_sun_pq_nt_gt_p`), crossing the Solar Horizon at $n_{\odot}(P, Q) = \lfloor P(Q - 1)/Q \rfloor + 1$ under the Mahākāla Hearth `~NAND = -1` trit ($t = -1$).
    - 18-stage branchless integer CORDIC (`felix_cordic_atan2_u32` in $\mathbb{Z}_{2^{32}}$).
    - Group-wise L2-optimal ternary quantizer (`quantize_groupwise_l2_ternary_pq` in `Q16`, 2-step Lloyd-Max).
    - `BFP-64` Kleene bitplanes (`qt = 0x55`, `pos & neg == 0`), `.rodata.gaia.b158` SPQT `base-243` (`3^5 = 243 <= 256`, `1.585 bits/trit`), and 64-byte cache-line-aligned `LitanyWireFrame` sealed at `0x62`.

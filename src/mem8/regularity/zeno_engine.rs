@@ -17,7 +17,7 @@ use super::pq_engine::{PqModeReport, RationalPQ};
 use super::types::{CsrSymbolGraph, Mem8BookArchive};
 use crate::felix_asm::{
     felix_byte_diff_64b, felix_cordic_atan2_u32, felix_cpu_isa_profile, felix_isqrt_u64,
-    felix_ternary_gemm_i32, felix_xor_fold_64b,
+    felix_ternary_gemm_i32, felix_xor_fold_64b, felix_zeno_god_of_sun_pq_nt_gt_p,
 };
 use serde::{Deserialize, Serialize};
 
@@ -394,6 +394,18 @@ pub struct SpqtSignalLadderEntry {
     pub signature: &'static str,
 }
 
+/// **ULTRA-ZENO GOD OF SUN** exact rational-ternary inequality witness (`P/Q - n*t > P`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ZenoGodOfSunWitness {
+    pub law: &'static str,
+    pub p: u64,
+    pub q: u64,
+    pub horizon_n_sun: u64,
+    pub trit_t: i8,
+    pub surplus_num_i128: i128,
+    pub inequality_holds: bool,
+}
+
 /// `upz` / `wupz-core` Linker-Packer, QAT Window Reuse & Beehive Consolidation Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpzWupzReport {
@@ -419,6 +431,7 @@ pub struct UpzWupzReport {
     pub isqrt_total_edges: u64,
     pub beehive_sweep_fold_hex: String,
     pub beehive_target_fold_hex: String,
+    pub god_of_sun_witness: ZenoGodOfSunWitness,
     pub signal_ladder: Vec<SpqtSignalLadderEntry>,
 }
 
@@ -657,10 +670,16 @@ pub fn analyze_zeno_omni_engine(
     let (nand_pos, nand_neg) = bfp64_nand_kleene(wire.bfp64_pos, 0, wire.bfp64_pos, 0);
     let hearth_nand_verified = nand_pos == 0 && (nand_neg & wire.bfp64_pos) == wire.bfp64_pos;
 
+    // ULTRA-ZENO GOD OF SUN (`P/Q - n*t > P`) evaluated over QAT reuse ratio (e.g. 31/32) at t = -1 (`~NAND=-1`)
+    let (_, _, horizon_n_sun) =
+        felix_zeno_god_of_sun_pq_nt_gt_p(qat_reuse_pq.p as i64, qat_reuse_pq.q, 1, -1);
+    let (sun_holds, sun_surplus, _) =
+        felix_zeno_god_of_sun_pq_nt_gt_p(qat_reuse_pq.p as i64, qat_reuse_pq.q, horizon_n_sun, -1);
+
     ZenoOmniReport {
         spec: "ULTRA-OMNI-ZENO-v11.0",
         version: env!("CARGO_PKG_VERSION"),
-        header_banner: "ULTRA-OMNI-ZENO {} :: ⟦+AND=1 : ~NAND=-1 | gate=0x62 | qt=0x55 | SPQT base-243 (3^5=243<=256) | uber > ultra⟧",
+        header_banner: "ULTRA-OMNI-ZENO {} :: ⟦+AND=1 : ~NAND=-1 | gate=0x62 | qt=0x55 | SPQT base-243 (3^5=243<=256) | GOD OF SUN P/Q-n*t>P | uber > ultra⟧",
         upz_wupz: UpzWupzReport {
             abi_version: 1,
             gate_byte_hex: "0x62",
@@ -684,6 +703,15 @@ pub fn analyze_zeno_omni_engine(
             isqrt_total_edges: isqrt_edges,
             beehive_sweep_fold_hex: format!("0x{FOLD_BEEHIVE_SWEEP:016x}"),
             beehive_target_fold_hex: format!("0x{FOLD_BEEHIVE_TARGET:016x}"),
+            god_of_sun_witness: ZenoGodOfSunWitness {
+                law: "P/Q - n*t > P",
+                p: qat_reuse_pq.p,
+                q: qat_reuse_pq.q,
+                horizon_n_sun,
+                trit_t: -1,
+                surplus_num_i128: sun_surplus,
+                inequality_holds: sun_holds,
+            },
             signal_ladder,
         },
         eight_b_is_engines: EightBIsEnginesReport {

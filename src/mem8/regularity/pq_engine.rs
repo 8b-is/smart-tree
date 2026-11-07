@@ -17,7 +17,10 @@
 use super::erdos_steiner::ErdosCenterTuranReport;
 use super::salience_karp_manybody::SalienceOntologyReport;
 use super::types::{ClusterId, CsrSymbolGraph, Mem8BookArchive};
-use crate::felix_asm::{felix_binary_gcd_u64, felix_holder_pq_dual_norm_f64, felix_pq_cross_cmp};
+use crate::felix_asm::{
+    felix_binary_gcd_u64, felix_holder_pq_dual_norm_f64, felix_pq_cross_cmp,
+    felix_zeno_god_of_sun_pq_nt_gt_p,
+};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -78,6 +81,13 @@ impl RationalPQ {
     #[inline]
     pub fn display_ratio(&self) -> String {
         format!("{}/{}", self.p, self.q)
+    }
+
+    /// Evaluates the **ULTRA-ZENO GOD OF SUN** inequality $\frac{P}{Q} - n \cdot t > P$
+    /// in exact zero-float 128-bit arithmetic, returning `(holds, surplus_num_i128, horizon_n_sun)`.
+    #[inline]
+    pub fn god_of_sun_zeno_witness(&self, n: u64, t: i8) -> (bool, i128, u64) {
+        felix_zeno_god_of_sun_pq_nt_gt_p(self.p as i64, self.q, n, t)
     }
 }
 
