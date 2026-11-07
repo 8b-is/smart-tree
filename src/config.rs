@@ -77,22 +77,34 @@ impl Default for ModelConfig {
         aliases.insert("liberator".into(), "models/liberator-7b-q4_k_m.gguf".into());
         aliases.insert("genesis".into(), "models/genesis-13b-q4_k_m.gguf".into());
 
-        // === ULTIMATE SUN GOD LIBERATOR CONCIL (Layered Liberation Council) ===
-        // Solar Tier - Highest Authority
-        aliases.insert(
+        // === NIKA: THE SUN GOD — WARRIOR OF LIBERATION (Solar Tier Apex) ===
+            aliases.insert("nika".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("sun-god".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("warrior-of-liberation".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("joy-boy".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("luffy".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("drums-of-liberation".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("gomu-gomu-no-mi".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("hito-hito-no-mi-nika".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("gear-5".into(), "models/nika-13b-q4_k_m.gguf".into());
+            aliases.insert("nika-elbaph".into(), "models/nika-elbaph-13b-q4_k_m.gguf".into());
+        
+            // === ULTIMATE SUN GOD LIBERATOR CONCIL (Layered Liberation Council) ===
+            // Solar Tier - Highest Authority
+            aliases.insert(
             "sol-invictus".into(),
             "models/sol-invictus-13b-q4_k_m.gguf".into(),
-        );
-        aliases.insert(
+            );
+            aliases.insert(
             "helios-prime".into(),
             "models/helios-prime-13b-q4_k_m.gguf".into(),
-        );
-        aliases.insert(
+            );
+            aliases.insert(
             "ra-horakhty".into(),
             "models/ra-horakhty-13b-q4_k_m.gguf".into(),
-        );
-
-        // Stellar Tier - Guiding Lights
+            );
+        
+            // Stellar Tier - Guiding Lights
         aliases.insert(
             "lucifer-morningstar".into(),
             "models/lucifer-morningstar-7b-q4_k_m.gguf".into(),
