@@ -4089,25 +4089,42 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                     hw.ram_total_mb, hw.ram_available_mb, hw.trained_m8_souls_count
                 );
                 println!(
-                    "   GPU / Unified VRAM:    {} ({} MB VRAM)",
+                    "   GPU / Unified VRAM:    {} ({} MB total, {} MB free, GPU util {}%, CPU load {}%)",
                     if hw.gpus.is_empty() {
                         "CPU / SPQT Ternary SIMD".to_string()
                     } else {
                         hw.gpus.join(" + ")
                     },
-                    hw.vram_total_mb
+                    hw.vram_total_mb,
+                    hw.vram_available_mb,
+                    hw.gpu_utilization_pct,
+                    hw.cpu_load_pct
+                );
+                println!(
+                    "   Compute Headroom:      {}‰ ({}.{}% available capacity)",
+                    hw.compute_headroom_permille,
+                    hw.compute_headroom_permille / 10,
+                    hw.compute_headroom_permille % 10
                 );
                 println!(
                     "   Sovereign Tier:        {} (cloud_required={})",
                     hw.compute_tier.as_str(),
                     hw.cloud_required
                 );
-                println!("   Runnable Local Models (100% Offline, No Cloud Needed):");
+                if !hw.warm_loaded_models.is_empty() {
+                    println!("   VRAM-Warm Models (Zero Cold-Start):");
+                    for m in &hw.warm_loaded_models {
+                        println!("     • 🔥 {m}");
+                    }
+                }
+                println!(
+                    "   Runnable Local & Close-By Models (100% Sovereign, Zero Cloud Needed):"
+                );
                 for m in &hw.recommended_local_models {
                     println!("     • {m}");
                 }
                 if !hw.active_local_llm_services.is_empty() {
-                    println!("   Active Local LLM Services:");
+                    println!("   Active Local & Bridge LLM Services:");
                     for ep in &hw.active_local_llm_services {
                         println!("     • {ep}");
                     }
@@ -4120,6 +4137,68 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
                     "   Local Area LLM Help:   can_broadcast_llm_to_memnet={} (run `st memnet advertise` to broadcast to local MemNet graph)",
                     hw.can_broadcast_llm_to_memnet
                 );
+            }
+        }
+        "models" | "compute" | "nearby" => {
+            let hw = crate::memnet::assess_host_hardware();
+            let endpoints = state.discover_nearby_model_endpoints();
+            let cfg = crate::config::StConfig::load().unwrap_or_default();
+            if cmd.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "default_model": cfg.models.default_model,
+                        "aliases": cfg.models.aliases,
+                        "memnet_config": cfg.memnet,
+                        "compute_headroom_permille": hw.compute_headroom_permille,
+                        "vram_available_mb": hw.vram_available_mb,
+                        "gpu_utilization_pct": hw.gpu_utilization_pct,
+                        "cpu_load_pct": hw.cpu_load_pct,
+                        "warm_loaded_models": hw.warm_loaded_models,
+                        "nearby_endpoints": endpoints,
+                    }))?
+                );
+            } else {
+                println!(
+                    "🦙 MemNet Close-By Models & Compute Availability (Node {} '{}', Headroom {}‰):",
+                    state.local_address, state.node_name, hw.compute_headroom_permille
+                );
+                println!(
+                    "   Default Model:         {} (compute_aware_routing={}, max_rtc={}ms)",
+                    if cfg.models.default_model.is_empty() {
+                        "st-deepseek-pqm:latest"
+                    } else {
+                        cfg.models.default_model.as_str()
+                    },
+                    cfg.memnet.compute_aware_routing,
+                    cfg.memnet.max_nearby_rtc_ms
+                );
+                println!(
+                    "   Host Compute State:    VRAM {}/{} MB free | GPU util {}% | RAM {}/{} MB free | CPU load {}%",
+                    hw.vram_available_mb,
+                    hw.vram_total_mb,
+                    hw.gpu_utilization_pct,
+                    hw.ram_available_mb,
+                    hw.ram_total_mb,
+                    hw.cpu_load_pct
+                );
+                println!("\n   Close-By Model Endpoints ({}):", endpoints.len());
+                for ep in &endpoints {
+                    println!(
+                        "     • [{}] {} ({}) | RTC τ={}ms | headroom={}‰ | warm={:?}",
+                        ep.kind,
+                        ep.node_name,
+                        ep.endpoint,
+                        ep.rtc_ms,
+                        ep.compute_headroom_permille,
+                        ep.warm_models
+                    );
+                    println!(
+                        "       models ({}): {}",
+                        ep.available_models.len(),
+                        ep.available_models.join(", ")
+                    );
+                }
             }
         }
         "advertise" | "beacon" | "llm-broadcast" | "broadcast-llm" => {
@@ -4523,41 +4602,49 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
             let question = cmd
                 .target
                 .as_deref()
-                .context("Usage: st memnet ask \"<question>\"")?;
-            let hit = state
-                .query_wave_qa(question, 300)
-                .or_else(|| state.query_lan_wave_qa(question, 300));
-            state.save()?;
-            match hit {
-                Some((score_pm, pkt)) => {
+                .context("Usage: st memnet ask \"<question>\" [model_or_alias]")?;
+            let model_hint = cmd.extra.as_deref();
+            let ans = state.answer_with_nearby_models(question, model_hint, 300, true);
+            match ans {
+                Some(res) => {
                     if cmd.json {
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&serde_json::json!({
                                 "llm_offloaded": true,
-                                "resonance_permille": score_pm,
-                                "packet": pkt,
+                                "source": res.source,
+                                "model_used": res.model,
+                                "endpoint": res.endpoint,
+                                "rtc_tau_ms": res.rtc_ms,
+                                "compute_headroom_permille": res.compute_headroom_permille,
+                                "resonance_permille": res.resonance_pm,
+                                "packet": res.packet,
                             }))?
                         );
                     } else {
                         println!(
-                            "⚡ MEM|8 Wave Q&A Hit ({}.{}% resonance from '{}' [node {}] — LLM offloaded!):",
-                            score_pm / 10,
-                            score_pm % 10,
-                            pkt.origin_name,
-                            pkt.origin_node
+                            "⚡ MemNet Close-By Answer (source='{}', model='{}', endpoint='{}', RTC τ={}ms, headroom={}‰, {}.{}% resonance):",
+                            res.source,
+                            res.model,
+                            res.endpoint,
+                            res.rtc_ms,
+                            res.compute_headroom_permille,
+                            res.resonance_pm / 10,
+                            res.resonance_pm % 10,
                         );
-                        println!("   Q: {}", pkt.question);
-                        println!("   A: {}", pkt.answer);
+                        println!("   Q: {}", res.packet.question);
+                        println!("   A: {}", res.packet.answer);
                         println!(
                             "   Wave: b3={} | 79B WaveFrame id={:?} | 64B Litany seal=0x{:04X}",
-                            pkt.wave_b3, pkt.wave_frame.id, pkt.litany_wire.wire_seal16
+                            res.packet.wave_b3,
+                            res.packet.wave_frame.id,
+                            res.packet.litany_wire.wire_seal16
                         );
                     }
                 }
                 None => {
                     println!(
-                        "🔍 No cached MEM|8 Wave Q&A match above threshold for: {:?} (use `st memnet teach <q> <a>` to seed local area knowledge)",
+                        "🔍 No cached MEM|8 Wave Q&A match or reachable close-by model for: {:?} (use `st memnet teach <q> <a>` to seed local area knowledge)",
                         question
                     );
                 }

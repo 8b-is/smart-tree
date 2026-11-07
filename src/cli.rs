@@ -804,6 +804,63 @@ pub enum Cmd {
     /// Pure-Rust 4gaia Sovereign p/q + OEIS A161330 + Salient .m8 trainer & DeepSeek Ollama registrar
     #[command(alias = "train-pq", alias = "gaia-train", alias = "pqm-train")]
     PqTrain(PqTrainCommand),
+
+    /// Sovereign CLI Mastery & Multi-Domain Model Test System (CLI, Code, Art, Love, Poetry, Sound, History)
+    #[command(
+        alias = "model-test",
+        alias = "test-models",
+        alias = "eval-models",
+        alias = "cli-test"
+    )]
+    PqTest(PqTestCommand),
+
+    /// Retrain/convert a public model (DeepSeek) to p/q, load the same model in Ollama & Smart Tree, and benchmark head-to-head
+    #[command(alias = "bench-pq", alias = "pqm-bench", alias = "ollama-bench")]
+    PqBench(PqBenchCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct PqBenchCommand {
+    /// Public base model to convert/retrain to p/q (default: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B)
+    #[arg(long, default_value = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B")]
+    pub base_model: String,
+    /// Ollama model tag for the p/q-converted checkpoint (default: st-deepseek-pqm:latest)
+    #[arg(long, default_value = "st-deepseek-pqm:latest")]
+    pub ollama_tag: String,
+    /// Number of Transformer projection matrices to quantize/train in 4gaia PQM (default: 28)
+    #[arg(long, default_value_t = 28)]
+    pub layers: usize,
+    /// Number of Symplectic Störmer–Verlet Leapfrog steps per layer (default: 32)
+    #[arg(long, default_value_t = 32)]
+    pub steps: usize,
+    /// Force retraining & Ollama registration before running the head-to-head benchmark
+    #[arg(long)]
+    pub retrain: bool,
+    /// Timeout in milliseconds for live Ollama HTTP query probe (default: 2500)
+    #[arg(long, default_value_t = 2500)]
+    pub ollama_timeout_ms: u64,
+    /// Emit structured JSON report
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct PqTestCommand {
+    /// Domain track to evaluate: all, cli, code, art, love, poetry, sound, history (default: all)
+    #[arg(long, short = 'd', default_value = "all")]
+    pub domain: String,
+    /// Optional model or persona filter (e.g. "in-binary:st-deepseek-pqm-4gaia", "persona:readme-expert", "art", "love")
+    #[arg(long, short = 'm')]
+    pub model: Option<String>,
+    /// Also probe external Ollama models (`st-deepseek-pqm:latest`, `aye-deepseek-pqm:latest`) if running
+    #[arg(long)]
+    pub include_ollama: bool,
+    /// Fail with non-zero exit code if any model fails a test in its intended domain track
+    #[arg(long)]
+    pub strict: bool,
+    /// Emit structured JSON report
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Clone, clap::Args)]

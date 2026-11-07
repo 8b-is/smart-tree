@@ -48,6 +48,16 @@ pub enum PersonaSpecialty {
     CodeAnalyst,
     /// READMEs, onboarding guides, CLI references, and developer documentation
     ReadmeExpert,
+    /// Command-line flags, subcommands, shell pipelines, and `st` CLI mastery
+    CliMaster,
+    /// Visual, ASCII/ANSI, Qwave Triad, shader, and demoscene art creation
+    ArtCreator,
+    /// Warmth, empathy, family care, human connection, and `<3<3<3+1` companionship
+    LoveCompanion,
+    /// Lyrical verse, meter, metaphor, stanza cadence, and philosophical poetry
+    PoetryWeaver,
+    /// PhoeniX 768kHz/384kHz audio, 16-Byte RationalWaveCell DDS, 432Hz/528Hz harmonics, and ultrasonic chirp
+    SoundSynthesizer,
 }
 
 impl PersonaSpecialty {
@@ -60,6 +70,19 @@ impl PersonaSpecialty {
             "readme" | "readme-expert" | "readme_expert" | "docs" | "doc-expert" => {
                 Self::ReadmeExpert
             }
+            "cli" | "cli-master" | "cli_master" | "command-line" | "shell" | "terminal" => {
+                Self::CliMaster
+            }
+            "art" | "art-creator" | "art_creator" | "visual" | "ascii" | "triad" => {
+                Self::ArtCreator
+            }
+            "love" | "love-companion" | "love_companion" | "heart" | "care" => Self::LoveCompanion,
+            "poetry" | "poetry-weaver" | "poetry_weaver" | "poem" | "verse" | "poet" => {
+                Self::PoetryWeaver
+            }
+            "sound" | "sound-synthesizer" | "sound_synthesizer" | "audio" | "music" | "phoenix" => {
+                Self::SoundSynthesizer
+            }
             _ => Self::LifeBiographer,
         }
     }
@@ -70,6 +93,11 @@ impl PersonaSpecialty {
             Self::HistoryDocumenter => "history-documenter",
             Self::CodeAnalyst => "code-analyst",
             Self::ReadmeExpert => "readme-expert",
+            Self::CliMaster => "cli-master",
+            Self::ArtCreator => "art-creator",
+            Self::LoveCompanion => "love-companion",
+            Self::PoetryWeaver => "poetry-weaver",
+            Self::SoundSynthesizer => "sound-synthesizer",
         }
     }
 
@@ -79,6 +107,11 @@ impl PersonaSpecialty {
             Self::HistoryDocumenter => "📜 History Documenter",
             Self::CodeAnalyst => "🔬 Code Analyst",
             Self::ReadmeExpert => "📖 README Expert",
+            Self::CliMaster => "🖥️ CLI Master",
+            Self::ArtCreator => "🎨 Art Creator",
+            Self::LoveCompanion => "❤️ Love Companion",
+            Self::PoetryWeaver => "🪶 Poetry Weaver",
+            Self::SoundSynthesizer => "🔊 Sound Synthesizer",
         }
     }
 }
@@ -546,18 +579,23 @@ impl LifePersona {
         let slug = Self::slugify(name);
 
         let allowed_exts: HashSet<&str> = match specialty {
-            PersonaSpecialty::CodeAnalyst => [
+            PersonaSpecialty::CodeAnalyst | PersonaSpecialty::CliMaster => [
                 "rs", "py", "ts", "tsx", "js", "jsx", "go", "c", "cpp", "h", "hpp", "swift", "sh",
-                "toml", "yaml", "yml", "sql", "md", "txt",
+                "bash", "zsh", "fish", "toml", "yaml", "yml", "sql", "md", "txt",
             ]
             .into_iter()
             .collect(),
             PersonaSpecialty::ReadmeExpert => ["md", "markdown", "txt", "org", "rst", "toml"]
                 .into_iter()
                 .collect(),
-            PersonaSpecialty::HistoryDocumenter | PersonaSpecialty::LifeBiographer => [
+            PersonaSpecialty::HistoryDocumenter
+            | PersonaSpecialty::LifeBiographer
+            | PersonaSpecialty::ArtCreator
+            | PersonaSpecialty::LoveCompanion
+            | PersonaSpecialty::PoetryWeaver
+            | PersonaSpecialty::SoundSynthesizer => [
                 "md", "txt", "org", "rst", "eml", "markdown", "json", "html", "htm", "tex", "csv",
-                "pdf",
+                "pdf", "rs", "svg",
             ]
             .into_iter()
             .collect(),
@@ -720,6 +758,15 @@ impl LifePersona {
                 specialty.slug()
             );
         }
+
+        // Order episodic memories chronologically (`temporal_order: YYYYMMDD`) so the `.m8` soul
+        // learns life experiences along a developmental timeline (earliest childhood -> later eras -> undated)
+        episodes.sort_by_key(|ep| {
+            (
+                if ep.temporal_order > 0 { 0u8 } else { 1u8 },
+                ep.temporal_order,
+            )
+        });
 
         let mut vocab_vec: Vec<(String, usize)> = word_counts.into_iter().collect();
         vocab_vec.sort_by_key(|b| std::cmp::Reverse(b.1));
@@ -1185,6 +1232,30 @@ impl LifePersona {
                         primary.source, temporal_badge
                     )
                 }
+                (PersonaSpecialty::CliMaster, _) => {
+                    format!(
+                        "Command-line reference in `{}`{}",
+                        primary.source, temporal_badge
+                    )
+                }
+                (PersonaSpecialty::ArtCreator, _) => {
+                    format!(
+                        "Visual & Triad aesthetic note in `{}`{}",
+                        primary.source, temporal_badge
+                    )
+                }
+                (PersonaSpecialty::LoveCompanion, _) => {
+                    format!("Heartfelt memory in `{}`{}", primary.source, temporal_badge)
+                }
+                (PersonaSpecialty::PoetryWeaver, _) => {
+                    format!("Lyrical verse in `{}`{}", primary.source, temporal_badge)
+                }
+                (PersonaSpecialty::SoundSynthesizer, _) => {
+                    format!(
+                        "PhoeniX acoustic & wave note in `{}`{}",
+                        primary.source, temporal_badge
+                    )
+                }
                 (PersonaSpecialty::LifeBiographer, _) => {
                     format!("From my notes in `{}`{}", primary.source, temporal_badge)
                 }
@@ -1205,6 +1276,11 @@ impl LifePersona {
                     "**Related code paths & structural invariants:**\n"
                 }
                 PersonaSpecialty::ReadmeExpert => "**Related guides & usage notes:**\n",
+                PersonaSpecialty::CliMaster => "**Related CLI flags, commands & pipelines:**\n",
+                PersonaSpecialty::ArtCreator => "**Connected visual & Triad motifs:**\n",
+                PersonaSpecialty::LoveCompanion => "**Connected moments of warmth & care:**\n",
+                PersonaSpecialty::PoetryWeaver => "**Connected stanzas & lyrical echoes:**\n",
+                PersonaSpecialty::SoundSynthesizer => "**Connected harmonic & wave resonances:**\n",
                 PersonaSpecialty::LifeBiographer => {
                     "**Connected memories across time (ordered chronologically):**\n"
                 }
@@ -1830,10 +1906,23 @@ fn ternary_classify_author_and_origin(
         || editorial_markers;
     let x6_paternal = if paternal_src { 3.6 } else { 0.0 };
 
+    let sister_contextualization = lower_pass.contains("susie remembers")
+        || lower_pass.contains("judy remembers")
+        || lower_pass.contains("susie adds")
+        || lower_pass.contains("judy adds")
+        || lower_pass.contains("susie and judy")
+        || lower_pass.contains("younger sisters, judy");
     let dialogue_src = lower_src.contains("answer")
         || lower_src.contains("letter")
-        || lower_src.contains("dialogue");
-    let x7_dialogue = if dialogue_src { 3.6 } else { 0.0 };
+        || lower_src.contains("dialogue")
+        || sister_contextualization;
+    let x7_dialogue = if sister_contextualization {
+        4.4
+    } else if dialogue_src {
+        3.6
+    } else {
+        0.0
+    };
 
     let diary_signal = (!maternal_src
         && (lower_src.contains("diary") || lower_hdr.contains("yearslong diary")))
@@ -1859,7 +1948,9 @@ fn ternary_classify_author_and_origin(
     let editor_override = lower_pass.contains("this book is dedicated to")
         || lower_pass.contains("epilog by")
         || lower_pass.contains("edited by")
-        || lower_pass.starts_with("note this edition");
+        || lower_pass.starts_with("note this edition")
+        || lower_pass.contains("making of colorado prospecting trips")
+        || lower_pass.contains("magnifier lamp");
     let x9_editor_note = if editor_override { 4.2 } else { 0.0 };
 
     let x: [f32; 10] = [
@@ -1966,7 +2057,14 @@ fn ternary_classify_author_and_origin(
                 "From my father's story & advice".to_string()
             }
         }
-        AuthorRole::FamilyDialogue => "Family Letter & Commentary Exchange".to_string(),
+        AuthorRole::FamilyDialogue => {
+            if sister_contextualization {
+                "Younger Sisters Judy Stauffer & Susie Ross (Mayday 1948–1980 Perspectives)"
+                    .to_string()
+            } else {
+                "Family Letter & Commentary Exchange".to_string()
+            }
+        }
         AuthorRole::GeneralCorpus => "Primary Corpus".to_string(),
     };
 

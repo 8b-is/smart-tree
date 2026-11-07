@@ -1772,6 +1772,33 @@ impl SovereignComputeTier {
     }
 }
 
+/// A close-by LLM / MemNet endpoint discovered on the host, loopback bridge, or local mesh.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NearbyModelEndpoint {
+    pub endpoint: String,
+    pub node_name: String,
+    pub kind: String,
+    pub rtc_ms: u32,
+    pub available: bool,
+    pub warm_models: Vec<String>,
+    pub available_models: Vec<String>,
+    pub compute_headroom_permille: u32,
+}
+
+/// Result of a compute-aware `MEMNET` query across close-by models and wave caches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NearbyModelAnswer {
+    pub source: String,
+    pub model: String,
+    pub endpoint: String,
+    pub node_name: String,
+    pub rtc_ms: u32,
+    pub compute_tier: String,
+    pub compute_headroom_permille: u32,
+    pub resonance_pm: u32,
+    pub packet: WaveQaPacket,
+}
+
 /// Complete end-host hardware & non-TCP/IP transport assessment for `i1.is` and `MEMNET`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostHardwareAssessment {
@@ -1785,6 +1812,18 @@ pub struct HostHardwareAssessment {
     pub ram_available_mb: u64,
     pub gpus: Vec<String>,
     pub vram_total_mb: u64,
+    #[serde(default)]
+    pub vram_available_mb: u64,
+    #[serde(default)]
+    pub gpu_utilization_pct: u8,
+    #[serde(default)]
+    pub cpu_load_pct: u8,
+    #[serde(default)]
+    pub compute_headroom_permille: u32,
+    #[serde(default)]
+    pub warm_loaded_models: Vec<String>,
+    #[serde(default)]
+    pub nearby_model_endpoints: Vec<NearbyModelEndpoint>,
     pub compute_tier: SovereignComputeTier,
     pub cloud_required: bool,
     pub can_broadcast_llm_to_memnet: bool,
@@ -2577,7 +2616,8 @@ impl MemnetNodeState {
                     origin_name: _,
                     timestamp_ms,
                 } => {
-                    let ollama_active = probe_tcp_port_ms("127.0.0.1", 11434, 15).is_some();
+                    let ollama_active = probe_tcp_port_ms("127.0.0.1", 11434, 15).is_some()
+                        || probe_tcp_port_ms("127.0.0.1", 11436, 15).is_some();
                     let pong = MemnetPayload::NodePong {
                         node_address: self.local_address,
                         node_name: self.node_name.clone(),
@@ -2601,6 +2641,19 @@ impl MemnetNodeState {
                             .into_raw_packet(vec![self.local_address])
                         {
                             let _ = sock.send_to(&resp_raw.to_wire_bytes(), peer);
+                        }
+                    } else if crate::config::StConfig::load()
+                        .map(|c| c.memnet.allow_nearby_models)
+                        .unwrap_or(true)
+                    {
+                        if let Some(ans) =
+                            self.answer_with_nearby_models(&question, None, min_resonance_pm, false)
+                        {
+                            if let Ok(resp_raw) = MemnetPayload::WaveQaResponse(ans.packet)
+                                .into_raw_packet(vec![self.local_address])
+                            {
+                                let _ = sock.send_to(&resp_raw.to_wire_bytes(), peer);
+                            }
                         }
                     }
                 }
@@ -3141,6 +3194,263 @@ impl MemnetNodeState {
             reviews: glassdoor.feed().to_vec(),
         }
     }
+
+    /// Discover all close-by model endpoints (local host, loopback bridges, configured `[memnet].endpoints`,
+    /// and active MemNet mesh routes within `max_nearby_rtc_ms`) with live model lists & compute headroom.
+    pub fn discover_nearby_model_endpoints(&self) -> Vec<NearbyModelEndpoint> {
+        let cfg = crate::config::StConfig::load().unwrap_or_default();
+        let hw = assess_host_hardware();
+        let mut endpoints = hw.nearby_model_endpoints;
+        let max_rtc = cfg.memnet.max_nearby_rtc_ms.max(10);
+
+        for r in &self.routes {
+            if r.status != RouteStatus::Up || r.effective_rtc_ms() > max_rtc {
+                continue;
+            }
+            let Some(host) = r.endpoint.split(':').next() else {
+                continue;
+            };
+            if host.is_empty()
+                || host.starts_with("255.")
+                || host.contains("//")
+                || host == "unplugged"
+                || host == "down"
+            {
+                continue;
+            }
+            let ollama_ep = format!("http://{host}:11434");
+            if !endpoints.iter().any(|e| e.endpoint == ollama_ep) {
+                if let Some((rtt_ms, avail, warm)) =
+                    probe_ollama_endpoint_models(&format!("{host}:11434"), 120)
+                {
+                    if !avail.is_empty() {
+                        endpoints.push(NearbyModelEndpoint {
+                            endpoint: ollama_ep,
+                            node_name: r.node_name.clone(),
+                            kind: "ollama-peer".to_string(),
+                            rtc_ms: r.effective_rtc_ms().min(rtt_ms as u32 + 2),
+                            available: true,
+                            warm_models: warm,
+                            available_models: avail,
+                            compute_headroom_permille: 850,
+                        });
+                    }
+                }
+            }
+            let st_ep = format!("http://{host}:28428");
+            if !endpoints.iter().any(|e| e.endpoint == st_ep) {
+                if let Some(rtt_ms) = probe_tcp_port_ms(host, 28428, 90) {
+                    endpoints.push(NearbyModelEndpoint {
+                        endpoint: st_ep,
+                        node_name: r.node_name.clone(),
+                        kind: "smart-tree-peer".to_string(),
+                        rtc_ms: r.effective_rtc_ms().min(rtt_ms as u32 + 2),
+                        available: true,
+                        warm_models: vec!["burn/mem8-ternary-micro".to_string()],
+                        available_models: vec!["burn/mem8-ternary-micro".to_string()],
+                        compute_headroom_permille: 800,
+                    });
+                }
+            }
+        }
+
+        endpoints.sort_by(|a, b| {
+            b.available
+                .cmp(&a.available)
+                .then_with(|| {
+                    b.warm_models
+                        .is_empty()
+                        .cmp(&a.warm_models.is_empty())
+                        .reverse()
+                })
+                .then_with(|| a.rtc_ms.cmp(&b.rtc_ms))
+                .then_with(|| {
+                    b.compute_headroom_permille
+                        .cmp(&a.compute_headroom_permille)
+                })
+        });
+        endpoints
+    }
+
+    /// Answer a question through `MEMNET` by consulting:
+    /// 1. Local `MEM|8` `WaveQaPacket` cache (instant zero-compute hit when `model_hint` is not forcing a specific model)
+    /// 2. Close-by LAN/mesh peers via UDP `:8423` (`query_lan_wave_qa`) when `allow_lan` is true
+    /// 3. All close-by LLM endpoints (`discover_nearby_model_endpoints`) ranked by real-time compute availability
+    ///    (free VRAM/RAM, GPU/CPU utilization, warm VRAM residency, and Peter's RTC `τ`)
+    /// 4. Local 2-Pass `.m8` Persona Souls + `burn/mem8-ternary-micro` SPQT Base-243 fallback
+    pub fn answer_with_nearby_models(
+        &mut self,
+        question: &str,
+        model_hint: Option<&str>,
+        min_resonance_pm: u32,
+        allow_lan: bool,
+    ) -> Option<NearbyModelAnswer> {
+        let q_trimmed = question.trim();
+        if q_trimmed.is_empty() {
+            return None;
+        }
+        let cfg = crate::config::StConfig::load().unwrap_or_default();
+        let resolved_hint = model_hint
+            .map(|h| h.trim())
+            .filter(|h| {
+                !h.is_empty()
+                    && !h.eq_ignore_ascii_case("auto")
+                    && !h.eq_ignore_ascii_case("memnet")
+                    && !h.eq_ignore_ascii_case("default")
+            })
+            .map(|h| cfg.resolve_model(h));
+
+        // 1. Check local wave cache first if no explicit model override was requested
+        if resolved_hint.is_none() {
+            if let Some((resonance_pm, pkt)) = self.query_wave_qa(q_trimmed, min_resonance_pm) {
+                let _ = self.save();
+                return Some(NearbyModelAnswer {
+                    source: "local-wave-cache".to_string(),
+                    model: "mem8/wave-qa-cache".to_string(),
+                    endpoint: format!("memnet://{}:{}", self.node_name, MEMNET_FS_PORT),
+                    node_name: pkt.origin_name.clone(),
+                    rtc_ms: 0,
+                    compute_tier: "zero-compute-wave-cache".to_string(),
+                    compute_headroom_permille: 1000,
+                    resonance_pm,
+                    packet: pkt,
+                });
+            }
+        }
+
+        // 2. Check LAN wave cache over UDP :8423 if enabled and no explicit model override
+        if allow_lan && resolved_hint.is_none() {
+            if let Some((resonance_pm, pkt)) = self.query_lan_wave_qa(q_trimmed, min_resonance_pm) {
+                let _ = self.save();
+                return Some(NearbyModelAnswer {
+                    source: "lan-wave-cache".to_string(),
+                    model: "mem8/lan-wave-qa".to_string(),
+                    endpoint: format!("udp://255.255.255.255:{MEMNET_FS_PORT}"),
+                    node_name: pkt.origin_name.clone(),
+                    rtc_ms: self.composite_rtc_tau_ms(0xC5).max(1),
+                    compute_tier: "mesh-wave-cache".to_string(),
+                    compute_headroom_permille: 1000,
+                    resonance_pm,
+                    packet: pkt,
+                });
+            }
+        }
+
+        // 3. If explicitly requesting a persona or burn ternary model, run 2-Pass Persona / Ternary directly
+        if let Some(ref hint) = resolved_hint {
+            if hint.starts_with("persona:")
+                || hint.starts_with("burn/")
+                || hint.starts_with("candle/")
+            {
+                let (model_used, reply) =
+                    synthesize_persona_or_ternary_answer(q_trimmed, Some(hint));
+                let pkt = self.learn_wave_qa(q_trimmed, &reply);
+                let _ = self.save();
+                if allow_lan {
+                    if let Ok(raw) = MemnetPayload::WaveQaResponse(pkt.clone())
+                        .into_raw_packet(vec![self.local_address])
+                    {
+                        let _ = self.broadcast_lan_udp(&raw);
+                    }
+                }
+                return Some(NearbyModelAnswer {
+                    source: "persona-pass2".to_string(),
+                    model: model_used,
+                    endpoint: format!("local://{}/mem8", self.node_name),
+                    node_name: self.node_name.clone(),
+                    rtc_ms: 1,
+                    compute_tier: "tier0-ternary-soul".to_string(),
+                    compute_headroom_permille: 1000,
+                    resonance_pm: 950,
+                    packet: pkt,
+                });
+            }
+        }
+
+        // 4. Compute-aware dispatch across all close-by Ollama & Smart Tree endpoints
+        if cfg.memnet.allow_nearby_models {
+            let endpoints = self.discover_nearby_model_endpoints();
+            let max_rtc = cfg.memnet.max_nearby_rtc_ms.max(10);
+
+            for ep in &endpoints {
+                if !ep.available || ep.rtc_ms > max_rtc {
+                    continue;
+                }
+                if ep.kind.starts_with("ollama") && !ep.available_models.is_empty() {
+                    if let Some((chosen_model, tier_label)) =
+                        select_compute_aware_model(q_trimmed, resolved_hint.as_deref(), ep, &cfg)
+                    {
+                        if let Some(answer_text) =
+                            call_ollama_chat_http(&ep.endpoint, &chosen_model, q_trimmed, 25_000)
+                        {
+                            let pkt = self.learn_wave_qa(q_trimmed, &answer_text);
+                            let _ = self.save();
+                            if allow_lan {
+                                if let Ok(raw) = MemnetPayload::WaveQaResponse(pkt.clone())
+                                    .into_raw_packet(vec![self.local_address])
+                                {
+                                    let _ = self.broadcast_lan_udp(&raw);
+                                }
+                            }
+                            return Some(NearbyModelAnswer {
+                                source: "nearby-ollama".to_string(),
+                                model: chosen_model,
+                                endpoint: ep.endpoint.clone(),
+                                node_name: ep.node_name.clone(),
+                                rtc_ms: ep.rtc_ms,
+                                compute_tier: tier_label,
+                                compute_headroom_permille: ep.compute_headroom_permille,
+                                resonance_pm: 980,
+                                packet: pkt,
+                            });
+                        }
+                    }
+                } else if ep.kind == "smart-tree-peer" && allow_lan {
+                    if let Some((peer_model, peer_answer)) =
+                        call_smart_tree_peer_ask_http(&ep.endpoint, q_trimmed, 4_000)
+                    {
+                        let pkt = self.learn_wave_qa(q_trimmed, &peer_answer);
+                        let _ = self.save();
+                        return Some(NearbyModelAnswer {
+                            source: "nearby-smart-tree-peer".to_string(),
+                            model: peer_model,
+                            endpoint: ep.endpoint.clone(),
+                            node_name: ep.node_name.clone(),
+                            rtc_ms: ep.rtc_ms,
+                            compute_tier: "mesh-peer-st".to_string(),
+                            compute_headroom_permille: ep.compute_headroom_permille,
+                            resonance_pm: 940,
+                            packet: pkt,
+                        });
+                    }
+                }
+            }
+        }
+
+        // 5. Fallback to local 2-Pass .m8 Persona Soul & SPQT Base-243 Ternary Engine (always available, 0 cloud)
+        let (model_used, reply) =
+            synthesize_persona_or_ternary_answer(q_trimmed, resolved_hint.as_deref());
+        let pkt = self.learn_wave_qa(q_trimmed, &reply);
+        let _ = self.save();
+        if allow_lan {
+            if let Ok(raw) =
+                MemnetPayload::WaveQaResponse(pkt.clone()).into_raw_packet(vec![self.local_address])
+            {
+                let _ = self.broadcast_lan_udp(&raw);
+            }
+        }
+        Some(NearbyModelAnswer {
+            source: "persona-pass2".to_string(),
+            model: model_used,
+            endpoint: format!("local://{}/mem8", self.node_name),
+            node_name: self.node_name.clone(),
+            rtc_ms: 1,
+            compute_tier: "tier0-ternary-soul".to_string(),
+            compute_headroom_permille: 1000,
+            resonance_pm: 920,
+            packet: pkt,
+        })
+    }
 }
 
 // ============================================================================
@@ -3148,7 +3458,7 @@ impl MemnetNodeState {
 // ============================================================================
 
 /// Perform a comprehensive end-host hardware, local LLM, and non-TCP/IP `MEMNET` transport assessment.
-/// Determines what models can and will run on the end host without any cloud dependency.
+/// Determines what models can and will run on the end host and close-by mesh without any cloud dependency.
 pub fn assess_host_hardware() -> HostHardwareAssessment {
     let hostname = std::env::var("HOSTNAME")
         .or_else(|_| std::fs::read_to_string("/etc/hostname").map(|s| s.trim().to_string()))
@@ -3158,7 +3468,7 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
     let cpu_arch = std::env::consts::ARCH.to_string();
     let cpu_cores = num_cpus::get().max(1);
 
-    // 1. CPU model & SIMD feature detection
+    // 1. CPU model, SIMD feature detection & integer CPU load %
     let mut cpu_model = format!("{cpu_arch} ({cpu_cores} cores)");
     let mut simd_capabilities = Vec::new();
     if let Ok(cpuinfo) = std::fs::read_to_string("/proc/cpuinfo") {
@@ -3190,6 +3500,25 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
     simd_capabilities.push("spqt-base243-ternary".to_string());
     simd_capabilities.push("felix-cordic-int18".to_string());
 
+    let mut cpu_load_pct = 10u8;
+    if let Ok(loadavg) = std::fs::read_to_string("/proc/loadavg") {
+        if let Some(first) = loadavg.split_whitespace().next() {
+            let mut parts = first.split('.');
+            let whole = parts
+                .next()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
+            let frac_str = parts.next().unwrap_or("0");
+            let frac = match frac_str.len() {
+                0 => 0u64,
+                1 => frac_str.parse::<u64>().unwrap_or(0) * 10,
+                _ => frac_str[..2].parse::<u64>().unwrap_or(0),
+            };
+            let load_x100 = whole * 100 + frac;
+            cpu_load_pct = (load_x100 / (cpu_cores as u64)).min(100) as u8;
+        }
+    }
+
     // 2. System RAM (total & available in MB)
     let mut ram_total_mb = 4096u64;
     let mut ram_available_mb = 2048u64;
@@ -3215,12 +3544,14 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
         }
     }
 
-    // 3. GPU / NPU / Unified Memory detection
+    // 3. GPU / NPU / Unified Memory detection + Free VRAM & GPU utilization %
     let mut gpus = Vec::new();
     let mut vram_total_mb = 0u64;
+    let mut vram_available_mb = 0u64;
+    let mut gpu_utilization_pct = 0u8;
     if let Ok(out) = std::process::Command::new("nvidia-smi")
         .args([
-            "--query-gpu=name,memory.total",
+            "--query-gpu=name,memory.total,memory.free,utilization.gpu",
             "--format=csv,noheader,nounits",
         ])
         .output()
@@ -3230,12 +3561,28 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
             for line in text.lines() {
                 let mut parts = line.split(',');
                 if let Some(name) = parts.next() {
-                    let mem_mb = parts
+                    let mem_total = parts
                         .next()
                         .and_then(|m| m.trim().parse::<u64>().ok())
                         .unwrap_or(0);
-                    vram_total_mb += mem_mb;
-                    gpus.push(format!("{} ({} MB VRAM)", name.trim(), mem_mb));
+                    let mem_free = parts
+                        .next()
+                        .and_then(|m| m.trim().parse::<u64>().ok())
+                        .unwrap_or(mem_total);
+                    let util = parts
+                        .next()
+                        .and_then(|u| u.trim().parse::<u8>().ok())
+                        .unwrap_or(0);
+                    vram_total_mb += mem_total;
+                    vram_available_mb += mem_free;
+                    gpu_utilization_pct = gpu_utilization_pct.max(util);
+                    gpus.push(format!(
+                        "{} ({} MB total, {} MB free, {}% util)",
+                        name.trim(),
+                        mem_total,
+                        mem_free,
+                        util
+                    ));
                 }
             }
         }
@@ -3243,6 +3590,7 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
     if gpus.is_empty() && Path::new("/dev/kfd").exists() {
         gpus.push("AMD ROCm GPU (/dev/kfd)".to_string());
         vram_total_mb = ram_total_mb / 2;
+        vram_available_mb = ram_available_mb / 2;
     }
     if gpus.is_empty() && os == "macos" && cpu_arch == "aarch64" {
         gpus.push(format!(
@@ -3250,14 +3598,153 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
             ram_total_mb
         ));
         vram_total_mb = (ram_total_mb * 3) / 4;
+        vram_available_mb = (ram_available_mb * 3) / 4;
     }
 
-    // 4. Active local LLM runtimes & trained .m8 souls
+    // Compute overall integer compute headroom in permille (0..=1000)
+    let mem_free_pm = if vram_total_mb > 0 {
+        ((vram_available_mb.saturating_mul(1000)) / vram_total_mb.max(1)).min(1000) as u32
+    } else {
+        ((ram_available_mb.saturating_mul(1000)) / ram_total_mb.max(1)).min(1000) as u32
+    };
+    let gpu_idle_pm = (100u32.saturating_sub(gpu_utilization_pct as u32)) * 10;
+    let cpu_idle_pm = (100u32.saturating_sub(cpu_load_pct as u32)) * 10;
+    let compute_headroom_permille =
+        ((mem_free_pm * 2 + gpu_idle_pm + cpu_idle_pm) / 4).clamp(50, 1000);
+
+    // 4. Probe close-by LLM runtimes, Ollama bridges (:11436, :11434, OLLAMA_HOST, config endpoints), Liquid-Rust (:8786), & trained .m8 souls
+    let cfg = crate::config::StConfig::load().unwrap_or_default();
     let mut active_local_llm_services =
         vec!["burn/mem8-ternary-micro (Built-in SPQT Base-243 · 0 Cloud)".to_string()];
-    if probe_tcp_port_ms("127.0.0.1", 11434, 25).is_some() {
-        active_local_llm_services.push("ollama://127.0.0.1:11434".to_string());
+    let mut nearby_model_endpoints = Vec::new();
+    let mut warm_loaded_models = Vec::new();
+    let mut discovered_ollama_models = Vec::new();
+
+    let mut candidate_urls: Vec<String> = Vec::new();
+    if let Ok(env_host) = std::env::var("OLLAMA_HOST") {
+        let trimmed = env_host.trim();
+        if !trimmed.is_empty() {
+            let url = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                trimmed.trim_end_matches('/').to_string()
+            } else {
+                format!("http://{}", trimmed.trim_end_matches('/'))
+            };
+            candidate_urls.push(url);
+        }
     }
+    for ep in &cfg.memnet.endpoints {
+        let clean = ep.trim().trim_end_matches('/').to_string();
+        if !clean.is_empty() && !candidate_urls.contains(&clean) {
+            candidate_urls.push(clean);
+        }
+    }
+    for default_ep in ["http://127.0.0.1:11436", "http://127.0.0.1:11434"] {
+        let s = default_ep.to_string();
+        if !candidate_urls.contains(&s) {
+            candidate_urls.push(s);
+        }
+    }
+
+    for url in &candidate_urls {
+        let host_port = url
+            .strip_prefix("http://")
+            .or_else(|| url.strip_prefix("https://"))
+            .unwrap_or(url);
+        let port = host_port
+            .rsplit_once(':')
+            .and_then(|(_, p)| p.parse::<u16>().ok())
+            .unwrap_or(11434);
+        let host_only = host_port
+            .rsplit_once(':')
+            .map(|(h, _)| h)
+            .unwrap_or(host_port);
+
+        if port == 11434 || port == 11436 {
+            if let Some((rtt_ms, avail, warm)) = probe_ollama_endpoint_models(host_port, 120) {
+                let svc_label = if avail.is_empty() {
+                    format!("ollama://{host_port} (standby, 0 models loaded)")
+                } else {
+                    format!(
+                        "ollama://{host_port} ({} models, {} warm in VRAM, RTT {}ms)",
+                        avail.len(),
+                        warm.len(),
+                        rtt_ms
+                    )
+                };
+                if !active_local_llm_services.contains(&svc_label) {
+                    active_local_llm_services.push(svc_label);
+                }
+                for w in &warm {
+                    if !warm_loaded_models.contains(w) {
+                        warm_loaded_models.push(w.clone());
+                    }
+                }
+                for m in &avail {
+                    if !discovered_ollama_models.contains(m) {
+                        discovered_ollama_models.push(m.clone());
+                    }
+                }
+                let ep_headroom = if host_only == "127.0.0.1" && port == 11434 {
+                    compute_headroom_permille
+                } else if !warm.is_empty() {
+                    920
+                } else {
+                    840
+                };
+                nearby_model_endpoints.push(NearbyModelEndpoint {
+                    endpoint: url.clone(),
+                    node_name: if port == 11436 {
+                        "a6000-sovereign-bridge (:11436)".to_string()
+                    } else if host_only == "127.0.0.1" || host_only == "localhost" {
+                        hostname.clone()
+                    } else {
+                        format!("peer-{host_only}")
+                    },
+                    kind: if host_only == "127.0.0.1" || host_only == "localhost" {
+                        "ollama-local".to_string()
+                    } else {
+                        "ollama-peer".to_string()
+                    },
+                    rtc_ms: (rtt_ms as u32) + 2,
+                    available: !avail.is_empty(),
+                    warm_models: warm,
+                    available_models: avail,
+                    compute_headroom_permille: ep_headroom,
+                });
+            }
+        } else if port == 8786 || port == 18786 {
+            if let Some(rtt_ms) = probe_tcp_port_ms(host_only, port, 40) {
+                let svc = format!("liquid-rust://{host_port} (LFM2.5-Audio-1.5B, RTT {rtt_ms}ms)");
+                if !active_local_llm_services.contains(&svc) {
+                    active_local_llm_services.push(svc);
+                }
+                nearby_model_endpoints.push(NearbyModelEndpoint {
+                    endpoint: url.clone(),
+                    node_name: format!("{hostname}-liquid-rust"),
+                    kind: "liquid-rust".to_string(),
+                    rtc_ms: (rtt_ms as u32) + 2,
+                    available: true,
+                    warm_models: vec!["liquid-rust/LFM2.5-Audio-1.5B".to_string()],
+                    available_models: vec!["liquid-rust/LFM2.5-Audio-1.5B".to_string()],
+                    compute_headroom_permille,
+                });
+            }
+        } else if port == 28428 && host_only != "127.0.0.1" && host_only != "localhost" {
+            if let Some(rtt_ms) = probe_tcp_port_ms(host_only, port, 60) {
+                nearby_model_endpoints.push(NearbyModelEndpoint {
+                    endpoint: url.clone(),
+                    node_name: format!("peer-st-{host_only}"),
+                    kind: "smart-tree-peer".to_string(),
+                    rtc_ms: (rtt_ms as u32) + 3,
+                    available: true,
+                    warm_models: vec!["burn/mem8-ternary-micro".to_string()],
+                    available_models: vec!["burn/mem8-ternary-micro".to_string()],
+                    compute_headroom_permille: 800,
+                });
+            }
+        }
+    }
+
     if probe_tcp_port_ms("127.0.0.1", 1234, 25).is_some() {
         active_local_llm_services.push("lmstudio://127.0.0.1:1234".to_string());
     }
@@ -3309,47 +3796,50 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
         }
     }
 
-    // 6. Determine Sovereign Compute Tier & Recommended Local Models (0 Cloud!)
+    // 6. Determine Sovereign Compute Tier & Populate Actual Installed Models (0 Cloud!)
     let effective_mem_mb = ram_total_mb.max(vram_total_mb);
-    let (compute_tier, mut recommended_local_models) =
-        if vram_total_mb >= 20_000 || ram_total_mb >= 32_000 {
-            (
-                SovereignComputeTier::Tier3SovereignRegionalBeacon,
-                vec![
-                    "burn/mem8-ternary-micro".to_string(),
-                    "deepseek-r1:32b-q4_k_m".to_string(),
-                    "qwen2.5-coder:32b".to_string(),
-                    "llama3.3:70b-iq2_xxs".to_string(),
-                ],
-            )
-        } else if vram_total_mb >= 7_500 || effective_mem_mb >= 12_000 {
-            (
-                SovereignComputeTier::Tier2WorkstationLlmHelper,
-                vec![
-                    "burn/mem8-ternary-micro".to_string(),
-                    "deepseek-r1:14b-q4_k_m".to_string(),
-                    "qwen2.5-coder:7b".to_string(),
-                ],
-            )
-        } else if effective_mem_mb >= 2_048 {
-            (
-                SovereignComputeTier::Tier1CompactLocalLlm,
-                vec![
-                    "burn/mem8-ternary-micro".to_string(),
-                    "qwen2.5-coder:1.5b-q4".to_string(),
-                    "llama3.2:3b-q4".to_string(),
-                ],
-            )
-        } else {
-            (
-                SovereignComputeTier::Tier0TernarySoulOnly,
-                vec!["burn/mem8-ternary-micro".to_string()],
-            )
-        };
+    let compute_tier = if vram_total_mb >= 20_000 || ram_total_mb >= 32_000 {
+        SovereignComputeTier::Tier3SovereignRegionalBeacon
+    } else if vram_total_mb >= 7_500 || effective_mem_mb >= 12_000 {
+        SovereignComputeTier::Tier2WorkstationLlmHelper
+    } else if effective_mem_mb >= 2_048 {
+        SovereignComputeTier::Tier1CompactLocalLlm
+    } else {
+        SovereignComputeTier::Tier0TernarySoulOnly
+    };
+
+    let mut recommended_local_models = vec![
+        "burn/mem8-ternary-micro".to_string(),
+        "burn/mem8-wave-micro".to_string(),
+    ];
+
+    // Prioritize warm models in VRAM first, then all actually installed Ollama models
+    for w in &warm_loaded_models {
+        if !recommended_local_models.contains(w) {
+            recommended_local_models.push(w.clone());
+        }
+    }
+    for m in &discovered_ollama_models {
+        if !recommended_local_models.contains(m) {
+            recommended_local_models.push(m.clone());
+        }
+    }
+    if nearby_model_endpoints
+        .iter()
+        .any(|e| e.kind == "liquid-rust")
+    {
+        let lfm = "liquid-rust/LFM2.5-Audio-1.5B".to_string();
+        if !recommended_local_models.contains(&lfm) {
+            recommended_local_models.push(lfm);
+        }
+    }
 
     if let Ok(personas) = crate::mem8::persona::LifePersona::list_all() {
-        for p in personas.into_iter().take(6) {
-            recommended_local_models.push(format!("persona:{}", p.slug));
+        for p in personas.into_iter().take(10) {
+            let slug = format!("persona:{}", p.slug);
+            if !recommended_local_models.contains(&slug) {
+                recommended_local_models.push(slug);
+            }
         }
     }
 
@@ -3368,6 +3858,12 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
         ram_available_mb,
         gpus,
         vram_total_mb,
+        vram_available_mb,
+        gpu_utilization_pct,
+        cpu_load_pct,
+        compute_headroom_permille,
+        warm_loaded_models,
+        nearby_model_endpoints,
         compute_tier,
         cloud_required: false,
         can_broadcast_llm_to_memnet,
@@ -3377,6 +3873,420 @@ pub fn assess_host_hardware() -> HostHardwareAssessment {
         non_ip_transports,
         overlay_ip_transports,
     }
+}
+
+/// Perform a raw HTTP/1.0 GET request with integer millisecond timeout and return the body string.
+fn raw_http10_get(host_port: &str, path: &str, timeout_ms: u64) -> Option<(u16, String)> {
+    use std::io::Read;
+    use std::net::{TcpStream, ToSocketAddrs};
+
+    let addr = host_port.to_socket_addrs().ok()?.next()?;
+    let start = std::time::Instant::now();
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(timeout_ms)).ok()?;
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(timeout_ms.max(850))));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(timeout_ms.max(250))));
+
+    let req = format!(
+        "GET {path} HTTP/1.0\r\nHost: {host_port}\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
+    );
+    stream.write_all(req.as_bytes()).ok()?;
+    let mut buf = Vec::new();
+    let _ = stream.read_to_end(&mut buf);
+    let rtt_ms = (start.elapsed().as_millis() / 4).clamp(1, 65_535) as u16;
+    let text = String::from_utf8_lossy(&buf);
+    let (_, body) = text
+        .split_once("\r\n\r\n")
+        .or_else(|| text.split_once("\n\n"))?;
+    if body.trim().is_empty() {
+        return None;
+    }
+    Some((rtt_ms, body.to_string()))
+}
+
+/// Probe an Ollama endpoint (`host:port`) for all installed models (`/api/tags`) and VRAM-warm models (`/api/ps`),
+/// automatically marking models whose `parent_model` is loaded in VRAM as warm!
+pub fn probe_ollama_endpoint_models(
+    host_port: &str,
+    timeout_ms: u64,
+) -> Option<(u16, Vec<String>, Vec<String>)> {
+    let (rtt_ms, tags_body) = raw_http10_get(host_port, "/api/tags", timeout_ms)?;
+    let tags_json: serde_json::Value = serde_json::from_str(tags_body.trim()).ok()?;
+    let models_arr = tags_json.get("models")?.as_array()?;
+
+    let mut available_models = Vec::new();
+    let mut parent_map: Vec<(String, String)> = Vec::new();
+    for m in models_arr {
+        if let Some(name) = m.get("name").and_then(|v| v.as_str()) {
+            available_models.push(name.to_string());
+            let parent = m
+                .get("details")
+                .and_then(|d| d.get("parent_model"))
+                .and_then(|p| p.as_str())
+                .unwrap_or("")
+                .to_string();
+            if !parent.is_empty() {
+                parent_map.push((name.to_string(), parent));
+            }
+        }
+    }
+
+    let mut warm_models = Vec::new();
+    if let Some((_ps_rtt, ps_body)) = raw_http10_get(host_port, "/api/ps", timeout_ms) {
+        if let Ok(ps_json) = serde_json::from_str::<serde_json::Value>(ps_body.trim()) {
+            if let Some(ps_arr) = ps_json.get("models").and_then(|v| v.as_array()) {
+                for m in ps_arr {
+                    if let Some(name) = m.get("name").and_then(|v| v.as_str()) {
+                        let s = name.to_string();
+                        if !warm_models.contains(&s) {
+                            warm_models.push(s);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Any model sharing weights (`parent_model`) with a VRAM-warm model is also warm in VRAM!
+    let base_warm = warm_models.clone();
+    for (child, parent) in &parent_map {
+        if base_warm.iter().any(|w| w == parent) && !warm_models.contains(child) {
+            warm_models.push(child.clone());
+        }
+    }
+
+    Some((rtt_ms, available_models, warm_models))
+}
+
+/// Select the best model on a close-by endpoint given the user's question, optional model hint,
+/// and current compute availability (`compute_headroom_permille` and VRAM residency).
+fn select_compute_aware_model(
+    question: &str,
+    resolved_hint: Option<&str>,
+    ep: &NearbyModelEndpoint,
+    cfg: &crate::config::StConfig,
+) -> Option<(String, String)> {
+    if ep.available_models.is_empty() {
+        return None;
+    }
+
+    // 1. If the caller asked for a specific model (or alias), check if this endpoint has it
+    if let Some(hint) = resolved_hint {
+        let clean = hint.strip_prefix("ollama/").unwrap_or(hint);
+        if let Some(found) = ep
+            .available_models
+            .iter()
+            .find(|m| m.eq_ignore_ascii_case(clean) || m.starts_with(clean))
+        {
+            return Some((found.clone(), "explicit-model-match".to_string()));
+        }
+    }
+
+    let lower_q = question.to_ascii_lowercase();
+    let is_code_query = lower_q.contains("rust")
+        || lower_q.contains("code")
+        || lower_q.contains("fn ")
+        || lower_q.contains("struct ")
+        || lower_q.contains("impl ")
+        || lower_q.contains("bug")
+        || lower_q.contains("compile");
+    let is_deep_reasoning = lower_q.contains("prove")
+        || lower_q.contains("theorem")
+        || lower_q.contains("math")
+        || lower_q.contains("erdos")
+        || lower_q.contains("ramsey")
+        || lower_q.contains("szemeredi")
+        || lower_q.contains("why ");
+    let is_st_domain = lower_q.contains("smart-tree")
+        || lower_q.contains("smart tree")
+        || lower_q.contains("memnet")
+        || lower_q.contains("mem8")
+        || lower_q.contains("0x62")
+        || lower_q.contains("spqt");
+
+    // 2. If compute-aware routing is enabled and an appropriate model is already warm in VRAM, prefer it!
+    if !ep.warm_models.is_empty() {
+        if is_st_domain {
+            for pref in ["st-deepseek-pqm:latest", "aye-deepseek-pqm:latest"] {
+                if ep.warm_models.iter().any(|w| w == pref) {
+                    return Some((pref.to_string(), "vram-warm-sovereign-pqm".to_string()));
+                }
+            }
+        }
+        // If default_model is warm, use it immediately
+        let def = cfg.resolve_model(&cfg.models.default_model);
+        let def_clean = def.strip_prefix("ollama/").unwrap_or(&def);
+        if ep.warm_models.iter().any(|w| w == def_clean) {
+            return Some((def_clean.to_string(), "vram-warm-default".to_string()));
+        }
+    }
+
+    // 3. Choose candidate pool based on compute headroom
+    let headroom = ep.compute_headroom_permille;
+    if headroom >= 650 && !is_st_domain {
+        if is_code_query {
+            for cand in [
+                "st-deepseek-pqm:latest",
+                "devstral:24b",
+                "qwen3.8:27b",
+                "qwen3.6:35b",
+                "aye-deepseek-pqm:latest",
+            ] {
+                if ep.available_models.iter().any(|m| m == cand) {
+                    return Some((cand.to_string(), "high-compute-code".to_string()));
+                }
+            }
+        }
+        if is_deep_reasoning {
+            for cand in [
+                "st-deepseek-pqm:latest",
+                "aye-deepseek-pqm:latest",
+                "deepseek-r1:32b",
+                "aye-deepseek:32b",
+                "cheet-deepseek:32b",
+                "qwen3.6:35b",
+            ] {
+                if ep.available_models.iter().any(|m| m == cand) {
+                    return Some((cand.to_string(), "high-compute-reasoning".to_string()));
+                }
+            }
+        }
+    }
+
+    // 4. Medium / general compute: prefer warm models first, then configured medium models, then heavy models
+    if let Some(first_warm) = ep.warm_models.first() {
+        // Prefer st-deepseek-pqm:latest if warm
+        if ep.warm_models.iter().any(|w| w == "st-deepseek-pqm:latest") {
+            return Some((
+                "st-deepseek-pqm:latest".to_string(),
+                "vram-warm-pqm".to_string(),
+            ));
+        }
+        return Some((first_warm.clone(), "vram-warm".to_string()));
+    }
+
+    for cand in &cfg.memnet.medium_compute_models {
+        let clean = cand.strip_prefix("ollama/").unwrap_or(cand);
+        if ep.available_models.iter().any(|m| m == clean) {
+            return Some((clean.to_string(), "medium-compute".to_string()));
+        }
+    }
+
+    if headroom >= 500 {
+        for cand in &cfg.memnet.heavy_compute_models {
+            let clean = cand.strip_prefix("ollama/").unwrap_or(cand);
+            if ep.available_models.iter().any(|m| m == clean) {
+                return Some((clean.to_string(), "heavy-compute".to_string()));
+            }
+        }
+    }
+
+    ep.available_models
+        .first()
+        .map(|m| (m.clone(), "available-fallback".to_string()))
+}
+
+/// Call a close-by Ollama endpoint (`POST /api/chat` with `stream: false`) over raw HTTP/1.0.
+fn call_ollama_chat_http(
+    endpoint_url: &str,
+    model: &str,
+    question: &str,
+    timeout_ms: u64,
+) -> Option<String> {
+    use std::io::Read;
+    use std::net::{TcpStream, ToSocketAddrs};
+
+    let host_port = endpoint_url
+        .strip_prefix("http://")
+        .or_else(|| endpoint_url.strip_prefix("https://"))
+        .unwrap_or(endpoint_url)
+        .trim_end_matches('/');
+    let addr = host_port.to_socket_addrs().ok()?.next()?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(250)).ok()?;
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(timeout_ms)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(2_000)));
+
+    let payload = serde_json::json!({
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": question
+            }
+        ],
+        "stream": false,
+        "think": false,
+        "options": {
+            "num_predict": 384
+        }
+    });
+    let body_bytes = serde_json::to_vec(&payload).ok()?;
+    let req = format!(
+        "POST /api/chat HTTP/1.0\r\nHost: {host_port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body_bytes.len()
+    );
+    stream.write_all(req.as_bytes()).ok()?;
+    stream.write_all(&body_bytes).ok()?;
+
+    let mut buf = Vec::new();
+    let _ = stream.read_to_end(&mut buf);
+    let text = String::from_utf8_lossy(&buf);
+    let (_, resp_body) = text
+        .split_once("\r\n\r\n")
+        .or_else(|| text.split_once("\n\n"))?;
+    let json: serde_json::Value = serde_json::from_str(resp_body.trim()).ok()?;
+    let content = json
+        .get("message")
+        .and_then(|m| {
+            m.get("content")
+                .and_then(|c| c.as_str())
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| m.get("thinking").and_then(|c| c.as_str()))
+        })
+        .or_else(|| json.get("response").and_then(|c| c.as_str()))?
+        .trim();
+    if content.is_empty() {
+        None
+    } else {
+        Some(content.to_string())
+    }
+}
+
+/// Query a close-by Smart Tree HTTP daemon (`POST /memnet/ask` with `lan: false`) over raw HTTP/1.0.
+fn call_smart_tree_peer_ask_http(
+    endpoint_url: &str,
+    question: &str,
+    timeout_ms: u64,
+) -> Option<(String, String)> {
+    use std::io::Read;
+    use std::net::{TcpStream, ToSocketAddrs};
+
+    let host_port = endpoint_url
+        .strip_prefix("http://")
+        .or_else(|| endpoint_url.strip_prefix("https://"))
+        .unwrap_or(endpoint_url)
+        .trim_end_matches('/');
+    let addr = host_port.to_socket_addrs().ok()?.next()?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(180)).ok()?;
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(timeout_ms)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+
+    let payload = serde_json::json!({
+        "question": question,
+        "lan": false
+    });
+    let body_bytes = serde_json::to_vec(&payload).ok()?;
+    let req = format!(
+        "POST /memnet/ask HTTP/1.0\r\nHost: {host_port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body_bytes.len()
+    );
+    stream.write_all(req.as_bytes()).ok()?;
+    stream.write_all(&body_bytes).ok()?;
+
+    let mut buf = Vec::new();
+    let _ = stream.read_to_end(&mut buf);
+    let text = String::from_utf8_lossy(&buf);
+    let (_, resp_body) = text
+        .split_once("\r\n\r\n")
+        .or_else(|| text.split_once("\n\n"))?;
+    let json: serde_json::Value = serde_json::from_str(resp_body.trim()).ok()?;
+    let ans = json.get("answer").and_then(|v| v.as_str())?.trim();
+    if ans.is_empty() {
+        return None;
+    }
+    let model = json
+        .get("model")
+        .or_else(|| json.get("persona"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("peer:smart-tree")
+        .to_string();
+    Some((model, ans.to_string()))
+}
+
+/// Pure-integer 2-Pass `.m8` Persona Soul & SPQT Base-243 Ternary synthesizer (zero floats).
+pub fn synthesize_persona_or_ternary_answer(
+    question: &str,
+    model_hint: Option<&str>,
+) -> (String, String) {
+    use crate::mem8::persona::LifePersona;
+
+    if let Some(hint) = model_hint {
+        let clean = hint
+            .strip_prefix("persona:")
+            .or_else(|| hint.strip_prefix("burn/"))
+            .or_else(|| hint.strip_prefix("candle/"))
+            .or_else(|| hint.strip_prefix("local/"))
+            .unwrap_or(hint);
+        if !clean.is_empty()
+            && !clean.contains("ternary")
+            && clean != "mem8-wave-micro"
+            && clean != "default"
+        {
+            if let Ok(persona) = LifePersona::load_cached(clean) {
+                let recalled = persona.recall_episodes(question, 8);
+                let answer = persona
+                    .synthesize_contextual_answer(question, &recalled)
+                    .unwrap_or_else(|| persona.respond_locally(question));
+                return (format!("persona:{}", persona.slug), answer);
+            }
+        }
+    }
+
+    let (q_trits, _) = crate::proxy::burn::compute_ternary_signature(question);
+    let lower_q = question.to_ascii_lowercase();
+    if let Ok(summaries) = LifePersona::list_all() {
+        let mut best_score = i32::MIN;
+        let mut best_persona = None;
+        for summary in &summaries {
+            if let Ok(p) = LifePersona::load_cached(&summary.slug) {
+                let top = p.recall_episodes(question, 1);
+                if let Some(ep) = top.first() {
+                    let (ep_trits, _) = crate::proxy::burn::compute_ternary_signature(&ep.passage);
+                    let dot: i32 = q_trits
+                        .iter()
+                        .zip(ep_trits.iter())
+                        .map(|(&a, &b)| (a as i32) * (b as i32))
+                        .sum();
+                    let mut score = dot;
+                    if lower_q.contains(&p.name.to_ascii_lowercase()) || lower_q.contains(&p.slug) {
+                        score += 72;
+                    }
+                    if let Some(ref seed) = p.ancestral_seed {
+                        for alias in &seed.aliases {
+                            if lower_q.contains(&alias.to_ascii_lowercase()) {
+                                score += 64;
+                            }
+                        }
+                        for place in &seed.places {
+                            if lower_q.contains(&place.to_ascii_lowercase()) {
+                                score += 48;
+                            }
+                        }
+                        for comp in &seed.companions {
+                            if lower_q.contains(&comp.to_ascii_lowercase()) {
+                                score += 48;
+                            }
+                        }
+                    }
+                    if score > best_score {
+                        best_score = score;
+                        best_persona = Some(p);
+                    }
+                }
+            }
+        }
+        if let Some(persona) = best_persona {
+            let recalled = persona.recall_episodes(question, 8);
+            let answer = persona
+                .synthesize_contextual_answer(question, &recalled)
+                .unwrap_or_else(|| persona.respond_locally(question));
+            return (format!("persona:{}", persona.slug), answer);
+        }
+    }
+
+    (
+        "burn/mem8-ternary-micro".to_string(),
+        format!("SPQT Base-243 Ternary response for: {question}"),
+    )
 }
 
 /// Detect local network interfaces `(iface_name, ipv4_str, is_up, medium)` across Linux and macOS.

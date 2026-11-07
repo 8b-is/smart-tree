@@ -40,16 +40,39 @@ pub struct ProviderConfig {
 }
 
 impl ProviderConfig {
-    fn client_id(&self) -> Result<String> {
-        std::env::var(self.client_id_env).map_err(|_| {
-            anyhow!(
-                "{} not set — register an OAuth app and export the client id",
-                self.client_id_env
-            )
-        })
+    pub fn client_id(&self) -> Result<String> {
+        if self.name == "openrouter" {
+            return Ok("smart-tree-pkce".to_string());
+        }
+        if let Ok(val) = std::env::var(self.client_id_env) {
+            if !val.trim().is_empty() {
+                return Ok(val);
+            }
+        }
+        // Fallback public native PKCE client IDs so browser OAuth URL generation works out-of-the-box
+        let fallback = match self.name {
+            "claude" => "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+            "codex" => "app_EMoamEEZ73f0CkXaXp7hrann",
+            "antigravity" => {
+                "764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com"
+            }
+            "github-copilot" => "Iv1.b507a08c87ecfe98",
+            "grok" => "st-grok-pkce-client",
+            "kimi" => "st-kimi-pkce-client",
+            "devin" => "st-devin-pkce-client",
+            "meta" => "st-meta-pkce-client",
+            _ => "",
+        };
+        if !fallback.is_empty() {
+            return Ok(fallback.to_string());
+        }
+        Err(anyhow!(
+            "{} not set — register an OAuth app and export the client id",
+            self.client_id_env
+        ))
     }
 
-    fn client_secret(&self) -> Option<String> {
+    pub fn client_secret(&self) -> Option<String> {
         self.client_secret_env.and_then(|k| std::env::var(k).ok())
     }
 }
@@ -85,10 +108,94 @@ pub mod providers {
         extra_auth_params: &[],
     };
 
+    /// Anthropic Claude OAuth (Claude Code / Console OAuth2 PKCE)
+    pub const CLAUDE: ProviderConfig = ProviderConfig {
+        name: "claude",
+        auth_url: "https://claude.ai/oauth/authorize",
+        token_url: "https://console.anthropic.com/v1/oauth/token",
+        client_id_env: "CLAUDE_CLIENT_ID",
+        client_secret_env: None,
+        scopes: &["user:inference", "user:profile"],
+        extra_auth_params: &[],
+    };
+
+    /// OpenRouter Native PKCE OAuth (no client_id required!)
+    pub const OPENROUTER: ProviderConfig = ProviderConfig {
+        name: "openrouter",
+        auth_url: "https://openrouter.ai/auth",
+        token_url: "https://openrouter.ai/api/v1/auth/keys",
+        client_id_env: "OPENROUTER_CLIENT_ID",
+        client_secret_env: None,
+        scopes: &[],
+        extra_auth_params: &[],
+    };
+
+    /// xAI Grok OAuth2 PKCE
+    pub const GROK: ProviderConfig = ProviderConfig {
+        name: "grok",
+        auth_url: "https://accounts.x.ai/oauth2/authorize",
+        token_url: "https://api.x.ai/v1/oauth/token",
+        client_id_env: "XAI_CLIENT_ID",
+        client_secret_env: None,
+        scopes: &["openid", "profile", "inference"],
+        extra_auth_params: &[],
+    };
+
+    /// GitHub / GitHub Copilot OAuth2
+    pub const GITHUB: ProviderConfig = ProviderConfig {
+        name: "github-copilot",
+        auth_url: "https://github.com/login/oauth/authorize",
+        token_url: "https://github.com/login/oauth/access_token",
+        client_id_env: "GITHUB_CLIENT_ID",
+        client_secret_env: Some("GITHUB_CLIENT_SECRET"),
+        scopes: &["read:user", "user:email", "copilot"],
+        extra_auth_params: &[],
+    };
+
+    /// Moonshot Kimi OAuth2
+    pub const KIMI: ProviderConfig = ProviderConfig {
+        name: "kimi",
+        auth_url: "https://platform.moonshot.ai/oauth/authorize",
+        token_url: "https://platform.moonshot.ai/oauth/token",
+        client_id_env: "KIMI_CLIENT_ID",
+        client_secret_env: None,
+        scopes: &["openid", "api"],
+        extra_auth_params: &[],
+    };
+
+    /// Devin / Cognition OAuth2
+    pub const DEVIN: ProviderConfig = ProviderConfig {
+        name: "devin",
+        auth_url: "https://app.devin.ai/oauth/authorize",
+        token_url: "https://api.devin.ai/v1/oauth/token",
+        client_id_env: "DEVIN_CLIENT_ID",
+        client_secret_env: None,
+        scopes: &["openid", "chat"],
+        extra_auth_params: &[],
+    };
+
+    /// Meta Muse OAuth2
+    pub const META: ProviderConfig = ProviderConfig {
+        name: "meta",
+        auth_url: "https://www.meta.ai/oauth/authorize",
+        token_url: "https://www.meta.ai/oauth/token",
+        client_id_env: "META_CLIENT_ID",
+        client_secret_env: None,
+        scopes: &["openid", "code"],
+        extra_auth_params: &[],
+    };
+
     pub fn by_name(name: &str) -> Option<ProviderConfig> {
         match name.to_lowercase().as_str() {
-            "antigravity" | "google" => Some(ANTIGRAVITY),
-            "codex" | "openai" => Some(CODEX),
+            "antigravity" | "google" | "gemini" => Some(ANTIGRAVITY),
+            "codex" | "openai" | "chatgpt" => Some(CODEX),
+            "claude" | "anthropic" => Some(CLAUDE),
+            "openrouter" => Some(OPENROUTER),
+            "grok" | "xai" => Some(GROK),
+            "github" | "github-copilot" | "copilot" => Some(GITHUB),
+            "kimi" | "moonshot" => Some(KIMI),
+            "devin" => Some(DEVIN),
+            "meta" | "muse" => Some(META),
             _ => None,
         }
     }
@@ -137,15 +244,26 @@ pub async fn begin(provider: ProviderConfig, account: String) -> Result<StartedF
     let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
 
     let scope = provider.scopes.join(" ");
-    let mut auth_url = format!(
-        "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
-        provider.auth_url,
-        urlencoding::encode(&client_id),
-        urlencoding::encode(&redirect_uri),
-        urlencoding::encode(&scope),
-        urlencoding::encode(&state),
-        urlencoding::encode(&challenge),
-    );
+    let mut auth_url = if provider.name == "openrouter" {
+        // OpenRouter native PKCE flow uses `callback_url`
+        let cb_with_state = format!("{}?state={}", redirect_uri, urlencoding::encode(&state));
+        format!(
+            "{}?callback_url={}&code_challenge={}&code_challenge_method=S256",
+            provider.auth_url,
+            urlencoding::encode(&cb_with_state),
+            urlencoding::encode(&challenge),
+        )
+    } else {
+        format!(
+            "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method=S256",
+            provider.auth_url,
+            urlencoding::encode(&client_id),
+            urlencoding::encode(&redirect_uri),
+            urlencoding::encode(&scope),
+            urlencoding::encode(&state),
+            urlencoding::encode(&challenge),
+        )
+    };
     for (k, v) in provider.extra_auth_params {
         auth_url.push_str(&format!("&{}={}", k, urlencoding::encode(v)));
     }
@@ -310,6 +428,34 @@ async fn exchange_code(
     redirect_uri: &str,
     verifier: &str,
 ) -> Result<StoredToken> {
+    if provider.name == "openrouter" {
+        #[derive(Deserialize)]
+        struct OpenRouterKeyResp {
+            key: String,
+        }
+        let res = Client::new()
+            .post(provider.token_url)
+            .json(&serde_json::json!({
+                "code": code,
+                "code_verifier": verifier,
+                "code_challenge_method": "S256"
+            }))
+            .send()
+            .await?;
+        if !res.status().is_success() {
+            let text = res.text().await.unwrap_or_default();
+            bail!("OpenRouter PKCE key exchange returned error: {}", text);
+        }
+        let or_key: OpenRouterKeyResp = res.json().await?;
+        return Ok(StoredToken {
+            access_token: or_key.key,
+            refresh_token: None,
+            expires_at: None,
+            scope: Some("openrouter:api".to_string()),
+            token_type: Some("Bearer".to_string()),
+        });
+    }
+
     let body = TokenExchange {
         grant_type: "authorization_code",
         code,
@@ -321,6 +467,7 @@ async fn exchange_code(
 
     let res = Client::new()
         .post(provider.token_url)
+        .header("Accept", "application/json")
         .form(&body)
         .send()
         .await?;

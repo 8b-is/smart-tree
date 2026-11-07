@@ -43,6 +43,8 @@ pub mod magiscanner; // Deep file security scanning, hash memory, cert trust
 pub mod mega_hidden_cascade; // Mega-Scale Hidden Dimension (1M+) & Dyadic Attention Cascade (1->3->7->11->21...->N=C-[MAXn-3]->INF/pq)
 pub mod mega_session_manager; // Mega session persistence in ~/.mem8/
 pub mod memory_manager; // Real memory management for consciousness!
+pub mod model_eval; // Sovereign CLI Mastery & Multi-Domain Model Test Harness (st pq-test / st model-test)
+pub mod pq_bench; // Head-to-head p/q model retraining & benchmark (Ollama vs Smart Tree, st pq-bench)
 pub mod pq_healer; // Sovereign 3-tier local p/q + SPQT ternary + Salient .m8 code healer (st pq-fix)
 pub mod pq_trainer; // Pure-Rust 4gaia Sovereign p/q + A161330 + Salient .m8 trainer (st pq-train)
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!

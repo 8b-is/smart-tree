@@ -1,6 +1,8 @@
 //! Axum HTTP server for the web dashboard
 
-use super::{api, assets, collab, state_sync, voice, websocket, DashboardState, SharedState};
+use super::{
+    api, assets, collab, providers, state_sync, voice, websocket, DashboardState, SharedState,
+};
 use crate::in_memory_logger::InMemoryLogStore;
 use anyhow::Result;
 use axum::{
@@ -135,6 +137,45 @@ pub async fn start_server(
             get(api::get_active_prompts).post(api::ask_prompt),
         )
         .route("/api/prompt/:prompt_id/answer", post(api::answer_prompt))
+        // Universal AI Providers, OAuth Hub & Grandma's 1-Click Website Maker
+        .route("/api/providers", get(providers::get_providers))
+        .route(
+            "/api/providers/discover",
+            post(providers::discover_providers),
+        )
+        .route("/api/providers/toggle", post(providers::toggle_provider))
+        .route(
+            "/api/providers/configure",
+            post(providers::configure_provider),
+        )
+        .route(
+            "/api/providers/disconnect",
+            post(providers::disconnect_provider),
+        )
+        .route(
+            "/api/providers/oauth/start",
+            post(providers::start_oauth_flow),
+        )
+        .route(
+            "/api/providers/oauth/status",
+            get(providers::get_oauth_status),
+        )
+        .route(
+            "/api/providers/import-opencode",
+            post(providers::import_opencode_auth),
+        )
+        .route(
+            "/api/providers/pq-bench",
+            post(providers::run_pq_bench_endpoint),
+        )
+        .route(
+            "/api/website/generate",
+            post(providers::generate_grandma_website),
+        )
+        .route(
+            "/api/website/preview/:slug",
+            get(providers::preview_website),
+        )
         // WebSocket endpoints
         .route("/ws/terminal", get(websocket::terminal_handler))
         .route("/ws/state", get(state_sync::state_handler))

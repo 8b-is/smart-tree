@@ -2211,4 +2211,516 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.collabPanel = new CollabPanel();
+    window.providersHub = new ProvidersHub();
+    window.grandmaWebsiteMaker = new GrandmaWebsiteMaker();
 });
+
+// ============================================================================
+// Universal AI Providers & OAuth Hub (Local Models Priority #1)
+// ============================================================================
+
+class ProvidersHub {
+    constructor() {
+        this.modal = document.getElementById('providersModalBackdrop');
+        this.openBtn = document.getElementById('openProvidersBtn');
+        this.closeBtn = document.getElementById('closeProvidersModal');
+        this.benchBtn = document.getElementById('runPqBenchBtn');
+        this.benchPanel = document.getElementById('pqBenchResultPanel');
+        this.scanBtn = document.getElementById('scanLocalModelsBtn');
+        this.importBtn = document.getElementById('importOpencodeBtn');
+        this.localGrid = document.getElementById('localProvidersGrid');
+        this.cloudGrid = document.getElementById('cloudProvidersGrid');
+        this.oauthBanner = document.getElementById('oauthStatusBanner');
+        this.overview = null;
+        this.pollTimer = null;
+
+        this.init();
+    }
+
+    async init() {
+        if (this.openBtn) {
+            this.openBtn.addEventListener('click', () => this.open());
+        }
+        if (this.closeBtn) {
+            this.closeBtn.addEventListener('click', () => this.close());
+        }
+        if (this.modal) {
+            this.modal.addEventListener('click', (e) => {
+                if (e.target === this.modal) this.close();
+            });
+        }
+        if (this.scanBtn) {
+            this.scanBtn.addEventListener('click', () => this.scanLocalServers());
+        }
+        if (this.benchBtn) {
+            this.benchBtn.addEventListener('click', () => this.runPqBenchmark());
+        }
+        if (this.importBtn) {
+            this.importBtn.addEventListener('click', () => this.importFromOpenCode());
+        }
+
+        await this.refresh();
+    }
+
+    open() {
+        if (this.modal) {
+            this.modal.classList.add('visible');
+            this.refresh();
+        }
+    }
+
+    close() {
+        if (this.modal) {
+            this.modal.classList.remove('visible');
+        }
+    }
+
+    showBanner(msg) {
+        if (!this.oauthBanner) return;
+        this.oauthBanner.textContent = msg;
+        this.oauthBanner.classList.remove('hidden');
+    }
+
+    async refresh() {
+        try {
+            const resp = await fetch('/api/providers');
+            if (!resp.ok) return;
+            this.overview = await resp.json();
+            this.render();
+        } catch (e) {
+            console.error('Failed to load providers:', e);
+        }
+    }
+
+    render() {
+        if (!this.overview) return;
+        const activeProv = this.overview.active_provider || 'st-sovereign';
+        const activeModel = this.overview.active_model || 'in-binary:st-deepseek-pqm-4gaia';
+
+        const headerLabel = document.getElementById('activeProviderLabel');
+        if (headerLabel) {
+            headerLabel.textContent = activeProv === 'st-sovereign'
+                ? 'Local: st-sovereign'
+                : `${activeProv}`;
+        }
+        const bProv = document.getElementById('bannerActiveProvider');
+        const bMod = document.getElementById('bannerActiveModel');
+        if (bProv) bProv.textContent = activeProv;
+        if (bMod) bMod.textContent = activeModel;
+
+        if (this.localGrid) this.localGrid.innerHTML = '';
+        if (this.cloudGrid) this.cloudGrid.innerHTML = '';
+
+        // Also update Grandma's Website Maker provider dropdown
+        const websiteSelect = document.getElementById('websiteProviderSelect');
+        if (websiteSelect) {
+            websiteSelect.innerHTML = '';
+            const enabledList = this.overview.providers.filter(p => p.enabled);
+            for (const p of enabledList) {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.id === 'st-sovereign'
+                    ? '🌲 Smart Tree Local + Grandma Jody (.m8 Soul) — Priority #1 (Free & Private)'
+                    : `${p.icon} ${p.name} (${p.default_model || 'default'})`;
+                websiteSelect.appendChild(opt);
+            }
+        }
+
+        for (const p of this.overview.providers) {
+            const card = this.buildCard(p);
+            if (p.category === 'local') {
+                if (this.localGrid) this.localGrid.appendChild(card);
+            } else {
+                if (this.cloudGrid) this.cloudGrid.appendChild(card);
+            }
+        }
+    }
+
+    buildCard(p) {
+        const card = document.createElement('div');
+        const isLocal = p.category === 'local';
+        card.className = `provider-card ${isLocal ? 'local-priority' : ''} ${!p.enabled ? 'provider-off' : ''}`;
+
+        const modelOptions = (p.available_models || [])
+            .map(m => `<option value="${m}" ${m === p.default_model ? 'selected' : ''}>${m}</option>`)
+            .join('');
+
+        card.innerHTML = `
+            <div class="provider-card-top">
+                <div class="provider-title-group">
+                    <span class="provider-icon">${p.icon}</span>
+                    <div>
+                        <div class="provider-name">${p.name}</div>
+                        <span class="provider-badge">${p.badge}</span>
+                    </div>
+                </div>
+                <button class="btn-small" data-action="toggle" title="Turn provider ON or OFF">
+                    ${p.enabled ? '🟢 ON' : '⚪ OFF'}
+                </button>
+            </div>
+            <div class="provider-tagline">${p.tagline}</div>
+            <div class="provider-status-line ${p.enabled ? 'status-on' : 'status-off'}">${p.status_text}</div>
+            <div class="provider-controls">
+                ${modelOptions ? `<select data-field="model" title="Default model">${modelOptions}</select>` : ''}
+                ${p.supports_base_url ? `<input type="text" data-field="base_url" value="${p.base_url || ''}" placeholder="Base URL (e.g. http://localhost:11434)">` : ''}
+                ${p.supports_api_key ? `<input type="password" data-field="api_key" placeholder="${p.has_api_key ? '•••••••• (API Key saved — paste to replace)' : 'Paste API Key (or use OAuth below)'}">` : ''}
+                <div class="provider-btn-row">
+                    ${p.supports_oauth ? `<button class="btn-oauth" data-action="oauth">🔑 Sign in with OAuth</button>` : ''}
+                    ${(p.supports_api_key || p.supports_base_url) ? `<button class="btn-small" data-action="save">💾 Save</button>` : ''}
+                    ${p.enabled ? `<button class="btn-small" data-action="set-active">⭐ Use Active</button>` : ''}
+                    ${(p.connected && p.id !== 'st-sovereign') ? `<button class="btn-small danger" data-action="disconnect">Disconnect</button>` : ''}
+                </div>
+            </div>
+        `;
+
+        const toggleBtn = card.querySelector('[data-action="toggle"]');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => this.toggleProvider(p.id, !p.enabled));
+        }
+        const oauthBtn = card.querySelector('[data-action="oauth"]');
+        if (oauthBtn) {
+            oauthBtn.addEventListener('click', () => this.startOAuth(p.id, p.name));
+        }
+        const saveBtn = card.querySelector('[data-action="save"]');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                const urlInput = card.querySelector('[data-field="base_url"]');
+                const keyInput = card.querySelector('[data-field="api_key"]');
+                const modelSel = card.querySelector('[data-field="model"]');
+                this.configureProvider(p.id, {
+                    base_url: urlInput ? urlInput.value : undefined,
+                    api_key: keyInput && keyInput.value ? keyInput.value : undefined,
+                    default_model: modelSel ? modelSel.value : undefined,
+                    enabled: true,
+                });
+            });
+        }
+        const activeBtn = card.querySelector('[data-action="set-active"]');
+        if (activeBtn) {
+            activeBtn.addEventListener('click', () => {
+                const modelSel = card.querySelector('[data-field="model"]');
+                this.toggleProvider(p.id, true, true, modelSel ? modelSel.value : p.default_model);
+            });
+        }
+        const discBtn = card.querySelector('[data-action="disconnect"]');
+        if (discBtn) {
+            discBtn.addEventListener('click', () => this.disconnectProvider(p.id));
+        }
+
+        return card;
+    }
+
+    async toggleProvider(providerId, enabled, setActive = false, defaultModel = null) {
+        try {
+            const resp = await fetch('/api/providers/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider_id: providerId,
+                    enabled,
+                    set_active: setActive,
+                    default_model: defaultModel
+                })
+            });
+            if (resp.ok) {
+                this.overview = await resp.json();
+                this.render();
+            }
+        } catch (e) {
+            console.error('Failed to toggle provider:', e);
+        }
+    }
+
+    async configureProvider(providerId, payload) {
+        try {
+            const resp = await fetch('/api/providers/configure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider_id: providerId, ...payload })
+            });
+            if (resp.ok) {
+                this.overview = await resp.json();
+                this.render();
+                this.showBanner(`✅ Saved configuration for ${providerId} and discovered available models!`);
+            }
+        } catch (e) {
+            console.error('Failed to configure provider:', e);
+        }
+    }
+
+    async disconnectProvider(providerId) {
+        try {
+            const resp = await fetch('/api/providers/disconnect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider_id: providerId })
+            });
+            if (resp.ok) {
+                this.overview = await resp.json();
+                this.render();
+                this.showBanner(`🔒 Disconnected ${providerId} and turned it OFF.`);
+            }
+        } catch (e) {
+            console.error('Failed to disconnect provider:', e);
+        }
+    }
+
+    async startOAuth(providerId, providerName) {
+        try {
+            this.showBanner(`🔑 Starting OAuth sign-in for ${providerName}...`);
+            const resp = await fetch('/api/providers/oauth/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider_id: providerId })
+            });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                this.showBanner(`⚠️ Could not start OAuth for ${providerName}: ${errText}`);
+                return;
+            }
+            const data = await resp.json();
+            window.open(data.auth_url, '_blank', 'noopener,noreferrer');
+            this.showBanner(`🌐 Browser opened for ${providerName}! ${data.instructions}`);
+
+            if (this.pollTimer) clearInterval(this.pollTimer);
+            this.pollTimer = setInterval(async () => {
+                try {
+                    const stResp = await fetch(`/api/providers/oauth/status?state=${encodeURIComponent(data.state)}`);
+                    if (!stResp.ok) return;
+                    const st = await stResp.json();
+                    if (st.status === 'ok') {
+                        clearInterval(this.pollTimer);
+                        this.showBanner(`✅ ${providerName} connected via OAuth and turned ON!`);
+                        await this.refresh();
+                    } else if (st.status === 'error') {
+                        clearInterval(this.pollTimer);
+                        this.showBanner(`❌ ${providerName} OAuth error: ${st.message}`);
+                    }
+                } catch (_) {}
+            }, 1500);
+        } catch (e) {
+            this.showBanner(`❌ OAuth error: ${e.message}`);
+        }
+    }
+
+    async scanLocalServers() {
+        this.showBanner('🔍 Scanning localhost for Ollama (:11434/:11436), LM Studio (:1234), llama.cpp (:8080), vLLM (:8000)...');
+        try {
+            const resp = await fetch('/api/providers/discover', { method: 'POST' });
+            if (resp.ok) {
+                this.overview = await resp.json();
+                this.render();
+                this.showBanner('✅ Local server scan complete! Local models prioritized #1.');
+            }
+        } catch (e) {
+            this.showBanner(`⚠️ Local scan error: ${e.message}`);
+        }
+    }
+
+    async importFromOpenCode() {
+        try {
+            const resp = await fetch('/api/providers/import-opencode', { method: 'POST' });
+            if (resp.ok) {
+                const data = await resp.json();
+                this.overview = data.overview;
+                this.render();
+                const count = (data.imported_providers || []).length;
+                this.showBanner(count > 0
+                    ? `📥 Imported ${count} provider(s) from OpenCode: ${data.imported_providers.join(', ')}`
+                    : 'ℹ️ No external OpenCode credentials found in ~/.local/share/opencode/auth.json — Local Smart Tree models remain active!');
+            }
+        } catch (e) {
+            this.showBanner(`⚠️ OpenCode import error: ${e.message}`);
+        }
+    }
+
+    async runPqBenchmark() {
+        if (!this.benchPanel) return;
+        this.benchPanel.classList.remove('hidden');
+        this.benchPanel.innerHTML = '<div>⚡ Running head-to-head <code>p/q</code> (`PQM` × OEIS A161330) benchmark: <strong>Ollama (`st-deepseek-pqm:latest`)</strong> vs. <strong>Smart Tree (`in-binary:st-deepseek-pqm-4gaia`)</strong>...</div>';
+        try {
+            const resp = await fetch('/api/providers/pq-bench', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ retrain: false })
+            });
+            if (!resp.ok) {
+                throw new Error(await resp.text());
+            }
+            const r = await resp.json();
+            const rowsHtml = (r.comparison_table || []).map(row => `
+                <tr>
+                    <td style="padding:4px 8px;border-bottom:1px solid var(--border-color);">${row.metric}</td>
+                    <td style="padding:4px 8px;border-bottom:1px solid var(--border-color);text-align:right;font-family:var(--font-mono);">${row.ollama_value}</td>
+                    <td style="padding:4px 8px;border-bottom:1px solid var(--border-color);text-align:right;font-family:var(--font-mono);color:var(--accent-green);font-weight:600;">${row.smart_tree_value}</td>
+                    <td style="padding:4px 8px;border-bottom:1px solid var(--border-color);text-align:right;font-family:var(--font-mono);color:var(--accent-primary);font-weight:700;">${row.speedup_or_gain}</td>
+                </tr>
+            `).join('');
+            this.benchPanel.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <strong>⚡ Head-to-Head <code>p/q</code> Benchmark: <code>${r.public_base_model}</code> (SHA-256 <code>${(r.checkpoint_sha256 || '').slice(0, 12)}</code>)</strong>
+                    <button type="button" class="btn-pill ghost" onclick="document.getElementById('pqBenchResultPanel').classList.add('hidden')">Close</button>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead>
+                        <tr style="text-align:left;color:var(--text-secondary);">
+                            <th style="padding:4px 8px;border-bottom:1px solid var(--border-color);">Metric / Workload</th>
+                            <th style="padding:4px 8px;border-bottom:1px solid var(--border-color);text-align:right;">Ollama (GGUF + PQM)</th>
+                            <th style="padding:4px 8px;border-bottom:1px solid var(--border-color);text-align:right;">Smart Tree (Native p/q)</th>
+                            <th style="padding:4px 8px;border-bottom:1px solid var(--border-color);text-align:right;">Speedup / Gain</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            `;
+        } catch (e) {
+            this.benchPanel.innerHTML = `<div>❌ Benchmark error: ${e.message}</div>`;
+        }
+    }
+}
+
+// ============================================================================
+// Grandma's 1-Click Website Maker (Local Models Priority #1)
+// ============================================================================
+
+class GrandmaWebsiteMaker {
+    constructor() {
+        this.modal = document.getElementById('websiteModalBackdrop');
+        this.openBtn = document.getElementById('openWebsiteMakerBtn');
+        this.closeBtn = document.getElementById('closeWebsiteModal');
+        this.bakeBtn = document.getElementById('bakeWebsiteBtn');
+        this.titleInput = document.getElementById('websiteTitleInput');
+        this.descInput = document.getElementById('websiteDescInput');
+        this.vibeSelect = document.getElementById('websiteVibeSelect');
+        this.providerSelect = document.getElementById('websiteProviderSelect');
+        this.resultBanner = document.getElementById('websiteResultBanner');
+        this.selectedTemplate = 'recipe';
+
+        this.init();
+    }
+
+    init() {
+        if (this.openBtn) {
+            this.openBtn.addEventListener('click', () => this.open());
+        }
+        if (this.closeBtn) {
+            this.closeBtn.addEventListener('click', () => this.close());
+        }
+        if (this.modal) {
+            this.modal.addEventListener('click', (e) => {
+                if (e.target === this.modal) this.close();
+            });
+        }
+
+        const tplBtns = document.querySelectorAll('.grandma-template-btn');
+        tplBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tplBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.selectedTemplate = btn.dataset.template || 'recipe';
+                if (btn.dataset.title && this.titleInput) {
+                    this.titleInput.value = btn.dataset.title;
+                }
+                if (btn.dataset.desc && this.descInput) {
+                    this.descInput.value = btn.dataset.desc;
+                }
+            });
+        });
+
+        if (this.bakeBtn) {
+            this.bakeBtn.addEventListener('click', () => this.bakeWebsite());
+        }
+    }
+
+    open() {
+        if (this.modal) {
+            this.modal.classList.add('visible');
+        }
+    }
+
+    close() {
+        if (this.modal) {
+            this.modal.classList.remove('visible');
+        }
+    }
+
+    async bakeWebsite() {
+        if (!this.bakeBtn) return;
+        const originalText = this.bakeBtn.textContent;
+        this.bakeBtn.textContent = '🥧 Baking your website with love...';
+        this.bakeBtn.disabled = true;
+
+        try {
+            const payload = {
+                title: this.titleInput ? this.titleInput.value : "Grandma's Cozy Website",
+                description: this.descInput ? this.descInput.value : '',
+                template: this.selectedTemplate,
+                vibe: this.vibeSelect ? this.vibeSelect.value : 'cozy-cream',
+                provider_id: this.providerSelect ? this.providerSelect.value : 'st-sovereign'
+            };
+
+            const resp = await fetch('/api/website/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!resp.ok) {
+                throw new Error(await resp.text());
+            }
+
+            const result = await resp.json();
+
+            if (this.resultBanner) {
+                this.resultBanner.classList.remove('hidden');
+                this.resultBanner.innerHTML = `
+                    <div>
+                        <strong>🎉 Your website "${result.title}" is ready!</strong>
+                        <div style="font-size:12px;opacity:0.85;">Saved to <code>${result.rel_path}</code> · Powered by <code>${result.provider_used}</code></div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <a href="${result.preview_url}" target="_blank" class="btn-pill" style="text-decoration:none;background:var(--accent-primary);color:#fff;">🌐 Open in Full Tab ↗</a>
+                        <button type="button" class="btn-pill ghost" id="viewInDashboardBtn">👀 View in Preview Pane</button>
+                    </div>
+                `;
+                const viewBtn = document.getElementById('viewInDashboardBtn');
+                if (viewBtn) {
+                    viewBtn.addEventListener('click', () => {
+                        this.showLivePreviewInPane(result);
+                        this.close();
+                    });
+                }
+            }
+
+            // Automatically show the live website in the right-hand Preview Pane and refresh files!
+            this.showLivePreviewInPane(result);
+            if (window.dashboard && typeof window.dashboard.loadFiles === 'function') {
+                window.dashboard.loadFiles(window.dashboard.currentPath);
+            }
+        } catch (e) {
+            if (this.resultBanner) {
+                this.resultBanner.classList.remove('hidden');
+                this.resultBanner.textContent = `❌ Could not bake website: ${e.message}`;
+            }
+        } finally {
+            this.bakeBtn.textContent = originalText;
+            this.bakeBtn.disabled = false;
+        }
+    }
+
+    showLivePreviewInPane(result) {
+        const previewContainer = document.getElementById('previewContainer');
+        const previewTitle = document.getElementById('previewTitle');
+        const previewContent = document.getElementById('previewContent');
+        if (!previewContainer || !previewContent) return;
+
+        previewContainer.classList.add('visible');
+        previewContainer.style.width = `${(window.dashboard && window.dashboard.previewWidth) || 480}px`;
+        if (previewTitle) {
+            previewTitle.innerHTML = `🌐 ${result.title} <a href="${result.preview_url}" target="_blank" style="margin-left:8px;font-size:11px;color:var(--accent-primary);">Open Full Tab ↗</a>`;
+        }
+        previewContent.innerHTML = `
+            <iframe src="${result.preview_url}" style="width:100%;height:100%;min-height:520px;border:none;border-radius:10px;background:#fff;"></iframe>
+        `;
+    }
+}

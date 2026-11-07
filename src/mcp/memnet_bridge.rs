@@ -24,13 +24,17 @@ pub fn memnet_tool_definition() -> Value {
             "properties": {
                 "operation": {
                     "type": "string",
-                    "enum": ["status", "peers", "ask", "teach", "share"],
-                    "description": "status/peers = mesh + route table; ask = local (and optionally LAN) wave Q&A; teach = anchor Q&A; share = publish folder",
+                    "enum": ["status", "peers", "models", "compute", "ask", "teach", "share"],
+                    "description": "status/peers = mesh + route table; models/compute = close-by models + live compute headroom; ask = local/LAN wave Q&A + compute-aware close-by model routing; teach = anchor Q&A; share = publish folder",
                     "default": "peers"
                 },
                 "question": {
                     "type": "string",
                     "description": "Question text (for 'ask' and 'teach')"
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Optional model name or alias from ~/.st/config.toml (for 'ask', e.g. 'st-deepseek', 'gemma4', 'devstral', 'persona:peter')"
                 },
                 "answer": {
                     "type": "string",
@@ -128,35 +132,49 @@ fn node_status(probe: bool) -> Result<Value> {
     }))
 }
 
-fn ask(question: &str, min_pm: u32, lan: bool) -> Result<Value> {
+fn models_status() -> Result<Value> {
+    let state = crate::memnet::MemnetNodeState::load_or_default();
+    let hw = crate::memnet::assess_host_hardware();
+    let endpoints = state.discover_nearby_model_endpoints();
+    let cfg = crate::config::StConfig::load().unwrap_or_default();
+    Ok(json!({
+        "node": state.node_name,
+        "default_model": cfg.models.default_model,
+        "aliases": cfg.models.aliases,
+        "memnet_config": cfg.memnet,
+        "compute_headroom_permille": hw.compute_headroom_permille,
+        "vram_total_mb": hw.vram_total_mb,
+        "vram_available_mb": hw.vram_available_mb,
+        "gpu_utilization_pct": hw.gpu_utilization_pct,
+        "cpu_load_pct": hw.cpu_load_pct,
+        "warm_loaded_models": hw.warm_loaded_models,
+        "recommended_local_models": hw.recommended_local_models,
+        "nearby_model_endpoints": endpoints,
+    }))
+}
+
+fn ask(question: &str, model_hint: Option<&str>, min_pm: u32, lan: bool) -> Result<Value> {
     anyhow::ensure!(
         !question.trim().is_empty(),
         "question is required for memnet ask"
     );
     let mut state = crate::memnet::MemnetNodeState::load_or_default();
-    if let Some((resonance_pm, pkt)) = state.query_wave_qa(question, min_pm) {
-        let _ = state.save();
+    if let Some(ans) = state.answer_with_nearby_models(question, model_hint, min_pm, lan) {
         return Ok(json!({
-            "source": "local",
-            "resonance_pm": resonance_pm,
-            "packet": packet_view(&pkt),
+            "source": ans.source,
+            "model_used": ans.model,
+            "endpoint": ans.endpoint,
+            "rtc_tau_ms": ans.rtc_ms,
+            "compute_headroom_permille": ans.compute_headroom_permille,
+            "resonance_pm": ans.resonance_pm,
+            "packet": packet_view(&ans.packet),
         }));
-    }
-    if lan {
-        if let Some((resonance_pm, pkt)) = state.query_lan_wave_qa(question, min_pm) {
-            let _ = state.save();
-            return Ok(json!({
-                "source": "lan",
-                "resonance_pm": resonance_pm,
-                "packet": packet_view(&pkt),
-            }));
-        }
     }
     Ok(json!({
         "source": "none",
         "resonance_pm": 0,
         "question": question,
-        "hint": "No cached wave answer above the minimum resonance; teach one with memnet teach or ask with lower min_resonance_pm.",
+        "hint": "No cached wave answer or reachable close-by model; teach one with memnet teach or ask with lower min_resonance_pm.",
     }))
 }
 
@@ -243,13 +261,20 @@ pub async fn handle_memnet(params: Option<Value>) -> Result<Value> {
                 .unwrap_or(false);
             serde_json::to_string_pretty(&node_status(probe)?)?
         }
+        "models" | "compute" => serde_json::to_string_pretty(&models_status()?)?,
         "ask" => {
             let q = params
                 .get("question")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            let lan = params.get("lan").and_then(|v| v.as_bool()).unwrap_or(false);
-            serde_json::to_string_pretty(&ask(q, clamp_pm(params.get("min_resonance_pm")), lan)?)?
+            let model_hint = params.get("model").and_then(|v| v.as_str());
+            let lan = params.get("lan").and_then(|v| v.as_bool()).unwrap_or(true);
+            serde_json::to_string_pretty(&ask(
+                q,
+                model_hint,
+                clamp_pm(params.get("min_resonance_pm")),
+                lan,
+            )?)?
         }
         "teach" => {
             let q = params
@@ -268,7 +293,7 @@ pub async fn handle_memnet(params: Option<Value>) -> Result<Value> {
             serde_json::to_string_pretty(&share(p, quota)?)?
         }
         other => anyhow::bail!(
-            "Unknown memnet operation '{}'. Valid: status, peers, ask, teach, share",
+            "Unknown memnet operation '{}'. Valid: status, peers, models, compute, ask, teach, share",
             other
         ),
     };

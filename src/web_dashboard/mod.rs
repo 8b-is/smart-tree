@@ -14,6 +14,7 @@ mod api;
 mod assets;
 mod collab;
 pub mod mcp_http;
+pub mod providers;
 mod pty;
 mod server;
 pub mod state_sync;

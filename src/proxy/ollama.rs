@@ -18,7 +18,46 @@ use super::{LlmProvider, LlmRequest, LlmResponse, LlmUsage};
 
 /// Default ports for local LLM servers
 pub const OLLAMA_PORT: u16 = 11434;
+pub const OLLAMA_BRIDGE_PORT: u16 = 11436;
 pub const LMSTUDIO_PORT: u16 = 1234;
+
+/// Normalize an endpoint or `OLLAMA_HOST` string into an `http://host:port` base URL.
+fn normalize_base_url(raw: &str) -> String {
+    let trimmed = raw.trim().trim_end_matches('/');
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        trimmed.to_string()
+    } else if trimmed.contains(':') {
+        format!("http://{trimmed}")
+    } else {
+        format!("http://{trimmed}:{OLLAMA_PORT}")
+    }
+}
+
+/// Ordered candidate Ollama URLs from `OLLAMA_HOST`, sovereign bridge `:11436`, local `:11434`, and `[memnet].endpoints`.
+pub fn candidate_ollama_base_urls() -> Vec<String> {
+    let mut urls = Vec::new();
+    let mut push_unique = |u: String| {
+        if !u.is_empty() && !urls.contains(&u) {
+            urls.push(u);
+        }
+    };
+    if let Ok(env_host) = std::env::var("OLLAMA_HOST") {
+        if !env_host.trim().is_empty() {
+            push_unique(normalize_base_url(&env_host));
+        }
+    }
+    if let Ok(cfg) = crate::config::StConfig::load() {
+        for ep in cfg.memnet.endpoints {
+            // Skip Smart Tree daemon/liquid-rust endpoints when building Ollama URLs
+            if !ep.ends_with(":28428") && !ep.ends_with(":8420") && !ep.ends_with(":8786") {
+                push_unique(normalize_base_url(&ep));
+            }
+        }
+    }
+    push_unique(format!("http://127.0.0.1:{OLLAMA_BRIDGE_PORT}"));
+    push_unique(format!("http://localhost:{OLLAMA_PORT}"));
+    urls
+}
 
 /// Detected local LLM server type
 #[derive(Debug, Clone, PartialEq)]
@@ -48,6 +87,7 @@ pub struct LocalLlmInfo {
 pub struct OllamaProvider {
     client: Client,
     base_url: String,
+    fallback_urls: Vec<String>,
     server_type: LocalLlmType,
     default_model: String,
 }
@@ -55,23 +95,40 @@ pub struct OllamaProvider {
 impl OllamaProvider {
     /// Create a new Ollama provider with explicit URL
     pub fn new(base_url: &str, server_type: LocalLlmType) -> Self {
+        let default_model = crate::config::StConfig::load()
+            .ok()
+            .map(|c| c.models.default_model)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "st-deepseek-pqm:latest".to_string());
+        let primary = normalize_base_url(base_url);
+        let fallback_urls = if server_type == LocalLlmType::Ollama {
+            candidate_ollama_base_urls()
+                .into_iter()
+                .filter(|u| u != &primary)
+                .collect()
+        } else {
+            Vec::new()
+        };
         Self {
             client: Client::builder()
                 .timeout(Duration::from_secs(300)) // Local models can be slow
                 .build()
                 .expect("Failed to create HTTP client"),
-            base_url: base_url.trim_end_matches('/').to_string(),
+            base_url: primary,
+            fallback_urls,
             server_type,
-            default_model: "llama3.2".to_string(),
+            default_model,
         }
     }
 
-    /// Create provider for Ollama at default port
+    /// Create provider for Ollama using `OLLAMA_HOST` / sovereign bridge / local port
     pub fn ollama() -> Self {
-        Self::new(
-            &format!("http://localhost:{}", OLLAMA_PORT),
-            LocalLlmType::Ollama,
-        )
+        let candidates = candidate_ollama_base_urls();
+        let primary = candidates
+            .first()
+            .cloned()
+            .unwrap_or_else(|| format!("http://localhost:{OLLAMA_PORT}"));
+        Self::new(&primary, LocalLlmType::Ollama)
     }
 
     /// Create provider for LM Studio at default port
@@ -97,20 +154,35 @@ impl OllamaProvider {
     }
 
     async fn list_ollama_models(&self) -> Result<Vec<String>> {
-        let url = format!("{}/api/tags", self.base_url);
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to connect to Ollama")?;
+        let mut all_models = Vec::new();
+        let mut last_err = None;
+        let mut urls = vec![self.base_url.clone()];
+        urls.extend(self.fallback_urls.iter().cloned());
 
-        let tags: OllamaTagsResponse = response
-            .json()
-            .await
-            .context("Failed to parse Ollama models response")?;
+        for base in urls {
+            let url = format!("{base}/api/tags");
+            match self.client.get(&url).send().await {
+                Ok(response) => {
+                    if let Ok(tags) = response.json::<OllamaTagsResponse>().await {
+                        for m in tags.models {
+                            if !all_models.contains(&m.name) {
+                                all_models.push(m.name);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                }
+            }
+        }
 
-        Ok(tags.models.into_iter().map(|m| m.name).collect())
+        if all_models.is_empty() {
+            if let Some(err) = last_err {
+                return Err(err).context("Failed to connect to Ollama");
+            }
+        }
+        Ok(all_models)
     }
 
     async fn list_lmstudio_models(&self) -> Result<Vec<String>> {
@@ -140,13 +212,15 @@ impl Default for OllamaProvider {
 #[async_trait]
 impl LlmProvider for OllamaProvider {
     async fn complete(&self, request: LlmRequest) -> Result<LlmResponse> {
-        let url = format!("{}/v1/chat/completions", self.base_url);
-
-        let model = if request.model.is_empty() || request.model == "default" {
+        let raw_model = if request.model.is_empty() || request.model == "default" {
             self.default_model.clone()
         } else {
             request.model.clone()
         };
+        let model = crate::config::StConfig::load()
+            .ok()
+            .map(|c| c.resolve_model(&raw_model))
+            .unwrap_or(raw_model);
 
         let openai_request = OpenAiChatRequest {
             model: model.clone(),
@@ -167,45 +241,63 @@ impl LlmProvider for OllamaProvider {
             stream: false, // We don't handle streaming in this basic impl
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&openai_request)
-            .send()
-            .await
-            .context(format!("Failed to send request to {}", self.server_type))?;
+        let mut candidate_bases = vec![self.base_url.clone()];
+        candidate_bases.extend(self.fallback_urls.iter().cloned());
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!(
-                "{} returned error {}: {}",
-                self.server_type,
-                status,
-                error_text
-            ));
+        let mut last_err = None;
+        for base in candidate_bases {
+            let url = format!("{base}/v1/chat/completions");
+            let response = match self.client.post(&url).json(&openai_request).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    last_err = Some(anyhow::anyhow!(
+                        "Failed to send request to {} ({}): {}",
+                        self.server_type,
+                        base,
+                        e
+                    ));
+                    continue;
+                }
+            };
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+                last_err = Some(anyhow::anyhow!(
+                    "{} ({}) returned error {}: {}",
+                    self.server_type,
+                    base,
+                    status,
+                    error_text
+                ));
+                continue;
+            }
+
+            let openai_response: OpenAiChatResponse = response
+                .json()
+                .await
+                .context("Failed to parse response from local LLM")?;
+
+            let content = openai_response
+                .choices
+                .first()
+                .map(|c| c.message.content.clone())
+                .unwrap_or_default();
+
+            return Ok(LlmResponse {
+                content,
+                model: openai_response.model,
+                usage: openai_response.usage.map(|u| LlmUsage {
+                    prompt_tokens: u.prompt_tokens,
+                    completion_tokens: u.completion_tokens,
+                    total_tokens: u.total_tokens,
+                }),
+            });
         }
 
-        let openai_response: OpenAiChatResponse = response
-            .json()
-            .await
-            .context("Failed to parse response from local LLM")?;
-
-        let content = openai_response
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .unwrap_or_default();
-
-        Ok(LlmResponse {
-            content,
-            model: openai_response.model,
-            usage: openai_response.usage.map(|u| LlmUsage {
-                prompt_tokens: u.prompt_tokens,
-                completion_tokens: u.completion_tokens,
-                total_tokens: u.total_tokens,
-            }),
-        })
+        Err(last_err.unwrap_or_else(|| {
+            anyhow::anyhow!("No reachable {} endpoint succeeded", self.server_type)
+        }))
     }
 
     fn name(&self) -> &'static str {
@@ -245,13 +337,15 @@ pub async fn check_server(host: &str, port: u16, timeout_ms: u64) -> bool {
 pub async fn detect_local_llms() -> Vec<LocalLlmInfo> {
     let mut detected = Vec::new();
 
-    // Check Ollama
-    if check_server("localhost", OLLAMA_PORT, 500).await {
+    // Check Ollama (across OLLAMA_HOST, bridge :11436, local :11434, and configured endpoints)
+    if check_server("127.0.0.1", OLLAMA_BRIDGE_PORT, 500).await
+        || check_server("localhost", OLLAMA_PORT, 500).await
+    {
         let provider = OllamaProvider::ollama();
         let models = provider.list_models().await.unwrap_or_default();
         detected.push(LocalLlmInfo {
             server_type: LocalLlmType::Ollama,
-            base_url: format!("http://localhost:{}", OLLAMA_PORT),
+            base_url: provider.base_url.clone(),
             models,
         });
     }
@@ -273,6 +367,9 @@ pub async fn detect_local_llms() -> Vec<LocalLlmInfo> {
 /// Quick check if any local LLM is available (non-blocking, fast timeout)
 pub async fn any_local_llm_available() -> bool {
     tokio::select! {
+        bridge = check_server("127.0.0.1", OLLAMA_BRIDGE_PORT, 200) => {
+            if bridge { return true; }
+        }
         ollama = check_server("localhost", OLLAMA_PORT, 200) => {
             if ollama { return true; }
         }
@@ -282,7 +379,8 @@ pub async fn any_local_llm_available() -> bool {
     }
 
     // Check remaining
-    check_server("localhost", OLLAMA_PORT, 200).await
+    check_server("127.0.0.1", OLLAMA_BRIDGE_PORT, 200).await
+        || check_server("localhost", OLLAMA_PORT, 200).await
         || check_server("localhost", LMSTUDIO_PORT, 200).await
 }
 

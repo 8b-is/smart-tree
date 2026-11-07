@@ -19,6 +19,12 @@
                 <span class="logo-text">Smart Tree</span>
             </div>
             <div class="header-actions">
+                <button class="btn-pill grandma-cta-btn" id="openWebsiteMakerBtn" title="Make a website in 1 click!">
+                    <span>👵✨</span> <span>Make a Website</span>
+                </button>
+                <button class="btn-pill providers-cta-btn" id="openProvidersBtn" title="Manage Local Models &amp; Cloud OAuth Providers">
+                    <span>🌲🤖</span> <span id="activeProviderLabel">Local: st-sovereign</span>
+                </button>
                 <button class="btn-icon" id="toggleLayout" title="Toggle terminal position (Ctrl+J)">&#x2B0C;</button>
                 <button class="btn-voice" id="voiceBtn" title="Voice output">&#x1F50A;</button>
             </div>
@@ -219,6 +225,114 @@
                 </div>
                 <div class="prompt-modal-footer">
                     <button class="btn-primary" id="promptSubmitBtn">Submit Answer</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Universal AI Providers & OAuth Modal (Local Models Priority #1) -->
+        <div class="prompt-modal-backdrop" id="providersModalBackdrop">
+            <div class="prompt-modal wide-modal" id="providersModal">
+                <div class="prompt-modal-header">
+                    <div>
+                        <span class="prompt-modal-title">🌲🤖 AI Models &amp; Universal OAuth Hub</span>
+                        <div class="modal-subtitle">Priority #1: Smart Tree Local Models (Always On) · Cloud Providers stay OFF unless you sign in!</div>
+                    </div>
+                    <button class="btn-icon" id="closeProvidersModal" title="Close">&#x2715;</button>
+                </div>
+                <div class="prompt-modal-body providers-modal-body">
+                    <div class="providers-toolbar">
+                        <div class="active-model-banner" id="activeModelBanner">
+                            <span>⭐ Active Engine:</span>
+                            <strong id="bannerActiveProvider">st-sovereign</strong>
+                            <span>·</span>
+                            <code id="bannerActiveModel">in-binary:st-deepseek-pqm-4gaia</code>
+                        </div>
+                        <div class="providers-toolbar-actions">
+                            <button class="btn-pill" id="runPqBenchBtn" title="Retrain/convert DeepSeek to p/q, load the same model in Ollama &amp; Smart Tree, and benchmark head-to-head!">⚡ Benchmark p/q: Smart Tree vs. Ollama</button>
+                            <button class="btn-pill" id="scanLocalModelsBtn" title="Auto-detect Ollama, LM Studio, llama.cpp, vLLM &amp; OpenAPI">🔍 Scan Local Servers</button>
+                            <button class="btn-pill ghost" id="importOpencodeBtn" title="Import existing OAuth/API keys from OpenCode (~/.local/share/opencode/auth.json)">📥 Import from OpenCode</button>
+                        </div>
+                    </div>
+                    <div id="oauthStatusBanner" class="oauth-status-banner hidden"></div>
+                    <div id="pqBenchResultPanel" class="oauth-status-banner hidden" style="flex-direction:column;align-items:stretch;gap:8px;"></div>
+
+                    <div class="providers-section-title">🏠 Priority #1: Our Local Models &amp; Local Servers (Free, Private &amp; Instant)</div>
+                    <div class="providers-grid" id="localProvidersGrid"></div>
+
+                    <div class="providers-section-title">☁️ Big Cloud Providers (Strictly OFF unless signed in via OAuth or API Key)</div>
+                    <div class="providers-grid" id="cloudProvidersGrid"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grandma's 1-Click Website Maker Modal -->
+        <div class="prompt-modal-backdrop" id="websiteModalBackdrop">
+            <div class="prompt-modal wide-modal grandma-modal" id="websiteModal">
+                <div class="prompt-modal-header">
+                    <div>
+                        <span class="prompt-modal-title">👵✨ Grandma's 1-Click Website Maker</span>
+                        <div class="modal-subtitle">So easy anyone can make a cozy, beautiful website in seconds — powered by our own Local Models first!</div>
+                    </div>
+                    <button class="btn-icon" id="closeWebsiteModal" title="Close">&#x2715;</button>
+                </div>
+                <div class="prompt-modal-body grandma-modal-body">
+                    <div class="grandma-step">
+                        <div class="grandma-step-label">1. What kind of website would you like to make?</div>
+                        <div class="grandma-template-grid" id="grandmaTemplateGrid">
+                            <button type="button" class="grandma-template-btn active" data-template="recipe" data-title="Grandma Jody's Cookie Kitchen" data-desc="Our favorite homemade family recipes, warm cinnamon pies, and Sunday afternoon kitchen stories.">
+                                <span class="tpl-emoji">🍪</span>
+                                <span class="tpl-name">Family Recipe Book</span>
+                            </button>
+                            <button type="button" class="grandma-template-btn" data-template="garden" data-title="Sunny Backyard Garden Journal" data-desc="What we planted this spring, heirloom tomatoes, wildflowers, and tips for happy honeybees.">
+                                <span class="tpl-emoji">🌻</span>
+                                <span class="tpl-name">Garden &amp; Flowers</span>
+                            </button>
+                            <button type="button" class="grandma-template-btn" data-template="craft" data-title="Cozy Quilt &amp; Knitting Corner" data-desc="Handmade patchwork quilts, soft wool scarves, and beginner-friendly stitching patterns.">
+                                <span class="tpl-emoji">🧶</span>
+                                <span class="tpl-name">Crafts &amp; Quilts</span>
+                            </button>
+                            <button type="button" class="grandma-template-btn" data-template="family" data-title="Our Family Story &amp; Album" data-desc="Cherished family memories, holiday get-togethers, milestone timelines, and a guestbook for the grandkids.">
+                                <span class="tpl-emoji">💌</span>
+                                <span class="tpl-name">Family Stories</span>
+                            </button>
+                            <button type="button" class="grandma-template-btn" data-template="project" data-title="My Sovereign Local Project" data-desc="A fast, clean showcase page built locally with Smart Tree and zero cloud tracking.">
+                                <span class="tpl-emoji">🚀</span>
+                                <span class="tpl-name">Project Page</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grandma-step">
+                        <div class="grandma-step-label">2. Give your website a name &amp; describe it in plain words:</div>
+                        <input type="text" id="websiteTitleInput" class="grandma-input" value="Grandma Jody's Cookie Kitchen" placeholder="Website Title (e.g. Grandma Jody's Cookie Kitchen)">
+                        <textarea id="websiteDescInput" class="grandma-textarea" rows="3" placeholder="Tell us what you want on your page...">Our favorite homemade family recipes, warm cinnamon pies, and Sunday afternoon kitchen stories.</textarea>
+                    </div>
+
+                    <div class="grandma-step grandma-row">
+                        <div class="grandma-col">
+                            <div class="grandma-step-label">3. Pick your favorite colors:</div>
+                            <select id="websiteVibeSelect" class="grandma-select">
+                                <option value="cozy-cream">🥧 Cozy Warm Cream &amp; Cinnamon (Recommended)</option>
+                                <option value="sunny-garden">🌻 Sunny Garden Green &amp; Gold</option>
+                                <option value="berry-rose">🍓 Sweet Berry Rose &amp; Peach</option>
+                                <option value="ocean-breeze">🌊 Calm Ocean Breeze</option>
+                                <option value="qwave-neon">⚡ Smart Tree Qwave Neon Triad</option>
+                            </select>
+                        </div>
+                        <div class="grandma-col">
+                            <div class="grandma-step-label">4. Choose your AI helper (Local Priority #1):</div>
+                            <select id="websiteProviderSelect" class="grandma-select">
+                                <option value="st-sovereign">🌲 Smart Tree Local + Grandma Jody (.m8 Soul) — Free &amp; Private</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grandma-actions">
+                        <button type="button" class="btn-primary grandma-bake-btn" id="bakeWebsiteBtn">
+                            🥧 Bake My Website Now!
+                        </button>
+                        <div id="websiteResultBanner" class="website-result-banner hidden"></div>
+                    </div>
                 </div>
             </div>
         </div>

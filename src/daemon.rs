@@ -577,8 +577,8 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    // Initialize LLM proxy with available providers
-    let llm_proxy = Arc::new(LlmProxy::default());
+    // Initialize LLM proxy with available providers (including close-by Ollama / LM Studio)
+    let llm_proxy = Arc::new(LlmProxy::with_local_detection().await);
     let provider_count = llm_proxy.providers.len();
 
     // Initialize proxy memory for conversation persistence
@@ -1027,6 +1027,7 @@ async fn memnet_ask_handler(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let min_pm = req.min_resonance_pm.unwrap_or(500).clamp(1, 1000);
     let question = req.question;
+    let model_hint_opt = req.model.clone();
     let model_hint = req
         .model
         .unwrap_or_else(|| "burn/mem8-ternary-micro".to_string());
@@ -1062,6 +1063,27 @@ async fn memnet_ask_handler(
                     "wave_b3": pkt.wave_b3,
                 });
             }
+        }
+        // Compute-aware close-by model routing (local/bridge/LAN Ollama + Smart Tree peers)
+        if let Some(ans) =
+            state.answer_with_nearby_models(&question, model_hint_opt.as_deref(), min_pm, lan)
+        {
+            return serde_json::json!({
+                "source": ans.source,
+                "model_used": ans.model,
+                "endpoint": ans.endpoint,
+                "rtc_tau_ms": ans.rtc_ms,
+                "compute_headroom_permille": ans.compute_headroom_permille,
+                "resonance_pm": ans.resonance_pm,
+                "packet_id": ans.packet.packet_id,
+                "answer": ans.packet.answer,
+                "origin_name": ans.packet.origin_name,
+                "hit_count": ans.packet.hit_count,
+                "litany_wire_64b_hex": hex::encode(ans.packet.litany_wire.to_bytes_64()),
+                "wave_frame_79b_hex": hex::encode(ans.packet.wave_frame.to_bytes_79()),
+                "wave_b3": ans.packet.wave_b3,
+                "stream_endpoint": "/memnet/stream",
+            });
         }
         // Fallback: synthesize via 2-Pass Persona Soul & cache into MemNet WaveQA
         if let Some((slug, pass2, full_reply, recalled_len)) =
@@ -4137,23 +4159,31 @@ async fn chat_completions(
     State(state): State<Arc<RwLock<DaemonState>>>,
     Json(req): Json<OpenAiRequest>,
 ) -> impl IntoResponse {
-    // Parse provider from model name (e.g., "anthropic/claude-3" or just "gpt-4")
+    // Resolve configured aliases first (`~/.st/config.toml`)
+    let resolved_model = crate::config::StConfig::load()
+        .ok()
+        .map(|c| c.resolve_model(&req.model))
+        .unwrap_or_else(|| req.model.clone());
+
+    // Parse provider from model name (e.g., "anthropic/claude-3" or just "st-deepseek-pqm:latest")
     // Smart routing: detect provider from model name if no explicit prefix
-    let (provider_name, model_name) = if let Some(slug) = req.model.strip_prefix("persona:") {
+    let (provider_name, model_name) = if let Some(slug) = resolved_model.strip_prefix("persona:") {
         ("burn".to_string(), format!("persona:{slug}"))
-    } else if let Some((p, m)) = req.model.split_once('/') {
+    } else if let Some((p, m)) = resolved_model.split_once('/') {
         if p.eq_ignore_ascii_case("burn")
             || p.eq_ignore_ascii_case("candle")
             || p.eq_ignore_ascii_case("local")
             || p.eq_ignore_ascii_case("persona")
         {
             ("burn".to_string(), m.to_string())
+        } else if p.eq_ignore_ascii_case("ollama") || p.eq_ignore_ascii_case("cheet") {
+            ("ollama".to_string(), m.to_string())
         } else {
             (p.to_string(), m.to_string())
         }
     } else {
         // Auto-detect provider from model name
-        let model_lower = req.model.to_lowercase();
+        let model_lower = resolved_model.to_lowercase();
         let provider = if model_lower.starts_with("persona")
             || model_lower.starts_with("mem8")
             || model_lower.starts_with("burn")
@@ -4161,6 +4191,17 @@ async fn chat_completions(
             || model_lower.starts_with("ternary")
         {
             "burn"
+        } else if model_lower.starts_with("st-deepseek")
+            || model_lower.starts_with("aye-deepseek")
+            || model_lower.starts_with("cheet-deepseek")
+            || model_lower.starts_with("deepseek")
+            || model_lower.starts_with("gemma")
+            || model_lower.starts_with("devstral")
+            || model_lower.starts_with("granite")
+            || model_lower.starts_with("qwen")
+            || model_lower.contains(':')
+        {
+            "ollama"
         } else if model_lower.starts_with("claude") {
             "openrouter" // Route Claude through OpenRouter (works with OPENROUTER_API_KEY)
         } else if model_lower.starts_with("gpt")
@@ -4176,11 +4217,11 @@ async fn chat_completions(
             || model_lower.contains("mistral")
             || model_lower.contains("mixtral")
         {
-            "openrouter" // Open models often via OpenRouter
+            "ollama"
         } else {
             "openrouter" // Default to OpenRouter as it supports many models
         };
-        (provider.to_string(), req.model.clone())
+        (provider.to_string(), resolved_model)
     };
 
     let internal_req = LlmRequest {
@@ -4394,7 +4435,7 @@ fn memory_error_response(message: String) -> axum::response::Response {
         .into_response()
 }
 
-/// List available models from all providers (local ternary & MEM8 personas first)
+/// List available models from all providers (local ternary, MEM8 personas, and close-by Ollama/MemNet models)
 async fn list_models(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<serde_json::Value> {
     let state_lock = state.read().await;
 
@@ -4421,6 +4462,19 @@ async fn list_models(State(state): State<Arc<RwLock<DaemonState>>>) -> Json<serd
                 "object": "model",
                 "owned_by": format!("MEM8-Soul ({})", p.specialty.slug()),
                 "episodes": p.episode_count,
+            }));
+        }
+    }
+
+    if let Ok(ollama_models) = crate::proxy::ollama::OllamaProvider::ollama()
+        .list_models()
+        .await
+    {
+        for m in ollama_models {
+            models.push(serde_json::json!({
+                "id": m,
+                "object": "model",
+                "owned_by": "MemNet-Ollama-Nearby",
             }));
         }
     }

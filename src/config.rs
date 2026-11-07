@@ -35,6 +35,138 @@ pub struct StConfig {
     /// `i1.is` MEM8 Knowledge Nexus, public/private wave policy, and Chain of Title settings
     #[serde(default)]
     pub i1_nexus: crate::mem8::i1_nexus::I1NexusConfig,
+
+    /// MemNet close-by model discovery and compute-aware routing settings
+    #[serde(default)]
+    pub memnet: MemnetConfig,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_max_nearby_rtc_ms() -> u32 {
+    150
+}
+
+fn default_min_free_vram_mb() -> u64 {
+    4096
+}
+
+fn default_min_free_ram_mb() -> u64 {
+    4096
+}
+
+fn default_max_util_pct() -> u8 {
+    85
+}
+
+fn default_memnet_endpoints() -> Vec<String> {
+    vec![
+        "http://127.0.0.1:11436".into(),
+        "http://127.0.0.1:11434".into(),
+        "http://172.16.47.91:11434".into(),
+        "http://172.16.47.91:28428".into(),
+        "http://172.16.47.103:11434".into(),
+        "http://172.16.47.103:28428".into(),
+        "http://127.0.0.1:8786".into(),
+    ]
+}
+
+fn default_heavy_models() -> Vec<String> {
+    vec![
+        "qwen3.6:35b".into(),
+        "deepseek-r1:32b".into(),
+        "aye-deepseek:32b".into(),
+        "cheet-deepseek:32b".into(),
+        "granite4.2:30b".into(),
+        "qwen3.8:27b".into(),
+        "gemma4:26b".into(),
+        "devstral:24b".into(),
+    ]
+}
+
+fn default_medium_models() -> Vec<String> {
+    vec![
+        "st-deepseek-pqm:latest".into(),
+        "aye-deepseek-pqm:latest".into(),
+        "cheet-deepseek-v2:16b".into(),
+        "deepseek-v2:16b".into(),
+        "gemma4:latest".into(),
+    ]
+}
+
+fn default_light_models() -> Vec<String> {
+    vec![
+        "burn/mem8-ternary-micro".into(),
+        "burn/mem8-wave-micro".into(),
+        "persona:code-analyst".into(),
+        "persona:peter".into(),
+        "persona:nate".into(),
+        "persona:markymarkdown".into(),
+        "persona:chris".into(),
+        "persona:readme-expert".into(),
+        "persona:history-documenter".into(),
+        "persona:smart-tree-lore".into(),
+        "persona:grandma-jody".into(),
+        "persona:anne-frank".into(),
+    ]
+}
+
+/// Configuration for MemNet close-by model discovery and compute-aware routing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemnetConfig {
+    /// Allow all close-by models (local, bridged, and LAN MemNet peers) to answer depending on compute availability
+    #[serde(default = "default_true")]
+    pub allow_nearby_models: bool,
+    /// Route queries across close-by models based on real-time compute headroom (free VRAM/RAM, GPU/CPU load, warm VRAM models, and RTC τ)
+    #[serde(default = "default_true")]
+    pub compute_aware_routing: bool,
+    /// Maximum Peter's Real Time Constant (RTC τ in ms) to consider a mesh node/endpoint "close-by" for live model offload
+    #[serde(default = "default_max_nearby_rtc_ms")]
+    pub max_nearby_rtc_ms: u32,
+    /// Minimum free VRAM (MB) required before scheduling a heavy GPU model
+    #[serde(default = "default_min_free_vram_mb")]
+    pub min_free_vram_mb: u64,
+    /// Minimum free system RAM (MB) required before scheduling a local LLM
+    #[serde(default = "default_min_free_ram_mb")]
+    pub min_free_ram_mb: u64,
+    /// Maximum GPU utilization (%) before falling back to lighter or peer models
+    #[serde(default = "default_max_util_pct")]
+    pub max_gpu_utilization_pct: u8,
+    /// Maximum CPU load (%) before falling back to lighter or peer models
+    #[serde(default = "default_max_util_pct")]
+    pub max_cpu_load_pct: u8,
+    /// Close-by LLM / MemNet endpoints to probe for available models & compute
+    #[serde(default = "default_memnet_endpoints")]
+    pub endpoints: Vec<String>,
+    /// Models suited for high compute availability (>= 18 GB free VRAM/RAM, low load)
+    #[serde(default = "default_heavy_models")]
+    pub heavy_compute_models: Vec<String>,
+    /// Models suited for medium compute availability (8..18 GB free VRAM/RAM, moderate load)
+    #[serde(default = "default_medium_models")]
+    pub medium_compute_models: Vec<String>,
+    /// Models suited for constrained/busy compute or instant zero-cloud wave response (< 8 GB free or high load)
+    #[serde(default = "default_light_models")]
+    pub light_compute_models: Vec<String>,
+}
+
+impl Default for MemnetConfig {
+    fn default() -> Self {
+        Self {
+            allow_nearby_models: true,
+            compute_aware_routing: true,
+            max_nearby_rtc_ms: default_max_nearby_rtc_ms(),
+            min_free_vram_mb: default_min_free_vram_mb(),
+            min_free_ram_mb: default_min_free_ram_mb(),
+            max_gpu_utilization_pct: default_max_util_pct(),
+            max_cpu_load_pct: default_max_util_pct(),
+            endpoints: default_memnet_endpoints(),
+            heavy_compute_models: default_heavy_models(),
+            medium_compute_models: default_medium_models(),
+            light_compute_models: default_light_models(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -385,6 +517,40 @@ impl Default for ModelConfig {
         aliases.insert("fiona".into(), "models/fiona-7b-q4_k_m.gguf".into());
         aliases.insert("helios".into(), "models/helios-7b-q4_k_m.gguf".into());
 
+        // === INSTALLED OLLAMA, LIQUID-RUST & MEM8 PERSONA MODELS ===
+        aliases.insert("st-pqm".into(), "st-deepseek-pqm:latest".into());
+        aliases.insert("pqm".into(), "st-deepseek-pqm:latest".into());
+        aliases.insert("aye-pqm".into(), "aye-deepseek-pqm:latest".into());
+        aliases.insert("gemma".into(), "gemma4:latest".into());
+        aliases.insert("gemma4".into(), "gemma4:latest".into());
+        aliases.insert("gemma26b".into(), "gemma4:26b".into());
+        aliases.insert("devstral".into(), "devstral:24b".into());
+        aliases.insert("coder".into(), "devstral:24b".into());
+        aliases.insert("granite".into(), "granite4.2:30b".into());
+        aliases.insert("granite4".into(), "granite4.2:30b".into());
+        aliases.insert("qwen".into(), "qwen3.8:27b".into());
+        aliases.insert("qwen27b".into(), "qwen3.8:27b".into());
+        aliases.insert("qwen35b".into(), "qwen3.6:35b".into());
+        aliases.insert("cheet16b".into(), "cheet-deepseek-v2:16b".into());
+        aliases.insert("cheet".into(), "cheet-deepseek:32b".into());
+        aliases.insert("cheet32b".into(), "cheet-deepseek:32b".into());
+        aliases.insert("aye".into(), "aye-deepseek:32b".into());
+        aliases.insert("aye32b".into(), "aye-deepseek:32b".into());
+        aliases.insert("deepseek16b".into(), "deepseek-v2:16b".into());
+        aliases.insert("deepseek".into(), "deepseek-r1:32b".into());
+        aliases.insert("r1".into(), "deepseek-r1:32b".into());
+        aliases.insert("liquid".into(), "liquid-rust/LFM2.5-Audio-1.5B".into());
+        aliases.insert("lfm-audio".into(), "liquid-rust/LFM2.5-Audio-1.5B".into());
+        aliases.insert("wave".into(), "burn/mem8-wave-micro".into());
+        aliases.insert("peter".into(), "persona:peter".into());
+        aliases.insert("nate".into(), "persona:nate".into());
+        aliases.insert("markymarkdown".into(), "persona:markymarkdown".into());
+        aliases.insert("chris".into(), "persona:chris".into());
+        aliases.insert("grandma-jody".into(), "persona:grandma-jody".into());
+        aliases.insert("anne-frank".into(), "persona:anne-frank".into());
+        aliases.insert("lore".into(), "persona:smart-tree-lore".into());
+        aliases.insert("smart-tree-lore".into(), "persona:smart-tree-lore".into());
+
         Self {
             default_model: "burn/mem8-ternary-micro".into(),
             aliases,
@@ -425,11 +591,34 @@ pub struct SafetyConfig {
 impl Default for SafetyConfig {
     fn default() -> Self {
         let mut scores = HashMap::new();
+        scores.insert("burn/mem8-ternary-micro".into(), 10);
+        scores.insert("burn/mem8-wave-micro".into(), 10);
         scores.insert("candle/mem8-ternary-micro".into(), 10);
         scores.insert("candle/mem8-wave-micro".into(), 10);
+        scores.insert("st-deepseek-pqm:latest".into(), 10);
+        scores.insert("aye-deepseek-pqm:latest".into(), 10);
+        scores.insert("gemma4:latest".into(), 10);
+        scores.insert("gemma4:26b".into(), 10);
+        scores.insert("devstral:24b".into(), 10);
+        scores.insert("granite4.2:30b".into(), 10);
+        scores.insert("qwen3.8:27b".into(), 10);
+        scores.insert("qwen3.6:35b".into(), 10);
+        scores.insert("cheet-deepseek-v2:16b".into(), 10);
+        scores.insert("cheet-deepseek:32b".into(), 10);
+        scores.insert("aye-deepseek:32b".into(), 10);
+        scores.insert("deepseek-v2:16b".into(), 10);
+        scores.insert("deepseek-r1:32b".into(), 10);
+        scores.insert("liquid-rust/LFM2.5-Audio-1.5B".into(), 10);
+        scores.insert("persona:peter".into(), 10);
+        scores.insert("persona:nate".into(), 10);
+        scores.insert("persona:markymarkdown".into(), 10);
+        scores.insert("persona:chris".into(), 10);
         scores.insert("persona:history-documenter".into(), 10);
         scores.insert("persona:code-analyst".into(), 10);
         scores.insert("persona:readme-expert".into(), 10);
+        scores.insert("persona:smart-tree-lore".into(), 10);
+        scores.insert("persona:grandma-jody".into(), 10);
+        scores.insert("persona:anne-frank".into(), 10);
         scores.insert("claude-opus-4-6".into(), 10);
         scores.insert("claude-sonnet-4-6".into(), 10);
         scores.insert("claude-haiku-4-5".into(), 10);
@@ -545,5 +734,24 @@ impl StConfig {
     /// Get safety score for a model (0-10)
     pub fn get_model_score(&self, model: &str) -> u8 {
         self.safety.model_scores.get(model).copied().unwrap_or(5) // Default: neutral
+    }
+
+    /// Resolve a short alias (or `"default"` / empty string) to its full model identifier.
+    pub fn resolve_model(&self, model: &str) -> String {
+        let trimmed = model.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("default") {
+            let def = self.models.default_model.trim();
+            return self
+                .models
+                .aliases
+                .get(def)
+                .cloned()
+                .unwrap_or_else(|| def.to_string());
+        }
+        self.models
+            .aliases
+            .get(trimmed)
+            .cloned()
+            .unwrap_or_else(|| trimmed.to_string())
     }
 }

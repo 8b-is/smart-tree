@@ -224,6 +224,12 @@ async fn main() -> Result<()> {
     if let Some(st::cli::Cmd::PqTrain(train_cmd)) = &cli.cmd {
         return st::pq_trainer::handle_pq_train_command(train_cmd).await;
     }
+    if let Some(st::cli::Cmd::PqTest(test_cmd)) = &cli.cmd {
+        return st::model_eval::handle_pq_test_command(test_cmd).await;
+    }
+    if let Some(st::cli::Cmd::PqBench(bench_cmd)) = &cli.cmd {
+        return st::pq_bench::handle_pq_bench_command(bench_cmd).await;
+    }
 
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {
@@ -496,6 +502,12 @@ async fn main() -> Result<()> {
             }
             st::cli::Cmd::PqTrain(ref train_cmd) => {
                 return st::pq_trainer::handle_pq_train_command(train_cmd).await;
+            }
+            st::cli::Cmd::PqTest(ref test_cmd) => {
+                return st::model_eval::handle_pq_test_command(test_cmd).await;
+            }
+            st::cli::Cmd::PqBench(ref bench_cmd) => {
+                return st::pq_bench::handle_pq_bench_command(bench_cmd).await;
             }
         }
     }

@@ -137,36 +137,35 @@ impl Default for LlmProxy {
     fn default() -> Self {
         let mut proxy = Self::new();
 
-        // Add default providers if API keys are present in environment
-        if std::env::var("OPENAI_API_KEY").is_ok() {
-            proxy.add_provider(Box::new(openai::OpenAiProvider::default()));
-        }
-
-        if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-            proxy.add_provider(Box::new(anthropic::AnthropicProvider::default()));
-        }
-
-        if std::env::var("GOOGLE_API_KEY").is_ok() {
-            proxy.add_provider(Box::new(google::GoogleProvider::default()));
-        }
-
-        // Add Grok provider if XAI_API_KEY or GROK_API_KEY is present
-        if std::env::var("XAI_API_KEY").is_ok() || std::env::var("GROK_API_KEY").is_ok() {
-            proxy.add_provider(Box::new(grok::GrokProvider::default()));
-        }
-
-        // Add OpenRouter provider if OPENROUTER_API_KEY is present (access to 100+ models!)
-        if std::env::var("OPENROUTER_API_KEY").is_ok() {
-            proxy.add_provider(Box::new(openrouter::OpenRouterProvider::default()));
-        }
-
-        // Add Z.AI (Zhipu / GLM) provider
-        if std::env::var("ZAI_API_KEY").is_ok() || std::env::var("ZHIPU_API_KEY").is_ok() {
-            proxy.add_provider(Box::new(zai::ZaiProvider::default()));
-        }
-
-        // Always add Burn local ternary & MEM8 provider
+        // Priority #1: Always add Smart Tree's own local ternary & MEM8 provider first!
         proxy.add_provider(Box::new(burn::BurnProvider::default()));
+
+        // Cloud providers are strictly OFF unless enabled & authenticated in `~/.st/providers.json`
+        let reg = crate::web_dashboard::providers::ProvidersRegistryFile::load();
+
+        if let Some(key) = reg.resolve_credential("openrouter") {
+            proxy.add_provider(Box::new(openrouter::OpenRouterProvider::new(key)));
+        }
+
+        if let Some(key) = reg.resolve_credential("claude") {
+            proxy.add_provider(Box::new(anthropic::AnthropicProvider::new(key)));
+        }
+
+        if let Some(key) = reg.resolve_credential("openai") {
+            proxy.add_provider(Box::new(openai::OpenAiProvider::new(key)));
+        }
+
+        if let Some(key) = reg.resolve_credential("google") {
+            proxy.add_provider(Box::new(google::GoogleProvider::new(key)));
+        }
+
+        if let Some(key) = reg.resolve_credential("grok") {
+            proxy.add_provider(Box::new(grok::GrokProvider::new(key)));
+        }
+
+        if let Some(key) = reg.resolve_credential("zai") {
+            proxy.add_provider(Box::new(zai::ZaiProvider::new(key)));
+        }
 
         proxy
     }

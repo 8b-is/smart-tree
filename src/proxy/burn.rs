@@ -132,6 +132,80 @@ fn prompt_specialty_affinity(prompt: &str, spec: PersonaSpecialty) -> f32 {
                 0.0
             }
         }
+        PersonaSpecialty::CliMaster => {
+            if lower.contains("cli")
+                || lower.contains("command")
+                || lower.contains("flag")
+                || lower.contains("st ")
+                || lower.contains("--")
+                || lower.contains("shell")
+                || lower.contains("pipe")
+                || lower.contains("terminal")
+            {
+                4.0
+            } else {
+                0.0
+            }
+        }
+        PersonaSpecialty::ArtCreator => {
+            if lower.contains("art")
+                || lower.contains("ascii")
+                || lower.contains("ansi")
+                || lower.contains("triad")
+                || lower.contains("palette")
+                || lower.contains("shader")
+                || lower.contains("visual")
+                || lower.contains("design")
+            {
+                4.0
+            } else {
+                0.0
+            }
+        }
+        PersonaSpecialty::LoveCompanion => {
+            if lower.contains("love")
+                || lower.contains("heart")
+                || lower.contains("care")
+                || lower.contains("warmth")
+                || lower.contains("kind")
+                || lower.contains("<3")
+                || lower.contains("family")
+            {
+                4.0
+            } else {
+                0.0
+            }
+        }
+        PersonaSpecialty::PoetryWeaver => {
+            if lower.contains("poem")
+                || lower.contains("poetry")
+                || lower.contains("verse")
+                || lower.contains("stanza")
+                || lower.contains("haiku")
+                || lower.contains("rhyme")
+                || lower.contains("lyric")
+            {
+                4.0
+            } else {
+                0.0
+            }
+        }
+        PersonaSpecialty::SoundSynthesizer => {
+            if lower.contains("sound")
+                || lower.contains("audio")
+                || lower.contains("music")
+                || lower.contains("phoenix")
+                || lower.contains("432")
+                || lower.contains("528")
+                || lower.contains("chirp")
+                || lower.contains("synth")
+                || lower.contains("frequency")
+            {
+                4.0
+            } else {
+                0.0
+            }
+        }
         PersonaSpecialty::LifeBiographer => 1.0,
     }
 }
