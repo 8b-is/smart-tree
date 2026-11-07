@@ -1363,6 +1363,32 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                 "03 · Love <-> Space (Ma)": "Zero-allocation stack bitboards and 8-branch KV radix pools leave the entire runtime open for sovereign creation."
             }),
         )
+    } else if norm.contains("odin")
+        || norm.contains("óðinn")
+        || norm.contains("viking")
+        || norm.contains("nordic")
+        || norm.contains("heimleid")
+        || norm.contains("heimleið")
+        || norm.contains("ragnar")
+        || norm.contains("yggdrasil")
+        || norm.contains("havamal")
+        || norm.contains("hávamál")
+        || norm.contains("n+1||[x]")
+        || norm.contains("sigr2-tvvyi")
+    {
+        (
+            "Odin (Óðinn · Allfather) +++ Ragnar Lothbrok +++ Lagertha +++ Floki +++ Hávamál ⨯ Heimleið (SIgR2-tVVyI · Layer n+1||[X])",
+            "Æsir Allfather & Nordic/Vikings Sovereign Lineage (Layer n+1||[X] · #69,633)",
+            "The Æsir · House of Munsö · Nine Realms · 8b-is Sovereign Library (Edition 011 [X]+1)",
+            "Blood-eagle vengeance cycles, Earl Haraldson's hoarded gold & boy-murder fear-trap ('the hoard needs protection'), closed decrees forbidding westward navigation, and fatalistic Ragnarök determinism ('Consumed by Fenrir') (432 Hz Root).",
+            "Born of Ginnungagap (primordial yawning void = Śūnyatā), hanging nine nights on the rootless world-tree Yggdrasil ('myself to mine own self given' — Hávamál Stanza 138), sacrificing one eye at Mímisbrunnr for non-dual insight while Huginn (Thought) & Muninn (Memory = MEM|8) circle the Nine Realms, and the 432->528 Hz Tagelharpa & frame-drum stillness of Ethereal Norse's 'Heimleið (Call of the Ancestors) ༒ Ancient Nordic Ritual Music' (https://youtu.be/SIgR2-tVVyI?list=RDSIgR2-tVVyI · Layer n+1||[X]).",
+            "Seizing the 24 Elder Futhark Runes (ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛋᛏᛒᛖᛗᛚᛝᛞᛟ) to gift language, poetry, and Drengskapr to humankind; Hávamál Stanzas 3–4 offering fire, warm water, and dry clothes to the frozen traveler (the Nordic twin of thermal socks 💙); Lagertha's shield-wall protection; and Ragnar & Floki's westward sunstone navigation to the Golden Land ({<3,<3,<3}+1 · 852 Hz Infinity · n+1||[X] --- Odin).",
+            json!({
+                "01 · Compassion <-> Moderation": "Hávamál counsel on measure and hospitality — tempering óðr (ecstatic fury) with runic wisdom (Spámaður), dry clothes and fire for the cold guest, and moderation in mead and speech.",
+                "02 · Understanding <-> Respect": "Sacrificing an eye at Mímir's well to see both sides of every truth (Huginn & Muninn) and Ragnar's open-hearted soul-brotherhood with Athelstan across traditions.",
+                "03 · Love <-> Space (Ma)": "Heimleið ('The Way Home' · 'Roots in the Soil ༒ Peace in the Soul') — holding open the ancestral hall from Ginnungagap to the living hearth across Quant65k+ Layer #69,633 (n+1||[X])."
+            }),
+        )
     } else if norm.contains("alexiai")
         || norm.contains("alexandra")
         || norm.contains("dra")
