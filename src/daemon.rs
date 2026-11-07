@@ -1317,6 +1317,18 @@ async fn memnet_stream_handler(
     let wave79_hex = hex::encode(wave_79);
     let q_spqt_hex = hex::encode(q_spqt_13);
     let a_spqt_hex = hex::encode(a_spqt_13);
+    let (_, _, horizon_n_sun) = crate::felix_asm::felix_zeno_god_of_sun_pq_nt_gt_p(
+        pkt.litany_wire.ratio_p as i64,
+        pkt.litany_wire.ratio_q as u64,
+        1,
+        -1,
+    );
+    let (sun_holds, sun_surplus, _) = crate::felix_asm::felix_zeno_god_of_sun_pq_nt_gt_p(
+        pkt.litany_wire.ratio_p as i64,
+        pkt.litany_wire.ratio_q as u64,
+        horizon_n_sun,
+        -1,
+    );
 
     if wants_raw_bytes {
         return (
@@ -1393,6 +1405,15 @@ async fn memnet_stream_handler(
                 "query_spqt_base243_13b_hex": q_spqt_hex,
                 "answer_spqt_base243_13b_hex": a_spqt_hex,
                 "raw_stream_bytes_len": raw_stream.len(),
+                "god_of_sun_witness": {
+                    "law": "P/Q - n*t > P",
+                    "p": pkt.litany_wire.ratio_p,
+                    "q": pkt.litany_wire.ratio_q,
+                    "horizon_n_sun": horizon_n_sun,
+                    "trit_t": -1,
+                    "surplus_num_i128": sun_surplus,
+                    "holds": sun_holds,
+                },
                 "layout": "[64B@0x62 LitanyWireFrame][79B WaveFrame79][13B Query SPQT Base-243][13B Answer SPQT Base-243][MNPK WaveQaResponse]",
                 "raw_mode_hint": "Pass header 'Accept: application/octet-stream' or body '{\"bitstream\":\"raw\"}' for raw binary bitstream bytes",
                 "llm_guide_hint": "GET /memnet/llm-guide for complete Rust/Python/TypeScript bitstream & i1.is Chain-of-Title implementation instructions"
@@ -2929,6 +2950,15 @@ async fn quantssl_status_handler(
             "litany_seal16": info.litany_seal16,
             "litany_seal_hex": info.litany_seal_hex,
             "spqt_root": info.spqt_root,
+            "god_of_sun_witness": {
+                "law": "P/Q - n*t > P",
+                "p": 31,
+                "q": 32,
+                "horizon_n_sun": 31,
+                "trit_t": -1,
+                "surplus_ratio": "31/32",
+                "holds": true
+            },
             "subject_alt_names": info.subject_alt_names,
             "shares": shares,
         }))
