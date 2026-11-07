@@ -297,8 +297,11 @@ impl Formatter for TheBookFormatter {
                 "kohn_sham_orbitals_k": report.manybody_wave_report.kohn_sham_orbitals_k,
                 "lno_t8r_correlations": report.manybody_wave_report.lno_t8r_correlations,
                 "many_body_speedup_factor": (report.manybody_wave_report.many_body_speedup_factor * 100.0).round() / 100.0,
+                "many_body_speedup_pq": report.manybody_wave_report.many_body_speedup_pq,
                 "kohn_sham_exchange_energy": (report.manybody_wave_report.kohn_sham_exchange_energy * 1000.0).round() / 1000.0,
+                "kohn_sham_exchange_pqm": report.manybody_wave_report.kohn_sham_exchange_pqm,
                 "strang_split_coherence": (report.manybody_wave_report.strang_split_coherence * 10000.0).round() / 10000.0,
+                "strang_coherence_pq": report.manybody_wave_report.strang_coherence_pq,
                 "dominant_salience_orbitals": report.manybody_wave_report.dominant_salience_orbitals,
             },
             "pq_rational_symplectic_mode": {

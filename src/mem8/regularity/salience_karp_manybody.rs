@@ -107,10 +107,16 @@ pub struct ManyBodyDftWaveReport {
     pub lno_t8r_correlations: usize,
     /// Pairwise complexity reduction factor $N^2 / \max(1, K^2 + |E_{\text{T8R}}|)$
     pub many_body_speedup_factor: f64,
-    /// Total Kohn–Sham mean-field exchange energy $\sum_{i,j} d_p(V_i, V_j) \langle \psi_i | \psi_j \rangle$
+    /// Exact coprime rational speedup $p/q = N(N-1) / (K^2 + |E_{\text{T8R}}|)$
+    pub many_body_speedup_pq: String,
+    /// Total Kohn–Sham mean-field + LNO `T8R` exchange energy $\sum_{i,j} d_p(V_i, V_j) \langle \psi_i | \psi_j \rangle$
     pub kohn_sham_exchange_energy: f64,
+    /// Exact `4gaia` zero-float `(p/q) * 2^m` PQM register for Kohn–Sham exchange energy
+    pub kohn_sham_exchange_pqm: String,
     /// Second-order Strang Split-Operator ($e^{hA/2} e^{hB} e^{hA/2}$) L2 wave coherence after step $h$
     pub strang_split_coherence: f64,
+    /// Exact coprime rational $p/q$ representation of Strang split-operator wave coherence
+    pub strang_coherence_pq: String,
     /// Top super-node orbital indices ranked by Strang-propagated salience amplitude $|\Psi_i(t + h)|^2$
     pub dominant_salience_orbitals: Vec<(ClusterId, f32)>,
 }
@@ -341,17 +347,22 @@ fn compute_manybody_dft_strang(
     let n = graph.num_vertices;
     let t8r_len = archive.exception_ledger.len();
 
-    let full_pairs = (n * n.saturating_sub(1)).max(1) as f64;
-    let dft_ops = (k * k + t8r_len).max(1) as f64;
-    let many_body_speedup_factor = (full_pairs / dft_ops).max(1.0);
+    let full_pairs_u64 = (n * n.saturating_sub(1)).max(1) as u64;
+    let dft_ops_u64 = (k * k + t8r_len).max(1) as u64;
+    let speedup_rat = super::pq_engine::RationalPQ::new_reduced(full_pairs_u64, dft_ops_u64);
+    let many_body_speedup_pq = speedup_rat.display_ratio();
+    let many_body_speedup_factor = (full_pairs_u64 as f64 / dft_ops_u64 as f64).max(1.0);
 
     if k == 0 {
         return ManyBodyDftWaveReport {
             kohn_sham_orbitals_k: 0,
             lno_t8r_correlations: t8r_len,
             many_body_speedup_factor,
+            many_body_speedup_pq,
             kohn_sham_exchange_energy: 0.0,
+            kohn_sham_exchange_pqm: "(0/1)*2^0".to_string(),
             strang_split_coherence: 1.0,
+            strang_coherence_pq: "1/1".to_string(),
             dominant_salience_orbitals: Vec::new(),
         };
     }
@@ -389,6 +400,15 @@ fn compute_manybody_dft_strang(
     let mut next_psi = psi.clone();
     let mut exchange_energy = 0.0_f64;
 
+    // 2a. Diagonal Hartree / Kohn-Sham orbital self-exchange density d_p(V_i, V_i) <\psi_i | \psi_i>
+    for (idx, sn) in super_nodes.iter().enumerate() {
+        let self_overlap = felix_dot64_f32(&centroids[idx].lanes, &centroids[idx].lanes).abs();
+        let self_xc = sn.internal_p_density.clamp(0.05, 4.0) * self_overlap;
+        exchange_energy += (self_xc as f64) * 0.25;
+        next_psi[idx] += 0.10 * h * self_xc * psi[idx];
+    }
+
+    // 2b. Off-diagonal regular super-edge Hartree-Fock / Kohn-Sham exchange integrals
     for edge in reduced_edges {
         let u_cid = edge.src_cluster as usize;
         let v_cid = edge.dst_cluster as usize;
@@ -412,24 +432,48 @@ fn compute_manybody_dft_strang(
         }
     }
 
-    // Include Local Natural Orbital (LNO / QM-MM) correlation corrections from T8R exceptions
+    // 2c. Local Natural Orbital (LNO / QM-MM) correlation corrections from T8R exceptions
+    // Includes both inter-orbital correlations (V_i <-> V_j) and QM-MM active-space boundary
+    // couplings (Outlier V_0 <-> Kohn-Sham orbital V_j) via 64-lane SIMD wave overlap.
     let sym_to_cluster = book.symbol_to_cluster();
     for exc in &archive.exception_ledger {
-        let c_u = sym_to_cluster
-            .get(exc.src_symbol as usize)
-            .copied()
-            .unwrap_or(0) as usize;
-        let c_v = sym_to_cluster
-            .get(exc.dst_symbol as usize)
-            .copied()
-            .unwrap_or(0) as usize;
-        if c_u < cid_to_idx.len() && c_v < cid_to_idx.len() {
-            let i = cid_to_idx[c_u];
-            let j = cid_to_idx[c_v];
-            if i != usize::MAX && j != usize::MAX {
-                next_psi[i] += 0.05 * h * psi[j];
-                exchange_energy += 0.05;
-            }
+        let u_sym = exc.src_symbol as usize;
+        let v_sym = exc.dst_symbol as usize;
+        let c_u = sym_to_cluster.get(u_sym).copied().unwrap_or(0) as usize;
+        let c_v = sym_to_cluster.get(v_sym).copied().unwrap_or(0) as usize;
+        let i = cid_to_idx.get(c_u).copied().unwrap_or(usize::MAX);
+        let j = cid_to_idx.get(c_v).copied().unwrap_or(usize::MAX);
+
+        if i != usize::MAX && j != usize::MAX {
+            let lno_overlap = felix_dot64_f32(&centroids[i].lanes, &centroids[j].lanes)
+                .abs()
+                .max(0.25);
+            let lno_coupling = 0.08 * lno_overlap;
+            next_psi[i] += lno_coupling * h * psi[j];
+            exchange_energy += lno_coupling as f64;
+        } else if i != usize::MAX || j != usize::MAX {
+            let (orb_idx, outlier_sym) = if i != usize::MAX {
+                (i, v_sym)
+            } else {
+                (j, u_sym)
+            };
+            let qm_mm_overlap = graph
+                .symbol_embeddings
+                .get(outlier_sym)
+                .map(|emb| felix_dot64_f32(emb, &centroids[orb_idx].lanes).abs())
+                .unwrap_or(0.5)
+                .max(0.2);
+            let qm_mm_coupling = 0.06 * qm_mm_overlap;
+            next_psi[orb_idx] += qm_mm_coupling * h * psi[orb_idx];
+            exchange_energy += qm_mm_coupling as f64;
+        } else if u_sym < graph.symbol_embeddings.len() && v_sym < graph.symbol_embeddings.len() {
+            let active_overlap = felix_dot64_f32(
+                &graph.symbol_embeddings[u_sym],
+                &graph.symbol_embeddings[v_sym],
+            )
+            .abs()
+            .max(0.2);
+            exchange_energy += (0.04 * active_overlap) as f64;
         }
     }
 
@@ -464,12 +508,20 @@ fn compute_manybody_dft_strang(
         .sum::<f32>()
         .clamp(0.0, 1.0);
 
+    let xc_q16 = ((exchange_energy * 65536.0).round() as i64).max(1);
+    let xc_pqm = crate::pq_trainer::normalize_symplectic_pqm(xc_q16, 1, -16);
+    let coh_num = (((coherence as f64) * 10_000.0).round() as u64).clamp(0, 10_000);
+    let coh_rat = super::pq_engine::RationalPQ::new_reduced(coh_num, 10_000);
+
     ManyBodyDftWaveReport {
         kohn_sham_orbitals_k: k,
         lno_t8r_correlations: t8r_len,
         many_body_speedup_factor,
+        many_body_speedup_pq,
         kohn_sham_exchange_energy: exchange_energy,
+        kohn_sham_exchange_pqm: xc_pqm.display_pqm(),
         strang_split_coherence: coherence as f64,
+        strang_coherence_pq: coh_rat.display_ratio(),
         dominant_salience_orbitals,
     }
 }
