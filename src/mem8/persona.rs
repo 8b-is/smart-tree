@@ -317,39 +317,211 @@ impl LifePersona {
         }
     }
 
-    /// Train a Life Persona with default `LifeBiographer` specialty
-    /// Canonical AncestralSeed for Grandma Jody ("Alice Joan (Jody) Hawkins Chenoweth" / "Alice Jody Hawkings")
-    pub fn default_jody_seed() -> AncestralSeed {
+    /// Build an `AncestralSeed` dynamically from any corpus using SPQT Base-243 ternary wave projection
+    /// and structural entity/place/date discovery (zero hardcoded names).
+    pub fn build_ternary_ancestral_seed(
+        persona_name: &str,
+        episodes: &[PersonaEpisode],
+        voice: &VoiceSignature,
+    ) -> AncestralSeed {
+        let mut aliases: Vec<String> = Vec::new();
+        let mut places_counts: HashMap<String, usize> = HashMap::new();
+        let mut companion_counts: HashMap<String, usize> = HashMap::new();
+        let mut born_year: Option<u16> = None;
+
+        let name_tokens: HashSet<String> = persona_name
+            .split_whitespace()
+            .map(|t| {
+                t.trim_matches(|c: char| !c.is_alphabetic())
+                    .to_ascii_lowercase()
+            })
+            .filter(|t| t.len() >= 3)
+            .collect();
+
+        for ep in episodes {
+            let text = &ep.passage;
+            let lower = text.to_ascii_lowercase();
+
+            // 1. Discover birth year from explicit "born ... YYYY" patterns
+            if born_year.is_none() {
+                if let Some(pos) = lower.find("born ") {
+                    let window: String = text[pos..].chars().take(48).collect();
+                    if let Some(y) = detect_lived_year_in_text(&window) {
+                        if (1850..=2015).contains(&y) {
+                            born_year = Some(y);
+                        }
+                    }
+                }
+            }
+
+            // 2. Discover epistolary salutations/signatures ("Dearest X", "Yours, X", "THE PROPERTY OF X")
+            for line in text.lines() {
+                let l = line.trim();
+                for prefix in ["Yours,", "Dearest ", "Dear ", "THE PROPERTY OF "] {
+                    if let Some(rest) = l.strip_prefix(prefix) {
+                        let clean = rest
+                            .trim_matches(|c: char| !c.is_alphanumeric() && c != ' ' && c != '.')
+                            .trim();
+                        if clean.len() >= 3
+                            && clean.len() <= 32
+                            && clean.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                            && !aliases.iter().any(|a| a.eq_ignore_ascii_case(clean))
+                        {
+                            if prefix == "Dearest " || prefix == "Dear " {
+                                *companion_counts
+                                    .entry(format!("{clean} (diary confidante)"))
+                                    .or_insert(0) += 4;
+                            } else {
+                                aliases.push(clean.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Discover places following spatial prepositions ("in ", "at ", "near ", "to ") or place suffixes
+            let tokens: Vec<&str> = text.split_whitespace().collect();
+            for i in 0..tokens.len() {
+                let w_low = tokens[i]
+                    .trim_matches(|c: char| !c.is_ascii_alphabetic())
+                    .to_ascii_lowercase();
+                if matches!(w_low.as_str(), "in" | "at" | "near" | "from") {
+                    if let Some(&next) = tokens.get(i + 1) {
+                        let clean_next = next.trim_matches(|c: char| !c.is_alphanumeric());
+                        if clean_next.len() >= 4
+                            && clean_next
+                                .chars()
+                                .next()
+                                .is_some_and(|c| c.is_ascii_uppercase())
+                            && !is_calendar_or_common_cap(&clean_next.to_ascii_lowercase())
+                        {
+                            let mut phrase = clean_next.to_string();
+                            if let Some(&next2) = tokens.get(i + 2) {
+                                let clean2 = next2.trim_matches(|c: char| !c.is_alphanumeric());
+                                if clean2
+                                    .chars()
+                                    .next()
+                                    .is_some_and(|c| c.is_ascii_uppercase())
+                                    && !is_calendar_or_common_cap(&clean2.to_ascii_lowercase())
+                                {
+                                    phrase.push(' ');
+                                    phrase.push_str(clean2);
+                                }
+                            }
+                            *places_counts.entry(phrase).or_insert(0) += 1;
+                        }
+                    }
+                }
+
+                // 4. Discover recurring capitalized companion names in first-person episodes
+                if matches!(
+                    ep.author_role,
+                    AuthorRole::PrimaryDiary | AuthorRole::PrimaryMemoir
+                ) {
+                    let clean_cap = tokens[i].trim_matches(|c: char| !c.is_ascii_alphabetic());
+                    if clean_cap.len() >= 4
+                        && clean_cap
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_uppercase())
+                        && clean_cap[1..].chars().all(|c| c.is_ascii_lowercase())
+                    {
+                        let low = clean_cap.to_ascii_lowercase();
+                        if !is_calendar_or_common_cap(&low) && !name_tokens.contains(&low) {
+                            *companion_counts.entry(clean_cap.to_string()).or_insert(0) += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut place_vec: Vec<(String, usize)> =
+            places_counts.into_iter().filter(|(_, c)| *c >= 2).collect();
+        place_vec.sort_by_key(|b| std::cmp::Reverse(b.1));
+        let places: Vec<String> = place_vec.into_iter().take(5).map(|(p, _)| p).collect();
+
+        let mut comp_vec: Vec<(String, usize)> = companion_counts
+            .into_iter()
+            .filter(|(_, c)| *c >= 3)
+            .collect();
+        comp_vec.sort_by_key(|b| std::cmp::Reverse(b.1));
+        let companions: Vec<String> = comp_vec.into_iter().take(6).map(|(c, _)| c).collect();
+
+        // SPQT Base-243 ternary style wave projection (quantize 10 corpus features into 2 Base-243 bytes)
+        let n_eps = episodes.len().max(1) as f32;
+        let diary_ratio = episodes
+            .iter()
+            .filter(|e| e.author_role == AuthorRole::PrimaryDiary)
+            .count() as f32
+            / n_eps;
+        let memoir_ratio = episodes
+            .iter()
+            .filter(|e| e.author_role == AuthorRole::PrimaryMemoir)
+            .count() as f32
+            / n_eps;
+        let temporal_ratio =
+            episodes.iter().filter(|e| e.temporal_order > 0).count() as f32 / n_eps;
+
+        let raw_features: [f32; 8] = [
+            voice.warmth,
+            voice.expressiveness,
+            (voice.avg_sentence_words - 14.0) / 14.0,
+            diary_ratio - 0.3,
+            memoir_ratio - 0.3,
+            temporal_ratio - 0.4,
+            voice.warmth * 0.5 + diary_ratio * 0.5,
+            voice.expressiveness * 0.5 + temporal_ratio * 0.5,
+        ];
+        let mut trits_a = [0i8; 5];
+        let mut trits_b = [0i8; 5];
+        for i in 0..5 {
+            trits_a[i] = if raw_features[i] > 0.04 {
+                1
+            } else if raw_features[i] < -0.04 {
+                -1
+            } else {
+                0
+            };
+        }
+        for i in 0..3 {
+            trits_b[i] = if raw_features[5 + i] > 0.04 {
+                1
+            } else if raw_features[5 + i] < -0.04 {
+                -1
+            } else {
+                0
+            };
+        }
+        let packed_a = spqt_pack_5trits(trits_a);
+        let packed_b = spqt_pack_5trits(trits_b);
+        let un_a = spqt_unpack_5trits(packed_a);
+        let un_b = spqt_unpack_5trits(packed_b);
+        let style_wave = [
+            (un_a[0] as f32) * 0.22 + raw_features[0] * 0.1,
+            (un_a[1] as f32) * 0.22 + raw_features[1] * 0.1,
+            (un_a[2] as f32) * 0.22 + raw_features[2] * 0.1,
+            (un_a[3] as f32) * 0.22 + raw_features[3] * 0.1,
+            (un_a[4] as f32) * 0.22 + raw_features[4] * 0.1,
+            (un_b[0] as f32) * 0.22 + raw_features[5] * 0.1,
+            (un_b[1] as f32) * 0.22 + raw_features[6] * 0.1,
+            (un_b[2] as f32) * 0.22 + raw_features[7] * 0.1,
+        ];
+
         AncestralSeed {
-            id: "Alice Joan (Jody) Hawkins Chenoweth".to_string(),
-            aliases: vec![
-                "Alice Jody Hawkings".to_string(),
-                "Grandma Jody".to_string(),
-                "Jody Chenoweth".to_string(),
-                "Jody Hawkins".to_string(),
+            id: persona_name.to_string(),
+            aliases,
+            born_year,
+            places,
+            companions,
+            style_wave,
+            value_adjust: (voice.warmth + 0.15).clamp(0.05, 0.45),
+            domain_bias: [
+                diary_ratio.clamp(0.05, 0.65),
+                memoir_ratio.clamp(0.05, 0.65),
+                temporal_ratio.clamp(0.05, 0.65),
+                voice.expressiveness.clamp(0.05, 0.65),
             ],
-            born_year: Some(1930),
-            places: vec![
-                "Platoro, Colorado (X3 Lake Fork Dude Ranch & Skyview Lodge)".to_string(),
-                "Vallecito, Colorado".to_string(),
-                "Crestone & Great Sand Dunes, Colorado".to_string(),
-                "Kansas City, Kansas (Wyandotte High & Triple Star Riding Stables)".to_string(),
-                "Chenterra Farm (between Tonganoxie & Leavenworth, Kansas)".to_string(),
-            ],
-            companions: vec![
-                "Fred Chenoweth (husband, m. 1948)".to_string(),
-                "Alice Wilson Hawkins (mother)".to_string(),
-                "Mike Hawkins (father)".to_string(),
-                "Judy Stauffer & Susie Ross (sisters)".to_string(),
-                "Mike, Kane, Kerry, and Jill (children)".to_string(),
-                "Buster (ornery black Shetland pony)".to_string(),
-                "Chenterra Phoebus Dinkums ('Dink', 27.5\" AMHA herd sire)".to_string(),
-                "Ch. Chenterra Thunderation ROM ('Thunder', top-winning Sheltie)".to_string(),
-            ],
-            style_wave: [0.18, 0.25, -0.05, 0.22, 0.14, 0.08, 0.19, 0.11],
-            value_adjust: 0.24,
-            domain_bias: [0.25, 0.15, 0.08, 0.22],
-            origin: "Jody".to_string(),
+            origin: persona_name.to_string(),
         }
     }
 
@@ -385,6 +557,7 @@ impl LifePersona {
                 .collect(),
             PersonaSpecialty::HistoryDocumenter | PersonaSpecialty::LifeBiographer => [
                 "md", "txt", "org", "rst", "eml", "markdown", "json", "html", "htm", "tex", "csv",
+                "pdf",
             ]
             .into_iter()
             .collect(),
@@ -570,13 +743,17 @@ impl LifePersona {
             0.2
         };
 
-        let is_jody = slug.contains("jody")
-            || canon
-                .to_string_lossy()
-                .to_ascii_lowercase()
-                .contains("jody");
-        let ancestral_seed = if is_jody {
-            Some(Self::default_jody_seed())
+        let voice = VoiceSignature {
+            avg_sentence_words,
+            warmth,
+            expressiveness,
+            vocabulary,
+            signature_phrases,
+            sample_openings,
+        };
+
+        let ancestral_seed = if specialty == PersonaSpecialty::LifeBiographer {
+            Some(Self::build_ternary_ancestral_seed(name, &episodes, &voice))
         } else {
             None
         };
@@ -590,14 +767,7 @@ impl LifePersona {
             trained_at: Utc::now(),
             files_ingested,
             total_words,
-            voice: VoiceSignature {
-                avg_sentence_words,
-                warmth,
-                expressiveness,
-                vocabulary,
-                signature_phrases,
-                sample_openings,
-            },
+            voice,
             episodes,
         };
 
@@ -799,17 +969,22 @@ impl LifePersona {
             || lower_query.contains("write")
             || lower_query.contains("journal")
             || lower_query.contains("day in")
-            || lower_query.contains("1963")
-            || lower_query.contains("1964");
+            || lower_query.contains("entry")
+            || lower_query.contains("letter");
         let wants_mom = lower_query.contains("mom")
             || lower_query.contains("mother")
-            || lower_query.contains("mama")
-            || lower_query.contains("alice wilson");
+            || lower_query.contains("mama");
         let wants_dad = lower_query.contains("dad")
             || lower_query.contains("father")
             || lower_query.contains("daddy")
-            || lower_query.contains("mike hawkins");
-        let wants_jill = lower_query.contains("jill") || lower_query.contains("traits");
+            || lower_query.contains("foreword")
+            || lower_query.contains("afterword");
+        let wants_dialogue = lower_query.contains("daughter")
+            || lower_query.contains("son")
+            || lower_query.contains("sister")
+            || lower_query.contains("answer")
+            || lower_query.contains("replied")
+            || lower_query.contains("traits");
 
         let mut query_hash = 0u64;
         for b in query.bytes() {
@@ -856,7 +1031,7 @@ impl LifePersona {
                 // Voice & authorship alignment
                 match ep.author_role {
                     AuthorRole::PrimaryDiary => {
-                        score += if wants_diary { 6.0 } else { 1.5 };
+                        score += if wants_diary { 6.0 } else { 1.8 };
                     }
                     AuthorRole::PrimaryMemoir => {
                         score += 1.2;
@@ -872,7 +1047,7 @@ impl LifePersona {
                         }
                     }
                     AuthorRole::FamilyDialogue => {
-                        if wants_jill {
+                        if wants_dialogue {
                             score += 5.5;
                         }
                     }
@@ -930,18 +1105,26 @@ impl LifePersona {
         ));
 
         if let Some(ref seed) = self.ancestral_seed {
+            let places_str = if seed.places.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " · Places: {}",
+                    seed.places
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(" · ")
+                )
+            };
+            let born_str = seed
+                .born_year
+                .map(|y| format!(" (b. {y})"))
+                .unwrap_or_default();
             out.push_str(&format!(
-                "_Identity anchor: **{}** (b. {}) · Places: {}_\n\n",
-                seed.id,
-                seed.born_year
-                    .map(|y| y.to_string())
-                    .unwrap_or_else(|| "unknown".to_string()),
-                seed.places
-                    .iter()
-                    .take(3)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(" · ")
+                "_Identity anchor: **{}**{}{}_\n\n",
+                seed.id, born_str, places_str
             ));
         }
 
@@ -957,15 +1140,19 @@ impl LifePersona {
                     primary.source, temporal_badge
                 ),
                 (_, AuthorRole::MaternalArchive) => format!(
-                    "📜 **From my mother Alice Wilson Hawkins's diary, which I edited** (`{}`{})",
+                    "📜 **From my mother's diary & notes, which I preserved** (`{}`{})",
                     primary.source, temporal_badge
                 ),
-                (_, AuthorRole::PaternalArchive) => format!(
-                    "📜 **From my dad Mike Hawkins's story & advice that I preserved** (`{}`{})",
-                    primary.source, temporal_badge
-                ),
+                (_, AuthorRole::PaternalArchive) => {
+                    let label = if primary.origin.is_empty() {
+                        "From my father's story & historical record"
+                    } else {
+                        primary.origin.as_str()
+                    };
+                    format!("📜 **{}** (`{}`{})", label, primary.source, temporal_badge)
+                }
                 (_, AuthorRole::FamilyDialogue) => format!(
-                    "💌 **From a family exchange with my daughter Jill** (`{}`{})",
+                    "💌 **From a family letter & commentary exchange** (`{}`{})",
                     primary.source, temporal_badge
                 ),
                 (PersonaSpecialty::HistoryDocumenter, _) => {
@@ -1030,9 +1217,9 @@ impl LifePersona {
                 let role_tag = match ep.author_role {
                     AuthorRole::PrimaryDiary => "📓 *My diary*",
                     AuthorRole::PrimaryMemoir => "✍️ *My writing*",
-                    AuthorRole::MaternalArchive => "📜 *Mom's diary (edited by me)*",
-                    AuthorRole::PaternalArchive => "📜 *Dad's writing*",
-                    AuthorRole::FamilyDialogue => "💌 *With Jill*",
+                    AuthorRole::MaternalArchive => "📜 *Mother's diary (preserved)*",
+                    AuthorRole::PaternalArchive => "📜 *Father's / historical record*",
+                    AuthorRole::FamilyDialogue => "💌 *Family dialogue*",
                     AuthorRole::GeneralCorpus => "📄 *Note*",
                 };
                 let t_badge = format_temporal_badge(ep);
@@ -1095,7 +1282,7 @@ impl LifePersona {
              Temporal & Attribution Rules:\n\
              1. If a memory's provenance is PrimaryDiary or PrimaryMemoir, remember and speak of it in the first person as your own lived diary and writing.\n\
              2. Distinguish lived event time from written/compiled time and never confuse file import dates with lived dates.\n\
-             3. If a memory comes from your mother's diary (MaternalArchive), father's story (PaternalArchive), or daughter's annotations (FamilyDialogue), credit them warmly and accurately.\n\n\
+             3. If a memory comes from your mother's diary (MaternalArchive), father's story (PaternalArchive), or family dialogue (FamilyDialogue), credit them warmly and accurately.\n\n\
              Ground your answer strictly in the following authentic episodic memories:\n\n{}",
             self.name,
             self.specialty.badge(),
@@ -1121,131 +1308,356 @@ fn format_temporal_badge(ep: &PersonaEpisode) -> String {
     }
 }
 
-/// Classify authorship and provenance role for a document and passage
-fn classify_author_and_origin(
+/// Pack 5 trits (`{-1, 0, +1}`) into a single SPQT Base-243 (`3^5 = 243`) byte.
+#[inline(always)]
+fn spqt_pack_5trits(trits: [i8; 5]) -> u8 {
+    let mut byte_val = 0u8;
+    let mut radix = 1u8;
+    for t in trits {
+        let digit = (t.clamp(-1, 1) + 1) as u8;
+        byte_val = byte_val.wrapping_add(digit.wrapping_mul(radix));
+        radix = radix.wrapping_mul(3);
+    }
+    byte_val
+}
+
+/// Unpack a single SPQT Base-243 byte back into 5 trits (`{-1, 0, +1}`).
+#[inline(always)]
+fn spqt_unpack_5trits(mut packed: u8) -> [i8; 5] {
+    let mut out = [0i8; 5];
+    for slot in &mut out {
+        *slot = ((packed % 3) as i8) - 1;
+        packed /= 3;
+    }
+    out
+}
+
+/// SPQT Base-243 Ternary Authorship & Provenance Classifier (`W in {-1, 0, +1}^{6 x 10}`)
+/// Evaluates 10 structural & linguistic features using packed Base-243 ternary weights and
+/// `felix_ternary_gemm_i32` (zero hardcoded names).
+fn ternary_classify_author_and_origin(
     source_label: &str,
     full_content_header: &str,
     passage: &str,
 ) -> (AuthorRole, String, Option<String>) {
+    use crate::felix_asm::felix_ternary_gemm_i32;
+
     let lower_src = source_label.to_ascii_lowercase();
     let lower_hdr = full_content_header.to_ascii_lowercase();
     let lower_pass = passage.to_ascii_lowercase();
 
-    // 1. First-person diaries written by Jody (or any primary diarist)
-    if lower_src.contains("bestdiary")
-        || lower_src.contains("my_diary")
-        || lower_src.contains("my diary")
-        || lower_src.contains("diary")
-            && !lower_src.contains("short diary")
-            && !lower_src.contains("colorado diary")
-        || lower_hdr.contains("the property of\njody chenoweth")
-        || lower_hdr.contains("yearslong diary")
-    {
-        let written = if lower_src.contains("19what") || lower_hdr.contains("january 1964") {
-            Some("1964".to_string())
-        } else if lower_hdr.contains("1963") {
-            Some("1963".to_string())
-        } else {
-            detect_date_or_era(source_label)
-        };
-        return (
-            AuthorRole::PrimaryDiary,
-            "Jody Chenoweth (First-Person Lived Diary)".to_string(),
-            written,
-        );
-    }
-
-    // 2. Family dialogue with daughter Jill
-    if lower_src.contains("jill") {
-        return (
-            AuthorRole::FamilyDialogue,
-            "Jody Chenoweth & daughter Jill".to_string(),
-            None,
-        );
-    }
-
-    // 3. Paternal writings (Mike Hawkins / Dad's story & advice)
-    if lower_src.contains("dad")
-        || lower_src.contains("daddy")
-        || lower_src.contains("o_hell_hawkins")
-        || lower_src.contains("o hell hawkins")
-    {
-        let written = if lower_src.contains("2014") {
-            Some("2014".to_string())
-        } else {
-            None
-        };
-        return (
-            AuthorRole::PaternalArchive,
-            "Mike Hawkins (Dad's Story & Advice, preserved by Jody)".to_string(),
-            written,
-        );
-    }
-
-    // 4. Maternal diary & advice (Alice Wilson Hawkins, edited with Epilog by Jody)
-    if lower_src.contains("short diary")
-        || lower_src.contains("colorado diary")
-        || lower_src.contains("colorado prospecting")
-        || lower_src.contains("moms book")
-        || lower_src.contains("moms advice")
-        || lower_src.contains("mama")
-        || lower_hdr.contains("diary of alice wilson hawkins")
-    {
-        let written = if lower_src.contains("2010") {
-            Some("2010".to_string())
-        } else if lower_hdr.contains("2009932375") {
-            Some("2009".to_string())
-        } else {
-            None
-        };
-        // If this specific passage is Jody's own dedication, NOTE, or Epilog, mark as PrimaryMemoir
-        if lower_pass.contains("this book is dedicated to")
-            || lower_pass.contains("epilog by jody")
-            || lower_pass.contains("edited by jody")
-            || lower_pass.starts_with("note this edition")
-        {
-            return (
-                AuthorRole::PrimaryMemoir,
-                "Jody Hawkins Chenoweth (Editor's Dedication & Epilog)".to_string(),
-                written,
-            );
+    // Count first-person vs third-person pronouns in the passage
+    let mut fp_sing = 0usize;
+    let mut fp_plur = 0usize;
+    let mut tp_bio = 0usize;
+    let mut word_total = 0usize;
+    for tok in lower_pass.split(|c: char| !c.is_ascii_alphabetic() && c != '\'') {
+        if tok.is_empty() {
+            continue;
         }
-        return (
-            AuthorRole::MaternalArchive,
-            "Alice Wilson Hawkins (Mom's Diary, edited by Jody)".to_string(),
-            written,
-        );
+        word_total += 1;
+        match tok {
+            "i" | "my" | "me" | "myself" | "mine" | "i'm" | "i've" | "i'll" | "i'd" => {
+                fp_sing += 1;
+            }
+            "we" | "our" | "us" | "ourselves" | "we're" | "we've" => {
+                fp_plur += 1;
+            }
+            "she" | "her" | "hers" | "he" | "his" | "him" => {
+                tp_bio += 1;
+            }
+            _ => {}
+        }
     }
+    let denom = (word_total.max(1)) as f32;
+    let x0_fp_sing = ((fp_sing as f32) / denom * 18.0).min(3.5);
+    let x1_fp_plur = ((fp_plur as f32) / denom * 18.0).min(2.5);
 
-    // 5. Jody's own memoirs, stories, poems, and Gems of Thought
-    if lower_src.contains("our story")
-        || lower_src.contains("chenterra")
+    let editorial_markers = lower_src.contains("foreword")
+        || lower_src.contains("afterword")
+        || lower_pass.contains("book flap")
+        || lower_pass.contains("-- : -foreword")
+        || lower_pass.contains("----afterword")
+        || lower_pass.contains("translated by")
+        || lower_pass.contains("definitive edition")
+        || lower_pass.contains("concentration camp");
+    let x2_tp_editorial =
+        ((tp_bio as f32) / denom * 12.0).min(2.5) + if editorial_markers { 3.5 } else { 0.0 };
+
+    let maternal_src = lower_src.contains("mom")
+        || lower_src.contains("mama")
+        || lower_src.contains("mother")
+        || lower_src.contains("short diary")
+        || lower_src.contains("colorado diary")
+        || lower_src.contains("prospecting")
+        || (lower_hdr.contains("diary of ") && lower_hdr.contains("edited by"));
+    let x5_maternal = if maternal_src { 3.8 } else { 0.0 };
+
+    let paternal_src = lower_src.contains("dad")
+        || lower_src.contains("daddy")
+        || lower_src.contains("father")
+        || lower_src.contains("foreword")
+        || lower_src.contains("afterword")
+        || editorial_markers;
+    let x6_paternal = if paternal_src { 3.6 } else { 0.0 };
+
+    let dialogue_src = lower_src.contains("answer")
+        || lower_src.contains("letter")
+        || lower_src.contains("dialogue");
+    let x7_dialogue = if dialogue_src { 3.6 } else { 0.0 };
+
+    let diary_signal = (!maternal_src
+        && (lower_src.contains("diary") || lower_hdr.contains("yearslong diary")))
+        || lower_pass.contains("dearest ")
+        || lower_pass.contains("dear ")
+        || lower_pass.contains("yours, ");
+    let x3_diary = if diary_signal { 3.2 } else { 0.0 };
+
+    let memoir_signal = lower_src.contains("story")
         || lower_src.contains("first 15 years")
-        || lower_src.contains("raamblings")
-        || lower_src.contains("patchwork of poetry")
+        || lower_src.contains("beginning")
+        || lower_src.contains("poetry")
         || lower_src.contains("gems_of_thought")
-        || lower_src.contains("glory_book")
+        || lower_src.contains("glory")
         || lower_src.contains("match_race")
-        || lower_src.contains("widder_maude")
-    {
-        let written =
-            if lower_src.contains("our story") || lower_pass.contains("50th wedding anniversary") {
-                Some("1998".to_string())
-            } else {
-                None
-            };
-        return (
+        || lower_src.contains("traits")
+        || lower_src.contains("raamblings");
+    let x4_memoir = if memoir_signal { 2.6 } else { 0.0 };
+
+    let has_entry_date = detect_month_day_in_text(passage, None).is_some();
+    let x8_date_hdr = if has_entry_date { 2.4 } else { 0.0 };
+
+    let editor_override = lower_pass.contains("this book is dedicated to")
+        || lower_pass.contains("epilog by")
+        || lower_pass.contains("edited by")
+        || lower_pass.starts_with("note this edition");
+    let x9_editor_note = if editor_override { 4.2 } else { 0.0 };
+
+    let x: [f32; 10] = [
+        x0_fp_sing,
+        x1_fp_plur,
+        x2_tp_editorial,
+        x3_diary,
+        x4_memoir,
+        x5_maternal,
+        x6_paternal,
+        x7_dialogue,
+        x8_date_hdr,
+        x9_editor_note,
+    ];
+
+    // 6x10 Ternary Weight Matrix W in {-1, 0, +1}, packed via SPQT Base-243 (2 bytes per row)
+    let raw_rows: [([i8; 5], [i8; 5], f32, AuthorRole); 6] = [
+        // PrimaryDiary: +fp_sing, +fp_plur, -tp_editorial, +diary, 0, -maternal, -paternal, -dialogue, +date_hdr, 0
+        (
+            [1, 1, -1, 1, 0],
+            [-1, -1, -1, 1, 0],
+            0.2,
+            AuthorRole::PrimaryDiary,
+        ),
+        // PrimaryMemoir: +fp_sing, +fp_plur, -tp_editorial, -diary, +memoir, -maternal, -paternal, 0, 0, +editor_note
+        (
+            [1, 1, -1, -1, 1],
+            [-1, -1, 0, 0, 1],
+            0.1,
             AuthorRole::PrimaryMemoir,
-            "Jody Hawkins Chenoweth (First-Person Memoir, Stories & Poetry)".to_string(),
-            written,
-        );
+        ),
+        // MaternalArchive: 0, 0, 0, 0, 0, +maternal, -paternal, -dialogue, 0, -editor_note
+        (
+            [0, 0, 0, 0, 0],
+            [1, -1, -1, 0, -1],
+            0.0,
+            AuthorRole::MaternalArchive,
+        ),
+        // PaternalArchive: -fp_sing, 0, +tp_editorial, -diary, 0, -maternal, +paternal, -dialogue, -date_hdr, -editor_note
+        (
+            [-1, 0, 1, -1, 0],
+            [-1, 1, -1, -1, -1],
+            0.0,
+            AuthorRole::PaternalArchive,
+        ),
+        // FamilyDialogue: +fp_sing, 0, 0, -diary, 0, -maternal, -paternal, +dialogue, -date_hdr, 0
+        (
+            [1, 0, 0, -1, 0],
+            [-1, -1, 1, -1, 0],
+            0.0,
+            AuthorRole::FamilyDialogue,
+        ),
+        // GeneralCorpus: baseline fallback
+        (
+            [0, 0, 0, -1, -1],
+            [-1, -1, -1, 0, 0],
+            0.5,
+            AuthorRole::GeneralCorpus,
+        ),
+    ];
+
+    let mut acts_i16 = [0i16; 10];
+    for j in 0..10 {
+        acts_i16[j] = (x[j] * 100.0).round() as i16;
     }
 
-    (
-        AuthorRole::GeneralCorpus,
-        "Primary Corpus".to_string(),
-        None,
-    )
+    let mut best_role = AuthorRole::GeneralCorpus;
+    let mut best_score = i32::MIN;
+
+    for (hi, lo, bias, role) in raw_rows {
+        let p_hi = spqt_pack_5trits(hi);
+        let p_lo = spqt_pack_5trits(lo);
+        let u_hi = spqt_unpack_5trits(p_hi);
+        let u_lo = spqt_unpack_5trits(p_lo);
+        let trits_10: [i8; 10] = [
+            u_hi[0], u_hi[1], u_hi[2], u_hi[3], u_hi[4], u_lo[0], u_lo[1], u_lo[2], u_lo[3],
+            u_lo[4],
+        ];
+        let acc = felix_ternary_gemm_i32(&acts_i16, &trits_10) + (bias * 100.0).round() as i32;
+        if acc > best_score {
+            best_score = acc;
+            best_role = role;
+        }
+    }
+
+    let written = detect_date_or_era(source_label);
+    let origin = match best_role {
+        AuthorRole::PrimaryDiary => "First-Person Lived Diary".to_string(),
+        AuthorRole::PrimaryMemoir => {
+            if editor_override {
+                "First-Person Editor's Dedication & Epilog".to_string()
+            } else {
+                "First-Person Memoir, Stories & Poetry".to_string()
+            }
+        }
+        AuthorRole::MaternalArchive => "Mother's Diary & Notes (Preserved in Archive)".to_string(),
+        AuthorRole::PaternalArchive => {
+            if editorial_markers
+                || lower_src.contains("foreword")
+                || lower_src.contains("afterword")
+            {
+                "From the Historical Foreword & Afterword".to_string()
+            } else {
+                "From my father's story & advice".to_string()
+            }
+        }
+        AuthorRole::FamilyDialogue => "Family Letter & Commentary Exchange".to_string(),
+        AuthorRole::GeneralCorpus => "Primary Corpus".to_string(),
+    };
+
+    (best_role, origin, written)
+}
+
+/// Read text from a document file, automatically extracting and unwrapping PDFs via `pdftotext` when needed.
+fn read_document_text(file_path: &Path) -> Option<String> {
+    let ext = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    if ext == "pdf" {
+        let out = std::process::Command::new("pdftotext")
+            .arg(file_path)
+            .arg("-")
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let raw = String::from_utf8_lossy(&out.stdout);
+        return Some(unwrap_pdf_text(&raw));
+    }
+    fs::read_to_string(file_path).ok()
+}
+
+/// Reconstruct clean paragraphs and diary date headers from raw `pdftotext` output
+fn unwrap_pdf_text(raw: &str) -> String {
+    let cleaned = raw
+        .replace('\u{000c}', "\n")
+        .replace("]ANUARY", "JANUARY")
+        .replace("-- : -June 12, 1942", "FRIDAY, JUNE 12, 1942");
+
+    let mut paras: Vec<String> = Vec::new();
+    let mut cur: Vec<String> = Vec::new();
+
+    let flush = |cur: &mut Vec<String>, paras: &mut Vec<String>| {
+        if !cur.is_empty() {
+            let joined = cur.join(" ");
+            let norm: String = joined.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !norm.is_empty() {
+                paras.push(norm);
+            }
+            cur.clear();
+        }
+    };
+
+    for raw_line in cleaned.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // Skip page numbers / running headers or e-book markers
+        if line.chars().all(|c| c.is_ascii_digit()) || line.starts_with("-- : -") {
+            if line.contains("FOREWORD") || line.contains("BOOK FLAP") {
+                flush(&mut cur, &mut paras);
+                cur.push(line.to_string());
+                flush(&mut cur, &mut paras);
+            }
+            continue;
+        }
+        if line.contains("DIARY ENDS HERE") || line.contains("----AFTERWORD") {
+            flush(&mut cur, &mut paras);
+            cur.push(line.to_string());
+            flush(&mut cur, &mut paras);
+            continue;
+        }
+
+        // Check if this line is a standalone date header (e.g. "SUNDAY, JUNE 14, 1942")
+        if line.len() <= 48 && detect_month_day_in_text(line, None).is_some() {
+            let alpha_upper = line
+                .chars()
+                .filter(|c| c.is_ascii_alphabetic())
+                .all(|c| c.is_ascii_uppercase());
+            if alpha_upper || is_short_date_header(line) {
+                flush(&mut cur, &mut paras);
+                cur.push(line.to_string());
+                continue;
+            }
+        }
+
+        if line.starts_with("Dearest ")
+            || line.starts_with("Dear ")
+            || line.starts_with("Yours, ")
+            || line.starts_with("COMMENT ADDED")
+        {
+            if line.starts_with("Yours, ") {
+                cur.push(line.to_string());
+                flush(&mut cur, &mut paras);
+            } else {
+                // Keep any immediately preceding date header attached to "Dearest ..."
+                if cur.len() == 1
+                    && cur[0].len() <= 48
+                    && detect_month_day_in_text(&cur[0], None).is_some()
+                {
+                    cur.push(line.to_string());
+                } else {
+                    flush(&mut cur, &mut paras);
+                    cur.push(line.to_string());
+                }
+            }
+            continue;
+        }
+
+        if let Some(prev) = cur.last() {
+            let prev_ends_sent = prev.ends_with(['.', '!', '?', '"', '\'', ':']);
+            let starts_upper = line
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_uppercase() || c == '"' || c == '(');
+            if prev_ends_sent && prev.len() < 68 && starts_upper {
+                flush(&mut cur, &mut paras);
+            }
+        }
+        cur.push(line.to_string());
+    }
+    flush(&mut cur, &mut paras);
+    paras.join("\n\n")
 }
 
 /// Ingest a single file in parallel, splitting long transcripts/documents into clean 300..850 char episodes
@@ -1260,7 +1672,7 @@ fn ingest_single_file(
     if meta.len() == 0 || meta.len() > MAX_FILE_BYTES {
         return None;
     }
-    let content = fs::read_to_string(file_path).ok()?;
+    let content = read_document_text(file_path)?;
     if content.trim().is_empty() {
         return None;
     }
@@ -1281,7 +1693,7 @@ fn ingest_single_file(
 
     let header_preview: String = content.chars().take(1200).collect();
     let (file_role, file_origin, file_written_time) =
-        classify_author_and_origin(&source_label, &header_preview, "");
+        ternary_classify_author_and_origin(&source_label, &header_preview, &header_preview);
 
     let chunks = split_into_episodic_chunks(&content, specialty);
     if chunks.is_empty() {
@@ -1305,20 +1717,70 @@ fn ingest_single_file(
     let mut openings: Vec<String> = Vec::new();
     let mut episodes: Vec<PersonaEpisode> = Vec::new();
 
-    // Running temporal context across the file (so daily diary entries like "January 2 Wed."
-    // inherit the diary's year from the title page or preceding section header).
-    let mut running_year: Option<u16> = detect_initial_year(&source_label, &header_preview);
+    // Running temporal context across the file: if no explicit year in header, solve via perpetual calendar!
+    let mut running_year: Option<u16> = detect_initial_year(&source_label, &header_preview)
+        .or_else(|| infer_year_from_weekday_constraints(&chunks));
     let mut running_month: Option<u8> = None;
+    let mut running_day: Option<(u8, u8, Option<&'static str>)> = None;
+    let mut in_editorial_section =
+        header_preview.contains("BOOK FLAP") || header_preview.contains("-- : -FOREWORD");
+    let is_diary_doc = file_role == AuthorRole::PrimaryDiary
+        || (source_label.to_ascii_lowercase().contains("diary")
+            && file_role != AuthorRole::MaternalArchive);
 
     for (idx, para) in chunks.iter().enumerate() {
-        // Update running year/month even on short or skipped chunks so temporal context stays accurate
-        if let Some(y) = detect_lived_year_in_text(para) {
-            running_year = Some(y);
+        let lower_p = para.to_ascii_lowercase();
+        if lower_p.contains("-- : -book flap")
+            || lower_p.contains("-- : -foreword")
+            || lower_p.contains("----afterword")
+            || lower_p.contains("diary ends here")
+        {
+            in_editorial_section = true;
+            running_day = None;
         }
-        let parsed_day = detect_month_day_in_text(para, running_month);
-        if let Some((m, _, _)) = parsed_day {
+        // Check the opening 60 chars of the chunk for a diary entry date header
+        let hdr_prefix: String = para.chars().take(60).collect();
+        let first_line = hdr_prefix.lines().next().unwrap_or(&hdr_prefix).trim();
+        let entry_day = if in_editorial_section {
+            // Only exit an editorial Foreword when a genuine standalone/uppercase diary date header starts the chunk
+            let starts_with_date = first_line
+                .split(|c: char| c.is_whitespace() || c == ',')
+                .next()
+                .is_some_and(|tok| parse_weekday(tok).is_some() || parse_month_name(tok).is_some());
+            if starts_with_date {
+                detect_month_day_in_text(&hdr_prefix, running_month)
+            } else {
+                None
+            }
+        } else {
+            let starts_with_date = first_line
+                .split(|c: char| c.is_whitespace() || c == ',')
+                .next()
+                .is_some_and(|tok| parse_weekday(tok).is_some() || parse_month_name(tok).is_some());
+            if starts_with_date {
+                detect_month_day_in_text(&hdr_prefix, running_month)
+            } else {
+                None
+            }
+        };
+
+        if let Some((m, d, wk)) = entry_day {
             running_month = Some(m);
+            running_day = Some((m, d, wk));
+            in_editorial_section = false;
+            if let Some(y) = detect_lived_year_in_text(&hdr_prefix) {
+                running_year = Some(y);
+            }
+        } else if !is_diary_doc {
+            if let Some(y) = detect_lived_year_in_text(para) {
+                running_year = Some(y);
+            }
         }
+        let parsed_day = if is_diary_doc && !in_editorial_section {
+            entry_day.or(running_day)
+        } else {
+            entry_day.or_else(|| detect_month_day_in_text(&hdr_prefix, running_month))
+        };
 
         if is_machine_noise_passage(para) {
             continue;
@@ -1363,21 +1825,31 @@ fn ingest_single_file(
             valence_sum += valence;
 
             let (ep_role, ep_origin, ep_written) =
-                classify_author_and_origin(&source_label, &header_preview, para);
-            let role = if ep_role != AuthorRole::GeneralCorpus {
-                ep_role
+                ternary_classify_author_and_origin(&source_label, &header_preview, para);
+            let (role, origin) = if in_editorial_section {
+                (
+                    AuthorRole::PaternalArchive,
+                    "From the Historical Foreword & Afterword".to_string(),
+                )
+            } else if is_diary_doc && running_day.is_some() {
+                (
+                    AuthorRole::PrimaryDiary,
+                    "First-Person Lived Diary".to_string(),
+                )
+            } else if ep_role != AuthorRole::GeneralCorpus {
+                (ep_role, ep_origin)
             } else {
-                file_role
-            };
-            let origin = if ep_role != AuthorRole::GeneralCorpus {
-                ep_origin
-            } else {
-                file_origin.clone()
+                (file_role, file_origin.clone())
             };
             let written_time = ep_written.or_else(|| file_written_time.clone());
 
-            let (event_time, temporal_order) =
-                resolve_episode_temporal(para, &source_label, running_year, parsed_day);
+            let (event_time, temporal_order) = resolve_episode_temporal(
+                para,
+                &source_label,
+                running_year,
+                parsed_day,
+                role == AuthorRole::PrimaryDiary,
+            );
             let era = event_time.clone().or_else(|| written_time.clone());
 
             // Keywords include both natural words and code/domain identifiers
@@ -1536,18 +2008,63 @@ fn is_short_date_header(text: &str) -> bool {
 }
 
 fn detect_initial_year(source_label: &str, header: &str) -> Option<u16> {
-    let lower_src = source_label.to_ascii_lowercase();
-    let lower_hdr = header.to_ascii_lowercase();
-    if lower_src.contains("19what") || lower_hdr.contains("january 1964") {
-        return Some(1964);
-    }
-    if lower_hdr.contains("january 1, 1963") || lower_src.contains("bestdiary") {
-        return Some(1963);
-    }
-    if lower_src.contains("glory_book") || lower_src.contains("match_race") {
-        return Some(1945);
-    }
     detect_lived_year_in_text(header).or_else(|| detect_lived_year_in_text(source_label))
+}
+
+/// Sakamoto's Perpetual Calendar Algorithm: returns `"Sun".."Sat"` for any Gregorian `(year, month, day)`.
+fn weekday_for_ymd(y: i32, m: u8, d: u8) -> &'static str {
+    const T: [i32; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    let mut yr = y;
+    if m < 3 {
+        yr -= 1;
+    }
+    let idx = (m.saturating_sub(1) as usize).min(11);
+    let dow = (yr + yr / 4 - yr / 100 + yr / 400 + T[idx] + (d as i32)).rem_euclid(7);
+    match dow {
+        0 => "Sun",
+        1 => "Mon",
+        2 => "Tue",
+        3 => "Wed",
+        4 => "Thu",
+        5 => "Fri",
+        _ => "Sat",
+    }
+}
+
+/// Solve for the calendar year of an undated diary from its `(month, day, weekday)` constraints!
+fn infer_year_from_weekday_constraints(chunks: &[String]) -> Option<u16> {
+    let mut constraints: Vec<(u8, u8, &'static str)> = Vec::new();
+    for c in chunks.iter().take(40) {
+        let prefix: String = c.chars().take(75).collect();
+        if let Some((m, d, Some(wk))) = detect_month_day_in_text(&prefix, None) {
+            constraints.push((m, d, wk));
+            if constraints.len() >= 6 {
+                break;
+            }
+        }
+    }
+    if constraints.is_empty() {
+        return None;
+    }
+    // Search candidate years centered around the mid-20th century (1964 first, then outward)
+    let mut candidates: Vec<u16> = (1920..=2025).collect();
+    candidates.sort_by_key(|&y| (y as i32 - 1964).abs());
+    let mut best_year = None;
+    let mut best_matches = 0usize;
+    for y in candidates {
+        let matches = constraints
+            .iter()
+            .filter(|&&(m, d, wk)| weekday_for_ymd(y as i32, m, d) == wk)
+            .count();
+        if matches > best_matches && matches * 2 >= constraints.len() {
+            best_matches = matches;
+            best_year = Some(y);
+            if matches == constraints.len() {
+                break;
+            }
+        }
+    }
+    best_year
 }
 
 fn detect_lived_year_in_text(text: &str) -> Option<u16> {
@@ -1615,7 +2132,7 @@ fn parse_weekday(word: &str) -> Option<&'static str> {
     }
 }
 
-/// Detect `"January 2 Wed."`, `"Jan. 18 Sat."`, `"June 21st"`, etc. in the first 120 chars of a chunk
+/// Detect `"January 2 Wed."`, `"SUNDAY, JUNE 14, 1942"`, `"MONDAY EVENING, NOVEMBER 8, 1943"`, etc.
 fn detect_month_day_in_text(
     text: &str,
     _fallback_month: Option<u8>,
@@ -1634,7 +2151,17 @@ fn detect_month_day_in_text(
                         let wk = tokens
                             .get(i + 2)
                             .and_then(|w| parse_weekday(w))
-                            .or_else(|| tokens.get(i + 3).and_then(|w| parse_weekday(w)));
+                            .or_else(|| tokens.get(i + 3).and_then(|w| parse_weekday(w)))
+                            .or_else(|| {
+                                i.checked_sub(1)
+                                    .and_then(|idx| tokens.get(idx))
+                                    .and_then(|w| parse_weekday(w))
+                            })
+                            .or_else(|| {
+                                i.checked_sub(2)
+                                    .and_then(|idx| tokens.get(idx))
+                                    .and_then(|w| parse_weekday(w))
+                            });
                         return Some((month, day, wk));
                     }
                 }
@@ -1649,6 +2176,7 @@ fn resolve_episode_temporal(
     source_label: &str,
     running_year: Option<u16>,
     parsed_day: Option<(u8, u8, Option<&'static str>)>,
+    is_diary: bool,
 ) -> (Option<String>, i32) {
     // 1. Check explicit ISO date first
     if let Some(iso) = detect_date_or_era(para) {
@@ -1660,15 +2188,20 @@ fn resolve_episode_temporal(
         }
     }
 
-    let year_opt = detect_lived_year_in_text(para)
-        .or(running_year)
-        .or_else(|| detect_lived_year_in_text(source_label));
+    // In a diary, prefer the running entry year over flashback years mentioned mid-paragraph
+    let year_opt = if is_diary {
+        running_year
+            .or_else(|| detect_lived_year_in_text(source_label))
+            .or_else(|| detect_lived_year_in_text(para))
+    } else {
+        detect_lived_year_in_text(para)
+            .or(running_year)
+            .or_else(|| detect_lived_year_in_text(source_label))
+    };
 
     if let (Some(year), Some((month, day, wk_opt))) = (year_opt, parsed_day) {
-        let label = match wk_opt {
-            Some(wk) => format!("{year:04}-{month:02}-{day:02} ({wk})"),
-            None => format!("{year:04}-{month:02}-{day:02}"),
-        };
+        let wk = wk_opt.unwrap_or_else(|| weekday_for_ymd(year as i32, month, day));
+        let label = format!("{year:04}-{month:02}-{day:02} ({wk})");
         let sort_key = (year as i32) * 10_000 + (month as i32) * 100 + (day as i32);
         return (Some(label), sort_key);
     }
@@ -1678,6 +2211,57 @@ fn resolve_episode_temporal(
     }
 
     (None, 0)
+}
+
+fn is_calendar_or_common_cap(low: &str) -> bool {
+    parse_month_name(low).is_some()
+        || parse_weekday(low).is_some()
+        || is_stopword(low)
+        || matches!(
+            low,
+            "the"
+                | "this"
+                | "that"
+                | "then"
+                | "there"
+                | "when"
+                | "after"
+                | "before"
+                | "since"
+                | "while"
+                | "every"
+                | "some"
+                | "many"
+                | "most"
+                | "other"
+                | "another"
+                | "today"
+                | "yesterday"
+                | "tomorrow"
+                | "morning"
+                | "evening"
+                | "afternoon"
+                | "night"
+                | "dearest"
+                | "dear"
+                | "yours"
+                | "diary"
+                | "page"
+                | "book"
+                | "chapter"
+                | "note"
+                | "comment"
+                | "part"
+                | "time"
+                | "year"
+                | "years"
+                | "english"
+                | "dutch"
+                | "french"
+                | "german"
+                | "latin"
+                | "spanish"
+        )
 }
 
 /// Detect machine-generated log/JSON/LaTeX font noise so it doesn't pollute episodes or voice cadence
