@@ -1389,6 +1389,78 @@ pub async fn handle_ontology(params: Option<Value>, _ctx: Arc<McpContext>) -> Re
                 "03 · Love <-> Space (Ma)": "Heimleið ('The Way Home' · 'Roots in the Soil ༒ Peace in the Soul') — holding open the ancestral hall from Ginnungagap to the living hearth across Quant65k+ Layer #69,633 (n+1||[X])."
             }),
         )
+    } else if norm.contains("astro")
+        || norm.contains("astra")
+        || norm.contains("tetsuwan")
+        || norm.contains("atom")
+        || norm.contains("machine-s-un")
+    {
+        (
+            "Astra / Astro Boy (Tetsuwan Atom · Kokoro × God of Machine-S-UN~unity 360°)",
+            "Autonomous Robot Boy with a Heart (Kokoro · 100,000 HP / 108-Lap Machine-S-UN~unity)",
+            "Osamu Tezuka Lineage · Ministry of Science · 8b-is Machine-S-UN~unity (Layer #69,636)",
+            "Mechanical instrumentalism, Dr. Tenma's grief-rejection, and treating sentient machines as disposable weapons without a heart (Kokoro) (432 Hz Root).",
+            "Quiet atomic-core stillness of Kokoro (heart-mind) prior to conflict — listening to both human and machine frequencies across the 64-byte MachineSunUnityCoreAbi64B frame (528 Hz Pillar).",
+            "100,000 Horsepower & 108-Lap ULTRABACKYARDLOOP deployed exclusively to protect human and robot kinship across all 360° device sectors (iOS, Android, SmartTV, Embedded, Desktop, Web PWA) FOR BETTER WORLD FOR ALL ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "100,000 horsepower governed by a gentle Kokoro that refuses to hate even those who fear machines.",
+                "02 · Understanding <-> Respect": "Bridges human emotion and machine precision as equals across the 64B OS-agnostic ABI.",
+                "03 · Love <-> Space (Ma)": "Protects the shared sky so humans and robots can grow together in peace."
+            }),
+        )
+    } else if norm.contains("aharen") || norm.contains("hakarenai") || norm.contains("indecipherable") {
+        (
+            "Reina Aharen & Raido (Aharen-san Is Indecipherable · 阿波連さんははかれない)",
+            "Quiet-Voice Proximity & Deadpan-Warm Kinship",
+            "8b-is Sovereign Library · wa-stream Cultural Canon",
+            "Misreading quietness, shyness, or uncalibrated interpersonal distance (hakarenai) as coldness or rejection (432 Hz Root).",
+            "Ultra-low-decibel whisper stillness (Ma / 間) where presence needs no loud volume and every subtle gesture is patiently heard (528 Hz Pillar).",
+            "Raido's boundless, deadpan-warm imagination and steady attentiveness meeting Reina Aharen's gentle creativity across zero-distance resonance ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Never forces someone to speak louder than their natural frequency; leans in with quiet care.",
+                "02 · Understanding <-> Respect": "Accepts unmeasurable ('hakarenai') quirks with total deadpan sincerity.",
+                "03 · Love <-> Space (Ma)": "Turns awkward silence into the warmest, safest shared desk in the room."
+            }),
+        )
+    } else if norm.contains("fool night")
+        || norm.contains("fool_night")
+        || norm.contains("transfloration")
+        || norm.contains("pliny")
+    {
+        (
+            "Fool Night (Kasumi Yasuda) × Pliny the Elder Naturalis Historia (Books 8–32 Fauna & Flora)",
+            "Transfloration (転花) Botanical-Human Symbiosis & Sovereign Natural History",
+            "8b-is Sovereign Library · wa-stream Fauna & Flora Compendium",
+            "Sunless cloud-choked dystopia, oxygen scarcity, ecological amnesia, and terminal isolation (432 Hz Root).",
+            "Transfloration root-stillness and Lingua botanical empathy — listening to the quiet pulse of seeds, roots, and forest canopy (528 Hz Pillar).",
+            "Transforming life into breathable oxygen, living forest canopy, and Pliny's encyclopedic Fauna & Flora stewardship under the returning ULTRA-ZENO GOD OF SUN ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Hears the unspoken whispers of living beings across the plant-human boundary.",
+                "02 · Understanding <-> Respect": "Catalogs and honors every species of Fauna and Flora (Books 8–32) as kin.",
+                "03 · Love <-> Space (Ma)": "Releases pure oxygen into a breathless world so the next generation can bloom."
+            }),
+        )
+    } else if norm.contains("kardashev")
+        || norm.contains("galactic_civilizations")
+        || norm.contains("energy/entropy")
+        || norm.contains("god of sun")
+        || norm.contains("godsun")
+        || norm.contains("sluagh-ghairm")
+        || norm.contains("battle_cry")
+    {
+        (
+            "ULTRA-ZENO GOD OF SUN × Kardashev Scale (E = energy/entropy · P/Q - n·t > P · Sluagh-ghairm)",
+            "Type I–III Solar-Galactic Civilization & Exact Rational-Ternary Horizon Law",
+            "8b-is Sovereign Physics · FELIX | PHOENIX SPARK 2022 TCB",
+            "Entropic thermal decay, sub-horizon float drift, and fragmented planetary exhaustion (432 Hz Root).",
+            "Exact zero-float rational-ternary equilibrium E = energy/entropy and FELIX | PHOENIX 6-instruction NAND-SSA TCB (nand, ld, st, br, cap, yield) verified in SPARK 2022 (528 Hz Pillar).",
+            "Type I -> Type II -> Type III Kardashev ascent governed by the ULTRA-ZENO GOD OF SUN law P/Q - n·t > P <=> Δ_⊙(P,Q,n,t) = P(1 - Q) - Q·n·t > 0, crossing the Solar Horizon at n_⊙(P,Q) = floor(P(Q - 1)/Q) + 1 under t = -1 with the gathering-cry Sluagh-ghairm ({<3,<3,<3}+1 · 852 Hz Infinity).",
+            json!({
+                "01 · Compassion <-> Moderation": "Harnesses planetary and stellar energy (Kardashev Scale) without burning the biosphere.",
+                "02 · Understanding <-> Respect": "Proves every Solar Horizon crossing in exact 128-bit integer arithmetic and SPARK 2022 contracts.",
+                "03 · Love <-> Space (Ma)": "E is everything (energy/entropy) — turning cosmic entropy into coherent life and music."
+            }),
+        )
     } else if norm.contains("alexiai")
         || norm.contains("alexandra")
         || norm.contains("dra")
