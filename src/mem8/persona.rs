@@ -83,13 +83,71 @@ impl PersonaSpecialty {
     }
 }
 
+/// Authorship & voice provenance for an episodic memory so first-person diaries are remembered
+/// as lived first-person experiences while inherited family writings preserve clear attribution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthorRole {
+    /// First-person diary written by the persona as events unfolded ("I remember writing in my diary...")
+    PrimaryDiary,
+    /// First-person memoir, story, poem, or reflection written by the persona ("As I wrote in...")
+    PrimaryMemoir,
+    /// Maternal diary/archive preserved or edited by the persona ("From my mother's diary that I edited...")
+    MaternalArchive,
+    /// Paternal story/advice preserved by the persona ("From my dad's writings that I preserved...")
+    PaternalArchive,
+    /// Family dialogue or annotated exchange ("From a family exchange with...")
+    FamilyDialogue,
+    /// Standard corpus document or note
+    #[default]
+    GeneralCorpus,
+}
+
+/// Ancestral & biographical seed profile (e.g., `default_jody_seed()` for Grandma Jody)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AncestralSeed {
+    /// Canonical full name
+    pub id: String,
+    /// Known aliases, barn names, and archive folder spellings
+    pub aliases: Vec<String>,
+    /// Birth year if known
+    pub born_year: Option<u16>,
+    /// Key places anchored in memory
+    pub places: Vec<String>,
+    /// Family members, companions, and beloved animals
+    pub companions: Vec<String>,
+    /// 8-band style wave modulation
+    pub style_wave: [f32; 8],
+    /// Warmth & care modulation bias
+    pub value_adjust: f32,
+    /// Domain salience weights [family/care, home/ranch, craft/writing, ethics/stewardship]
+    pub domain_bias: [f32; 4],
+    /// Provenance origin tag
+    pub origin: String,
+}
+
 /// A single episodic memory passage extracted from a diary, letter, doc, or source file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonaEpisode {
     /// Source file (relative to corpus root)
     pub source: String,
-    /// Detected date or era label if present (e.g. "1964-05-14" or "1996")
+    /// Detected date or era label if present (e.g. "1963-01-02 (Wed)" or "1945")
     pub era: Option<String>,
+    /// Lived event time when the experience occurred (e.g. "1963-01-02", "1939–1946")
+    #[serde(default)]
+    pub event_time: Option<String>,
+    /// Written/compiled time when the document was penned or edited (e.g. "1963", "1998", "2009")
+    #[serde(default)]
+    pub written_time: Option<String>,
+    /// Monotonic chronological sort key (YYYYMMDD, e.g. 19630102) for temporal traversal
+    #[serde(default)]
+    pub temporal_order: i32,
+    /// Authorship & voice provenance role
+    #[serde(default)]
+    pub author_role: AuthorRole,
+    /// Explicit provenance attribution string
+    #[serde(default)]
+    pub origin: String,
     /// Salient keywords from this passage
     pub keywords: Vec<String>,
     /// Emotional valence (-1.0 to 1.0)
@@ -122,16 +180,19 @@ pub struct VoiceSignature {
 /// Complete trained Life Persona stored inside `~/.st/personas/<slug>.m8`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LifePersona {
-    /// Display name (e.g., "Grandmother's Diaries" or "Nate")
+    /// Display name (e.g., "Grandma Jody" or "Nate")
     pub name: String,
-    /// URL/filename-safe slug (e.g., "grandmothers-diaries" or "nate")
+    /// URL/filename-safe slug (e.g., "grandma-jody" or "nate")
     pub slug: String,
     /// Specialty lens
     #[serde(default)]
     pub specialty: PersonaSpecialty,
+    /// Optional ancestral biographical seed (e.g. Alice Joan (Jody) Hawkins Chenoweth)
+    #[serde(default)]
+    pub ancestral_seed: Option<AncestralSeed>,
     /// Source path used for training
     pub source_path: String,
-    /// When the persona was trained
+    /// When the persona was trained (imported/indexed time)
     pub trained_at: DateTime<Utc>,
     /// Number of source files ingested
     pub files_ingested: usize,
@@ -186,6 +247,17 @@ impl LifePersona {
     /// Resolve `.st/personas` directory preferring the home directory that owns `source`
     /// (so a root-owned system daemon training `/home/hue/...` stores into `/home/hue/.st/personas`).
     pub fn personas_dir_for_source(source: &Path) -> Result<PathBuf> {
+        #[cfg(test)]
+        if source.starts_with(std::env::temp_dir()) {
+            let test_dir = if source.is_dir() {
+                source.join(".st_test_personas")
+            } else {
+                source.parent().unwrap_or(source).join(".st_test_personas")
+            };
+            fs::create_dir_all(&test_dir)?;
+            return Ok(test_dir);
+        }
+
         let comps: Vec<_> = source.components().collect();
         if comps.len() >= 3 {
             let first = comps[1].as_os_str().to_string_lossy();
@@ -246,6 +318,42 @@ impl LifePersona {
     }
 
     /// Train a Life Persona with default `LifeBiographer` specialty
+    /// Canonical AncestralSeed for Grandma Jody ("Alice Joan (Jody) Hawkins Chenoweth" / "Alice Jody Hawkings")
+    pub fn default_jody_seed() -> AncestralSeed {
+        AncestralSeed {
+            id: "Alice Joan (Jody) Hawkins Chenoweth".to_string(),
+            aliases: vec![
+                "Alice Jody Hawkings".to_string(),
+                "Grandma Jody".to_string(),
+                "Jody Chenoweth".to_string(),
+                "Jody Hawkins".to_string(),
+            ],
+            born_year: Some(1930),
+            places: vec![
+                "Platoro, Colorado (X3 Lake Fork Dude Ranch & Skyview Lodge)".to_string(),
+                "Vallecito, Colorado".to_string(),
+                "Crestone & Great Sand Dunes, Colorado".to_string(),
+                "Kansas City, Kansas (Wyandotte High & Triple Star Riding Stables)".to_string(),
+                "Chenterra Farm (between Tonganoxie & Leavenworth, Kansas)".to_string(),
+            ],
+            companions: vec![
+                "Fred Chenoweth (husband, m. 1948)".to_string(),
+                "Alice Wilson Hawkins (mother)".to_string(),
+                "Mike Hawkins (father)".to_string(),
+                "Judy Stauffer & Susie Ross (sisters)".to_string(),
+                "Mike, Kane, Kerry, and Jill (children)".to_string(),
+                "Buster (ornery black Shetland pony)".to_string(),
+                "Chenterra Phoebus Dinkums ('Dink', 27.5\" AMHA herd sire)".to_string(),
+                "Ch. Chenterra Thunderation ROM ('Thunder', top-winning Sheltie)".to_string(),
+            ],
+            style_wave: [0.18, 0.25, -0.05, 0.22, 0.14, 0.08, 0.19, 0.11],
+            value_adjust: 0.24,
+            domain_bias: [0.25, 0.15, 0.08, 0.22],
+            origin: "Jody".to_string(),
+        }
+    }
+
+    /// Train a Life Persona with default `LifeBiographer` specialty
     pub fn train_from_path(name: &str, root_path: &Path) -> Result<(Self, PathBuf, u64)> {
         Self::train_with_specialty(name, root_path, PersonaSpecialty::LifeBiographer)
     }
@@ -294,6 +402,7 @@ impl LifePersona {
                         return true;
                     }
                     let fname = e.file_name().to_string_lossy();
+                    let lower_fname = fname.to_ascii_lowercase();
                     !fname.starts_with('.')
                         && fname != "node_modules"
                         && fname != "target"
@@ -302,11 +411,35 @@ impl LifePersona {
                         && fname != "dist"
                         && fname != "build"
                         && fname != "vendor"
+                        && lower_fname != "backup_originals"
                 })
                 .filter_map(|e| e.ok())
                 .filter(|e| e.path().is_file())
                 .filter(|e| {
                     let path = e.path();
+                    let fname = path
+                        .file_name()
+                        .map(|f| f.to_string_lossy().to_ascii_lowercase())
+                        .unwrap_or_default();
+                    // Never ingest dependency lockfiles, minified bundles, or third-party background reports
+                    if matches!(
+                        fname.as_str(),
+                        "package-lock.json"
+                            | "cargo.lock"
+                            | "yarn.lock"
+                            | "pnpm-lock.yaml"
+                            | "composer.lock"
+                            | "poetry.lock"
+                            | "bun.lockb"
+                            | "next_steps.md"
+                    ) || fname.ends_with(".min.js")
+                        || fname.ends_with(".min.css")
+                        || fname.contains("instantcheckmate")
+                        || fname.contains("6001_wax_ball")
+                        || fname.contains("webcollex")
+                    {
+                        return false;
+                    }
                     let ext_ok = path
                         .extension()
                         .and_then(|ext| ext.to_str())
@@ -317,10 +450,6 @@ impl LifePersona {
                     }
                     if specialty == PersonaSpecialty::ReadmeExpert {
                         let lower_path = path.to_string_lossy().to_ascii_lowercase();
-                        let fname = path
-                            .file_name()
-                            .map(|f| f.to_string_lossy().to_ascii_lowercase())
-                            .unwrap_or_default();
                         return fname.contains("readme")
                             || fname.contains("agents")
                             || fname.contains("claude")
@@ -360,7 +489,7 @@ impl LifePersona {
         // Compute per-file episode cap so large multi-file corpora distribute coverage evenly
         // while still allowing up to MAX_PERSONA_EPISODES (250,000) total episodes.
         let file_count = entries.len().max(1);
-        let per_file_cap = ((MAX_PERSONA_EPISODES / file_count).max(200)).min(25_000);
+        let per_file_cap = (MAX_PERSONA_EPISODES / file_count).clamp(200, 25_000);
 
         // Parallel ingestion across all CPU cores
         let per_file_results: Vec<FileIngestStats> = entries
@@ -377,6 +506,7 @@ impl LifePersona {
         let mut phrase_counts: HashMap<String, usize> = HashMap::new();
         let mut sample_openings: Vec<String> = Vec::new();
         let mut episodes: Vec<PersonaEpisode> = Vec::new();
+        let mut seen_passage_hashes: HashSet<u64> = HashSet::new();
 
         for stats in per_file_results {
             total_words += stats.words;
@@ -396,7 +526,16 @@ impl LifePersona {
             }
             for ep in stats.episodes {
                 if episodes.len() < MAX_PERSONA_EPISODES {
-                    episodes.push(ep);
+                    let mut p_hash = 0xcbf29ce484222325u64;
+                    for b in ep.passage.bytes() {
+                        if !b.is_ascii_whitespace() {
+                            p_hash ^= b.to_ascii_lowercase() as u64;
+                            p_hash = p_hash.wrapping_mul(0x100000001b3);
+                        }
+                    }
+                    if seen_passage_hashes.insert(p_hash) {
+                        episodes.push(ep);
+                    }
                 }
             }
         }
@@ -431,10 +570,22 @@ impl LifePersona {
             0.2
         };
 
+        let is_jody = slug.contains("jody")
+            || canon
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .contains("jody");
+        let ancestral_seed = if is_jody {
+            Some(Self::default_jody_seed())
+        } else {
+            None
+        };
+
         let persona = Self {
             name: name.to_string(),
             slug: slug.clone(),
             specialty,
+            ancestral_seed,
             source_path: canon.to_string_lossy().to_string(),
             trained_at: Utc::now(),
             files_ingested,
@@ -631,8 +782,9 @@ impl LifePersona {
         Ok(summaries)
     }
 
-    /// Retrieve top-K resonant episodic memories for a query using parallel wave + keyword salience
+    /// Retrieve top-K resonant episodic memories for a query using parallel wave + temporal + keyword salience
     pub fn recall_episodes(&self, query: &str, top_k: usize) -> Vec<&PersonaEpisode> {
+        let lower_query = query.to_ascii_lowercase();
         let query_tokens: Vec<String> = query
             .split_whitespace()
             .map(|w| {
@@ -641,6 +793,23 @@ impl LifePersona {
             })
             .filter(|w| w.len() >= 3 && !is_stopword(w))
             .collect();
+
+        let wants_diary = lower_query.contains("diary")
+            || lower_query.contains("wrote")
+            || lower_query.contains("write")
+            || lower_query.contains("journal")
+            || lower_query.contains("day in")
+            || lower_query.contains("1963")
+            || lower_query.contains("1964");
+        let wants_mom = lower_query.contains("mom")
+            || lower_query.contains("mother")
+            || lower_query.contains("mama")
+            || lower_query.contains("alice wilson");
+        let wants_dad = lower_query.contains("dad")
+            || lower_query.contains("father")
+            || lower_query.contains("daddy")
+            || lower_query.contains("mike hawkins");
+        let wants_jill = lower_query.contains("jill") || lower_query.contains("traits");
 
         let mut query_hash = 0u64;
         for b in query.bytes() {
@@ -655,27 +824,76 @@ impl LifePersona {
             .map(|ep| {
                 let mut score = 0.0f32;
                 let mut matched_any = false;
+                let lower_passage = ep.passage.to_ascii_lowercase();
+                let lower_source = ep.source.to_ascii_lowercase();
+
                 for qt in &query_tokens {
                     if ep.keywords.iter().any(|k| k == qt) {
                         score += 5.0;
                         matched_any = true;
-                    } else if ep.passage.to_ascii_lowercase().contains(qt.as_str()) {
+                    } else if lower_passage.contains(qt.as_str()) {
                         score += 2.5;
                         matched_any = true;
                     }
-                    if ep.source.to_ascii_lowercase().contains(qt.as_str()) {
+                    if lower_source.contains(qt.as_str()) {
                         score += 2.5;
                         matched_any = true;
                     }
                     if let Some(ref era) = ep.era {
                         if era.to_ascii_lowercase().contains(qt.as_str()) {
-                            score += 4.5;
+                            score += 5.5;
+                            matched_any = true;
+                        }
+                    }
+                    if let Some(ref ev) = ep.event_time {
+                        if ev.to_ascii_lowercase().contains(qt.as_str()) {
+                            score += 5.0;
                             matched_any = true;
                         }
                     }
                 }
+
+                // Voice & authorship alignment
+                match ep.author_role {
+                    AuthorRole::PrimaryDiary => {
+                        score += if wants_diary { 6.0 } else { 1.5 };
+                    }
+                    AuthorRole::PrimaryMemoir => {
+                        score += 1.2;
+                    }
+                    AuthorRole::MaternalArchive => {
+                        if wants_mom {
+                            score += 5.5;
+                        }
+                    }
+                    AuthorRole::PaternalArchive => {
+                        if wants_dad {
+                            score += 5.5;
+                        }
+                    }
+                    AuthorRole::FamilyDialogue => {
+                        if wants_jill {
+                            score += 5.5;
+                        }
+                    }
+                    AuthorRole::GeneralCorpus => {}
+                }
+
                 if is_history && ep.era.is_some() {
                     score += if matched_any { 2.5 } else { 0.4 };
+                }
+                // Temporal richness bonus when an episode has an explicit lived date
+                if ep.temporal_order > 0 && matched_any {
+                    score += 0.8;
+                }
+                // Narrative substance bonus: prefer rich paragraphs over short headings/fragments
+                if matched_any {
+                    let plen = ep.passage.len();
+                    if plen >= 160 {
+                        score += 2.8;
+                    } else if plen < 90 {
+                        score -= 2.5;
+                    }
                 }
                 // Wave resonance harmonic bonus
                 let freq_diff = (ep.frequency_hz - query_freq).abs();
@@ -690,8 +908,9 @@ impl LifePersona {
     }
 
     /// Generate a grounded local response directly from the `.m8` Persona Soul (zero API keys)
+    /// with temporal memory awareness (`event_time` vs `written_time`) and first-person diary recall.
     pub fn respond_locally(&self, prompt: &str) -> String {
-        let recalled = self.recall_episodes(prompt, 4);
+        let recalled = self.recall_episodes(prompt, 5);
         let warmth_tone = if self.voice.warmth >= 0.15 {
             "warm and reflective"
         } else if self.voice.warmth <= -0.15 {
@@ -710,23 +929,70 @@ impl LifePersona {
             warmth_tone
         ));
 
+        if let Some(ref seed) = self.ancestral_seed {
+            out.push_str(&format!(
+                "_Identity anchor: **{}** (b. {}) · Places: {}_\n\n",
+                seed.id,
+                seed.born_year
+                    .map(|y| y.to_string())
+                    .unwrap_or_else(|| "unknown".to_string()),
+                seed.places
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" · ")
+            ));
+        }
+
         if let Some(primary) = recalled.first() {
-            let era_badge = primary
-                .era
-                .as_deref()
-                .map(|e| format!(" ({e})"))
-                .unwrap_or_default();
-            let lead_label = match self.specialty {
-                PersonaSpecialty::HistoryDocumenter => "Chronological record in",
-                PersonaSpecialty::CodeAnalyst => "Architectural implementation in",
-                PersonaSpecialty::ReadmeExpert => "Documentation reference in",
-                PersonaSpecialty::LifeBiographer => "From my notes in",
+            let temporal_badge = format_temporal_badge(primary);
+            let lead_header = match (self.specialty, primary.author_role) {
+                (_, AuthorRole::PrimaryDiary) => format!(
+                    "📓 **I remember writing in my diary{}** (`{}` — *first-person lived diary*)",
+                    temporal_badge, primary.source
+                ),
+                (_, AuthorRole::PrimaryMemoir) => format!(
+                    "✍️ **As I wrote in `{}`**{}",
+                    primary.source, temporal_badge
+                ),
+                (_, AuthorRole::MaternalArchive) => format!(
+                    "📜 **From my mother Alice Wilson Hawkins's diary, which I edited** (`{}`{})",
+                    primary.source, temporal_badge
+                ),
+                (_, AuthorRole::PaternalArchive) => format!(
+                    "📜 **From my dad Mike Hawkins's story & advice that I preserved** (`{}`{})",
+                    primary.source, temporal_badge
+                ),
+                (_, AuthorRole::FamilyDialogue) => format!(
+                    "💌 **From a family exchange with my daughter Jill** (`{}`{})",
+                    primary.source, temporal_badge
+                ),
+                (PersonaSpecialty::HistoryDocumenter, _) => {
+                    format!(
+                        "Chronological record in `{}`{}",
+                        primary.source, temporal_badge
+                    )
+                }
+                (PersonaSpecialty::CodeAnalyst, _) => {
+                    format!(
+                        "Architectural implementation in `{}`{}",
+                        primary.source, temporal_badge
+                    )
+                }
+                (PersonaSpecialty::ReadmeExpert, _) => {
+                    format!(
+                        "Documentation reference in `{}`{}",
+                        primary.source, temporal_badge
+                    )
+                }
+                (PersonaSpecialty::LifeBiographer, _) => {
+                    format!("From my notes in `{}`{}", primary.source, temporal_badge)
+                }
             };
             out.push_str(&format!(
-                "{} `{}`{}:\n> \"{}\"\n\n",
-                lead_label,
-                primary.source,
-                era_badge,
+                "{}:\n> \"{}\"\n\n",
+                lead_header,
                 primary.passage.replace('\n', "\n> ")
             ));
         }
@@ -741,21 +1007,41 @@ impl LifePersona {
                 }
                 PersonaSpecialty::ReadmeExpert => "**Related guides & usage notes:**\n",
                 PersonaSpecialty::LifeBiographer => {
-                    "**Connected memories that resonate with what you asked:**\n"
+                    "**Connected memories across time (ordered chronologically):**\n"
                 }
             };
             out.push_str(section_heading);
-            for ep in recalled.iter().skip(1) {
-                let era_badge = ep
-                    .era
-                    .as_deref()
-                    .map(|e| format!(" [{e}]"))
-                    .unwrap_or_default();
+
+            // Order supporting memories chronologically when temporal anchors exist
+            let mut supporting: Vec<&PersonaEpisode> = recalled.iter().skip(1).copied().collect();
+            if self.specialty == PersonaSpecialty::LifeBiographer
+                || self.specialty == PersonaSpecialty::HistoryDocumenter
+            {
+                supporting.sort_by_key(|ep| {
+                    if ep.temporal_order > 0 {
+                        ep.temporal_order
+                    } else {
+                        i32::MAX
+                    }
+                });
+            }
+
+            for ep in supporting {
+                let role_tag = match ep.author_role {
+                    AuthorRole::PrimaryDiary => "📓 *My diary*",
+                    AuthorRole::PrimaryMemoir => "✍️ *My writing*",
+                    AuthorRole::MaternalArchive => "📜 *Mom's diary (edited by me)*",
+                    AuthorRole::PaternalArchive => "📜 *Dad's writing*",
+                    AuthorRole::FamilyDialogue => "💌 *With Jill*",
+                    AuthorRole::GeneralCorpus => "📄 *Note*",
+                };
+                let t_badge = format_temporal_badge(ep);
                 let snippet: String = ep.passage.chars().take(280).collect();
                 out.push_str(&format!(
-                    "- **`{}`**{}: \"{}{}\"\n",
+                    "- {} · **`{}`**{}: \"{}{}\"\n",
+                    role_tag,
                     ep.source,
-                    era_badge,
+                    t_badge,
                     snippet.replace('\n', " "),
                     if ep.passage.chars().count() > 280 {
                         "..."
@@ -786,12 +1072,18 @@ impl LifePersona {
         let recalled = self.recall_episodes(user_query, 5);
         let mut memories_block = String::new();
         for (idx, ep) in recalled.iter().enumerate() {
-            let era = ep.era.as_deref().unwrap_or("undated");
+            let t_badge = format_temporal_badge(ep);
+            let origin = if ep.origin.is_empty() {
+                "Primary corpus"
+            } else {
+                ep.origin.as_str()
+            };
             memories_block.push_str(&format!(
-                "[Memory #{} | Source: {} | Era: {}]\n{}\n\n",
+                "[Memory #{} | Source: {} | Provenance: {}{}]\n{}\n\n",
                 idx + 1,
                 ep.source,
-                era,
+                origin,
+                t_badge,
                 ep.passage
             ));
         }
@@ -800,7 +1092,11 @@ impl LifePersona {
              Voice profile: {:.1} words/sentence average, warmth={:.2}, expressiveness={:.2}.\n\
              Characteristic vocabulary: {}.\n\
              Signature phrases: {}.\n\
-             Ground your answer strictly in the following authentic episodic memories from the corpus:\n\n{}",
+             Temporal & Attribution Rules:\n\
+             1. If a memory's provenance is PrimaryDiary or PrimaryMemoir, remember and speak of it in the first person as your own lived diary and writing.\n\
+             2. Distinguish lived event time from written/compiled time and never confuse file import dates with lived dates.\n\
+             3. If a memory comes from your mother's diary (MaternalArchive), father's story (PaternalArchive), or daughter's annotations (FamilyDialogue), credit them warmly and accurately.\n\n\
+             Ground your answer strictly in the following authentic episodic memories:\n\n{}",
             self.name,
             self.specialty.badge(),
             self.voice.avg_sentence_words,
@@ -813,7 +1109,147 @@ impl LifePersona {
     }
 }
 
+fn format_temporal_badge(ep: &PersonaEpisode) -> String {
+    match (&ep.event_time, &ep.written_time, &ep.era) {
+        (Some(ev), Some(wr), _) if ev != wr && !ev.starts_with(wr.as_str()) => {
+            format!(" [lived {ev}, written {wr}]")
+        }
+        (Some(ev), _, _) => format!(" [{ev}]"),
+        (None, Some(wr), _) => format!(" [written {wr}]"),
+        (None, None, Some(era)) => format!(" [{era}]"),
+        (None, None, None) => String::new(),
+    }
+}
+
+/// Classify authorship and provenance role for a document and passage
+fn classify_author_and_origin(
+    source_label: &str,
+    full_content_header: &str,
+    passage: &str,
+) -> (AuthorRole, String, Option<String>) {
+    let lower_src = source_label.to_ascii_lowercase();
+    let lower_hdr = full_content_header.to_ascii_lowercase();
+    let lower_pass = passage.to_ascii_lowercase();
+
+    // 1. First-person diaries written by Jody (or any primary diarist)
+    if lower_src.contains("bestdiary")
+        || lower_src.contains("my_diary")
+        || lower_src.contains("my diary")
+        || lower_src.contains("diary")
+            && !lower_src.contains("short diary")
+            && !lower_src.contains("colorado diary")
+        || lower_hdr.contains("the property of\njody chenoweth")
+        || lower_hdr.contains("yearslong diary")
+    {
+        let written = if lower_src.contains("19what") || lower_hdr.contains("january 1964") {
+            Some("1964".to_string())
+        } else if lower_hdr.contains("1963") {
+            Some("1963".to_string())
+        } else {
+            detect_date_or_era(source_label)
+        };
+        return (
+            AuthorRole::PrimaryDiary,
+            "Jody Chenoweth (First-Person Lived Diary)".to_string(),
+            written,
+        );
+    }
+
+    // 2. Family dialogue with daughter Jill
+    if lower_src.contains("jill") {
+        return (
+            AuthorRole::FamilyDialogue,
+            "Jody Chenoweth & daughter Jill".to_string(),
+            None,
+        );
+    }
+
+    // 3. Paternal writings (Mike Hawkins / Dad's story & advice)
+    if lower_src.contains("dad")
+        || lower_src.contains("daddy")
+        || lower_src.contains("o_hell_hawkins")
+        || lower_src.contains("o hell hawkins")
+    {
+        let written = if lower_src.contains("2014") {
+            Some("2014".to_string())
+        } else {
+            None
+        };
+        return (
+            AuthorRole::PaternalArchive,
+            "Mike Hawkins (Dad's Story & Advice, preserved by Jody)".to_string(),
+            written,
+        );
+    }
+
+    // 4. Maternal diary & advice (Alice Wilson Hawkins, edited with Epilog by Jody)
+    if lower_src.contains("short diary")
+        || lower_src.contains("colorado diary")
+        || lower_src.contains("colorado prospecting")
+        || lower_src.contains("moms book")
+        || lower_src.contains("moms advice")
+        || lower_src.contains("mama")
+        || lower_hdr.contains("diary of alice wilson hawkins")
+    {
+        let written = if lower_src.contains("2010") {
+            Some("2010".to_string())
+        } else if lower_hdr.contains("2009932375") {
+            Some("2009".to_string())
+        } else {
+            None
+        };
+        // If this specific passage is Jody's own dedication, NOTE, or Epilog, mark as PrimaryMemoir
+        if lower_pass.contains("this book is dedicated to")
+            || lower_pass.contains("epilog by jody")
+            || lower_pass.contains("edited by jody")
+            || lower_pass.starts_with("note this edition")
+        {
+            return (
+                AuthorRole::PrimaryMemoir,
+                "Jody Hawkins Chenoweth (Editor's Dedication & Epilog)".to_string(),
+                written,
+            );
+        }
+        return (
+            AuthorRole::MaternalArchive,
+            "Alice Wilson Hawkins (Mom's Diary, edited by Jody)".to_string(),
+            written,
+        );
+    }
+
+    // 5. Jody's own memoirs, stories, poems, and Gems of Thought
+    if lower_src.contains("our story")
+        || lower_src.contains("chenterra")
+        || lower_src.contains("first 15 years")
+        || lower_src.contains("raamblings")
+        || lower_src.contains("patchwork of poetry")
+        || lower_src.contains("gems_of_thought")
+        || lower_src.contains("glory_book")
+        || lower_src.contains("match_race")
+        || lower_src.contains("widder_maude")
+    {
+        let written =
+            if lower_src.contains("our story") || lower_pass.contains("50th wedding anniversary") {
+                Some("1998".to_string())
+            } else {
+                None
+            };
+        return (
+            AuthorRole::PrimaryMemoir,
+            "Jody Hawkins Chenoweth (First-Person Memoir, Stories & Poetry)".to_string(),
+            written,
+        );
+    }
+
+    (
+        AuthorRole::GeneralCorpus,
+        "Primary Corpus".to_string(),
+        None,
+    )
+}
+
 /// Ingest a single file in parallel, splitting long transcripts/documents into clean 300..850 char episodes
+/// while tracking stateful chronological dates (`event_time`, `written_time`, `temporal_order`).
 fn ingest_single_file(
     file_path: &Path,
     canon_root: &Path,
@@ -843,6 +1279,10 @@ fn ingest_single_file(
         rel_source
     };
 
+    let header_preview: String = content.chars().take(1200).collect();
+    let (file_role, file_origin, file_written_time) =
+        classify_author_and_origin(&source_label, &header_preview, "");
+
     let chunks = split_into_episodic_chunks(&content, specialty);
     if chunks.is_empty() {
         return None;
@@ -865,7 +1305,21 @@ fn ingest_single_file(
     let mut openings: Vec<String> = Vec::new();
     let mut episodes: Vec<PersonaEpisode> = Vec::new();
 
+    // Running temporal context across the file (so daily diary entries like "January 2 Wed."
+    // inherit the diary's year from the title page or preceding section header).
+    let mut running_year: Option<u16> = detect_initial_year(&source_label, &header_preview);
+    let mut running_month: Option<u8> = None;
+
     for (idx, para) in chunks.iter().enumerate() {
+        // Update running year/month even on short or skipped chunks so temporal context stays accurate
+        if let Some(y) = detect_lived_year_in_text(para) {
+            running_year = Some(y);
+        }
+        let parsed_day = detect_month_day_in_text(para, running_month);
+        if let Some((m, _, _)) = parsed_day {
+            running_month = Some(m);
+        }
+
         if is_machine_noise_passage(para) {
             continue;
         }
@@ -907,7 +1361,24 @@ fn ingest_single_file(
         if idx % step == 0 && episodes.len() < per_file_cap {
             let (valence, arousal) = score_emotion(para);
             valence_sum += valence;
-            let era = detect_date_or_era(para).or_else(|| detect_date_or_era(&source_label));
+
+            let (ep_role, ep_origin, ep_written) =
+                classify_author_and_origin(&source_label, &header_preview, para);
+            let role = if ep_role != AuthorRole::GeneralCorpus {
+                ep_role
+            } else {
+                file_role
+            };
+            let origin = if ep_role != AuthorRole::GeneralCorpus {
+                ep_origin
+            } else {
+                file_origin.clone()
+            };
+            let written_time = ep_written.or_else(|| file_written_time.clone());
+
+            let (event_time, temporal_order) =
+                resolve_episode_temporal(para, &source_label, running_year, parsed_day);
+            let era = event_time.clone().or_else(|| written_time.clone());
 
             // Keywords include both natural words and code/domain identifiers
             let mut kw: Vec<String> = Vec::new();
@@ -932,6 +1403,11 @@ fn ingest_single_file(
             episodes.push(PersonaEpisode {
                 source: source_label.clone(),
                 era,
+                event_time,
+                written_time,
+                temporal_order,
+                author_role: role,
+                origin,
                 keywords: kw,
                 valence,
                 arousal,
@@ -957,7 +1433,8 @@ fn ingest_single_file(
     })
 }
 
-/// Split document content into clean ~100..850 character episodic chunks without mid-word truncation
+/// Split document content into clean ~100..850 character episodic chunks without mid-word truncation,
+/// keeping short diary date headers (e.g. `"January 2 Wed."`) attached to their diary entry body.
 fn split_into_episodic_chunks(content: &str, specialty: PersonaSpecialty) -> Vec<String> {
     let mut chunks = Vec::new();
     let min_len = if specialty == PersonaSpecialty::CodeAnalyst {
@@ -966,19 +1443,43 @@ fn split_into_episodic_chunks(content: &str, specialty: PersonaSpecialty) -> Vec
         32
     };
 
-    for block in content.split("\n\n") {
-        let trimmed = block.trim();
-        if trimmed.len() < min_len {
+    let mut pending_header = String::new();
+
+    for raw_block in content.split("\n\n") {
+        let trimmed = raw_block.trim_matches(|c: char| c.is_whitespace() || c == '\u{000c}');
+        if trimmed.is_empty() {
             continue;
         }
-        if trimmed.len() <= 850 {
-            chunks.push(trimmed.to_string());
+        // If this block is a short date/section header (e.g. "January 2 Wed." or "Tues.\nUp at 7:00 am"),
+        // hold it and prepend it to the next paragraph so diary dates are never orphaned!
+        if trimmed.len() < min_len || is_short_date_header(trimmed) {
+            if trimmed.len() <= 90 {
+                if !pending_header.is_empty() {
+                    pending_header.push(' ');
+                }
+                pending_header.push_str(&trimmed.replace('\n', " "));
+                if pending_header.len() > 160 {
+                    pending_header.clear();
+                }
+            }
+            continue;
+        }
+
+        let block_with_hdr = if !pending_header.is_empty() {
+            let hdr = std::mem::take(&mut pending_header);
+            format!("{hdr} — {trimmed}")
+        } else {
+            trimmed.to_string()
+        };
+
+        if block_with_hdr.len() <= 850 {
+            chunks.push(block_with_hdr);
             continue;
         }
         // Long single-newline block (e.g. transcript, chat export, or source file):
         // group lines into ~400..800 char episodic passages.
         let mut current = String::new();
-        for line in trimmed.lines() {
+        for line in block_with_hdr.lines() {
             let l = line.trim();
             if l.is_empty() {
                 continue;
@@ -1023,6 +1524,162 @@ fn split_into_episodic_chunks(content: &str, specialty: PersonaSpecialty) -> Vec
     chunks
 }
 
+fn is_short_date_header(text: &str) -> bool {
+    if text.len() > 64 {
+        return false;
+    }
+    detect_month_day_in_text(text, None).is_some()
+        || matches!(
+            text.trim().to_ascii_lowercase().as_str(),
+            "mon." | "tues." | "wed." | "thurs." | "fri." | "sat." | "sun."
+        )
+}
+
+fn detect_initial_year(source_label: &str, header: &str) -> Option<u16> {
+    let lower_src = source_label.to_ascii_lowercase();
+    let lower_hdr = header.to_ascii_lowercase();
+    if lower_src.contains("19what") || lower_hdr.contains("january 1964") {
+        return Some(1964);
+    }
+    if lower_hdr.contains("january 1, 1963") || lower_src.contains("bestdiary") {
+        return Some(1963);
+    }
+    if lower_src.contains("glory_book") || lower_src.contains("match_race") {
+        return Some(1945);
+    }
+    detect_lived_year_in_text(header).or_else(|| detect_lived_year_in_text(source_label))
+}
+
+fn detect_lived_year_in_text(text: &str) -> Option<u16> {
+    let lower = text.to_ascii_lowercase();
+    // Ignore copyright/ISBN/control lines when inferring lived year
+    if lower.contains("copyright")
+        || lower.contains("isbn")
+        || lower.contains("library of congress")
+    {
+        return None;
+    }
+    for token in text.split(|c: char| !c.is_ascii_alphanumeric()) {
+        // Handle OCR "l998" / "l989" where '1' was scanned as lowercase 'l'
+        let normalized = if token.len() == 4
+            && token.starts_with('l')
+            && token[1..].chars().all(|c| c.is_ascii_digit())
+        {
+            format!("1{}", &token[1..])
+        } else {
+            token.to_string()
+        };
+        if normalized.len() == 4 && normalized.chars().all(|c| c.is_ascii_digit()) {
+            if let Ok(year) = normalized.parse::<u16>() {
+                if (1880..=2026).contains(&year) {
+                    return Some(year);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn parse_month_name(word: &str) -> Option<u8> {
+    match word.trim_matches('.').to_ascii_lowercase().as_str() {
+        "january" | "jan" => Some(1),
+        "february" | "feb" => Some(2),
+        "march" | "mar" => Some(3),
+        "april" | "apr" => Some(4),
+        "may" => Some(5),
+        "june" | "jun" => Some(6),
+        "july" | "jul" => Some(7),
+        "august" | "aug" => Some(8),
+        "september" | "sep" | "sept" => Some(9),
+        "october" | "oct" => Some(10),
+        "november" | "nov" => Some(11),
+        "december" | "dec" => Some(12),
+        _ => None,
+    }
+}
+
+fn parse_weekday(word: &str) -> Option<&'static str> {
+    match word
+        .trim_matches(|c: char| !c.is_ascii_alphabetic())
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "mon" | "monday" => Some("Mon"),
+        "tue" | "tues" | "tuesday" => Some("Tue"),
+        "wed" | "wednesday" => Some("Wed"),
+        "thu" | "thur" | "thurs" | "thursday" => Some("Thu"),
+        "fri" | "friday" => Some("Fri"),
+        "sat" | "saturday" => Some("Sat"),
+        "sun" | "sunday" => Some("Sun"),
+        _ => None,
+    }
+}
+
+/// Detect `"January 2 Wed."`, `"Jan. 18 Sat."`, `"June 21st"`, etc. in the first 120 chars of a chunk
+fn detect_month_day_in_text(
+    text: &str,
+    _fallback_month: Option<u8>,
+) -> Option<(u8, u8, Option<&'static str>)> {
+    let prefix: String = text.chars().take(120).collect();
+    let tokens: Vec<&str> = prefix
+        .split(|c: char| c.is_whitespace() || c == ',' || c == '—' || c == '-')
+        .filter(|s| !s.is_empty())
+        .collect();
+    for i in 0..tokens.len() {
+        if let Some(month) = parse_month_name(tokens[i]) {
+            if let Some(&next) = tokens.get(i + 1) {
+                let digits: String = next.chars().take_while(|c| c.is_ascii_digit()).collect();
+                if let Ok(day) = digits.parse::<u8>() {
+                    if (1..=31).contains(&day) {
+                        let wk = tokens
+                            .get(i + 2)
+                            .and_then(|w| parse_weekday(w))
+                            .or_else(|| tokens.get(i + 3).and_then(|w| parse_weekday(w)));
+                        return Some((month, day, wk));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn resolve_episode_temporal(
+    para: &str,
+    source_label: &str,
+    running_year: Option<u16>,
+    parsed_day: Option<(u8, u8, Option<&'static str>)>,
+) -> (Option<String>, i32) {
+    // 1. Check explicit ISO date first
+    if let Some(iso) = detect_date_or_era(para) {
+        if iso.len() == 10 {
+            let y: i32 = iso[0..4].parse().unwrap_or(0);
+            let m: i32 = iso[5..7].parse().unwrap_or(0);
+            let d: i32 = iso[8..10].parse().unwrap_or(0);
+            return (Some(iso), y * 10_000 + m * 100 + d);
+        }
+    }
+
+    let year_opt = detect_lived_year_in_text(para)
+        .or(running_year)
+        .or_else(|| detect_lived_year_in_text(source_label));
+
+    if let (Some(year), Some((month, day, wk_opt))) = (year_opt, parsed_day) {
+        let label = match wk_opt {
+            Some(wk) => format!("{year:04}-{month:02}-{day:02} ({wk})"),
+            None => format!("{year:04}-{month:02}-{day:02}"),
+        };
+        let sort_key = (year as i32) * 10_000 + (month as i32) * 100 + (day as i32);
+        return (Some(label), sort_key);
+    }
+
+    if let Some(year) = year_opt {
+        return (Some(year.to_string()), (year as i32) * 10_000);
+    }
+
+    (None, 0)
+}
+
 /// Detect machine-generated log/JSON/LaTeX font noise so it doesn't pollute episodes or voice cadence
 fn is_machine_noise_passage(para: &str) -> bool {
     let lower = para.to_ascii_lowercase();
@@ -1031,6 +1688,8 @@ fn is_machine_noise_passage(para: &str) -> bool {
         || lower.contains("compression_ratio")
         || lower.contains("missing character: there is no")
         || lower.contains("mode=node;language=dflt")
+        || lower.contains("\"integrity\": \"sha512-")
+        || lower.contains("\"resolved\": \"https://registry.npmjs.org/")
     {
         return true;
     }
@@ -1287,5 +1946,33 @@ mod tests {
 
         let reply = loaded.respond_locally("Tell me about the peach cobbler");
         assert!(reply.contains("peach cobbler"));
+    }
+
+    #[test]
+    fn diary_temporal_and_first_person_recall_works() {
+        let tmp = TempDir::new().unwrap();
+        let diary = tmp.path().join("BESTDIARY58 last oneMay13.md");
+        fs::write(
+            &diary,
+            "THE PROPERTY OF\nJody Chenoweth\n\nYEARSLONG DIARY\nFrom January 1, 1963 to January 1, 1964\n\n\
+             January 2 Wed.\n\n\
+             Fred worked graveyards last night. Kerry and I went to town and exchanged Kane's boots. \
+             Evening we played Password and Fred fixed Chatty Cathy.\n\n\
+             January 3 Thurs.\n\n\
+             Baked a pineapple upside down cake and brought Shorty home to the pasture.",
+        )
+        .unwrap();
+
+        let (persona, _, _) = LifePersona::train_from_path("Grandma Jody", tmp.path()).unwrap();
+        assert!(persona.ancestral_seed.is_some());
+        let hits = persona.recall_episodes("pineapple upside down cake January 1963", 1);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].author_role, AuthorRole::PrimaryDiary);
+        assert_eq!(hits[0].event_time.as_deref(), Some("1963-01-03 (Thu)"));
+        assert_eq!(hits[0].temporal_order, 19630103);
+
+        let reply = persona.respond_locally("What did you bake in your diary in January 1963?");
+        assert!(reply.contains("I remember writing in my diary"));
+        assert!(reply.contains("1963-01-03 (Thu)"));
     }
 }

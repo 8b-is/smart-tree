@@ -170,6 +170,32 @@ impl LlmProvider for BurnProvider {
                         let t_dot = ternary_dot(&q_trits, &ep_trits) as f32;
                         let mut score =
                             t_dot * 0.25 + prompt_specialty_affinity(user_prompt, p.specialty);
+                        let lower_prompt = user_prompt.to_ascii_lowercase();
+                        if lower_prompt.contains(&p.name.to_ascii_lowercase())
+                            || lower_prompt.contains(&p.slug)
+                        {
+                            score += 18.0;
+                        }
+                        if let Some(ref seed) = p.ancestral_seed {
+                            for alias in &seed.aliases {
+                                if lower_prompt.contains(&alias.to_ascii_lowercase()) {
+                                    score += 16.0;
+                                }
+                            }
+                            for token in [
+                                "jody",
+                                "grandma",
+                                "chenterra",
+                                "platoro",
+                                "fred",
+                                "sheltie",
+                                "miniature horse",
+                            ] {
+                                if lower_prompt.contains(token) {
+                                    score += 12.0;
+                                }
+                            }
+                        }
                         for w in user_prompt.split_whitespace() {
                             let clean = w
                                 .trim_matches(|c: char| !c.is_alphanumeric())
