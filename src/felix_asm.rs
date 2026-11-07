@@ -1154,6 +1154,7 @@ pub fn felix_kleene_nand_trit_asm(a: i8, b: i8) -> i8 {
 ///   `vcgtq_s16`/`vcltq_s16` + pairwise 32-bit accumulation `vpadalq_s16` + `vaddvq_s32`).
 /// - `x86_64`: 8-lane SSE2 vectorization (`_mm_loadu_si128` + `_mm_cmpgt_epi16` + `_mm_madd_epi16` `PMADDWD`).
 /// - Portable tail & fallback: 4-way unrolled branchless sign/zero bitmasks (`0` multiplications, `0` branches, `0` floats).
+///
 /// Produces the exact same `i32` sum across AArch64, x86_64, RISC-V, and WASM.
 #[inline(always)]
 pub fn felix_ternary_gemm_i32(acts: &[i16], trits: &[i8]) -> i32 {
@@ -1601,7 +1602,7 @@ mod tests {
         let (holds_at_horizon, surplus_at_horizon, _) =
             felix_zeno_god_of_sun_pq_nt_gt_p(31, 32, n_sun, -1);
         assert!(holds_at_horizon);
-        assert_eq!(surplus_at_horizon, 31 - 32 * 31 * (-1) - 31 * 32); // 31 > 0
+        assert_eq!(surplus_at_horizon, 31 - (-(32 * 31)) - 31 * 32); // 31 > 0
 
         let mut acc = [1.0_f32; 64];
         let src = [2.0_f32; 64];

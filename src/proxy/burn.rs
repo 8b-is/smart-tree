@@ -44,7 +44,7 @@ pub fn compute_ternary_signature(text: &str) -> ([i8; 65], [u8; 13]) {
 
     // Pack 5 trits per byte in SPQT base-243 (`3^5 = 243`)
     let mut packed = [0u8; 13];
-    for (chunk_idx, chunk) in trits.chunks_exact(5).enumerate() {
+    for (chunk_idx, chunk) in trits.as_chunks::<5>().0.iter().enumerate() {
         let mut byte_val = 0u8;
         let mut radix = 1u8;
         for &t in chunk {

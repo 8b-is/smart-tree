@@ -182,8 +182,7 @@ fn quantize_bend_pack_row_scalar_with_phase(
     let mut total_sse = 0u64;
     let mut out_idx = 0usize;
 
-    let chunks = weights.chunks_exact(5);
-    let rem = chunks.remainder();
+    let (chunks, rem) = weights.as_chunks::<5>();
 
     for chunk in chunks {
         let mut bent_5 = [0u8; 5];

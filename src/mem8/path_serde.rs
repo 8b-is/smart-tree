@@ -50,8 +50,10 @@ pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<PathBuf
     if encoding == 2 && bytes.len() % 2 == 0 {
         use std::os::windows::ffi::OsStringExt;
         let wide: Vec<_> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&pair| u16::from_le_bytes(pair))
             .collect();
         return Ok(std::ffi::OsString::from_wide(&wide).into());
     }

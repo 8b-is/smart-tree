@@ -763,8 +763,10 @@ fn decode_record_from_slice(
 
         let mut frame = Vec::with_capacity(needed_bytes);
         frame.extend_from_slice(payload);
-        for chunk in slice[native_block::PAIR_SIZE..].chunks_exact(native_block::PAIR_SIZE) {
-            let pair: &[u8; native_block::PAIR_SIZE] = chunk.try_into().unwrap();
+        for pair in slice[native_block::PAIR_SIZE..]
+            .as_chunks::<{ native_block::PAIR_SIZE }>()
+            .0
+        {
             let (next_location, _, next_payload) = native_block::decode_pair(pair)?;
             ensure!(location == next_location, "Mismatched MEM8 continuation");
             frame.extend_from_slice(next_payload);

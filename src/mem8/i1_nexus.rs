@@ -649,16 +649,15 @@ impl I1NexusStore {
             })
             .collect();
 
-        for i in 0..n {
+        for (i, acts_i) in acts_vec.iter().enumerate().take(n) {
             let mut rels: Vec<NibbleRelation> = Vec::new();
-            for j in 0..n {
+            for (j, trits_j) in trits_vec.iter().enumerate().take(n) {
                 if i == j {
                     continue;
                 }
                 let a = &self.nibbles[i];
                 let b = &self.nibbles[j];
-                let dot =
-                    crate::felix_asm::felix_ternary_gemm_i32(&acts_vec[i], &trits_vec[j]) as i16;
+                let dot = crate::felix_asm::felix_ternary_gemm_i32(acts_i, trits_j) as i16;
 
                 let shared_kw = a.keywords.iter().filter(|k| b.keywords.contains(k)).count() as u16;
 
