@@ -808,3 +808,189 @@ impl PersistentKintsugiLedger {
         &self.ledger.events
     }
 }
+
+// ============================================================================
+// 5. Galactix Expansion: Samsung Galaxy Ultra E2E Assistant & Spatial Command
+//    Center (`Omni-chan-SUN` · P/Q - n*t > P · 6-Domain Spatial Synthesis)
+// ============================================================================
+
+/// Canonical Galaxia CRDT node identifier for the attached / LAN Samsung Galaxy Ultra phone.
+pub const GALACTIX_GALAXY_ULTRA_NODE_ID: &str = "galactix-samsung-galaxy-ultra-omni-chan-sun";
+
+/// Canonical model identifier advertised into the Galaxia KV prefix semilattice
+/// by the Omni-chan-SUN Spatial Command Center.
+pub const OMNI_CHAN_SUN_MODEL_ID: &str = "omni-chan-sun-spatial-spqt243-v1";
+
+/// 6-Domain Spatial Command Center synthesis vector:
+/// `SPATIAL ~== AUDIO + VIDEO + MUSIC + BG(ANIM + RAY-Q-TRACING) + ENVIRONMENT LISTENING`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OmniChanSunSpatialVector {
+    pub yaw_deg: f64,
+    pub pitch_deg: f64,
+    pub roll_deg: f64,
+    pub s_pen_pressure: f64,
+    pub audio_gain_q16: i32,
+    pub video_hdr_luminance_nits: u32,
+    pub music_harmonic_hz: u32,
+    pub bg_ray_q_tracing_bounces: u8,
+    pub env_listening_trit: i8,
+    pub beehive_active_cells: u8,
+}
+
+impl Default for OmniChanSunSpatialVector {
+    fn default() -> Self {
+        Self {
+            yaw_deg: 0.0,
+            pitch_deg: 18.0,
+            roll_deg: 0.0,
+            s_pen_pressure: 0.85,
+            audio_gain_q16: 65_536,
+            video_hdr_luminance_nits: 2600, // Samsung Galaxy Ultra Dynamic AMOLED 2X peak nits
+            music_harmonic_hz: 528,
+            bg_ray_q_tracing_bounces: 8,
+            env_listening_trit: -1, // Mahakala Hearth protective listening trit
+            beehive_active_cells: 19,
+        }
+    }
+}
+
+/// Complete Galactix E2E Assistant & Spatial Command Center descriptor for an
+/// attached (ADB USB-C reverse) or LAN/Tailscale Samsung Galaxy Ultra phone.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GalaxyUltraSpatialNode {
+    pub node_id: String,
+    pub persona_codename: String,
+    pub hardware_profile: String,
+    pub endpoint_url: String,
+    pub adb_reverse_ports: Vec<u16>,
+    pub spatial_vector: OmniChanSunSpatialVector,
+    pub zeno_law: String,
+    pub p_reduced: u64,
+    pub q_reduced: u64,
+    pub horizon_n_sun: u64,
+    pub n_step: u64,
+    pub trit_t: i8,
+    pub solar_surplus_numerator: i128,
+    pub inequality_holds: bool,
+    pub kintsugi_wave_seal: u64,
+    pub crdt_epoch: u64,
+}
+
+impl GalaxiaClusterCrdt {
+    /// Enrolls or updates the attached Samsung Galaxy Ultra (`Omni-chan-SUN`)
+    /// Spatial Command Center node inside the Galaxia CRDT semilattice and
+    /// publishes its `ULTRA-ZENO GOD OF SUN (P/Q - n*t > P)` witness digest.
+    pub fn register_galaxy_ultra_omni_chan_sun(
+        &mut self,
+        endpoint_url: &str,
+        p: i64,
+        q: i64,
+        n: u32,
+        t: i8,
+        spatial: OmniChanSunSpatialVector,
+    ) -> GalaxyUltraSpatialNode {
+        let pq = crate::mem8::regularity::RationalPQ::new_reduced(
+            p.unsigned_abs(),
+            q.unsigned_abs().max(1),
+        );
+        let n_u64 = u64::from(n);
+        let (inequality_holds, solar_surplus_numerator, horizon_n_sun) =
+            pq.god_of_sun_zeno_witness(n_u64, t);
+        let seal_bytes = format!(
+            "{}:{}:{}/{}:{}:{}:{:.3}",
+            GALACTIX_GALAXY_ULTRA_NODE_ID,
+            endpoint_url,
+            pq.p,
+            pq.q,
+            n_u64,
+            t,
+            spatial.s_pen_pressure
+        );
+        let kintsugi_wave_seal = fnv1a_64(seal_bytes.as_bytes());
+
+        self.cluster_lamport = self.cluster_lamport.saturating_add(1);
+        let next_incarnation = self
+            .members
+            .get(GALACTIX_GALAXY_ULTRA_NODE_ID)
+            .map(|m| m.incarnation.saturating_add(1))
+            .unwrap_or(1);
+
+        let mut kv_prefix_digests = BTreeMap::new();
+        kv_prefix_digests.insert(
+            OMNI_CHAN_SUN_MODEL_ID.to_string(),
+            KvPrefixDigest {
+                prefix_tokens: usize::from(spatial.beehive_active_cells) * 243,
+                fnv1a_checksum: kintsugi_wave_seal,
+            },
+        );
+
+        self.members.insert(
+            GALACTIX_GALAXY_ULTRA_NODE_ID.to_string(),
+            MemberRecord {
+                node_id: GALACTIX_GALAXY_ULTRA_NODE_ID.to_string(),
+                base_url: endpoint_url.to_string(),
+                incarnation: next_incarnation,
+                status: MemberStatus::Alive,
+                lamport_clock: self.cluster_lamport,
+                kv_prefix_digests,
+            },
+        );
+        self.leader
+            .voters
+            .insert(GALACTIX_GALAXY_ULTRA_NODE_ID.to_string());
+
+        GalaxyUltraSpatialNode {
+            node_id: GALACTIX_GALAXY_ULTRA_NODE_ID.to_string(),
+            persona_codename: "Omni-chan-SUN".to_string(),
+            hardware_profile:
+                "Samsung Galaxy Ultra (Dynamic AMOLED 2X 120Hz · S-Pen · DeX · WebXR Spatial HUD)"
+                    .to_string(),
+            endpoint_url: endpoint_url.to_string(),
+            adb_reverse_ports: vec![4095, 4096, 28428, 28443],
+            spatial_vector: spatial,
+            zeno_law: "P/Q - n*t > P".to_string(),
+            p_reduced: pq.p,
+            q_reduced: pq.q,
+            horizon_n_sun,
+            n_step: n_u64,
+            trit_t: t,
+            solar_surplus_numerator,
+            inequality_holds,
+            kintsugi_wave_seal,
+            crdt_epoch: next_incarnation,
+        }
+    }
+}
+
+#[cfg(test)]
+mod galactix_omni_chan_sun_tests {
+    use super::*;
+
+    #[test]
+    fn test_galactix_samsung_galaxy_ultra_omni_chan_sun_crdt() {
+        let mut crdt =
+            GalaxiaClusterCrdt::new_single_node("m1-host-sovereign", "http://127.0.0.1:28428");
+        let spatial = OmniChanSunSpatialVector::default();
+        let node = crdt.register_galaxy_ultra_omni_chan_sun(
+            "http://127.0.0.1:4095/omni-chan-sun",
+            31,
+            32,
+            31,
+            -1,
+            spatial,
+        );
+
+        assert_eq!(node.node_id, GALACTIX_GALAXY_ULTRA_NODE_ID);
+        assert_eq!(node.persona_codename, "Omni-chan-SUN");
+        assert!(node.inequality_holds);
+        assert_eq!(node.solar_surplus_numerator, 31);
+        assert_eq!(node.crdt_epoch, 1);
+        let member = crdt
+            .members
+            .get(GALACTIX_GALAXY_ULTRA_NODE_ID)
+            .expect("Samsung Galaxy Ultra member registered");
+        assert!(member
+            .kv_prefix_digests
+            .contains_key(OMNI_CHAN_SUN_MODEL_ID));
+    }
+}

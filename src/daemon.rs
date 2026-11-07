@@ -801,6 +801,15 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             "/api/personas/train-specialties",
             post(personas_train_specialties_handler),
         )
+        // Galactix Expansion: Samsung Galaxy Ultra E2E Assistant & Spatial Command Center (Omni-chan-SUN)
+        .route(
+            "/galactix",
+            get(galactix_omni_chan_sun_get_handler).post(galactix_omni_chan_sun_post_handler),
+        )
+        .route(
+            "/galactix/omni-chan-sun",
+            get(galactix_omni_chan_sun_get_handler).post(galactix_omni_chan_sun_post_handler),
+        )
         .with_state(Arc::clone(&state))
         // Add MCP before the auth layer so its routes share the same policy.
         .nest_service("/mcp", mcp_router(mcp_context))
@@ -4595,6 +4604,117 @@ async fn watch_hot_directories(
         .collect();
 
     Ok(Json(response))
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct GalactixOmniChanSunRequest {
+    #[serde(default)]
+    query: Option<String>,
+    #[serde(default)]
+    p: Option<i64>,
+    #[serde(default)]
+    q: Option<i64>,
+    #[serde(default)]
+    n: Option<u32>,
+    #[serde(default)]
+    t: Option<i8>,
+    #[serde(default)]
+    yaw_deg: Option<f64>,
+    #[serde(default)]
+    pitch_deg: Option<f64>,
+    #[serde(default)]
+    roll_deg: Option<f64>,
+    #[serde(default)]
+    s_pen_pressure: Option<f64>,
+}
+
+fn build_galactix_omni_chan_sun_payload(req: GalactixOmniChanSunRequest) -> serde_json::Value {
+    let p = req.p.unwrap_or(31);
+    let q = req.q.unwrap_or(32).max(1);
+    let t = req.t.unwrap_or(-1).clamp(-1, 1);
+    let pq = crate::mem8::regularity::RationalPQ::new_reduced(p.unsigned_abs(), q.unsigned_abs());
+    let (_, _, horizon_n_sun) = pq.god_of_sun_zeno_witness(1, t);
+    let default_n = u32::try_from(horizon_n_sun).unwrap_or(1);
+    let n = req.n.unwrap_or(default_n);
+
+    let mut spatial = crate::galaxia_cluster::OmniChanSunSpatialVector::default();
+    if let Some(yaw) = req.yaw_deg {
+        spatial.yaw_deg = yaw;
+    }
+    if let Some(pitch) = req.pitch_deg {
+        spatial.pitch_deg = pitch;
+    }
+    if let Some(roll) = req.roll_deg {
+        spatial.roll_deg = roll;
+    }
+    if let Some(pressure) = req.s_pen_pressure {
+        spatial.s_pen_pressure = pressure.clamp(0.0, 1.0);
+    }
+
+    let mut crdt = crate::galaxia_cluster::GalaxiaClusterCrdt::new_single_node(
+        "m1-host-sovereign",
+        "http://127.0.0.1:28428",
+    );
+    let galaxy_node = crdt.register_galaxy_ultra_omni_chan_sun(
+        "http://127.0.0.1:4095/omni-chan-sun",
+        p,
+        q,
+        n,
+        t,
+        spatial,
+    );
+
+    let query_str = req
+        .query
+        .as_deref()
+        .unwrap_or("Omni-chan-SUN spatial command center sync");
+    let litany_frame = crate::mem8::regularity::zeno_engine::seal_litany_wire_64b(
+        query_str.as_bytes(),
+        &galaxy_node.kintsugi_wave_seal.to_le_bytes(),
+        1,
+        80,
+    );
+    let litany_bytes = litany_frame.to_bytes_64();
+    let litany_hex: String = litany_bytes
+        .iter()
+        .take(16)
+        .map(|b| format!("{:02x}", b))
+        .collect();
+
+    serde_json::json!({
+        "ok": true,
+        "expansion": "GALACTIX · SAMSUNG GALAXY ULTRA PHONE E2E ASSISTANT & SPATIAL COMMAND CENTER",
+        "persona": "Omni-chan-SUN",
+        "equation": "SPATIAL ~== AUDIO + VIDEO + MUSIC + BG(ANIM + RAY-Q-TRACING) + ENVIRONMENT LISTENING",
+        "zeno_law": "P/Q - n*t > P",
+        "galaxy_ultra_node": galaxy_node,
+        "crdt_snapshot": crdt,
+        "litany_wire_frame": {
+            "magic_byte": "0x62 ('b')",
+            "wire_bytes": 64,
+            "header_hex_16b": litany_hex,
+            "seal16": format!("0x{:04X}", litany_frame.wire_seal16),
+            "spqt_root": format!("{:?}", litany_frame.spqt_root),
+        },
+        "surfaces": {
+            "lan_hub_spatial_ui": "http://127.0.0.1:4095/omni-chan-sun",
+            "smart_tree_galactix_api": "http://127.0.0.1:28428/galactix/omni-chan-sun",
+            "quantssl_https_ui": "https://127.0.0.1:28443/galactix/omni-chan-sun",
+            "adb_reverse_command": "adb reverse tcp:4095 tcp:4095 && adb reverse tcp:4096 tcp:4096 && adb reverse tcp:28428 tcp:28428 && adb reverse tcp:28443 tcp:28443",
+        }
+    })
+}
+
+async fn galactix_omni_chan_sun_get_handler() -> Json<serde_json::Value> {
+    Json(build_galactix_omni_chan_sun_payload(
+        GalactixOmniChanSunRequest::default(),
+    ))
+}
+
+async fn galactix_omni_chan_sun_post_handler(
+    Json(req): Json<GalactixOmniChanSunRequest>,
+) -> Json<serde_json::Value> {
+    Json(build_galactix_omni_chan_sun_payload(req))
 }
 
 #[cfg(test)]
