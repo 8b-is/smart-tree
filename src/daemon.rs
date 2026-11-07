@@ -192,30 +192,115 @@ impl AuthState {
     }
 }
 
-/// Auth middleware: validates Bearer token when the daemon is externally bound.
+/// Returns `true` if `ip` belongs to loopback, RFC1918 private LAN (`10/8`, `172.16/12`, `192.168/16`),
+/// IPv4/IPv6 link-local (`169.254/16`, `fe80::/10` — USB-C bridge & mDNS), IPv6 ULA (`fc00::/7`),
+/// or CGNAT / Tailscale (`100.64.0.0/10`).
+pub fn is_trusted_internal_lan_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let octets = v4.octets();
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || (octets[0] == 100 && (octets[1] & 0xC0) == 64)
+        }
+        std::net::IpAddr::V6(v6) => {
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return is_trusted_internal_lan_ip(std::net::IpAddr::V4(mapped));
+            }
+            let seg0 = v6.segments()[0];
+            v6.is_loopback() || (seg0 & 0xfe00) == 0xfc00 || (seg0 & 0xffc0) == 0xfe80
+        }
+    }
+}
+
+/// Returns `true` if the HTTP `Host` header refers to localhost, `.local` mDNS, or an internal LAN IP.
+fn host_is_local_or_lan(host_header: &str) -> bool {
+    let host = host_header
+        .trim()
+        .strip_prefix('[')
+        .and_then(|s| s.split(']').next())
+        .unwrap_or_else(|| host_header.split(':').next().unwrap_or(host_header))
+        .trim()
+        .to_ascii_lowercase();
+    if host == "localhost" || host.ends_with(".local") || host.ends_with(".lan") {
+        return true;
+    }
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_trusted_internal_lan_ip(ip);
+    }
+    false
+}
+
+/// Auth middleware: validates Bearer token only for untrusted public WAN origins.
 ///
-/// - `/health` is always public (health checks / monitoring).
-/// - Localhost-only daemon (`allow_external == false`): loopback is trusted
-///   (same boundary as stdio `st --mcp`), so MCP HTTP + dashboard work with
-///   zero setup. A valid Bearer token is still accepted for compatibility.
-/// - Externally bound daemon (`allow_external == true`): strict Bearer check
-///   with constant-time comparison on every route except `/health`.
+/// - `/health` and `/quantssl/*` CA/status routes are always public.
+/// - Localhost (`127.0.0.1`, `::1`) and internal safe LAN peers (`10/8`, `172.16/12`,
+///   `192.168/16`, `169.254/16` USB-C bridge, `100.64/10` Tailscale, `.local` mDNS)
+///   are trusted internally on LAN with zero Bearer token friction.
+/// - Public WAN connections require a valid `Authorization: Bearer <token>` header
+///   or `?token=<token>` query parameter (constant-time SHA-256 comparison).
 async fn auth_middleware(
     State(state): State<AuthState>,
     req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    // Allow /health without auth (for health checks and monitoring)
-    if req.uri().path() == "/health" {
+    let path = req.uri().path();
+    if path == "/health" || path == "/quantssl" || path.starts_with("/quantssl/") {
         return next.run(req).await;
     }
 
-    // Localhost-only: loopback differs from external by definition of bind.
+    // Localhost-only bind: loopback is trusted by definition.
     if !state.allow_external {
         return next.run(req).await;
     }
 
-    // Externally bound: strict Bearer check.
+    // Check if peer IP from ConnectInfo is loopback or internal safe LAN
+    let peer_is_lan = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<SocketAddr>>()
+        .map(|ci| is_trusted_internal_lan_ip(ci.0.ip()));
+
+    let forwarded_untrusted = req
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|xff| xff.split(',').next())
+        .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
+        .is_some_and(|ip| !is_trusted_internal_lan_ip(ip));
+
+    if !forwarded_untrusted {
+        if peer_is_lan == Some(true) {
+            return next.run(req).await;
+        }
+        if peer_is_lan.is_none() {
+            let host_ok = req
+                .headers()
+                .get("host")
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(host_is_local_or_lan);
+            if host_ok {
+                return next.run(req).await;
+            }
+        }
+    }
+
+    // Check `?token=<token>` query parameter for browser convenience
+    if let Some(q) = req.uri().query() {
+        for pair in q.split('&') {
+            if let Some(provided) = pair.strip_prefix("token=") {
+                if state
+                    .tokens
+                    .iter()
+                    .fold(false, |acc, t| acc | ct_token_matches(t, provided))
+                {
+                    return next.run(req).await;
+                }
+            }
+        }
+    }
+
+    // Externally bound WAN origin: strict Bearer check.
     let auth_header = req
         .headers()
         .get("authorization")
@@ -249,7 +334,7 @@ pub struct DaemonConfig {
     pub orchestrator_url: Option<String>,
     /// Enable credit tracking
     pub enable_credits: bool,
-    /// Allow connections from external hosts (default: false, localhost only)
+    /// Allow connections from external/LAN hosts (default: true, public internally on LAN)
     pub allow_external: bool,
 }
 
@@ -260,7 +345,7 @@ impl Default for DaemonConfig {
             watch_paths: vec![],
             orchestrator_url: Some("wss://gpu.foken.ai/api/credits".to_string()),
             enable_credits: true,
-            allow_external: false,
+            allow_external: true,
         }
     }
 }
@@ -687,6 +772,15 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .route("/i1/nexus", get(i1_nexus_status_handler))
         .route("/i1/nexus/distill", post(i1_nexus_distill_handler))
         .route("/i1/nexus/settings", post(i1_nexus_settings_handler))
+        .route("/memnet/shares", get(lan_shares_portal_handler))
+        // QuantSSL Local Safe Network Share & PKI (public internally on LAN)
+        .route("/quantssl", get(quantssl_status_handler))
+        .route("/quantssl/status", get(quantssl_status_handler))
+        .route("/quantssl/ca.crt", get(quantssl_ca_cert_handler))
+        .route("/quantssl/lan.crt", get(quantssl_lan_cert_handler))
+        .route("/shares", get(lan_shares_portal_handler))
+        .route("/shares/:share_name", get(lan_share_root_handler))
+        .route("/shares/:share_name/*rel_path", get(lan_share_path_handler))
         // MEM8 Life Personas (.m8 Soul Trainer & Local Ternary Micro-Model)
         .route("/api/personas", get(personas_list_handler))
         .route("/api/personas/train", post(personas_train_handler))
@@ -697,12 +791,16 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         .with_state(Arc::clone(&state))
         // Add MCP before the auth layer so its routes share the same policy.
         .nest_service("/mcp", mcp_router(mcp_context))
-        // Bearer token auth only when externally bound; localhost is trusted
-        // (see AuthState). /health stays public inside the middleware.
+        // Bearer token auth only for untrusted WAN; localhost & internal LAN are trusted.
         .layer(middleware::from_fn_with_state(
             AuthState::new(load_all_tokens(), config.allow_external),
             auth_middleware,
         ));
+
+    // Provision QuantSSL local safe PKI & default LAN network shares
+    let https_port: u16 = 28443;
+    let quantssl_info = ensure_quantssl_pki(config.port, https_port).ok();
+    let _ = ensure_default_lan_shares();
 
     let bind_addr: [u8; 4] = if config.allow_external {
         [0, 0, 0, 0]
@@ -711,8 +809,22 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     };
     let addr = SocketAddr::from((bind_addr, config.port));
     println!("Smart Tree Daemon listening on http://{}", addr);
-    if !config.allow_external {
-        println!("  🔒 Bound to localhost only: MCP + dashboard need no token (set allow_external=true in ~/.st/config.toml to require Bearer token)");
+    if config.allow_external {
+        println!(
+            "  🌐 Public internally on LAN: localhost + RFC1918/Link-Local/Tailscale trusted without token"
+        );
+    } else {
+        println!("  🔒 Bound to localhost only: MCP + dashboard need no token");
+    }
+    if let Some(ref qssl) = quantssl_info {
+        println!(
+            "  🔐 QuantSSL Safe LAN HTTPS: https://{}:{}/ (seal 0x{:04X}, SPQT {})",
+            qssl.lan_ip, https_port, qssl.litany_seal16, qssl.spqt_root
+        );
+        println!(
+            "  📂 Safe LAN Shares:         http://{}:{}/shares & https://{}:{}/shares",
+            qssl.lan_ip, config.port, qssl.lan_ip, https_port
+        );
     }
     println!(
         "  - Dashboard:    http://localhost:{}/ (open this!)",
@@ -724,7 +836,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         "  - MCP HTTP:     /mcp (Streamable HTTP) + /mcp/sse (SSE) — The Custodian watching! 🧹"
     );
     println!(
-        "  - Token:        {} (needed only when externally bound; `st token` prints it)",
+        "  - Token:        {} (needed only for untrusted public WAN; `st token` prints it)",
         token_path().display()
     );
     println!("  - Context API:  /context");
@@ -743,6 +855,11 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     println!("  - Shutdown:     POST /shutdown");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    // Spawn QuantSSL TLS 1.3 HTTPS terminator on :28443 -> 127.0.0.1:28428
+    if let Some(ref qssl) = quantssl_info {
+        spawn_quantssl_https_proxy(qssl.clone(), config.port, https_port);
+    }
 
     // Spawn background MemNet UDP responder on :8423 (best-effort if port available)
     std::thread::spawn(|| {
@@ -781,13 +898,16 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         }
     });
 
-    // Serve with graceful shutdown support
-    let served = axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            shutdown_rx.await.ok();
-            println!("\n🌳 Smart Tree Daemon shutting down gracefully...");
-        })
-        .await;
+    // Serve with ConnectInfo<SocketAddr> + graceful shutdown support
+    let served = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        shutdown_rx.await.ok();
+        println!("\n🌳 Smart Tree Daemon shutting down gracefully...");
+    })
+    .await;
     let _ = maintenance_stop.send(());
     maintenance
         .await
@@ -1795,6 +1915,26 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             </div>
         </div>
 
+        <!-- QuantSSL Safe LAN Network Shares -->
+        <div class="card" style="grid-column: 1 / -1; border-color: rgba(78,205,196,0.35);">
+            <h2>🔐 QuantSSL Safe LAN Network Shares (Public Internally on LAN)</h2>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:0.75rem">
+                Sealed with <code>64B@0x62 LitanyWireFrame</code> &amp; <code>SPQT Base-243</code> ternary root · Zero Bearer token required on localhost &amp; internal RFC1918/Link-Local/Tailscale LAN
+            </p>
+            <div id="quantssl-banner" style="background:rgba(0,0,0,0.3);padding:0.75rem 1rem;border-radius:8px;font-size:0.8rem;margin-bottom:0.75rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+                <span>Loading QuantSSL LAN status...</span>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+                <input type="text" id="share-path-input" placeholder="Directory path to share on LAN (e.g. ~/workspace/peterlodri-sec/crush-love-dev)" style="flex:1;padding:0.6rem;border-radius:6px;border:none;background:rgba(255,255,255,0.1);color:white;">
+                <button onclick="addLanShare()" style="padding:0.6rem 1.2rem;border-radius:6px;border:none;background:#4ecdc4;color:#1a1a2e;font-weight:bold;cursor:pointer;">📡 Share on LAN</button>
+                <a href="/shares" class="dashboard-link" style="margin-top:0;padding:0.6rem 1rem;font-size:0.85rem;">📂 Open Share Portal</a>
+                <a href="/quantssl/ca.crt" class="dashboard-link" style="margin-top:0;padding:0.6rem 1rem;font-size:0.85rem;background:linear-gradient(135deg,#27ae60,#2ecc71);">🔑 QuantSSL CA.crt</a>
+            </div>
+            <div id="lan-shares-list" style="max-height:180px;overflow-y:auto;font-size:0.82rem;color:#ccc;">
+                Loading active LAN shares...
+            </div>
+        </div>
+
         <!-- Settings -->
         <div class="card" style="grid-column: 1 / -1;">
             <h2>⚙️ Configuration</h2>
@@ -1804,6 +1944,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             <div style="display:flex;gap:1rem;flex-wrap:wrap;">
                 <a href="/settings" class="dashboard-link" style="font-size:0.9rem;padding:0.5rem 1rem;">View Config</a>
                 <a href="/v1/models" class="dashboard-link" style="font-size:0.9rem;padding:0.5rem 1rem;background:linear-gradient(135deg,#27ae60,#2ecc71);">Available Models</a>
+                <a href="/quantssl/status" class="dashboard-link" style="font-size:0.9rem;padding:0.5rem 1rem;background:linear-gradient(135deg,#e67e22,#f39c12);">QuantSSL Status JSON</a>
             </div>
             <pre id="config-preview" style="margin-top:1rem;background:rgba(0,0,0,0.3);padding:1rem;border-radius:8px;font-size:0.75rem;max-height:150px;overflow:auto;display:none;"></pre>
         </div>
@@ -1813,7 +1954,7 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
 
     <script>
         // Automagic auth for externally-bound daemons: `/?token=<token>` is
-        // stored locally; localhost needs no token at all.
+        // stored locally; localhost and internal LAN need no token at all.
         try {
             const tk = new URLSearchParams(location.search).get('token');
             if (tk) localStorage.setItem('st_daemon_token', tk);
@@ -2066,12 +2207,67 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
             }
         }
 
+        async function loadQuantSslAndShares() {
+            const bannerEl = document.getElementById('quantssl-banner');
+            const sharesEl = document.getElementById('lan-shares-list');
+            try {
+                const res = await fetch('/quantssl/status', { headers: ST_HEADERS });
+                const data = await res.json();
+                bannerEl.innerHTML = `
+                    <div><strong style="color:#4ecdc4;">🌐 LAN HTTP:</strong> <a href="${data.lan_http_url}" style="color:#4ecdc4;">${data.lan_http_url}</a> · <strong style="color:#2ecc71;">🔐 QuantSSL HTTPS:</strong> <a href="${data.lan_https_url}" style="color:#2ecc71;">${data.lan_https_url}</a></div>
+                    <div><span style="color:#f39c12;">Seal:</span> <code>${data.litany_seal_hex}</code> · <span style="color:#f39c12;">SPQT:</span> <code>${data.spqt_root}</code> · <span style="color:#888;">mDNS: ${data.mdns_host}</span></div>
+                `;
+                const shares = data.shares || [];
+                if (shares.length === 0) {
+                    sharesEl.innerHTML = '<div style="color:#888;">No shared folders yet. Enter a directory path above to publish on LAN.</div>';
+                } else {
+                    sharesEl.innerHTML = shares.map(s => `
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+                            <div>
+                                <a href="/shares/${encodeURIComponent(s.share_name)}" style="color:#4ecdc4;font-weight:bold;text-decoration:none;">📂 ${s.share_name}</a>
+                                <span style="color:#888;font-size:0.75rem;"> — ${s.host_path} (${s.total_files} files · ${(s.total_bytes/1024).toFixed(1)} KiB · ${(s.consciousness_freq_hz/100).toFixed(2)} Hz · seal 0x${s.wire_seal16.toString(16).toUpperCase().padStart(4,'0')})</span>
+                            </div>
+                            <a href="/shares/${encodeURIComponent(s.share_name)}" style="padding:3px 10px;border-radius:4px;background:#27ae60;color:white;font-size:0.75rem;text-decoration:none;">Browse LAN Share</a>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                bannerEl.innerHTML = `<span style="color:#e74c3c;">QuantSSL status error: ${e.message}</span>`;
+            }
+        }
+
+        async function addLanShare() {
+            const inp = document.getElementById('share-path-input');
+            const path = (inp.value || '').trim();
+            if (!path) return;
+            addLog('LAN-SHARE', `Publishing safe LAN share: ${path}...`);
+            try {
+                const res = await fetch('/memnet/share', {
+                    method: 'POST',
+                    headers: ST_HEADERS,
+                    body: JSON.stringify({ path, quota_mb: 4096 })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    addLog('ERROR', data.error || 'Share failed');
+                    return;
+                }
+                inp.value = '';
+                addLog('LAN-SHARE-OK', `Shared ${data.share_name} (${data.total_files} files) at /shares/${data.share_name}`);
+                await loadQuantSslAndShares();
+            } catch (e) {
+                addLog('ERROR', e.message);
+            }
+        }
+
         loadPersonas();
         loadI1Nexus();
+        loadQuantSslAndShares();
 
         // Connect to WebSocket for live transparency
         try {
-            const ws = new WebSocket(`ws://${location.host}/ws`);
+            const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${wsProto}//${location.host}/ws`);
             ws.onmessage = (e) => {
                 try {
                     const data = JSON.parse(e.data);
@@ -2084,6 +2280,779 @@ async fn welcome_page() -> axum::response::Html<&'static str> {
 </body>
 </html>"#,
     )
+}
+
+// =============================================================================
+// QUANTSSL LOCAL SAFE PKI & LAN NETWORK SHARES (PUBLIC INTERNALLY ON LAN)
+// =============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuantSslInfo {
+    pub protocol: String,
+    pub lan_ip: String,
+    pub mdns_host: String,
+    pub http_port: u16,
+    pub https_port: u16,
+    pub lan_http_url: String,
+    pub lan_https_url: String,
+    pub mdns_http_url: String,
+    pub mdns_https_url: String,
+    pub shares_http_url: String,
+    pub shares_https_url: String,
+    pub ca_cert_path: String,
+    pub lan_cert_path: String,
+    pub ca_fingerprint_sha256: String,
+    pub lan_fingerprint_sha256: String,
+    pub litany_wire_64b_hex: String,
+    pub litany_seal16: u16,
+    pub litany_seal_hex: String,
+    pub spqt_root: String,
+    pub subject_alt_names: Vec<String>,
+}
+
+fn detect_primary_lan_ip() -> String {
+    if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        if sock.connect("192.168.1.1:80").is_ok() {
+            if let Ok(addr) = sock.local_addr() {
+                let ip = addr.ip().to_string();
+                if ip != "127.0.0.1" && ip != "0.0.0.0" {
+                    return ip;
+                }
+            }
+        }
+    }
+    for iface in ["en0", "en1", "eth0", "wlan0"] {
+        if let Ok(out) = std::process::Command::new("ipconfig")
+            .args(["getifaddr", iface])
+            .output()
+        {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !s.is_empty() {
+                return s;
+            }
+        }
+    }
+    "127.0.0.1".to_string()
+}
+
+fn detect_mdns_hostname() -> String {
+    if let Ok(out) = std::process::Command::new("scutil")
+        .args(["--get", "LocalHostName"])
+        .output()
+    {
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !s.is_empty() {
+            return format!("{s}.local");
+        }
+    }
+    let host = whoami::fallible::hostname().unwrap_or_else(|_| "smart-tree".to_string());
+    if host.ends_with(".local") {
+        host
+    } else {
+        format!("{host}.local")
+    }
+}
+
+pub fn quantssl_dir() -> PathBuf {
+    let user_dir = PathBuf::from("/Users/peterlodri/.st/quantssl");
+    if PathBuf::from("/Users/peterlodri").is_dir() {
+        return user_dir;
+    }
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".st")
+        .join("quantssl")
+}
+
+/// Ensure QuantSSL Root CA + multi-SAN LAN TLS certificate exist and are sealed with a `64B@0x62` `LitanyWireFrame`.
+pub fn ensure_quantssl_pki(http_port: u16, https_port: u16) -> Result<QuantSslInfo> {
+    use crate::mem8::regularity::zeno_engine::seal_litany_wire_64b;
+    use sha2::{Digest, Sha256};
+
+    let dir = quantssl_dir();
+    std::fs::create_dir_all(&dir)?;
+
+    let lan_ip = detect_primary_lan_ip();
+    let mdns_host = detect_mdns_hostname();
+    let ca_key = dir.join("ca.key");
+    let ca_crt = dir.join("ca.crt");
+    let lan_key = dir.join("lan.key");
+    let lan_csr = dir.join("lan.csr");
+    let lan_crt = dir.join("lan.crt");
+    let ext_cnf = dir.join("quantssl_san.cnf");
+
+    let mut sans = vec![
+        "DNS:localhost".to_string(),
+        format!("DNS:{mdns_host}"),
+        "DNS:st.local".to_string(),
+        "DNS:memnet.local".to_string(),
+        "IP:127.0.0.1".to_string(),
+        "IP:::1".to_string(),
+        "IP:169.254.180.232".to_string(),
+    ];
+    let lan_san = format!("IP:{lan_ip}");
+    if !sans.contains(&lan_san) {
+        sans.push(lan_san);
+    }
+
+    if !ca_crt.exists() || !ca_key.exists() {
+        let _ = std::process::Command::new("openssl")
+            .args([
+                "ecparam",
+                "-name",
+                "prime256v1",
+                "-genkey",
+                "-noout",
+                "-out",
+                &ca_key.to_string_lossy(),
+            ])
+            .status();
+        let _ = std::process::Command::new("openssl")
+            .args([
+                "req",
+                "-x509",
+                "-new",
+                "-nodes",
+                "-key",
+                &ca_key.to_string_lossy(),
+                "-sha256",
+                "-days",
+                "3650",
+                "-subj",
+                "/O=8b-is Sovereign QuantSSL/OU=MemNet Safe LAN Share/CN=QuantSSL Local Safe Network Root CA",
+                "-out",
+                &ca_crt.to_string_lossy(),
+            ])
+            .status();
+    }
+
+    // Regenerate LAN cert if missing or if current LAN IP isn't in the SAN config
+    let san_line = format!("subjectAltName = {}", sans.join(","));
+    let prev_cnf = std::fs::read_to_string(&ext_cnf).unwrap_or_default();
+    if !lan_crt.exists() || !lan_key.exists() || !prev_cnf.contains(&san_line) {
+        let cnf_body = format!(
+            "[v3_req]\nbasicConstraints = CA:FALSE\nkeyUsage = digitalSignature, keyEncipherment\nextendedKeyUsage = serverAuth, clientAuth\n{san_line}\n"
+        );
+        std::fs::write(&ext_cnf, cnf_body)?;
+
+        let _ = std::process::Command::new("openssl")
+            .args([
+                "ecparam",
+                "-name",
+                "prime256v1",
+                "-genkey",
+                "-noout",
+                "-out",
+                &lan_key.to_string_lossy(),
+            ])
+            .status();
+        let _ = std::process::Command::new("openssl")
+            .args([
+                "req",
+                "-new",
+                "-key",
+                &lan_key.to_string_lossy(),
+                "-subj",
+                &format!("/O=8b-is Sovereign QuantSSL/OU=Safe LAN Share/CN={mdns_host}"),
+                "-out",
+                &lan_csr.to_string_lossy(),
+            ])
+            .status();
+        let _ = std::process::Command::new("openssl")
+            .args([
+                "x509",
+                "-req",
+                "-in",
+                &lan_csr.to_string_lossy(),
+                "-CA",
+                &ca_crt.to_string_lossy(),
+                "-CAkey",
+                &ca_key.to_string_lossy(),
+                "-CAcreateserial",
+                "-out",
+                &lan_crt.to_string_lossy(),
+                "-days",
+                "825",
+                "-sha256",
+                "-extfile",
+                &ext_cnf.to_string_lossy(),
+                "-extensions",
+                "v3_req",
+            ])
+            .status();
+    }
+
+    let ca_bytes = std::fs::read(&ca_crt).unwrap_or_default();
+    let lan_bytes = std::fs::read(&lan_crt).unwrap_or_default();
+    let ca_fp = hex::encode(Sha256::digest(&ca_bytes));
+    let lan_fp = hex::encode(Sha256::digest(&lan_bytes));
+    let litany = seal_litany_wire_64b(&lan_bytes, &ca_bytes, 1, 80);
+    let litany_hex = hex::encode(litany.to_bytes_64());
+
+    let info = QuantSslInfo {
+        protocol: "QuantSSL-TLS1.3-64B@0x62-SPQT-Base243".to_string(),
+        lan_ip: lan_ip.clone(),
+        mdns_host: mdns_host.clone(),
+        http_port,
+        https_port,
+        lan_http_url: format!("http://{lan_ip}:{http_port}/"),
+        lan_https_url: format!("https://{lan_ip}:{https_port}/"),
+        mdns_http_url: format!("http://{mdns_host}:{http_port}/"),
+        mdns_https_url: format!("https://{mdns_host}:{https_port}/"),
+        shares_http_url: format!("http://{lan_ip}:{http_port}/shares"),
+        shares_https_url: format!("https://{lan_ip}:{https_port}/shares"),
+        ca_cert_path: ca_crt.display().to_string(),
+        lan_cert_path: lan_crt.display().to_string(),
+        ca_fingerprint_sha256: ca_fp,
+        lan_fingerprint_sha256: lan_fp,
+        litany_wire_64b_hex: litany_hex,
+        litany_seal16: litany.wire_seal16,
+        litany_seal_hex: format!("0x{:04X}", litany.wire_seal16),
+        spqt_root: format!("{:?}", litany.spqt_root),
+        subject_alt_names: sans,
+    };
+
+    let _ = std::fs::write(
+        dir.join("quantssl-manifest.json"),
+        serde_json::to_string_pretty(&info).unwrap_or_default(),
+    );
+    Ok(info)
+}
+
+/// Seed safe default local workspace shares into `MemnetNodeState` so LAN peers immediately see them.
+pub fn ensure_default_lan_shares() -> Result<()> {
+    let mut state = crate::memnet::MemnetNodeState::load_or_default();
+    let endpoint = format!("0.0.0.0:{}", crate::memnet::MEMNET_FS_PORT);
+    let candidates = [
+        "/Users/peterlodri/workspace/peterlodri-sec/crush-love-dev",
+        "/Users/peterlodri/workspace/peterlodri-sec/sovereign-library",
+        "/Users/peterlodri/workspace/peterlodri-sec/smart-tree",
+        "/Users/peterlodri/workspace/peterlodri-sec/fandom-mcp",
+        "/Users/peterlodri/workspace/peterlodri-sec/wigle-triad",
+    ];
+    let mut changed = false;
+    for dir_str in candidates {
+        let p = std::path::Path::new(dir_str);
+        if p.is_dir() {
+            let share_name = p
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("share")
+                .to_string();
+            if !state.shared_folders.contains_key(&share_name) {
+                if let Ok(manifest) = crate::memnet::SharedFolderManifest::from_directory(
+                    p,
+                    Some(&share_name),
+                    state.local_address,
+                    &state.node_name,
+                    &endpoint,
+                    4096,
+                ) {
+                    state.shared_folders.insert(share_name, manifest);
+                    changed = true;
+                }
+            }
+        }
+    }
+    if changed {
+        let _ = state.save();
+    }
+    Ok(())
+}
+
+/// Spawn a lightweight TLS 1.3 / 1.2 QuantSSL HTTPS reverse proxy on `0.0.0.0:https_port` -> `127.0.0.1:http_port`.
+fn spawn_quantssl_https_proxy(qssl: QuantSslInfo, http_port: u16, https_port: u16) {
+    let dir = quantssl_dir();
+    let proxy_py = dir.join("quantssl_tls_proxy.py");
+    let script = r#"#!/usr/bin/env python3
+import asyncio, ssl, sys
+
+CERT_FILE, KEY_FILE, HTTP_PORT, HTTPS_PORT = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+
+async def pipe(reader, writer):
+    try:
+        while True:
+            data = await reader.read(65536)
+            if not data:
+                break
+            writer.write(data)
+            await writer.drain()
+    except Exception:
+        pass
+    finally:
+        try:
+            writer.close()
+        except Exception:
+            pass
+
+async def handle_client(client_reader, client_writer):
+    try:
+        up_reader, up_writer = await asyncio.open_connection("127.0.0.1", HTTP_PORT)
+    except Exception:
+        client_writer.close()
+        return
+    await asyncio.gather(pipe(client_reader, up_writer), pipe(up_reader, client_writer))
+
+async def main():
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    ctx.load_cert_chain(certfile=CERT_FILE, keyfile=KEY_FILE)
+    server = await asyncio.start_server(handle_client, "0.0.0.0", HTTPS_PORT, ssl=ctx)
+    async with server:
+        await server.serve_forever()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
+"#;
+    let _ = std::fs::write(&proxy_py, script);
+    let _ = std::process::Command::new("python3")
+        .arg(&proxy_py)
+        .arg(&qssl.lan_cert_path)
+        .arg(dir.join("lan.key"))
+        .arg(http_port.to_string())
+        .arg(https_port.to_string())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
+async fn quantssl_status_handler(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+) -> Json<serde_json::Value> {
+    let port = state.read().await.config.port;
+    let qssl = ensure_quantssl_pki(port, 28443).ok();
+    let mesh = crate::memnet::MemnetNodeState::load_or_default();
+    let shares: Vec<_> = mesh
+        .shared_folders
+        .values()
+        .map(|s| {
+            serde_json::json!({
+                "share_name": s.share_name,
+                "share_id": s.share_id,
+                "host_path": s.host_path,
+                "total_files": s.total_files,
+                "total_bytes": s.total_bytes,
+                "offered_drive_space_mb": s.offered_drive_space_mb,
+                "consciousness_freq_hz": s.consciousness_freq_hz,
+                "semantic_essence": s.semantic_essence,
+                "wire_seal16": s.litany_wire.wire_seal16,
+                "spqt_root": format!("{:?}", s.litany_wire.spqt_root),
+                "browse_url": format!("/shares/{}", s.share_name),
+            })
+        })
+        .collect();
+
+    if let Some(info) = qssl {
+        Json(serde_json::json!({
+            "ok": true,
+            "public_internally_on_lan": true,
+            "protocol": info.protocol,
+            "lan_ip": info.lan_ip,
+            "mdns_host": info.mdns_host,
+            "http_port": info.http_port,
+            "https_port": info.https_port,
+            "lan_http_url": info.lan_http_url,
+            "lan_https_url": info.lan_https_url,
+            "mdns_http_url": info.mdns_http_url,
+            "mdns_https_url": info.mdns_https_url,
+            "shares_http_url": info.shares_http_url,
+            "shares_https_url": info.shares_https_url,
+            "ca_cert_url": "/quantssl/ca.crt",
+            "lan_cert_url": "/quantssl/lan.crt",
+            "ca_fingerprint_sha256": info.ca_fingerprint_sha256,
+            "lan_fingerprint_sha256": info.lan_fingerprint_sha256,
+            "litany_wire_64b_hex": info.litany_wire_64b_hex,
+            "litany_seal16": info.litany_seal16,
+            "litany_seal_hex": info.litany_seal_hex,
+            "spqt_root": info.spqt_root,
+            "subject_alt_names": info.subject_alt_names,
+            "shares": shares,
+        }))
+    } else {
+        Json(serde_json::json!({
+            "ok": false,
+            "shares": shares,
+        }))
+    }
+}
+
+async fn quantssl_ca_cert_handler() -> impl IntoResponse {
+    let path = quantssl_dir().join("ca.crt");
+    match std::fs::read(&path) {
+        Ok(bytes) => (
+            StatusCode::OK,
+            [
+                (
+                    axum::http::header::CONTENT_TYPE,
+                    "application/x-x509-ca-cert",
+                ),
+                (
+                    axum::http::header::CONTENT_DISPOSITION,
+                    "attachment; filename=\"quantssl-lan-ca.crt\"",
+                ),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, format!("QuantSSL CA not found: {e}")).into_response(),
+    }
+}
+
+async fn quantssl_lan_cert_handler() -> impl IntoResponse {
+    let path = quantssl_dir().join("lan.crt");
+    match std::fs::read(&path) {
+        Ok(bytes) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "application/x-pem-file")],
+            bytes,
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            format!("QuantSSL LAN cert not found: {e}"),
+        )
+            .into_response(),
+    }
+}
+
+fn is_sensitive_filename(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower == ".env"
+        || lower.starts_with(".env.")
+        || lower == "daemon.token"
+        || lower.ends_with(".key")
+        || lower.starts_with("id_rsa")
+        || lower.starts_with("id_ed25519")
+        || lower == ".git"
+        || lower == ".ds_store"
+}
+
+async fn lan_shares_portal_handler(
+    State(state): State<Arc<RwLock<DaemonState>>>,
+    headers: axum::http::HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let port = state.read().await.config.port;
+    let qssl = ensure_quantssl_pki(port, 28443).ok();
+    let mesh = crate::memnet::MemnetNodeState::load_or_default();
+
+    let wants_json = params.get("format").is_some_and(|f| f == "json")
+        || headers
+            .get(axum::http::header::ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|a| a.contains("application/json"));
+
+    if wants_json {
+        return Json(serde_json::json!({
+            "quantssl": qssl,
+            "shares": mesh.shared_folders,
+        }))
+        .into_response();
+    }
+
+    let mut rows = String::new();
+    for s in mesh.shared_folders.values() {
+        rows.push_str(&format!(
+            r#"<tr>
+                <td><a href="/shares/{name}" style="color:#4ecdc4;font-weight:bold;text-decoration:none;">📂 {name}</a></td>
+                <td><code>{path}</code></td>
+                <td>{files} files ({kb:.1} KiB)</td>
+                <td>{freq:.2} Hz</td>
+                <td><code>0x{seal:04X}</code> ({spqt:?})</td>
+                <td><a href="/shares/{name}" class="btn">Browse Share</a></td>
+            </tr>"#,
+            name = s.share_name,
+            path = s.host_path,
+            files = s.total_files,
+            kb = (s.total_bytes as f64) / 1024.0,
+            freq = (s.consciousness_freq_hz as f64) / 100.0,
+            seal = s.litany_wire.wire_seal16,
+            spqt = s.litany_wire.spqt_root,
+        ));
+    }
+
+    let (lan_http, lan_https, seal_hex) = if let Some(ref q) = qssl {
+        (
+            q.lan_http_url.clone(),
+            q.lan_https_url.clone(),
+            q.litany_seal_hex.clone(),
+        )
+    } else {
+        (
+            format!("http://localhost:{port}/"),
+            "https://localhost:28443/".to_string(),
+            "0x0062".to_string(),
+        )
+    };
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuantSSL Safe LAN Network Shares — Smart Tree</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #141625; color: #e6e8f0; padding: 2rem; max-width: 1150px; margin: 0 auto; }}
+  h1 {{ color: #4ecdc4; margin-bottom: 0.4rem; }}
+  .meta {{ background: rgba(78,205,196,0.08); border: 1px solid rgba(78,205,196,0.3); padding: 1rem; border-radius: 10px; margin: 1rem 0 1.5rem; font-size: 0.9rem; line-height: 1.6; }}
+  table {{ width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.04); border-radius: 10px; overflow: hidden; }}
+  th, td {{ padding: 0.85rem 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 0.9rem; }}
+  th {{ background: rgba(255,255,255,0.06); color: #4ecdc4; }}
+  .btn {{ background: #27ae60; color: white; padding: 5px 12px; border-radius: 6px; text-decoration: none; font-size: 0.8rem; font-weight: bold; }}
+  a {{ color: #4ecdc4; }}
+</style>
+</head>
+<body>
+  <h1>🔐 QuantSSL Safe LAN Network Shares</h1>
+  <p style="color:#9aa0b8;">Public Internally on LAN · Sealed with <code>64B@0x62 LitanyWireFrame</code> ({seal_hex}) · Zero Bearer Token Required on Localhost &amp; Internal LAN</p>
+  <div class="meta">
+    <div><strong>🌐 LAN HTTP:</strong> <a href="{lan_http}">{lan_http}</a> &nbsp;|&nbsp; <strong>🔐 QuantSSL HTTPS:</strong> <a href="{lan_https}">{lan_https}</a></div>
+    <div><strong>🔑 Trust Root CA on LAN Devices:</strong> <a href="/quantssl/ca.crt">Download quantssl-lan-ca.crt</a> &nbsp;|&nbsp; <a href="/quantssl/status">QuantSSL JSON Manifest</a> &nbsp;|&nbsp; <a href="/">← Back to Dashboard</a></div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Share Name</th><th>Host Path</th><th>Files / Size</th><th>Wave Freq</th><th>64B@0x62 Seal</th><th>Action</th></tr>
+    </thead>
+    <tbody>{rows}</tbody>
+  </table>
+</body>
+</html>"#
+    );
+    axum::response::Html(html).into_response()
+}
+
+async fn lan_share_root_handler(
+    axum::extract::Path(share_name): axum::extract::Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    serve_lan_share_entry(&share_name, "", &params).await
+}
+
+async fn lan_share_path_handler(
+    axum::extract::Path((share_name, rel_path)): axum::extract::Path<(String, String)>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    serve_lan_share_entry(&share_name, &rel_path, &params).await
+}
+
+async fn serve_lan_share_entry(
+    share_name: &str,
+    rel_path: &str,
+    params: &HashMap<String, String>,
+) -> axum::response::Response {
+    use crate::mem8::regularity::zeno_engine::seal_litany_wire_64b;
+    use sha2::{Digest, Sha256};
+
+    let mesh = crate::memnet::MemnetNodeState::load_or_default();
+    let Some(manifest) = mesh.shared_folders.get(share_name) else {
+        return (
+            StatusCode::NOT_FOUND,
+            format!("LAN share '{share_name}' not found"),
+        )
+            .into_response();
+    };
+
+    let Ok(root_canon) = std::fs::canonicalize(&manifest.host_path) else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Share root inaccessible".to_string(),
+        )
+            .into_response();
+    };
+
+    let clean_rel = rel_path.trim_start_matches('/');
+    for comp in std::path::Path::new(clean_rel).components() {
+        if let std::path::Component::Normal(os) = comp {
+            if let Some(s) = os.to_str() {
+                if is_sensitive_filename(s) {
+                    return (
+                        StatusCode::FORBIDDEN,
+                        "Access to sensitive file blocked by QuantSSL Safe Share policy",
+                    )
+                        .into_response();
+                }
+            }
+        }
+    }
+
+    let target_joined = if clean_rel.is_empty() {
+        root_canon.clone()
+    } else {
+        root_canon.join(clean_rel)
+    };
+    let Ok(target_canon) = std::fs::canonicalize(&target_joined) else {
+        return (StatusCode::NOT_FOUND, "Path not found in LAN share").into_response();
+    };
+
+    // Strict containment check inside the shared folder root
+    if !target_canon.starts_with(&root_canon) {
+        return (
+            StatusCode::FORBIDDEN,
+            "Path traversal outside share root denied",
+        )
+            .into_response();
+    }
+
+    if target_canon.is_dir() {
+        let mut entries_list = Vec::new();
+        if let Ok(rd) = std::fs::read_dir(&target_canon) {
+            for entry in rd.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if is_sensitive_filename(&name) {
+                    continue;
+                }
+                if let Ok(meta) = entry.metadata() {
+                    entries_list.push((name, meta.is_dir(), meta.len()));
+                }
+            }
+        }
+        entries_list.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        if params.get("format").is_some_and(|f| f == "json") {
+            let items: Vec<_> = entries_list
+                .iter()
+                .map(|(n, is_dir, sz)| {
+                    serde_json::json!({
+                        "name": n,
+                        "is_dir": is_dir,
+                        "size": sz,
+                    })
+                })
+                .collect();
+            return Json(serde_json::json!({
+                "share": share_name,
+                "path": clean_rel,
+                "seal16": manifest.litany_wire.wire_seal16,
+                "entries": items,
+            }))
+            .into_response();
+        }
+
+        let mut rows = String::new();
+        if !clean_rel.is_empty() {
+            let parent = std::path::Path::new(clean_rel)
+                .parent()
+                .and_then(|p| p.to_str())
+                .unwrap_or("");
+            let parent_href = if parent.is_empty() {
+                format!("/shares/{share_name}")
+            } else {
+                format!("/shares/{share_name}/{parent}")
+            };
+            rows.push_str(&format!(
+                r#"<tr><td colspan="3"><a href="{parent_href}" style="color:#f39c12;">⬅ .. (Parent Directory)</a></td></tr>"#
+            ));
+        }
+
+        for (name, is_dir, sz) in &entries_list {
+            let href = if clean_rel.is_empty() {
+                format!("/shares/{share_name}/{name}")
+            } else {
+                format!("/shares/{share_name}/{clean_rel}/{name}")
+            };
+            let icon = if *is_dir { "📁" } else { "📄" };
+            let size_label = if *is_dir {
+                "DIR".to_string()
+            } else {
+                format!("{sz} B")
+            };
+            rows.push_str(&format!(
+                r#"<tr>
+                    <td><a href="{href}" style="color:#4ecdc4;text-decoration:none;">{icon} {name}</a></td>
+                    <td>{size_label}</td>
+                    <td><a href="{href}" style="color:#2ecc71;font-size:0.82rem;">{act}</a></td>
+                </tr>"#,
+                act = if *is_dir { "Open" } else { "View / Download" }
+            ));
+        }
+
+        let html = format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>/{share_name}/{clean_rel} — QuantSSL Safe LAN Share</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #141625; color: #e6e8f0; padding: 2rem; max-width: 1050px; margin: 0 auto; }}
+  h1 {{ color: #4ecdc4; font-size: 1.5rem; margin-bottom: 0.4rem; }}
+  .nav {{ margin-bottom: 1rem; font-size: 0.9rem; color: #888; }}
+  .nav a {{ color: #4ecdc4; text-decoration: none; }}
+  table {{ width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.04); border-radius: 10px; overflow: hidden; }}
+  th, td {{ padding: 0.7rem 1rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.9rem; }}
+  th {{ background: rgba(255,255,255,0.06); color: #4ecdc4; }}
+</style>
+</head>
+<body>
+  <h1>📂 QuantSSL Safe LAN Share: /{share_name}/{clean_rel}</h1>
+  <div class="nav">
+    <a href="/">🌳 Dashboard</a> · <a href="/shares">📡 All LAN Shares</a> · Seal <code>0x{:04X}</code> ({:?})
+  </div>
+  <table>
+    <thead><tr><th>Name</th><th>Size</th><th>Action</th></tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+</body>
+</html>"#,
+            manifest.litany_wire.wire_seal16, manifest.litany_wire.spqt_root
+        );
+        return axum::response::Html(html).into_response();
+    }
+
+    // Serve regular file with QuantSSL Litany seal + SHA-256 headers
+    match std::fs::read(&target_canon) {
+        Ok(bytes) => {
+            let sha256_hex = hex::encode(Sha256::digest(&bytes));
+            let litany = seal_litany_wire_64b(&bytes, &bytes, 1, 80);
+            let ext = target_canon
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let content_type = match ext.as_str() {
+                "html" | "htm" => "text/html; charset=utf-8",
+                "md" | "txt" | "rs" | "py" | "toml" | "yaml" | "yml" | "sh" | "zsh" | "js"
+                | "mjs" | "ts" | "c" | "h" => "text/plain; charset=utf-8",
+                "json" => "application/json",
+                "pdf" => "application/pdf",
+                "png" => "image/png",
+                "jpg" | "jpeg" => "image/jpeg",
+                "svg" => "image/svg+xml",
+                "wav" => "audio/wav",
+                _ => "application/octet-stream",
+            };
+            (
+                StatusCode::OK,
+                [
+                    (axum::http::header::CONTENT_TYPE, content_type.to_string()),
+                    (
+                        axum::http::HeaderName::from_static("x-quantssl-sha256"),
+                        sha256_hex,
+                    ),
+                    (
+                        axum::http::HeaderName::from_static("x-quantssl-litany-seal"),
+                        format!("0x{:04X}", litany.wire_seal16),
+                    ),
+                    (
+                        axum::http::HeaderName::from_static("x-quantssl-spqt-root"),
+                        format!("{:?}", litany.spqt_root),
+                    ),
+                ],
+                bytes,
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Read error: {e}"),
+        )
+            .into_response(),
+    }
 }
 
 async fn health() -> &'static str {

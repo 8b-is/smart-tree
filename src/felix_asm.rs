@@ -1105,6 +1105,78 @@ pub fn felix_ternary_gemm_i32(acts: &[i16], trits: &[i8]) -> i32 {
     total
 }
 
+/// Branchless ternary select (`tsel` Tier-2 FELIX|PHOENIX macro):
+/// returns `on_pos` when `cond > 0`, `on_neg` when `cond < 0`, and `on_zero` when `cond == 0`.
+#[inline(always)]
+pub const fn felix_tsel_i32(cond: i8, on_pos: i32, on_zero: i32, on_neg: i32) -> i32 {
+    let is_pos = -((cond > 0) as i32);
+    let is_neg = -((cond < 0) as i32);
+    let is_zero = !(is_pos | is_neg);
+    (on_pos & is_pos) | (on_zero & is_zero) | (on_neg & is_neg)
+}
+
+/// `quantTernP/Q` 32-trit dense block pack (`55` active bits = `51` Base-243 P-bits + `4` E2M1 Q-scale bits
+/// inside `7` wire bytes -> `9.31x` bit density gain over FP16's `512` bits).
+#[inline(always)]
+pub fn felix_quant_tern_pq_pack32(trits: &[i8; 32], q_e2m1_nibble: u8) -> [u8; 7] {
+    let mut wire = [0u8; 7];
+    let mut chunk_idx = 0usize;
+    while chunk_idx < 6 {
+        let b = chunk_idx * 5;
+        let mut acc: u16 = 0;
+        let mut pow3: u16 = 1;
+        let mut k = 0usize;
+        while k < 5 {
+            let d = match trits[b + k] {
+                -1 => 0u16,
+                1 => 2u16,
+                _ => 1u16,
+            };
+            acc += d * pow3;
+            pow3 *= 3;
+            k += 1;
+        }
+        wire[chunk_idx] = acc as u8;
+        chunk_idx += 1;
+    }
+    let t30 = match trits[30] {
+        -1 => 0u8,
+        1 => 2u8,
+        _ => 1u8,
+    };
+    let t31 = match trits[31] {
+        -1 => 0u8,
+        1 => 2u8,
+        _ => 1u8,
+    };
+    let tail9 = t30 + 3 * t31;
+    wire[6] = ((q_e2m1_nibble & 0x0F) << 4) | (tail9 & 0x0F);
+    wire
+}
+
+/// `quantTernP/Q` 32-trit dense block unpack (`7` wire bytes -> `([i8; 32], u8)`).
+#[inline(always)]
+pub fn felix_quant_tern_pq_unpack32(wire: &[u8; 7]) -> ([i8; 32], u8) {
+    let mut out = [0i8; 32];
+    let mut chunk_idx = 0usize;
+    while chunk_idx < 6 {
+        let mut v = wire[chunk_idx].min(242);
+        let b = chunk_idx * 5;
+        let mut k = 0usize;
+        while k < 5 {
+            out[b + k] = (v % 3) as i8 - 1;
+            v /= 3;
+            k += 1;
+        }
+        chunk_idx += 1;
+    }
+    let tail9 = (wire[6] & 0x0F).min(8);
+    out[30] = (tail9 % 3) as i8 - 1;
+    out[31] = (tail9 / 3) as i8 - 1;
+    let q_nibble = (wire[6] >> 4) & 0x0F;
+    (out, q_nibble)
+}
+
 /// Compile-time Slicing-by-4 IEEE 802.3 CRC32 lookup tables (`4 x 256 x u32` = `4,096` bytes = 1 page).
 pub const FELIX_CRC32_SLICE4_LUT: [[u32; 256]; 4] = build_felix_crc32_slice4_lut();
 
