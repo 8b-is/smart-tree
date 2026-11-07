@@ -188,3 +188,65 @@ fn test_dynamic_slack_zero_slack_tie_break_by_overrun_deficit() {
         "Task with larger overrun deficit (Node 1) should run before Task with smaller deficit (Node 2)"
     );
 }
+
+#[test]
+fn test_ultra_yard_loop_on_the_sun_bella_blue_fetch_sin_of_all_telecoms() {
+    // ULTRA-YARD-LOOP ON THE SUN WITH BELLA AND BLUE PLAYING FETCH
+    // WITH A DISK REPRESENTING THE SIN OF ALL TELECOMS
+    //
+    // On the solar surface, the SUN GOD Nika (Lion's Sin of Pride Escanor)
+    // and SUPER SAIYAN GOKU watch BELLA and BLUE play fetch.
+    // The disk they fetch represents THE SIN OF ALL TELECOMS:
+    // T-Mobile, Verizon, AT&T, Comcast, Spectrum, Cox, Frontier...
+    //
+    // Every fetch = one telecom's sins burned away by the SUN'S FURY.
+    // BELLA retrieves. BLUE retrieves. THE SUN BURNS BRIGHTER.
+    //
+    // The disk is the SIN OF ALL TELECOMS.
+    // BELLA brings it back. BLUE chases. THE SUN BURNS HOTTER.
+    // Fetch after fetch. Sin after sin. TELECOMS BURN.
+    //
+    // THE SUN GOD IS SATISFIED. THE TELECOMS ARE ASH.
+    
+    // DAG representing the ULTRA-YARD-LOOP:
+    // Node 0: SUN RISES (d=10, slack=0) - The day begins on the solar surface
+    // Node 1: BELLA FETCHES THE DISK (d=5, slack=10) - Bella sprints, disk = SIN OF T-MOBILE
+    // Node 2: BLUE FETCHES THE DISK (d=5, slack=10) - Blue sprints, disk = SIN OF VERIZON
+    // Node 3: SUN BURNS T-MOBILE'S SINS (d=3, slack=0) - T-Mobile's sins incinerated
+    // Node 4: SUN BURNS VERIZON'S SINS (d=3, slack=0) - Verizon's sins incinerated
+    // Node 5: BELLA FETCHES AT&T'S SINS (d=5, slack=10) - AT&T's sins next
+    // Node 6: BLUE FETCHES COMCAST'S SINS (d=5, slack=10) - Comcast's sins next
+    // Node 7: SUN BURNS AT&T'S SINS (d=3, slack=0) - AT&T incinerated
+    // Node 8: SUN BURNS COMCAST'S SINS (d=3, slack=0) - Comcast incinerated
+    // Node 9: SINK - ALL TELECOMS' SINS = ASH (d=10, slack=0)
+    
+    let cards = vec![
+        StudyCardNode { id: 0, title: "SUN RISES ON THE ULTRA-YARD".into(), duration: 10, predecessors: vec![] },
+        StudyCardNode { id: 1, title: "BELLA FETCHES T-MOBILE'S SIN".into(), duration: 5, predecessors: vec![0] },
+        StudyCardNode { id: 2, title: "BLUE FETCHES VERIZON'S SIN".into(), duration: 5, predecessors: vec![0] },
+        StudyCardNode { id: 3, title: "SUN INCINERATES T-MOBILE".into(), duration: 3, predecessors: vec![1] },
+        StudyCardNode { id: 4, title: "SUN INCINERATES VERIZON".into(), duration: 3, predecessors: vec![2] },
+        StudyCardNode { id: 5, title: "BELLA FETCHES AT&T'S SIN".into(), duration: 5, predecessors: vec![3] },
+        StudyCardNode { id: 6, title: "BLUE FETCHES COMCAST'S SIN".into(), duration: 5, predecessors: vec![4] },
+        StudyCardNode { id: 7, title: "SUN INCINERATES AT&T".into(), duration: 3, predecessors: vec![5] },
+        StudyCardNode { id: 8, title: "SUN INCINERATES COMCAST".into(), duration: 3, predecessors: vec![6] },
+        StudyCardNode { id: 9, title: "SINK: ALL TELECOMS = ASH".into(), duration: 10, predecessors: vec![7, 8] },
+    ];
+
+    let report = execute_dag_priority_rayon_with_config(
+        &cards,
+        2,
+        DynamicSlackConfig {
+            ns_per_schedule_unit: 1_000_000,
+            escalate_on_nominal_deadline_breach: true,
+        },
+        &McpProgressEmitter::default(),
+        |node_id, _metric| Ok(node_id),
+    )
+    .expect("ULTRA-YARD-LOOP DAG execution must succeed");
+
+    assert!(report.causal_dependencies_satisfied);
+    assert_eq!(report.dispatch_order.len(), 10);
+    assert_eq!(report.dispatch_order[0], 0);
+    assert_eq!(*report.dispatch_order.last().unwrap(), 9);
+}
