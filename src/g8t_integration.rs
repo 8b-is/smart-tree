@@ -4363,7 +4363,7 @@ fn extract_pure_rust_candidates_from_file(
         // Check signature uses primitive integers / slices only
         let sig_part = after_fn.trim_end_matches('{').trim();
         let has_primitive_int = [
-            "u64", "i64", "u32", "i32", "u16", "i16", "u8", "i8", "usize", "u128", "i128",
+            "u64", "i64", "u32", "i32", "u16", "i16", "u8", "i8", "usize", "u128", "i128", "bool",
         ]
         .iter()
         .any(|t| sig_part.contains(t));
@@ -4434,7 +4434,7 @@ fn extract_pure_rust_candidates_from_file(
             normalized_fn,
         ));
         i = end_line + 1;
-        if out.len() >= 6 {
+        if out.len() >= 16 {
             break;
         }
     }
@@ -4612,13 +4612,15 @@ pub fn optimize_project_with_g8t(
             }
         }
         for c in c_list {
-            if raw_candidates.len() < 12 {
-                search_keywords.push(c.0.clone());
+            if raw_candidates.len() < 48 {
+                if !search_keywords.contains(&c.0) {
+                    search_keywords.push(c.0.clone());
+                }
                 raw_candidates.push(c);
             }
         }
         for kw in kw_list {
-            if search_keywords.len() < 20 && !search_keywords.contains(&kw) {
+            if search_keywords.len() < 28 && !search_keywords.contains(&kw) {
                 search_keywords.push(kw);
             }
         }
@@ -4698,16 +4700,54 @@ pub fn optimize_project_with_g8t(
                 local_benchmark: bench,
             })
         })
+        .take(16)
         .collect();
 
     let g8t_url = resolve_g8t_url();
     let offline_mode = std::env::var_os("ST_G8T_OFFLINE").is_some()
         || std::env::var_os("ST_SYNC_TEST_BASE").is_some();
 
-    let leaderboard_entries = if offline_mode {
+    let initial_entries = if offline_mode {
         Vec::new()
     } else {
         fetch_leaderboard_entries(&g8t_url).unwrap_or_default()
+    };
+
+    // Automatically submit eligible new pure-Rust capsules (or refresh real-hardware benchmark votes) to g8t.is
+    let mut submitted_capsules: Vec<SubmitCapsuleReceipt> = Vec::new();
+    let mut total_fokens_earned_fkn: u64 = 0;
+
+    if auto_submit && !offline_mode && max_submits > 0 {
+        let domain_prefix = format!("{}-", project_name);
+        for cand in candidate_capsules.iter().take(max_submits) {
+            let existing_entry = initial_entries
+                .iter()
+                .find(|e| e.capsule.name.eq_ignore_ascii_case(&cand.name));
+            // Submit if not on board yet, or if it belongs to this project domain so its real hardware vote is refreshed
+            let should_submit_or_refresh = match existing_entry {
+                None => true,
+                Some(entry) => entry.capsule.domain.starts_with(&domain_prefix),
+            };
+            if !should_submit_or_refresh {
+                continue;
+            }
+            let domain = format!("{}-{}", project_name, cand.local_benchmark.hardware.arch);
+            if let Ok(receipt) =
+                submit_rust_function(&cand.name, &domain, &cand.source_code, &[], "u64", partner)
+            {
+                total_fokens_earned_fkn =
+                    total_fokens_earned_fkn.saturating_add(receipt.foken_earned_fkn);
+                submitted_capsules.push(receipt);
+            }
+        }
+    }
+
+    let leaderboard_entries = if offline_mode {
+        Vec::new()
+    } else if !submitted_capsules.is_empty() {
+        fetch_leaderboard_entries(&g8t_url).unwrap_or(initial_entries)
+    } else {
+        initial_entries
     };
 
     // Match project keywords & domains against live g8t.is leaderboard
@@ -4727,7 +4767,7 @@ pub fn optimize_project_with_g8t(
                     recommended_capsules.push(rec);
                 }
             }
-            if recommended_capsules.len() >= 6 {
+            if recommended_capsules.len() >= 12 {
                 break;
             }
         }
@@ -4749,30 +4789,6 @@ pub fn optimize_project_with_g8t(
         }
         for (idx, rec) in recommended_capsules.iter_mut().enumerate() {
             rec.rank = idx + 1;
-        }
-    }
-
-    // Automatically submit eligible new pure-Rust capsules to g8t.is
-    let mut submitted_capsules: Vec<SubmitCapsuleReceipt> = Vec::new();
-    let mut total_fokens_earned_fkn: u64 = 0;
-
-    if auto_submit && !offline_mode && max_submits > 0 {
-        for cand in candidate_capsules.iter().take(max_submits) {
-            // Skip if already published with identical name on leaderboard
-            let already_on_board = leaderboard_entries
-                .iter()
-                .any(|e| e.capsule.name.eq_ignore_ascii_case(&cand.name));
-            if already_on_board {
-                continue;
-            }
-            let domain = format!("{}-{}", project_name, cand.local_benchmark.hardware.arch);
-            if let Ok(receipt) =
-                submit_rust_function(&cand.name, &domain, &cand.source_code, &[], "u64", partner)
-            {
-                total_fokens_earned_fkn =
-                    total_fokens_earned_fkn.saturating_add(receipt.foken_earned_fkn);
-                submitted_capsules.push(receipt);
-            }
         }
     }
 
@@ -5766,8 +5782,19 @@ struct ResolvedChainCapsule {
 
 fn default_secondary_param_expr(param_name: &str, param_ty: &str, param_idx: usize) -> String {
     let low = param_name.to_ascii_lowercase();
+    if param_ty == "bool" {
+        if low.contains("wait") || low.contains("idle") || low.contains("skip") {
+            return "std::hint::black_box(false)".to_string();
+        }
+        return "std::hint::black_box(true)".to_string();
+    }
+    if low.contains("now") {
+        return format!("std::hint::black_box(cur_u64.wrapping_add(1500) as {param_ty})");
+    }
     let val: i64 = if low.contains("half_life") || low.contains("half_lives") {
         1
+    } else if low.contains("tau") {
+        3_600
     } else if low.contains("budget") {
         16_667
     } else if low.contains("accept_den") || low.contains("target_den") {
@@ -5787,11 +5814,7 @@ fn default_secondary_param_expr(param_name: &str, param_ty: &str, param_idx: usi
     } else {
         432 + (param_idx as i64) * 96
     };
-    if param_ty == "bool" {
-        "true".to_string()
-    } else {
-        format!("({val}i64 as {param_ty})")
-    }
+    format!("std::hint::black_box({val}i64 as {param_ty})")
 }
 
 /// Resolve, snap, compile (`rustc -C opt-level=3`), and execute a multi-stage chain of pure-Rust capsules
@@ -6003,6 +6026,8 @@ pub fn execute_capsule_chain(
                     call_args.push("&cur_bytes".to_string());
                 } else if p_ty == "bool" {
                     call_args.push("((cur_u64 & 1) != 0)".to_string());
+                } else if p_name == "t_sec" {
+                    call_args.push(format!("((cur_u64 & 0xFF) as {p_ty})"));
                 } else {
                     call_args.push(format!("(cur_u64 as {p_ty})"));
                 }
@@ -6011,14 +6036,10 @@ pub fn execute_capsule_chain(
             }
         }
         let call_str = format!("stage_{idx}::{}({})", stg.fn_name, call_args.join(", "));
-        let out_to_u64 = if stg.out_ty == "bool" {
-            "(step_out as u64)"
-        } else {
-            "(step_out as u64)"
-        };
+        let out_to_u64 = "(step_out as u64)";
 
         let step_block = format!(
-            "    let cur_bytes: [u8; 8] = cur_u64.to_le_bytes();\n    let _ = &cur_bytes;\n    let step_out: {} = {call_str};\n    let next_u64: u64 = {out_to_u64};\n",
+            "    let cur_bytes: [u8; 8] = cur_u64.to_le_bytes();\n    let _ = &cur_bytes;\n    let step_out: {} = {call_str};\n    let next_u64: u64 = std::hint::black_box({out_to_u64});\n",
             stg.out_ty
         );
         chain_body_fast.push_str(&step_block);
