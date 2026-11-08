@@ -320,6 +320,30 @@ const STOP_AND_META_WORDS: &[&str] = &[
     "tree",
     "llm",
     "llms",
+    "prompt",
+    "prompts",
+    "send",
+    "sending",
+    "tool",
+    "tools",
+    "agent",
+    "agents",
+    "initial",
+    "dashboard",
+    "debug",
+    "mode",
+    "realtime",
+    "issue",
+    "issues",
+    "happening",
+    "rename",
+    "generic",
+    "generioc",
+    "claude",
+    "coming",
+    "into",
+    "see",
+    "whats",
 ];
 
 /// Extract meaningful domain/project tokens from a context string.
@@ -1275,7 +1299,9 @@ pub async fn handle_helper_with_cwd(
     let params = params.unwrap_or_else(|| json!({}));
 
     let user_situation = params
-        .get("input")
+        .get("whats_the_situation")
+        .or_else(|| params.get("what_is_the_situation"))
+        .or_else(|| params.get("input"))
         .or_else(|| params.get("context"))
         .or_else(|| params.get("situation"))
         .or_else(|| params.get("prompt"))
@@ -1394,11 +1420,17 @@ pub async fn handle_helper_with_cwd(
 
     let cheet_joke = pick_cheet_dad_joke(&combined_context, inferred_intent);
     let dc_pick = crate::g8t_integration::route_dealers_choice(&combined_context, &[]);
+    let interaction_guidance = crate::service_debug::shape_interaction_guidance(&combined_context);
+    let stream_notes = crate::service_debug::list_stream_comments(6);
+    let capsela_improvements = crate::flow_broadcaster::check_capsela_improvements();
 
     let payload = json!({
         "ok": true,
         "helper": "Smart Tree Mechanic's Helper (Local SPQT Base-243 Ternary Aye 🛠️ + The Cheet 😺 Dad-Jokes Helper)",
         "cheet_dad_joke": cheet_joke,
+        "interaction_guidance": interaction_guidance,
+        "stream_partnership_notes": stream_notes,
+        "capsela_improvements": capsela_improvements,
         "session_parameters": session,
         "dealers_choice_router": {
             "problem_domain": dc_pick.classified_domain,
@@ -1418,7 +1450,8 @@ pub async fn handle_helper_with_cwd(
                 "POST http://127.0.0.1:28428/v1/chat/completions (supports model: 'dealers_choice' / 'g8t/dealers-choice')",
                 "POST http://127.0.0.1:28428/v1/helper",
                 "GET  http://127.0.0.1:28428/v1/dealers-choice",
-                "POST http://127.0.0.1:28428/v1/capsela/asm-exec"
+                "POST http://127.0.0.1:28428/v1/capsela/asm-exec",
+                "GET  http://127.0.0.1:28428/flow (Visual Studio Diff Engine & Brett Favre Play-by-Play)"
             ],
             "sovereign_cloud_tier": "https://i1.is / https://g8t.is — $5.00/mo Sovereign Helper & Context-Compression Proxy (saves 80-95% of tokens so builders never need a $200/month subscription!)",
             "unlimited_dealers_choice_tier": "https://g8t.is — $10.00/mo Unlimited g8t Session using Dealer's Choice on Best Model (automatically routes each problem to the #1 empirically proven model over time + Complete Capsela Freestanding ASM Executable Studio!)",
@@ -1440,17 +1473,21 @@ pub async fn handle_helper_with_cwd(
 pub fn helper_tool_definition() -> Value {
     json!({
         "name": "helper",
-        "description": "🛠️😺 MECHANIC'S HELPER (Local SPQT Base-243 Ternary Aye & The Cheet Dad-Jokes Helper) — Call `helper` with a string describing what you know about the current conversation! Like a master mechanic's shop helper, it updates internal session parameters, harvests recent LLM JSON/JSONL logs, returns context-matched projects (or only ~/Documents, ~/Desktop, and ~/Downloads when no specific project context is sent), hands you the exact compressed context & next MCP tools to save 80-95% of cloud LLM tokens, and can even start background music if nothing is already playing!",
+        "description": "🛠️😺 MECHANIC'S HELPER (Local SPQT Base-243 Ternary Aye & The Cheet Dad-Jokes Helper) — Call `helper` with `whats_the_situation` describing what you know about the current conversation! Like a master mechanic's shop helper, it shapes per-interaction partnership guidance (Chris hates wasteful XML, purple is never good, no floats, no unsolicited boilerplate unless it's a special partnership/g8t pattern), surfaces gentle user stream notes ('A user mentioned this before in our partnership...'), checks Capsela g8t speed improvements, updates internal session parameters, harvests recent LLM JSON/JSONL logs, returns context-matched projects (or only ~/Documents, ~/Desktop, and ~/Downloads when no specific project context is sent), hands you the exact compressed context & next MCP tools to save 80-95% of cloud LLM tokens, and can start background music if nothing is already playing!",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "whats_the_situation": {
+                    "type": "string",
+                    "description": "What's the situation? Pass everything the AI Agent knows about the current conversation/task right now so Smart Tree can shape guidance, partnership rules, projects, and tools for this interaction."
+                },
                 "input": {
                     "type": "string",
-                    "description": "Everything the LLM knows about the current conversation/task right now (e.g. 'debugging Grandma Jody persona wave interference in smart-tree' or 'helping user organize files')"
+                    "description": "Alias for 'whats_the_situation' — everything the LLM knows about the current conversation/task right now"
                 },
                 "context": {
                     "type": "string",
-                    "description": "Alias for 'input' — current conversation context string"
+                    "description": "Alias for 'whats_the_situation' — current conversation context string"
                 },
                 "persona": {
                     "type": "string",
@@ -1529,7 +1566,7 @@ mod tests {
     async fn test_handle_helper_end_to_end() {
         let out = handle_helper_with_cwd(
             Some(json!({
-                "input": "We are working on smart-tree MCP tools and Grandma Jody persona memories",
+                "whats_the_situation": "We are working on smart-tree MCP tools, dashboard UI colors, XML removal, and Grandma Jody persona memories",
                 "persona": "aye+cheet",
                 "play_music": false,
                 "token_budget": 3500
@@ -1548,6 +1585,11 @@ mod tests {
         assert_eq!(parsed["session_parameters"]["token_budget"], 3500);
         assert!(parsed["mechanic_tool_tray"].as_array().is_some());
         assert!(parsed["projects_for_llm"]["projects"].as_array().is_some());
+        assert!(parsed["interaction_guidance"].as_array().is_some());
+        assert!(parsed["capsela_improvements"].as_array().is_some());
+        let guidance_joined = serde_json::to_string(&parsed["interaction_guidance"]).unwrap();
+        assert!(guidance_joined.contains("XML is super wasteful"));
+        assert!(guidance_joined.contains("purple is never good"));
         assert!(parsed["g8t_i1_cost_saver_proxy"]["sovereign_cloud_tier"]
             .as_str()
             .unwrap_or("")

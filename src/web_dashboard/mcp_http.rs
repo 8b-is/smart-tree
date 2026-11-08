@@ -5,7 +5,7 @@
 //! through the daemon's central brain.
 //!
 //! Endpoints:
-//! - GET  /mcp/sse - SSE endpoint for MCP (Claude Code compatible)
+//! - GET  /mcp/sse - SSE endpoint for MCP (AI Agent compatible)
 //! - POST /mcp/message - Send JSON-RPC message (for SSE clients)
 //! - POST /mcp/initialize - Initialize MCP session
 //! - GET  /mcp/tools/list - List available tools
@@ -197,6 +197,7 @@ pub async fn mcp_tools_call(
     State(state): State<SharedMcpContext>,
     Json(req): Json<ToolCallRequest>,
 ) -> impl IntoResponse {
+    let started = std::time::Instant::now();
     let ctx = ensure_mcp_context(&state).await;
 
     // === THE CUSTODIAN CHECKPOINT ===
@@ -206,6 +207,12 @@ pub async fn mcp_tools_call(
         tracing::warn!("🧹 Custodian Alert: {}", alert);
     }
 
+    let req_preview = req
+        .arguments
+        .as_ref()
+        .map(crate::service_debug::value_preview)
+        .unwrap_or_else(|| "{}".to_string());
+
     // Dispatch to the consolidated tool handler
     let result = crate::mcp::tools_consolidated_enhanced::dispatch_consolidated_tool(
         &req.name,
@@ -214,25 +221,55 @@ pub async fn mcp_tools_call(
     )
     .await;
 
+    let duration_us = started.elapsed().as_micros() as u64;
+
     match result {
         Ok(mut value) => {
             // Include Custodian alert in successful responses if present
-            if let Some(alert) = custodian_alert {
+            if let Some(ref alert) = custodian_alert {
                 if let Some(obj) = value.as_object_mut() {
                     obj.insert("_custodian_alert".to_string(), json!(alert));
                 }
             }
+            let res_preview = crate::service_debug::value_preview(&value);
+            crate::service_debug::record_event(
+                "mcp-http",
+                "POST /mcp/tools/call",
+                &req.name,
+                200,
+                duration_us,
+                false,
+                custodian_alert,
+                &req_preview,
+                &res_preview,
+                "http",
+            );
             (StatusCode::OK, Json(value))
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "error": {
-                    "code": -32603,
-                    "message": e.to_string()
-                }
-            })),
-        ),
+        Err(e) => {
+            let err_msg = e.to_string();
+            crate::service_debug::record_event(
+                "mcp-http",
+                "POST /mcp/tools/call",
+                &req.name,
+                500,
+                duration_us,
+                true,
+                Some(format!("MCP HTTP tool '{}' error: {}", req.name, err_msg)),
+                &req_preview,
+                &err_msg,
+                "http",
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": {
+                        "code": -32603,
+                        "message": err_msg
+                    }
+                })),
+            )
+        }
     }
 }
 
@@ -337,7 +374,7 @@ fn evaluate_operation(tool_name: &str, args: &Option<Value>) -> Option<String> {
 }
 
 // =============================================================================
-// SSE ENDPOINT (Claude Code Compatible)
+// SSE ENDPOINT (AI Agent Compatible)
 // =============================================================================
 
 /// GET /mcp/sse - Server-Sent Events endpoint for MCP
@@ -363,7 +400,7 @@ pub async fn mcp_sse_handler(
     let endpoint_with_session = format!("{}?session_id={}", endpoint, session_id);
 
     // Create the initial events stream
-    // Note: endpoint must be absolute URL for Claude Code compatibility
+    // Note: endpoint must be absolute URL for MCP SSE client compatibility
     let events = stream::iter(vec![
         // Send the endpoint event as required by MCP SSE protocol
         Ok(Event::default()
@@ -394,17 +431,28 @@ pub async fn mcp_message_handler(
     State(state): State<SharedMcpContext>,
     Json(request): Json<Value>,
 ) -> impl IntoResponse {
+    let started = std::time::Instant::now();
     let ctx = ensure_mcp_context(&state).await;
 
     // Parse JSON-RPC request
     let method = request["method"].as_str().unwrap_or("");
     let id = request.get("id").cloned();
     let params = request.get("params").cloned();
+    let target = request["params"]["name"]
+        .as_str()
+        .unwrap_or(method)
+        .to_string();
+    let req_preview = params
+        .as_ref()
+        .map(crate::service_debug::value_preview)
+        .unwrap_or_else(|| "{}".to_string());
 
     // === THE CUSTODIAN CHECKPOINT ===
+    let mut custodian_alert: Option<String> = None;
     if let Some(name) = request["params"]["name"].as_str() {
         if let Some(alert) = evaluate_operation(name, &params) {
             tracing::warn!("🧹 Custodian Alert: {}", alert);
+            custodian_alert = Some(alert);
         }
     }
 
@@ -460,6 +508,28 @@ pub async fn mcp_message_handler(
             }
         }),
     };
+
+    let duration_us = started.elapsed().as_micros() as u64;
+    let is_err = result.get("error").is_some()
+        || result
+            .get("isError")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+    let res_preview = crate::service_debug::value_preview(&result);
+    if !method.starts_with("notifications/") {
+        crate::service_debug::record_event(
+            "mcp-http",
+            method,
+            &target,
+            if is_err { 500 } else { 200 },
+            duration_us,
+            is_err,
+            custodian_alert,
+            &req_preview,
+            &res_preview,
+            "http-jsonrpc",
+        );
+    }
 
     // Build JSON-RPC response
     let response = if let Some(id) = id {

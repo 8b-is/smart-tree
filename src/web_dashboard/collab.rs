@@ -61,7 +61,7 @@ pub enum ServerMessage {
 fn parse_participant_type(s: &str) -> ParticipantType {
     match s.to_lowercase().as_str() {
         "human" | "user" => ParticipantType::Human,
-        "claude" => ParticipantType::Claude,
+        "ai_agent" | "agent" | "claude" => ParticipantType::Claude,
         "omni" => ParticipantType::Omni,
         "grok" => ParticipantType::Grok,
         "gemini" => ParticipantType::Gemini,

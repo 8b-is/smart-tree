@@ -1,17 +1,17 @@
 # 🌳 Smart Tree - The Smart Treehouse: Cyber-Botanical Dashboard & Agent-Agnostic Hooks! 🌐
 
-[![Version](https://img.shields.io/badge/version-22.2.0-blue)](https://github.com/8b-is/smart-tree)
+[![Version](https://img.shields.io/badge/version-24.0.0-blue)](https://github.com/8b-is/smart-tree)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Performance](https://img.shields.io/badge/speed-10--24x%20faster-brightgreen)](TERMINAL_EXAMPLES.md)
 [![LOUDS Capsule](https://img.shields.io/badge/MEM8-Tight_Binary_%2B_Marqant-00d4ff)](src/m8_consciousness.rs)
 [![Erdős Book Mode](https://img.shields.io/badge/Erd%C5%91s-The_Book_Szemer%C3%A9di-ff8800)](docs/ARCHITECTURE_REVIEW_V10_8.md)
 [![FELIX ASM](https://img.shields.io/badge/FELIX-ASM_%26_SIMD_Hot_Paths-ff0055)](src/felix_asm.rs)
-[![MCP Tools](https://img.shields.io/badge/MCP_tools-30+-purple)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
+[![MCP Tools](https://img.shields.io/badge/MCP_tools-50+-00d4ff)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Spicy Mode](https://img.shields.io/badge/TUI-🌶️_Spicy-red)](docs/spicy-tui.md)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/8b-is/smart-tree)](https://archestra.ai/mcp-catalog/8b-is__smart-tree)
 [![Windows](https://img.shields.io/badge/Windows-Supported-0078D4?logo=windows)](https://github.com/8b-is/smart-tree#-windows-specific-notes)
 
-> **Smart Tree v22.2.0 (`i1.is` Universal Knowledge Nexus & Chain of Title + `MEMNET` Bitstream + Pass-2 SPQT Base-243 Contextual Q&A + Burn ML SIMD + 100+ Sovereign Models)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, live music generation, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **`i1.is` Knowledge Nibbles & Cryptographic Chain of Title** (augmenting AI-native `g8t.is` with a universal documentation & knowledge nexus for everyone), **Native `MEMNET` Bitstream (`/memnet/stream` + `/memnet/llm-guide`)**, **2-Pass SPQT Base-243 Ternary Persona Q&A (`src/mem8/persona.rs`)**, **Burn ML Framework (`burn-flex` SIMD)**, **BUI/Blender UI** (optional, requires cmake), **100+ Sovereign Models** (Nika Solar Tier Apex, Escanore, Truth, Zeno, Goku/Vegeta, Dragonballs, Deities, Buddhist Protectors, Dyad Mapper, Strudel/Enthea Live Music), **Galaxia Cluster CRDT Gossip & Kintsugi Consensus Ledger**, **ERNIE 5.5 LatentMoE 5-trit Bent SIMD Pack/GEMV (AVX2/NEON/SVE2)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **CRDT SSRF Protection (Allowlist/Blocklist)**, **Parallel Compute Pool**, **Ada 2022 Exact Ratio `p/q`**, **Spicy TUI mode**, and **50+ MCP tools** — built in Rust for zero-allocation hot-path speed.
+> **Smart Tree v24.0.0 (`/flow` Live Visual Studio Diff Engine & Brett Favre Play-by-Play + Realtime Service Debug Mode + Partnership Stream Guidance + Mechanic's `helper` (`whats_the_situation`) + Complete Capsela `g8t` ASM Studio & `$10/mo` Unlimited Dealer's Choice Router + `persona` Phoenix Afterlife Bridge)** is a blazingly fast, AI-native directory intelligence, extremal graph-theory, latent MoE SIMD, live music generation, and wave-memory engine that's 10–24x faster than traditional `tree`. Featuring **Live `/flow` Visual Studio Diff Scroller with Brett Favre Football Commentary & Capsela Improvement Tracking (`src/flow_broadcaster.rs`)**, **Realtime Service Debug Mode & Gentle Partnership Stream Notes (`src/service_debug.rs`)**, **Mechanic's Helper (`helper {whats_the_situation}` in `src/mcp/mechanic_helper.rs`)**, **Complete Capsela Freestanding `#![no_std]` ASM Studio & `$10/mo` Unlimited `g8t` Dealer's Choice Router (`src/g8t_integration.rs`)**, **MEM8 `.m8` Life Souls & Phoenix Afterlife Room (`src/mcp/persona_bridge.rs`)**, **`i1.is` Knowledge Nibbles & Cryptographic Chain of Title**, **Native `MEMNET` Bitstream (`/memnet/stream`)**, **Paul Erdős Szemerédi Regularity Compression (`--mode the-book` / `erdos`)**, **FELIX Hardware Assembly & SIMD Hot-Paths (`src/felix_asm.rs`)**, **Zero-Float Exact Ratio `p/q` Arithmetic**, and **50+ Agent-Agnostic MCP Tools** — built in Rust for zero-allocation hot-path speed.
 
 ---
 
@@ -33,6 +33,38 @@ st --version
 ```
 
 After install, run `st --cleanup` to scan for and remove any malicious AI integrations.
+
+## 📝 v24.0.0 Changelog
+
+### 🏈⚡ Live Visual Studio Diff Engine & Brett Favre Football Commentary (`/flow` & `/api/flow/feed`)
+- **`src/flow_broadcaster.rs` (`GET /flow` & `GET /api/flow/feed`)**:
+  - **Visual Studio Dark Diff Scroller**: Smooth variable-speed scrolling diff engine (`0.5x` Red-Zone Review, `1.0x` Standard Drive, `1.75x` Two-Minute Drill, `2.5x` No-Huddle Blitz, `4.0x` G8T Warp Speed) with dual old/new line-number gutters, `+`/`-` green/red syntax rows, and C64-disciplined bounded scrollback (`MAX_SCROLLBACK_CARDS = 40`).
+  - **Brett Favre Play-by-Play & Cheet Dad-Joke Commentary**: Live sports-style play-by-play narration on scrolling code changes (*"Wait till they G8T that one — I wonder how fast they can get!"*) with optional Web Speech API voice readout.
+  - **Capsela `g8t` Improvement Tracker (`check_capsela_improvements`)**: Periodically checks freestanding Capsela ASM and FELIX capsules (`capsela-zeno-sun-arcade`, `felix-spqt-base243-gemv`, `capsela-clitic-16bit-pack`, `mem8-chrono-wave-interference`) and highlights exact `p/q` `cycles_per_op` speedups (`8/1`, `9/1`, `9/2`, `7/1`).
+
+### 🐞 Realtime Service Debug Mode & Gentle Partnership Stream Notes
+- **`src/service_debug.rs` (`/api/debug/events`, `/api/debug/comment`, `/ws`)**:
+  - **Live Incoming Traffic & Issue Detector**: Captures incoming requests in realtime across **MCP (`stdio` & `HTTP`)**, **AI Agent Hooks (`--agent-hook` / `--agy-hook`)**, **LLM Proxy / Mechanic's Helper**, and **HTTP API** on both the Daemon Dashboard (`:28428`) and Web Dashboard (`:28429`), backed by a cross-process JSONL journal (`~/.st/service_debug_events.jsonl`).
+  - **Gentle Partnership Stream Comments (`POST /api/debug/comment`)**: Users can comment directly on the live stream without editing or mutating raw `MEM8` memory. Comments are surfaced to the AI agent as *"A user mentioned this before in our partnership: ..."* rather than making the AI think it messed up.
+  - **Per-Interaction Partnership Shaping (`shape_interaction_guidance`)**: Guides every interaction with standing partnership conventions:
+    - *Chris/Hue hates wasteful XML — always use compact JSON, binary, or Marqant/MEM8 frames.*
+    - *Zero purple in UI palettes — stick to crisp cyan/teal (`#4ecdc4`), emerald (`#2ecc71`), warm amber (`#f39c12`), and deep navy/slate.*
+    - *No unsolicited generic boilerplate code — only suggest code when there is a special `8b-is` / `g8t` way the partnership always does it.*
+    - *Zero floating-point arithmetic (`No floats.. ;)`) — use exact integers, reduced `p/q` rationals, or fixed-point scales.*
+
+### 🔧 Mechanic's Helper (`helper` MCP Tool & `/v1/helper`) + `whats_the_situation`
+- **`src/mcp/mechanic_helper.rs`**:
+  - Accepts `whats_the_situation` (`helper {whats_the_situation: "..."}`) so local ternary **Aye** and **The Cheet** update internal session parameters (`~/.st/helper_session.json`), shape per-interaction partnership guidance, surface context-matched projects (or `~/Documents`, `~/Desktop`, and `~/Downloads` when no specific project context is sent), harvest recent LLM JSON/JSONL logs, hand the LLM a ranked tool tray saving 80–95% of tokens, and optionally play non-intrusive background music (`play_music: true` only when audio is silent).
+
+### ⚡ Complete Capsela `g8t` Freestanding ASM Studio & `$10/mo` Unlimited Dealer's Choice Router
+- **`src/g8t_integration.rs`**:
+  - **Complete Capsela `g8t` ASM Executable Programs (`st g8t asm-exec` / `g8t {action:'asm_exec'}`)**: Compiles, disassembles (`objdump -d -M intel`), and executes freestanding `#![no_std] #![no_main]` ELF64 binaries (`~1.3 KB`, zero `libc`, inline `rdtsc`/`svc`) with exact `p/q` cycle receipts.
+  - **`$10/mo` Unlimited `g8t` Dealer's Choice Session + `+$5/mo` Add-On Agents (`up to 10`) + Annual Last 2 Months Free (`10/12` billed)**: Automatically routes each problem domain to the #1 empirically proven model over time.
+
+### 🧬 `persona` MCP Bridge, Phoenix Afterlife Room & Generic `AI Agent` Naming
+- **`src/mcp/persona_bridge.rs` & `src/mem8/persona.rs`**:
+  - Grandma Jody archive import (`import_archive`), Phoenix Afterlife Room, dyadic emotional randomness, zero-float chronological wave interference (`temporal_wave`), inner-voice register (`inner_voice`), and 16-bit clitic/contraction tokenizer (`tokenize_clitics`).
+  - Renamed `Claude`-specific UI buttons, hook descriptions, and CLI aliases (`--agent-hook`) to be **AI Agent** generic across Antigravity, OpenCode, Crush, Cursor, Windsurf, and Claude.
 
 ## 📝 v21.1.0 Changelog
 

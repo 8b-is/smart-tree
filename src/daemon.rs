@@ -780,9 +780,19 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
             "/galactix/omni-chan-sun",
             get(galactix_omni_chan_sun_get_handler).post(galactix_omni_chan_sun_post_handler),
         )
+        // Realtime Service Debug Mode API + Visual Studio Live Diff /flow Broadcaster
+        .route("/flow", get(flow_page_handler))
+        .route("/api/flow/feed", get(flow_feed_handler))
+        .route("/api/debug/events", get(debug_events_handler))
+        .route("/api/debug/clear", post(debug_clear_handler))
+        .route("/api/debug/toggle", post(debug_toggle_handler))
+        .route("/api/debug/test", post(debug_test_handler))
+        .route("/api/debug/comment", post(debug_comment_handler))
         .with_state(Arc::clone(&state))
         // Add MCP before the auth layer so its routes share the same policy.
         .nest_service("/mcp", mcp_router(mcp_context))
+        // Realtime Service Debug telemetry layer (captures incoming HTTP traffic & errors)
+        .layer(middleware::from_fn(service_debug_middleware))
         // Bearer token auth only for untrusted WAN; localhost & internal LAN are trusted.
         .layer(middleware::from_fn_with_state(
             AuthState::new(load_all_tokens(), config.allow_external),
@@ -2008,18 +2018,75 @@ async fn welcome_page(
         .log-entry { padding: 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .log-entry .time { color: #888; }
         .log-entry .type { padding: 2px 6px; border-radius: 3px; font-size: 0.65rem; }
-        .log-entry .type.mcp { background: #9b59b6; }
+        .log-entry .type.mcp { background: #16a085; }
         .log-entry .type.llm { background: #3498db; }
         .log-entry .type.tool { background: #e67e22; }
         .log-entry .content { color: #ccc; margin-top: 0.25rem; word-break: break-all; }
 
-        /* Dashboard link */
+        /* Dashboard link (Zero-Purple Palette) */
         .dashboard-link {
             display: inline-block; margin-top: 1rem; padding: 0.75rem 2rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; text-decoration: none; border-radius: 8px; font-weight: bold;
+            background: linear-gradient(135deg, #16a085 0%, #4ecdc4 100%);
+            color: #0b0f17; text-decoration: none; border-radius: 8px; font-weight: bold;
         }
         .dashboard-link:hover { opacity: 0.9; }
+
+        /* Realtime Service Debug Mode */
+        .debug-toggle-btn {
+            display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem;
+            padding: 0.55rem 1.2rem; border-radius: 999px; border: 1px solid rgba(243,156,18,0.6);
+            background: rgba(243,156,18,0.18); color: #f39c12; font-weight: bold;
+            font-size: 0.85rem; cursor: pointer; transition: all 0.15s ease;
+        }
+        .debug-toggle-btn.active {
+            background: rgba(46,204,113,0.22); border-color: #2ecc71; color: #2ecc71;
+        }
+        .debug-stats-bar {
+            display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.75rem;
+        }
+        .debug-stat-pill {
+            padding: 0.35rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.35);
+            border: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; color: #ccc;
+        }
+        .debug-stat-pill strong { color: #4ecdc4; }
+        .debug-stat-pill.err strong { color: #e74c3c; }
+        .debug-filter-bar {
+            display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; margin-bottom: 0.75rem;
+        }
+        .debug-pill-btn {
+            padding: 0.35rem 0.7rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06); color: #ccc; font-size: 0.74rem; cursor: pointer;
+        }
+        .debug-pill-btn.active {
+            background: #4ecdc4; color: #1a1a2e; border-color: #4ecdc4; font-weight: bold;
+        }
+        .debug-table-wrap {
+            max-height: 290px; overflow-y: auto; background: rgba(0,0,0,0.35);
+            border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+        }
+        .debug-table {
+            width: 100%; border-collapse: collapse; font-family: monospace; font-size: 0.74rem;
+        }
+        .debug-table th, .debug-table td {
+            padding: 0.45rem 0.6rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .debug-table th {
+            position: sticky; top: 0; background: #161b30; color: #4ecdc4; z-index: 1;
+        }
+        .debug-table tr.debug-row { cursor: pointer; }
+        .debug-table tr.debug-row:hover { background: rgba(78,205,196,0.1); }
+        .debug-table tr.debug-row.err-row { background: rgba(231,76,60,0.14); }
+        .debug-table tr.debug-row.warn-row { background: rgba(243,156,18,0.12); }
+        .badge-sev { padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.66rem; }
+        .badge-sev.ok { background: rgba(39,174,96,0.25); color: #2ecc71; }
+        .badge-sev.warn { background: rgba(243,156,18,0.28); color: #f39c12; }
+        .badge-sev.error { background: rgba(231,76,60,0.32); color: #ff6b6b; }
+        .badge-ch { padding: 2px 6px; border-radius: 4px; background: rgba(78,205,196,0.22); color: #4ecdc4; font-size: 0.66rem; }
+        .debug-inspector-drawer {
+            margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px;
+            background: rgba(0,0,0,0.45); border: 1px solid rgba(78,205,196,0.35);
+            font-family: monospace; font-size: 0.74rem; display: none;
+        }
 
         .custodian { text-align: center; color: #f39c12; margin-top: 1.5rem; }
     </style>
@@ -2032,9 +2099,83 @@ async fn welcome_page(
         <p style="color:#4ecdc4;margin-top:1rem;">You're viewing the Smart Tree Dashboard</p>
         <p style="color:#888;font-size:0.85rem;">Dashboard: <strong>http://localhost:28428/</strong> · MCP (HTTP): <strong>http://localhost:28428/mcp</strong> (SSE: /mcp/sse) · MCP (stdio): <code>st --mcp</code></p>
         <p style="color:#666;font-size:0.75rem;">Localhost needs no token. If `st up` started this, you are done — `st token` shows the token for external use.</p>
+        <div style="display:flex;justify-content:center;gap:0.65rem;flex-wrap:wrap;margin-top:0.75rem;">
+            <button id="header-debug-btn" class="debug-toggle-btn active" style="margin-top:0;" onclick="toggleDebugPanel()">
+                <span>🐞</span>
+                <span id="header-debug-label">Realtime Service Debug Mode: ON (Live)</span>
+                <span id="header-debug-badge" style="padding:1px 7px;border-radius:999px;background:rgba(0,0,0,0.35);">0 events</span>
+            </button>
+            <a href="/flow" class="debug-toggle-btn" style="margin-top:0;text-decoration:none;border-color:rgba(78,205,196,0.7);background:rgba(78,205,196,0.18);color:#4ecdc4;">
+                <span>🏈⚡</span>
+                <span>Open /flow (Live VS Diff Scroller &amp; Brett Favre Commentary)</span>
+            </a>
+        </div>
     </div>
 
     <div class="grid">
+        <!-- Realtime Service Debug Inspector (Live Incoming Traffic & Issue Detector) -->
+        <div class="card" id="service-debug-card" style="grid-column: 1 / -1; border-color: rgba(46,204,113,0.45);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+                <h2 style="margin-bottom:0;">🐞 Realtime Service Debug Mode — Live Incoming Requests, Issue Detector &amp; Partnership Stream</h2>
+                <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+                    <span id="debug-live-indicator" style="font-size:0.75rem;color:#2ecc71;font-weight:bold;">🟢 LIVE STREAMING</span>
+                    <a href="/flow" class="debug-pill-btn" style="text-decoration:none;border-color:#4ecdc4;color:#4ecdc4;font-weight:bold;">🏈⚡ /flow Live Diff</a>
+                    <button class="debug-pill-btn" id="debug-pause-btn" onclick="toggleDebugPause()">⏸ Pause</button>
+                    <button class="debug-pill-btn" onclick="injectDebugTest(false)">🧪 Test Call</button>
+                    <button class="debug-pill-btn" style="border-color:rgba(231,76,60,0.5);color:#ff6b6b;" onclick="injectDebugTest(true)">⚠️ Simulate Issue</button>
+                    <button class="debug-pill-btn" onclick="clearDebugEvents()">🗑 Clear</button>
+                </div>
+            </div>
+            <p style="font-size:0.78rem;color:#888;margin-bottom:0.65rem;">
+                Captures incoming traffic across <strong>MCP (stdio &amp; HTTP)</strong>, <strong>AI Agent Hooks</strong>, <strong>LLM Proxy / Mechanic's Helper</strong>, and <strong>HTTP API</strong> in realtime. Leave a comment on the stream below to guide the AI as <em>"A user mentioned this before in our partnership..."</em> without mutating raw MEM8 memory!
+            </p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.65rem;padding:0.55rem 0.75rem;border-radius:8px;background:rgba(78,205,196,0.08);border:1px solid rgba(78,205,196,0.28);">
+                <span style="font-size:0.76rem;color:#4ecdc4;font-weight:bold;">💬 Comment on Stream:</span>
+                <input type="text" id="stream-comment-author" value="Hue/Chris" placeholder="Author" style="width:110px;padding:0.38rem 0.55rem;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.35);color:white;font-size:0.75rem;">
+                <input type="text" id="stream-comment-input" placeholder="Guide the AI gently (e.g. 'Chris hates XML as it is super wasteful' or 'Maybe purple is never good')..." onkeypress="if(event.key==='Enter')submitStreamComment()" style="flex:1;min-width:220px;padding:0.38rem 0.65rem;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.35);color:white;font-size:0.75rem;">
+                <button class="debug-pill-btn active" onclick="submitStreamComment()">Post to Partnership Stream</button>
+            </div>
+            <div id="stream-comments-strip" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.65rem;"></div>
+            <div class="debug-stats-bar" id="debug-stats-bar">
+                <div class="debug-stat-pill">Total Incoming: <strong id="dbg-total">0</strong></div>
+                <div class="debug-stat-pill err">⚠️ Issues / Errors: <strong id="dbg-errors">0</strong></div>
+                <div class="debug-stat-pill">🐢 Slow (&gt;1500ms): <strong id="dbg-slow">0</strong></div>
+                <div class="debug-stat-pill">MCP (stdio/HTTP): <strong id="dbg-mcp">0</strong></div>
+                <div class="debug-stat-pill">Agent Hooks: <strong id="dbg-hooks">0</strong></div>
+                <div class="debug-stat-pill">LLM Proxy / Helper: <strong id="dbg-llm">0</strong></div>
+                <div class="debug-stat-pill">Avg Latency: <strong id="dbg-avg-ms">0 ms</strong> (max <span id="dbg-max-ms">0</span> ms)</div>
+            </div>
+            <div id="debug-last-issue-banner" style="display:none;margin-bottom:0.65rem;padding:0.55rem 0.8rem;border-radius:6px;background:rgba(231,76,60,0.18);border:1px solid rgba(231,76,60,0.5);font-size:0.78rem;color:#ffb4b4;"></div>
+            <div class="debug-filter-bar">
+                <button class="debug-pill-btn active" data-ch="all" onclick="setDebugChannelFilter('all', this)">All Traffic</button>
+                <button class="debug-pill-btn" data-ch="issues" onclick="setDebugChannelFilter('issues', this)">⚠️ Issues Only</button>
+                <button class="debug-pill-btn" data-ch="mcp" onclick="setDebugChannelFilter('mcp', this)">MCP (stdio + HTTP)</button>
+                <button class="debug-pill-btn" data-ch="agent-hook" onclick="setDebugChannelFilter('agent-hook', this)">AI Agent Hooks</button>
+                <button class="debug-pill-btn" data-ch="llm-proxy" onclick="setDebugChannelFilter('llm-proxy', this)">LLM Proxy</button>
+                <button class="debug-pill-btn" data-ch="http-api" onclick="setDebugChannelFilter('http-api', this)">HTTP API</button>
+                <input type="text" id="debug-search-input" placeholder="Filter by tool, method, path, error..." oninput="renderDebugTable()" style="flex:1;min-width:180px;padding:0.35rem 0.65rem;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.3);color:white;font-size:0.75rem;">
+            </div>
+            <div class="debug-table-wrap">
+                <table class="debug-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Status</th>
+                            <th>Channel</th>
+                            <th>PID</th>
+                            <th>Method</th>
+                            <th>Target / Tool</th>
+                            <th>Latency</th>
+                            <th>Summary / Issue Diagnostic</th>
+                        </tr>
+                    </thead>
+                    <tbody id="debug-events-tbody">
+                        <tr><td colspan="8" style="text-align:center;color:#888;padding:1rem;">Waiting for incoming service traffic... (or click 🧪 Test Call)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="debug-inspector-drawer" id="debug-inspector-drawer"></div>
+        </div>
         <!-- Chat Test -->
         <div class="card">
             <h2>💬 Test Chat (Local Ternary Model &amp; MEM8 Personas)</h2>
@@ -2541,21 +2682,242 @@ async fn welcome_page(
             }
         }
 
+        // === Realtime Service Debug Mode JS ===
+        let debugEvents = [];
+        let debugPaused = false;
+        let debugChannelFilter = 'all';
+        let selectedDebugEventId = null;
+
+        function escHtml(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function toggleDebugPanel() {
+            const card = document.getElementById('service-debug-card');
+            const btn = document.getElementById('header-debug-btn');
+            const lbl = document.getElementById('header-debug-label');
+            if (!card) return;
+            const hidden = card.style.display === 'none';
+            card.style.display = hidden ? '' : 'none';
+            btn.classList.toggle('active', hidden);
+            lbl.textContent = hidden ? 'Realtime Service Debug Mode: ON (Live)' : 'Realtime Service Debug Mode: OFF';
+        }
+
+        function toggleDebugPause() {
+            debugPaused = !debugPaused;
+            const btn = document.getElementById('debug-pause-btn');
+            const ind = document.getElementById('debug-live-indicator');
+            if (btn) btn.textContent = debugPaused ? '▶ Resume' : '⏸ Pause';
+            if (ind) {
+                ind.textContent = debugPaused ? '⏸ PAUSED' : '🟢 LIVE STREAMING';
+                ind.style.color = debugPaused ? '#f39c12' : '#2ecc71';
+            }
+            if (!debugPaused) fetchDebugSnapshot();
+        }
+
+        function setDebugChannelFilter(ch, btnEl) {
+            debugChannelFilter = ch;
+            document.querySelectorAll('.debug-filter-bar .debug-pill-btn').forEach(b => b.classList.remove('active'));
+            if (btnEl) btnEl.classList.add('active');
+            renderDebugTable();
+        }
+
+        function updateDebugStatsUI(stats) {
+            if (!stats) return;
+            document.getElementById('dbg-total').textContent = stats.total_events || 0;
+            document.getElementById('dbg-errors').textContent = stats.error_events || 0;
+            document.getElementById('dbg-slow').textContent = stats.slow_events || 0;
+            document.getElementById('dbg-mcp').textContent = stats.mcp_events || 0;
+            document.getElementById('dbg-hooks').textContent = stats.hook_events || 0;
+            document.getElementById('dbg-llm').textContent = stats.llm_proxy_events || 0;
+            document.getElementById('dbg-avg-ms').textContent = (stats.avg_duration_ms || 0) + ' ms';
+            document.getElementById('dbg-max-ms').textContent = stats.max_duration_ms || 0;
+            const badge = document.getElementById('header-debug-badge');
+            if (badge) {
+                const errs = stats.error_events || 0;
+                badge.textContent = errs > 0 ? `${stats.total_events || 0} ev · ⚠️ ${errs} err` : `${stats.total_events || 0} events`;
+                badge.style.color = errs > 0 ? '#ff6b6b' : '#fff';
+            }
+            const banner = document.getElementById('debug-last-issue-banner');
+            if (banner) {
+                if (stats.last_issue && (stats.last_issue.is_error || stats.last_issue.is_slow || stats.last_issue.issue_summary)) {
+                    const li = stats.last_issue;
+                    banner.style.display = 'block';
+                    banner.innerHTML = `<strong>🚨 Latest Detected Issue (${escHtml(li.channel)} · ${escHtml(li.method)} → ${escHtml(li.target)}):</strong> ${escHtml(li.issue_summary || 'Error')} <span style="color:#ccc;">(status ${li.status_code}, ${li.duration_ms}ms, PID ${li.pid})</span>`;
+                } else {
+                    banner.style.display = 'none';
+                }
+            }
+        }
+
+        function renderDebugTable() {
+            const tbody = document.getElementById('debug-events-tbody');
+            if (!tbody) return;
+            const q = (document.getElementById('debug-search-input')?.value || '').trim().toLowerCase();
+            const filtered = debugEvents.filter(ev => {
+                if (debugChannelFilter === 'issues') {
+                    if (!ev.is_error && !ev.is_slow && !ev.issue_summary) return false;
+                } else if (debugChannelFilter === 'mcp') {
+                    if (!String(ev.channel || '').startsWith('mcp')) return false;
+                } else if (debugChannelFilter !== 'all') {
+                    if (ev.channel !== debugChannelFilter) return false;
+                }
+                if (q) {
+                    const hay = `${ev.channel} ${ev.method} ${ev.target} ${ev.issue_summary || ''} ${ev.request_preview || ''} ${ev.response_preview || ''}`.toLowerCase();
+                    if (!hay.includes(q)) return false;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;padding:1rem;">No matching debug events yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.slice(0, 100).map(ev => {
+                const t = (ev.timestamp_iso || '').split('T')[1]?.replace('Z', '').substring(0, 12) || '--:--:--';
+                const sev = ev.severity || (ev.is_error ? 'error' : (ev.is_slow ? 'warn' : 'ok'));
+                const rowCls = ev.is_error ? 'debug-row err-row' : (ev.is_slow || ev.issue_summary ? 'debug-row warn-row' : 'debug-row');
+                const summary = ev.issue_summary
+                    ? `<span style="color:#ff9f43;font-weight:bold;">⚠️ ${escHtml(ev.issue_summary)}</span>`
+                    : `<span style="color:#aaa;">${escHtml((ev.request_preview || '').substring(0, 90))}</span>`;
+                return `<tr class="${rowCls}" onclick="inspectDebugEvent(${ev.id})">
+                    <td style="color:#888;">${escHtml(t)}</td>
+                    <td><span class="badge-sev ${sev}">${ev.status_code} ${sev.toUpperCase()}</span></td>
+                    <td><span class="badge-ch">${escHtml(ev.channel)}</span></td>
+                    <td style="color:#888;">${ev.pid || '-'}</td>
+                    <td style="color:#4ecdc4;font-weight:bold;">${escHtml(ev.method)}</td>
+                    <td style="color:#f39c12;">${escHtml(ev.target)}</td>
+                    <td>${ev.duration_ms} ms</td>
+                    <td>${summary}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function inspectDebugEvent(id) {
+            selectedDebugEventId = id;
+            const ev = debugEvents.find(e => e.id === id);
+            const drawer = document.getElementById('debug-inspector-drawer');
+            if (!ev || !drawer) return;
+            drawer.style.display = 'block';
+            drawer.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                    <strong style="color:#4ecdc4;">🔍 Event #${ev.id} · ${escHtml(ev.channel)} · ${escHtml(ev.method)} → ${escHtml(ev.target)} (${ev.duration_ms}ms / ${ev.duration_us}µs · status ${ev.status_code} · PID ${ev.pid} · client ${escHtml(ev.client_info)})</strong>
+                    <button class="debug-pill-btn" onclick="document.getElementById('debug-inspector-drawer').style.display='none'">✕ Close</button>
+                </div>
+                ${ev.issue_summary ? `<div style="margin-bottom:0.5rem;padding:0.45rem;border-radius:4px;background:rgba(231,76,60,0.2);color:#ff8787;"><strong>⚠️ Issue Diagnostic:</strong> ${escHtml(ev.issue_summary)}</div>` : ''}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                    <div>
+                        <div style="color:#888;margin-bottom:0.25rem;">📥 Incoming Request Payload:</div>
+                        <pre style="margin:0;padding:0.5rem;border-radius:6px;background:rgba(0,0,0,0.5);color:#a8e6cf;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;">${escHtml(ev.request_preview || '{}')}</pre>
+                    </div>
+                    <div>
+                        <div style="color:#888;margin-bottom:0.25rem;">📤 Outgoing Response / Error Preview:</div>
+                        <pre style="margin:0;padding:0.5rem;border-radius:6px;background:rgba(0,0,0,0.5);color:#ffd3b6;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;">${escHtml(ev.response_preview || '{}')}</pre>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStreamComments(notes) {
+            const strip = document.getElementById('stream-comments-strip');
+            if (!strip) return;
+            if (!notes || notes.length === 0) {
+                strip.innerHTML = '';
+                return;
+            }
+            strip.innerHTML = notes.slice(0, 6).map(n => `
+                <div style="padding:3px 9px;border-radius:999px;background:rgba(46,204,113,0.14);border:1px solid rgba(46,204,113,0.38);font-size:0.72rem;color:#a8e6cf;">
+                    💬 <strong>${escHtml(n.author)}:</strong> "${escHtml(n.raw_comment)}"
+                </div>
+            `).join('');
+        }
+
+        async function submitStreamComment() {
+            const authorEl = document.getElementById('stream-comment-author');
+            const inputEl = document.getElementById('stream-comment-input');
+            const comment = (inputEl?.value || '').trim();
+            if (!comment) return;
+            const author = (authorEl?.value || 'Hue/Chris').trim();
+            try {
+                const res = await fetch('/api/debug/comment', {
+                    method: 'POST',
+                    headers: ST_HEADERS,
+                    body: JSON.stringify({
+                        author,
+                        comment,
+                        related_event_id: selectedDebugEventId
+                    })
+                });
+                if (res.ok) {
+                    inputEl.value = '';
+                    await fetchDebugSnapshot();
+                }
+            } catch (e) {}
+        }
+
+        async function fetchDebugSnapshot() {
+            if (debugPaused) return;
+            try {
+                const res = await fetch('/api/debug/events?limit=120', { headers: ST_HEADERS });
+                if (!res.ok) return;
+                const snap = await res.json();
+                debugEvents = snap.events || [];
+                updateDebugStatsUI(snap.stats);
+                renderStreamComments(snap.stream_comments || []);
+                renderDebugTable();
+            } catch (e) {}
+        }
+
+        async function clearDebugEvents() {
+            try {
+                await fetch('/api/debug/clear', { method: 'POST', headers: ST_HEADERS });
+                debugEvents = [];
+                document.getElementById('debug-inspector-drawer').style.display = 'none';
+                await fetchDebugSnapshot();
+            } catch (e) {}
+        }
+
+        async function injectDebugTest(simulateError) {
+            try {
+                await fetch('/api/debug/test', {
+                    method: 'POST',
+                    headers: ST_HEADERS,
+                    body: JSON.stringify({ simulate_error: !!simulateError })
+                });
+                await fetchDebugSnapshot();
+            } catch (e) {}
+        }
+
         loadPersonas();
         loadI1Nexus();
         loadQuantSslAndShares();
+        fetchDebugSnapshot();
+        setInterval(fetchDebugSnapshot, 1500);
 
-        // Connect to WebSocket for live transparency
+        // Connect to WebSocket for live transparency & realtime Service Debug events
         try {
             const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             const ws = new WebSocket(`${wsProto}//${location.host}/ws`);
             ws.onmessage = (e) => {
                 try {
                     const data = JSON.parse(e.data);
-                    addLog(data.type || 'EVENT', JSON.stringify(data));
+                    if (data.type === 'debug_event' && data.event) {
+                        const ev = data.event;
+                        addLog(ev.channel.toUpperCase(), `${ev.method} → ${ev.target} (${ev.status_code}, ${ev.duration_ms}ms) ${ev.issue_summary ? '⚠️ ' + ev.issue_summary : ''}`);
+                        if (!debugPaused) {
+                            if (!debugEvents.some(x => x.id === ev.id)) {
+                                debugEvents.unshift(ev);
+                                if (debugEvents.length > 200) debugEvents.pop();
+                            }
+                            renderDebugTable();
+                        }
+                    } else {
+                        addLog(data.type || 'EVENT', JSON.stringify(data));
+                    }
                 } catch { addLog('RAW', e.data); }
             };
-            ws.onopen = () => addLog('SYSTEM', 'WebSocket connected for live updates');
+            ws.onopen = () => addLog('SYSTEM', 'WebSocket connected for live realtime debug stream');
         } catch (e) { console.log('WS not available'); }
     </script>
 </body>
@@ -3728,10 +4090,234 @@ async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(_state): State<Arc<RwLock<DaemonState>>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|_socket| async {
-        // WebSocket handling for real-time updates
-        // TODO: Implement real-time context streaming
+    ws.on_upgrade(|socket| async move {
+        use axum::extract::ws::Message;
+        use futures::{SinkExt, StreamExt};
+
+        let (mut sender, mut receiver) = socket.split();
+        let mut rx = crate::service_debug::subscribe_debug_events();
+        let mut last_seen_id: u64 =
+            crate::service_debug::get_debug_snapshot(&crate::service_debug::ServiceDebugQuery {
+                limit: Some(1),
+                ..Default::default()
+            })
+            .events
+            .first()
+            .map(|e| e.id)
+            .unwrap_or(0);
+
+        let send_task = tokio::spawn(async move {
+            let mut poll_tick = tokio::time::interval(std::time::Duration::from_millis(600));
+            loop {
+                tokio::select! {
+                    Ok(ev) = rx.recv() => {
+                        if ev.id > last_seen_id {
+                            last_seen_id = ev.id;
+                        }
+                        let payload = serde_json::json!({
+                            "type": "debug_event",
+                            "event": ev,
+                        });
+                        if let Ok(txt) = serde_json::to_string(&payload) {
+                            if sender.send(Message::Text(txt)).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    _ = poll_tick.tick() => {
+                        // Also pick up events appended to ~/.st/service_debug_events.jsonl by stdio MCP or hooks
+                        let snap = crate::service_debug::get_debug_snapshot(
+                            &crate::service_debug::ServiceDebugQuery {
+                                since_id: Some(last_seen_id),
+                                limit: Some(25),
+                                ..Default::default()
+                            },
+                        );
+                        for ev in snap.events.into_iter().rev() {
+                            if ev.id > last_seen_id {
+                                last_seen_id = ev.id;
+                            }
+                            let payload = serde_json::json!({
+                                "type": "debug_event",
+                                "event": ev,
+                            });
+                            if let Ok(txt) = serde_json::to_string(&payload) {
+                                if sender.send(Message::Text(txt)).await.is_err() {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let recv_task =
+            tokio::spawn(async move { while let Some(Ok(_msg)) = receiver.next().await {} });
+
+        tokio::select! {
+            _ = send_task => {},
+            _ = recv_task => {},
+        }
     })
+}
+
+/// Axum middleware that captures incoming HTTP requests and errors into the Realtime Service Debug ring.
+async fn service_debug_middleware(req: Request, next: Next) -> impl IntoResponse {
+    let started = std::time::Instant::now();
+    let method = req.method().to_string();
+    let path = req.uri().path().to_string();
+    let query = req
+        .uri()
+        .query()
+        .map(|q| format!("?{}", q))
+        .unwrap_or_default();
+
+    let res = next.run(req).await;
+    let status = res.status().as_u16();
+    let duration_us = started.elapsed().as_micros() as u64;
+    let is_err = status >= 400;
+
+    // Skip polling noise unless an error occurred
+    let is_noisy_poll = path.starts_with("/api/debug")
+        || path == "/ws"
+        || path == "/health"
+        || path == "/ping"
+        || path == "/ is-alive";
+    // /mcp/* requests are already recorded with rich JSON-RPC payloads in mcp_http.rs unless transport failed
+    let is_mcp_handled = path.starts_with("/mcp") && !is_err && path != "/mcp";
+
+    if (!is_noisy_poll && !is_mcp_handled) || is_err {
+        let channel = if path.starts_with("/v1/helper") {
+            "mechanic-helper"
+        } else if path.starts_with("/v1/") {
+            "llm-proxy"
+        } else if path.starts_with("/cli/") {
+            "cli-daemon"
+        } else if path.starts_with("/mcp") {
+            "mcp-http"
+        } else {
+            "http-api"
+        };
+        let method_label = format!("{} {}", method, path);
+        let req_preview = if query.is_empty() {
+            format!("{} {}", method, path)
+        } else {
+            format!("{} {}{}", method, path, query)
+        };
+        let issue = if is_err {
+            Some(format!("HTTP {} on {} {}{}", status, method, path, query))
+        } else {
+            None
+        };
+        crate::service_debug::record_event(
+            channel,
+            &method_label,
+            &path,
+            status,
+            duration_us,
+            is_err,
+            issue,
+            &req_preview,
+            &format!("HTTP {}", status),
+            "http-client",
+        );
+    }
+
+    res
+}
+
+async fn debug_events_handler(
+    Query(query): Query<crate::service_debug::ServiceDebugQuery>,
+) -> Json<crate::service_debug::ServiceDebugSnapshot> {
+    Json(crate::service_debug::get_debug_snapshot(&query))
+}
+
+async fn debug_clear_handler() -> Json<serde_json::Value> {
+    crate::service_debug::clear_debug_events();
+    Json(serde_json::json!({ "cleared": true }))
+}
+
+#[derive(Deserialize)]
+struct DebugTogglePayload {
+    enabled: bool,
+}
+
+async fn debug_toggle_handler(Json(body): Json<DebugTogglePayload>) -> Json<serde_json::Value> {
+    crate::service_debug::set_debug_capture_enabled(body.enabled);
+    Json(serde_json::json!({
+        "debug_enabled": crate::service_debug::is_debug_capture_enabled()
+    }))
+}
+
+#[derive(Deserialize, Default)]
+struct DebugTestPayload {
+    #[serde(default)]
+    simulate_error: bool,
+}
+
+async fn debug_test_handler(
+    Json(body): Json<DebugTestPayload>,
+) -> Json<crate::service_debug::ServiceDebugEvent> {
+    let ev = if body.simulate_error {
+        crate::service_debug::record_event(
+            "mcp-http",
+            "tools/call",
+            "read",
+            500,
+            1920000,
+            true,
+            Some(
+                "Simulated issue: Tool 'read' timed out after 1920ms on locked resource"
+                    .to_string(),
+            ),
+            r#"{"name":"read","arguments":{"file_path":"src/locked_module.rs"}}"#,
+            r#"{"isError":true,"error":"Resource temporarily unavailable (os error 11)"}"#,
+            "debug-simulator",
+        )
+    } else {
+        crate::service_debug::record_event(
+            "mcp-stdio",
+            "tools/call",
+            "helper",
+            200,
+            3400,
+            false,
+            None,
+            r#"{"name":"helper","arguments":{"input":"Debugging incoming service requests on Smart Tree dashboard"}}"#,
+            r#"{"selection_mode":"documents_desktop_downloads_default","mechanic":"Aye + The Cheet","status":"ok"}"#,
+            "debug-simulator",
+        )
+    };
+    Json(ev)
+}
+
+#[derive(Deserialize)]
+struct StreamCommentPayload {
+    #[serde(default)]
+    author: String,
+    comment: String,
+    #[serde(default)]
+    related_event_id: Option<u64>,
+}
+
+async fn debug_comment_handler(
+    Json(body): Json<StreamCommentPayload>,
+) -> Json<crate::service_debug::StreamPartnershipNote> {
+    Json(crate::service_debug::add_stream_comment(
+        &body.author,
+        &body.comment,
+        body.related_event_id,
+    ))
+}
+
+async fn flow_page_handler() -> axum::response::Html<&'static str> {
+    axum::response::Html(crate::flow_broadcaster::render_flow_page_html())
+}
+
+async fn flow_feed_handler() -> Json<crate::flow_broadcaster::FlowFeedResponse> {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    Json(crate::flow_broadcaster::build_flow_feed(cwd.as_path()))
 }
 
 // === Collaboration Station Handlers ===

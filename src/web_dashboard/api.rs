@@ -809,3 +809,100 @@ pub async fn get_active_prompts(State(state): State<SharedState>) -> Json<Vec<Pr
 
     Json(list)
 }
+
+// ----- Realtime Service Debug Mode Endpoints -----
+
+pub async fn get_debug_events(
+    Query(query): Query<crate::service_debug::ServiceDebugQuery>,
+) -> Json<crate::service_debug::ServiceDebugSnapshot> {
+    Json(crate::service_debug::get_debug_snapshot(&query))
+}
+
+pub async fn clear_debug_events() -> Json<serde_json::Value> {
+    crate::service_debug::clear_debug_events();
+    Json(serde_json::json!({ "cleared": true }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DebugToggleRequest {
+    pub enabled: bool,
+}
+
+pub async fn toggle_debug_capture(Json(req): Json<DebugToggleRequest>) -> Json<serde_json::Value> {
+    crate::service_debug::set_debug_capture_enabled(req.enabled);
+    Json(serde_json::json!({
+        "debug_enabled": crate::service_debug::is_debug_capture_enabled()
+    }))
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct DebugTestRequest {
+    #[serde(default)]
+    pub simulate_error: bool,
+}
+
+pub async fn inject_debug_test(
+    Json(req): Json<DebugTestRequest>,
+) -> Json<crate::service_debug::ServiceDebugEvent> {
+    let ev = if req.simulate_error {
+        crate::service_debug::record_event(
+            "mcp-http",
+            "tools/call",
+            "read",
+            500,
+            1920000,
+            true,
+            Some(
+                "Simulated issue: Tool 'read' timed out after 1920ms on locked resource"
+                    .to_string(),
+            ),
+            r#"{"name":"read","arguments":{"file_path":"src/locked_module.rs"}}"#,
+            r#"{"isError":true,"error":"Resource temporarily unavailable (os error 11)"}"#,
+            "dashboard-debug",
+        )
+    } else {
+        crate::service_debug::record_event(
+            "mcp-stdio",
+            "tools/call",
+            "helper",
+            200,
+            3400,
+            false,
+            None,
+            r#"{"name":"helper","arguments":{"whats_the_situation":"Realtime service debug check from Smart Tree Dashboard"}}"#,
+            r#"{"selection_mode":"documents_desktop_downloads_default","mechanic":"Aye + The Cheet","status":"ok"}"#,
+            "dashboard-debug",
+        )
+    };
+    Json(ev)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DebugStreamCommentRequest {
+    #[serde(default)]
+    pub author: String,
+    pub comment: String,
+    #[serde(default)]
+    pub related_event_id: Option<u64>,
+}
+
+pub async fn post_debug_comment(
+    Json(req): Json<DebugStreamCommentRequest>,
+) -> Json<crate::service_debug::StreamPartnershipNote> {
+    Json(crate::service_debug::add_stream_comment(
+        &req.author,
+        &req.comment,
+        req.related_event_id,
+    ))
+}
+
+pub async fn serve_flow_page() -> axum::response::Html<&'static str> {
+    axum::response::Html(crate::flow_broadcaster::render_flow_page_html())
+}
+
+pub async fn get_flow_feed(
+    State(state): State<SharedState>,
+) -> Json<crate::flow_broadcaster::FlowFeedResponse> {
+    let cwd = state.read().await.cwd.clone();
+    Json(crate::flow_broadcaster::build_flow_feed(cwd.as_path()))
+}

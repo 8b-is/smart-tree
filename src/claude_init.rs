@@ -316,14 +316,14 @@ impl ClaudeInit {
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-restore"
+                            "command": "st --agent-restore"
                         }]
                     }],
                     "SessionEnd": [{
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-save"
+                            "command": "st --agent-save"
                         }]
                     }],
                     "PreToolUse": [{
@@ -341,14 +341,14 @@ impl ClaudeInit {
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-restore"
+                            "command": "st --agent-restore"
                         }]
                     }],
                     "SessionEnd": [{
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-save"
+                            "command": "st --agent-save"
                         }]
                     }],
                     "PreToolUse": [{
@@ -366,14 +366,14 @@ impl ClaudeInit {
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-restore"
+                            "command": "st --agent-restore"
                         }]
                     }],
                     "SessionEnd": [{
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-save"
+                            "command": "st --agent-save"
                         }]
                     }],
                     "PreToolUse": [{
@@ -392,14 +392,14 @@ impl ClaudeInit {
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-restore"
+                            "command": "st --agent-restore"
                         }]
                     }],
                     "SessionEnd": [{
                         "matcher": "",
                         "hooks": [{
                             "type": "command",
-                            "command": "st --claude-save"
+                            "command": "st --agent-save"
                         }]
                     }]
                 })
@@ -613,33 +613,33 @@ Use `st --help` to explore more features!
     /// Show what settings would be generated without writing
     pub fn show_suggested(&self) -> Result<()> {
         println!(
-            "📋 Suggested Claude integration for {:?} project:\n",
+            "📋 Suggested AI Agent integration for {:?} project:\n",
             self.project_type
         );
 
         // NO automatic UserPromptSubmit dumps - AI requests context via MCP tools when needed
         let hooks = match self.project_type {
             ProjectType::Rust => json!({
-                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
-                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}],
+                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --agent-restore"}]}],
+                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --agent-save"}]}],
                 "PreToolUse": [{"matcher": "cargo (build|test|run)", "hooks": [{"type": "command", "command": "st -m summary --depth 1 target/"}]}]
             }),
             ProjectType::Python => json!({
-                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
-                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}],
+                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --agent-restore"}]}],
+                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --agent-save"}]}],
                 "PreToolUse": [{"matcher": "pytest|python.*test", "hooks": [{"type": "command", "command": "st -m summary --depth 2 tests/"}]}]
             }),
             _ => json!({
-                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-restore"}]}],
-                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --claude-save"}]}]
+                "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "st --agent-restore"}]}],
+                "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "st --agent-save"}]}]
             }),
         };
 
         let settings = json!({"hooks": hooks});
-        println!("━━━ Add to .claude/settings.json ━━━");
+        println!("━━━ Add to .agents/hooks.json or .claude/settings.json ━━━");
         println!("{}\n", serde_json::to_string_pretty(&settings)?);
 
-        println!("💡 Or run: st --setup-claude (will ask before overwriting)");
+        println!("💡 Or run: st --hooks-install");
         Ok(())
     }
 }

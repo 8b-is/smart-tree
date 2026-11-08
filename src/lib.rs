@@ -73,11 +73,18 @@ pub mod mcp;
 // In-memory logger for API access
 pub mod in_memory_logger;
 
+// Realtime Service Debug Inspector (captures MCP stdio/HTTP, Agent Hooks, LLM Proxy & HTTP traffic)
+pub mod service_debug;
+
+// Visual Studio-style Live Diff Flow & Brett Favre Sports Commentary + Capsela Improvement Tracker
+pub mod flow_broadcaster;
+
 // Feedback API client for Smart Tree Hub at 8s.is.
 pub mod feedback_client;
 
-// Claude integration initializer - auto-configures optimal .claude directory
+// AI Agent integration initializer - auto-configures optimal agent directory (.agents / .claude)
 pub mod claude_init;
+pub use claude_init as agent_init;
 
 // AI integration installer - unified setup for all AI platforms
 pub mod ai_install;
@@ -206,8 +213,9 @@ pub mod m8_format_converter;
 // Quantum Wave Signatures - Full 32-bit consciousness patterns (not horse apples!)
 pub mod quantum_wave_signature;
 
-// Claude Hook Handler - Comprehensive context provider for conversations
+// AI Agent Hook Handler - Comprehensive context provider for AI agent conversations
 pub mod claude_hook;
+pub use claude_hook as agent_hook;
 
 // Marqant - Quantum-compressed markdown format (external crate from ./marqant submodule)
 // Now accessed via: use marqant::Marqant;

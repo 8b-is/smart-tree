@@ -962,17 +962,33 @@ class Dashboard {
 
     // Quick Action Buttons
     initQuickActions() {
-        document.getElementById('btnClaudeContinue').addEventListener('click', () => {
-            this.runCommand('claude --dangerously-skip-permissions -c');
-        });
+        const btnContinue = document.getElementById('btnAgentContinue') || document.getElementById('btnClaudeContinue');
+        if (btnContinue) {
+            btnContinue.addEventListener('click', () => {
+                this.runCommand('st --agent-restore');
+            });
+        }
 
-        document.getElementById('btnClaudeNew').addEventListener('click', () => {
-            this.runCommand('claude --dangerously-skip-permissions');
-        });
+        const btnNew = document.getElementById('btnAgentNew') || document.getElementById('btnClaudeNew');
+        if (btnNew) {
+            btnNew.addEventListener('click', () => {
+                this.runCommand('st --agent-context');
+            });
+        }
 
-        document.getElementById('btnST').addEventListener('click', () => {
-            this.runCommand('st -m ai .');
-        });
+        const btnSt = document.getElementById('btnST');
+        if (btnSt) {
+            btnSt.addEventListener('click', () => {
+                this.runCommand('st -m ai .');
+            });
+        }
+
+        const btnDbg = document.getElementById('btnServiceDebug');
+        if (btnDbg) {
+            btnDbg.addEventListener('click', () => {
+                if (window.serviceDebugHub) window.serviceDebugHub.open();
+            });
+        }
     }
 
     // Send command to active terminal
@@ -2059,6 +2075,8 @@ class CollabPanel {
     typeEmoji(type) {
         switch ((type || '').toLowerCase()) {
             case 'human': return '👤';
+            case 'ai_agent':
+            case 'agent':
             case 'claude': return '🤖';
             case 'omni': return '🌀';
             case 'grok': return '⚡';
@@ -2213,6 +2231,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.collabPanel = new CollabPanel();
     window.providersHub = new ProvidersHub();
     window.grandmaWebsiteMaker = new GrandmaWebsiteMaker();
+    window.serviceDebugHub = new ServiceDebugHub();
 });
 
 // ============================================================================
@@ -2722,5 +2741,275 @@ class GrandmaWebsiteMaker {
         previewContent.innerHTML = `
             <iframe src="${result.preview_url}" style="width:100%;height:100%;min-height:520px;border:none;border-radius:10px;background:#fff;"></iframe>
         `;
+    }
+}
+
+// ============================================================================
+// Realtime Service Debug Mode Hub (MCP stdio/HTTP, Agent Hooks, LLM Proxy, HTTP)
+// ============================================================================
+
+class ServiceDebugHub {
+    constructor() {
+        this.modal = document.getElementById('debugModalBackdrop');
+        this.openBtn = document.getElementById('openDebugModalBtn');
+        this.closeBtn = document.getElementById('closeDebugModal');
+        this.badge = document.getElementById('debugHeaderBadge');
+        this.tbody = document.getElementById('wdDbgTbody');
+        this.inspector = document.getElementById('wdDbgInspector');
+        this.searchInput = document.getElementById('wdDbgSearchInput');
+        this.pauseBtn = document.getElementById('wdDbgPauseBtn');
+        this.liveStatus = document.getElementById('wdDbgLiveStatus');
+        this.events = [];
+        this.paused = false;
+        this.channelFilter = 'all';
+
+        this.init();
+    }
+
+    init() {
+        if (this.openBtn) this.openBtn.addEventListener('click', () => this.open());
+        if (this.closeBtn) this.closeBtn.addEventListener('click', () => this.close());
+        if (this.modal) {
+            this.modal.addEventListener('click', (e) => {
+                if (e.target === this.modal) this.close();
+            });
+        }
+        if (this.pauseBtn) {
+            this.pauseBtn.addEventListener('click', () => {
+                this.paused = !this.paused;
+                this.pauseBtn.textContent = this.paused ? '▶ Resume' : '⏸ Pause';
+                if (this.liveStatus) {
+                    this.liveStatus.textContent = this.paused ? '⏸ PAUSED' : '🟢 LIVE';
+                    this.liveStatus.style.color = this.paused ? '#f39c12' : '#2ecc71';
+                }
+                if (!this.paused) this.fetchSnapshot();
+            });
+        }
+        const okBtn = document.getElementById('wdDbgTestOkBtn');
+        if (okBtn) okBtn.addEventListener('click', () => this.injectTest(false));
+        const errBtn = document.getElementById('wdDbgTestErrBtn');
+        if (errBtn) errBtn.addEventListener('click', () => this.injectTest(true));
+        const clrBtn = document.getElementById('wdDbgClearBtn');
+        if (clrBtn) clrBtn.addEventListener('click', () => this.clearEvents());
+        const postCommentBtn = document.getElementById('wdDbgPostCommentBtn');
+        if (postCommentBtn) postCommentBtn.addEventListener('click', () => this.submitComment());
+        const commentInput = document.getElementById('wdDbgCommentInput');
+        if (commentInput) {
+            commentInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.submitComment();
+            });
+        }
+        if (this.searchInput) {
+            this.searchInput.addEventListener('input', () => this.renderTable());
+        }
+        document.querySelectorAll('.wd-dbg-filter').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                this.channelFilter = btn.dataset.ch || 'all';
+                document.querySelectorAll('.wd-dbg-filter').forEach((b) => {
+                    b.classList.remove('active');
+                    b.classList.add('ghost');
+                });
+                btn.classList.remove('ghost');
+                btn.classList.add('active');
+                this.renderTable();
+            });
+        });
+
+        this.fetchSnapshot();
+        setInterval(() => this.fetchSnapshot(), 1500);
+        if (new URLSearchParams(location.search).get('debug') === '1') {
+            this.open();
+        }
+    }
+
+    open() {
+        if (!this.modal) return;
+        this.modal.classList.add('visible');
+        this.fetchSnapshot();
+    }
+
+    close() {
+        if (!this.modal) return;
+        this.modal.classList.remove('visible');
+    }
+
+    esc(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async fetchSnapshot() {
+        if (this.paused) return;
+        try {
+            const res = await fetch('/api/debug/events?limit=120');
+            if (!res.ok) return;
+            const snap = await res.json();
+            this.events = snap.events || [];
+            this.updateStats(snap.stats);
+            this.renderComments(snap.stream_comments || []);
+            this.renderTable();
+        } catch (_) {}
+    }
+
+    renderComments(notes) {
+        const strip = document.getElementById('wdDbgCommentsStrip');
+        if (!strip) return;
+        if (!notes || notes.length === 0) {
+            strip.innerHTML = '';
+            return;
+        }
+        strip.innerHTML = notes.slice(0, 6).map((n) => `
+            <span style="padding:3px 9px;border-radius:999px;background:rgba(46,204,113,0.14);border:1px solid rgba(46,204,113,0.38);font-size:11px;color:#a8e6cf;">
+                💬 <strong>${this.esc(n.author)}:</strong> "${this.esc(n.raw_comment)}"
+            </span>
+        `).join('');
+    }
+
+    async submitComment() {
+        const authorEl = document.getElementById('wdDbgCommentAuthor');
+        const inputEl = document.getElementById('wdDbgCommentInput');
+        const comment = (inputEl?.value || '').trim();
+        if (!comment) return;
+        const author = (authorEl?.value || 'Hue/Chris').trim();
+        try {
+            const res = await fetch('/api/debug/comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    author,
+                    comment,
+                    related_event_id: this.selectedEventId || null
+                })
+            });
+            if (res.ok) {
+                inputEl.value = '';
+                await this.fetchSnapshot();
+            }
+        } catch (_) {}
+    }
+
+    updateStats(stats) {
+        if (!stats) return;
+        const setTxt = (id, v) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = v;
+        };
+        setTxt('wdDbgTotal', stats.total_events || 0);
+        setTxt('wdDbgErrors', stats.error_events || 0);
+        setTxt('wdDbgSlow', stats.slow_events || 0);
+        setTxt('wdDbgMcp', stats.mcp_events || 0);
+        setTxt('wdDbgHooks', stats.hook_events || 0);
+        setTxt('wdDbgLlm', stats.llm_proxy_events || 0);
+        setTxt('wdDbgAvgMs', (stats.avg_duration_ms || 0) + ' ms');
+        if (this.badge) {
+            const errs = stats.error_events || 0;
+            this.badge.textContent = errs > 0 ? `Debug (${stats.total_events || 0} · ⚠️ ${errs})` : `Debug (${stats.total_events || 0})`;
+            this.badge.style.color = errs > 0 ? '#ff6b6b' : '';
+        }
+        const banner = document.getElementById('wdDbgLastIssueBanner');
+        if (banner) {
+            if (stats.last_issue && (stats.last_issue.is_error || stats.last_issue.is_slow || stats.last_issue.issue_summary)) {
+                const li = stats.last_issue;
+                banner.classList.remove('hidden');
+                banner.innerHTML = `<strong>🚨 Latest Issue (${this.esc(li.channel)} · ${this.esc(li.method)} → ${this.esc(li.target)}):</strong> ${this.esc(li.issue_summary || 'Error')} (status ${li.status_code}, ${li.duration_ms}ms, PID ${li.pid})`;
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+    }
+
+    renderTable() {
+        if (!this.tbody) return;
+        const q = (this.searchInput?.value || '').trim().toLowerCase();
+        const filtered = this.events.filter((ev) => {
+            if (this.channelFilter === 'issues') {
+                if (!ev.is_error && !ev.is_slow && !ev.issue_summary) return false;
+            } else if (this.channelFilter === 'mcp') {
+                if (!String(ev.channel || '').startsWith('mcp')) return false;
+            } else if (this.channelFilter !== 'all') {
+                if (ev.channel !== this.channelFilter) return false;
+            }
+            if (q) {
+                const hay = `${ev.channel} ${ev.method} ${ev.target} ${ev.issue_summary || ''} ${ev.request_preview || ''} ${ev.response_preview || ''}`.toLowerCase();
+                if (!hay.includes(q)) return false;
+            }
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            this.tbody.innerHTML = '<tr><td colspan="8" style="padding:14px;text-align:center;color:#888;">No matching debug events yet.</td></tr>';
+            return;
+        }
+
+        this.tbody.innerHTML = filtered.slice(0, 100).map((ev) => {
+            const t = (ev.timestamp_iso || '').split('T')[1]?.replace('Z', '').substring(0, 12) || '--:--:--';
+            const sev = ev.severity || (ev.is_error ? 'error' : (ev.is_slow ? 'warn' : 'ok'));
+            const sevColor = sev === 'error' ? '#ff6b6b' : (sev === 'warn' ? '#f39c12' : '#2ecc71');
+            const rowBg = ev.is_error ? 'rgba(231,76,60,0.14)' : (ev.is_slow ? 'rgba(243,156,18,0.12)' : 'transparent');
+            const summary = ev.issue_summary
+                ? `<span style="color:#ff9f43;font-weight:bold;">⚠️ ${this.esc(ev.issue_summary)}</span>`
+                : `<span style="color:#aaa;">${this.esc((ev.request_preview || '').substring(0, 80))}</span>`;
+            return `<tr style="background:${rowBg};border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" data-ev-id="${ev.id}">
+                <td style="padding:5px 8px;color:#888;">${this.esc(t)}</td>
+                <td style="padding:5px 8px;color:${sevColor};font-weight:bold;">${ev.status_code} ${sev.toUpperCase()}</td>
+                <td style="padding:5px 8px;color:#4ecdc4;">${this.esc(ev.channel)}</td>
+                <td style="padding:5px 8px;color:#888;">${ev.pid || '-'}</td>
+                <td style="padding:5px 8px;color:#4ecdc4;font-weight:bold;">${this.esc(ev.method)}</td>
+                <td style="padding:5px 8px;color:#f39c12;">${this.esc(ev.target)}</td>
+                <td style="padding:5px 8px;">${ev.duration_ms} ms</td>
+                <td style="padding:5px 8px;">${summary}</td>
+            </tr>`;
+        }).join('');
+
+        this.tbody.querySelectorAll('tr[data-ev-id]').forEach((row) => {
+            row.addEventListener('click', () => {
+                const id = Number(row.getAttribute('data-ev-id'));
+                this.inspectEvent(id);
+            });
+        });
+    }
+
+    inspectEvent(id) {
+        const ev = this.events.find((e) => e.id === id);
+        if (!ev || !this.inspector) return;
+        this.inspector.classList.remove('hidden');
+        this.inspector.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <strong style="color:#4ecdc4;">🔍 Event #${ev.id} · ${this.esc(ev.channel)} · ${this.esc(ev.method)} → ${this.esc(ev.target)} (${ev.duration_ms}ms / ${ev.duration_us}µs · status ${ev.status_code} · PID ${ev.pid})</strong>
+                <button type="button" class="btn-pill ghost" id="wdDbgCloseInspectorBtn">✕ Close</button>
+            </div>
+            ${ev.issue_summary ? `<div style="margin-bottom:6px;padding:6px;border-radius:4px;background:rgba(231,76,60,0.2);color:#ff8787;"><strong>⚠️ Issue Diagnostic:</strong> ${this.esc(ev.issue_summary)}</div>` : ''}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                    <div style="color:#888;margin-bottom:4px;">📥 Incoming Request Payload:</div>
+                    <pre style="margin:0;padding:8px;border-radius:6px;background:rgba(0,0,0,0.55);color:#a8e6cf;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;">${this.esc(ev.request_preview || '{}')}</pre>
+                </div>
+                <div>
+                    <div style="color:#888;margin-bottom:4px;">📤 Outgoing Response / Error Preview:</div>
+                    <pre style="margin:0;padding:8px;border-radius:6px;background:rgba(0,0,0,0.55);color:#ffd3b6;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;">${this.esc(ev.response_preview || '{}')}</pre>
+                </div>
+            </div>
+        `;
+        const closeBtn = document.getElementById('wdDbgCloseInspectorBtn');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.inspector.classList.add('hidden'));
+    }
+
+    async injectTest(simulateError) {
+        try {
+            await fetch('/api/debug/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ simulate_error: !!simulateError })
+            });
+            await this.fetchSnapshot();
+        } catch (_) {}
+    }
+
+    async clearEvents() {
+        try {
+            await fetch('/api/debug/clear', { method: 'POST' });
+            this.events = [];
+            if (this.inspector) this.inspector.classList.add('hidden');
+            await this.fetchSnapshot();
+        } catch (_) {}
     }
 }

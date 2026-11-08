@@ -320,7 +320,7 @@ pub struct Cli {
     // =========================================================================
     // HOOKS
     // =========================================================================
-    /// Install Smart Tree hooks to AI Agent settings (Antigravity/agy & Claude)
+    /// Install Smart Tree hooks to AI Agent settings (Antigravity/agy, OpenCode, Crush, & Claude)
     #[arg(long, exclusive = true, help_heading = "Hooks")]
     pub hooks_install: bool,
 
@@ -328,9 +328,10 @@ pub struct Cli {
     #[arg(long, value_name = "ACTION", value_parser = ["enable", "disable", "status"], help_heading = "Hooks")]
     pub hooks_config: Option<String>,
 
-    /// Execute an Antigravity (agy) lifecycle hook handler (stdin JSON -> stdout JSON)
+    /// Execute an AI Agent lifecycle hook handler (stdin JSON -> stdout JSON)
     #[arg(
         long,
+        alias = "agent-hook",
         value_name = "EVENT",
         value_parser = [
             "session-start",
@@ -977,6 +978,9 @@ pub struct G8tCommand {
     /// Number of top results to display (or max routines to golf)
     #[arg(long)]
     pub top: Option<usize>,
+    /// Optional project directory or file path for capsule chain / submit
+    #[arg(long)]
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone, clap::Args)]

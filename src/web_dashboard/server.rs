@@ -91,6 +91,59 @@ async fn check_allowed_network(
     }
 }
 
+/// Capture non-polling dashboard API calls and errors into the Realtime Service Debug ring.
+async fn dashboard_debug_middleware(req: Request<Body>, next: Next) -> Response {
+    let started = std::time::Instant::now();
+    let method = req.method().to_string();
+    let path = req.uri().path().to_string();
+    let query = req
+        .uri()
+        .query()
+        .map(|q| format!("?{}", q))
+        .unwrap_or_default();
+
+    let res = next.run(req).await;
+    let status = res.status().as_u16();
+    let duration_us = started.elapsed().as_micros() as u64;
+    let is_err = status >= 400;
+
+    let is_static_or_poll = path == "/"
+        || path.ends_with(".js")
+        || path.ends_with(".css")
+        || path.starts_with("/api/debug")
+        || path == "/api/health"
+        || path == "/api/prompt"
+        || path.starts_with("/ws/");
+
+    if !is_static_or_poll || is_err {
+        let method_label = format!("{} {}", method, path);
+        let req_preview = if query.is_empty() {
+            method_label.clone()
+        } else {
+            format!("{}{}", method_label, query)
+        };
+        let issue = if is_err {
+            Some(format!("Dashboard HTTP {} on {}", status, req_preview))
+        } else {
+            None
+        };
+        crate::service_debug::record_event(
+            "http-api",
+            &method_label,
+            &path,
+            status,
+            duration_us,
+            is_err,
+            issue,
+            &req_preview,
+            &format!("HTTP {}", status),
+            "web-dashboard",
+        );
+    }
+
+    res
+}
+
 /// Start the web dashboard server
 pub async fn start_server(
     port: u16,
@@ -184,6 +237,15 @@ pub async fn start_server(
         .route("/api/voice/transcribe", post(voice::transcribe))
         .route("/api/voice/register", post(voice::register_speaker))
         .route("/api/voice/speak", post(voice::speak))
+        // Realtime Service Debug Mode API + Visual Studio Live Diff /flow Broadcaster
+        .route("/flow", get(api::serve_flow_page))
+        .route("/api/flow/feed", get(api::get_flow_feed))
+        .route("/api/debug/events", get(api::get_debug_events))
+        .route("/api/debug/clear", post(api::clear_debug_events))
+        .route("/api/debug/toggle", post(api::toggle_debug_capture))
+        .route("/api/debug/test", post(api::inject_debug_test))
+        .route("/api/debug/comment", post(api::post_debug_comment))
+        .layer(axum::middleware::from_fn(dashboard_debug_middleware))
         .layer(axum::Extension(allowed.clone()))
         .layer(CorsLayer::permissive())
         .with_state(state);

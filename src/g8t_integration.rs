@@ -1027,9 +1027,26 @@ pub fn format_partnership_aye_id(partner: &str, arch: &str) -> String {
 }
 
 /// Measure hardware cycles locally over `8` windows × `100,000` iterations (`800,000` ops)
-/// using `_rdtsc` / `cntvct_el0` and `Instant`.
+/// by compiling `source_code` with `rustc --edition 2021 -C opt-level=3` (`#[inline(never)]`)
+/// and timing real native calls with `_rdtsc` / `cntvct_el0` and `Instant`.
 pub fn benchmark_rust_function_locally(source_code: &str) -> LocalHardwareBenchmark {
     let hardware = detect_hardware_arch();
+
+    // Compile and execute the real function via rustc -C opt-level=3 + _rdtsc when valid Rust fn source is provided
+    if let Ok(proof) = prove_capsule_with_rustc(source_code) {
+        return LocalHardwareBenchmark {
+            hardware,
+            ops_completed: proof.ops_completed,
+            processing_time_ns: proof.processing_time_ns,
+            cpu_cycles: proof.cpu_cycles,
+            sample_durations_ns: proof.sample_durations_ns,
+            cycles_per_op_pq: proof.cycles_per_op_pq,
+            cycles_per_op: proof.cycles_per_op,
+            ns_per_op_pq: proof.ns_per_op_pq,
+            ns_per_op: proof.ns_per_op,
+        };
+    }
+
     const WINDOWS: usize = 8;
     const ITERS_PER_WINDOW: u64 = 100_000;
     const TOTAL_OPS: u64 = (WINDOWS as u64) * ITERS_PER_WINDOW;
@@ -2402,20 +2419,44 @@ pub struct LocalRustcProof {
     pub ns_per_op_pq: String,
 }
 
-fn parse_fn_header_signature(source_code: &str) -> Result<(String, Vec<String>, String, String)> {
-    let fn_line = source_code
-        .lines()
-        .map(str::trim)
-        .find(|l| {
-            !l.starts_with("//")
-                && (l.starts_with("pub fn ")
-                    || l.starts_with("pub const fn ")
-                    || l.starts_with("fn ")
-                    || l.starts_with("const fn "))
-        })
-        .context("Could not find standalone `fn` declaration in capsule source")?;
+type ParsedFnHeaderSignature = (String, Vec<(String, String)>, Vec<String>, String, String);
 
-    let after_fn = fn_line
+fn parse_fn_header_signature_with_names(source_code: &str) -> Result<ParsedFnHeaderSignature> {
+    let mut header_buf = String::new();
+    let mut found_fn = false;
+    for line in source_code.lines() {
+        let trimmed = line.split("//").next().unwrap_or("").trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !found_fn {
+            if trimmed.starts_with("pub fn ")
+                || trimmed.starts_with("pub const fn ")
+                || trimmed.starts_with("fn ")
+                || trimmed.starts_with("const fn ")
+            {
+                found_fn = true;
+                header_buf.push_str(trimmed);
+                header_buf.push(' ');
+                if trimmed.contains('{') {
+                    break;
+                }
+            }
+        } else {
+            header_buf.push_str(trimmed);
+            header_buf.push(' ');
+            if trimmed.contains('{') {
+                break;
+            }
+        }
+    }
+
+    if !found_fn {
+        bail!("Could not find standalone `fn` declaration in capsule source");
+    }
+
+    let header_before_brace = header_buf.split('{').next().unwrap_or(&header_buf).trim();
+    let after_fn = header_before_brace
         .split("fn ")
         .nth(1)
         .context("Malformed `fn` declaration")?;
@@ -2427,16 +2468,23 @@ fn parse_fn_header_signature(source_code: &str) -> Result<(String, Vec<String>, 
         .split_once(')')
         .context("Missing `)` in function declaration")?;
 
+    let mut named_params = Vec::new();
     let mut param_types = Vec::new();
     for p in params_raw.split(',') {
         let p_trim = p.trim();
         if p_trim.is_empty() {
             continue;
         }
-        let (_, ty_raw) = p_trim
+        let (name_raw, ty_raw) = p_trim
             .split_once(':')
             .context("Parameter missing `: <type>`")?;
+        let clean_name = name_raw
+            .trim()
+            .trim_start_matches("mut ")
+            .trim()
+            .to_string();
         let clean_ty: String = ty_raw.chars().filter(|c| !c.is_whitespace()).collect();
+        named_params.push((clean_name, clean_ty.clone()));
         param_types.push(clean_ty);
     }
 
@@ -2449,6 +2497,12 @@ fn parse_fn_header_signature(source_code: &str) -> Result<(String, Vec<String>, 
     let out_ty: String = ret_part.chars().filter(|c| !c.is_whitespace()).collect();
     let sig_key = format!("({})->{}", param_types.join(","), out_ty);
 
+    Ok((fn_name, named_params, param_types, out_ty, sig_key))
+}
+
+fn parse_fn_header_signature(source_code: &str) -> Result<(String, Vec<String>, String, String)> {
+    let (fn_name, _named, param_types, out_ty, sig_key) =
+        parse_fn_header_signature_with_names(source_code)?;
     Ok((fn_name, param_types, out_ty, sig_key))
 }
 
@@ -2549,11 +2603,129 @@ fn parse_elf64_sym_size_local(elf: &[u8], target_sym: &[u8]) -> Option<u64> {
     None
 }
 
+fn build_local_capsule_arg_binding(idx: usize, ty: &str, seed_expr: &str) -> (String, String) {
+    let var_name = format!("arg_{idx}");
+    match ty {
+        "u64" | "i64" | "u32" | "i32" | "u16" | "i16" | "u8" | "i8" | "usize" | "isize"
+        | "u128" | "i128" => (
+            format!("    let {var_name}: {ty} = std::hint::black_box(({seed_expr}) as {ty});\n"),
+            var_name,
+        ),
+        "bool" => (
+            format!("    let {var_name}: bool = std::hint::black_box((({seed_expr}) & 1) != 0);\n"),
+            var_name,
+        ),
+        "&str" => (
+            format!(
+                "    let {var_name}: &str = std::hint::black_box(if (({seed_expr}) & 1) == 0 {{ \"ayecast-g8t\" }} else {{ \"smart-tree\" }});\n"
+            ),
+            var_name,
+        ),
+        _ if ty.starts_with("&[") && ty.ends_with(']') => {
+            let elem_ty = &ty[2..ty.len() - 1];
+            let buf_name = format!("buf_{idx}");
+            let cast_expr = if elem_ty == "bool" {
+                format!("((({seed_expr}).wrapping_add((k as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15u64)) & 1) != 0)")
+            } else {
+                format!("(({seed_expr}).wrapping_add((k as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15u64))) as {elem_ty}")
+            };
+            let stmt = format!(
+                "    let {buf_name}: [{elem_ty}; 8] = core::array::from_fn(|k| {cast_expr});\n    let {var_name}: {ty} = std::hint::black_box(&{buf_name});\n"
+            );
+            (stmt, var_name)
+        }
+        _ if ty.starts_with('[') && ty.ends_with(']') => {
+            let inner = &ty[1..ty.len() - 1];
+            let (elem_ty, _len) = inner.rsplit_once(';').unwrap_or(("u8", "4"));
+            let elem_ty = elem_ty.trim();
+            let cast_expr = if elem_ty == "bool" {
+                format!("((({seed_expr}).wrapping_add((k as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15u64)) & 1) != 0)")
+            } else {
+                format!("(({seed_expr}).wrapping_add((k as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15u64))) as {elem_ty}")
+            };
+            let stmt = format!(
+                "    let {var_name}: {ty} = std::hint::black_box(core::array::from_fn(|k| {cast_expr}));\n"
+            );
+            (stmt, var_name)
+        }
+        _ if ty.starts_with("Vec<") && ty.ends_with('>') => {
+            let elem_ty = &ty[4..ty.len() - 1];
+            let cast_expr = if elem_ty == "bool" {
+                format!("((({seed_expr}).wrapping_add(k.wrapping_mul(0x9E37_79B9_7F4A_7C15u64)) & 1) != 0)")
+            } else {
+                format!("(({seed_expr}).wrapping_add(k.wrapping_mul(0x9E37_79B9_7F4A_7C15u64))) as {elem_ty}")
+            };
+            let stmt = format!(
+                "    let {var_name}: {ty} = std::hint::black_box((0..8u64).map(|k| {cast_expr}).collect());\n"
+            );
+            (stmt, var_name)
+        }
+        _ => (
+            format!("    let {var_name}: {ty} = Default::default();\n"),
+            var_name,
+        ),
+    }
+}
+
+fn run_binary_with_timeout_local(
+    bin_path: &std::path::Path,
+    timeout: std::time::Duration,
+) -> Result<std::process::Output> {
+    static BENCH_EXEC_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let lock = BENCH_EXEC_LOCK.get_or_init(|| std::sync::Mutex::new(()));
+    let _guard = lock.lock().ok();
+
+    let mut child = std::process::Command::new(bin_path)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("Failed to spawn compiled capsule benchmark binary")?;
+
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return child
+                    .wait_with_output()
+                    .context("Failed to collect capsule benchmark output");
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    bail!(
+                        "Compiled capsule benchmark binary timed out after {} ms",
+                        timeout.as_millis()
+                    );
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                bail!("Error waiting for capsule benchmark binary: {e}");
+            }
+        }
+    }
+}
+
 /// Compile `source_code` with `rustc --edition 2021 -C opt-level=3 --emit=asm,link`,
 /// run the 64 canonical `g8t.is` equivalence test vectors (`0..64 * 0x9E37_79B9_7F4A_7C15`),
 /// extract ELF `.text` bytes + `asm_instruction_count`, and run the 8-window `_rdtsc` benchmark.
 pub fn prove_capsule_with_rustc(source_code: &str) -> Result<LocalRustcProof> {
     static PROOF_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    static PROOF_CACHE: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, LocalRustcProof>>,
+    > = std::sync::OnceLock::new();
+
+    let cache_key = source_code.trim().to_string();
+    let cache = PROOF_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+    if let Ok(guard) = cache.lock() {
+        if let Some(cached) = guard.get(&cache_key) {
+            return Ok(cached.clone());
+        }
+    }
+
     struct ProofTempDir(std::path::PathBuf);
     impl ProofTempDir {
         fn path(&self) -> &std::path::Path {
@@ -2614,17 +2786,9 @@ pub fn prove_capsule_with_rustc(source_code: &str) -> Result<LocalRustcProof> {
                 (idx * 13) % 63 + 1
             )
         };
-        let var_name = format!("arg_{idx}");
-        if ty == "bool" {
-            arg_bindings.push_str(&format!(
-                "    let {var_name}: bool = std::hint::black_box((({seed_expr}) & 1) != 0);\n"
-            ));
-        } else {
-            arg_bindings.push_str(&format!(
-                "    let {var_name}: {ty} = std::hint::black_box(({seed_expr}) as {ty});\n"
-            ));
-        }
-        call_args.push(var_name);
+        let (stmt, expr) = build_local_capsule_arg_binding(idx, ty, &seed_expr);
+        arg_bindings.push_str(&stmt);
+        call_args.push(expr);
     }
 
     let call_expr = format!("cap_impl::{fn_name}({})", call_args.join(", "));
@@ -2640,8 +2804,16 @@ fn read_tsc() -> u64 {{
     #[cfg(target_arch = "aarch64")]
     unsafe {{
         let cnt: u64;
-        core::arch::asm!("mrs {{}}, cntvct_el0", out(reg) cnt, options(nomem, nostack, preserves_flags));
-        cnt
+        let frq: u64;
+        core::arch::asm!(
+            "mrs {{cnt}}, cntvct_el0",
+            "mrs {{frq}}, cntfrq_el0",
+            cnt = out(reg) cnt,
+            frq = out(reg) frq,
+            options(nomem, nostack, preserves_flags)
+        );
+        let f = frq.max(1) as u128;
+        ((cnt as u128).wrapping_mul(3_200_000_000u128) / f) as u64
     }}
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     {{ 0u64 }}
@@ -2731,9 +2903,8 @@ fn main() {{
         .and_then(|elf| parse_elf64_sym_size_local(&elf, b"__g8t_cap_fn"))
         .unwrap_or_else(|| (asm_instruction_count * 4).max(1));
 
-    let run_out = std::process::Command::new(&bin_path)
-        .output()
-        .context("Failed to run compiled capsule proof binary")?;
+    let run_out =
+        run_binary_with_timeout_local(&bin_path, std::time::Duration::from_millis(2_000))?;
     if !run_out.status.success() {
         bail!("Compiled capsule proof binary exited with non-zero status");
     }
@@ -2782,7 +2953,7 @@ fn main() {{
     let cycles_per_op = RationalPq::from_u64(cpu_cycles, ops_completed.max(1));
     let ns_per_op = RationalPq::from_u64(processing_time_ns, ops_completed.max(1));
 
-    Ok(LocalRustcProof {
+    let proof = LocalRustcProof {
         fn_name,
         signature_key,
         output_digest_blake3,
@@ -2796,7 +2967,13 @@ fn main() {{
         cycles_per_op,
         ns_per_op_pq: ns_per_op.to_pq_string(),
         ns_per_op,
-    })
+    };
+
+    if let Ok(mut guard) = cache.lock() {
+        guard.insert(cache_key, proof.clone());
+    }
+
+    Ok(proof)
 }
 
 /// Built-in Sovereign Cycle-Golf optimization specification for high-number routines on `g8t.is`.
@@ -3956,8 +4133,51 @@ pub fn handle_g8t_mcp_action(params: &Value) -> Result<Value> {
                 }]
             }))
         }
+        "chain" | "snap" | "pipeline" | "compose" | "run_chain" | "run-chain" => {
+            let chain_query = if let Some(arr) = params.get("chain").or_else(|| params.get("capsules")).and_then(Value::as_array) {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
+            } else {
+                params
+                    .get("chain")
+                    .or_else(|| params.get("query"))
+                    .or_else(|| params.get("target"))
+                    .or_else(|| params.get("name"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("ayecast")
+                    .to_string()
+            };
+            let proj_path = params
+                .get("path")
+                .or_else(|| params.get("project"))
+                .and_then(Value::as_str);
+            let seed = params
+                .get("seed")
+                .or_else(|| params.get("arg"))
+                .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok())))
+                .unwrap_or(432_528);
+            let partner = params
+                .get("partner")
+                .and_then(Value::as_str)
+                .unwrap_or("Hue + Gemini (0+1)");
+            let receipt = execute_capsule_chain(
+                &chain_query,
+                proj_path.map(std::path::Path::new),
+                seed,
+                partner,
+            )?;
+            let formatted = format_capsule_chain_report(&receipt);
+            Ok(json!({
+                "content": [{
+                    "type": "text",
+                    "text": format!("{}\n\nJSON Receipt:\n{}", formatted, serde_json::to_string_pretty(&receipt)?)
+                }]
+            }))
+        }
         other => bail!(
-            "Unknown g8t action '{}'. Valid actions: best, yolo, submit, leaderboard, targets, golf, optimize, asm_exec, dealers_choice",
+            "Unknown g8t action '{}'. Valid actions: best, yolo, submit, leaderboard, targets, golf, optimize, asm_exec, chain, dealers_choice",
             other
         ),
     }
@@ -4089,21 +4309,48 @@ fn extract_pure_rust_candidates_from_file(
 
     while i < lines.len() {
         let trimmed = lines[i].trim();
-        let is_fn_start = (trimmed.starts_with("pub fn ")
+        let is_fn_prefix = (trimmed.starts_with("pub fn ")
             || trimmed.starts_with("pub const fn ")
             || trimmed.starts_with("fn ")
             || trimmed.starts_with("const fn "))
-            && trimmed.contains('(')
-            && trimmed.contains("->")
-            && trimmed.ends_with('{');
+            && trimmed.contains('(');
 
-        if !is_fn_start {
+        if !is_fn_prefix {
+            i += 1;
+            continue;
+        }
+
+        // Gather header across up to 8 lines until `{` is reached
+        let mut header_joined = String::new();
+        let mut header_end_line = None;
+        for (j, line_j) in lines.iter().enumerate().skip(i).take(8) {
+            let clean = line_j.split("//").next().unwrap_or("").trim();
+            if !clean.is_empty() {
+                if !header_joined.is_empty() {
+                    header_joined.push(' ');
+                }
+                header_joined.push_str(clean);
+            }
+            if clean.ends_with('{') {
+                header_end_line = Some(j);
+                break;
+            }
+            if clean.ends_with(';') {
+                break;
+            }
+        }
+
+        let Some(_hdr_end) = header_end_line else {
+            i += 1;
+            continue;
+        };
+        if !header_joined.contains("->") || !header_joined.ends_with('{') {
             i += 1;
             continue;
         }
 
         // Extract function name
-        let after_fn = trimmed.split("fn ").nth(1).unwrap_or("").trim();
+        let after_fn = header_joined.split("fn ").nth(1).unwrap_or("").trim();
         let fn_name: String = after_fn
             .chars()
             .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
@@ -4113,11 +4360,13 @@ fn extract_pure_rust_candidates_from_file(
             continue;
         }
 
-        // Check signature uses primitive integers only (u64, i64, u32, i32, usize, u16, u8, bool)
+        // Check signature uses primitive integers / slices only
         let sig_part = after_fn.trim_end_matches('{').trim();
-        let has_primitive_int = ["u64", "i64", "u32", "i32", "usize", "u128", "i128"]
-            .iter()
-            .any(|t| sig_part.contains(t));
+        let has_primitive_int = [
+            "u64", "i64", "u32", "i32", "u16", "i16", "u8", "i8", "usize", "u128", "i128",
+        ]
+        .iter()
+        .any(|t| sig_part.contains(t));
         let has_non_standalone = [
             "self", "Self", "&mut", "Result", "Option", "String", "Vec", "Path", "Value", "async",
             "<",
@@ -4130,10 +4379,10 @@ fn extract_pure_rust_candidates_from_file(
             continue;
         }
 
-        // Find matching closing brace within 40 lines
+        // Find matching closing brace within 55 lines
         let mut depth: i64 = 0;
         let mut end_idx = None;
-        for (j, line_j) in lines.iter().enumerate().skip(i).take(40) {
+        for (j, line_j) in lines.iter().enumerate().skip(i).take(55) {
             for ch in line_j.chars() {
                 if ch == '{' {
                     depth += 1;
@@ -4141,7 +4390,7 @@ fn extract_pure_rust_candidates_from_file(
                     depth -= 1;
                 }
             }
-            if depth == 0 {
+            if depth == 0 && j >= _hdr_end {
                 end_idx = Some(j);
                 break;
             }
@@ -4171,6 +4420,7 @@ fn extract_pure_rust_candidates_from_file(
             continue;
         }
 
+        // Verify the function body does not call sibling helper functions not defined inside it
         let normalized_fn = if full_fn.trim_start().starts_with("pub ") {
             full_fn
         } else {
@@ -4184,7 +4434,7 @@ fn extract_pure_rust_candidates_from_file(
             normalized_fn,
         ));
         i = end_line + 1;
-        if out.len() >= 4 {
+        if out.len() >= 6 {
             break;
         }
     }
@@ -4413,26 +4663,40 @@ pub fn optimize_project_with_g8t(
         );
     }
 
-    // Benchmark discovered pure-Rust candidate functions locally in parallel
+    // Benchmark discovered pure-Rust candidate functions locally on uncontested hardware
     let candidate_capsules: Vec<CandidateCapsule> = raw_candidates
-        .par_iter()
-        .map(|(name, line_no, file_loc, src)| {
-            let bench = benchmark_rust_function_locally(src);
+        .iter()
+        .filter_map(|(name, line_no, file_loc, src)| {
+            // Only keep candidates that compile as standalone zero-dependency capsules
+            let proof = prove_capsule_with_rustc(src).ok()?;
+            let bench = LocalHardwareBenchmark {
+                hardware: detect_hardware_arch(),
+                ops_completed: proof.ops_completed,
+                processing_time_ns: proof.processing_time_ns,
+                cpu_cycles: proof.cpu_cycles,
+                sample_durations_ns: proof.sample_durations_ns,
+                cycles_per_op_pq: proof.cycles_per_op_pq,
+                cycles_per_op: proof.cycles_per_op,
+                ns_per_op_pq: proof.ns_per_op_pq,
+                ns_per_op: proof.ns_per_op,
+            };
             let sig = src
-                .lines()
-                .find(|l| l.contains("fn "))
+                .split('{')
+                .next()
                 .unwrap_or("")
-                .trim_end_matches('{')
-                .trim()
-                .to_string();
-            CandidateCapsule {
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty() && !l.starts_with("//") && !l.starts_with('#'))
+                .collect::<Vec<_>>()
+                .join(" ");
+            Some(CandidateCapsule {
                 name: name.clone(),
                 file_path: file_loc.clone(),
                 line_number: *line_no,
                 signature: sig,
                 source_code: src.clone(),
                 local_benchmark: bench,
-            }
+            })
         })
         .collect();
 
@@ -5437,6 +5701,610 @@ pub fn format_capsela_asm_executable_report(r: &CapselaAsmExecutableReceipt) -> 
         out.push_str(&r.asm_preview);
         out.push_str("\n```\n");
     }
+    out
+}
+
+// ============================================================================
+// 8C.2 AI + HUMAN PARTNER CAPSULE CHAIN COMPOSER & EXECUTOR (`st g8t chain`)
+// ============================================================================
+
+/// Step-by-step intermediate execution trace for a single capsule stage in a chain.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapsuleChainStepTrace {
+    pub step_index: usize,
+    pub fn_name: String,
+    pub origin: String,
+    pub signature_key: String,
+    pub input_summary: String,
+    pub output_value: String,
+    pub output_u64: u64,
+}
+
+/// Complete receipt from snapping, compiling (`rustc -C opt-level=3`), and executing a chain of capsules.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CapsuleChainReceipt {
+    pub chain_name: String,
+    pub partner: String,
+    pub arch: String,
+    pub seed: u64,
+    pub stage_count: usize,
+    pub snapped_chain: Vec<String>,
+    pub step_traces: Vec<CapsuleChainStepTrace>,
+    pub final_output: String,
+    pub final_output_u64: u64,
+    pub equivalence_digest_blake3: String,
+    pub binary_path: String,
+    pub source_path: String,
+    pub compiled_text_bytes: u64,
+    pub asm_instruction_count: u64,
+    pub fits_c64_64k: bool,
+    pub c64_ram_ratio: RationalPq,
+    pub c64_ram_ratio_pq: String,
+    pub ops_completed: u64,
+    pub cpu_cycles: u64,
+    pub processing_time_ns: u64,
+    pub cycles_per_chain: RationalPq,
+    pub cycles_per_chain_pq: String,
+    pub cycles_per_stage: RationalPq,
+    pub cycles_per_stage_pq: String,
+    pub ns_per_chain: RationalPq,
+    pub ns_per_chain_pq: String,
+    pub tier_badge: String,
+    pub speed_bar_ascii: String,
+    pub remote_circuit_id: Option<String>,
+}
+
+struct ResolvedChainCapsule {
+    fn_name: String,
+    origin: String,
+    capsule_id: Option<String>,
+    named_params: Vec<(String, String)>,
+    out_ty: String,
+    signature_key: String,
+    source_code: String,
+}
+
+fn default_secondary_param_expr(param_name: &str, param_ty: &str, param_idx: usize) -> String {
+    let low = param_name.to_ascii_lowercase();
+    let val: i64 = if low.contains("half_life") || low.contains("half_lives") {
+        1
+    } else if low.contains("budget") {
+        16_667
+    } else if low.contains("accept_den") || low.contains("target_den") {
+        100
+    } else if low.contains("accept_num") {
+        85
+    } else if low.contains("target_num") {
+        75
+    } else if low.contains("den") || low == "q" || low.contains("std") {
+        16
+    } else if low.contains("vel") || low.contains("offset") {
+        12
+    } else if low.contains("accel") {
+        4
+    } else if low.contains("height") || low.contains("width") {
+        64
+    } else {
+        432 + (param_idx as i64) * 96
+    };
+    if param_ty == "bool" {
+        "true".to_string()
+    } else {
+        format!("({val}i64 as {param_ty})")
+    }
+}
+
+/// Resolve, snap, compile (`rustc -C opt-level=3`), and execute a multi-stage chain of pure-Rust capsules
+/// for an AI agent and its human partner.
+pub fn execute_capsule_chain(
+    chain_query: &str,
+    project_dir: Option<&std::path::Path>,
+    seed: u64,
+    partner: &str,
+) -> Result<CapsuleChainReceipt> {
+    let q_trim = chain_query.trim();
+    let stage_queries: Vec<String> = if q_trim.is_empty()
+        || q_trim.eq_ignore_ascii_case("ayecast")
+        || q_trim.eq_ignore_ascii_case("default")
+    {
+        vec![
+            "fnv1a_64".to_string(),
+            "splitmix64".to_string(),
+            "st_golf_a6000_c64_ring_salience_u64".to_string(),
+            "phoenix_decay_q15".to_string(),
+            "ilog2_1p_q4".to_string(),
+            "servo_hang_monitor_level".to_string(),
+        ]
+    } else if q_trim.contains("==>") || q_trim.contains("->") || q_trim.contains(',') {
+        q_trim
+            .replace("==>", ",")
+            .replace("->", ",")
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect()
+    } else {
+        vec![q_trim.to_string()]
+    };
+
+    // 1. Collect local project pure-Rust functions if project_dir (or `.`) exists
+    let mut local_funcs: Vec<(String, String, String)> = Vec::new();
+    let scan_root = project_dir.unwrap_or_else(|| std::path::Path::new("."));
+    if scan_root.exists() {
+        let mut rs_files = Vec::new();
+        collect_project_source_files(scan_root, &mut rs_files);
+        for fpath in rs_files {
+            if fpath.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            if let Ok(content) = std::fs::read_to_string(&fpath) {
+                let rel = fpath
+                    .strip_prefix(scan_root)
+                    .unwrap_or(&fpath)
+                    .to_string_lossy()
+                    .to_string();
+                for (fname, _line, loc, src) in
+                    extract_pure_rust_candidates_from_file(&rel, &content)
+                {
+                    local_funcs.push((fname, loc, src));
+                }
+            }
+        }
+    }
+
+    // 2. Collect Sovereign Cycle-Golf library & live g8t.is leaderboard entries
+    let golf_lib = sovereign_cycle_golf_library();
+    let g8t_url = resolve_g8t_url();
+    let offline_mode = std::env::var_os("ST_G8T_OFFLINE").is_some()
+        || std::env::var_os("ST_SYNC_TEST_BASE").is_some();
+    let leaderboard_entries = if offline_mode {
+        Vec::new()
+    } else {
+        fetch_leaderboard_entries(&g8t_url).unwrap_or_default()
+    };
+
+    let mut resolved_stages: Vec<ResolvedChainCapsule> = Vec::with_capacity(stage_queries.len());
+    for sq in &stage_queries {
+        let sq_low = sq.to_ascii_lowercase();
+
+        // Try exact or substring match in local workspace first, then g8t.is leaderboard, then golf_lib
+        let mut chosen_src: Option<(String, Option<String>, String)> = None;
+
+        if let Some((_, loc, src)) = local_funcs
+            .iter()
+            .find(|(n, _, _)| n.eq_ignore_ascii_case(sq))
+        {
+            chosen_src = Some((format!("local:{loc}"), None, src.clone()));
+        } else if let Some(entry) = leaderboard_entries.iter().find(|e| {
+            e.capsule.name.eq_ignore_ascii_case(sq) || e.capsule.id.eq_ignore_ascii_case(sq)
+        }) {
+            chosen_src = Some((
+                format!("g8t.is:{}", entry.capsule.domain),
+                Some(entry.capsule.id.clone()),
+                entry.capsule.source_code.clone(),
+            ));
+        } else if let Some(spec) = golf_lib.iter().find(|s| {
+            s.golfed_fn_name.eq_ignore_ascii_case(sq) || s.target_name.eq_ignore_ascii_case(sq)
+        }) {
+            chosen_src = Some((
+                format!("sovereign-lib:{}", spec.domain),
+                None,
+                spec.source_code.to_string(),
+            ));
+        } else if let Some((_, loc, src)) = local_funcs
+            .iter()
+            .find(|(n, _, _)| n.to_ascii_lowercase().contains(&sq_low))
+        {
+            chosen_src = Some((format!("local:{loc}"), None, src.clone()));
+        } else if let Some(entry) = leaderboard_entries.iter().find(|e| {
+            e.capsule.name.to_ascii_lowercase().contains(&sq_low)
+                || e.capsule.domain.to_ascii_lowercase().contains(&sq_low)
+        }) {
+            chosen_src = Some((
+                format!("g8t.is:{}", entry.capsule.domain),
+                Some(entry.capsule.id.clone()),
+                entry.capsule.source_code.clone(),
+            ));
+        } else if let Some(spec) = golf_lib.iter().find(|s| {
+            s.golfed_fn_name.to_ascii_lowercase().contains(&sq_low)
+                || s.target_name.to_ascii_lowercase().contains(&sq_low)
+                || s.domain.to_ascii_lowercase().contains(&sq_low)
+        }) {
+            chosen_src = Some((
+                format!("sovereign-lib:{}", spec.domain),
+                None,
+                spec.source_code.to_string(),
+            ));
+        }
+
+        let (mut origin, mut cap_id, raw_src) = chosen_src
+            .with_context(|| format!("Could not resolve capsule stage '{sq}' in local workspace, g8t.is, or sovereign library"))?;
+
+        let (fn_name, named_params, _param_types, out_ty, signature_key) =
+            parse_fn_header_signature_with_names(&raw_src)?;
+
+        // If resolved locally, check if it also has a live capsule_id on g8t.is
+        if cap_id.is_none() {
+            if let Some(entry) = leaderboard_entries
+                .iter()
+                .find(|e| e.capsule.name.eq_ignore_ascii_case(&fn_name))
+            {
+                cap_id = Some(entry.capsule.id.clone());
+                origin = format!("{origin} + g8t.is:{}", &entry.capsule.id[..8]);
+            }
+        }
+
+        resolved_stages.push(ResolvedChainCapsule {
+            fn_name,
+            origin,
+            capsule_id: cap_id,
+            named_params,
+            out_ty,
+            signature_key,
+            source_code: raw_src,
+        });
+    }
+
+    if resolved_stages.is_empty() {
+        bail!("Capsule chain requires at least 1 capsule stage");
+    }
+
+    // 3. Emit the complete chained Rust program with step-by-step tracing, 64-vector equivalence, and 800,000-op _rdtsc benchmark
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let bin_dir = home.join(".st").join("capsela_bin");
+    std::fs::create_dir_all(&bin_dir).context("Failed to create ~/.st/capsela_bin")?;
+
+    let chain_slug: String = resolved_stages
+        .iter()
+        .map(|s| {
+            s.fn_name
+                .chars()
+                .take(10)
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("_to_");
+    let chain_name = if chain_slug.is_empty() {
+        "g8t_capsule_chain".to_string()
+    } else {
+        format!("chain_{}", &chain_slug[..chain_slug.len().min(48)])
+    };
+
+    let src_path = bin_dir.join(format!("{chain_name}.rs"));
+    let asm_path = bin_dir.join(format!("{chain_name}.s"));
+    let bin_path = bin_dir.join(&chain_name);
+
+    let mut stage_mods = String::new();
+    let mut chain_body_fast = String::new();
+    let mut chain_body_trace = String::new();
+
+    for (idx, stg) in resolved_stages.iter().enumerate() {
+        stage_mods.push_str(&format!(
+            "#[forbid(unsafe_code)]\npub mod stage_{idx} {{\n    #![allow(unused_parens, dead_code)]\n"
+        ));
+        for line in stg.source_code.lines() {
+            let t = line.trim();
+            if t.starts_with("#[inline") || t.starts_with("#[export_name") {
+                continue;
+            }
+            stage_mods.push_str("    ");
+            stage_mods.push_str(line);
+            stage_mods.push('\n');
+        }
+        stage_mods.push_str("}\n\n");
+
+        // Build call arguments for stage `idx` where Pin 0 comes from `cur_u64` (`seed` at idx 0, previous output at idx >= 1)
+        let mut call_args = Vec::with_capacity(stg.named_params.len());
+        for (p_idx, (p_name, p_ty)) in stg.named_params.iter().enumerate() {
+            if p_idx == 0 {
+                if p_ty == "&[u8]" {
+                    call_args.push("&cur_bytes".to_string());
+                } else if p_ty == "bool" {
+                    call_args.push("((cur_u64 & 1) != 0)".to_string());
+                } else {
+                    call_args.push(format!("(cur_u64 as {p_ty})"));
+                }
+            } else {
+                call_args.push(default_secondary_param_expr(p_name, p_ty, p_idx));
+            }
+        }
+        let call_str = format!("stage_{idx}::{}({})", stg.fn_name, call_args.join(", "));
+        let out_to_u64 = if stg.out_ty == "bool" {
+            "(step_out as u64)"
+        } else {
+            "(step_out as u64)"
+        };
+
+        let step_block = format!(
+            "    let cur_bytes: [u8; 8] = cur_u64.to_le_bytes();\n    let _ = &cur_bytes;\n    let step_out: {} = {call_str};\n    let next_u64: u64 = {out_to_u64};\n",
+            stg.out_ty
+        );
+        chain_body_fast.push_str(&step_block);
+        chain_body_fast.push_str("    cur_u64 = next_u64;\n");
+
+        chain_body_trace.push_str(&step_block);
+        chain_body_trace.push_str(&format!(
+            "    println!(\"STEP:{idx}:{}:{{cur_u64}}:{{step_out:?}}:{{next_u64}}\");\n    cur_u64 = next_u64;\n",
+            stg.fn_name
+        ));
+    }
+
+    let harness_src = format!(
+        r#"//! Auto-assembled g8t.is + Smart-Tree Capsule Chain Program (`{chain_name}`)
+#![allow(unused_parens, dead_code, unnecessary_cast)]
+
+{stage_mods}
+#[inline(always)]
+fn read_tsc() -> u64 {{
+    #[cfg(target_arch = "x86_64")]
+    unsafe {{ core::arch::x86_64::_rdtsc() }}
+    #[cfg(target_arch = "aarch64")]
+    unsafe {{
+        let cnt: u64;
+        let frq: u64;
+        core::arch::asm!(
+            "mrs {{cnt}}, cntvct_el0",
+            "mrs {{frq}}, cntfrq_el0",
+            cnt = out(reg) cnt,
+            frq = out(reg) frq,
+            options(nomem, nostack, preserves_flags)
+        );
+        let f = frq.max(1) as u128;
+        ((cnt as u128).wrapping_mul(3_200_000_000u128) / f) as u64
+    }}
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {{ 0u64 }}
+}}
+
+#[export_name = "__g8t_capsule_chain"]
+#[inline(never)]
+pub fn run_capsule_chain(seed: u64) -> u64 {{
+    let mut cur_u64: u64 = seed;
+{chain_body_fast}    cur_u64
+}}
+
+fn trace_capsule_chain(seed: u64) -> u64 {{
+    let mut cur_u64: u64 = seed;
+{chain_body_trace}    cur_u64
+}}
+
+fn main() {{
+    let user_seed: u64 = {seed}u64;
+    let final_val = trace_capsule_chain(user_seed);
+    println!("FINAL:{{final_val}}");
+
+    for v_idx in 0..64u64 {{
+        let s = v_idx.wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
+        let out = std::hint::black_box(run_capsule_chain(std::hint::black_box(s)));
+        println!("OUT:{{v_idx}}:{{out}}");
+    }}
+
+    for warm_i in 0..4096u64 {{
+        let s = warm_i.wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
+        let _ = std::hint::black_box(run_capsule_chain(std::hint::black_box(s)));
+    }}
+
+    let mut sample_durations_ns = [0u64; 8];
+    let mut sample_cycles = [0u64; 8];
+    for win in 0..8usize {{
+        let base_iter = (win as u64) * 100_000u64;
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+        let t0 = std::time::Instant::now();
+        let c0 = read_tsc();
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+        for iter in 0..100_000u64 {{
+            let idx = base_iter.wrapping_add(iter);
+            let s = idx.wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
+            let _ = std::hint::black_box(run_capsule_chain(std::hint::black_box(s)));
+        }}
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+        let c1 = read_tsc();
+        let elapsed_ns = t0.elapsed().as_nanos() as u64;
+        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+        sample_durations_ns[win] = elapsed_ns.max(1);
+        sample_cycles[win] = c1.saturating_sub(c0).max(1);
+    }}
+    let mut sorted_cyc = sample_cycles;
+    sorted_cyc.sort_unstable();
+    let mut sorted_ns = sample_durations_ns;
+    sorted_ns.sort_unstable();
+    let total_cycles = (sorted_cyc[0] + sorted_cyc[1] + sorted_cyc[2] + sorted_cyc[3]).saturating_mul(2).max(1);
+    let total_ns = (sorted_ns[0] + sorted_ns[1] + sorted_ns[2] + sorted_ns[3]).saturating_mul(2).max(1);
+    println!("BENCH:ops=800000:ns={{total_ns}}:cycles={{total_cycles}}");
+}}
+"#
+    );
+
+    std::fs::write(&src_path, &harness_src)?;
+
+    let mut cmd = std::process::Command::new("rustc");
+    cmd.arg("--edition")
+        .arg("2021")
+        .arg("-C")
+        .arg("opt-level=3");
+    #[cfg(target_arch = "x86_64")]
+    {
+        cmd.arg("-C").arg("llvm-args=-x86-asm-syntax=intel");
+    }
+    let compile_out = cmd
+        .arg("--emit=asm,link")
+        .arg("--out-dir")
+        .arg(&bin_dir)
+        .arg(&src_path)
+        .output()
+        .context("Failed to compile capsule chain with rustc -C opt-level=3")?;
+
+    if !compile_out.status.success() {
+        bail!(
+            "Capsule chain compilation failed: {}",
+            String::from_utf8_lossy(&compile_out.stderr).trim()
+        );
+    }
+
+    let raw_asm = std::fs::read_to_string(&asm_path).unwrap_or_default();
+    let asm_instruction_count =
+        extract_local_asm_instruction_count(&raw_asm, "__g8t_capsule_chain");
+    let compiled_text_bytes = std::fs::read(&bin_path)
+        .ok()
+        .and_then(|elf| parse_elf64_sym_size_local(&elf, b"__g8t_capsule_chain"))
+        .unwrap_or_else(|| (asm_instruction_count * 4).max(16));
+
+    let run_out =
+        run_binary_with_timeout_local(&bin_path, std::time::Duration::from_millis(3_000))?;
+    if !run_out.status.success() {
+        bail!(
+            "Compiled capsule chain binary exited with non-zero status: {}",
+            String::from_utf8_lossy(&run_out.stderr).trim()
+        );
+    }
+
+    let stdout = String::from_utf8_lossy(&run_out.stdout);
+    let mut step_traces = Vec::new();
+    let mut final_output_u64 = 0u64;
+    let mut eq_payload = Vec::new();
+    eq_payload.extend_from_slice(b"G8T_CHAIN_EQUIVALENCE_64_V1\n");
+    let mut ops_completed = 800_000u64;
+    let mut processing_time_ns = 1u64;
+    let mut cpu_cycles = 1u64;
+
+    for line in stdout.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("STEP:") {
+            let parts: Vec<&str> = rest.splitn(5, ':').collect();
+            if parts.len() == 5 {
+                let s_idx = parts[0].parse::<usize>().unwrap_or(0);
+                let in_u64 = parts[2].parse::<u64>().unwrap_or(0);
+                let out_str = parts[3].to_string();
+                let out_u64 = parts[4].parse::<u64>().unwrap_or(0);
+                if let Some(stg) = resolved_stages.get(s_idx) {
+                    step_traces.push(CapsuleChainStepTrace {
+                        step_index: s_idx,
+                        fn_name: stg.fn_name.clone(),
+                        origin: stg.origin.clone(),
+                        signature_key: stg.signature_key.clone(),
+                        input_summary: if s_idx == 0 {
+                            format!("seed={in_u64}")
+                        } else {
+                            format!("from step_{}={in_u64}", s_idx - 1)
+                        },
+                        output_value: out_str,
+                        output_u64: out_u64,
+                    });
+                }
+            }
+        } else if let Some(rest) = t.strip_prefix("FINAL:") {
+            final_output_u64 = rest.trim().parse::<u64>().unwrap_or(0);
+        } else if t.starts_with("OUT:") {
+            eq_payload.extend_from_slice(t.as_bytes());
+            eq_payload.push(b'\n');
+        } else if let Some(rest) = t.strip_prefix("BENCH:") {
+            for kv in rest.split(':') {
+                if let Some(v) = kv.strip_prefix("ops=") {
+                    ops_completed = v.parse::<u64>().unwrap_or(800_000).max(1);
+                } else if let Some(v) = kv.strip_prefix("ns=") {
+                    processing_time_ns = v.parse::<u64>().unwrap_or(1).max(1);
+                } else if let Some(v) = kv.strip_prefix("cycles=") {
+                    cpu_cycles = v.parse::<u64>().unwrap_or(1).max(1);
+                }
+            }
+        }
+    }
+
+    let stage_count = resolved_stages.len().max(1);
+    let final_output = step_traces
+        .last()
+        .map(|s| s.output_value.clone())
+        .unwrap_or_else(|| final_output_u64.to_string());
+    let equivalence_digest_blake3 = blake3_hash_hex(&eq_payload)[..32].to_string();
+    let c64_ram_ratio = RationalPq::from_u64(compiled_text_bytes.max(1), C64_RAM_CEILING_BYTES);
+    let cycles_per_chain = RationalPq::from_u64(cpu_cycles, ops_completed);
+    let cycles_per_stage =
+        RationalPq::from_u64(cpu_cycles, ops_completed.saturating_mul(stage_count as u64));
+    let ns_per_chain = RationalPq::from_u64(processing_time_ns, ops_completed);
+    let tier_badge = format_cycle_tier_badge(cycles_per_stage, compiled_text_bytes).to_string();
+    let speed_bar_ascii = format_ascii_speed_bar(cycles_per_stage, 10);
+
+    Ok(CapsuleChainReceipt {
+        chain_name,
+        partner: partner.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+        seed,
+        stage_count,
+        snapped_chain: resolved_stages.iter().map(|s| s.fn_name.clone()).collect(),
+        step_traces,
+        final_output,
+        final_output_u64,
+        equivalence_digest_blake3,
+        binary_path: bin_path.display().to_string(),
+        source_path: src_path.display().to_string(),
+        compiled_text_bytes,
+        asm_instruction_count,
+        fits_c64_64k: compiled_text_bytes <= C64_RAM_CEILING_BYTES,
+        c64_ram_ratio_pq: c64_ram_ratio.to_pq_string(),
+        c64_ram_ratio,
+        ops_completed,
+        cpu_cycles,
+        processing_time_ns,
+        cycles_per_chain_pq: cycles_per_chain.to_pq_string(),
+        cycles_per_chain,
+        cycles_per_stage_pq: cycles_per_stage.to_pq_string(),
+        cycles_per_stage,
+        ns_per_chain_pq: ns_per_chain.to_pq_string(),
+        ns_per_chain,
+        tier_badge,
+        speed_bar_ascii,
+        remote_circuit_id: None,
+    })
+}
+
+/// Format a `CapsuleChainReceipt` for human + AI partner inspection.
+pub fn format_capsule_chain_report(r: &CapsuleChainReceipt) -> String {
+    let mut out = String::new();
+    out.push_str("  <3<3<3+1 ,oO*'*Oo.  G 8 T   A I   +   H U M A N   C A P S U L E   C H A I N   E X E C U T O R  .oO*'*Oo, 0+1\n");
+    out.push_str("  +==========================================================================================================+\n");
+    out.push_str(&format!(
+        "  | CHAIN    : {:<42} | PARTNER: {:<23} | ARCH: {:<7} |\n",
+        &r.chain_name[..r.chain_name.len().min(42)],
+        &r.partner[..r.partner.len().min(23)],
+        r.arch
+    ));
+    out.push_str(&format!(
+        "  | STAGES   : {:>2} snapped capsules | .text: {:>5} B (C64 p/q: {:<12}) | ASM INSNS: {:>4} | SEED: {:<7} |\n",
+        r.stage_count, r.compiled_text_bytes, r.c64_ram_ratio_pq, r.asm_instruction_count, r.seed
+    ));
+    out.push_str(&format!(
+        "  | SPEED    : {} {} cyc/chain (p/q) = {:<15} | cyc/stage (p/q) = {:<15} |\n",
+        r.tier_badge, r.speed_bar_ascii, r.cycles_per_chain_pq, r.cycles_per_stage_pq
+    ));
+    out.push_str(&format!(
+        "  | WITNESS  : 64-Vector BLAKE3 = {} | FINAL OUTPUT = {:<24} |\n",
+        r.equivalence_digest_blake3, r.final_output
+    ));
+    out.push_str("  +----------------------------------------------------------------------------------------------------------+\n");
+    out.push_str(&format!(
+        "  | PIPELINE : {}\n",
+        r.snapped_chain.join(" ==> ")
+    ));
+    out.push_str("  +----------------------------------------------------------------------------------------------------------+\n");
+    out.push_str(
+        "  | STEP-BY-STEP MECHANISM TRACE (`Show me the mechanism; keep the evidence`):\n",
+    );
+    for trace in &r.step_traces {
+        out.push_str(&format!(
+            "  |   [Step {:>2}] {:<36} {:<18} | {:<18} ==> out = {}\n",
+            trace.step_index,
+            trace.fn_name,
+            trace.signature_key,
+            trace.input_summary,
+            trace.output_value
+        ));
+    }
+    out.push_str("  +----------------------------------------------------------------------------------------------------------+\n");
+    out.push_str(&format!("  | BINARY   : {}\n", r.binary_path));
+    out.push_str(&format!("  | SOURCE   : {}\n", r.source_path));
+    out.push_str("  +==========================================================================================================+\n");
     out
 }
 
@@ -6504,5 +7372,41 @@ mod tests {
         assert_eq!(receipt.execution_exit_code, 0);
         assert!(receipt.execution_stdout.contains("CAPSELA_ASM_EXE"));
         assert!(receipt.cycles_per_op.num > 0);
+    }
+
+    #[test]
+    fn real_rustc_benchmark_differentiates_workloads_and_executes_capsule_chain() {
+        std::env::set_var("ST_G8T_OFFLINE", "1");
+
+        // 1. Verify benchmark_rust_function_locally compiles and measures real instructions
+        let tiny_fn = "pub const fn tiny_xor_step(x: u64) -> u64 { x ^ 0x432 }";
+        let heavy_crc_fn = "pub fn crc32_ieee_loop(bytes: &[u8]) -> u32 {\n    let mut crc: u32 = 0xFFFF_FFFF;\n    let mut i = 0usize;\n    while i < bytes.len() {\n        crc ^= bytes[i] as u32;\n        let mut bit = 0u8;\n        while bit < 8 {\n            let mask = (crc & 1).wrapping_neg();\n            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);\n            bit += 1;\n        }\n        i += 1;\n    }\n    !crc\n}";
+
+        let b_tiny = benchmark_rust_function_locally(tiny_fn);
+        let b_heavy = benchmark_rust_function_locally(heavy_crc_fn);
+        assert_eq!(b_tiny.ops_completed, 800_000);
+        assert_eq!(b_heavy.ops_completed, 800_000);
+        assert!(
+            b_tiny.cycles_per_op < b_heavy.cycles_per_op,
+            "expected tiny_xor_step ({}) to take fewer hardware cycles than 64-iteration crc32_ieee_loop ({})",
+            b_tiny.cycles_per_op_pq,
+            b_heavy.cycles_per_op_pq
+        );
+
+        // 2. Verify execute_capsule_chain snaps, compiles, and traces a multi-stage chain
+        let chain_receipt = execute_capsule_chain(
+            "st_golf_borg_rs_smart_tree_fnv_fold_u64 -> st_golf_isqrt_salience_step_u64 -> st_golf_wa_frame_crc8_gf2_u64",
+            None,
+            432_528,
+            "Hue + Gemini (0+1)",
+        )
+        .expect("3-stage capsule chain compiles and executes");
+
+        assert_eq!(chain_receipt.stage_count, 3);
+        assert_eq!(chain_receipt.step_traces.len(), 3);
+        assert!(chain_receipt.fits_c64_64k);
+        assert!(chain_receipt.compiled_text_bytes > 0);
+        assert!(chain_receipt.cycles_per_chain.num > 0);
+        assert_eq!(chain_receipt.equivalence_digest_blake3.len(), 32);
     }
 }

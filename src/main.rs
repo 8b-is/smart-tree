@@ -236,6 +236,24 @@ async fn main() -> Result<()> {
                     st::g8t_integration::format_dealers_choice_report(&report)
                 );
             }
+            "chain" | "snap" | "pipeline" | "compose" | "run-chain" | "run_chain" => {
+                let q = g8t_cmd.target.as_deref().unwrap_or("ayecast");
+                let proj_dir = g8t_cmd
+                    .file
+                    .as_deref()
+                    .map(std::path::Path::new)
+                    .or_else(|| Some(std::path::Path::new(".")));
+                let receipt = st::g8t_integration::execute_capsule_chain(
+                    q,
+                    proj_dir,
+                    432_528,
+                    &g8t_cmd.partner,
+                )?;
+                println!(
+                    "{}",
+                    st::g8t_integration::format_capsule_chain_report(&receipt)
+                );
+            }
             _ => {
                 let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(15);
                 let report = st::g8t_integration::get_foken_scoreboard(top_n)?;

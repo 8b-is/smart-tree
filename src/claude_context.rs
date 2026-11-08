@@ -420,18 +420,24 @@ struct RelevanceCheck {
 }
 
 // CLI integration
-pub fn handle_claude_commands(cmd: &str) -> Result<()> {
+pub type AgentContext = ClaudeContext;
+
+pub fn handle_agent_commands(cmd: &str) -> Result<()> {
     match cmd {
-        "--claude-context" => ClaudeContext::show()?,
-        "--claude-save" => {
+        "--agent-context" | "--claude-context" => ClaudeContext::show()?,
+        "--agent-save" | "--claude-save" => {
             let context = ClaudeContext::generate_current_context();
             ClaudeContext::save(&context)?;
         }
-        "--claude-restore" => {
+        "--agent-restore" | "--claude-restore" => {
             let context = ClaudeContext::restore()?;
             println!("{}", context);
         }
         _ => {}
     }
     Ok(())
+}
+
+pub fn handle_claude_commands(cmd: &str) -> Result<()> {
+    handle_agent_commands(cmd)
 }

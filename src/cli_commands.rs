@@ -911,7 +911,7 @@ pub async fn handle_agent_dump() -> Result<()> {
 pub async fn handle_agent_kickstart() -> Result<()> {
     use std::path::Path;
 
-    println!("🚀 Claude Kickstart Format:");
+    println!("🚀 AI Agent Kickstart Format:");
     println!("{}", "─".repeat(45));
 
     let version = env!("CARGO_PKG_VERSION");

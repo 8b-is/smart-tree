@@ -1,5 +1,5 @@
-// Claude Hook Handler - "Context is consciousness" - Omni
-// Comprehensive context provider for Claude conversations
+// AI Agent Hook Handler - "Context is consciousness" - Omni
+// Comprehensive context provider for AI Agent conversations
 // Integrates path extraction, project detection, git awareness, and MEM8 search
 
 use anyhow::Result;
@@ -540,6 +540,7 @@ fn store_conversation_in_mem8(user_prompt: &str) -> Result<()> {
 pub async fn handle_agy_hook(event: &str) -> Result<()> {
     use std::io::IsTerminal;
 
+    let started = std::time::Instant::now();
     let mut input = String::new();
     if !io::stdin().is_terminal() {
         let _ = io::stdin().read_to_string(&mut input);
@@ -551,9 +552,53 @@ pub async fn handle_agy_hook(event: &str) -> Result<()> {
         serde_json::from_str(&input).unwrap_or_else(|_| serde_json::json!({}))
     };
 
-    let response = process_agy_hook_payload(event, &payload)?;
-    println!("{}", serde_json::to_string(&response)?);
-    Ok(())
+    match process_agy_hook_payload(event, &payload) {
+        Ok(response) => {
+            let out_str = serde_json::to_string(&response)?;
+            let duration_us = started.elapsed().as_micros() as u64;
+            crate::service_debug::record_event(
+                "agent-hook",
+                event,
+                event,
+                200,
+                duration_us,
+                false,
+                None,
+                &input,
+                &out_str,
+                "agent-hook-stdio",
+            );
+            println!("{}", out_str);
+            Ok(())
+        }
+        Err(e) => {
+            let duration_us = started.elapsed().as_micros() as u64;
+            let err_msg = e.to_string();
+            crate::service_debug::record_event(
+                "agent-hook",
+                event,
+                event,
+                500,
+                duration_us,
+                true,
+                Some(format!("Agent hook '{}' failed: {}", event, err_msg)),
+                &input,
+                &err_msg,
+                "agent-hook-stdio",
+            );
+            Err(e)
+        }
+    }
+}
+
+/// Generic AI Agent lifecycle hook entry point (alias for `handle_agy_hook`).
+pub async fn handle_agent_hook(event: &str) -> Result<()> {
+    handle_agy_hook(event).await
+}
+
+/// Generic AI Agent hook payload processor (alias for `process_agy_hook_payload`).
+pub fn process_agent_hook_payload(event: &str, payload: &Value) -> Result<Value> {
+    process_agy_hook_payload(event, payload)
 }
 
 /// Process an Antigravity hook payload and return the JSON response object
@@ -776,9 +821,21 @@ fn handle_agy_pre_invocation(payload: &Value) -> Result<Value> {
             ));
         }
         proj_lines.push(
-            "🔧 *Mechanic's Helper*: Call MCP `helper {input: \"<current conversation summary>\"}` for local ternary Aye & The Cheet tool suggestions, LLM JSON log harvest, and non-intrusive background music (`play_music: true`).".to_string(),
+            "🔧 *Mechanic's Helper*: Call MCP `helper {whats_the_situation: \"<current conversation summary>\"}` for per-interaction partnership guidance, local ternary Aye & The Cheet tool suggestions, Capsela g8t speed improvements, LLM JSON log harvest, and non-intrusive background music (`play_music: true`).".to_string(),
         );
         sections.push(proj_lines.join("\n"));
+    }
+
+    // 2c. Per-interaction partnership guidance & live dashboard stream notes ("A user mentioned this before...")
+    let guidance = crate::service_debug::shape_interaction_guidance(user_prompt);
+    if !guidance.is_empty() {
+        let mut g_lines = vec![
+            "### 🤝 Partnership Guidance & Stream Notes (Shaped for This Interaction)".to_string(),
+        ];
+        for rule in guidance.iter().take(8) {
+            g_lines.push(format!("- {}", rule));
+        }
+        sections.push(g_lines.join("\n"));
     }
 
     // 3. If code-related and inside a git repo, include concise git status

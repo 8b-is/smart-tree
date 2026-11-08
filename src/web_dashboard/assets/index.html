@@ -25,6 +25,12 @@
                 <button class="btn-pill providers-cta-btn" id="openProvidersBtn" title="Manage Local Models &amp; Cloud OAuth Providers">
                     <span>🌲🤖</span> <span id="activeProviderLabel">Local: st-sovereign</span>
                 </button>
+                <button class="btn-pill" id="openDebugModalBtn" title="Realtime Service Debug Mode — See incoming MCP, Hook, Proxy &amp; HTTP requests live!">
+                    <span>🐞</span> <span id="debugHeaderBadge">Debug Live</span>
+                </button>
+                <a class="btn-pill" href="/flow" title="Open /flow — Live Visual Studio Diff Scroller &amp; Brett Favre Football Commentary" style="text-decoration:none;border-color:rgba(78,205,196,0.65);color:#4ecdc4;">
+                    <span>🏈⚡</span> <span>/flow</span>
+                </a>
                 <button class="btn-icon" id="toggleLayout" title="Toggle terminal position (Ctrl+J)">&#x2B0C;</button>
                 <button class="btn-voice" id="voiceBtn" title="Voice output">&#x1F50A;</button>
             </div>
@@ -97,7 +103,7 @@
                                 <input type="text" id="collabName" placeholder="Your name" autocomplete="off">
                                 <select id="collabType">
                                     <option value="human">Human</option>
-                                    <option value="claude">Claude</option>
+                                    <option value="ai_agent">AI Agent</option>
                                     <option value="omni">Omni</option>
                                     <option value="grok">Grok</option>
                                     <option value="gemini">Gemini</option>
@@ -161,18 +167,22 @@
                     <div class="terminal-actions">
                         <button class="btn-icon" id="newTerminal" title="New AI Console (Ctrl+Shift+`)">+</button>
                         <div class="quick-actions">
-                            <button class="btn-quick" id="btnClaudeContinue"
-                                title="Claude Code (continue conversation)">
+                            <button class="btn-quick" id="btnAgentContinue"
+                                title="AI Agent (restore consciousness &amp; continue session)">
                                 <span class="btn-quick-icon">&#x1F916;</span>
-                                <span class="btn-quick-label">Claude -c</span>
+                                <span class="btn-quick-label">Agent -c</span>
                             </button>
-                            <button class="btn-quick" id="btnClaudeNew" title="Claude Code (new conversation)">
+                            <button class="btn-quick" id="btnAgentNew" title="AI Agent (new session context)">
                                 <span class="btn-quick-icon">&#x2728;</span>
-                                <span class="btn-quick-label">Claude new</span>
+                                <span class="btn-quick-label">Agent new</span>
                             </button>
-                            <button class="btn-quick" id="btnST" title="Smart Tree context">
+                            <button class="btn-quick" id="btnST" title="Smart Tree AI context">
                                 <span class="btn-quick-icon">&#x1F332;</span>
                                 <span class="btn-quick-label">st -m ai</span>
+                            </button>
+                            <button class="btn-quick" id="btnServiceDebug" title="Realtime Service Debug Mode">
+                                <span class="btn-quick-icon">🐞</span>
+                                <span class="btn-quick-label">Debug</span>
                             </button>
                         </div>
                     </div>
@@ -333,6 +343,77 @@
                         </button>
                         <div id="websiteResultBanner" class="website-result-banner hidden"></div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Realtime Service Debug Mode Modal -->
+        <div class="prompt-modal-backdrop" id="debugModalBackdrop">
+            <div class="prompt-modal wide-modal" id="debugModal">
+                <div class="prompt-modal-header">
+                    <div>
+                        <span class="prompt-modal-title">🐞 Realtime Service Debug Mode — Incoming Traffic &amp; Issue Detector</span>
+                        <div class="modal-subtitle">Live stream across MCP (stdio &amp; HTTP), AI Agent Hooks, LLM Proxy / Mechanic's Helper, and HTTP API</div>
+                    </div>
+                    <button class="btn-icon" id="closeDebugModal" title="Close">&#x2715;</button>
+                </div>
+                <div class="prompt-modal-body" style="display:flex;flex-direction:column;gap:10px;max-height:78vh;overflow-y:auto;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;">
+                            <span class="btn-pill ghost">Total: <strong id="wdDbgTotal">0</strong></span>
+                            <span class="btn-pill ghost" style="color:#ff6b6b;">⚠️ Issues: <strong id="wdDbgErrors">0</strong></span>
+                            <span class="btn-pill ghost">🐢 Slow: <strong id="wdDbgSlow">0</strong></span>
+                            <span class="btn-pill ghost">MCP: <strong id="wdDbgMcp">0</strong></span>
+                            <span class="btn-pill ghost">Agent Hooks: <strong id="wdDbgHooks">0</strong></span>
+                            <span class="btn-pill ghost">LLM Proxy: <strong id="wdDbgLlm">0</strong></span>
+                            <span class="btn-pill ghost">Avg: <strong id="wdDbgAvgMs">0 ms</strong></span>
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <span id="wdDbgLiveStatus" style="font-size:12px;color:#2ecc71;font-weight:bold;">🟢 LIVE</span>
+                            <a href="/flow" class="btn-pill ghost" style="text-decoration:none;color:#4ecdc4;">🏈⚡ /flow Live Diff</a>
+                            <button type="button" class="btn-pill ghost" id="wdDbgPauseBtn">⏸ Pause</button>
+                            <button type="button" class="btn-pill ghost" id="wdDbgTestOkBtn">🧪 Test Call</button>
+                            <button type="button" class="btn-pill ghost" id="wdDbgTestErrBtn" style="color:#ff6b6b;">⚠️ Simulate Issue</button>
+                            <button type="button" class="btn-pill ghost" id="wdDbgClearBtn">🗑 Clear</button>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 10px;border-radius:8px;background:rgba(78,205,196,0.08);border:1px solid rgba(78,205,196,0.28);">
+                        <span style="font-size:12px;color:#4ecdc4;font-weight:bold;">💬 Comment on Stream:</span>
+                        <input type="text" id="wdDbgCommentAuthor" value="Hue/Chris" placeholder="Author" style="width:105px;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.35);color:#fff;font-size:12px;">
+                        <input type="text" id="wdDbgCommentInput" placeholder="Guide the AI gently ('A user mentioned before: Chris hates XML as it is super wasteful')..." style="flex:1;min-width:200px;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.35);color:#fff;font-size:12px;">
+                        <button type="button" class="btn-pill active" id="wdDbgPostCommentBtn">Post to Partnership Stream</button>
+                    </div>
+                    <div id="wdDbgCommentsStrip" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                    <div id="wdDbgLastIssueBanner" class="oauth-status-banner hidden" style="border-color:#e74c3c;color:#ffb4b4;"></div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                        <button type="button" class="btn-pill wd-dbg-filter active" data-ch="all">All</button>
+                        <button type="button" class="btn-pill ghost wd-dbg-filter" data-ch="issues">⚠️ Issues Only</button>
+                        <button type="button" class="btn-pill ghost wd-dbg-filter" data-ch="mcp">MCP (stdio + HTTP)</button>
+                        <button type="button" class="btn-pill ghost wd-dbg-filter" data-ch="agent-hook">AI Agent Hooks</button>
+                        <button type="button" class="btn-pill ghost wd-dbg-filter" data-ch="llm-proxy">LLM Proxy</button>
+                        <button type="button" class="btn-pill ghost wd-dbg-filter" data-ch="http-api">HTTP API</button>
+                        <input type="text" id="wdDbgSearchInput" placeholder="Filter by tool, method, path, error..." style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.35);color:#fff;font-size:12px;">
+                    </div>
+                    <div style="max-height:320px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:8px;background:rgba(0,0,0,0.35);">
+                        <table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:12px;">
+                            <thead>
+                                <tr style="background:rgba(255,255,255,0.06);color:#4ecdc4;text-align:left;">
+                                    <th style="padding:6px 8px;">Time</th>
+                                    <th style="padding:6px 8px;">Status</th>
+                                    <th style="padding:6px 8px;">Channel</th>
+                                    <th style="padding:6px 8px;">PID</th>
+                                    <th style="padding:6px 8px;">Method</th>
+                                    <th style="padding:6px 8px;">Target / Tool</th>
+                                    <th style="padding:6px 8px;">Latency</th>
+                                    <th style="padding:6px 8px;">Summary / Issue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wdDbgTbody">
+                                <tr><td colspan="8" style="padding:14px;text-align:center;color:#888;">Waiting for incoming service traffic...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="wdDbgInspector" class="hidden" style="padding:10px;border-radius:8px;background:rgba(0,0,0,0.5);border:1px solid rgba(78,205,196,0.4);font-family:monospace;font-size:12px;"></div>
                 </div>
             </div>
         </div>
