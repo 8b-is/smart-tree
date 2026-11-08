@@ -293,13 +293,163 @@ pub async fn handle_context(params: Option<Value>, ctx: Arc<McpContext>) -> Resu
     super::tools::handle_tools_call(json!({ "name": tool_name, "arguments": params }), ctx).await
 }
 
-/// Consolidated memory tool - collaborative memories
+/// Consolidated memory tool - collaborative memories, loose ternary project remembering, Do-Not-Look privacy, & MEM8 Life Personas
 pub async fn handle_memory(params: Option<Value>, ctx: Arc<McpContext>) -> Result<Value> {
     let params = params.unwrap_or_else(|| json!({}));
     let operation = params
         .get("operation")
         .and_then(|v| v.as_str())
         .unwrap_or("find");
+
+    if matches!(
+        operation,
+        "persona_list"
+            | "persona_ask"
+            | "persona_recall"
+            | "persona_inspect"
+            | "persona_train"
+            | "persona_specialties"
+    ) {
+        return super::persona_bridge::handle_persona(Some(params), ctx).await;
+    }
+
+    match operation {
+        "do_not_look" | "dont_look" | "ignore_folder" | "no_look" => {
+            let path_str = params
+                .get("path")
+                .or_else(|| params.get("origin"))
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing 'path' for do_not_look operation"))?;
+            let target_path = std::path::Path::new(path_str);
+            let canon = crate::config::StConfig::add_do_not_look_path(target_path)?;
+            crate::mcp::smart_project_detector::invalidate_do_not_look_cache();
+
+            if params
+                .get("marker")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+                && canon.is_dir()
+            {
+                let _ = std::fs::write(
+                    canon.join(".noaye"),
+                    "# Aye Do-Not-Look marker (Smart Tree will not remember or index this folder)\n",
+                );
+            }
+
+            let purged = if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+                mgr.forget_directory_prefix(&canon)
+            } else {
+                0
+            };
+
+            return Ok(json!({
+                "ok": true,
+                "operation": "do_not_look",
+                "path": canon.display().to_string(),
+                "purged_memories": purged,
+                "message": format!(
+                    "🙈 Aye will no longer look in or remember '{}' (purged {} existing memories).",
+                    canon.display(),
+                    purged
+                )
+            }));
+        }
+        "allow_look" | "look_again" | "unignore_folder" => {
+            let path_str = params
+                .get("path")
+                .or_else(|| params.get("origin"))
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Missing 'path' for allow_look operation"))?;
+            let target_path = std::path::Path::new(path_str);
+            let canon = crate::config::StConfig::remove_do_not_look_path(target_path)?;
+            for marker in crate::mcp::smart_project_detector::DO_NOT_LOOK_MARKER_FILES {
+                let m_path = canon.join(marker);
+                if m_path.is_file() {
+                    let _ = std::fs::remove_file(m_path);
+                }
+            }
+            crate::mcp::smart_project_detector::invalidate_do_not_look_cache();
+
+            let remembered = if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+                mgr.ensure_directory_remembered(&canon)
+            } else {
+                None
+            };
+
+            return Ok(json!({
+                "ok": true,
+                "operation": "allow_look",
+                "path": canon.display().to_string(),
+                "remembered": remembered,
+                "message": format!("👀 Aye is allowed to look in and remember '{}' again.", canon.display())
+            }));
+        }
+        "projects" | "discover_projects" | "list_projects" => {
+            let mut mgr = crate::memory_manager::MemoryManager::new()?;
+            let mut newly_discovered = Vec::new();
+            if let Some(path_str) = params
+                .get("path")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+            {
+                let root = std::path::Path::new(path_str);
+                for (proj_path, decision) in
+                    crate::mcp::smart_project_detector::discover_projects_ternary_in_tree(root, 3)
+                {
+                    let _ = mgr.remember_single_project_dir(&proj_path);
+                    newly_discovered.push(json!({
+                        "path": proj_path.display().to_string(),
+                        "project_name": decision.project_name,
+                        "compound_slug": decision.compound_slug,
+                        "archetype": decision.archetype.as_str(),
+                        "score_q8": decision.score_q8,
+                        "spqt_sig_hex": decision.spqt_sig_hex,
+                        "keywords": decision.keywords,
+                    }));
+                }
+            }
+            let all_remembered = mgr.list_remembered_projects();
+            let total_remembered = all_remembered.len();
+            let limit = params
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as usize)
+                .unwrap_or(25)
+                .clamp(1, 100);
+            let offset = params
+                .get("offset")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as usize)
+                .unwrap_or(0);
+            let page: Vec<Value> = all_remembered
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .map(|m| {
+                    let preview: String = m.context.chars().take(180).collect();
+                    json!({
+                        "origin": m.origin,
+                        "keywords": m.keywords.into_iter().take(8).collect::<Vec<_>>(),
+                        "summary": preview,
+                        "timestamp": m.timestamp.to_rfc3339(),
+                    })
+                })
+                .collect();
+            let cfg = crate::config::StConfig::load().unwrap_or_default();
+            return Ok(json!({
+                "ok": true,
+                "operation": "projects",
+                "model": "burn/mem8-ternary-micro (SPQT Base-243 · zero-float FELIX GEMM)",
+                "remembered_project_count": total_remembered,
+                "offset": offset,
+                "limit": limit,
+                "newly_discovered": newly_discovered,
+                "remembered_projects": page,
+                "do_not_look_paths": cfg.safety.do_not_look_paths,
+            }));
+        }
+        _ => {}
+    }
 
     let tool_name = match operation {
         "anchor" | "save" | "store" => "anchor_collaborative_memory",
@@ -623,8 +773,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["anchor", "find"],
-                        "description": "Memory operation"
+                        "enum": ["anchor", "find", "projects", "do_not_look", "allow_look", "persona_list", "persona_ask", "persona_recall", "persona_inspect", "persona_train", "persona_specialties"],
+                        "description": "Memory operation ('anchor', 'find', 'projects' to list/discover ternary projects, 'do_not_look' to tell Aye not to look in a folder, 'allow_look' to re-enable looking, or 'persona_*' bridge operations)"
                     },
                     "context": {
                         "type": "string",
@@ -642,9 +792,28 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                     "origin": {
                         "type": "string",
                         "description": "Who created this? 'human', 'ai:claude', or 'tandem:human:claude' (default: tandem:human:claude)"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Persona name or slug (for persona_* operations)"
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Question or prompt (for persona_ask / persona_recall)"
+                    },
+                    "temp": {
+                        "type": "string",
+                        "description": "Rational p/q or Q8 integer temperature (default: '184/256')"
+                    },
+                    "speak": {
+                        "description": "Synthesize spoken WAV audio (boolean or WAV path)"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Directory or file path (for persona_train / persona_specialties)"
                     }
                 },
-                "required": ["operation", "keywords"]
+                "required": ["operation"]
             }
         }),
         json!({
@@ -666,6 +835,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
             }
         }),
         super::memnet_bridge::memnet_tool_definition(),
+        super::persona_bridge::persona_tool_definition(),
+        super::mechanic_helper::helper_tool_definition(),
         json!({
             "name": "sse",
             "description": "Watch directory with Server-Sent Events",
@@ -859,8 +1030,8 @@ pub fn get_consolidated_tools() -> Vec<Value> {
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize"],
-                        "description": "Action: 'best' (Top 1-3 fastest Rust functions by exact rational p/q cycles/op), 'yolo' (ONLY the #1 fastest raw drop-in Rust function + 1-line receipt), 'submit' (publish + hardware-benchmark a Rust function with partnership attribution), 'leaderboard' (live Speed & Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board of slowest routines), 'golf' (prove 64-vector equivalence & submit golfed routines to drop cycles/op), 'optimize' (audit repo & generate g8t.md)",
+                        "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize", "asm_exec", "dealers_choice"],
+                        "description": "Action: 'best' (Top 1-3 fastest Rust functions by exact rational p/q cycles/op), 'yolo' (ONLY the #1 fastest raw drop-in Rust function + 1-line receipt), 'submit' (publish + hardware-benchmark a Rust function with partnership attribution), 'leaderboard' (live Speed & Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board of slowest routines), 'golf' (prove 64-vector equivalence & submit golfed routines to drop cycles/op), 'optimize' (audit repo & generate g8t.md), 'asm_exec' (compile, disassemble & run a complete freestanding #![no_std] #![no_main] Capsela g8t ASM ELF64 executable), 'dealers_choice' ($10/mo Unlimited g8t Dealer's Choice Best-Model Router & empirical domain leaderboard)",
                         "default": "best"
                     },
                     "query": {
@@ -969,6 +1140,12 @@ pub async fn dispatch_consolidated_tool(
         "memory" => handle_memory(params, ctx).await?,
         "compare" => handle_compare(params, ctx).await?,
         "memnet" | "mesh" | "memnet_bridge" => super::memnet_bridge::handle_memnet(params).await?,
+        "persona" | "personas" | "life_persona" | "m8_persona" | "phoenix_persona" => {
+            super::persona_bridge::handle_persona(params, ctx).await?
+        }
+        "helper" | "mechanic_helper" | "cheet" | "aye_helper" => {
+            super::mechanic_helper::handle_helper(params, ctx).await?
+        }
         "sse" => handle_sse(params, ctx).await?,
         "feedback" => handle_feedback(params, ctx).await?,
         "server_info" => {

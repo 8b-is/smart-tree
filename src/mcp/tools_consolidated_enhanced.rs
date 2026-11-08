@@ -513,8 +513,8 @@ EXAMPLES:
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["anchor", "find"],
-                        "description": "Memory operation"
+                        "enum": ["anchor", "find", "projects", "do_not_look", "allow_look", "persona_list", "persona_ask", "persona_recall", "persona_inspect", "persona_train", "persona_specialties"],
+                        "description": "Memory operation ('anchor', 'find', 'projects' to list/discover ternary projects, 'do_not_look' to tell Aye not to look in a folder, 'allow_look' to re-enable looking, or 'persona_*' bridge operations)"
                     },
                     "context": {
                         "type": "string",
@@ -532,9 +532,32 @@ EXAMPLES:
                     "origin": {
                         "type": "string",
                         "description": "Who created this? 'human', 'ai:claude', or 'tandem:human:claude' (default: tandem:human:claude)"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Persona name or slug (for persona_* operations, e.g. 'Grandma Jody')"
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Question or prompt (for persona_ask / persona_recall)"
+                    },
+                    "temp": {
+                        "type": "string",
+                        "description": "Rational p/q or Q8 integer temperature (for persona_ask / persona_recall, default: '184/256')"
+                    },
+                    "speak": {
+                        "description": "Synthesize spoken WAV audio (boolean or WAV path, for persona_ask)"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Directory or file path (for persona_train / persona_specialties)"
+                    },
+                    "specialty": {
+                        "type": "string",
+                        "description": "Specialty lens (for persona_train)"
                     }
                 },
-                "required": ["operation", "keywords"]
+                "required": ["operation"]
             }
         }));
     }
@@ -1097,8 +1120,8 @@ EXAMPLES:
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize"],
-                    "description": "Action: 'best' (Top 1-3 fastest functions), 'yolo' (#1 fastest drop-in code only), 'submit' (publish + benchmark Rust function), 'leaderboard' (live Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board), 'golf' (prove 64-vector equivalence & drop cycles/op on routines), 'optimize' (audit repo & generate g8t.md)",
+                    "enum": ["best", "yolo", "submit", "leaderboard", "targets", "golf", "optimize", "asm_exec", "dealers_choice"],
+                    "description": "Action: 'best' (Top 1-3 fastest functions), 'yolo' (#1 fastest drop-in code only), 'submit' (publish + benchmark Rust function), 'leaderboard' (live Foken FKN scoreboard with <3<3<3+1 ,oO*'*Oo. ASCII art), 'targets' (Cycle-Golf Bounty Board), 'golf' (prove 64-vector equivalence & drop cycles/op on routines), 'optimize' (audit repo & generate g8t.md), 'asm_exec' (compile, disassemble & run a complete freestanding #![no_std] #![no_main] Capsela g8t ASM ELF64 executable), 'dealers_choice' ($10/mo Unlimited g8t Dealer's Choice Best-Model Router & empirical domain leaderboard)",
                     "default": "best"
                 },
                 "query": {
@@ -1143,6 +1166,12 @@ EXAMPLES:
 
     // Add MemNet MCP bridge (wave-Q&A offload mesh over UDP :8423)
     tools.push(super::memnet_bridge::memnet_tool_definition());
+
+    // Add MEM8 Life Persona (`m8 persona`) MCP bridge
+    tools.push(super::persona_bridge::persona_tool_definition());
+
+    // Add Mechanic's Helper (`helper` — local ternary Aye & The Cheet dad-jokes helper)
+    tools.push(super::mechanic_helper::helper_tool_definition());
 
     tools.extend(super::combinatorics_llm::get_combinatorics_llm_mcp_tools());
 

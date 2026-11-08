@@ -1605,7 +1605,51 @@ impl Scanner {
             self.save_scan_state(&sorted_nodes);
         }
 
+        // Automatically remember loose projects discovered by the built-in SPQT Base-243
+        // ternary model unless Aye is told not to look in a folder.
+        #[cfg(not(test))]
+        self.auto_remember_scanned_projects(&sorted_nodes);
+
         Ok((sorted_nodes, final_stats))
+    }
+
+    /// Inspect `self.root` and shallow directory nodes (`depth <= 2`) with the built-in
+    /// SPQT Base-243 ternary project classifier and remember any discovered projects into
+    /// `~/.st/memories.m8`, unless Aye is told not to look in the folder.
+    #[cfg(not(test))]
+    fn auto_remember_scanned_projects(&self, nodes: &[FileNode]) {
+        if crate::mcp::smart_project_detector::is_ephemeral_or_system_path(&self.root)
+            || !crate::mcp::smart_project_detector::is_aye_allowed_to_look(&self.root)
+        {
+            return;
+        }
+
+        let mut candidate_dirs: Vec<&Path> = Vec::with_capacity(32);
+        if crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(&self.root)
+            .is_some()
+        {
+            candidate_dirs.push(self.root.as_path());
+        }
+        for node in nodes.iter().filter(|n| n.is_dir && n.depth <= 2).take(48) {
+            if node.path != self.root
+                && crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(
+                    &node.path,
+                )
+                .is_some()
+            {
+                candidate_dirs.push(node.path.as_path());
+            }
+        }
+
+        if candidate_dirs.is_empty() {
+            return;
+        }
+
+        if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+            for dir in candidate_dirs {
+                let _ = mgr.remember_single_project_dir(dir);
+            }
+        }
     }
 
     /// Save the current scan state for future change detection

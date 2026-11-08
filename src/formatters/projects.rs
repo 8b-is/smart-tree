@@ -49,7 +49,10 @@ pub enum ProjectType {
     Ruby,       // Gemfile
     Docker,     // Dockerfile
     Kubernetes, // k8s yaml files
-    Monorepo,   // Multiple project types
+    Obsidian,   // .obsidian vault or .m8 consciousness garden
+    OfficeHub, // hierarchical/organizational project folder (e.g. office/atlanta -> office_atlanta)
+    GitRepo,   // .git repository without language manifest
+    Monorepo,  // Multiple project types
     Unknown,
 }
 
@@ -76,38 +79,68 @@ impl ProjectsFormatter {
         }
     }
 
-    /// Scan directory for all projects
+    /// Scan directory for all projects (combining manifest/README detection with the
+    /// built-in local SPQT Base-243 ternary project model, and automatically remembering
+    /// discovered projects unless Aye is told not to look in a folder).
     pub fn scan_projects(&self, root: &Path) -> Result<Vec<ProjectInfo>> {
         let projects = Arc::new(Mutex::new(Vec::new()));
         let seen_paths = Arc::new(Mutex::new(std::collections::HashSet::new()));
         let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
 
-        // First pass: Find projects with README.md
+        if !crate::mcp::smart_project_detector::is_aye_allowed_to_look(&root) {
+            return Ok(Vec::new());
+        }
+
+        // Walk directories while respecting Do-Not-Look markers & safety config
         let walker = WalkDir::new(&root)
             .max_depth(self.max_depth.unwrap_or(10))
             .follow_links(false)
             .into_iter()
+            .filter_entry(|e| {
+                !e.file_type().is_dir()
+                    || crate::mcp::smart_project_detector::is_aye_allowed_to_look(e.path())
+            })
             .filter_map(|e| e.ok())
             .collect::<Vec<_>>();
 
         walker.par_iter().for_each(|entry| {
-            // Check for README.md files
+            // 0. Built-in local SPQT Base-243 ternary model loose directory evaluation
+            //    (.git, .obsidian, office/atlanta -> office_atlanta, etc.)
+            if entry.file_type().is_dir() {
+                let dir_path = entry.path();
+                if crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(
+                    dir_path,
+                )
+                .is_some()
+                    && seen_paths.lock().unwrap().insert(dir_path.to_path_buf())
+                {
+                    if let Ok(project) = self.analyze_project(dir_path) {
+                        projects.lock().unwrap().push(project);
+                    }
+                }
+            }
+
+            // 1. Check for README.md files
             if self.is_readme(entry) {
                 let project_path = entry.path().parent().unwrap();
-                if seen_paths
-                    .lock()
-                    .unwrap()
-                    .insert(project_path.to_path_buf())
+                if crate::mcp::smart_project_detector::is_aye_allowed_to_look(project_path)
+                    && seen_paths
+                        .lock()
+                        .unwrap()
+                        .insert(project_path.to_path_buf())
                 {
                     if let Ok(project) = self.analyze_project(project_path) {
-                        if project.size >= self.min_project_size {
+                        if project.size >= self.min_project_size
+                            || project_path.join(".git").exists()
+                            || project_path.join(".obsidian").is_dir()
+                        {
                             projects.lock().unwrap().push(project);
                         }
                     }
                 }
             }
 
-            // Also check for project marker files (even without README)
+            // 2. Also check for project marker files (even without README)
             if entry.file_type().is_file() {
                 let filename = entry.file_name().to_str().unwrap_or("");
                 let is_project_marker = matches!(
@@ -149,10 +182,11 @@ impl ProjectsFormatter {
                     let project_path = entry.path().parent().unwrap();
 
                     // Check if we haven't seen this project yet
-                    if seen_paths
-                        .lock()
-                        .unwrap()
-                        .insert(project_path.to_path_buf())
+                    if crate::mcp::smart_project_detector::is_aye_allowed_to_look(project_path)
+                        && seen_paths
+                            .lock()
+                            .unwrap()
+                            .insert(project_path.to_path_buf())
                     {
                         // Look for README in parent directory if not found
                         let readme_path = if !project_path.join("README.md").exists() {
@@ -168,7 +202,9 @@ impl ProjectsFormatter {
                         if let Ok(project) =
                             self.analyze_project_with_readme_path(project_path, readme_path)
                         {
-                            if project.size >= self.min_project_size {
+                            if project.size >= self.min_project_size
+                                || project_path.join(".git").exists()
+                            {
                                 projects.lock().unwrap().push(project);
                             }
                         }
@@ -179,6 +215,17 @@ impl ProjectsFormatter {
 
         let mut result = projects.lock().unwrap().clone();
         result.sort_by_key(|a| std::cmp::Reverse(a.last_modified)); // Most recent first
+
+        // Always remember discovered projects into MEM|8 (`~/.st/memories.m8`) unless in unit tests
+        #[cfg(not(test))]
+        if !crate::mcp::smart_project_detector::is_ephemeral_or_system_path(&root) {
+            if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+                for proj in &result {
+                    let _ = mgr.remember_single_project_dir(&proj.path);
+                }
+            }
+        }
+
         Ok(result)
     }
 
@@ -208,6 +255,17 @@ impl ProjectsFormatter {
             .unwrap_or("unknown")
             .to_string();
 
+        let ternary_decision =
+            crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(project_path);
+
+        if let Some(ref td) = ternary_decision {
+            if td.archetype
+                == crate::mcp::smart_project_detector::TernaryProjectArchetype::OfficeLocationHub
+            {
+                name = td.project_name.clone();
+            }
+        }
+
         // Check if this is a git submodule
         let is_submodule = project_path.join(".git").exists()
             && project_path
@@ -221,12 +279,33 @@ impl ProjectsFormatter {
 
         let mut project_type = self.detect_project_type(project_path);
 
-        // If no type detected, check parent directory
+        // If no type detected, check parent directory or ternary archetype
         if project_type == ProjectType::Unknown && project_path != readme_path {
             project_type = self.detect_project_type(readme_path);
         }
+        if project_type == ProjectType::Unknown {
+            if let Some(ref td) = ternary_decision {
+                project_type = match td.archetype {
+                    crate::mcp::smart_project_detector::TernaryProjectArchetype::ObsidianVault => {
+                        ProjectType::Obsidian
+                    }
+                    crate::mcp::smart_project_detector::TernaryProjectArchetype::OfficeLocationHub => {
+                        ProjectType::OfficeHub
+                    }
+                    crate::mcp::smart_project_detector::TernaryProjectArchetype::GitRepository => {
+                        ProjectType::GitRepo
+                    }
+                    _ => ProjectType::Unknown,
+                };
+            }
+        }
 
-        let summary = self.extract_summary(readme_path)?;
+        let mut summary = self.extract_summary(readme_path)?;
+        if summary.is_empty() {
+            if let Some(ref td) = ternary_decision {
+                summary = td.summary.clone();
+            }
+        }
         let (size, file_count, created, last_modified, last_accessed) =
             self.get_project_stats(project_path)?;
         let mut dependencies = self.detect_dependencies(project_path, &project_type);
@@ -727,6 +806,9 @@ impl ProjectsFormatter {
             ProjectType::Ruby => 0x52,       // R
             ProjectType::Docker => 0x43,     // C (Container)
             ProjectType::Kubernetes => 0x4B, // K
+            ProjectType::Obsidian => 0x4F,   // O (Obsidian/M8)
+            ProjectType::OfficeHub => 0x48,  // H (Hub / office_atlanta)
+            ProjectType::GitRepo => 0x56,    // V (VCS / Git)
             ProjectType::Monorepo => 0x4D,   // M
             ProjectType::Unknown => 0x55,    // U
         };
@@ -779,6 +861,9 @@ impl Formatter for ProjectsFormatter {
                 ProjectType::Ruby => "💎",
                 ProjectType::Docker => "🐳",
                 ProjectType::Kubernetes => "☸️",
+                ProjectType::Obsidian => "🔮",
+                ProjectType::OfficeHub => "🏢",
+                ProjectType::GitRepo => "🌿",
                 ProjectType::Monorepo => "📚",
                 ProjectType::Unknown => "📁",
             };

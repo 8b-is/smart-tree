@@ -108,12 +108,18 @@ enum PersonaCommands {
     },
     /// List all trained .m8 Life Personas in ~/.st/personas/
     List,
-    /// Ask or converse with a trained .m8 Life Persona locally
+    /// Ask or converse with a trained .m8 Life Persona locally (with Phoenix Afterlife Room & optional voice synthesis)
     Ask {
         /// Persona name or slug
         name: String,
         /// Question or prompt
         prompt: String,
+        /// Rational p/q or Q8 integer temperature for personality & dyadic emotional randomness (e.g. "184/256", "240", "0", default "184/256")
+        #[arg(short, long, default_value = "184/256")]
+        temp: String,
+        /// Synthesize spoken WAV audio modulated by personality, temperature, and dyadic emotion
+        #[arg(short, long, num_args = 0..=1, default_missing_value = "")]
+        speak: Option<String>,
     },
 }
 
@@ -552,9 +558,25 @@ fn main() -> Result<()> {
                     }
                 }
             }
-            PersonaCommands::Ask { name, prompt } => {
+            PersonaCommands::Ask {
+                name,
+                prompt,
+                temp,
+                speak,
+            } => {
                 let persona = st::mem8::persona::LifePersona::load(&name)?;
-                println!("{}", persona.respond_locally(&prompt));
+                let temp_q8 = parse_rational_temp_q8(&temp);
+                let wav_path = speak.map(|raw| {
+                    if raw.trim().is_empty() {
+                        std::path::PathBuf::from(format!("/tmp/{}_phoenix_voice.wav", persona.slug))
+                    } else {
+                        std::path::PathBuf::from(raw)
+                    }
+                });
+                println!(
+                    "{}",
+                    persona.respond_with_phoenix(&prompt, temp_q8, wav_path.as_deref())
+                );
             }
         },
     }
@@ -647,6 +669,10 @@ fn pack_path(path: &Path) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn parse_rational_temp_q8(s: &str) -> i32 {
+    st::mem8::persona::parse_rational_temp_q8(s)
 }
 
 // Trish says: "This validator sparkles with reliability! Every byte accounted for!" 💜

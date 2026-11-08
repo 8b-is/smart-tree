@@ -207,6 +207,35 @@ async fn main() -> Result<()> {
                     report.recommended_capsules.len()
                 );
             }
+            "asm-exec" | "asm_exec" | "capsela-exe" | "capsela_exe" | "executable" | "exec"
+            | "asm" => {
+                let q = g8t_cmd
+                    .target
+                    .as_deref()
+                    .unwrap_or("capsela-zeno-sun-arcade");
+                let receipt = st::g8t_integration::build_and_run_capsela_asm_executable(
+                    q,
+                    &[],
+                    None,
+                    "432528",
+                    &g8t_cmd.partner,
+                )?;
+                println!(
+                    "{}",
+                    st::g8t_integration::format_capsela_asm_executable_report(&receipt)
+                );
+            }
+            "dealers-choice" | "dealers_choice" | "dealer" | "unlimited" | "router" => {
+                let q = g8t_cmd
+                    .target
+                    .as_deref()
+                    .unwrap_or("complete capsela g8t asm executable programs");
+                let report = st::g8t_integration::route_dealers_choice(q, &[]);
+                println!(
+                    "{}",
+                    st::g8t_integration::format_dealers_choice_report(&report)
+                );
+            }
             _ => {
                 let top_n = g8t_cmd.top.or(cli.g8t_top).unwrap_or(15);
                 let report = st::g8t_integration::get_foken_scoreboard(top_n)?;

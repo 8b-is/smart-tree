@@ -307,6 +307,32 @@ impl MemoryProxy {
 
         self.memory.update_scope(scope_id, new_history)?;
 
+        #[cfg(not(test))]
+        {
+            let user_text = request
+                .messages
+                .iter()
+                .rev()
+                .find(|m| m.role == LlmRole::User)
+                .map(|m| m.content.as_str())
+                .unwrap_or("");
+            crate::mcp::mechanic_helper::record_proxy_conversation_turn(
+                provider_name,
+                scope_id,
+                &request.model,
+                user_text,
+                &response.content,
+            );
+            let dom = crate::g8t_integration::classify_dealers_choice_domain(user_text);
+            let _ = crate::g8t_integration::record_dealers_choice_outcome(
+                dom,
+                &request.model,
+                !response.content.trim().is_empty(),
+                crate::g8t_integration::RationalPq::new(2, 1),
+                50,
+            );
+        }
+
         Ok(response)
     }
 }

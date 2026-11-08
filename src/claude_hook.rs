@@ -50,6 +50,23 @@ pub async fn handle_user_prompt_submit() -> Result<()> {
         search_mem8_context(&project_keywords)?;
     }
 
+    // 2b. Context-driven project list (or ~/Documents, ~/Desktop, ~/Downloads default)
+    let proj_report = crate::mcp::mechanic_helper::select_projects_for_context(user_prompt, 4);
+    if !proj_report.projects.is_empty() {
+        println!(
+            "### 🗂️ Projects ({})",
+            if proj_report.selection_mode == "context_matched_projects" {
+                "context-matched via SPQT Base-243 ternary"
+            } else {
+                "Documents / Desktop / Downloads default"
+            }
+        );
+        for item in &proj_report.projects {
+            println!("  • **{}** (`{}`): {}", item.name, item.path, item.summary);
+        }
+        println!();
+    }
+
     // 3. Provide current directory context
     provide_current_context(user_prompt)?;
 
@@ -741,6 +758,29 @@ fn handle_agy_pre_invocation(payload: &Value) -> Result<Value> {
         }
     }
 
+    // 2b. Context-matched projects (or ~/Documents, ~/Desktop, ~/Downloads when no specific project context matches)
+    let proj_report = crate::mcp::mechanic_helper::select_projects_for_context(user_prompt, 4);
+    if !proj_report.projects.is_empty() {
+        let mut proj_lines = vec![format!(
+            "### 🗂️ Context Projects ({})",
+            if proj_report.selection_mode == "context_matched_projects" {
+                "SPQT Base-243 ternary match"
+            } else {
+                "Documents / Desktop / Downloads default"
+            }
+        )];
+        for item in &proj_report.projects {
+            proj_lines.push(format!(
+                "- **{}** (`{}`): {}",
+                item.name, item.path, item.summary
+            ));
+        }
+        proj_lines.push(
+            "🔧 *Mechanic's Helper*: Call MCP `helper {input: \"<current conversation summary>\"}` for local ternary Aye & The Cheet tool suggestions, LLM JSON log harvest, and non-intrusive background music (`play_music: true`).".to_string(),
+        );
+        sections.push(proj_lines.join("\n"));
+    }
+
     // 3. If code-related and inside a git repo, include concise git status
     if detect_code_intent(user_prompt) && std::path::Path::new(".git").exists() {
         if let Ok(output) = Command::new("git").args(["status", "--short"]).output() {
@@ -973,7 +1013,11 @@ fn collect_mem8_context(keywords: &[String]) -> Vec<String> {
             let _ = mgr.ensure_directory_remembered(&cwd);
         }
         if let Ok(mems) = mgr.find(keywords) {
-            for m in mems.into_iter().take(4) {
+            for m in mems
+                .into_iter()
+                .filter(|m| m.anchor_type != "project")
+                .take(4)
+            {
                 let (clean_ctx, trust) = guardian.sanitize_memory_text(&m.context, &m.origin);
                 if trust == crate::ai_guardian::MemoryTrustLevel::Quarantined {
                     continue;

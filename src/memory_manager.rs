@@ -202,32 +202,70 @@ impl MemoryManager {
         Ok(memory)
     }
 
-    /// Automatically harvest and remember salient context from `dir` if no memory
-    /// is anchored for `dir` yet, so directories are always remembered without
-    /// requiring manual memory initialization.
+    /// Returns `true` when this `MemoryManager` points at the user's global `~/.st/memories.m8`.
+    fn is_default_global_bank(&self) -> bool {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let default_path = Path::new(&home).join(".st").join("memories.m8");
+        self.bank_path == default_path
+    }
+
+    /// Automatically harvest and remember salient context from `dir` (and any loose child
+    /// projects up to depth 2 classified by the built-in SPQT Base-243 ternary model)
+    /// unless Aye is told not to look in `dir`.
     pub fn ensure_directory_remembered(&mut self, dir: &Path) -> Option<Memory> {
-        if !dir.is_dir() {
+        if !dir.is_dir() || !crate::mcp::smart_project_detector::is_aye_allowed_to_look(dir) {
             return None;
         }
         let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-        let dir_str = canon.to_string_lossy().to_string();
 
-        // Skip ephemeral/system pseudo-directories and test tempdirs
-        if dir_str == "/"
-            || dir_str.starts_with("/tmp")
-            || dir_str.starts_with("/proc")
-            || dir_str.starts_with("/sys")
-            || dir_str.starts_with("/dev")
-            || dir_str.starts_with("/run")
-            || dir_str.contains("/.tmp")
-            || dir_str.contains("/target/")
+        // When writing to the global `~/.st/memories.m8` bank, skip ephemeral `/tmp` and `.tmp*`
+        // directories so unit tests never pollute the user's persistent memory bank.
+        if self.is_default_global_bank()
+            && crate::mcp::smart_project_detector::is_ephemeral_or_system_path(&canon)
         {
             return None;
         }
 
+        if self.is_default_global_bank() {
+            let _ = self.ensure_ssh_connections_remembered();
+            let _ = self.ingest_wa_stream();
+        }
+
+        let primary = self.remember_single_project_dir(&canon);
+
+        // Also let the built-in ternary model loosely discover projects inside child folders (up to depth 2),
+        // such as `.git` repos, `.obsidian` vaults, or `office/atlanta` (`office_atlanta`).
+        let discovered =
+            crate::mcp::smart_project_detector::discover_projects_ternary_in_tree(&canon, 2);
+        let mut first_child = None;
+        for (proj_path, _decision) in discovered {
+            if proj_path == canon {
+                continue;
+            }
+            if let Some(mem) = self.remember_single_project_dir(&proj_path) {
+                if first_child.is_none() {
+                    first_child = Some(mem);
+                }
+            }
+        }
+
+        primary.or(first_child)
+    }
+
+    /// Anchor or update a single directory as a `"project"` memory in `self.bank` if it passes
+    /// the Do-Not-Look check and directory memory synthesis.
+    pub fn remember_single_project_dir(&mut self, dir: &Path) -> Option<Memory> {
+        if !dir.is_dir() || !crate::mcp::smart_project_detector::is_aye_allowed_to_look(dir) {
+            return None;
+        }
+        let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+        if self.is_default_global_bank()
+            && crate::mcp::smart_project_detector::is_ephemeral_or_system_path(&canon)
+        {
+            return None;
+        }
+        let dir_str = canon.to_string_lossy().to_string();
         let truncated_origin = Self::truncate_utf8(&dir_str, 255);
-        let _ = self.ensure_ssh_connections_remembered();
-        let _ = self.ingest_wa_stream();
 
         let (keywords, context) = Self::synthesize_directory_memory(&canon)?;
         let truncated_context = Self::truncate_utf8(&context, 4096);
@@ -238,13 +276,73 @@ impl MemoryManager {
             .iter()
             .find(|m| m.origin == truncated_origin && m.anchor_type == "project")
         {
-            if existing.context == truncated_context {
+            if existing.context == truncated_context && existing.keywords == keywords {
                 return Some(existing.clone());
             }
         }
 
         self.anchor_silent("project", keywords, &context, &dir_str)
             .ok()
+    }
+
+    /// Walk `root` up to `max_depth`, using Smart Tree's built-in SPQT Base-243 ternary model
+    /// (`burn/mem8-ternary-micro`) to loosely discover projects (`.git`, `.obsidian`,
+    /// `office/atlanta` -> `office_atlanta`, code manifests, note vaults) and remember them
+    /// in `"projects"`, skipping any folder where Aye is told not to look.
+    pub fn discover_and_remember_projects_in_tree(
+        &mut self,
+        root: &Path,
+        max_depth: usize,
+    ) -> Vec<Memory> {
+        let mut remembered = Vec::new();
+        if !root.is_dir() || !crate::mcp::smart_project_detector::is_aye_allowed_to_look(root) {
+            return remembered;
+        }
+        let discovered =
+            crate::mcp::smart_project_detector::discover_projects_ternary_in_tree(root, max_depth);
+        for (proj_path, _decision) in discovered {
+            if let Some(mem) = self.remember_single_project_dir(&proj_path) {
+                remembered.push(mem);
+            }
+        }
+        remembered
+    }
+
+    /// Purge any remembered memories whose `origin` is inside `dir` (used when Aye is told
+    /// not to look in a folder).
+    pub fn forget_directory_prefix(&mut self, dir: &Path) -> usize {
+        let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+        let raw_prefix = dir.to_string_lossy().trim_end_matches('/').to_string();
+        let canon_prefix = canon.to_string_lossy().trim_end_matches('/').to_string();
+        let before = self.bank.memories.len();
+        self.bank.memories.retain(|m| {
+            let orig = m.origin.trim_end_matches('/');
+            let matches_raw = !raw_prefix.is_empty()
+                && (orig == raw_prefix || orig.starts_with(&format!("{raw_prefix}/")));
+            let matches_canon = !canon_prefix.is_empty()
+                && (orig == canon_prefix || orig.starts_with(&format!("{canon_prefix}/")));
+            !(matches_raw || matches_canon)
+        });
+        let removed = before.saturating_sub(self.bank.memories.len());
+        if removed > 0 {
+            let _ = self.save();
+        }
+        removed
+    }
+
+    /// Return all remembered `"project"` memories that Aye is currently allowed to look at.
+    pub fn list_remembered_projects(&self) -> Vec<Memory> {
+        self.bank
+            .memories
+            .iter()
+            .filter(|m| {
+                m.anchor_type == "project"
+                    && crate::mcp::smart_project_detector::is_aye_allowed_to_look(Path::new(
+                        &m.origin,
+                    ))
+            })
+            .cloned()
+            .collect()
     }
 
     /// Automatically remember non-secret SSH host aliases and endpoints from `~/.ssh/config`
@@ -708,7 +806,9 @@ impl MemoryManager {
 
     pub fn synthesize_directory_memory(dir: &Path) -> Option<(Vec<String>, String)> {
         let dir_str = dir.to_string_lossy();
-        if crate::ai_guardian::AiGuardian::is_untrusted_repo_or_source(&dir_str) {
+        if crate::ai_guardian::AiGuardian::is_untrusted_repo_or_source(&dir_str)
+            || !crate::mcp::smart_project_detector::is_aye_allowed_to_look(dir)
+        {
             return None;
         }
         let guardian = crate::ai_guardian::AiGuardian::new();
@@ -718,18 +818,54 @@ impl MemoryManager {
             .and_then(|n| n.to_str())
             .filter(|s| !s.is_empty())?;
 
-        let mut keywords: Vec<String> = vec![dir_name.to_lowercase()];
+        let ternary_decision =
+            crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(dir);
+
+        let mut keywords: Vec<String> = Vec::new();
+        if let Some(ref td) = ternary_decision {
+            for kw in &td.keywords {
+                if !keywords.contains(kw) {
+                    keywords.push(kw.clone());
+                }
+            }
+        }
+        if !keywords.contains(&dir_name.to_lowercase()) {
+            keywords.push(dir_name.to_lowercase());
+        }
         if let Some(parent_name) = dir
             .parent()
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
         {
             if !parent_name.is_empty() && parent_name != "data" && parent_name != "home" {
-                keywords.push(parent_name.to_lowercase());
+                let p_low = parent_name.to_lowercase();
+                if !keywords.contains(&p_low) {
+                    keywords.push(p_low.clone());
+                }
+                let compound = format!("{}_{}", p_low, dir_name.to_lowercase());
+                if !keywords.contains(&compound) {
+                    keywords.insert(0, compound);
+                }
             }
         }
 
         let mut parts: Vec<String> = Vec::new();
+
+        if let Some(ref td) = ternary_decision {
+            match td.archetype {
+                crate::mcp::smart_project_detector::TernaryProjectArchetype::ObsidianVault => {
+                    parts.push(format!("{} (Obsidian / MEM|8 Vault)", td.project_name));
+                }
+                crate::mcp::smart_project_detector::TernaryProjectArchetype::OfficeLocationHub => {
+                    parts.push(format!(
+                        "{} (Project Hub · {})",
+                        td.project_name,
+                        td.archetype.as_str()
+                    ));
+                }
+                _ => {}
+            }
+        }
 
         // 1. Inspect project manifests (Cargo.toml, package.json, pyproject.toml, go.mod)
         let cargo_toml = dir.join("Cargo.toml");
@@ -953,16 +1089,23 @@ impl MemoryManager {
             }
         }
 
-        // 4. Check git HEAD branch
+        // 4. Check git HEAD branch or bare .git repository
         let git_head = dir.join(".git").join("HEAD");
         if let Ok(head_str) = fs::read_to_string(&git_head) {
             let head_trimmed = head_str.trim();
             if let Some(branch) = head_trimmed.strip_prefix("ref: refs/heads/") {
                 parts.push(format!("git branch: {branch}"));
+            } else if !head_trimmed.is_empty() {
+                parts.push(format!(
+                    "git HEAD: {}",
+                    Self::truncate_utf8(head_trimmed, 40)
+                ));
             }
+        } else if dir.join(".git").exists() {
+            parts.push(format!("{dir_name} (git repository)"));
         }
 
-        // 5. Fallback to top-level notable files if no manifest/doc was found
+        // 5. Fallback to top-level notable files or ternary decision summary if no manifest/doc was found
         if parts.is_empty() {
             if let Ok(entries) = fs::read_dir(dir) {
                 let mut names: Vec<String> = entries
@@ -981,6 +1124,12 @@ impl MemoryManager {
                 if !names.is_empty() {
                     parts.push(format!("{dir_name}: entries [{}]", names.join(", ")));
                 }
+            }
+        }
+
+        if parts.is_empty() {
+            if let Some(td) = ternary_decision {
+                parts.push(td.summary);
             }
         }
 
@@ -1424,5 +1573,61 @@ Host i1.is i1
         assert!(kw.contains(&"github".to_string()));
         assert!(kw.contains(&"felix".to_string()));
         assert!(kw.contains(&"phoenix".to_string()));
+    }
+
+    #[test]
+    fn test_auto_remember_loose_projects_and_do_not_look() {
+        let temp = tempdir().unwrap();
+        let mut mgr = MemoryManager::with_bank_path(temp.path().join("memories.m8")).unwrap();
+
+        let workspace = temp.path().join("workspace");
+        let git_proj = workspace.join("sovereign-core");
+        fs::create_dir_all(git_proj.join(".git")).unwrap();
+        fs::write(git_proj.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+
+        let obsidian_proj = workspace.join("mind-palace");
+        fs::create_dir_all(obsidian_proj.join(".obsidian")).unwrap();
+        fs::write(
+            obsidian_proj.join("Index.md"),
+            "# Mind Palace\nObsidian vault for wave notes.\n",
+        )
+        .unwrap();
+
+        let office_atlanta = workspace.join("office").join("atlanta");
+        fs::create_dir_all(&office_atlanta).unwrap();
+        fs::write(
+            office_atlanta.join("operations.md"),
+            "# Atlanta Operations\nRegional hub notes.\n",
+        )
+        .unwrap();
+
+        let ignored_proj = workspace.join("secret-area");
+        fs::create_dir_all(ignored_proj.join(".git")).unwrap();
+        fs::write(ignored_proj.join(".noaye"), "do not look here\n").unwrap();
+
+        let remembered = mgr.discover_and_remember_projects_in_tree(&workspace, 3);
+        assert!(remembered.len() >= 3);
+
+        // Verify `office_atlanta` is remembered and searchable by keyword "office_atlanta"
+        let atl_hits = mgr.find(&["office_atlanta".to_string()]).unwrap();
+        assert_eq!(atl_hits.len(), 1);
+        assert_eq!(atl_hits[0].anchor_type, "project");
+        assert!(atl_hits[0].keywords.contains(&"office_atlanta".to_string()));
+
+        // Verify Obsidian vault is remembered
+        let obs_hits = mgr.find(&["obsidian".to_string()]).unwrap();
+        assert_eq!(obs_hits.len(), 1);
+
+        // Verify `.noaye` folder was never remembered
+        let secret_hits = mgr.find(&["secret-area".to_string()]).unwrap();
+        assert!(secret_hits.is_empty());
+
+        // Now tell Aye not to look in `office/atlanta` and purge its memory
+        let purged = mgr.forget_directory_prefix(&office_atlanta);
+        assert_eq!(purged, 1);
+        assert!(mgr
+            .find(&["office_atlanta".to_string()])
+            .unwrap()
+            .is_empty());
     }
 }

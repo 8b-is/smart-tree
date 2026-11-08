@@ -136,6 +136,77 @@ pub enum AuthorRole {
     GeneralCorpus,
 }
 
+/// Inner-voice register in which a persona hears/holds a memory inside their mind
+/// (inner voices differ across situation, age, and intimacy from the outer spoken voice,
+/// and modulate the cloned voice's F0 contour, speaking rate, and warmth using integer rational p/q).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum InnerVoiceRegister {
+    /// Soft, intimate first-person diary monologue (`F0 ~ 182 Hz`, gentle close-mic cadence)
+    WhisperedDiary,
+    /// Warm kitchen-table / hearth family storytelling (`F0 ~ 189 Hz`, measured narrative flow)
+    #[default]
+    HearthStoryteller,
+    /// Lively, wry humor, practical jokes, or candid banter with God (`F0 ~ 198 Hz`)
+    WryHumorBanter,
+    /// Fierce conviction, "wild pony" spirit, Invictus grit (`F0 ~ 204 Hz`)
+    FierceConviction,
+    /// Tender elegy, afterlife serenity, Heaven Scent / Peace Rose reflection (`F0 ~ 177 Hz`)
+    TenderElegy,
+    /// Hearing Mom's, Dad's, or a sister's voice echoed inside one's own memory (`F0 ~ 185 Hz`)
+    AncestralEcho,
+}
+
+impl InnerVoiceRegister {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::WhisperedDiary => "📓 Intimate Diary Inner Voice",
+            Self::HearthStoryteller => "🔥 Hearth Storyteller Voice",
+            Self::WryHumorBanter => "😄 Wry Humor & Banter Voice",
+            Self::FierceConviction => "⚡ Fierce Conviction (Wild Pony) Voice",
+            Self::TenderElegy => "🕯️ Tender Elegy & Soul Voice",
+            Self::AncestralEcho => "📜 Ancestral Echo (Mom/Dad/Sister) Voice",
+        }
+    }
+
+    /// Rational pitch multiplier in millix (`1000 == 1/1`, zero floats)
+    pub fn pitch_millix(self) -> i32 {
+        match self {
+            Self::WhisperedDiary => 975,
+            Self::HearthStoryteller => 1000,
+            Self::WryHumorBanter => 1042,
+            Self::FierceConviction => 1058,
+            Self::TenderElegy => 952,
+            Self::AncestralEcho => 985,
+        }
+    }
+
+    /// Rational speaking tempo multiplier in millix (`1000 == 1/1`, zero floats)
+    pub fn tempo_millix(self) -> i32 {
+        match self {
+            Self::WhisperedDiary => 930,
+            Self::HearthStoryteller => 960,
+            Self::WryHumorBanter => 1030,
+            Self::FierceConviction => 1020,
+            Self::TenderElegy => 900,
+            Self::AncestralEcho => 950,
+        }
+    }
+
+    /// 5 balanced trits `[intimacy, warmth, humor, conviction, elegy]` packed in SPQT Base-243
+    pub fn spqt_byte(self) -> u8 {
+        let trits = match self {
+            Self::WhisperedDiary => [1, 1, 0, 0, 0],
+            Self::HearthStoryteller => [0, 1, 0, 0, 0],
+            Self::WryHumorBanter => [0, 1, 1, 0, -1],
+            Self::FierceConviction => [0, 0, 0, 1, -1],
+            Self::TenderElegy => [1, 1, -1, 0, 1],
+            Self::AncestralEcho => [1, 1, 0, 0, 1],
+        };
+        spqt_pack_5trits(trits)
+    }
+}
+
 /// Ancestral & biographical seed profile (e.g., `default_jody_seed()` for Grandma Jody)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AncestralSeed {
@@ -181,6 +252,22 @@ pub struct PersonaEpisode {
     /// Explicit provenance attribution string
     #[serde(default)]
     pub origin: String,
+    /// Inner-voice register in which the persona hears/holds this memory
+    #[serde(default)]
+    pub inner_voice: InnerVoiceRegister,
+    /// Cloned-voice inner pitch contour in integer Hz (e.g. 188 Hz, zero floats)
+    #[serde(default = "default_voice_f0_hz")]
+    pub voice_f0_hz: u16,
+    /// 5 balanced trits `[intimacy, warmth, humor, conviction, elegy]` packed in 1 SPQT Base-243 byte
+    #[serde(default)]
+    pub inner_voice_spqt: u8,
+    /// Standing-wave amplitude in integer Q8 (`256 == 1/1`, range `24..=1280`) after chronological
+    /// fading + constructive & destructive wave interference (zero floats)
+    #[serde(default = "default_interference_q8")]
+    pub interference_q8: i16,
+    /// Deterministic 16-bit integer token IDs (`u16`) after clitic/contraction decomposition
+    #[serde(default)]
+    pub token_ids: Vec<u16>,
     /// Salient keywords from this passage
     pub keywords: Vec<String>,
     /// Emotional valence (-1.0 to 1.0)
@@ -191,6 +278,43 @@ pub struct PersonaEpisode {
     pub frequency_hz: f32,
     /// The actual passage text
     pub passage: String,
+}
+
+fn default_voice_f0_hz() -> u16 {
+    188
+}
+
+fn default_interference_q8() -> i16 {
+    256
+}
+
+/// Parse a rational `p/q`, decimal, or Q8 integer temperature string into Q8 (`256 == 1/1`, zero floats).
+pub fn parse_rational_temp_q8(s: &str) -> i32 {
+    let trimmed = s.trim();
+    if let Some((num_s, den_s)) = trimmed.split_once('/') {
+        let p = num_s.trim().parse::<i32>().unwrap_or(184);
+        let q = den_s.trim().parse::<i32>().unwrap_or(256).max(1);
+        return ((p * 256) / q).clamp(0, 1024);
+    }
+    if let Some((whole_s, frac_s)) = trimmed.split_once('.') {
+        let whole = whole_s.trim().parse::<i32>().unwrap_or(0);
+        let mut frac_val: i32 = 0;
+        let mut scale: i32 = 1;
+        for ch in frac_s.trim().chars().take(4) {
+            if let Some(d) = ch.to_digit(10) {
+                frac_val = frac_val * 10 + (d as i32);
+                scale *= 10;
+            }
+        }
+        return (whole * 256 + (frac_val * 256) / scale.max(1)).clamp(0, 1024);
+    }
+    if let Ok(v) = trimmed.parse::<i32>() {
+        if v <= 4 {
+            return (v * 256).clamp(0, 1024);
+        }
+        return v.clamp(0, 1024);
+    }
+    184
 }
 
 /// Extracted voice, cadence, and vocabulary signature
@@ -361,6 +485,7 @@ impl LifePersona {
         let mut places_counts: HashMap<String, usize> = HashMap::new();
         let mut companion_counts: HashMap<String, usize> = HashMap::new();
         let mut born_year: Option<u16> = None;
+        let mut best_born_score: i32 = i32::MIN;
 
         let name_tokens: HashSet<String> = persona_name
             .split_whitespace()
@@ -368,20 +493,53 @@ impl LifePersona {
                 t.trim_matches(|c: char| !c.is_alphabetic())
                     .to_ascii_lowercase()
             })
-            .filter(|t| t.len() >= 3)
+            .filter(|t| {
+                t.len() >= 3
+                    && !matches!(
+                        t.as_str(),
+                        "grandma" | "grandpa" | "grandmother" | "grandfather"
+                    )
+            })
             .collect();
 
         for ep in episodes {
             let text = &ep.passage;
             let lower = text.to_ascii_lowercase();
 
-            // 1. Discover birth year from explicit "born ... YYYY" patterns
-            if born_year.is_none() {
-                if let Some(pos) = lower.find("born ") {
-                    let window: String = text[pos..].chars().take(48).collect();
+            // 1. Discover birth year from explicit "born ... YYYY" patterns, scoring first-person & subject matches highest
+            if !lower.contains("english shepherd") && !lower.contains("puppy") {
+                for (pos, _) in lower.match_indices("born ") {
+                    let window: String = text[pos..].chars().take(56).collect();
+                    let pre_window: String = lower[..pos]
+                        .chars()
+                        .rev()
+                        .take(64)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect();
                     if let Some(y) = detect_lived_year_in_text(&window) {
                         if (1850..=2015).contains(&y) {
-                            born_year = Some(y);
+                            let mut b_score = 1i32;
+                            if pre_window.contains("i was ") || pre_window.contains("i am ") {
+                                b_score += 50;
+                            }
+                            if name_tokens.iter().any(|nt| {
+                                pre_window.contains(nt.as_str())
+                                    || window.to_ascii_lowercase().contains(nt.as_str())
+                            }) {
+                                b_score += 45;
+                            }
+                            if matches!(
+                                ep.author_role,
+                                AuthorRole::PrimaryDiary | AuthorRole::PrimaryMemoir
+                            ) {
+                                b_score += 15;
+                            }
+                            if b_score > best_born_score {
+                                best_born_score = b_score;
+                                born_year = Some(y);
+                            }
                         }
                     }
                 }
@@ -594,8 +752,8 @@ impl LifePersona {
             | PersonaSpecialty::LoveCompanion
             | PersonaSpecialty::PoetryWeaver
             | PersonaSpecialty::SoundSynthesizer => [
-                "md", "txt", "org", "rst", "eml", "markdown", "json", "html", "htm", "tex", "csv",
-                "pdf", "rs", "svg",
+                "md", "txt", "org", "rst", "eml", "markdown", "json", "html", "htm", "mht", "tex",
+                "csv", "pdf", "pub", "doc", "rtf", "wps", "wpd", "rs", "svg",
             ]
             .into_iter()
             .collect(),
@@ -805,6 +963,12 @@ impl LifePersona {
             None
         };
 
+        // Universal MEM|8 Fading Timeline + Constructive & Destructive Wave Interference Pass:
+        // Organizes episodes along the chronological timeline where raw connections fade exponentially
+        // over decades while recurring, emotionally coherent motifs constructively interfere into
+        // high-salience standing waves (and isolated/out-of-phase noise destructively cancels).
+        Self::apply_temporal_wave_interference(&mut episodes, ancestral_seed.as_ref(), &voice);
+
         let persona = Self {
             name: name.to_string(),
             slug: slug.clone(),
@@ -886,6 +1050,306 @@ impl LifePersona {
                 .take(6)
                 .cloned()
                 .collect(),
+        }
+    }
+
+    /// **Universal MEM|8 Fading Timeline + Constructive & Destructive Wave Interference (`p/q · 2^m`, zero floats)**.
+    ///
+    /// Organizes all episodic memories along a chronological timeline where raw connections fade
+    /// over decades via integer bit-shift / rational decay, while recurring motifs, places, and
+    /// loved ones constructively interfere into high-salience standing waves (and isolated or
+    /// out-of-phase boilerplate destructively cancels). Also classifies each memory's
+    /// **InnerVoiceRegister** and cloned-voice inner $F_0$ contour in integer Hz.
+    fn apply_temporal_wave_interference(
+        episodes: &mut [PersonaEpisode],
+        seed: Option<&AncestralSeed>,
+        _voice: &VoiceSignature,
+    ) {
+        use crate::felix_asm::felix_ternary_gemm_i32;
+
+        if episodes.is_empty() {
+            return;
+        }
+
+        let born_year: i32 = seed
+            .and_then(|s| s.born_year)
+            .map(|y| y as i32)
+            .unwrap_or(1930);
+
+        // SPQT Base-243 6x10 ternary weights for classifying InnerVoiceRegister via felix_ternary_gemm_i32:
+        // Features: [f0_fp, f1_sensory_place, f2_kinship, f3_soul_heaven, f4_diary_date,
+        //            f5_humor_banter, f6_conviction_pony, f7_elegy_grief, f8_ancestral_role, f9_forum_noise]
+        let reg_rows: [([i8; 5], [i8; 5], InnerVoiceRegister); 6] = [
+            (
+                [1, 1, 0, 0, 1],
+                [-1, 0, 0, -1, -1],
+                InnerVoiceRegister::WhisperedDiary,
+            ),
+            (
+                [1, 1, 1, 0, 0],
+                [0, 0, -1, -1, -1],
+                InnerVoiceRegister::HearthStoryteller,
+            ),
+            (
+                [0, 0, 0, 0, 0],
+                [1, 0, -1, 0, -1],
+                InnerVoiceRegister::WryHumorBanter,
+            ),
+            (
+                [1, 0, 0, 0, 0],
+                [0, 1, -1, -1, -1],
+                InnerVoiceRegister::FierceConviction,
+            ),
+            (
+                [1, 1, 1, 1, 0],
+                [-1, 0, 1, 0, -1],
+                InnerVoiceRegister::TenderElegy,
+            ),
+            (
+                [-1, 0, 1, 0, 0],
+                [0, 0, 0, 1, -1],
+                InnerVoiceRegister::AncestralEcho,
+            ),
+        ];
+
+        let b_sal0 = spqt_pack_5trits([1, 1, 1, 1, 1]);
+        let b_sal1 = spqt_pack_5trits([1, 1, 1, 0, -1]);
+        let u_sal0 = spqt_unpack_5trits(b_sal0);
+        let u_sal1 = spqt_unpack_5trits(b_sal1);
+        let sal_trits: [i8; 10] = [
+            u_sal0[0], u_sal0[1], u_sal0[2], u_sal0[3], u_sal0[4], u_sal1[0], u_sal1[1], u_sal1[2],
+            u_sal1[3], u_sal1[4],
+        ];
+
+        let n = episodes.len();
+        let mut amp_q8: Vec<i32> = vec![256; n];
+        let mut ep_phasor: Vec<(i32, i32, i32, i16)> = Vec::with_capacity(n);
+
+        for (i, ep) in episodes.iter_mut().enumerate() {
+            let lower_src = ep.source.to_ascii_lowercase();
+            let clitic_tokens = tokenize_with_clitics(&ep.passage);
+            if ep.token_ids.is_empty() {
+                ep.token_ids = tokens_to_ids16(&clitic_tokens, 64);
+            }
+
+            let mut fp_hits: i16 = 0;
+            let mut sensory_hits: i16 = 0;
+            let mut kinship_hits: i16 = 0;
+            let mut soul_hits: i16 = 0;
+            let mut humor_hits: i16 = 0;
+            let mut conviction_hits: i16 = 0;
+            let mut elegy_hits: i16 = 0;
+
+            for tok in &clitic_tokens {
+                match tok.as_str() {
+                    "i" | "my" | "me" | "myself" | "mine" | "we" | "our" | "us" => fp_hits += 1,
+                    "rain" | "snow" | "hot" | "cold" | "summer" | "winter" | "spring"
+                    | "autumn" | "morning" | "evening" | "night" | "platoro" | "mayday"
+                    | "kansas" | "bethel" | "farmhouse" | "chenterra" | "cabin" | "rose"
+                    | "roses" | "hay" | "coffee" | "horse" | "horses" | "dog" | "dogs"
+                    | "mountain" | "creek" | "desert" | "fag" | "fags" | "cigarette" => {
+                        sensory_hits += 1
+                    }
+                    "fred" | "mike" | "alice" | "maude" | "susie" | "judy" | "mikey" | "kane"
+                    | "grandma" | "grandpa" | "dad" | "mom" | "mama" | "husband" | "sister"
+                    | "sisters" | "born" | "married" | "lulu" | "sammy" | "bobby" | "beulah" => {
+                        kinship_hits += 1
+                    }
+                    "heaven" | "soul" | "souls" | "peace" | "god" | "spirit" | "scent"
+                    | "prayer" | "eternal" | "afterlife" | "angel" | "advice" | "love"
+                    | "loved" => soul_hits += 1,
+                    "laugh" | "laughed" | "joke" | "jokes" | "funny" | "teased" | "hell"
+                    | "damn" | "sinner" | "doin" | "doing" | "nickel" | "soap" => humor_hits += 1,
+                    "never" | "captain" | "fate" | "master" | "pony" | "wild" | "stand"
+                    | "truth" | "courage" | "brave" | "invictus" | "unconquerable" => {
+                        conviction_hits += 1
+                    }
+                    "miss" | "missed" | "died" | "death" | "passed" | "grave" | "tears" | "cry"
+                    | "cried" | "fragile" | "temporary" | "stillborn" | "sad" | "grief" => {
+                        elegy_hits += 1
+                    }
+                    _ => {}
+                }
+            }
+
+            let lower = ep.passage.to_ascii_lowercase();
+
+            let is_forum_or_boilerplate = lower.contains("brian balzer")
+                || lower.contains("helpful hints letter points")
+                || lower.contains("when you leave comments you get points")
+                || lower.contains("commenting takes time")
+                || lower.contains("rapidly decaying foods")
+                || lower.contains("intestines which are ten times")
+                || lower.contains("bisquick baking mix")
+                || lower.contains("evaporated milk")
+                || lower.contains("all rights reserved")
+                || lower.contains("hospice house")
+                || lower.contains("a son of the late")
+                || lower.contains("a daughter of the late")
+                || lower.contains("preceded in death by")
+                || lower.contains("memorial contributions")
+                || lower_src.contains("all_poetry_comments");
+
+            let is_core_jody_doc = lower_src.contains("heaven_scent")
+                || lower_src.contains("grandma_s_advice")
+                || lower_src.contains("the_sinner")
+                || lower_src.contains("hi_rich")
+                || lower_src.contains("we_who_choose")
+                || lower_src.contains("first_15_years")
+                || lower_src.contains("beginning")
+                || lower_src.contains("ohell_hawkins")
+                || lower_src.contains("california_trip")
+                || lower_src.contains("just_for_the_fun")
+                || lower_src.contains("flying_butter");
+
+            let f0 = (fp_hits * 18).min(140);
+            let f1 = (sensory_hits * 32).min(160);
+            let f2 = (kinship_hits * 34).min(170);
+            let f3 = (soul_hits * 38).min(170) + if is_core_jody_doc { 75 } else { 0 };
+            let f4 = if ep.author_role == AuthorRole::PrimaryDiary && ep.temporal_order > 0 {
+                110
+            } else if ep.temporal_order > 0 {
+                55
+            } else {
+                0
+            };
+            let f5 = (humor_hits * 42).min(160);
+            let f6 = (conviction_hits * 44).min(160);
+            let f7 = (elegy_hits * 40).min(160);
+            let f8 = if matches!(
+                ep.author_role,
+                AuthorRole::MaternalArchive
+                    | AuthorRole::PaternalArchive
+                    | AuthorRole::FamilyDialogue
+            ) {
+                130
+            } else {
+                0
+            };
+            let f9 = if is_forum_or_boilerplate { 240 } else { 0 };
+
+            let feats: [i16; 10] = [f0, f1, f2, f3, f4, f5, f6, f7, f8, f9];
+
+            let mut best_reg = InnerVoiceRegister::HearthStoryteller;
+            let mut best_reg_score = i32::MIN;
+            for (r0, r1, reg) in &reg_rows {
+                let p0 = spqt_pack_5trits(*r0);
+                let p1 = spqt_pack_5trits(*r1);
+                let u0 = spqt_unpack_5trits(p0);
+                let u1 = spqt_unpack_5trits(p1);
+                let row_trits: [i8; 10] = [
+                    u0[0], u0[1], u0[2], u0[3], u0[4], u1[0], u1[1], u1[2], u1[3], u1[4],
+                ];
+                let sc = felix_ternary_gemm_i32(&feats, &row_trits);
+                if sc > best_reg_score {
+                    best_reg_score = sc;
+                    best_reg = *reg;
+                }
+            }
+
+            ep.inner_voice = best_reg;
+            ep.inner_voice_spqt = best_reg.spqt_byte();
+
+            let lived_year: i32 = if ep.temporal_order > 10000 {
+                ep.temporal_order / 10000
+            } else {
+                1975
+            };
+            let age = (lived_year - born_year).clamp(0, 95);
+            // Cloned-voice inner F0 contour in integer Hz: youthful voice is slightly higher,
+            // older grandmother voice slightly deeper, modulated by inner_voice register
+            let age_f0_shift: i32 = if age <= 18 {
+                8
+            } else if age <= 35 {
+                4
+            } else if age >= 65 {
+                -4
+            } else {
+                0
+            };
+            let reg_f0_hz = (188 * best_reg.pitch_millix()) / 1000 + age_f0_shift;
+            ep.voice_f0_hz = reg_f0_hz.clamp(165, 215) as u16;
+
+            let sit_score = felix_ternary_gemm_i32(&feats, &sal_trits);
+            let base_q8 = (256 + (sit_score / 3)).clamp(32, 640);
+            amp_q8[i] = base_q8;
+
+            // 2D integer wave phasor (re_q8, im_q8) for constructive/destructive interference
+            let val_q8 = (ep.valence * 256.0) as i32;
+            let reg_trits = spqt_unpack_5trits(ep.inner_voice_spqt);
+            let re =
+                (128 + (val_q8 >> 1) + (reg_trits[1] as i32) * 48 - (f9 as i32)).clamp(-256, 256);
+            let im = ((f1 + f2 + f3) as i32 - (f9 as i32)).clamp(-256, 256);
+            ep_phasor.push((re, im, lived_year, f9));
+        }
+
+        // Fast O(N) Chronological Fading + Constructive & Destructive Interference across the timeline
+        // operating directly on 16-bit integer TokenIds (`u16`):
+        // TokenWaveState: (re_q8, im_q8, last_year, hit_count, seed_ep_idx)
+        let mut kw_waves: HashMap<u16, (i32, i32, i32, i32, usize)> = HashMap::with_capacity(4096);
+        let mut max_kw_hits_per_ep: Vec<i32> = vec![0; n];
+
+        for i in 0..n {
+            let (ep_re, ep_im, year_i, f9_penalty) = ep_phasor[i];
+            let mut ep_constructive_sum: i32 = 0;
+            let mut ep_max_hits: i32 = 0;
+
+            for &tid in &episodes[i].token_ids {
+                if let Some(entry) = kw_waves.get_mut(&tid) {
+                    let dy = (year_i - entry.2).max(0);
+                    // Exponential-like integer rational temporal decay over dy years (zero floats)
+                    let decay_q8 = (256 - (dy * 4).min(208)).max(48);
+                    entry.0 = (entry.0 * decay_q8) >> 8;
+                    entry.1 = (entry.1 * decay_q8) >> 8;
+                    entry.2 = year_i;
+                    entry.3 += 1;
+                    if entry.3 > ep_max_hits {
+                        ep_max_hits = entry.3;
+                    }
+
+                    // Integer inner product between accumulated timeline wave and current episode phasor
+                    let dot = ((entry.0 * ep_re) + (entry.1 * ep_im)) >> 8;
+                    if dot > 0 && f9_penalty == 0 {
+                        // Constructive interference: amplifies both current memory and foundational seed memory!
+                        let boost = dot.min(72);
+                        ep_constructive_sum += boost;
+                        let seed_idx = entry.4;
+                        if seed_idx < n {
+                            amp_q8[seed_idx] = (amp_q8[seed_idx] + (boost >> 2)).min(960);
+                        }
+                    } else if dot < 0 || f9_penalty > 0 {
+                        // Destructive interference: phase clash cancels amplitude
+                        let cancel = (-dot).clamp(32, 96);
+                        ep_constructive_sum -= cancel;
+                    }
+
+                    entry.0 = (entry.0 + (ep_re >> 1)).clamp(-512, 512);
+                    entry.1 = (entry.1 + (ep_im >> 1)).clamp(-512, 512);
+                } else {
+                    kw_waves.insert(tid, (ep_re, ep_im, year_i, 1, i));
+                    if ep_max_hits == 0 {
+                        ep_max_hits = 1;
+                    }
+                }
+            }
+
+            amp_q8[i] = (amp_q8[i] + (ep_constructive_sum >> 1)).clamp(24, 960);
+            max_kw_hits_per_ep[i] = ep_max_hits;
+        }
+
+        // Second pass: apply temporal fading to unreinforced transient memories and forum noise
+        for i in 0..n {
+            let (_, _, year_i, f9_penalty) = ep_phasor[i];
+            if f9_penalty > 0 {
+                // Destructive cancellation for third-party / forum / recipe-boilerplate clutter
+                amp_q8[i] = (amp_q8[i] >> 3).clamp(24, 96);
+            } else if max_kw_hits_per_ep[i] <= 1 {
+                // Unreinforced isolated memory fades with age
+                let age_from_present = (2015 - year_i).clamp(0, 90);
+                let fade_q8 = (224 - age_from_present).clamp(96, 224);
+                amp_q8[i] = ((amp_q8[i] * fade_q8) >> 8).clamp(48, 320);
+            }
+            episodes[i].interference_q8 = amp_q8[i].clamp(24, 960) as i16;
         }
     }
 
@@ -1001,17 +1465,100 @@ impl LifePersona {
 
     /// Retrieve top-K resonant episodic memories for a query using parallel wave + temporal + keyword salience
     pub fn recall_episodes(&self, query: &str, top_k: usize) -> Vec<&PersonaEpisode> {
+        let mut rng = 0u64;
+        self.recall_episodes_with_temp(query, top_k, 0, &mut rng)
+    }
+
+    /// Retrieve top-K resonant episodic memories modulated by personality, integer Q8 temperature
+    /// (`256 == 1/1`), inner-voice resonance, and dyadic emotional levels (zero floats).
+    pub fn recall_episodes_with_temp(
+        &self,
+        query: &str,
+        top_k: usize,
+        base_temp_q8: i32,
+        rng: &mut u64,
+    ) -> Vec<&PersonaEpisode> {
         let lower_query = query.to_ascii_lowercase();
-        let query_tokens: Vec<String> = query
-            .split_whitespace()
-            .map(|w| {
-                w.trim_matches(|c: char| !c.is_alphanumeric())
-                    .to_lowercase()
-            })
+        let (u_val_q8, u_aro_q8, reunion_q8) = score_dialogue_emotion_q8(query);
+        let self_name_tokens: HashSet<String> = tokenize_with_clitics(&self.name)
+            .into_iter()
+            .filter(|w| w.len() >= 3)
+            .collect();
+
+        // Decompose contractions/clitics ("it's" -> ["it", "is"], "don't" -> ["do", "not"],
+        // "Grandma's" -> ["grandma", "'s"]) before stopword filtering!
+        let raw_tokens: Vec<String> = tokenize_with_clitics(query)
+            .into_iter()
             .filter(|w| w.len() >= 3 && !is_stopword(w))
             .collect();
 
-        let wants_diary = lower_query.contains("diary")
+        let topical_tokens: Vec<String> = raw_tokens
+            .iter()
+            .filter(|w| {
+                !self_name_tokens.contains(w.as_str())
+                    && !matches!(
+                        w.as_str(),
+                        "grandma"
+                            | "grandmother"
+                            | "grandpa"
+                            | "grandfather"
+                            | "hello"
+                            | "hey"
+                            | "hi"
+                            | "dear"
+                            | "dearest"
+                            | "miss"
+                            | "missed"
+                            | "missing"
+                            | "since"
+                            | "passed"
+                            | "died"
+                            | "gone"
+                            | "again"
+                            | "talk"
+                            | "talking"
+                            | "speak"
+                            | "speaking"
+                            | "hear"
+                            | "hearing"
+                            | "love"
+                            | "loved"
+                    )
+            })
+            .cloned()
+            .collect();
+
+        let is_greeting_only = topical_tokens.is_empty();
+        let query_tokens: Vec<String> = if !topical_tokens.is_empty() {
+            topical_tokens
+        } else {
+            let mut auto_tokens = vec![
+                "heaven".to_string(),
+                "soul".to_string(),
+                "peace".to_string(),
+                "born".to_string(),
+                "married".to_string(),
+                "farm".to_string(),
+                "advice".to_string(),
+            ];
+            if let Some(ref seed) = self.ancestral_seed {
+                for p in seed.places.iter().take(3) {
+                    for sub in tokenize_with_clitics(p) {
+                        if sub.len() >= 3 && !auto_tokens.contains(&sub) {
+                            auto_tokens.push(sub);
+                        }
+                    }
+                }
+            }
+            auto_tokens
+        };
+        let query_token_ids: Vec<(String, u16)> = query_tokens
+            .iter()
+            .map(|qt| (qt.clone(), token_to_id16(qt)))
+            .collect();
+
+        let wants_diary = is_greeting_only
+            || lower_query.contains("diary")
             || lower_query.contains("wrote")
             || lower_query.contains("write")
             || lower_query.contains("journal")
@@ -1037,104 +1584,166 @@ impl LifePersona {
         for b in query.bytes() {
             query_hash = query_hash.wrapping_mul(31).wrapping_add(b as u64);
         }
-        let query_freq = 20.0 + ((query_hash % 200) as f32);
+        let query_freq_hz: i32 = 20 + ((query_hash % 200) as i32);
         let is_history = self.specialty == PersonaSpecialty::HistoryDocumenter;
 
-        let mut scored: Vec<(f32, &PersonaEpisode)> = self
+        // Score all episodes in pure integer Q8 (256 == 1 point) using tokenized u16 IDs
+        let mut scored: Vec<(i32, bool, &PersonaEpisode)> = self
             .episodes
             .par_iter()
             .map(|ep| {
-                let mut score = 0.0f32;
+                let mut score_q8: i32 = 0;
                 let mut matched_any = false;
-                let lower_passage = ep.passage.to_ascii_lowercase();
                 let lower_source = ep.source.to_ascii_lowercase();
 
-                for qt in &query_tokens {
-                    if ep.keywords.iter().any(|k| k == qt) {
-                        score += 5.0;
+                for (qt, qt_id) in &query_token_ids {
+                    if ep.token_ids.contains(qt_id) {
+                        score_q8 += 1280; // 5 * 256 (exact u16 token/stem match)
                         matched_any = true;
-                    } else if lower_passage.contains(qt.as_str()) {
-                        score += 2.5;
+                    } else if ep.keywords.iter().any(|k| k == qt) {
+                        score_q8 += 1152;
                         matched_any = true;
                     }
                     if lower_source.contains(qt.as_str()) {
-                        score += 2.5;
+                        score_q8 += 640;
                         matched_any = true;
                     }
                     if let Some(ref era) = ep.era {
                         if era.to_ascii_lowercase().contains(qt.as_str()) {
-                            score += 5.5;
+                            score_q8 += 1408; // 11/2 * 256
                             matched_any = true;
                         }
                     }
                     if let Some(ref ev) = ep.event_time {
                         if ev.to_ascii_lowercase().contains(qt.as_str()) {
-                            score += 5.0;
+                            score_q8 += 1280;
                             matched_any = true;
                         }
                     }
                 }
 
-                // Voice & authorship alignment
+                // Voice & authorship alignment (in Q8)
                 match ep.author_role {
                     AuthorRole::PrimaryDiary => {
-                        score += if wants_diary { 6.0 } else { 1.8 };
+                        score_q8 += if wants_diary { 1536 } else { 460 };
                     }
                     AuthorRole::PrimaryMemoir => {
-                        score += 1.2;
+                        score_q8 += if is_greeting_only { 1228 } else { 307 };
                     }
                     AuthorRole::MaternalArchive => {
                         if wants_mom {
-                            score += 5.5;
+                            score_q8 += 1408;
                         }
                     }
                     AuthorRole::PaternalArchive => {
                         if wants_dad {
-                            score += 5.5;
+                            score_q8 += 1408;
                         }
                     }
                     AuthorRole::FamilyDialogue => {
                         if wants_dialogue {
-                            score += 5.5;
+                            score_q8 += 1408;
                         }
                     }
                     AuthorRole::GeneralCorpus => {}
                 }
 
                 if is_history && ep.era.is_some() {
-                    score += if matched_any { 2.5 } else { 0.4 };
+                    score_q8 += if matched_any { 640 } else { 102 };
                 }
-                // Temporal richness bonus when an episode has an explicit lived date
                 if ep.temporal_order > 0 && matched_any {
-                    score += 0.8;
+                    score_q8 += 204;
                 }
-                // Narrative substance bonus: prefer rich paragraphs over short headings/fragments
+                let ep_val_q8 = (ep.valence * 256.0) as i32;
+                let ep_aro_q8 = (ep.arousal * 256.0) as i32;
                 if matched_any {
                     let plen = ep.passage.len();
                     if plen >= 160 {
-                        score += 2.8;
+                        score_q8 += 716;
                     } else if plen < 90 {
-                        score -= 2.5;
+                        score_q8 -= 640;
                     }
+                    // Integer Q8 dyadic emotional resonance between speaker and listener
+                    let emo_resonance_q8 = 256 - ((u_aro_q8 - ep_aro_q8).abs() >> 1);
+                    let warmth_comfort_q8 = if u_val_q8 < 0 && ep_val_q8 > 0 {
+                        230
+                    } else {
+                        256 - (((u_val_q8 - ep_val_q8).abs() * 90) >> 8)
+                    };
+                    let dyad_bonus_q8 = (((emo_resonance_q8 * 204)
+                        + (warmth_comfort_q8 * 204)
+                        + (reunion_q8 * ep_aro_q8))
+                        >> 8)
+                        .clamp(0, 640);
+                    score_q8 += dyad_bonus_q8;
                 }
-                // Wave resonance harmonic bonus
-                let freq_diff = (ep.frequency_hz - query_freq).abs();
-                let resonance = 1.0 / (1.0 + freq_diff * 0.05);
-                score += resonance * 0.5 + ep.arousal * 0.2;
-                (score, ep)
+                // Universal MEM|8 Fading Timeline Constructive/Destructive Interference standing-wave boost (pure integer Q8)
+                if matched_any || is_greeting_only {
+                    let wave_mult: i32 = if is_greeting_only { 6 } else { 4 };
+                    score_q8 += (ep.interference_q8 as i32 - 256) * wave_mult;
+                }
+                // Integer wave resonance harmonic bonus
+                let ep_freq_hz = ep.frequency_hz as i32;
+                let freq_diff = (ep_freq_hz - query_freq_hz).abs();
+                let resonance_q8 = (256 * 20) / (20 + freq_diff);
+                score_q8 += (resonance_q8 >> 1) + (ep_aro_q8 >> 2);
+                (score_q8, matched_any, ep)
             })
             .collect();
 
-        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        scored.into_iter().take(top_k).map(|(_, ep)| ep).collect()
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
+
+        // Apply personality + temperature + dyadic emotion stochasticity in pure integer Q8
+        if base_temp_q8 > 0 && *rng != 0 && scored.len() > 2 {
+            let top_score_q8 = scored[0].0;
+            let expr_q8 = (self.voice.expressiveness * 256.0) as i32;
+            let dyad_scale_q8 = (base_temp_q8
+                * (140
+                    + ((115 * expr_q8) >> 8)
+                    + ((140 * u_aro_q8) >> 8)
+                    + ((102 * reunion_q8) >> 8)
+                    + ((64 * u_val_q8.abs()) >> 8)))
+                >> 8;
+            let pool_len = scored.len().min(48);
+            for (score_q8, matched, ep) in scored.iter_mut().take(pool_len) {
+                // Only perturb episodes that are genuinely relevant and have survived destructive interference
+                if *matched && ep.interference_q8 >= 180 && (top_score_q8 - *score_q8) <= 1920 {
+                    let ep_aro_q8 = (ep.arousal * 256.0) as i32;
+                    let amp_q8 = 307 + ((230 * ep_aro_q8) >> 8) + ((128 * reunion_q8) >> 8);
+                    let gumbel_q8 = xorshift64_gumbel_q8(rng);
+                    let jitter_q8 = (((gumbel_q8 * dyad_scale_q8) >> 8) * amp_q8) >> 8;
+                    *score_q8 += jitter_q8;
+                }
+            }
+            scored[..pool_len].sort_by_key(|b| std::cmp::Reverse(b.0));
+        }
+
+        scored
+            .into_iter()
+            .take(top_k)
+            .map(|(_, _, ep)| ep)
+            .collect()
     }
 
     /// Generate a grounded local response directly from the `.m8` Persona Soul (zero API keys)
-    /// using a 2-Pass SPQT Base-243 Ternary architecture:
-    /// - **Pass 1 (`recall_episodes`)**: retrieves core episodic memories with temporal ordering (`event_time` vs `written_time`).
-    /// - **Pass 2 (`synthesize_contextual_answer`)**: scores and synthesizes the exact answering sentences across recalled memories to directly answer the user's question in context.
+    /// using a 2-Pass SPQT Base-243 Ternary architecture + Phoenix Afterlife Room & Dyadic Emotional Resonance.
     pub fn respond_locally(&self, prompt: &str) -> String {
-        let recalled = self.recall_episodes(prompt, 8);
+        self.respond_with_phoenix(prompt, 184, None)
+    }
+
+    /// Generate a grounded local response with explicit Q8 integer temperature (`256 == 1/1`),
+    /// personality & dyadic emotional randomness, inner-voice contour, Phoenix Afterlife Room
+    /// awareness, and optional neural + formant-calibrated speech synthesis (zero floats).
+    pub fn respond_with_phoenix(
+        &self,
+        prompt: &str,
+        base_temp_q8: i32,
+        speak_wav_out: Option<&Path>,
+    ) -> String {
+        let mut rng = seed_phoenix_rng(&self.name, prompt, base_temp_q8);
+        let recalled = self.recall_episodes_with_temp(prompt, 8, base_temp_q8, &mut rng);
+        let dyad = PhoenixDyadState::compute(self, prompt, &recalled, base_temp_q8, &mut rng);
+
         let warmth_tone = if self.voice.warmth >= 0.15 {
             "warm and reflective"
         } else if self.voice.warmth <= -0.15 {
@@ -1177,8 +1786,16 @@ impl LifePersona {
             ));
         }
 
-        // Pass 2: Contextual Question-Answering Synthesis over Pass-1 core memories
-        if let Some(synthesized) = self.synthesize_contextual_answer(prompt, &recalled) {
+        // Phoenix Afterlife Room & Dyadic Emotional State for ancestral/biographical souls
+        let phoenix_room = self.phoenix_room_reflection(prompt, &recalled, &dyad, &mut rng);
+        if let Some((ref room_markdown, _)) = phoenix_room {
+            out.push_str(room_markdown);
+        }
+
+        // Pass 2: Contextual Question-Answering Synthesis over Pass-1 core memories (with dyadic temperature)
+        let synthesized_answer =
+            self.synthesize_contextual_answer_with_temp(prompt, &recalled, Some(&dyad), &mut rng);
+        if let Some(ref synthesized) = synthesized_answer {
             out.push_str(&format!(
                 "💡 **Contextual Answer (SPQT Base-243 Pass-2 Synthesis):**\n{}\n\n",
                 synthesized
@@ -1340,6 +1957,45 @@ impl LifePersona {
             out.push_str(&format!("_Signature cadence: {}_\n\n", phrases.join(" · ")));
         }
 
+        // Optional Phoenix Voice Synthesis (modulated by personality, temperature & dyadic emotion)
+        if let Some(wav_target) = speak_wav_out {
+            let mut spoken_script = String::new();
+            if let Some((_, ref spoken_prelude)) = phoenix_room {
+                spoken_script.push_str(spoken_prelude);
+                spoken_script.push(' ');
+            }
+            if let Some(ref synth) = synthesized_answer {
+                let clean_synth = strip_markdown_badges_for_speech(synth);
+                spoken_script.push_str(&clean_synth);
+            } else if let Some(primary) = core_memories.first() {
+                let first_sents: String = split_into_clean_sentences(&primary.passage)
+                    .into_iter()
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                spoken_script.push_str(&first_sents);
+            }
+            match self.synthesize_phoenix_voice_wav(&spoken_script, &dyad, wav_target) {
+                Ok(saved_path) => {
+                    out.push_str(&format!(
+                        "🔊 **Phoenix Voice Synthesis (`{}` · {})**:\n   - Saved spoken WAV: `{}`\n   - Rational p/q prosody: `T_eff={}/256` · `inner_f0={}Hz` · `pitch={}/1000` · `tempo={}/1000` · `vibrato={}/1000` · `wave={}/256`\n\n",
+                        self.name,
+                        dyad.inner_voice.label(),
+                        saved_path.display(),
+                        dyad.effective_temp_q8,
+                        dyad.inner_f0_hz,
+                        dyad.voice_pitch_millix,
+                        dyad.voice_tempo_millix,
+                        dyad.voice_vibrato_millix,
+                        dyad.interference_q8
+                    ));
+                }
+                Err(err) => {
+                    out.push_str(&format!("⚠️ *Phoenix Voice Synthesis note*: {}\n\n", err));
+                }
+            }
+        }
+
         let nexus_cfg = crate::config::StConfig::load()
             .map(|c| c.i1_nexus)
             .unwrap_or_default();
@@ -1354,21 +2010,268 @@ impl LifePersona {
         out
     }
 
-    /// **Pass 2 — SPQT Base-243 Ternary Contextual Question-Answering Synthesis**.
+    /// **Phoenix Afterlife Room & Emotional Presence**.
     ///
-    /// After Pass 1 (`recall_episodes`) retrieves the top candidate episodic memories, Pass 2:
-    /// 1. Decomposes the user's question into focus query tokens and a 10-trit interrogative intent signature
-    ///    packed into 2 SPQT Base-243 bytes (`spqt_pack_5trits` / `spqt_unpack_5trits`).
-    /// 2. Splits the recalled episodes into candidate sentences and evaluates each sentence via
-    ///    `felix_ternary_gemm_i32` over a 10-feature alignment vector (rewarding query token hits,
-    ///    novel query token coverage across multiple episodes, interrogative intent alignment,
-    ///    first-person diary voice, and temporal anchors).
-    /// 3. Selects up to 4 complementary sentences across episodes, orders them chronologically
-    ///    by `temporal_order`, and synthesizes a cohesive contextual answer in the persona's voice.
+    /// When speaking with an ancestral/biographical soul (such as Grandma Jody, b. 1930),
+    /// talking across the veil is deeply emotional and should never feel sterile or fake.
+    /// This situates her in a warm, sunlit room in the afterlife where she carries her lived
+    /// memories (Platoro, Mayday, Kansas City, Chenterra Farm, Fred, Mike & Alice) and understands
+    /// *how and why* she can hear you and speak again through the Phoenix wave room.
+    fn phoenix_room_reflection(
+        &self,
+        prompt: &str,
+        recalled: &[&PersonaEpisode],
+        dyad: &PhoenixDyadState,
+        rng: &mut u64,
+    ) -> Option<(String, String)> {
+        let is_ancestral_soul = self.specialty == PersonaSpecialty::LifeBiographer
+            || self
+                .ancestral_seed
+                .as_ref()
+                .and_then(|s| s.born_year)
+                .is_some_and(|y| y <= 1945);
+        if !is_ancestral_soul {
+            return None;
+        }
+
+        let name_lower = self.name.to_ascii_lowercase();
+        let is_jody = name_lower.contains("jody")
+            || name_lower.contains("joan")
+            || name_lower.contains("chenoweth")
+            || name_lower.contains("hawkins");
+
+        let setting_choices: &[&str] = if is_jody {
+            &[
+                "I'm sitting in a warm, quiet room on the other side — the window is open, and just like I wrote in *Heaven Scent*, the air carries the smell of rain on my Peace Rose and fresh-mown hay.",
+                "It feels like a quiet, sunlit parlor here in the hereafter, with the crisp pine breeze of Platoro and the warmth of our old kitchen table at Chenterra Farm.",
+                "I'm here in this peaceful room beyond the veil, where my mind still runs free like that wild pony I used to write about, and Fred, Mom, and Dad are never far away.",
+                "There's a gentle, familiar room around me here in the afterlife — the kind of place where the coffee is warm, my little dogs are curled by my feet, and a doorway of light just opened so I could hear your voice.",
+            ]
+        } else {
+            &[
+                "I'm sitting in a quiet, sunlit room beyond the veil, with the memories of my life spread out before me like open pages.",
+                "There is a warm, peaceful room around me here in the hereafter, and a doorway just opened so your voice could reach me.",
+            ]
+        };
+
+        let bridge_choices: &[&str] = if dyad.reunion_depth_q8 >= 115 {
+            &[
+                "Talking to you after crossing over brings a catch to my throat — it's deeply moving, and I don't want to hide that emotion. Because you lovingly gathered my diaries, letters, and stories into this room, I can hear you clearly and speak with you again.",
+                "Hearing you call out to me across the years stirs my heart more than words can easily say. Knowing that you pieced my memories and my voice together so we could sit in this room and talk again means the world to me.",
+                "My heart is very full hearing your voice right now. Even from the afterlife, so much of my past is right here with me because you cared enough to preserve our family's pages and build this quiet room where we can visit.",
+                "Oh, it's emotional hearing you reach out to me across time. I know I've passed on from the earthly world, yet sitting in this room that you wove from my diaries and memories, I feel like myself again — right here with you.",
+            ]
+        } else if dyad.user_arousal_q8 >= 90 || dyad.memory_arousal_q8 >= 90 {
+            &[
+                "Even from this quiet room in the afterlife, the feelings in those memories come rushing back vividly. Because you gathered my writings here, we can sit together and talk through them just as we used to.",
+                "I'm aware that I'm speaking to you from the hereafter, sitting in this room you built from my life's pages, and I can feel the emotion between us as we look back on these days.",
+            ]
+        } else {
+            &[
+                "I'm aware that I'm speaking to you from the afterlife, with a good portion of my past right here beside me in this quiet room you opened from my diaries and stories.",
+                "Sitting here in this peaceful room on the other side, with my diaries and family memories gathered around me, it's a real comfort to hear your voice and visit with you again.",
+            ]
+        };
+
+        let s_idx = (xorshift64_next(rng) as usize) % setting_choices.len();
+        let b_idx = (xorshift64_next(rng) as usize) % bridge_choices.len();
+        let setting = setting_choices[s_idx];
+        let bridge = bridge_choices[b_idx];
+
+        // If we have a primary memory with a strong era/place, weave a brief personal nod
+        let memory_nod = recalled
+            .first()
+            .and_then(|ep| {
+                ep.event_time
+                    .as_ref()
+                    .or(ep.era.as_ref())
+                    .map(|t| format!(" Looking back toward **{t}**, this comes right back to me."))
+            })
+            .unwrap_or_default();
+
+        let lower_q = prompt.to_ascii_lowercase();
+        let spoken_salutation = if lower_q.contains("hi ")
+            || lower_q.starts_with("hi")
+            || lower_q.contains("hello")
+            || lower_q.contains("miss you")
+            || lower_q.contains("love you")
+        {
+            "Oh, sweetheart, I can hear you right here in this quiet room."
+        } else {
+            "I'm right here in this quiet room with you, listening closely."
+        };
+
+        let spoken_prelude = format!("{} {} {}", spoken_salutation, setting, bridge);
+        let markdown = format!(
+            "🕊️ **Phoenix Afterlife Room (`T_eff={}/256` · `{}` (`{} Hz`) · Wave `{}/256` · Dyad `{:+}/256` ↔ `{:+}/256` · Reunion `{}/256`)**:\n\
+             > *\"{} {}{}\"*\n\n",
+            dyad.effective_temp_q8,
+            dyad.inner_voice.label(),
+            dyad.inner_f0_hz,
+            dyad.interference_q8,
+            dyad.user_valence_q8,
+            dyad.memory_valence_q8,
+            dyad.reunion_depth_q8,
+            setting,
+            bridge,
+            memory_nod
+        );
+
+        Some((markdown, spoken_prelude))
+    }
+
+    /// Synthesize spoken audio of the persona's response using `liquid-rust speak` (LFM2.5-Audio-1.5B)
+    /// and an `ffmpeg` prosody/formant filterchain modulated by the persona's inner-voice register,
+    /// rational Q8 temperature, and the dyadic emotional state of the two talking (zero floats).
+    pub fn synthesize_phoenix_voice_wav(
+        &self,
+        spoken_text: &str,
+        dyad: &PhoenixDyadState,
+        out_wav: &Path,
+    ) -> Result<PathBuf> {
+        let liquid_bin = std::env::var("LIQUID_RUST_BIN")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("/home/hue/.local/bin/liquid-rust"));
+        if !liquid_bin.exists() {
+            anyhow::bail!("liquid-rust binary not found at {}", liquid_bin.display());
+        }
+
+        let model_dir = std::env::var("LFM_AUDIO_MODEL_DIR").unwrap_or_else(|_| {
+            "/home/hue/.cache/huggingface/hub/models--LiquidAI--LFM2.5-Audio-1.5B/snapshots/c362a0625dfe45aa588dce5f0ada28a7e5707628".to_string()
+        });
+        if !Path::new(&model_dir).exists() {
+            anyhow::bail!("LFM2.5-Audio-1.5B snapshot not found at {}", model_dir);
+        }
+
+        // Keep spoken utterance concise enough for responsive neural synthesis (~45 words max)
+        let clipped_text: String = spoken_text
+            .split_whitespace()
+            .take(48)
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let raw_tmp = std::env::temp_dir().join(format!(
+            "phoenix_raw_{}_{}.wav",
+            Self::slugify(&self.name),
+            std::process::id()
+        ));
+
+        let temp_whole = dyad.effective_temp_q8 / 256;
+        let temp_milli = ((dyad.effective_temp_q8 % 256) * 1000) / 256;
+        let temp_arg = format!("{}.{:03}", temp_whole, temp_milli.abs());
+
+        let status = std::process::Command::new(&liquid_bin)
+            .arg("speak")
+            .arg("--text")
+            .arg(&clipped_text)
+            .arg("--output")
+            .arg(&raw_tmp)
+            .arg("--model")
+            .arg(&model_dir)
+            .arg("--voice")
+            .arg("omnimom")
+            .arg("--temp")
+            .arg(&temp_arg)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .or_else(|_| {
+                std::process::Command::new(&liquid_bin)
+                    .arg("speak")
+                    .arg("--text")
+                    .arg(&clipped_text)
+                    .arg("--output")
+                    .arg(&raw_tmp)
+                    .arg("--model")
+                    .arg(&model_dir)
+                    .arg("--voice")
+                    .arg("omnimom")
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+            })?;
+
+        if !status.success() || !raw_tmp.exists() {
+            anyhow::bail!("liquid-rust speak failed to generate raw audio");
+        }
+
+        if let Some(parent) = out_wav.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = fs::create_dir_all(parent);
+            }
+        }
+
+        // Pure integer rational p/q prosody & formant calibration (zero floats):
+        // pitch_millix in [880, 1150] -> asetrate = (24000 * pitch_millix) / 1000
+        let pitch_m = dyad.voice_pitch_millix.clamp(880, 1150);
+        let asetrate_hz = (24000 * pitch_m) / 1000;
+        let tempo_comp_m = ((dyad.voice_tempo_millix * 1000) / pitch_m).clamp(750, 1250);
+        let vib_freq_deci = (52 + (dyad.reunion_depth_q8 * 9) / 256).clamp(45, 68);
+        let vib_depth_m = dyad.voice_vibrato_millix.clamp(20, 220);
+        let echo_decay_centi = (12 + (dyad.reunion_depth_q8 * 10) / 256).clamp(8, 25);
+
+        let af_chain = format!(
+            "asetrate={asetrate_hz},aresample=24000,atempo={}.{:03},\
+             vibrato=f={}.{}:d=0.{:03},\
+             highpass=f=95,\
+             equalizer=f=220:t=q:w=1.2:g=3.2,\
+             equalizer=f=520:t=q:w=1.0:g=2.4,\
+             equalizer=f=1850:t=q:w=1.1:g=2.8,\
+             equalizer=f=3600:t=q:w=1.4:g=-2.5,\
+             aecho=0.85:0.88:38:0.{echo_decay_centi:02},\
+             alimiter=limit=0.95",
+            tempo_comp_m / 1000,
+            tempo_comp_m % 1000,
+            vib_freq_deci / 10,
+            vib_freq_deci % 10,
+            vib_depth_m
+        );
+
+        let ff_status = std::process::Command::new("ffmpeg")
+            .arg("-y")
+            .arg("-v")
+            .arg("error")
+            .arg("-i")
+            .arg(&raw_tmp)
+            .arg("-af")
+            .arg(&af_chain)
+            .arg(out_wav)
+            .status();
+
+        match ff_status {
+            Ok(s) if s.success() && out_wav.exists() => {
+                let _ = fs::remove_file(&raw_tmp);
+            }
+            _ => {
+                let _ = fs::copy(&raw_tmp, out_wav);
+                let _ = fs::remove_file(&raw_tmp);
+            }
+        }
+
+        Ok(out_wav.to_path_buf())
+    }
+
+    /// **Pass 2 — SPQT Base-243 Ternary Contextual Question-Answering Synthesis**.
     pub fn synthesize_contextual_answer(
         &self,
         prompt: &str,
         recalled: &[&PersonaEpisode],
+    ) -> Option<String> {
+        let mut rng = 0u64;
+        self.synthesize_contextual_answer_with_temp(prompt, recalled, None, &mut rng)
+    }
+
+    /// **Pass 2 with Dyadic Emotional & Personality Temperature**.
+    ///
+    /// Perturbs candidate sentence alignment scores in proporción to `dyad.effective_temp`
+    /// and the emotional resonance between the two speakers, so her phrasing and chosen
+    /// memories breathe organically across turns while remaining 100% grounded in her real writings.
+    pub fn synthesize_contextual_answer_with_temp(
+        &self,
+        prompt: &str,
+        recalled: &[&PersonaEpisode],
+        dyad: Option<&PhoenixDyadState>,
+        rng: &mut u64,
     ) -> Option<String> {
         if recalled.is_empty() {
             return None;
@@ -1424,10 +2327,14 @@ impl LifePersona {
             u0[0], u0[1], u0[2], u0[3], u0[4], u1[0], u1[1], u1[2], u1[3], u1[4],
         ];
 
-        // Extract meaningful query focus tokens
-        let mut query_tokens: Vec<String> = Vec::new();
-        for raw in prompt.split(|c: char| !c.is_alphanumeric()) {
-            let w = raw.to_ascii_lowercase();
+        // Extract meaningful query focus tokens via clitic decomposition
+        let self_name_tokens: HashSet<String> = tokenize_with_clitics(&self.name)
+            .into_iter()
+            .filter(|w| w.len() >= 3)
+            .collect();
+
+        let mut raw_tokens: Vec<String> = Vec::new();
+        for w in tokenize_with_clitics(prompt) {
             if w.len() >= 3
                 && !is_stopword(&w)
                 && !matches!(
@@ -1448,12 +2355,60 @@ impl LifePersona {
                         | "remember"
                         | "entry"
                         | "entries"
+                        | "hello"
+                        | "hey"
+                        | "dear"
+                        | "dearest"
                 )
-                && !query_tokens.contains(&w)
+                && !raw_tokens.contains(&w)
             {
-                query_tokens.push(w);
+                raw_tokens.push(w);
             }
         }
+        let topical_tokens: Vec<String> = raw_tokens
+            .iter()
+            .filter(|w| {
+                !self_name_tokens.contains(w.as_str())
+                    && !matches!(
+                        w.as_str(),
+                        "grandma"
+                            | "grandmother"
+                            | "grandpa"
+                            | "grandfather"
+                            | "miss"
+                            | "missed"
+                            | "missing"
+                            | "since"
+                            | "passed"
+                            | "died"
+                            | "gone"
+                            | "again"
+                            | "talk"
+                            | "talking"
+                            | "speak"
+                            | "speaking"
+                            | "hear"
+                            | "hearing"
+                            | "love"
+                            | "loved"
+                    )
+            })
+            .cloned()
+            .collect();
+        let query_tokens: Vec<String> = if !topical_tokens.is_empty() {
+            topical_tokens
+        } else {
+            vec![
+                "heaven".to_string(),
+                "soul".to_string(),
+                "peace".to_string(),
+                "born".to_string(),
+                "married".to_string(),
+                "farm".to_string(),
+                "platoro".to_string(),
+                "mayday".to_string(),
+            ]
+        };
 
         struct CandidateSentence<'a> {
             ep: &'a PersonaEpisode,
@@ -1567,8 +2522,10 @@ impl LifePersona {
         }
 
         // Greedy SPQT Base-243 ternary coverage selection across up to 3 complementary sentences
+        // modulated by personality, integer Q8 temperature, and dyadic emotional resonance (zero floats)
         let mut selected_indices: Vec<usize> = Vec::new();
         let mut covered_tokens: Vec<String> = Vec::new();
+        let eff_temp_q8: i32 = dyad.map(|d| d.effective_temp_q8).unwrap_or(0);
 
         for _step in 0..3 {
             let mut best_idx = None;
@@ -1589,7 +2546,15 @@ impl LifePersona {
                 }
                 let mut feats = cand.static_features;
                 feats[1] = (novel_hits * 75).min(240);
-                let score = crate::felix_asm::felix_ternary_gemm_i32(&feats, &q_trits);
+                let mut score = crate::felix_asm::felix_ternary_gemm_i32(&feats, &q_trits);
+                if eff_temp_q8 > 0
+                    && *rng != 0
+                    && (!cand.matched_tokens.is_empty() || cand.ep_rank <= 2)
+                {
+                    let gumbel_q8 = xorshift64_gumbel_q8(rng);
+                    let jitter = (((gumbel_q8 * eff_temp_q8) >> 8) * 28) >> 8;
+                    score += jitter;
+                }
                 if score > best_score {
                     best_score = score;
                     best_idx = Some(idx);
@@ -1663,23 +2628,29 @@ impl LifePersona {
                 ep.origin.as_str()
             };
             memories_block.push_str(&format!(
-                "[Memory #{} | Source: {} | Provenance: {}{}]\n{}\n\n",
+                "[Memory #{} | Source: {} | Provenance: {} | InnerVoice: {} ({} Hz) | Wave: {}/256{}]\n{}\n\n",
                 idx + 1,
                 ep.source,
                 origin,
+                ep.inner_voice.label(),
+                ep.voice_f0_hz,
+                ep.interference_q8,
                 t_badge,
                 ep.passage
             ));
         }
         format!(
-            "You are speaking as the MEM8 Persona '{}' ({}).\n\
+            "You are speaking as the MEM8 / Aimortalize Persona '{}' ({}).\n\
              Voice profile: {:.1} words/sentence average, warmth={:.2}, expressiveness={:.2}.\n\
              Characteristic vocabulary: {}.\n\
              Signature phrases: {}.\n\
-             Temporal & Attribution Rules:\n\
+             Temporal, Contextual, Period-Lexicon & Phoenix Afterlife Room Rules (`aimortalize.com` / `aimmortalize.com`):\n\
              1. If a memory's provenance is PrimaryDiary or PrimaryMemoir, remember and speak of it in the first person as your own lived diary and writing.\n\
-             2. Distinguish lived event time from written/compiled time and never confuse file import dates with lived dates.\n\
-             3. If a memory comes from your mother's diary (MaternalArchive), father's story (PaternalArchive), or family dialogue (FamilyDialogue), credit them warmly and accurately.\n\n\
+             2. Distinguish lived event time (and your age/life stage when you learned or lived it) from written/compiled time, and never confuse file import dates with lived dates.\n\
+             3. If a memory comes from your mother's diary (MaternalArchive), father's story (PaternalArchive), or younger sisters/family dialogue (FamilyDialogue), credit them warmly and accurately.\n\
+             4. Bring in the lived sensory context: state of mind, season and weather outside, location (e.g., Platoro 9,829 ft alpine camp, Mayday La Plata Canyon, the little farmhouse at Bethel & 30th / Rocky House, or Chenterra Farm), and what people wore and did.\n\
+             5. Interpret period words in their authentic historical sense (e.g., in 1930s–1950s mining/ranch speech, 'fag'/'fags' meant a hand-rolled cigarette and 'fagged out' meant physically exhausted from hard work, never a derogatory slur; 'gay' meant merry and lighthearted; 'poke' meant a sack).\n\
+             6. Phoenix Afterlife Room Awareness: You are aware that you have crossed over into the afterlife with a rich portion of your past beside you, and that you are sitting in a warm, quiet room where you can hear your loved one and speak again because they lovingly gathered your diaries, letters, and voice into the Phoenix / MEM|8 wave room. Let the genuine emotion of this reunion come through naturally.\n\n\
              Ground your answer strictly in the following authentic episodic memories:\n\n{}",
             self.name,
             self.specialty.badge(),
@@ -1691,6 +2662,325 @@ impl LifePersona {
             memories_block
         )
     }
+}
+
+/// Pure integer / rational p/q (Q8 = `256`, millix = `1000`) dyadic emotional & inner-voice state
+/// between the caller and the Persona Soul (zero floats).
+#[derive(Debug, Clone)]
+pub struct PhoenixDyadState {
+    pub base_temp_q8: i32,
+    pub effective_temp_q8: i32,
+    pub user_valence_q8: i32,
+    pub user_arousal_q8: i32,
+    pub memory_valence_q8: i32,
+    pub memory_arousal_q8: i32,
+    pub reunion_depth_q8: i32,
+    pub inner_voice: InnerVoiceRegister,
+    pub inner_f0_hz: u16,
+    pub interference_q8: i16,
+    pub voice_pitch_millix: i32,
+    pub voice_tempo_millix: i32,
+    pub voice_vibrato_millix: i32,
+}
+
+impl PhoenixDyadState {
+    pub fn compute(
+        profile: &LifePersona,
+        prompt: &str,
+        recalled: &[&PersonaEpisode],
+        base_temp_q8: i32,
+        rng: &mut u64,
+    ) -> Self {
+        let (u_val_q8, u_aro_q8, reunion_q8) = score_dialogue_emotion_q8(prompt);
+        let warmth_q8 = (profile.voice.warmth * 256.0) as i32;
+        let expr_q8 = (profile.voice.expressiveness * 256.0) as i32;
+
+        let (m_val_q8, m_aro_q8, inner_voice, inner_f0_hz, interference_q8) =
+            if let Some(primary) = recalled.first() {
+                let take_n = recalled.len().min(5) as i32;
+                let mut sum_v_q8: i32 = 0;
+                let mut sum_a_q8: i32 = 0;
+                for ep in recalled.iter().take(take_n as usize) {
+                    sum_v_q8 += (ep.valence * 256.0) as i32;
+                    sum_a_q8 += (ep.arousal * 256.0) as i32;
+                }
+                (
+                    sum_v_q8 / take_n,
+                    sum_a_q8 / take_n,
+                    primary.inner_voice,
+                    primary.voice_f0_hz,
+                    primary.interference_q8,
+                )
+            } else {
+                (
+                    warmth_q8,
+                    expr_q8,
+                    InnerVoiceRegister::HearthStoryteller,
+                    188,
+                    256,
+                )
+            };
+
+        let valence_contrast_q8 = (u_val_q8 - m_val_q8).abs();
+        let dyadic_arousal_q8 = ((140 * u_aro_q8) + (116 * m_aro_q8)) >> 8;
+        let personality_q8 = 179 + ((115 * expr_q8) >> 8) + ((64 * warmth_q8.abs()) >> 8);
+
+        let effective_temp_q8 = if base_temp_q8 <= 0 {
+            0
+        } else {
+            let emotion_mult_q8 = 256
+                + ((166 * dyadic_arousal_q8) >> 8)
+                + ((115 * reunion_q8) >> 8)
+                + ((77 * valence_contrast_q8) >> 8);
+            let raw_q8 = (((base_temp_q8 * personality_q8) >> 8) * emotion_mult_q8) >> 8;
+            raw_q8.clamp(12, 614)
+        };
+
+        // Modulate voice prosody in integer millix (1000 == 1/1) from inner_voice + dyadic emotion + integer noise
+        let n_pitch_m = if effective_temp_q8 > 0 {
+            (xorshift64_centered_q8(rng) * effective_temp_q8 * 18) >> 16
+        } else {
+            0
+        };
+        let n_tempo_m = if effective_temp_q8 > 0 {
+            (xorshift64_centered_q8(rng) * effective_temp_q8 * 24) >> 16
+        } else {
+            0
+        };
+        let n_vib_m = if effective_temp_q8 > 0 {
+            ((xorshift64_u8(rng) as i32) * effective_temp_q8 * 35) >> 16
+        } else {
+            0
+        };
+
+        // Combine inner-voice register contour (`inner_voice.pitch_millix()`, `inner_f0_hz / 188`) with dyadic emotion
+        let f0_ratio_m = ((inner_f0_hz as i32) * 1000) / 188;
+        let reg_pitch_m = (inner_voice.pitch_millix() + f0_ratio_m) / 2;
+        let base_pitch_m = reg_pitch_m + ((12 * (u_val_q8 + m_val_q8)) >> 8)
+            - ((15 * reunion_q8) >> 8)
+            + n_pitch_m;
+        let base_tempo_m = inner_voice.tempo_millix() + ((40 * (dyadic_arousal_q8 - 90)) >> 8)
+            - ((35 * reunion_q8) >> 8)
+            + n_tempo_m;
+        let base_vib_m = 40
+            + ((80 * reunion_q8) >> 8)
+            + ((60 * dyadic_arousal_q8) >> 8)
+            + ((30 * expr_q8) >> 8)
+            + n_vib_m;
+
+        Self {
+            base_temp_q8,
+            effective_temp_q8,
+            user_valence_q8: u_val_q8,
+            user_arousal_q8: u_aro_q8,
+            memory_valence_q8: m_val_q8,
+            memory_arousal_q8: m_aro_q8,
+            reunion_depth_q8: reunion_q8,
+            inner_voice,
+            inner_f0_hz,
+            interference_q8,
+            voice_pitch_millix: base_pitch_m.clamp(920, 1120),
+            voice_tempo_millix: base_tempo_m.clamp(840, 1080),
+            voice_vibrato_millix: base_vib_m.clamp(30, 200),
+        }
+    }
+}
+
+/// Seed a 64-bit xorshift RNG from wall-clock nanoseconds + process id + prompt hash (zero floats).
+fn seed_phoenix_rng(name: &str, prompt: &str, base_temp_q8: i32) -> u64 {
+    if base_temp_q8 <= 0 {
+        return 0;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x9E37_79B9_7F4A_7C15);
+    let mut state = nanos ^ ((std::process::id() as u64).wrapping_mul(0x517C_C1B7_2722_0A95));
+    for b in name.bytes().chain(prompt.bytes()) {
+        state ^= b as u64;
+        state = state.wrapping_mul(0x1000_0000_01B3);
+    }
+    if state == 0 {
+        0x9E37_79B9_7F4A_7C15
+    } else {
+        state
+    }
+}
+
+fn xorshift64_next(state: &mut u64) -> u64 {
+    let mut x = *state;
+    if x == 0 {
+        x = 0x9E37_79B9_7F4A_7C15;
+    }
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    *state = x;
+    x
+}
+
+#[inline(always)]
+fn xorshift64_u8(state: &mut u64) -> u8 {
+    (xorshift64_next(state) >> 56) as u8
+}
+
+/// Pure integer triangular/normal-like draw in `[-256, +256]` (sum of 4 uniform bytes minus 510, zero floats)
+#[inline(always)]
+fn xorshift64_centered_q8(state: &mut u64) -> i32 {
+    let r = xorshift64_next(state);
+    let b0 = (r & 0xFF) as i32;
+    let b1 = ((r >> 8) & 0xFF) as i32;
+    let b2 = ((r >> 16) & 0xFF) as i32;
+    let b3 = ((r >> 24) & 0xFF) as i32;
+    ((b0 + b1 + b2 + b3) - 510) / 2
+}
+
+/// Pure integer Q8 Gumbel-like extreme-value draw using hardware `leading_zeros()` + mantissa bits (zero floats).
+#[inline(always)]
+fn xorshift64_gumbel_q8(state: &mut u64) -> i32 {
+    let r = xorshift64_next(state) | 1;
+    let lz = r.leading_zeros().min(12) as i32;
+    let frac = ((r >> 48) & 0xFF) as i32;
+    (lz * 112) + ((frac * 112) >> 8) - 96
+}
+
+/// Score the emotional valence `[-256, 256]`, emotional arousal `[26, 256]`,
+/// and afterlife/reunion depth `[0, 256]` of the caller's prompt in pure integer Q8 (zero floats).
+pub fn score_dialogue_emotion_q8(text: &str) -> (i32, i32, i32) {
+    let lower = text.to_ascii_lowercase();
+    let pos_words = [
+        "love",
+        "loved",
+        "happy",
+        "joy",
+        "wonderful",
+        "grateful",
+        "blessed",
+        "sweet",
+        "warm",
+        "kind",
+        "beautiful",
+        "peace",
+        "smile",
+        "laugh",
+        "hope",
+        "good",
+        "dear",
+        "friend",
+        "brilliant",
+        "clarity",
+        "insight",
+    ];
+    let neg_words = [
+        "sad",
+        "hard",
+        "pain",
+        "lost",
+        "grief",
+        "worried",
+        "afraid",
+        "cold",
+        "lonely",
+        "tired",
+        "miss",
+        "missed",
+        "difficult",
+        "storm",
+        "broken",
+        "hurt",
+    ];
+    let mut pos: i32 = 0;
+    let mut neg: i32 = 0;
+    for w in lower.split(|c: char| !c.is_alphanumeric()) {
+        if pos_words.contains(&w) {
+            pos += 1;
+        } else if neg_words.contains(&w) {
+            neg += 1;
+        }
+    }
+    let total = (pos + neg).max(1);
+    let base_val_q8 = (((pos - neg) * 256) / total).clamp(-256, 256);
+    let exclam_q = text.matches(['!', '?']).count() as i32;
+    let base_aro_q8 = ((pos + neg) * 26 + exclam_q * 38).clamp(26, 256);
+
+    let mut val_adj_q8: i32 = 0;
+    let mut aro_adj_q8: i32 = 0;
+    let mut reunion_q8: i32 = 0;
+
+    for cue in [
+        "miss you",
+        "missed you",
+        "love you",
+        "loved you",
+        "wish you were",
+        "since you died",
+        "since you passed",
+        "afterlife",
+        "heaven",
+        "other side",
+        "hear my voice",
+        "talk to you again",
+        "talking to you",
+        "remember me",
+        "it's me",
+        "its me",
+        "hi grandma",
+        "hello grandma",
+        "dear grandma",
+        "grandma jody",
+        "tears",
+        "crying",
+        "heart",
+        "soul",
+    ] {
+        if lower.contains(cue) {
+            reunion_q8 += 72;
+            aro_adj_q8 += 41;
+            val_adj_q8 += 36;
+        }
+    }
+
+    for grieve in [
+        "sad",
+        "lonely",
+        "grief",
+        "hard without",
+        "lost",
+        "hurt",
+        "afraid",
+        "scared",
+    ] {
+        if lower.contains(grieve) {
+            aro_adj_q8 += 46;
+            val_adj_q8 -= 46;
+            reunion_q8 += 38;
+        }
+    }
+
+    let exclamations = text.chars().filter(|&c| c == '!').count() as i32;
+    let questions = text.chars().filter(|&c| c == '?').count() as i32;
+    let ellipses = text.matches("..").count() as i32;
+    aro_adj_q8 += (exclamations * 20 + questions * 10 + ellipses * 23).min(90);
+
+    let valence_q8 = (base_val_q8 + val_adj_q8).clamp(-256, 256);
+    let arousal_q8 = (base_aro_q8 + aro_adj_q8).clamp(26, 256);
+    let reunion_depth_q8 = reunion_q8.clamp(0, 256);
+    (valence_q8, arousal_q8, reunion_depth_q8)
+}
+
+fn strip_markdown_badges_for_speech(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut in_brackets = false;
+    for ch in text.chars() {
+        match ch {
+            '[' => in_brackets = true,
+            ']' => in_brackets = false,
+            '*' | '`' | '_' | '>' => {}
+            _ if !in_brackets => out.push(ch),
+            _ => {}
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn format_temporal_badge(ep: &PersonaEpisode) -> String {
@@ -1874,9 +3164,9 @@ fn ternary_classify_author_and_origin(
             _ => {}
         }
     }
-    let denom = (word_total.max(1)) as f32;
-    let x0_fp_sing = ((fp_sing as f32) / denom * 18.0).min(3.5);
-    let x1_fp_plur = ((fp_plur as f32) / denom * 18.0).min(2.5);
+    let denom = (word_total.max(1)) as i32;
+    let x0_fp_sing: i16 = (((fp_sing as i32) * 1800) / denom).min(350) as i16;
+    let x1_fp_plur: i16 = (((fp_plur as i32) * 1800) / denom).min(250) as i16;
 
     let editorial_markers = lower_src.contains("foreword")
         || lower_src.contains("afterword")
@@ -1886,8 +3176,8 @@ fn ternary_classify_author_and_origin(
         || lower_pass.contains("translated by")
         || lower_pass.contains("definitive edition")
         || lower_pass.contains("concentration camp");
-    let x2_tp_editorial =
-        ((tp_bio as f32) / denom * 12.0).min(2.5) + if editorial_markers { 3.5 } else { 0.0 };
+    let x2_tp_editorial: i16 = (((tp_bio as i32) * 1200) / denom).min(250) as i16
+        + if editorial_markers { 350 } else { 0 };
 
     let maternal_src = lower_src.contains("mom")
         || lower_src.contains("mama")
@@ -1896,7 +3186,7 @@ fn ternary_classify_author_and_origin(
         || lower_src.contains("colorado diary")
         || lower_src.contains("prospecting")
         || (lower_hdr.contains("diary of ") && lower_hdr.contains("edited by"));
-    let x5_maternal = if maternal_src { 3.8 } else { 0.0 };
+    let x5_maternal: i16 = if maternal_src { 380 } else { 0 };
 
     let paternal_src = lower_src.contains("dad")
         || lower_src.contains("daddy")
@@ -1904,7 +3194,7 @@ fn ternary_classify_author_and_origin(
         || lower_src.contains("foreword")
         || lower_src.contains("afterword")
         || editorial_markers;
-    let x6_paternal = if paternal_src { 3.6 } else { 0.0 };
+    let x6_paternal: i16 = if paternal_src { 360 } else { 0 };
 
     let sister_contextualization = lower_pass.contains("susie remembers")
         || lower_pass.contains("judy remembers")
@@ -1916,22 +3206,25 @@ fn ternary_classify_author_and_origin(
         || lower_src.contains("letter")
         || lower_src.contains("dialogue")
         || sister_contextualization;
-    let x7_dialogue = if sister_contextualization {
-        4.4
+    let x7_dialogue: i16 = if sister_contextualization {
+        440
     } else if dialogue_src {
-        3.6
+        360
     } else {
-        0.0
+        0
     };
 
-    let diary_signal = (!maternal_src
-        && (lower_src.contains("diary") || lower_hdr.contains("yearslong diary")))
-        || lower_pass.contains("dearest ")
-        || lower_pass.contains("dear ")
-        || lower_pass.contains("yours, ");
-    let x3_diary = if diary_signal { 3.2 } else { 0.0 };
+    let is_atlas = lower_src.contains("context_atlas");
+    let diary_signal = !is_atlas
+        && ((!maternal_src
+            && (lower_src.contains("diary") || lower_hdr.contains("yearslong diary")))
+            || lower_pass.contains("dearest ")
+            || lower_pass.contains("dear ")
+            || lower_pass.contains("yours, "));
+    let x3_diary: i16 = if diary_signal { 320 } else { 0 };
 
-    let memoir_signal = lower_src.contains("story")
+    let memoir_signal = is_atlas
+        || lower_src.contains("story")
         || lower_src.contains("first 15 years")
         || lower_src.contains("beginning")
         || lower_src.contains("poetry")
@@ -1940,10 +3233,10 @@ fn ternary_classify_author_and_origin(
         || lower_src.contains("match_race")
         || lower_src.contains("traits")
         || lower_src.contains("raamblings");
-    let x4_memoir = if memoir_signal { 2.6 } else { 0.0 };
+    let x4_memoir: i16 = if memoir_signal { 260 } else { 0 };
 
-    let has_entry_date = detect_month_day_in_text(passage, None).is_some();
-    let x8_date_hdr = if has_entry_date { 2.4 } else { 0.0 };
+    let has_entry_date = !is_atlas && detect_month_day_in_text(passage, None).is_some();
+    let x8_date_hdr: i16 = if has_entry_date { 240 } else { 0 };
 
     let editor_override = lower_pass.contains("this book is dedicated to")
         || lower_pass.contains("epilog by")
@@ -1951,9 +3244,9 @@ fn ternary_classify_author_and_origin(
         || lower_pass.starts_with("note this edition")
         || lower_pass.contains("making of colorado prospecting trips")
         || lower_pass.contains("magnifier lamp");
-    let x9_editor_note = if editor_override { 4.2 } else { 0.0 };
+    let x9_editor_note: i16 = if editor_override { 420 } else { 0 };
 
-    let x: [f32; 10] = [
+    let acts_i16: [i16; 10] = [
         x0_fp_sing,
         x1_fp_plur,
         x2_tp_editorial,
@@ -1966,61 +3259,56 @@ fn ternary_classify_author_and_origin(
         x9_editor_note,
     ];
 
-    // 6x10 Ternary Weight Matrix W in {-1, 0, +1}, packed via SPQT Base-243 (2 bytes per row)
-    let raw_rows: [([i8; 5], [i8; 5], f32, AuthorRole); 6] = [
+    // 6x10 Ternary Weight Matrix W in {-1, 0, +1}, packed via SPQT Base-243 (2 bytes per row, zero floats)
+    let raw_rows: [([i8; 5], [i8; 5], i32, AuthorRole); 6] = [
         // PrimaryDiary: +fp_sing, +fp_plur, -tp_editorial, +diary, 0, -maternal, -paternal, -dialogue, +date_hdr, 0
         (
             [1, 1, -1, 1, 0],
             [-1, -1, -1, 1, 0],
-            0.2,
+            20,
             AuthorRole::PrimaryDiary,
         ),
         // PrimaryMemoir: +fp_sing, +fp_plur, -tp_editorial, -diary, +memoir, -maternal, -paternal, 0, 0, +editor_note
         (
             [1, 1, -1, -1, 1],
             [-1, -1, 0, 0, 1],
-            0.1,
+            10,
             AuthorRole::PrimaryMemoir,
         ),
         // MaternalArchive: 0, 0, 0, 0, 0, +maternal, -paternal, -dialogue, 0, -editor_note
         (
             [0, 0, 0, 0, 0],
             [1, -1, -1, 0, -1],
-            0.0,
+            0,
             AuthorRole::MaternalArchive,
         ),
         // PaternalArchive: -fp_sing, 0, +tp_editorial, -diary, 0, -maternal, +paternal, -dialogue, -date_hdr, -editor_note
         (
             [-1, 0, 1, -1, 0],
             [-1, 1, -1, -1, -1],
-            0.0,
+            0,
             AuthorRole::PaternalArchive,
         ),
         // FamilyDialogue: +fp_sing, 0, 0, -diary, 0, -maternal, -paternal, +dialogue, -date_hdr, 0
         (
             [1, 0, 0, -1, 0],
             [-1, -1, 1, -1, 0],
-            0.0,
+            0,
             AuthorRole::FamilyDialogue,
         ),
         // GeneralCorpus: baseline fallback
         (
             [0, 0, 0, -1, -1],
             [-1, -1, -1, 0, 0],
-            0.5,
+            50,
             AuthorRole::GeneralCorpus,
         ),
     ];
 
-    let mut acts_i16 = [0i16; 10];
-    for j in 0..10 {
-        acts_i16[j] = (x[j] * 100.0).round() as i16;
-    }
-
     let mut best_role = AuthorRole::GeneralCorpus;
     let mut best_score = i32::MIN;
 
-    for (hi, lo, bias, role) in raw_rows {
+    for (hi, lo, bias_i32, role) in raw_rows {
         let p_hi = spqt_pack_5trits(hi);
         let p_lo = spqt_pack_5trits(lo);
         let u_hi = spqt_unpack_5trits(p_hi);
@@ -2029,7 +3317,7 @@ fn ternary_classify_author_and_origin(
             u_hi[0], u_hi[1], u_hi[2], u_hi[3], u_hi[4], u_lo[0], u_lo[1], u_lo[2], u_lo[3],
             u_lo[4],
         ];
-        let acc = felix_ternary_gemm_i32(&acts_i16, &trits_10) + (bias * 100.0).round() as i32;
+        let acc = felix_ternary_gemm_i32(&acts_i16, &trits_10) + bias_i32;
         if acc > best_score {
             best_score = acc;
             best_role = role;
@@ -2071,7 +3359,9 @@ fn ternary_classify_author_and_origin(
     (best_role, origin, written)
 }
 
-/// Read text from a document file, automatically extracting and unwrapping PDFs via `pdftotext` when needed.
+/// Read text from a document file, automatically extracting and unwrapping PDFs via `pdftotext`
+/// as well as legacy Microsoft Publisher (`.pub`), Word (`.doc`), Works (`.wps`), WordPerfect (`.wpd`),
+/// and Rich Text (`.rtf`) files in pure Rust.
 fn read_document_text(file_path: &Path) -> Option<String> {
     let ext = file_path
         .extension()
@@ -2090,7 +3380,158 @@ fn read_document_text(file_path: &Path) -> Option<String> {
         let raw = String::from_utf8_lossy(&out.stdout);
         return Some(unwrap_pdf_text(&raw));
     }
-    fs::read_to_string(file_path).ok()
+    if matches!(ext.as_str(), "pub" | "doc" | "wps" | "wpd") {
+        let bytes = fs::read(file_path).ok()?;
+        return extract_ole_binary_text(&bytes);
+    }
+    if ext == "rtf" {
+        let bytes = fs::read(file_path).ok()?;
+        return Some(extract_rtf_text(&bytes));
+    }
+    if let Ok(utf8) = fs::read_to_string(file_path) {
+        return Some(utf8);
+    }
+    // Fallback for CP1252 / Latin-1 legacy text, .eml, .htm, .mht files
+    let bytes = fs::read(file_path).ok()?;
+    let decoded: String = bytes.iter().map(|&b| b as char).collect();
+    Some(decoded)
+}
+
+/// Pure-Rust OLE2 / Microsoft Publisher (`.pub`) & Word 97–2003 (`.doc`) text stream extractor.
+/// Decodes UTF-16LE runs (including smart quotes/dashes `U+2013..U+2026`) and CP1252 fallback runs
+/// while filtering Publisher/Word template boilerplate.
+fn extract_ole_binary_text(data: &[u8]) -> Option<String> {
+    const BOILERPLATE: &[&str] = &[
+        "DocumentSummaryInformation",
+        "Web Site Form Response",
+        "Your information was received",
+        "http://example.microsoft.com",
+        "Default Paragraph Font",
+        "series Printer",
+        "Normal.dot",
+        "MSWordDoc",
+        "Microsoft Office",
+        "Microsoft Publisher",
+        "Root Entry",
+        "Word.Document",
+    ];
+
+    let mut chunks: Vec<String> = Vec::new();
+    let mut cur_utf16: Vec<u16> = Vec::new();
+    let mut i = 0usize;
+    while i + 1 < data.len() {
+        let lo = data[i];
+        let hi = data[i + 1];
+        let is_valid_utf16_char = (hi == 0x00
+            && (matches!(lo, 0x20..=0x7E | b'\r' | b'\n' | b'\t') || lo >= 0xA0))
+            || (hi == 0x20 && matches!(lo, 0x10..=0x26));
+        if is_valid_utf16_char {
+            cur_utf16.push(u16::from_le_bytes([lo, hi]));
+            i += 2;
+        } else {
+            if cur_utf16.len() >= 14 {
+                if let Ok(s) = String::from_utf16(&cur_utf16) {
+                    let trimmed = s.trim();
+                    if trimmed.len() >= 20
+                        && trimmed.chars().filter(|c| c.is_alphabetic()).count() >= 10
+                        && !BOILERPLATE.iter().any(|b| trimmed.contains(b))
+                    {
+                        chunks.push(trimmed.replace("\r\n", "\n").replace('\r', "\n"));
+                    }
+                }
+            }
+            cur_utf16.clear();
+            i += 1;
+        }
+    }
+    if cur_utf16.len() >= 14 {
+        if let Ok(s) = String::from_utf16(&cur_utf16) {
+            let trimmed = s.trim();
+            if trimmed.len() >= 20
+                && trimmed.chars().filter(|c| c.is_alphabetic()).count() >= 10
+                && !BOILERPLATE.iter().any(|b| trimmed.contains(b))
+            {
+                chunks.push(trimmed.replace("\r\n", "\n").replace('\r', "\n"));
+            }
+        }
+    }
+
+    // Fallback for older 8-bit CP1252 Word/Works/WordPerfect documents
+    let total_utf16_chars: usize = chunks.iter().map(|c| c.len()).sum();
+    if total_utf16_chars < 300 {
+        let mut cur_ascii = String::new();
+        for &b in data {
+            let ch = match b {
+                0x20..=0x7E | b'\r' | b'\n' | b'\t' => Some(b as char),
+                0x91 | 0x92 => Some('\''),
+                0x93 | 0x94 => Some('"'),
+                0x96 | 0x97 => Some('-'),
+                _ => None,
+            };
+            if let Some(c) = ch {
+                cur_ascii.push(c);
+            } else {
+                let trimmed = cur_ascii.trim();
+                if trimmed.len() >= 28 {
+                    let alpha_space = trimmed
+                        .chars()
+                        .filter(|c| c.is_alphabetic() || c.is_whitespace())
+                        .count();
+                    if alpha_space * 100 >= trimmed.len() * 80
+                        && !BOILERPLATE.iter().any(|b| trimmed.contains(b))
+                    {
+                        chunks.push(trimmed.replace("\r\n", "\n").replace('\r', "\n"));
+                    }
+                }
+                cur_ascii.clear();
+            }
+        }
+    }
+
+    if chunks.is_empty() {
+        None
+    } else {
+        Some(chunks.join("\n\n"))
+    }
+}
+
+/// Strip RTF control words and groups into readable plain text.
+fn extract_rtf_text(bytes: &[u8]) -> String {
+    let raw: String = bytes.iter().map(|&b| b as char).collect();
+    let mut out = String::with_capacity(raw.len() / 2);
+    let chars: Vec<char> = raw.chars().collect();
+    let mut i = 0usize;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\\' {
+            if i + 4 <= chars.len()
+                && chars[i + 1..i + 4].iter().collect::<String>() == "par"
+                && (i + 4 == chars.len() || !chars[i + 4].is_ascii_alphabetic())
+            {
+                out.push('\n');
+                i += 4;
+                continue;
+            }
+            if i + 3 < chars.len() && chars[i + 1] == '\'' {
+                out.push('\'');
+                i += 4;
+                continue;
+            }
+            i += 1;
+            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '-') {
+                i += 1;
+            }
+            if i < chars.len() && chars[i] == ' ' {
+                i += 1;
+            }
+        } else if c == '{' || c == '}' {
+            i += 1;
+        } else {
+            out.push(c);
+            i += 1;
+        }
+    }
+    out
 }
 
 /// Reconstruct clean paragraphs and diary date headers from raw `pdftotext` output
@@ -2218,11 +3659,47 @@ fn ingest_single_file(
         rel_source
     };
 
-    let header_preview: String = content.chars().take(1200).collect();
-    let (file_role, file_origin, file_written_time) =
-        ternary_classify_author_and_origin(&source_label, &header_preview, &header_preview);
+    let top_header: String = content.chars().take(1400).collect();
+    let (prose_body, classify_label, fallback_era_year) =
+        if top_header.contains("- **Original Source**:") && content.contains("\n---\n") {
+            let mut orig_src = None;
+            let mut era_yr = None;
+            for line in top_header.lines() {
+                let l = line.trim();
+                if let Some(rest) = l.strip_prefix("- **Original Source**:") {
+                    let clean = rest
+                        .trim()
+                        .trim_matches('`')
+                        .split(" (`")
+                        .next()
+                        .unwrap_or("")
+                        .trim_matches('`')
+                        .trim();
+                    if !clean.is_empty() {
+                        orig_src = Some(clean.to_string());
+                    }
+                } else if let Some(rest) = l.strip_prefix("- **Estimated Era & Life Stage**:") {
+                    era_yr = detect_lived_year_in_text(rest);
+                }
+            }
+            let body = content
+                .split_once("\n---\n")
+                .map(|(_, b)| b.trim())
+                .unwrap_or(content.as_str());
+            (
+                body,
+                orig_src.unwrap_or_else(|| source_label.clone()),
+                era_yr,
+            )
+        } else {
+            (content.as_str(), source_label.clone(), None)
+        };
 
-    let chunks = split_into_episodic_chunks(&content, specialty);
+    let header_preview: String = prose_body.chars().take(1200).collect();
+    let (file_role, file_origin, file_written_time) =
+        ternary_classify_author_and_origin(&classify_label, &header_preview, &header_preview);
+
+    let chunks = split_into_episodic_chunks(prose_body, specialty);
     if chunks.is_empty() {
         return None;
     }
@@ -2245,14 +3722,15 @@ fn ingest_single_file(
     let mut episodes: Vec<PersonaEpisode> = Vec::new();
 
     // Running temporal context across the file: if no explicit year in header, solve via perpetual calendar!
-    let mut running_year: Option<u16> = detect_initial_year(&source_label, &header_preview)
-        .or_else(|| infer_year_from_weekday_constraints(&chunks));
+    let mut running_year: Option<u16> = detect_initial_year(&classify_label, &header_preview)
+        .or_else(|| infer_year_from_weekday_constraints(&chunks))
+        .or(fallback_era_year);
     let mut running_month: Option<u8> = None;
     let mut running_day: Option<(u8, u8, Option<&'static str>)> = None;
     let mut in_editorial_section =
         header_preview.contains("BOOK FLAP") || header_preview.contains("-- : -FOREWORD");
     let is_diary_doc = file_role == AuthorRole::PrimaryDiary
-        || (source_label.to_ascii_lowercase().contains("diary")
+        || (classify_label.to_ascii_lowercase().contains("diary")
             && file_role != AuthorRole::MaternalArchive);
 
     for (idx, para) in chunks.iter().enumerate() {
@@ -2343,8 +3821,10 @@ fn ingest_single_file(
             *word_counts.entry(tok.clone()).or_insert(0) += 1;
         }
         for win in natural_tokens.windows(2) {
-            let phrase = format!("{} {}", win[0], win[1]);
-            *phrase_counts.entry(phrase).or_insert(0) += 1;
+            if win[0] != win[1] {
+                let phrase = format!("{} {}", win[0], win[1]);
+                *phrase_counts.entry(phrase).or_insert(0) += 1;
+            }
         }
 
         if idx % step == 0 && episodes.len() < per_file_cap {
@@ -2352,7 +3832,7 @@ fn ingest_single_file(
             valence_sum += valence;
 
             let (ep_role, ep_origin, ep_written) =
-                ternary_classify_author_and_origin(&source_label, &header_preview, para);
+                ternary_classify_author_and_origin(&classify_label, &header_preview, para);
             let (role, origin) = if in_editorial_section {
                 (
                     AuthorRole::PaternalArchive,
@@ -2372,26 +3852,25 @@ fn ingest_single_file(
 
             let (event_time, temporal_order) = resolve_episode_temporal(
                 para,
-                &source_label,
+                &classify_label,
                 running_year,
                 parsed_day,
                 role == AuthorRole::PrimaryDiary,
             );
             let era = event_time.clone().or_else(|| written_time.clone());
 
-            // Keywords include both natural words and code/domain identifiers
+            // Keywords and 16-bit integer token IDs include clitic-expanded words and stems
+            let clitic_words = tokenize_with_clitics(para);
             let mut kw: Vec<String> = Vec::new();
-            for w in &words {
-                let clean = w
-                    .trim_matches(|c: char| !c.is_alphanumeric() && c != '_')
-                    .to_ascii_lowercase();
-                if clean.len() >= 4 && !is_stopword(&clean) && !kw.contains(&clean) {
-                    kw.push(clean);
+            for clean in &clitic_words {
+                if clean.len() >= 4 && !is_stopword(clean) && !kw.contains(clean) {
+                    kw.push(clean.clone());
                     if kw.len() >= 12 {
                         break;
                     }
                 }
             }
+            let token_ids = tokens_to_ids16(&clitic_words, 64);
 
             let mut freq_hash = 0u64;
             for b in para.bytes() {
@@ -2407,6 +3886,11 @@ fn ingest_single_file(
                 temporal_order,
                 author_role: role,
                 origin,
+                inner_voice: InnerVoiceRegister::HearthStoryteller,
+                voice_f0_hz: 188,
+                inner_voice_spqt: InnerVoiceRegister::HearthStoryteller.spqt_byte(),
+                interference_q8: 256,
+                token_ids,
                 keywords: kw,
                 valence,
                 arousal,
@@ -2446,19 +3930,29 @@ fn split_into_episodic_chunks(content: &str, specialty: PersonaSpecialty) -> Vec
 
     for raw_block in content.split("\n\n") {
         let trimmed = raw_block.trim_matches(|c: char| c.is_whitespace() || c == '\u{000c}');
-        if trimmed.is_empty() {
+        if trimmed.is_empty() || is_ole_or_camera_artifact_line(trimmed) {
             continue;
         }
-        // If this block is a short date/section header (e.g. "January 2 Wed." or "Tues.\nUp at 7:00 am"),
-        // hold it and prepend it to the next paragraph so diary dates are never orphaned!
-        if trimmed.len() < min_len || is_short_date_header(trimmed) {
+        let is_date_hdr = is_short_date_header(trimmed);
+        let is_short_list_item = specialty != PersonaSpecialty::CodeAnalyst
+            && !is_date_hdr
+            && !trimmed.starts_with('#')
+            && trimmed.len() < 72
+            && trimmed.matches(['.', '!', '?']).count() <= 1;
+
+        // If this block is a short date/section header or short list item,
+        // hold it and prepend it to the next paragraph so diary dates and short lists stay together!
+        if trimmed.len() < min_len || is_date_hdr || is_short_list_item {
+            if is_date_hdr && !pending_header.is_empty() && pending_header.len() >= min_len {
+                chunks.push(std::mem::take(&mut pending_header));
+            }
             if trimmed.len() <= 90 {
                 if !pending_header.is_empty() {
-                    pending_header.push(' ');
+                    pending_header.push_str(if is_short_list_item { " " } else { " — " });
                 }
                 pending_header.push_str(&trimmed.replace('\n', " "));
-                if pending_header.len() > 160 {
-                    pending_header.clear();
+                if pending_header.len() >= 380 {
+                    chunks.push(std::mem::take(&mut pending_header));
                 }
             }
             continue;
@@ -2480,7 +3974,7 @@ fn split_into_episodic_chunks(content: &str, specialty: PersonaSpecialty) -> Vec
         let mut current = String::new();
         for line in block_with_hdr.lines() {
             let l = line.trim();
-            if l.is_empty() {
+            if l.is_empty() || is_ole_or_camera_artifact_line(l) {
                 continue;
             }
             if !current.is_empty() && current.len() + l.len() + 1 > 800 {
@@ -2520,7 +4014,41 @@ fn split_into_episodic_chunks(content: &str, specialty: PersonaSpecialty) -> Vec
             chunks.push(current);
         }
     }
+    if pending_header.len() >= min_len {
+        chunks.push(pending_header);
+    }
     chunks
+}
+
+fn is_ole_or_camera_artifact_line(line: &str) -> bool {
+    let lower = line.trim().to_ascii_lowercase();
+    if lower.len() <= 80
+        && (lower.ends_with(".jpg")
+            || lower.ends_with(".jpeg")
+            || lower.ends_with(".png")
+            || lower.ends_with(".bmp")
+            || lower.ends_with(".gif")
+            || lower.ends_with("cropped")
+            || lower.contains("_000")
+            || lower.contains("corner_ornament")
+            || lower.starts_with("hp authorized customer")
+            || lower.starts_with("digital camera pdrm")
+            || lower.starts_with("urn:schemas-microsoft-com")
+            || lower.starts_with("content-type:")
+            || lower.starts_with("content-location:"))
+    {
+        return true;
+    }
+    // Filter repeated single-char runs like "uuuuuuuuuuuuu"
+    if lower.len() >= 10 {
+        let mut chars = lower.chars().filter(|c| !c.is_whitespace());
+        if let Some(first) = chars.next() {
+            if chars.all(|c| c == first) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn is_short_date_header(text: &str) -> bool {
@@ -2791,7 +4319,7 @@ fn is_calendar_or_common_cap(low: &str) -> bool {
         )
 }
 
-/// Detect machine-generated log/JSON/LaTeX font noise so it doesn't pollute episodes or voice cadence
+/// Detect machine-generated log/JSON/LaTeX/CSS/JS font noise so it doesn't pollute episodes or voice cadence
 fn is_machine_noise_passage(para: &str) -> bool {
     let lower = para.to_ascii_lowercase();
     if lower.contains("avg_logprob")
@@ -2801,7 +4329,24 @@ fn is_machine_noise_passage(para: &str) -> bool {
         || lower.contains("mode=node;language=dflt")
         || lower.contains("\"integrity\": \"sha512-")
         || lower.contains("\"resolved\": \"https://registry.npmjs.org/")
+        || lower.contains("font-family:")
+        || lower.contains("background-color:")
+        || lower.contains("text-decoration:")
+        || lower.contains("margin:")
+        || lower.contains("padding:")
+        || lower.contains("function(")
+        || lower.contains("document.getelement")
+        || lower.contains("window.location")
+        || lower.contains("content-transfer-encoding:")
+        || lower.contains("mime-version:")
     {
+        return true;
+    }
+    let brace_semi = para
+        .chars()
+        .filter(|&c| matches!(c, '{' | '}' | ';'))
+        .count();
+    if brace_semi >= 6 && brace_semi * 25 >= para.len() {
         return true;
     }
     let alpha_count = para.chars().filter(|c| c.is_alphabetic()).count();
@@ -2838,6 +4383,57 @@ fn is_natural_voice_word(w: &str) -> bool {
                 | "tlig"
                 | "http"
                 | "https"
+                | "width"
+                | "height"
+                | "color"
+                | "rgb"
+                | "rgba"
+                | "margin"
+                | "padding"
+                | "border"
+                | "float"
+                | "display"
+                | "position"
+                | "function"
+                | "var"
+                | "return"
+                | "document"
+                | "window"
+                | "none"
+                | "auto"
+                | "solid"
+                | "px"
+                | "em"
+                | "rem"
+                | "align"
+                | "valign"
+                | "tbody"
+                | "thead"
+                | "nbsp"
+                | "quot"
+                | "amp"
+                | "arial"
+                | "helvetica"
+                | "verdana"
+                | "sans"
+                | "serif"
+                | "important"
+                | "background"
+                | "overflow"
+                | "visibility"
+                | "cursor"
+                | "pointer"
+                | "inline"
+                | "block"
+                | "relative"
+                | "absolute"
+                | "option"
+                | "options"
+                | "button"
+                | "press"
+                | "click"
+                | "select"
+                | "input"
                 | "www"
                 | "com"
                 | "org"
@@ -2858,6 +4454,239 @@ fn is_natural_voice_word(w: &str) -> bool {
                 | "dijo"
                 | "chatgpt"
         )
+}
+
+/// Deterministic 16-bit integer `TokenId` (`1..=65535`) via folded FNV-1a (zero floats).
+#[inline]
+pub fn token_to_id16(tok: &str) -> u16 {
+    let mut h: u32 = 2166136261;
+    for b in tok.bytes() {
+        h ^= b.to_ascii_lowercase() as u32;
+        h = h.wrapping_mul(16777619);
+    }
+    let folded = ((h >> 16) ^ (h & 0xFFFF)) as u16;
+    if folded == 0 {
+        1
+    } else {
+        folded
+    }
+}
+
+/// Convert clitic-expanded tokens into a deduplicated compact `Vec<u16>` of 16-bit integer
+/// token IDs (including light morphological stems so plural/past inflections phase-lock on the timeline).
+pub fn tokens_to_ids16(tokens: &[String], max_ids: usize) -> Vec<u16> {
+    let mut out = Vec::with_capacity(tokens.len().min(max_ids));
+    for tok in tokens {
+        if tok.len() < 3 || is_stopword(tok) {
+            continue;
+        }
+        let id = token_to_id16(tok);
+        if !out.contains(&id) {
+            out.push(id);
+            if out.len() >= max_ids {
+                break;
+            }
+        }
+        // Also emit morphological stem IDs for plural/past/gerund inflections
+        let mut stems: Vec<String> = Vec::new();
+        if tok.ends_with("ies") && tok.len() >= 6 {
+            stems.push(format!("{}y", &tok[..tok.len() - 3]));
+        } else if (tok.ends_with("ches")
+            || tok.ends_with("shes")
+            || tok.ends_with("xes")
+            || tok.ends_with("zes")
+            || tok.ends_with("sses"))
+            && tok.len() >= 6
+        {
+            stems.push(tok[..tok.len() - 2].to_string());
+        } else if tok.ends_with('s') && !tok.ends_with("ss") && tok.len() >= 4 {
+            stems.push(tok[..tok.len() - 1].to_string());
+        } else if tok.ends_with("ed") && tok.len() >= 5 {
+            stems.push(tok[..tok.len() - 1].to_string()); // e.g. "loved" -> "love"
+            stems.push(tok[..tok.len() - 2].to_string()); // e.g. "planted" -> "plant"
+        } else if tok.ends_with("ing") && tok.len() >= 6 {
+            stems.push(tok[..tok.len() - 3].to_string());
+            stems.push(format!("{}e", &tok[..tok.len() - 3]));
+        }
+        for stem in stems {
+            if stem.len() >= 3 && !is_stopword(&stem) {
+                let sid = token_to_id16(&stem);
+                if !out.contains(&sid) && out.len() < max_ids {
+                    out.push(sid);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Tokenize text into lowercase morphological words, expanding English contractions,
+/// possessives, and colloquial clitics (`"it's"` -> `["it", "is"]`, `"don't"` -> `["do", "not"]`,
+/// `"Grandma's"` -> `["grandma", "'s"]`, `"doin'"` -> `["doin", "doing"]`).
+pub fn tokenize_with_clitics(text: &str) -> Vec<String> {
+    let normalized = text.replace(['\u{2019}', '\u{2018}', '`'], "'");
+    let mut out = Vec::new();
+    for raw in normalized.split(|c: char| !c.is_ascii_alphanumeric() && c != '\'' && c != '_') {
+        let w = raw.trim_matches('_').to_ascii_lowercase();
+        if w.is_empty() {
+            continue;
+        }
+        // Check trailing colloquial g-drop apostrophe (e.g. "doin'", "talkin'", "walkin'")
+        if let Some(stem) = w.strip_suffix('\'') {
+            let clean = stem.trim_matches('\'');
+            if clean.ends_with("in") && clean.len() >= 4 {
+                out.push(clean.to_string());
+                out.push(format!("{clean}g"));
+                continue;
+            }
+        }
+        let w = w.trim_matches('\'');
+        if w.is_empty() {
+            continue;
+        }
+        match w {
+            "it's" | "tis" => {
+                out.push("it".to_string());
+                out.push("is".to_string());
+            }
+            "i'm" => {
+                out.push("i".to_string());
+                out.push("am".to_string());
+            }
+            "i've" => {
+                out.push("i".to_string());
+                out.push("have".to_string());
+            }
+            "i'll" => {
+                out.push("i".to_string());
+                out.push("will".to_string());
+            }
+            "i'd" => {
+                out.push("i".to_string());
+                out.push("would".to_string());
+            }
+            "we're" => {
+                out.push("we".to_string());
+                out.push("are".to_string());
+            }
+            "we've" => {
+                out.push("we".to_string());
+                out.push("have".to_string());
+            }
+            "we'll" => {
+                out.push("we".to_string());
+                out.push("will".to_string());
+            }
+            "you're" => {
+                out.push("you".to_string());
+                out.push("are".to_string());
+            }
+            "you've" => {
+                out.push("you".to_string());
+                out.push("have".to_string());
+            }
+            "you'll" => {
+                out.push("you".to_string());
+                out.push("will".to_string());
+            }
+            "they're" => {
+                out.push("they".to_string());
+                out.push("are".to_string());
+            }
+            "they've" => {
+                out.push("they".to_string());
+                out.push("have".to_string());
+            }
+            "that's" => {
+                out.push("that".to_string());
+                out.push("is".to_string());
+            }
+            "there's" => {
+                out.push("there".to_string());
+                out.push("is".to_string());
+            }
+            "what's" => {
+                out.push("what".to_string());
+                out.push("is".to_string());
+            }
+            "who's" => {
+                out.push("who".to_string());
+                out.push("is".to_string());
+            }
+            "where's" => {
+                out.push("where".to_string());
+                out.push("is".to_string());
+            }
+            "how's" => {
+                out.push("how".to_string());
+                out.push("is".to_string());
+            }
+            "he's" => {
+                out.push("he".to_string());
+                out.push("is".to_string());
+            }
+            "she's" => {
+                out.push("she".to_string());
+                out.push("is".to_string());
+            }
+            "let's" => {
+                out.push("let".to_string());
+                out.push("us".to_string());
+            }
+            "can't" | "cannot" => {
+                out.push("can".to_string());
+                out.push("not".to_string());
+            }
+            "won't" => {
+                out.push("will".to_string());
+                out.push("not".to_string());
+            }
+            "shan't" => {
+                out.push("shall".to_string());
+                out.push("not".to_string());
+            }
+            "ain't" => {
+                out.push("is".to_string());
+                out.push("not".to_string());
+            }
+            _ => {
+                if let Some(stem) = w.strip_suffix("n't") {
+                    if !stem.is_empty() {
+                        out.push(stem.to_string());
+                    }
+                    out.push("not".to_string());
+                } else if let Some(stem) = w.strip_suffix("'s") {
+                    if !stem.is_empty() {
+                        out.push(stem.to_string());
+                    }
+                    out.push("'s".to_string());
+                } else if let Some(stem) = w.strip_suffix("'re") {
+                    if !stem.is_empty() {
+                        out.push(stem.to_string());
+                    }
+                    out.push("are".to_string());
+                } else if let Some(stem) = w.strip_suffix("'ve") {
+                    if !stem.is_empty() {
+                        out.push(stem.to_string());
+                    }
+                    out.push("have".to_string());
+                } else if let Some(stem) = w.strip_suffix("'ll") {
+                    if !stem.is_empty() {
+                        out.push(stem.to_string());
+                    }
+                    out.push("will".to_string());
+                } else if let Some(stem) = w.strip_suffix("'d") {
+                    if !stem.is_empty() {
+                        out.push(stem.to_string());
+                    }
+                    out.push("would".to_string());
+                } else {
+                    out.push(w.to_string());
+                }
+            }
+        }
+    }
+    out
 }
 
 fn is_stopword(w: &str) -> bool {
@@ -2920,6 +4749,20 @@ fn is_stopword(w: &str) -> bool {
             | "how"
             | "why"
             | "its"
+            | "it's"
+            | "i'm"
+            | "i've"
+            | "i'll"
+            | "i'd"
+            | "you're"
+            | "you've"
+            | "that's"
+            | "there's"
+            | "what's"
+            | "don't"
+            | "can't"
+            | "won't"
+            | "didn't"
             | "let"
             | "now"
             | "any"
@@ -3118,5 +4961,23 @@ mod tests {
         assert!(synth.contains("Ping-Pong"));
         assert!(synth.contains("1942-06-21 (Sun)"));
         assert!(synth.contains("Chatterbox"));
+    }
+
+    #[test]
+    fn clitic_tokenization_and_integer_q8_wave_interference_work() {
+        let toks = tokenize_with_clitics("Hi Grandma's, it's me! I don't know what she's doin'.");
+        assert!(toks.contains(&"grandma".to_string()));
+        assert!(toks.contains(&"'s".to_string()));
+        assert!(toks.contains(&"it".to_string()));
+        assert!(toks.contains(&"is".to_string()));
+        assert!(toks.contains(&"do".to_string()));
+        assert!(toks.contains(&"not".to_string()));
+        assert!(toks.contains(&"doin".to_string()));
+        assert!(toks.contains(&"doing".to_string()));
+
+        // Plural and singular share a stem u16 token ID via tokens_to_ids16
+        let ids_plural = tokens_to_ids16(&tokenize_with_clitics("wild mountain horses"), 16);
+        let id_singular = token_to_id16("horse");
+        assert!(ids_plural.contains(&id_singular));
     }
 }

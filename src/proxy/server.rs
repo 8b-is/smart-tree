@@ -41,14 +41,27 @@ pub async fn start_proxy_server(port: u16) -> Result<()> {
     let app = Router::new()
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/models", get(list_models))
+        .route(
+            "/v1/helper",
+            post(helper_post_endpoint).get(helper_get_endpoint),
+        )
+        .route("/v1/dealers-choice", get(dealers_choice_endpoint))
+        .route("/v1/capsela/asm-exec", post(capsela_asm_exec_endpoint))
         .route("/admin/status", get(admin_status))
         .layer(middleware::from_fn(bearer_auth))
         .with_state(proxy);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     println!("Smart Tree LLM Proxy on http://{}", addr);
-    println!("  POST /v1/chat/completions");
+    println!(
+        "  POST /v1/chat/completions  (supports model: 'dealers_choice' / 'g8t/dealers-choice')"
+    );
     println!("  GET  /v1/models");
+    println!("  POST /v1/helper            (Mechanic's Helper · Aye & The Cheet · $5/mo i1.is)");
+    println!(
+        "  GET  /v1/dealers-choice    ($10/mo Unlimited g8t Dealer's Choice Model Leaderboard)"
+    );
+    println!("  POST /v1/capsela/asm-exec  (Complete Freestanding #![no_std] Capsela ASM Studio)");
     println!("  GET  /admin/status");
     if std::env::var("ST_PROXY_API_KEY").is_ok() {
         println!("  Auth: bearer (ST_PROXY_API_KEY required)");
@@ -94,13 +107,39 @@ async fn chat_completions(
     State(proxy): State<SharedProxy>,
     Json(req): Json<OpenAiRequest>,
 ) -> Response {
-    let (provider_name, model_name) = match req.model.split_once('/') {
-        Some((p, m)) => (p.to_string(), m.to_string()),
-        None => ("openai".to_string(), req.model.clone()),
+    let last_user_text = req
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.content.as_str())
+        .unwrap_or("");
+
+    let is_dealers_choice = matches!(
+        req.model.to_ascii_lowercase().as_str(),
+        "dealers_choice"
+            | "dealers-choice"
+            | "g8t/dealers-choice"
+            | "g8t/dealers_choice"
+            | "dealer"
+            | "auto"
+    );
+
+    let (provider_name, model_name) = if is_dealers_choice {
+        let lock = proxy.read().await;
+        let available = lock.inner.list_providers();
+        drop(lock);
+        let route = crate::g8t_integration::route_dealers_choice(last_user_text, &available);
+        (route.selected_provider, route.selected_model)
+    } else {
+        match req.model.split_once('/') {
+            Some((p, m)) => (p.to_string(), m.to_string()),
+            None => ("openai".to_string(), req.model.clone()),
+        }
     };
 
     let internal_req = LlmRequest {
-        model: model_name,
+        model: model_name.clone(),
         messages: req.messages.into_iter().map(Into::into).collect(),
         temperature: req.temperature,
         max_tokens: req.max_tokens,
@@ -120,7 +159,11 @@ async fn chat_completions(
                 id: format!("st-{}", uuid::Uuid::new_v4()),
                 object: "chat.completion".to_string(),
                 created: chrono::Utc::now().timestamp() as u64,
-                model: req.model,
+                model: if is_dealers_choice {
+                    format!("dealers_choice->{}/{}", provider_name, model_name)
+                } else {
+                    req.model
+                },
                 choices: vec![OpenAiChoice {
                     index: 0,
                     message: OpenAiResponseMessage {
@@ -214,4 +257,75 @@ async fn admin_status(State(proxy): State<SharedProxy>) -> Response {
         version: env!("CARGO_PKG_VERSION"),
     })
     .into_response()
+}
+
+/// POST /v1/helper — Mechanic's Helper endpoint for LLM proxy clients & g8t.is/i1.is cost-savers.
+async fn helper_post_endpoint(Json(payload): Json<serde_json::Value>) -> Response {
+    match crate::mcp::mechanic_helper::handle_helper_with_cwd(Some(payload), None).await {
+        Ok(val) => (StatusCode::OK, Json(val)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "ok": false, "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /v1/helper — Returns current Mechanic's Helper session, Documents/Desktop/Downloads projects, and tool tray.
+async fn helper_get_endpoint() -> Response {
+    helper_post_endpoint(Json(serde_json::json!({}))).await
+}
+
+/// GET /v1/dealers-choice — Returns the $10/mo Unlimited g8t Dealer's Choice Model Leaderboard across all 8 domains.
+async fn dealers_choice_endpoint(State(proxy): State<SharedProxy>) -> Response {
+    let lock = proxy.read().await;
+    let available = lock.inner.list_providers();
+    drop(lock);
+    let report = crate::g8t_integration::route_dealers_choice(
+        "complete capsela g8t asm executable programs",
+        &available,
+    );
+    (StatusCode::OK, Json(report)).into_response()
+}
+
+/// POST /v1/capsela/asm-exec — Compiles, disassembles, and executes a complete freestanding `#![no_std] #![no_main]` Capsela ASM program.
+async fn capsela_asm_exec_endpoint(Json(payload): Json<serde_json::Value>) -> Response {
+    let query = payload
+        .get("query")
+        .or_else(|| payload.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("capsela-zeno-sun-arcade");
+    let custom_source = payload.get("source_code").and_then(|v| v.as_str());
+    let capsules_list: Vec<String> = payload
+        .get("capsules")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let seed = payload
+        .get("seed")
+        .and_then(|v| v.as_str())
+        .unwrap_or("432528");
+    let partner = payload
+        .get("partner")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Hue + Gemini (0+1)");
+
+    match crate::g8t_integration::build_and_run_capsela_asm_executable(
+        query,
+        &capsules_list,
+        custom_source,
+        seed,
+        partner,
+    ) {
+        Ok(receipt) => (StatusCode::OK, Json(receipt)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "ok": false, "error": e.to_string() })),
+        )
+            .into_response(),
+    }
 }

@@ -957,7 +957,7 @@ pub struct MemnetCommand {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct G8tCommand {
-    /// Action: leaderboard (or scoreboard), targets (or bounty/arcade), golf (or routines/routinesd), best (or suggest), yolo, submit (or publish), optimize
+    /// Action: leaderboard (or scoreboard), targets (or bounty/arcade), golf (or routines/routinesd), best (or suggest), yolo, submit (or publish), optimize, asm-exec (or capsela-exe), dealers-choice (or dealer)
     #[arg(default_value = "leaderboard")]
     pub action: String,
     /// Query string for best/yolo, routine filter for golf (default: "all"), or file/source_code for submit

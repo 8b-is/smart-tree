@@ -584,8 +584,20 @@ pub struct SafetyConfig {
     /// Log all LLM requests for transparency
     pub transparency_logging: bool,
     /// Model safety scores (model_id -> score 0-10)
-    //[serde(default)]
+    #[serde(default)]
     pub model_scores: HashMap<String, u8>,
+    /// Automatically remember discovered projects into MEM|8 (`~/.st/memories.m8`)
+    /// unless Aye is told not to look in a folder.
+    #[serde(default = "default_true")]
+    pub auto_remember_projects: bool,
+    /// Folders where Aye is told not to look (never auto-remembered or indexed into projects)
+    #[serde(
+        default,
+        alias = "ignored_paths",
+        alias = "no_look_paths",
+        alias = "do_not_look"
+    )]
+    pub do_not_look_paths: Vec<String>,
 }
 
 impl Default for SafetyConfig {
@@ -631,11 +643,45 @@ impl Default for SafetyConfig {
             custodian_enabled: true,
             transparency_logging: true,
             model_scores: scores,
+            auto_remember_projects: true,
+            do_not_look_paths: Vec::new(),
         }
     }
 }
 
 impl StConfig {
+    /// Tell Aye not to look in a folder (persisted in `~/.st/config.toml`).
+    pub fn add_do_not_look_path(path: &std::path::Path) -> Result<PathBuf> {
+        let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let path_str = canon.to_string_lossy().to_string();
+        let mut cfg = Self::load().unwrap_or_default();
+        if !cfg
+            .safety
+            .do_not_look_paths
+            .iter()
+            .any(|p| p.trim_end_matches('/') == path_str.trim_end_matches('/'))
+        {
+            cfg.safety.do_not_look_paths.push(path_str);
+            cfg.save()?;
+        }
+        Ok(canon)
+    }
+
+    /// Allow Aye to look in a previously excluded folder again.
+    pub fn remove_do_not_look_path(path: &std::path::Path) -> Result<PathBuf> {
+        let canon = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let path_str = canon.to_string_lossy().to_string();
+        let norm = path_str.trim_end_matches('/');
+        let mut cfg = Self::load().unwrap_or_default();
+        let prev_len = cfg.safety.do_not_look_paths.len();
+        cfg.safety
+            .do_not_look_paths
+            .retain(|p| p.trim_end_matches('/') != norm);
+        if cfg.safety.do_not_look_paths.len() != prev_len {
+            cfg.save()?;
+        }
+        Ok(canon)
+    }
     /// Get config file path
     pub fn config_path() -> Result<PathBuf> {
         if let Some(path) = std::env::var_os("ST_CONFIG_PATH") {
