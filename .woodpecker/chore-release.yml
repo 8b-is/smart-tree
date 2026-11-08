@@ -1,0 +1,29 @@
+when:
+  - event: [push, pull_request, manual, cron]
+    branch: [main]
+  - event: tag
+    ref: refs/tags/v*
+
+steps:
+  chore-polish:
+    image: rust:latest
+    environment:
+      CI: "1"
+      SMART_TREE_NONINTERACTIVE: "1"
+    commands:
+      - apt-get update && apt-get install -y libssl-dev pkg-config libdbus-1-dev libasound2-dev libudev-dev libsqlite3-dev clang
+      - rustup component add rustfmt clippy
+      - ./scripts/codeberg_ci_agent.sh --chore-polish
+
+  release-publish:
+    image: rust:latest
+    when:
+      event: tag
+      ref: refs/tags/v*
+    environment:
+      CI: "1"
+      SMART_TREE_NONINTERACTIVE: "1"
+    commands:
+      - apt-get update && apt-get install -y libssl-dev pkg-config libdbus-1-dev libasound2-dev libudev-dev libsqlite3-dev clang
+      - rustup component add rustfmt clippy
+      - ./scripts/codeberg_ci_agent.sh --release

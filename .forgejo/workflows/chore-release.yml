@@ -1,0 +1,46 @@
+name: Codeberg Chore-Polish & Release Agent
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+env:
+  CI: "1"
+  SMART_TREE_NONINTERACTIVE: "1"
+
+jobs:
+  chore-polish:
+    name: Chore-Polish (fmt, clippy, non-interactive tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config libdbus-1-dev libasound2-dev libudev-dev libsqlite3-dev clang
+      - name: Install Rust toolchain
+        run: |
+          rustup update stable
+          rustup component add rustfmt clippy
+      - name: Run Codeberg CI Chore-Polish Agent
+        run: ./scripts/codeberg_ci_agent.sh --chore-polish
+
+  release:
+    name: Build & Publish Release
+    needs: chore-polish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config libdbus-1-dev libasound2-dev libudev-dev libsqlite3-dev clang
+      - name: Run Release Agent
+        run: ./scripts/codeberg_ci_agent.sh --release
