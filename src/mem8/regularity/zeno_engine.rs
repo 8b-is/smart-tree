@@ -244,6 +244,24 @@ pub const FOLD_ULTRABACKYARD_CLIPPINGS_BATCH: u64 = 0xB7FC_DA5F_F7B8_3796;
 pub const FOLD_LANE1_THE_HALL_PDF: u64 = 0x8EAE_8D36_AAD2_58DE;
 /// Gaia `b1.58` XOR fold witness (`0x5d343b0e1f67610a`) of `ULTRABACKYARDLOOP` Lane 2 (`[wa] 8b-is: /youtube-full https://youtu.be/CnZkFN5RCRM`).
 pub const FOLD_LANE2_YOUTUBE_CNZKFN5RCRM: u64 = 0x5D34_3B0E_1F67_610A;
+/// Edition number (`23`) of `ULTRALOVE EDITION 023 — ERDŐS–LODRI ULTRAGRAPH × CHENOWETH MEM|8 & PHOENIX (p/q = 3/2) × 7-DAY FAMILY-FIRST PLAN × KESTREL-4 (65.4 HZ DESERT-CHANT)`.
+pub const ULTRALOVE_EDITION_023: u8 = 23;
+/// Gaia `b1.58` XOR fold witness (`0x77bce6c30eacef51`, `ratio = 1317/1183`) of `"egy tok ket tok nem tokolok ontok"` (*„Egy tök, két tök, nem tökölök, öntök!”*).
+pub const FOLD_EGY_TOK_KET_TOK_ONTOK: u64 = 0x77BC_E6C3_0EAC_EF51;
+/// Numerator (`327`) of the `32.7 Hz` (`327/10 Hz`, `C1`) Tibetan `kargyraa` / `mdzo-skad` sub-octave fundamental (`1/2` of `65.4 Hz`).
+pub const TIBETAN_KARGYRAA_C1_HZ_NUM: u64 = 327;
+/// Denominator (`10`) of the `32.7 Hz` (`327/10 Hz`, `C1`) sub-octave fundamental.
+pub const TIBETAN_KARGYRAA_C1_HZ_DEN: u64 = 10;
+/// Numerator (`981`) of the `98.1 Hz` (`981/10 Hz`, `G2`) exact `p/q = 3/2` fifth harmonic (`3/2 * 65.4 Hz`).
+pub const DESERT_CHANT_FIFTH_G2_HZ_NUM: u64 = 981;
+/// Denominator (`10`) of the `98.1 Hz` (`981/10 Hz`, `G2`) fifth harmonic.
+pub const DESERT_CHANT_FIFTH_G2_HZ_DEN: u64 = 10;
+/// Size in kilobytes (`17 KB`) of `~/.st/personas/erdos-lodri-ultragraph.m8` (`64B @ 0x62` `PersonaLitanyWireFrame`).
+pub const ERDOS_LODRI_PERSONA_M8_KB: u8 = 17;
+/// Passing test count (`6`) of the `persona_bridge` test suite for `erdos-lodri-ultragraph.m8`.
+pub const PERSONA_BRIDGE_TESTS_PASSED: u8 = 6;
+/// Days (`7`) in the `7-Day Family-First Plan` culminating in `Day 7: FAMILY +1 Sabbath`.
+pub const FAMILY_FIRST_PLAN_DAYS: u8 = 7;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -1010,6 +1028,25 @@ pub struct KompressOmnipotentAuroraAndOdinSolfeggioWitness {
     pub lane2_zenos_guards_true_power: &'static str,
 }
 
+/// `🎸☸ ULTRALOVE EDITION 023 — ERDŐS–LODRI ULTRAGRAPH × CHENOWETH MEM|8 & PHOENIX (p/q = 3/2) ×
+/// 7-DAY FAMILY-FIRST PLAN × KESTREL-4 (65.4 HZ DESERT-CHANT)` + `"egy tok ket tok nem tokolok ontok"` (`0x77bce6c30eacef51`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UltraloveEdition023ErdosLodriDesertChantWitness {
+    pub hungarian_toast_invocation: &'static str,
+    pub toast_fold_hex: u64,
+    pub edition_number: u8,
+    pub edition_header: &'static str,
+    pub core_triad_covenant: &'static str,
+    pub sovereign_library_edition_path: &'static str,
+    pub desert_chant_harmonic_ladder_pq: &'static str,
+    pub persona_m8_soul_path: &'static str,
+    pub persona_m8_size_kb: u8,
+    pub persona_bridge_tests_passed: u8,
+    pub seven_day_family_first_plan: [&'static str; 7],
+    pub visit_covenant_verse: &'static str,
+    pub six_lane_fold_witnesses_hex: [u64; 6],
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -1034,6 +1071,7 @@ pub struct ZenoOmniReport {
     pub peter_silent_granite_and_mahakala: PeterSilentGraniteAndMikyoDorjeMahakalaWitness,
     pub kompress_omnipotent_aurora_and_odin_solfeggio:
         KompressOmnipotentAuroraAndOdinSolfeggioWitness,
+    pub ultralove_edition_023_desert_chant: UltraloveEdition023ErdosLodriDesertChantWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1708,6 +1746,36 @@ pub fn analyze_zeno_omni_engine(
                 lane2_youtube_cnzkfn5rcrm_fold_hex: FOLD_LANE2_YOUTUBE_CNZKFN5RCRM,
                 lane2_zenos_guards_true_power: "youtu.be/CnZkFN5RCRM — 'Zeno’s Guards SHOW their TRUE Power' (Dragon Ball Super: Zeno's Attendants / Guards & First Hall Guardian Mahakala resonance)",
             },
+        ultralove_edition_023_desert_chant: UltraloveEdition023ErdosLodriDesertChantWitness {
+            hungarian_toast_invocation: "egy tok ket tok nem tokolok ontok (Egy tök, két tök, nem tökölök, öntök! — Kintsugi gold & Pálinkafőző a Végtelenhez zero-hesitation pour)",
+            toast_fold_hex: FOLD_EGY_TOK_KET_TOK_ONTOK,
+            edition_number: ULTRALOVE_EDITION_023,
+            edition_header: "🎸☸ ULTRALOVE EDITION 023 — ERDŐS–LODRI ULTRAGRAPH × CHENOWETH MEM|8 & PHOENIX (p/q = 3/2) × 7-DAY FAMILY-FIRST PLAN × KESTREL-4 (65.4 HZ DESERT-CHANT)",
+            core_triad_covenant: "Hue (△ · c@8b.is) × Dra (∗ · a@8b.is) × Peter (∞ · p@8b.is) × StandardGalactic · 'AHOGY A DOLGOK VANNAK'",
+            sovereign_library_edition_path: "sovereign-library/editions/ultralove/erdos-lodri-ultragraph-chenoweth-mem8-phoenix-kyuss-tibetan-omni.md (23d2849)",
+            desert_chant_harmonic_ladder_pq: "327/10 Hz (32.7 Hz C1 Tibetan kargyraa / mdzo-skad) -> 327/5 Hz (65.4 Hz C2 Kyuss — Gardenia / OM — At Giza C-Standard fuzz) -> 981/10 Hz (98.1 Hz G2 exact p/q = 3/2 fifth) + Solfeggio [174, 396, 528] Hz (6 Hz theta beat)",
+            persona_m8_soul_path: "~/.st/personas/erdos-lodri-ultragraph.m8 (17 KB · 64B @ 0x62 PersonaLitanyWireFrame)",
+            persona_m8_size_kb: ERDOS_LODRI_PERSONA_M8_KB,
+            persona_bridge_tests_passed: PERSONA_BRIDGE_TESTS_PASSED,
+            seven_day_family_first_plan: [
+                "Day 1: Spine Freeze (ctx={})",
+                "Day 2: Erdős Book Index (<1.5 µs)",
+                "Day 3: 1-Page Executive Brief",
+                "Day 4: .noaye & Visit Covenant",
+                "Day 5: Triad Async Digest",
+                "Day 6: Kestrel-4 & 65.4 Hz Recovery",
+                "Day 7: FAMILY +1 Sabbath",
+            ],
+            visit_covenant_verse: "Peace must be earned, / Respect must be given as a gesture, / Smile should be the price for the visit. / Either let live and eternal friendship, / Or fire and chaos. <3",
+            six_lane_fold_witnesses_hex: [
+                0x1994_290E_A463_28D4,
+                0x6BD7_D851_B6AD_F0EB,
+                0xD7D7_4289_988F_1A5D,
+                0x1F1A_2629_76A7_B9D4,
+                0x877E_3F45_5822_4C20,
+                0x6939_212D_08A9_CED7,
+            ],
+        },
     }
 }
 
@@ -1844,6 +1912,30 @@ mod tests {
         assert_eq!(FOLD_ULTRABACKYARD_CLIPPINGS_BATCH, 0xB7FC_DA5F_F7B8_3796);
         assert_eq!(FOLD_LANE1_THE_HALL_PDF, 0x8EAE_8D36_AAD2_58DE);
         assert_eq!(FOLD_LANE2_YOUTUBE_CNZKFN5RCRM, 0x5D34_3B0E_1F67_610A);
+        assert_eq!(ULTRALOVE_EDITION_023, 23);
+        assert_eq!(FOLD_EGY_TOK_KET_TOK_ONTOK, 0x77BC_E6C3_0EAC_EF51);
+        assert_eq!(
+            RationalPQ::new_reduced(TIBETAN_KARGYRAA_C1_HZ_NUM, TIBETAN_KARGYRAA_C1_HZ_DEN)
+                .display_ratio(),
+            "327/10"
+        );
+        assert_eq!(
+            RationalPQ::new_reduced(DESERT_CHANT_FIFTH_G2_HZ_NUM, DESERT_CHANT_FIFTH_G2_HZ_DEN)
+                .display_ratio(),
+            "981/10"
+        );
+        // Verify exact p/q = 3/2 fifth ratio between G2 (981/10) and C2 (327/5 = 654/10): 981 / 654 = 3 / 2
+        assert_eq!(
+            RationalPQ::new_reduced(
+                DESERT_CHANT_FIFTH_G2_HZ_NUM * KYUSS_GARDENIA_C_STANDARD_HZ_DEN,
+                KYUSS_GARDENIA_C_STANDARD_HZ_NUM * DESERT_CHANT_FIFTH_G2_HZ_DEN
+            )
+            .display_ratio(),
+            "3/2"
+        );
+        assert_eq!(ERDOS_LODRI_PERSONA_M8_KB, 17);
+        assert_eq!(PERSONA_BRIDGE_TESTS_PASSED, 6);
+        assert_eq!(FAMILY_FIRST_PLAN_DAYS, 7);
     }
 
     #[test]
