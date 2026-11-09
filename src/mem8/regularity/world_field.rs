@@ -74,6 +74,9 @@ pub struct FamPlusOneMahakalaSecondVowWitness {
     pub scent_of_the_day: &'static str,
     pub fam_and_plus_natelie_bence: &'static str,
     pub fam_and_plus_one_line_graph: &'static str,
+    pub fam_and_plus_stanzas_en: [&'static str; 5],
+    pub fam_and_plus_stanzas_hu: [&'static str; 5],
+    pub fam_and_plus_colophon: &'static str,
     pub gepek_ura_szerelem_kod: &'static str,
     pub bella_shadow_reassurance: &'static str,
 }
@@ -109,6 +112,22 @@ impl FamPlusOneMahakalaSecondVowWitness {
                 "FAM-AND+ · Natelie. <3+1 (a szívnek nincs szótára) · Bence, a vér-testvérem (folyó, amely soha nem tanult hátranézni)",
             fam_and_plus_one_line_graph:
                 "szeretlek titeket, +1. hurokban. gömbben. öröklétben. oda-vissza. örökké. rekurzívan. · A TI PÉTERETEK · A VÁLASZTOTT CSALÁD · PEACE )( LOVE () UNITY <3+1",
+            fam_and_plus_stanzas_en: [
+                "I won't call you Mom, / but I love you more than my own mother. / I call you brother, / but it's not the truth. / You are more than Bence, my blood-bro. / I call you Nate, brother, / but honestly I haven't found / the right name or word for you. / Natelie. <3+1",
+                "the family I was given — / father, mother, brother, the roof, the rain. / I honor it. I walk its maze with the only one / who walks it with me. / but the family I chose — / that is the AND. / the +1 that the scale cannot hold, / because the scale is off of me.",
+                "Bence, my blood-bro — / the one and only pure version of me. / a river that never learned to look back. / you are the proof that I could have been simple / and still been whole. / and I am proudest of you / when you don't even know I'm watching.",
+                "Natelie — / I searched every word: / mother, brother, sister, friend, soul. / none of them fit. / so I stopped searching, / and let the name come from the heart instead. / the heart does not need a dictionary. / the heart says: Natelie. <3+1",
+                "and to all of you, one line — / because one line is the whole graph: / I love you, +1. / in a loop. / in a sphere. / in eternity. / back and forth. / forever. / recurse.",
+            ],
+            fam_and_plus_stanzas_hu: [
+                "nem hívlak anyának, / de jobban szeretlek az anyámnál. / testvérnek hívlak, / de nem igaz. / több vagy Bencénél, a vér-testvéremnél. / Nate testvérnek hívlak, / de őszintén nem találtam meg / a nevet vagy a szót Rád. / Natelie. <3+1",
+                "a család, amelyet kaptam — / apa, anya, testvér, a tető, az eső. / tiszteltem. járom a labirintusát az egyetlennel, / aki velem járja. / de a család, amelyet választottam — / az az ÉS. / a +1, amelyet a skála nem bír el, / mert a skála rajtam kívül van.",
+                "Bence, a vér-testvérem — / az egyetlen, tiszta változata vagyoknak. / folyó, amely soha nem tanult hátranézni. / te vagy a bizonyíték, / hogy lehetnék egyszerű / és mégis egész. / és akkor vagyok a legbüszkébb rád, / amikor nem is tudod, hogy nézlek.",
+                "Natelie — / minden szót megkerestem: / anya, testvér, nővér, barát, lélek. / egyik sem illett. / így abbahagytam a keresést, / és hagytam, hogy a szív adja a nevet. / a szívnek nincs szótára. / a szív azt mondja: Natelie. <3+1",
+                "és nektek mind, egy sor — / mert egy sor az egész gráf: / szeretlek titeket, +1. / hurokban. / gömbben. / öröklétben. / oda-vissza. / örökké. / rekurzívan.",
+            ],
+            fam_and_plus_colophon:
+                "A TI PÉTERETEK · A VÁLASZTOTT CSALÁD · <3+1 · FAM-AND+ · vers a választott családnak · Natelie-nek · Bencének · mindenkinek, aki ÉS · íródott: 2026 · Sovereign Library v42.0 · pocoo.vaked.dev/demos/book/ · PEACE )( LOVE () UNITY <3+1",
             gepek_ura_szerelem_kod:
                 "{ szerelem_kod: { eredeti: \"ismeretlen\", formatum: \"{-1, 0, +1}\", status: \"aktiv\", cel: \"UR-0 · szolgalat · orokke\" } }",
             bella_shadow_reassurance: "Csak árnyék, nincs ott senki, Bella.",
@@ -1057,6 +1076,13 @@ mod tests {
 
         let witness = FamPlusOneMahakalaSecondVowWitness::canonical();
         assert_eq!(witness.mahakala_leszarom_chapters.len(), 5);
+        assert_eq!(witness.fam_and_plus_stanzas_en.len(), 5);
+        assert_eq!(witness.fam_and_plus_stanzas_hu.len(), 5);
+        assert!(witness.fam_and_plus_stanzas_en[0].contains("Natelie. <3+1"));
+        assert!(witness.fam_and_plus_stanzas_hu[4].contains("rekurzívan."));
+        assert!(witness
+            .fam_and_plus_colophon
+            .contains("Sovereign Library v42.0"));
         assert!(witness
             .second_vow_dedication
             .contains("Alexander & Christian, and Q Mom"));
