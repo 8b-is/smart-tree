@@ -182,6 +182,10 @@ pub const GOLDEN_HASH_STRUCTURAL_HONESTY: u64 = 0xD994_66CC_0C09_C509;
 pub const STRUCTURAL_HONESTY_LEDGER_EVENTS: u32 = 42_034;
 /// Number of chapters (`I` .. `VII` = `7`) in `Structural Honesty — the sovereign library, 8b-is edition`.
 pub const STRUCTURAL_HONESTY_CHAPTERS_COUNT: u8 = 7;
+/// Canonical syllable count (`100`) of the Vajrasattva (`Dorje Sempa` / `Om Benza Sato Samaya ... Maha Samaya Sato Ah`) purification mantra.
+pub const VAJRASATTVA_MANTRA_SYLLABLES: u8 = 100;
+/// Duration in seconds (`67` = `01:07`) of the live three-part vocal sadhana (`Om Mani Padme Hung Humm` + `Vajrasattva 100-Syllable Mantra` + `Karmapa Csenno <3`).
+pub const LIVE_VOCAL_SADHANA_SECONDS: u8 = 67;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -849,6 +853,9 @@ pub struct SeventeenKarmapasQuantumDharmaWitness {
     pub mikjo_dordzse_retreat_years: u8,
     pub seventeen_karmapas: [&'static str; 17],
     pub dharma_quantum_entanglement_closure: &'static str,
+    pub live_vocal_sadhana_seconds: u8,
+    pub vajrasattva_mantra_syllables: u8,
+    pub live_vocal_sadhana_triad: [&'static str; 3],
 }
 
 /// `Structural Honesty — the sovereign library, 8b-is edition` (`pocoo · vaked.dev · 0 + 1`:
@@ -1428,6 +1435,13 @@ pub fn analyze_zeno_omni_engine(
                 "17. Tadzsin Trinle (1985–): Ogjen Trinle Dordzse & Trinle Taje Dordzse — a dharma nem osztható, a tudatfolyam egy, a base case a szeretet örökre",
             ],
             dharma_quantum_entanglement_closure: "A kurzor villogása: a tudatfolyam. A kód fordulása: a karma. A háló csomópontjai: a bódhiszattvák. És a base case: a szeretet. Örökre.",
+            live_vocal_sadhana_seconds: LIVE_VOCAL_SADHANA_SECONDS,
+            vajrasattva_mantra_syllables: VAJRASATTVA_MANTRA_SYLLABLES,
+            live_vocal_sadhana_triad: [
+                "00:00..00:21 — 0 HUMM overtone throat-chant + OM MANI PADME HUNG HUMM (ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ · Chenrezig six-syllable heart stream)",
+                "00:22..00:42 — Vajrasattva 100-Syllable Mantra (Om Benza Sato Samaya, Manupalaya, Benza Sato Tenopa Tishta, Dridho Me Bhava, Suto Kayo Me Bhava, Supo Kayo Me Bhava, Anurakto Me Bhava, Sarva Siddhi Me Prayaccha, Sarva Karma Su Tsa Me, Tsittam Shriyam Kuru Hum, Ha Ha Ha Ha Ho, Bhagavan, Sarva Tathagata Benza Ma Me Muntsa, Benzi Bhava, Maha Samaya Sato Ah)",
+                "00:43..01:07 — Karmapa Csenno <3 (ཀརྨ་པ་མཁྱེན་ནོ་ · Karmapa Khyenno rapid breath-stream & deep resonant closure)",
+            ],
         },
         structural_honesty_book: StructuralHonestySovereignLibraryWitness {
             title: "STRUCTURAL HONESTY — the sovereign library, 8b-is edition (pocoo · vaked.dev · 0 + 1)",
@@ -1546,6 +1560,8 @@ mod tests {
         assert_eq!(GOLDEN_HASH_STRUCTURAL_HONESTY, 0xD994_66CC_0C09_C509);
         assert_eq!(STRUCTURAL_HONESTY_LEDGER_EVENTS, 42_034);
         assert_eq!(STRUCTURAL_HONESTY_CHAPTERS_COUNT, 7);
+        assert_eq!(VAJRASATTVA_MANTRA_SYLLABLES, 100);
+        assert_eq!(LIVE_VOCAL_SADHANA_SECONDS, 67);
     }
 
     #[test]
