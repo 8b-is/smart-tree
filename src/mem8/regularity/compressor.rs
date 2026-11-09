@@ -11,6 +11,45 @@ use super::types::*;
 use crate::felix_asm::{felix_add_assign_64_f32, felix_normalize64_f32};
 use rayon::prelude::*;
 
+/// Default target regularity threshold $\varepsilon = 0.10$.
+pub const DEFAULT_REGULARITY_EPSILON: f64 = 0.10;
+
+/// Default minimum relative $p$-density $d_{\min} = 0.25$ to emit a `RegularSuperEdge` in $R$.
+pub const DEFAULT_MIN_REDUCED_DENSITY: f64 = 0.25;
+
+/// Default hard cap on cluster count $K_{\max} = 128$.
+pub const DEFAULT_MAX_CLUSTERS: usize = 128;
+
+/// Default maximum energy-pumping refinement iterations (`16`).
+pub const DEFAULT_MAX_REFINEMENT_STEPS: usize = 16;
+
+/// Minimum cluster cardinality floor (`2.0`) before absorbing micro-fragments into $V_0$.
+pub const MIN_CLUSTER_CARDINALITY_FLOOR: f64 = 2.0;
+
+/// Number of `f32` lanes in a super-node semantic centroid (`64`).
+pub const CENTROID_EMBEDDING_LANES: usize = 64;
+
+/// Number of top internal-degree anchor symbols retained per super-node (`3`).
+pub const TOP_REPRESENTATIVE_SYMBOLS: usize = 3;
+
+/// Floor on ambient density $p$ to prevent division-by-zero (`1e-12`).
+pub const AMBIENT_DENSITY_FLOOR: f64 = 1e-12;
+
+/// Byte length of the deterministic `Mem8BookArchive` model digest (`32`).
+pub const DIGEST_BYTES: usize = 32;
+
+/// Number of 64-bit word slots in the 32-byte model digest (`4`).
+pub const DIGEST_WORD_SLOTS: usize = 4;
+
+/// SplitMix64 golden ratio increment (`0x9E37_79B9_7F4A_7C15`).
+pub const SPLITMIX64_GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
+
+/// SplitMix64 first avalanche multiplier (`0xBF58_476D_1CE4_E5B9`).
+pub const SPLITMIX64_MUL1: u64 = 0xBF58_476D_1CE4_E5B9;
+
+/// SplitMix64 second avalanche multiplier (`0x94D0_49BB_1331_11EB`).
+pub const SPLITMIX64_MUL2: u64 = 0x94D0_49BB_1331_11EB;
+
 /// Hyperparameters for MEM8 "Book Mode" Szemerédi Regularity Compression
 #[derive(Debug, Clone, Copy)]
 pub struct RegularityConfig {
@@ -27,10 +66,10 @@ pub struct RegularityConfig {
 impl Default for RegularityConfig {
     fn default() -> Self {
         Self {
-            epsilon: 0.10,
-            min_reduced_density: 0.25,
-            max_clusters: 128,
-            max_refinement_steps: 16,
+            epsilon: DEFAULT_REGULARITY_EPSILON,
+            min_reduced_density: DEFAULT_MIN_REDUCED_DENSITY,
+            max_clusters: DEFAULT_MAX_CLUSTERS,
+            max_refinement_steps: DEFAULT_MAX_REFINEMENT_STEPS,
         }
     }
 }
@@ -45,7 +84,7 @@ pub fn compress_symbol_graph_to_mem8(
     let n = graph.num_vertices;
     if n == 0 {
         return Mem8BookArchive {
-            model_digest: [0u8; 32],
+            model_digest: [0u8; DIGEST_BYTES],
             epsilon: cfg.epsilon as f32,
             compression_ratio: 1.0,
             final_energy: 0.0,
@@ -151,7 +190,7 @@ fn apply_partition_refinement(
 ) {
     let min_cluster_card = ((cfg.epsilon * (total_n as f64)) / (cfg.max_clusters as f64))
         .floor()
-        .max(2.0) as usize;
+        .max(MIN_CLUSTER_CARDINALITY_FLOOR) as usize;
 
     let mut next_clusters: Vec<Vec<SymbolId>> = Vec::with_capacity(cfg.max_clusters + 1);
     let mut outlier_v0 = std::mem::take(&mut partition.clusters[0]);
@@ -233,7 +272,7 @@ fn build_mem8_book_archive(
             continue;
         }
 
-        let mut centroid = [0.0_f32; 64];
+        let mut centroid = [0.0_f32; CENTROID_EMBEDDING_LANES];
         let mut internal_edges = 0usize;
         let mut deg_pairs: Vec<(SymbolId, u32)> = Vec::with_capacity(verts.len());
 
@@ -258,12 +297,16 @@ fn build_mem8_book_archive(
 
         // Pick top-3 internal-degree symbols as human/LLM anchor names
         deg_pairs.sort_unstable_by_key(|a| std::cmp::Reverse(a.1));
-        let representative_symbols: Vec<SymbolId> =
-            deg_pairs.iter().take(3).map(|&(s, _)| s).collect();
+        let representative_symbols: Vec<SymbolId> = deg_pairs
+            .iter()
+            .take(TOP_REPRESENTATIVE_SYMBOLS)
+            .map(|&(s, _)| s)
+            .collect();
 
         let area = (verts.len() * verts.len()) as f64;
-        let internal_p_density =
-            ((internal_edges as f64) / (area * graph.ambient_density_p.max(1e-12))) as f32;
+        let internal_p_density = ((internal_edges as f64)
+            / (area * graph.ambient_density_p.max(AMBIENT_DENSITY_FLOOR)))
+            as f32;
 
         super_nodes.push(Mem8SuperNode {
             cluster_id: cid as ClusterId,
@@ -355,14 +398,14 @@ fn build_mem8_book_archive(
     let compression_ratio = (original_primitives as f32) / (compressed_primitives.max(1) as f32);
 
     // Deterministic FNV-1a / SplitMix64 32-byte digest over the partition structure
-    let mut model_digest = [0u8; 32];
+    let mut model_digest = [0u8; DIGEST_BYTES];
     let mut state = (graph.num_vertices as u64)
-        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_mul(SPLITMIX64_GAMMA)
         .wrapping_add(graph.num_edges as u64);
-    for slot_idx in 0..4 {
+    for slot_idx in 0..DIGEST_WORD_SLOTS {
         state ^= (slot_idx as u64).wrapping_add(super_nodes.len() as u64);
-        state = (state ^ (state >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        state = (state ^ (state >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        state = (state ^ (state >> 30)).wrapping_mul(SPLITMIX64_MUL1);
+        state = (state ^ (state >> 27)).wrapping_mul(SPLITMIX64_MUL2);
         state ^= state >> 31;
         let off = slot_idx * 8;
         model_digest[off..off + 8].copy_from_slice(&state.to_le_bytes());

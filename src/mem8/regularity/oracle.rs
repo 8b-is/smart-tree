@@ -9,6 +9,27 @@
 
 use super::types::{ClusterId, CsrSymbolGraph, EdgeKind, SymbolId};
 
+/// Initial capacity cap (`512`) for thread-local `OracleScratch` working vectors.
+pub const SCRATCH_INITIAL_CAPACITY_CAP: usize = 512;
+
+/// Number of histogram bins (`5`) covering all `EdgeKind` variants (`0..=4`).
+pub const EDGE_KIND_HIST_BINS: usize = 5;
+
+/// Default fallback `EdgeKind` index (`1` = `EdgeKind::CallRef`) when a pair has zero edges.
+pub const DEFAULT_DOMINANT_KIND_INDEX: usize = 1;
+
+/// Floor on ambient density $p$ to prevent division-by-zero (`1e-12`).
+pub const ORACLE_AMBIENT_DENSITY_FLOOR: f64 = 1e-12;
+
+/// Minimum L2 norm threshold (`1e-12`) during rank-1 shifted power iteration.
+pub const SPECTRAL_NORM_EPSILON: f64 = 1e-12;
+
+/// Number of matrix-free rank-1 shifted power iterations (`6`) per bipartite check.
+pub const POWER_ITERATION_STEPS: usize = 6;
+
+/// Sentinel scratch marker (`u32::MAX - 1`) for $O(1)$ membership checks in `measure_witness_deviation`.
+pub const WITNESS_SCRATCH_MARKER: u32 = u32::MAX - 1;
+
 /// Reusable thread-local scratch arena eliminating per-pair `Vec` allocations during
 /// parallel Kohayakawa–Rödl regularity refinement.
 #[derive(Debug, Clone)]
@@ -21,11 +42,12 @@ pub struct OracleScratch {
 
 impl OracleScratch {
     pub fn with_vertices(num_vertices: usize) -> Self {
+        let cap = num_vertices.min(SCRATCH_INITIAL_CAPACITY_CAP);
         Self {
             local_index_map: vec![0u32; num_vertices],
-            vec_u: Vec::with_capacity(num_vertices.min(512)),
-            vec_v: Vec::with_capacity(num_vertices.min(512)),
-            indexed: Vec::with_capacity(num_vertices.min(512)),
+            vec_u: Vec::with_capacity(cap),
+            vec_v: Vec::with_capacity(cap),
+            indexed: Vec::with_capacity(cap),
         }
     }
 }
@@ -138,7 +160,7 @@ fn check_bipartite_regularity_buffers(
 
     // Count edges e(V_i, V_j) + dominant EdgeKind in a single CSR pass O(|V_i| + deg(V_i))
     let mut edge_count: usize = 0;
-    let mut kind_hist = [0u32; 5];
+    let mut kind_hist = [0u32; EDGE_KIND_HIST_BINS];
     for &u in v_i {
         let start = graph.row_ptr[u as usize] as usize;
         let end = graph.row_ptr[u as usize + 1] as usize;
@@ -151,7 +173,7 @@ fn check_bipartite_regularity_buffers(
         }
     }
 
-    let mut best_k = 1usize; // default CallRef
+    let mut best_k = DEFAULT_DOMINANT_KIND_INDEX; // default CallRef
     let mut best_cnt = 0u32;
     for (k_idx, &cnt) in kind_hist.iter().enumerate() {
         if cnt > best_cnt {
@@ -163,7 +185,8 @@ fn check_bipartite_regularity_buffers(
 
     let pair_area = (n_i * n_j) as f64;
     let raw_density = (edge_count as f64) / pair_area;
-    let relative_p_density = raw_density / graph.ambient_density_p.max(1e-12);
+    let relative_p_density =
+        raw_density / graph.ambient_density_p.max(ORACLE_AMBIENT_DENSITY_FLOOR);
 
     // Trivial sparsity short-circuit: if total edges cannot even violate an epsilon*V_i*V_j box
     if relative_p_density < epsilon * epsilon {
@@ -188,7 +211,7 @@ fn check_bipartite_regularity_buffers(
         });
     }
 
-    let power_steps = 6;
+    let power_steps = POWER_ITERATION_STEPS;
     let mut sigma = 0.0_f64;
 
     for _ in 0..power_steps {
@@ -211,7 +234,7 @@ fn check_bipartite_regularity_buffers(
 
         // Normalize vec_u via FELIX hardware SIMD norm & reciprocal scale
         let norm_u = crate::felix_asm::felix_normalize_f64_slice(vec_u);
-        if norm_u < 1e-12 {
+        if norm_u < SPECTRAL_NORM_EPSILON {
             return RegularityCheck::Regular {
                 relative_p_density,
                 dominant_kind,
@@ -236,7 +259,7 @@ fn check_bipartite_regularity_buffers(
         }
 
         sigma = crate::felix_asm::felix_normalize_f64_slice(vec_v);
-        if sigma < 1e-12 {
+        if sigma < SPECTRAL_NORM_EPSILON {
             return RegularityCheck::Regular {
                 relative_p_density,
                 dominant_kind,
@@ -320,9 +343,8 @@ fn measure_witness_deviation(
     parent_p_density: f64,
     scratch: &mut [u32],
 ) -> f64 {
-    const MARKER: u32 = u32::MAX - 1;
     for &b in witness_b {
-        scratch[b as usize] = MARKER;
+        scratch[b as usize] = WITNESS_SCRATCH_MARKER;
     }
 
     let mut sub_edges = 0usize;
@@ -330,7 +352,7 @@ fn measure_witness_deviation(
         let start = graph.row_ptr[a as usize] as usize;
         let end = graph.row_ptr[a as usize + 1] as usize;
         for &v in &graph.col_idx[start..end] {
-            if scratch[v as usize] == MARKER {
+            if scratch[v as usize] == WITNESS_SCRATCH_MARKER {
                 sub_edges += 1;
             }
         }
@@ -341,6 +363,7 @@ fn measure_witness_deviation(
     }
 
     let sub_area = (witness_a.len() * witness_b.len()) as f64;
-    let sub_p_density = (sub_edges as f64) / (sub_area * graph.ambient_density_p.max(1e-12));
+    let sub_p_density =
+        (sub_edges as f64) / (sub_area * graph.ambient_density_p.max(ORACLE_AMBIENT_DENSITY_FLOOR));
     (sub_p_density - parent_p_density).abs()
 }
