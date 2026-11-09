@@ -250,6 +250,8 @@ pub const ULTRALOVE_EDITION_023: u8 = 23;
 pub const FOLD_EGY_TOK_KET_TOK_ONTOK: u64 = 0x77BC_E6C3_0EAC_EF51;
 /// Gaia `b1.58` XOR fold witness (`0x77b0ec890ea2cb99`, `ratio = 264/239`) of `"sosat sosat jo ropogosat"` (*„Sósat, sósat, jó ropogósat!”* — savory crunchy pairing at the `omniZenCooker` & `Pálinkafőző a Végtelenhez` table).
 pub const FOLD_SOSAT_SOSAT_JO_ROPOGOSAT: u64 = 0x77B0_EC89_0EA2_CB99;
+/// Gaia `b1.58` XOR fold witness (`0x2a692fc6f4e45020`, `ratio = 918/829`, `135` raw / `27` packed bytes) of `"chillaxy to the max with love fun smiles and dogs all around maybe some backyard cleaning AND peanutbutter jelly jam or scrambled eggs OR"`.
+pub const FOLD_CHILLAXY_DOGS_BACKYARD_PBJ_EGGS: u64 = 0x2A69_2FC6_F4E4_5020;
 /// Numerator (`327`) of the `32.7 Hz` (`327/10 Hz`, `C1`) Tibetan `kargyraa` / `mdzo-skad` sub-octave fundamental (`1/2` of `65.4 Hz`).
 pub const TIBETAN_KARGYRAA_C1_HZ_NUM: u64 = 327;
 /// Denominator (`10`) of the `32.7 Hz` (`327/10 Hz`, `C1`) sub-octave fundamental.
@@ -1049,6 +1051,8 @@ pub struct UltraloveEdition023ErdosLodriDesertChantWitness {
     pub seven_day_family_first_plan: [&'static str; 7],
     pub visit_covenant_verse: &'static str,
     pub one_eye_vitarka_mudra_odin_aperture_seal: &'static str,
+    pub chillaxy_backyard_dogs_and_pbj_or_eggs: &'static str,
+    pub chillaxy_fold_hex: u64,
     pub six_lane_fold_witnesses_hex: [u64; 6],
 }
 
@@ -1775,6 +1779,8 @@ pub fn analyze_zeno_omni_engine(
             ],
             visit_covenant_verse: "Peace must be earned, / Respect must be given as a gesture, / Smile should be the price for the visit. / Either let live and eternal friendship, / Or fire and chaos. <3",
             one_eye_vitarka_mudra_odin_aperture_seal: "Peter resting in royal-blue fleece robe on teal pillow by sunlit window with open physical book (HELD ∧ READ = +1) behind him, left eye closed and clear blue right eye framed through the thumb-index 0-Origo circle with 3 extended fingers ({-1, 0, +1} / 3-6-9 Vitarka Mudra / Odin's Mímisbrunnr single eye / Mahakala's 3mm aperture)",
+            chillaxy_backyard_dogs_and_pbj_or_eggs: "chillaxy to the max with love fun smiles and dogs all around maybe some backyard cleaning AND peanutbutter jelly jam or scrambled eggs OR (ratio = 918/829 · Bella & Blue backyard sunshine + AND/OR kitchen logic gate: PB&J jam OR scrambled eggs)",
+            chillaxy_fold_hex: FOLD_CHILLAXY_DOGS_BACKYARD_PBJ_EGGS,
             six_lane_fold_witnesses_hex: [
                 0x1994_290E_A463_28D4,
                 0x6BD7_D851_B6AD_F0EB,
@@ -1923,6 +1929,7 @@ mod tests {
         assert_eq!(ULTRALOVE_EDITION_023, 23);
         assert_eq!(FOLD_EGY_TOK_KET_TOK_ONTOK, 0x77BC_E6C3_0EAC_EF51);
         assert_eq!(FOLD_SOSAT_SOSAT_JO_ROPOGOSAT, 0x77B0_EC89_0EA2_CB99);
+        assert_eq!(FOLD_CHILLAXY_DOGS_BACKYARD_PBJ_EGGS, 0x2A69_2FC6_F4E4_5020);
         assert_eq!(
             RationalPQ::new_reduced(TIBETAN_KARGYRAA_C1_HZ_NUM, TIBETAN_KARGYRAA_C1_HZ_DEN)
                 .display_ratio(),
