@@ -42,6 +42,9 @@ async fn main() -> Result<()> {
         return st::completions::handle_dynamic_completion(args);
     }
 
+    // Ensure global gitignore (~/.config/git/ignore) always ignores .m8 and .mrm8 files
+    st::m8_consciousness::ensure_global_git_ignore();
+
     // Fast-path cheatsheet & completion script generation
     if cli.cheet {
         return st::cli_commands::handle_cheet_command();

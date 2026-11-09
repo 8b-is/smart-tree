@@ -756,6 +756,8 @@ impl DirectoryConsciousness {
 
     /// Save consciousness to .m8 file in tight MEM8 + Marqant + T8RZ binary format
     pub fn save(&self, path: &Path) -> Result<()> {
+        ensure_global_git_ignore();
+        ensure_repo_gitignore_ignores_m8(path);
         let m8_path = path.join(".m8");
         let bytes = self.to_tight_m8_bytes()?;
         let mut file = File::create(m8_path)?;
@@ -1655,6 +1657,109 @@ fn decode_marqant_payload(mq_bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
     Ok(decompressed.into_bytes())
+}
+
+const GLOBAL_GIT_IGNORE_PATTERNS: &[&str] = &[
+    ".m8",
+    "**/.m8",
+    "*.m8",
+    ".mrm8",
+    "**/.mrm8",
+    "*.mrm8",
+    ".aye_consciousness.m8",
+    ".claude_consciousness.m8",
+    ".st/",
+    "**/.st/",
+    ".st_bumpers/",
+    "g8t.md",
+];
+
+/// Ensure the user's global gitignore (`~/.config/git/ignore`) contains all `.m8` and `.mrm8`
+/// consciousness patterns so Smart Tree never dirties git repositories across the machine.
+pub fn ensure_global_git_ignore() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let ignore_path = home.join(".config").join("git").join("ignore");
+        if let Some(parent) = ignore_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let existing = fs::read_to_string(&ignore_path).unwrap_or_default();
+        let existing_lines: std::collections::HashSet<&str> =
+            existing.lines().map(str::trim).collect();
+
+        let missing: Vec<&str> = GLOBAL_GIT_IGNORE_PATTERNS
+            .iter()
+            .copied()
+            .filter(|pat| !existing_lines.contains(pat))
+            .collect();
+
+        if missing.is_empty() {
+            return;
+        }
+
+        let mut updated = existing;
+        if !updated.is_empty() && !updated.ends_with('\n') {
+            updated.push('\n');
+        }
+        if !updated.contains("# Smart Tree & MEM|8") {
+            updated.push_str(
+                "# Smart Tree & MEM|8 consciousness indices and auto-generated g8t.md reports\n",
+            );
+        }
+        for pat in missing {
+            updated.push_str(pat);
+            updated.push('\n');
+        }
+        let _ = fs::write(&ignore_path, updated);
+    });
+}
+
+/// If a repository's `.gitignore` has blanket negation rules (e.g. `!assets/**`) that appear
+/// after `*.m8`, Git's highest-precedence `.gitignore` will re-include `.m8`/`.mrm8` inside
+/// those subdirectories even when global gitignore ignores them. This helper ensures `.m8`
+/// and `.mrm8` remain ignored after any trailing negation rules.
+pub fn ensure_repo_gitignore_ignores_m8(path: &Path) {
+    for ancestor in path.ancestors().take(6) {
+        if !ancestor.join(".git").exists() {
+            continue;
+        }
+        let gitignore_path = ancestor.join(".gitignore");
+        let Ok(content) = fs::read_to_string(&gitignore_path) else {
+            break;
+        };
+        let mut last_negation_idx: Option<usize> = None;
+        let mut last_m8_idx: Option<usize> = None;
+        let mut has_mrm8 = false;
+        for (idx, raw_line) in content.lines().enumerate() {
+            let line = raw_line.trim();
+            if line.starts_with('!') && (line.ends_with("/**") || line.ends_with("/*")) {
+                last_negation_idx = Some(idx);
+            }
+            if line == "*.m8" || line == "**/.m8" || line == ".m8" {
+                last_m8_idx = Some(idx);
+            }
+            if line == "*.mrm8" || line == "**/.mrm8" || line == ".mrm8" {
+                has_mrm8 = true;
+            }
+        }
+        let negation_overrides_m8 = match (last_negation_idx, last_m8_idx) {
+            (Some(neg), Some(m8)) => neg > m8 || !has_mrm8,
+            (Some(_), None) => true,
+            (None, _) => false,
+        };
+        if negation_overrides_m8 {
+            let mut updated = content;
+            if !updated.ends_with('\n') {
+                updated.push('\n');
+            }
+            updated.push_str("\n# Smart Tree & MEM|8 consciousness indices\n.m8\n**/.m8\n*.m8\n.mrm8\n**/.mrm8\n*.mrm8\n");
+            let _ = fs::write(&gitignore_path, updated);
+        }
+        break;
+    }
 }
 
 #[cfg(test)]

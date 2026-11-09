@@ -34,6 +34,7 @@ use std::time::SystemTime;
     http://localhost:28428/flow      Live Visual Studio Diff Stream + Brett Favre Sports Commentary
 
   Subcommands:
+    st g8t optimize [PATH]           Generate g8t.md optimization & p/q audit report (or `st --g8t-md`)
     st g8t leaderboard | best <Q>    Query g8t.is Rust capsules, YOLO #1 pick, golf, or submit
     st memnet status | assess | ask  Sovereign MemNet hardware assessment, node graph & Wave Q&A
     st remember <REPO_OR_DIR>        Ingest git forge or directory into salient MEM|8 wave store
@@ -430,6 +431,19 @@ pub struct Cli {
     // =========================================================================
     // G8T.IS RUST FUNCTION CAPSULES, YOLO FASTEST-PICK & FOKEN SCOREBOARD
     // =========================================================================
+    /// Audit a Rust repository, benchmark candidate functions, and generate g8t.md (default: current dir)
+    #[arg(
+        long,
+        alias = "g8t-md",
+        alias = "g8t-audit",
+        alias = "g8t",
+        value_name = "PATH",
+        default_missing_value = ".",
+        num_args = 0..=1,
+        help_heading = "g8t.is Rust Capsules & Fokens"
+    )]
+    pub g8t_optimize: Option<String>,
+
     /// Query g8t.is for the fastest verified Rust functions by keyword, domain, or signature (e.g. "binary search", "(u64,u64)->u64")
     #[arg(
         long,
@@ -544,12 +558,12 @@ pub struct ScanArgs {
     // =========================================================================
     // FILTERING - What to include/exclude
     // =========================================================================
-    /// Find files matching regex pattern (e.g., --find "README\.md")
-    #[arg(long, help_heading = "Filtering")]
+    /// Find files matching regex pattern (e.g., -f "README\.md")
+    #[arg(short = 'f', long, help_heading = "Filtering")]
     pub find: Option<String>,
 
-    /// Filter by file extension (e.g., --type rs)
-    #[arg(long = "type", help_heading = "Filtering")]
+    /// Filter by file extension (e.g., -t rs)
+    #[arg(short = 't', long = "type", help_heading = "Filtering")]
     pub filter_type: Option<String>,
 
     /// Filter by entry type: f (files) or d (directories)
@@ -596,7 +610,7 @@ pub struct ScanArgs {
     pub show_ignored: bool,
 
     /// Show EVERYTHING (--all + --no-ignore + --no-default-ignore)
-    #[arg(long, help_heading = "Traversal")]
+    #[arg(short = 'e', long, help_heading = "Traversal")]
     pub everything: bool,
 
     // =========================================================================
@@ -682,8 +696,8 @@ pub struct ScanArgs {
     // =========================================================================
     // SEARCH & ANALYSIS
     // =========================================================================
-    /// Search file contents (e.g., --search "TODO")
-    #[arg(long, help_heading = "Search & Analysis")]
+    /// Search file contents (e.g., -s "TODO")
+    #[arg(short = 's', long, help_heading = "Search & Analysis")]
     pub search: Option<String>,
 
     /// Group by semantic similarity
@@ -1213,6 +1227,23 @@ pub enum SortField {
     Date,
 }
 
+impl SortField {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SortField::AToZ => "a-to-z",
+            SortField::ZToA => "z-to-a",
+            SortField::Largest => "largest",
+            SortField::Smallest => "smallest",
+            SortField::Newest => "newest",
+            SortField::Oldest => "oldest",
+            SortField::Type => "type",
+            SortField::Name => "name",
+            SortField::Size => "size",
+            SortField::Date => "date",
+        }
+    }
+}
+
 /// Enum for mermaid style argument
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum MermaidStyleArg {
@@ -1224,6 +1255,17 @@ pub enum MermaidStyleArg {
     Gitgraph,
     /// Treemap style (shows file sizes visually)
     Treemap,
+}
+
+impl MermaidStyleArg {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MermaidStyleArg::Flowchart => "flowchart",
+            MermaidStyleArg::Mindmap => "mindmap",
+            MermaidStyleArg::Gitgraph => "gitgraph",
+            MermaidStyleArg::Treemap => "treemap",
+        }
+    }
 }
 
 /// Color mode for output
