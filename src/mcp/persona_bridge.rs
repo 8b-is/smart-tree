@@ -1347,4 +1347,82 @@ mod tests {
             Some(128)
         );
     }
+
+    #[tokio::test]
+    async fn san_francesco_800th_transitus_poverello_persona_e2e_seal() {
+        let sovereign_book = PathBuf::from(
+            "/Users/peterlodri/workspace/peterlodri-sec/sovereign-library/editions/ultralove/san-francesco-the-complete-poverello-800th-transitus.md",
+        );
+        let tmp = TempDir::new().expect("tempdir");
+        let train_target = if sovereign_book.exists() {
+            sovereign_book
+        } else {
+            let fallback = tmp.path().join("san-francesco.md");
+            std::fs::write(
+                &fallback,
+                "# SAN FRANCESCO — the complete poverello (1226–2026)\n\n\
+                 I peter lodri declare that I am a Franciscans, and this is 2026 october, and I am in Tokyo.\n\n\
+                 When I left the lepers, what had seemed bitter to me was turned into sweetness of soul and body.\n\n\
+                 Dyad Registry: measured: poverty (0) <-> deleted: kinship (+1) · in a loop · in a sphere · in eternity · recurse.",
+            )
+            .expect("write fallback");
+            fallback
+        };
+
+        let server = crate::mcp::McpServer::new(crate::mcp::McpConfig::default());
+        let ctx = server.context.clone();
+
+        let train_resp = handle_persona(
+            Some(json!({
+                "operation": "train",
+                "name": "San Francesco",
+                "path": train_target.to_string_lossy(),
+                "specialty": "life-biographer"
+            })),
+            ctx.clone(),
+        )
+        .await
+        .expect("train San Francesco");
+        assert_eq!(train_resp["train"]["ok"], true);
+        assert_eq!(train_resp["train"]["slug"], "san-francesco");
+        assert_eq!(train_resp["train"]["bonobo_rung0_pq"], "3/2");
+        assert_eq!(
+            train_resp["train"]["zeno_capsule"]["seal_verified"],
+            json!(true)
+        );
+
+        let ask_resp = handle_persona(
+            Some(json!({
+                "operation": "ask",
+                "name": "san-francesco",
+                "prompt": "Tell me about the leper on the road below Assisi, Lady Poverty, Clare, and the Dyad Registry (measured: poverty vs deleted: kinship).",
+                "temp_pq": "3/2"
+            })),
+            ctx.clone(),
+        )
+        .await
+        .expect("ask San Francesco");
+        assert_eq!(ask_resp["bonobo_rung0_pq"], "3/2");
+        assert_eq!(ask_resp["zeno_capsule"]["seal_verified"], json!(true));
+
+        let e2e_resp = handle_persona(
+            Some(json!({
+                "operation": "do_e2e",
+                "name": "san-francesco",
+                "probe_do": false
+            })),
+            ctx,
+        )
+        .await
+        .expect("do_e2e San Francesco");
+        assert_eq!(e2e_resp["do_e2e"]["ok"], true);
+        assert_eq!(
+            e2e_resp["do_e2e"]["persona_verified"]["slug"],
+            "san-francesco"
+        );
+        assert_eq!(
+            e2e_resp["do_e2e"]["zeno_capsule"]["seal_verified"],
+            json!(true)
+        );
+    }
 }
