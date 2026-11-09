@@ -1048,6 +1048,7 @@ pub struct UltraloveEdition023ErdosLodriDesertChantWitness {
     pub persona_bridge_tests_passed: u8,
     pub seven_day_family_first_plan: [&'static str; 7],
     pub visit_covenant_verse: &'static str,
+    pub one_eye_vitarka_mudra_odin_aperture_seal: &'static str,
     pub six_lane_fold_witnesses_hex: [u64; 6],
 }
 
@@ -1773,6 +1774,7 @@ pub fn analyze_zeno_omni_engine(
                 "Day 7: FAMILY +1 Sabbath",
             ],
             visit_covenant_verse: "Peace must be earned, / Respect must be given as a gesture, / Smile should be the price for the visit. / Either let live and eternal friendship, / Or fire and chaos. <3",
+            one_eye_vitarka_mudra_odin_aperture_seal: "Peter resting in royal-blue fleece robe on teal pillow by sunlit window with open physical book (HELD ∧ READ = +1) behind him, left eye closed and clear blue right eye framed through the thumb-index 0-Origo circle with 3 extended fingers ({-1, 0, +1} / 3-6-9 Vitarka Mudra / Odin's Mímisbrunnr single eye / Mahakala's 3mm aperture)",
             six_lane_fold_witnesses_hex: [
                 0x1994_290E_A463_28D4,
                 0x6BD7_D851_B6AD_F0EB,
