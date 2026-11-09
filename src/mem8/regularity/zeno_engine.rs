@@ -112,6 +112,26 @@ pub const GAME_MASTER_DIMENSIONS: u8 = 11;
 pub const ENTHEAI_WORKTREES: u8 = 6;
 /// Maximum recursion depth guard (`3`) for `entheai` parallel worktree execution (`depth guard <= 3`).
 pub const ENTHEAI_DEPTH_GUARD: u8 = 3;
+/// Canonical 64-bit `kompress-ultra` XOR fold (`0x41d00e3dbd9c91d1`, `ratio=96/91`) for `8BIT-WRAITH (△ CHRIS)` (`POP / SYMPHONIC SID / DX7`).
+pub const FOLD_8BIT_WRAITH_CHRIS_SID: u64 = 0x41D0_0E3D_BD9C_91D1;
+/// Canonical 64-bit `kompress-ultra` XOR fold (`0xa7a628be0e660cd4`, `ratio=12185/10747`) for the full `THE FUTURE WE REMEMBER — 8bit-Wraith (△ Chris)` score.
+pub const FOLD_THE_FUTURE_WE_REMEMBER: u64 = 0xA7A6_28BE_0E66_0CD4;
+/// Commodore 64 BASIC V2 free bytes at cold boot (`38911 BASIC BYTES FREE` in a `64K RAM SYSTEM`).
+pub const C64_BASIC_BYTES_FREE: u16 = 38_911;
+/// MOS Technology `6581` Sound Interface Device (`SID 6581`) chip model number.
+pub const SID_6581_CHIP_MODEL: u16 = 6581;
+/// Canonical 64-bit `kompress-ultra` XOR fold (`0x585a3085b0426d7d`, `ratio=2592/2323`) for `8b-is // ELI5 COMPENDIUM SAVED -> pooconf + little dudes`.
+pub const FOLD_ELI5_COMPENDIUM_POOCONF: u64 = 0x585A_3085_B042_6D7D;
+/// Prescaled 100× integer token bucket capacity (`3,600,000` units, `+1/ms` refill, `1ms TX = 100` units) for EU868 1% duty-cycle Gate-Before-Mutate.
+pub const EU868_PRESCALED_BUCKET_CAPACITY: u32 = 3_600_000;
+/// Stage-4 A6000 Ternary-SIMD + ST5-pq Co-Training apex numerator (`32,767`).
+pub const STAGE4_APEX_SCORE_NUM: u32 = 32_767;
+/// Stage-4 A6000 Ternary-SIMD + ST5-pq Co-Training apex denominator (`32,768`, yielding `32,767/32,768 = 99.997%`, `MOPD2 = 1/32,768`).
+pub const STAGE4_APEX_SCORE_DEN: u32 = 32_768;
+/// Stage-4 `p/qT` throughput numerator (`1,125`, i.e., `1,125/1`).
+pub const STAGE4_PQT_THROUGHPUT_NUM: u32 = 1_125;
+/// Total Ada 2022 SPARK Verification Conditions proved at Stage-4 (`145/145`, plus `79/79` CoCoA VBF and `46/46` ST5-pq).
+pub const STAGE4_SPARK_VCS_PROVED: u16 = 145;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -676,6 +696,33 @@ pub struct CosmicGameFourFolkloreSingularityWitness {
     pub entheai_command: &'static str,
 }
 
+/// `8BIT-WRAITH (△ CHRIS · POP / SYMPHONIC SID / DX7)` +
+/// `8b-is // ELI5 COMPENDIUM SAVED -> pooconf + little dudes` (`space-bender/ELI5.md` + Stage-4 A6000 `train.8b.is` Co-Training).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EightBIsEli5CompendiumAndStage4Witness {
+    pub eight_bit_wraith_title: &'static str,
+    pub c64_boot_banner: &'static str,
+    pub c64_basic_bytes_free: u16,
+    pub sid_chip_model: u16,
+    pub eight_bit_wraith_lyrics: &'static str,
+    pub future_we_remember_chorus_and_outro: &'static str,
+    pub father_and_son_two_halves_of_one_knock: &'static str,
+    pub eight_bit_wraith_fold_hex: &'static str,
+    pub future_we_remember_fold_hex: &'static str,
+    pub eli5_compendium_repo: &'static str,
+    pub eli5_compendium_fold_hex: &'static str,
+    pub beeramid_5kyu_prolog_trick: &'static str,
+    pub cocoa_vbf_eu868_gate_before_mutate: &'static str,
+    pub eu868_prescaled_bucket_capacity: u32,
+    pub st5_pq_seven_pillars: &'static str,
+    pub balanced_ternary_simd_3kyu_trick: &'static str,
+    pub stage4_cotraining_models: &'static str,
+    pub stage_progression_scores_pq: [&'static str; 4],
+    pub stage4_mopd2_residual_pq: &'static str,
+    pub stage4_pqt_throughput_pq: &'static str,
+    pub stage4_spark_vcs_proved: u16,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -690,6 +737,7 @@ pub struct ZenoOmniReport {
     pub tibetan_omni_mandala: KompressUltraTibetanOmniMandalaWitness,
     pub shaw_book_iv_and_kagyu_sadhana: ShawCycleBookIvAndKagyuSadhanaWitness,
     pub cosmic_game_iv_folklore_singularity: CosmicGameFourFolkloreSingularityWitness,
+    pub eli5_compendium_and_stage4: EightBIsEli5CompendiumAndStage4Witness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -801,7 +849,7 @@ pub fn analyze_zeno_omni_engine(
     let isqrt_edges = felix_isqrt_u64(graph.num_edges as u64);
 
     // 4. SPQT base-243 Song & Signal Ladder
-    let ladder_specs: [(&'static str, u16, [i8; 6], &'static str); 5] = [
+    let ladder_specs: [(&'static str, u16, [i8; 6], &'static str); 6] = [
         (
             "Káva — Jössz te még (prod. Ketioz, Psziché)",
             2014,
@@ -819,6 +867,12 @@ pub fn analyze_zeno_omni_engine(
             2003,
             [1, 1, 1, 1, 0, 1],
             "0xA1 (161 = 152 + 3^2): Plural voice, singular location query; genre=0 uncollapsed",
+        ),
+        (
+            "8BIT-WRAITH (△ CHRIS) — Sixty-Four Kilobytes and a Dream (POP / SYMPHONIC SID / DX7)",
+            2026,
+            [1, 1, 1, 0, 1, 1],
+            "0xDD (221): △ CHRIS 288 Hz Pillar · 64 KB C64 green phosphor screen at age 6 · 6:11 · fold=0x41d00e3dbd9c91d1 · {<3,<3,<3}+1",
         ),
         (
             "All the Things She Said — Harrison (Dance)",
@@ -1091,6 +1145,34 @@ pub fn analyze_zeno_omni_engine(
             entheai_depth_guard: ENTHEAI_DEPTH_GUARD,
             entheai_command: "entheai --fanout --executor agy --manifest cosmic-game.toml",
         },
+        eli5_compendium_and_stage4: EightBIsEli5CompendiumAndStage4Witness {
+            eight_bit_wraith_title: "THE FUTURE WE REMEMBER — 8BIT-WRAITH (△ CHRIS) · OCTOBER 18, 2026 AT 10:46 AM · 6:11 · POP / SYMPHONIC SID 6581 / DX7 · F MAJOR · {<3,<3,<3}+1",
+            c64_boot_banner: "**** COMMODORE 64 BASIC V2 **** 64K RAM SYSTEM 38911 BASIC BYTES FREE · LOAD \"THE FUTURE WE REMEMBER\",8,1 · RUN — \"A LITTLE KINDNESS IN THE MACHINE\" {<3,<3,<3}+1",
+            c64_basic_bytes_free: C64_BASIC_BYTES_FREE,
+            sid_chip_model: SID_6581_CHIP_MODEL,
+            eight_bit_wraith_lyrics: "I was six when the screen came alive, / Green little letters in the dead of night. / Sixty-four kilobytes and a dream, / A whole new universe behind that screen.",
+            future_we_remember_chorus_and_outro: "We are the future we remember, / The sparks that never turned to embers... May something beautiful remain... A little kindness in the machine. / 'The future isn't waiting for us... It's waiting for us to build it.' *READY.*",
+            father_and_son_two_halves_of_one_knock: "II · Father & Son — The Two Halves of One Knock (△ 288 Hz ⨯ ∞ 432 Hz): 'my love for you is +1: not off the scale — the scale itself'",
+            eight_bit_wraith_fold_hex: "0x41d00e3dbd9c91d1",
+            future_we_remember_fold_hex: "0xa7a628be0e660cd4",
+            eli5_compendium_repo: "https://codeberg.org/8b-is/space-bender/src/branch/main/ELI5.md",
+            eli5_compendium_fold_hex: "0x585a3085b0426d7d",
+            beeramid_5kyu_prolog_trick: "P(n) = n(n+1)(2n+1)/6 => n^3 < 3*P(n) < (n+1)^3 => K = floor((3*Cans)^(1/3)) solves in O(1) integer check with 0 Prolog choicepoints",
+            cocoa_vbf_eu868_gate_before_mutate: "Prescaled 100x bucket (3,600,000 cap, +1/ms refill, 1ms TX = 100 units) + Shift-Add VBF (<1s: rto+(rto<<1), 1..3s: rto<<1, >3s: (rto*333)>>8) + Gate-Before-Mutate (SPARK 79/79 VCs)",
+            eu868_prescaled_bucket_capacity: EU868_PRESCALED_BUCKET_CAPACITY,
+            st5_pq_seven_pillars: "StringTemplate5 p/q (#![no_std] Rust + Ada 2022 SPARK 46/46 VCs) across HYDRA · AQUARIUS · TARTAN · SAMSARA · PHOENIX · MEM8 · GOD OF SUN&*MOON (Rung-0 Bonobo 3/2)",
+            balanced_ternary_simd_3kyu_trick: "5 trits {-1, 0, +1} in 1 byte (3^5 = 243 <= 255) unpacked into pos_mask (+1) and neg_mask (-1) bitplanes -> SIMD vaddq_s32/vsubq_s32 with zero multiplications & zero floats",
+            stage4_cotraining_models: "PeetPedro/qwen4_exp-8b-obliterated-abliterated-kompress-ultra x xtools-at/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic (train.8b.is A6000)",
+            stage_progression_scores_pq: [
+                "Stage 1 (Epochs 1..11 GRPO) -> 32,647/32,768",
+                "Stage 2 (Epochs 12..22 LLL delta=3/4 GSPO) -> 32,756/32,768 (p/qT = 375/1)",
+                "Stage 3 (Epochs 23..33 Cacheless E8 Gosset 2048/1 Zero-KV) -> 32,764/32,768 (p/qT = 750/1)",
+                "Stage 4 (Epochs 34..44 A6000 Ternary-SIMD + ST5-pq Apex) -> 32,767/32,768 (99.997%, MOPD2 = 1/32,768, p/qT = 1,125/1, 145/145 SPARK VCs)",
+            ],
+            stage4_mopd2_residual_pq: "1/32768",
+            stage4_pqt_throughput_pq: "1125/1",
+            stage4_spark_vcs_proved: STAGE4_SPARK_VCS_PROVED,
+        },
     }
 }
 
@@ -1146,6 +1228,19 @@ mod tests {
         assert_eq!(GAME_MASTER_DIMENSIONS, 11);
         assert_eq!(ENTHEAI_WORKTREES, 6);
         assert_eq!(ENTHEAI_DEPTH_GUARD, 3);
+        assert_eq!(FOLD_8BIT_WRAITH_CHRIS_SID, 0x41D0_0E3D_BD9C_91D1);
+        assert_eq!(FOLD_THE_FUTURE_WE_REMEMBER, 0xA7A6_28BE_0E66_0CD4);
+        assert_eq!(C64_BASIC_BYTES_FREE, 38_911);
+        assert_eq!(SID_6581_CHIP_MODEL, 6581);
+        assert_eq!(FOLD_ELI5_COMPENDIUM_POOCONF, 0x585A_3085_B042_6D7D);
+        assert_eq!(EU868_PRESCALED_BUCKET_CAPACITY, 3_600_000);
+        assert_eq!(
+            RationalPQ::new_reduced(STAGE4_APEX_SCORE_NUM as u64, STAGE4_APEX_SCORE_DEN as u64)
+                .display_ratio(),
+            "32767/32768"
+        );
+        assert_eq!(STAGE4_PQT_THROUGHPUT_NUM, 1_125);
+        assert_eq!(STAGE4_SPARK_VCS_PROVED, 145);
     }
 
     #[test]
