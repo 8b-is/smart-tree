@@ -24,28 +24,64 @@ use crate::felix_asm::{felix_popcnt_u64, felix_tzcnt_u64};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
+/// Number of 64-bit words (`4`) in a `BitSet256` bitboard.
+pub const BITSET256_WORDS: usize = 4;
+
+/// Total bit capacity (`256`) of a `BitSet256` bitboard.
+pub const BITSET256_BITS: usize = 256;
+
+/// Maximum forward degeneracy neighborhood size (`255`) packed into `BitSet256`.
+pub const MAX_FORWARD_NEIGHBORS: usize = 255;
+
+/// Number of explicit AST `EdgeKind` colors (`5`).
+pub const NUM_AST_EDGE_COLORS: usize = 5;
+
+/// Default minimum monochromatic clique size $k$ (`3`).
+pub const DEFAULT_MIN_CLIQUE_K: usize = 3;
+
+/// Default minimum Ramsey log-surprise threshold in nats (`2.5`).
+pub const DEFAULT_MIN_SURPRISE_NATS: f64 = 2.5;
+
+/// Default minimum left/right set cardinality (`3`) for Erdős–Hajnal bi-cliques.
+pub const DEFAULT_MIN_BICLIQUE_SIDE: usize = 3;
+
+/// Default almost-pure bi-clique tolerance $\delta$ (`0.15`).
+pub const DEFAULT_BICLIQUE_TOLERANCE_DELTA: f64 = 0.15;
+
+/// Floor (`1e-9`) for per-color edge density $p_c$.
+pub const COLOR_DENSITY_FLOOR: f64 = 1e-9;
+
+/// Ceiling (`0.999_999`) for per-color edge density $p_c$.
+pub const COLOR_DENSITY_CEIL: f64 = 0.999_999;
+
+/// Per-color cap (`128`) on raw Bron–Kerbosch candidate cliques.
+pub const MAX_CLIQUE_CANDIDATES_PER_COLOR: usize = 128;
+
+/// Maximum number of top Erdős–Hajnal bi-cliques (`32`) returned in `RamseyErdosHajnalReport`.
+pub const MAX_REPORTED_BICLIQUES: usize = 32;
+
 /// Stack-allocated 256-bit SIMD bitboard for single-cycle Bron–Kerbosch neighborhood intersections.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
-pub struct BitSet256(pub [u64; 4]);
+pub struct BitSet256(pub [u64; BITSET256_WORDS]);
 
 impl BitSet256 {
-    pub const EMPTY: Self = Self([0; 4]);
+    pub const EMPTY: Self = Self([0; BITSET256_WORDS]);
 
     #[inline(always)]
     pub fn set(&mut self, idx: usize) {
-        debug_assert!(idx < 256);
+        debug_assert!(idx < BITSET256_BITS);
         self.0[idx >> 6] |= 1u64 << (idx & 63);
     }
 
     #[inline(always)]
     pub fn clear(&mut self, idx: usize) {
-        debug_assert!(idx < 256);
+        debug_assert!(idx < BITSET256_BITS);
         self.0[idx >> 6] &= !(1u64 << (idx & 63));
     }
 
     #[inline(always)]
     pub fn contains(&self, idx: usize) -> bool {
-        debug_assert!(idx < 256);
+        debug_assert!(idx < BITSET256_BITS);
         (self.0[idx >> 6] & (1u64 << (idx & 63))) != 0
     }
 
@@ -190,15 +226,15 @@ pub struct RamseyScanConfig {
 impl Default for RamseyScanConfig {
     fn default() -> Self {
         Self {
-            min_clique_k: 3,
-            min_surprise_nats: 2.5,
-            min_biclique_side: 3,
-            biclique_tolerance_delta: 0.15,
+            min_clique_k: DEFAULT_MIN_CLIQUE_K,
+            min_surprise_nats: DEFAULT_MIN_SURPRISE_NATS,
+            min_biclique_side: DEFAULT_MIN_BICLIQUE_SIDE,
+            biclique_tolerance_delta: DEFAULT_BICLIQUE_TOLERANCE_DELTA,
         }
     }
 }
 
-const ALL_COLORS: [EdgeKind; 5] = [
+const ALL_COLORS: [EdgeKind; NUM_AST_EDGE_COLORS] = [
     EdgeKind::Import,
     EdgeKind::CallRef,
     EdgeKind::TraitImpl,
@@ -216,7 +252,7 @@ pub fn analyze_ramsey_and_erdos_hajnal(
         return RamseyErdosHajnalReport {
             num_vertices: 0,
             degeneracy_d: 0,
-            omega_per_color: [0; 5],
+            omega_per_color: [0; NUM_AST_EDGE_COLORS],
             alpha_independent_set: Vec::new(),
             erdos_hajnal_exponent_gamma: 0.0,
             expected_random_gamma: 0.0,
@@ -226,8 +262,9 @@ pub fn analyze_ramsey_and_erdos_hajnal(
     }
 
     // 1. Build per-color undirected adjacency lists + directed lookup for tournament classification
-    let mut color_undirected: Vec<Vec<Vec<SymbolId>>> = vec![vec![Vec::new(); n]; 5];
-    let mut color_edge_counts = [0usize; 5];
+    let mut color_undirected: Vec<Vec<Vec<SymbolId>>> =
+        vec![vec![Vec::new(); n]; NUM_AST_EDGE_COLORS];
+    let mut color_edge_counts = [0usize; NUM_AST_EDGE_COLORS];
 
     for u in 0..n {
         let start = graph.row_ptr[u] as usize;
@@ -269,7 +306,8 @@ pub fn analyze_ramsey_and_erdos_hajnal(
             continue;
         }
 
-        let p_c = (undirected_edges as f64 / max_pairs).clamp(1e-9, 0.999_999);
+        let p_c =
+            (undirected_edges as f64 / max_pairs).clamp(COLOR_DENSITY_FLOOR, COLOR_DENSITY_CEIL);
         let (_, order) = compute_degeneracy_ordering(adj);
         let mut pos_in_order = vec![0usize; n];
         for (pos, &v) in order.iter().enumerate() {
@@ -285,7 +323,7 @@ pub fn analyze_ramsey_and_erdos_hajnal(
                 .iter()
                 .copied()
                 .filter(|&w| pos_in_order[w as usize] > ord_idx)
-                .take(255)
+                .take(MAX_FORWARD_NEIGHBORS)
                 .collect();
 
             let m = forward_neighbors.len();
@@ -520,7 +558,7 @@ fn bron_kerbosch_tomita_256(
         p_set.clear(v_bit);
         x_set.set(v_bit);
 
-        if out.len() >= 128 {
+        if out.len() >= MAX_CLIQUE_CANDIDATES_PER_COLOR {
             return;
         }
     }
@@ -692,7 +730,7 @@ fn extract_erdos_hajnal_bicliques(
         let area_b = b.left_set_a.len() * b.right_set_b.len();
         area_b.cmp(&area_a)
     });
-    results.truncate(32);
+    results.truncate(MAX_REPORTED_BICLIQUES);
     results
 }
 

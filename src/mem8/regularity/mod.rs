@@ -75,8 +75,9 @@ pub use wire::{
 };
 pub use world_field::{
     analyze_semantic_world_engine, AdmissibleManifoldCertificate, CausalDagNode,
-    FieldProposalDelta, LatentFieldPoint, PerceptualHistoryEntry, SemanticWorldEngineReport,
-    SemanticWorldState, WorldActionObservation, WORLD_Q16_ONE,
+    FamPlusOneMahakalaSecondVowWitness, FieldProposalDelta, LatentFieldPoint,
+    PerceptualHistoryEntry, SemanticWorldEngineReport, SemanticWorldState, WorldActionObservation,
+    WORLD_Q16_ONE,
 };
 pub use zeno_engine::{
     analyze_zeno_omni_engine, bfp64_and_kleene, bfp64_nand_kleene, evaluate_spherepop_witness,

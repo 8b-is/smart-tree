@@ -4,6 +4,33 @@
 use crate::scanner::{FileCategory, FileNode};
 use serde::{Deserialize, Serialize};
 
+/// Number of `f32` lanes (`64`) in a native MEM8 semantic wave embedding.
+pub const WAVE_EMBEDDING_LANES: usize = 64;
+
+/// Floor (`1e-9`) on global baseline graph density $p = |E| / |V|^2$.
+pub const AMBIENT_DENSITY_FLOOR_P: f64 = 1e-9;
+
+/// SplitMix64 golden ratio constant (`0x9E37_79B9_7F4A_7C15`) for deterministic wave seeding.
+pub const SPLITMIX64_SEED_MUL: u64 = 0x9E37_79B9_7F4A_7C15;
+
+/// FNV-1a 64-bit offset basis (`0xCBF2_9CE4_8422_2325`).
+pub const FNV1A_64_OFFSET_BASIS: u64 = 0xCBF2_9CE4_8422_2325;
+
+/// FNV-1a 64-bit prime (`0x0100_0000_01B3`).
+pub const FNV1A_64_PRIME: u64 = 0x0100_0000_01B3;
+
+/// Maximum directory tree depth slots (`128`) tracked during `from_file_nodes`.
+pub const MAX_DIRECTORY_DEPTH_SLOTS: usize = 128;
+
+/// Default regularity $\varepsilon$ (`0.10`) for an empty `SzemerediPartition`.
+pub const DEFAULT_EMPTY_PARTITION_EPSILON: f64 = 0.10;
+
+/// Default initial regularity $\varepsilon$ (`0.12`) for directory-seeded partitions.
+pub const DEFAULT_INITIAL_PARTITION_EPSILON: f64 = 0.12;
+
+/// Byte length (`32`) of the `Mem8BookArchive` model digest.
+pub const ARCHIVE_DIGEST_BYTES: usize = 32;
+
 /// Compact 32-bit identifier for symbols/files in `~/.st/symbols/`
 pub type SymbolId = u32;
 /// Identifier for a Szemerédi partition cell `V_i` (`0` is reserved for the outlier set `V_0`)
@@ -120,7 +147,7 @@ impl CsrSymbolGraph {
         }
 
         let denom = (num_vertices.max(1) * num_vertices.max(1)) as f64;
-        let ambient_density_p = ((num_edges as f64) / denom).max(1e-9);
+        let ambient_density_p = ((num_edges as f64) / denom).max(AMBIENT_DENSITY_FLOOR_P);
 
         let embeddings = if symbol_embeddings.len() == num_vertices {
             symbol_embeddings
@@ -144,15 +171,19 @@ impl CsrSymbolGraph {
     }
 
     /// Synthesizes a deterministic L2-normalized 64-lane MEM8 wave embedding for a node.
-    pub fn synthetic_wave_embedding(seed: u64, size: u64, depth: usize) -> [f32; 64] {
-        let mut vec = [0.0_f32; 64];
+    pub fn synthetic_wave_embedding(
+        seed: u64,
+        size: u64,
+        depth: usize,
+    ) -> [f32; WAVE_EMBEDDING_LANES] {
+        let mut vec = [0.0_f32; WAVE_EMBEDDING_LANES];
         let mut norm_sq = 0.0_f32;
-        let base_freq = ((seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 48) as f32) * 0.01 + 1.0;
+        let base_freq = ((seed.wrapping_mul(SPLITMIX64_SEED_MUL) >> 48) as f32) * 0.01 + 1.0;
         let size_phase = ((size.saturating_add(1) as f32).ln()) * 0.25;
         let depth_mod = (depth as f32) * 0.15;
 
         for (lane, slot) in vec.iter_mut().enumerate() {
-            let t = (lane as f32) / 64.0;
+            let t = (lane as f32) / (WAVE_EMBEDDING_LANES as f32);
             let val = (base_freq * t * core::f32::consts::TAU + size_phase).sin()
                 + 0.5 * (depth_mod * (lane as f32)).cos();
             *slot = val;
@@ -176,14 +207,14 @@ impl CsrSymbolGraph {
                 vertex_to_cluster: Vec::new(),
                 clusters: vec![Vec::new()],
                 energy_index: 0.0,
-                epsilon: 0.10,
+                epsilon: DEFAULT_EMPTY_PARTITION_EPSILON,
             };
             return (empty_graph, empty_part);
         }
 
         let mut edges: Vec<(SymbolId, SymbolId, EdgeKind)> = Vec::with_capacity(n * 3);
         let mut embeddings = Vec::with_capacity(n);
-        let mut depth_parent = [0u32; 128];
+        let mut depth_parent = [0u32; MAX_DIRECTORY_DEPTH_SLOTS];
 
         // Map top-level directories to initial Szemerédi clusters V_1 .. V_k
         let mut dir_to_cluster = std::collections::HashMap::<String, ClusterId>::new();
@@ -197,16 +228,16 @@ impl CsrSymbolGraph {
                 .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("root");
-            let mut hash_seed = 0xCBF2_9CE4_8422_2325_u64;
+            let mut hash_seed = FNV1A_64_OFFSET_BASIS;
             for &b in name.as_bytes() {
                 hash_seed ^= b as u64;
-                hash_seed = hash_seed.wrapping_mul(0x0100_0000_01B3);
+                hash_seed = hash_seed.wrapping_mul(FNV1A_64_PRIME);
             }
             embeddings.push(Self::synthetic_wave_embedding(
                 hash_seed, node.size, node.depth,
             ));
 
-            let d = node.depth.min(127);
+            let d = node.depth.min(MAX_DIRECTORY_DEPTH_SLOTS - 1);
             if idx > 0 {
                 let p = if d == 0 { 0 } else { depth_parent[d - 1] };
                 edges.push((p, sym, EdgeKind::Import));
@@ -271,7 +302,7 @@ impl CsrSymbolGraph {
             vertex_to_cluster,
             clusters,
             energy_index: 0.0,
-            epsilon: 0.12,
+            epsilon: DEFAULT_INITIAL_PARTITION_EPSILON,
         };
         (graph, partition)
     }
