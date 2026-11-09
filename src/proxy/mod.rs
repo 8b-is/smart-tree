@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 pub mod burn;
+pub mod caveman;
 pub mod claude;
 // Re-export for backward compatibility - `proxy::anthropic::AnthropicProvider` still works
 pub use claude as anthropic;

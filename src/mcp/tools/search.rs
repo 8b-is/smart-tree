@@ -263,8 +263,9 @@ pub async fn find_projects(args: Value, ctx: Arc<McpContext>) -> Result<Value> {
             if let Some(idx) = line.find("] ") {
                 let after_hash = &line[idx + 2..];
                 let name_start = after_hash
-                    .chars()
-                    .position(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                    .char_indices()
+                    .find(|&(_, c)| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                    .map(|(i, _)| i)
                     .unwrap_or(0);
                 let name = after_hash[name_start..].trim().to_string();
 
