@@ -537,14 +537,17 @@ pub struct OsAgentAgnosticMatrix {
     pub os_targets_supported: [&'static str; 8],
     pub agent_harnesses_supported: [&'static str; 13],
     pub universal_skill_directories: [&'static str; 5],
-    pub embedded_sovereign_skills: [&'static str; 7],
+    pub embedded_sovereign_skills: [&'static str; 8],
 }
 
 /// `ultramesh-mem` v1.1.0 BrainState & 5 Ralph-Loops (`Pruner`, `Rewriter`, `Circulator`, `Composer`, `Mesh` `MAX_DEPTH=1`)
-/// coupled with `ultrabackyardloop` and `ULTRA-OMNI-ZENO`.
+/// coupled with `al-biruni` Singleton Pair Mesh (`al-biruni-1` Researcher + `al-biruni-2` Writer),
+/// `ultrabackyardloop`, `ultra-graph-theory`, and `<8b.is> mem8&memnet&phoenix <<<{~}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UltraMeshMemBridge {
     pub status: &'static str,
+    pub al_biruni_singleton_pair: [&'static str; 2],
+    pub mem8_memnet_phoenix_wave_sigil: &'static str,
     pub ralph_loops: [&'static str; 5],
     pub mesh_max_depth_guard: u8,
     pub mesh_current_depth: u8,
@@ -869,10 +872,16 @@ pub fn analyze_zeno_omni_engine(
                 "ultrabackyardloop",
                 "ultra-omni-zeno",
                 "ultramesh-mem",
+                "al-biruni",
             ],
         },
         ultramesh_mem: UltraMeshMemBridge {
             status: "Alive",
+            al_biruni_singleton_pair: [
+                "al-biruni-1 :: Researcher (auto · deep · generate via ultra-graph-theory)",
+                "al-biruni-2 :: Writer (content · technical · publish via ultra-omni-zeno)",
+            ],
+            mem8_memnet_phoenix_wave_sigil: "<8b.is> mem8&memnet&phoenix <<<{~}",
             ralph_loops: [
                 "1. BRAIN <-> Pruner (Erdos-Steiner Score-Feedback Loop)",
                 "2. BRAIN <-> Rewriter (SPQT base-243 Compression-Feedback Loop)",

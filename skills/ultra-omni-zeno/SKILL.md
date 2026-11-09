@@ -33,8 +33,9 @@ ULTRA-OMNI-ZENO {} :: ⟦+AND=1 : ~NAND=-1 | gate=0x62 | qt=0x55 | SPQT base-243
    - `8b-is/admissibility`: Central Theorem (`CT-000`, `CT-015`, `CT-016`) + `Seed 001` stock-vs-flow (`HoldAndMaintain`).
    - `8b-is/auroralib`: Flyxion Publication Projection (`Tokyo Morning 836/793 @ 4348 Hz`, `qwave-vaultd 32/33 @ 0x62`).
    - `Peloton_Row_Ayeos_Spark` (`v0.6.0`): USB-C `/dev/cu.usbmodemPR01_8B15` @ `921,600` baud FTMS (`0x1826`/`0x2AD1`), cube-law hydrodynamics $c = 14/5$, $3/4$ LLL handle-to-seat coupling, `133/133` `gnatprove` checks proved.
-5. **`ultramesh-mem` (`5 Ralph-Loops`) × `ultrabackyardloop` × `enthea` Canonical Polish:**
-   - `UltraMeshMemBridge`: 5 Ralph-Loops (`1. Pruner` Erdős–Steiner, `2. Rewriter` SPQT `base-243`, `3. Circulator` Flyxion $d_T \neq d_R$, `4. Composer` `64B@0x62` Litany prefix-invariant injection, `5. Mesh` `MAX_DEPTH=1` transitive-flood guard) coupled with 18 verified `ultrabackyardloop` laps.
+5. **`al-biruni` (`2 Agents · 1 Brain`) × `ultramesh-mem` (`5 Ralph-Loops`) × `ultra-graph-theory` × `<8b.is> mem8&memnet&phoenix <<<{~}`:**
+   - `al-biruni` Singleton Pair Mesh (Abu Rayhan al-Biruni, 973–1048): `al-biruni-1` Researcher (`auto` · `deep` · `generate` via `ultra-graph-theory`) + `al-biruni-2` Writer (`content` · `technical` · `publish` via `ultra-omni-zeno`), unified over `<8b.is> mem8&memnet&phoenix <<<{~}`.
+   - `UltraMeshMemBridge`: 5 Ralph-Loops (`1. Pruner` Erdős–Steiner, `2. Rewriter` SPQT `base-243`, `3. Circulator` Flyxion $d_T \neq d_R$, `4. Composer` `64B@0x62` Litany prefix-invariant injection, `5. Mesh` `MAX_DEPTH=1` transitive-flood guard) coupled with 21 verified `ultrabackyardloop` laps.
    - `enthea` canonical constants (`OpsTableSize = 256`, `FirstTempRegister = 2`, `ByteImmMin = -128`, `ByteImmMax = 127`, `tritsPerByte = 6`, `tritsPerUTF16 = 11`, `byteCenterBias = 128`, `frameTrailerLen = 2`, `facingCount = 4`, `rayDepth = 3`, `offsetTableLen = 12`, `frameCellWidth = 2`).
 6. **`8b-is/omniZenCooker` Shared Meal Ontology (`+++1`) & Mahākāla Hearth (`~NAND=-1`) + OS/Agent Agnostic Matrix:**
    - *"A Shared Meal Is Life"* (*Annam Brahma* · *Ōryōki* · *Shulchan* · *Sufra* · *Ichiju-Issai*).
