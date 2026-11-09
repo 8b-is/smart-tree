@@ -1204,10 +1204,98 @@ impl MemoryManager {
             }
         }
 
-        // Sort by timestamp (most recent first)
-        results.sort_by_key(|a| std::cmp::Reverse(a.timestamp));
+        // Sort by Hybrid Vector (E8 Gosset + SPQT Base-243) + BM25F + Wave Resonance RRF score,
+        // tie-breaking by most recent timestamp first
+        if results.len() > 1 {
+            let mut vdb = crate::mem8::vector_db::M8VectorWaveDb::new();
+            for m in &results {
+                vdb.insert(
+                    &m.anchor_type,
+                    &m.origin,
+                    m.keywords.clone(),
+                    &m.context,
+                    m.frequency as u32,
+                    m.timestamp.timestamp(),
+                );
+            }
+            let query_str = keywords.join(" ");
+            let hits = vdb.search_hybrid_rrf(
+                &query_str,
+                keywords,
+                108,
+                &crate::mem8::vector_db::VectorMetadataFilter::default(),
+                results.len(),
+            );
+            let mut ranked = Vec::with_capacity(results.len());
+            for hit in hits {
+                if let Some(m) = results.get(hit.record_id) {
+                    ranked.push(m.clone());
+                }
+            }
+            if ranked.len() == results.len() {
+                results = ranked;
+            } else {
+                results.sort_by_key(|a| std::cmp::Reverse(a.timestamp));
+            }
+        }
 
         Ok(results)
+    }
+
+    /// Execute a full `M8VectorWaveDb` Hybrid Vector (E8 Gosset PQ + SPQT Base-243 HNSW) + BM25F +
+    /// Wave Resonance Reciprocal Rank Fusion (`RRF`) search over the memory bank.
+    pub fn find_hybrid_vector_rrf(
+        &mut self,
+        query: &str,
+        keywords: &[String],
+        target_freq_hz: u32,
+        top_k: usize,
+    ) -> Result<(
+        Vec<(Memory, crate::mem8::vector_db::HybridVectorSearchHit)>,
+        crate::mem8::vector_db::VectorDbHealthReport,
+    )> {
+        self.bank.total_recalls += 1;
+        self.bank.last_accessed = Utc::now();
+
+        let guardian = crate::ai_guardian::AiGuardian::new();
+        let mut clean_memories = Vec::new();
+        let mut vdb = crate::mem8::vector_db::M8VectorWaveDb::new();
+
+        for memory in &self.bank.memories {
+            let (sanitized_context, trust) =
+                guardian.sanitize_memory_text(&memory.context, &memory.origin);
+            if trust == crate::ai_guardian::MemoryTrustLevel::Quarantined {
+                continue;
+            }
+            let mut m = memory.clone();
+            m.context = sanitized_context;
+            vdb.insert(
+                &m.anchor_type,
+                &m.origin,
+                m.keywords.clone(),
+                &m.context,
+                m.frequency as u32,
+                m.timestamp.timestamp(),
+            );
+            clean_memories.push(m);
+        }
+
+        let health = vdb.health_report();
+        let hits = vdb.search_hybrid_rrf(
+            query,
+            keywords,
+            target_freq_hz,
+            &crate::mem8::vector_db::VectorMetadataFilter::default(),
+            top_k,
+        );
+
+        let mut paired = Vec::with_capacity(hits.len());
+        for hit in hits {
+            if let Some(m) = clean_memories.get(hit.record_id) {
+                paired.push((m.clone(), hit));
+            }
+        }
+        Ok((paired, health))
     }
 
     /// Get statistics about memory bank
