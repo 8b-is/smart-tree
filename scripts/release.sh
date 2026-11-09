@@ -87,12 +87,29 @@ REMOTE_WORK="/tmp/st-mac-release-${BUILD_ID}"
 ) &
 MAC_PID=$!
 
+WIN_PID=""
+if command -v cargo-xwin >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/cargo-xwin" ]]; then
+    CARGO_XWIN_BIN="$(command -v cargo-xwin 2>/dev/null || echo "$HOME/.local/bin/cargo-xwin")"
+    (
+        export PATH="$HOME/.local/bin:$PATH"
+        export ST_BUILD_ID="$BUILD_ID"
+        export SMART_TREE_NO_UPDATE_CHECK=1
+        cd "$RELEASE_DIR/source/smart-tree"
+        "$CARGO_XWIN_BIN" build --locked --release --target x86_64-pc-windows-msvc --bin st --bin m8 --bin n8x
+    ) &
+    WIN_PID=$!
+fi
+
 wait "$LINUX_PID"
 ok "Linux x86_64 build complete"
 wait "$MAC_PID"
 ok "macOS aarch64 build complete on ${MAC_HOST}"
+if [[ -n "$WIN_PID" ]]; then
+    wait "$WIN_PID"
+    ok "Windows x86_64-pc-windows-msvc build complete"
+fi
 
-# 4. Package Linux and macOS archives into RELEASE_DIR
+# 4. Package Linux, macOS, and Windows archives into RELEASE_DIR
 python3 scripts/package_i1_release.py binaries \
     --release "$RELEASE_DIR" \
     --binaries "$LINUX_CACHE_TARGET_DIR/release" \
@@ -117,7 +134,29 @@ python3 scripts/package_i1_release.py binaries \
     --force
 cp "$RELEASE_DIR/st-aarch64-apple-darwin.tar.gz" "$RELEASE_DIR/smart-tree-aarch64-apple-darwin.tar.gz"
 (cd "$RELEASE_DIR" && sha256sum "smart-tree-aarch64-apple-darwin.tar.gz" > "smart-tree-aarch64-apple-darwin.tar.gz.sha256")
-ok "Packaged Linux & macOS bundles into ${RELEASE_DIR}"
+
+WIN_BIN_DIR="${CARGO_TARGET_DIR:-$HOME/.cargo/target}/x86_64-pc-windows-msvc/release"
+WIN_ASSETS=()
+if [[ -f "$WIN_BIN_DIR/st.exe" ]]; then
+    python3 scripts/package_i1_release.py binaries \
+        --release "$RELEASE_DIR" \
+        --binaries "$WIN_BIN_DIR" \
+        --target x86_64-pc-windows-msvc \
+        --force
+    cp "$RELEASE_DIR/st-x86_64-pc-windows-msvc.zip" "$RELEASE_DIR/smart-tree-x86_64-pc-windows-msvc.zip"
+    cp "$RELEASE_DIR/st-x86_64-pc-windows-msvc.zip" "$RELEASE_DIR/st-${TAG}-x86_64-pc-windows-msvc.zip"
+    (cd "$RELEASE_DIR" && sha256sum "smart-tree-x86_64-pc-windows-msvc.zip" > "smart-tree-x86_64-pc-windows-msvc.zip.sha256")
+    (cd "$RELEASE_DIR" && sha256sum "st-${TAG}-x86_64-pc-windows-msvc.zip" > "st-${TAG}-x86_64-pc-windows-msvc.zip.sha256")
+    WIN_ASSETS=(
+        "$RELEASE_DIR/st-x86_64-pc-windows-msvc.zip"
+        "$RELEASE_DIR/st-x86_64-pc-windows-msvc.zip.sha256"
+        "$RELEASE_DIR/smart-tree-x86_64-pc-windows-msvc.zip"
+        "$RELEASE_DIR/smart-tree-x86_64-pc-windows-msvc.zip.sha256"
+        "$RELEASE_DIR/st-${TAG}-x86_64-pc-windows-msvc.zip"
+        "$RELEASE_DIR/st-${TAG}-x86_64-pc-windows-msvc.zip.sha256"
+    )
+fi
+ok "Packaged Linux, macOS & Windows bundles into ${RELEASE_DIR}"
 
 # 5. Publish to GitHub Release & i1.is nodes
 if gh release view "$TAG" -R "$GITHUB_REPO" >/dev/null 2>&1; then
@@ -133,6 +172,7 @@ if gh release view "$TAG" -R "$GITHUB_REPO" >/dev/null 2>&1; then
         "$RELEASE_DIR/st-aarch64-apple-darwin.tar.gz.sha256" \
         "$RELEASE_DIR/smart-tree-aarch64-apple-darwin.tar.gz" \
         "$RELEASE_DIR/smart-tree-aarch64-apple-darwin.tar.gz.sha256" \
+        "${WIN_ASSETS[@]}" \
         -R "$GITHUB_REPO" --clobber
 else
     gh release create "$TAG" \
@@ -147,6 +187,7 @@ else
         "$RELEASE_DIR/st-aarch64-apple-darwin.tar.gz.sha256" \
         "$RELEASE_DIR/smart-tree-aarch64-apple-darwin.tar.gz" \
         "$RELEASE_DIR/smart-tree-aarch64-apple-darwin.tar.gz.sha256" \
+        "${WIN_ASSETS[@]}" \
         -R "$GITHUB_REPO" \
         --title "Smart Tree ${TAG}" \
         --notes "Smart Tree ${TAG} (${BUILD_ID})"

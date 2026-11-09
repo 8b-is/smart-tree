@@ -29,7 +29,10 @@ def publish(source, root):
     names = {'manifest.json', 'build-id.txt', 'version.txt', 'BUILD_FEATURES.txt'}
     for asset in assets:
         name = asset['name']
-        if name != 'source.tar.gz' and not re.fullmatch(r'st-(aarch64|x86_64)-(apple-darwin|unknown-linux-gnu)\.tar\.gz', name):
+        if name != 'source.tar.gz' and not re.fullmatch(
+            r'st-(aarch64|x86_64)-(apple-darwin|unknown-linux-gnu)\.tar\.gz|st-(aarch64|x86_64)-pc-windows-msvc\.zip',
+            name,
+        ):
             raise ValueError('Unexpected release asset name')
         expected_url = f'https://i1.is/releases/smart-tree/{build}/{name}'
         if asset['browser_download_url'] != expected_url:
