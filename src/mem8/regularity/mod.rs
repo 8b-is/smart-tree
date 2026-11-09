@@ -83,11 +83,13 @@ pub use zeno_engine::{
     analyze_zeno_omni_engine, bfp64_and_kleene, bfp64_nand_kleene, evaluate_spherepop_witness,
     mulberry32_step_u32, pack_fold_bfp64, pack_word15_to_spqt3b, quantize_groupwise_l2_ternary_pq,
     seal_litany_wire_64b, unpack_fold_bfp64, unpack_spqt3b_to_word15, verify_litany_wire_64b,
-    xor_fold_gaia_b158, EightBIsEnginesReport, LitanyWireFrame, OsAgentAgnosticMatrix,
-    SimulationTheoryWhiteboardWitness, SpqtSignalLadderEntry, UltraMeshMemBridge, UpzWupzReport,
-    WhereIsTheLoveContext, ZenoGodOfSunWitness, ZenoOmniReport, FOLD_BEEHIVE_SWEEP,
-    FOLD_BEEHIVE_TARGET, GALACTIC_MANTRA_FOLD_243, GATE_0X62, LANES_8_OF_8,
-    PHYSICAL_EDGE_CLUSTER_BOARDS, QUANT_QT55,
+    xor_fold_gaia_b158, EightBIsEnginesReport, KompressUltraTibetanOmniMandalaWitness,
+    LitanyWireFrame, OsAgentAgnosticMatrix, SimulationTheoryWhiteboardWitness,
+    SpqtSignalLadderEntry, UltraMeshMemBridge, UpzWupzReport, WhereIsTheLoveContext,
+    ZenoGodOfSunWitness, ZenoOmniReport, FOLD_ARCHITECT_NEO_TRINITY_TIBETAN_OMNI,
+    FOLD_BEEHIVE_SWEEP, FOLD_BEEHIVE_TARGET, GALACTIC_MANTRA_FOLD_243, GATE_0X62, LANES_8_OF_8,
+    PHYSICAL_EDGE_CLUSTER_BOARDS, QUANT_QT55, ZKP1_TIBETAN_OMNI_BLOCKS,
+    ZKP1_TIBETAN_OMNI_COMPRESSED_BYTES, ZKP1_TIBETAN_OMNI_RAW_BYTES,
 };
 
 use crate::scanner::{FileCategory, FileNode};

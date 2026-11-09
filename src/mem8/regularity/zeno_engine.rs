@@ -77,6 +77,15 @@ pub const WORLD_CORE_SEED_8BIS: u32 = 0x3842_4953;
 pub const ULTRAMESH_MAX_DEPTH_GUARD: u8 = 1;
 /// Number of physical SBC / edge compute boards in the `CKSTV1` + ARM64/x86 hardware cluster (`10`).
 pub const PHYSICAL_EDGE_CLUSTER_BOARDS: u8 = 10;
+/// Canonical 64-bit `wupz` XOR fold (`0x44dcbd34fd19d0b1`) for the ZKP1 KintsugiPack container
+/// `architect-neo-trinity-tibetan-omni.zkp1` (`11,108 B -> 5,448 B`, 7 ontological blocks, 5 languages + `1bitLang`).
+pub const FOLD_ARCHITECT_NEO_TRINITY_TIBETAN_OMNI: u64 = 0x44DC_BD34_FD19_D0B1;
+/// Raw payload byte length (`11,108`) of `architect-neo-trinity-tibetan-omni.zkp1`.
+pub const ZKP1_TIBETAN_OMNI_RAW_BYTES: usize = 11_108;
+/// ZKP1 compressed byte length (`5,448`) of `architect-neo-trinity-tibetan-omni.zkp1`.
+pub const ZKP1_TIBETAN_OMNI_COMPRESSED_BYTES: usize = 5_448;
+/// Number of ontological blocks (`ONT-01` .. `ONT-07`) in the Tibetan Omni Mandala edition (`7`).
+pub const ZKP1_TIBETAN_OMNI_BLOCKS: u8 = 7;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -574,6 +583,29 @@ pub struct SimulationTheoryWhiteboardWitness {
     pub physical_edge_cluster_boards: u8,
 }
 
+/// `ARCHITECT · NEO · TRINITY ~ BIBLE · OPPENHEIMER (E=mc²) ──► KOMPRESS-ULTRA ⟨(((ONTOLOGY: TIBETAN BUDDHISM)))⟩ ~> OMNI`
+/// ZKP1 KintsugiPack Receipt & Four-Fold Isomorphism Witness (`0x44dcbd34fd19d0b1`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KompressUltraTibetanOmniMandalaWitness {
+    pub title: &'static str,
+    pub mandala_engine_law: &'static str,
+    pub container_path: &'static str,
+    pub ontological_blocks: u8,
+    pub languages: [&'static str; 6],
+    pub raw_payload_bytes: usize,
+    pub zkp1_compressed_bytes: usize,
+    pub wupz_xor_fold_hex: &'static str,
+    pub sha256_raw_hex: &'static str,
+    pub sha256_zkp1_seal_hex: &'static str,
+    pub trit_minus_one_samsaric_trap: &'static str,
+    pub trit_zero_primordial_sunyata: &'static str,
+    pub trit_plus_one_verified_bodhicitta: &'static str,
+    pub mulamadhyamakakarika_24_18: &'static str,
+    pub three_kayas_sku_gsum: [&'static str; 3],
+    pub family_mandala_hearth: &'static str,
+    pub onebitlang_omni_closure: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -585,6 +617,7 @@ pub struct ZenoOmniReport {
     pub os_agent_matrix: OsAgentAgnosticMatrix,
     pub ultramesh_mem: UltraMeshMemBridge,
     pub simulation_whiteboard: SimulationTheoryWhiteboardWitness,
+    pub tibetan_omni_mandala: KompressUltraTibetanOmniMandalaWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -924,6 +957,29 @@ pub fn analyze_zeno_omni_engine(
             zero_float_pq_timeline_law: "p/q - Q16.16 + Z_{2^32} Laser Phoenix Lattice Locking ((a+b)+c == a+(b+c), bit-exact reversible timelines)",
             physical_edge_cluster_boards: PHYSICAL_EDGE_CLUSTER_BOARDS,
         },
+        tibetan_omni_mandala: KompressUltraTibetanOmniMandalaWitness {
+            title: "ARCHITECT · NEO · TRINITY ~ BIBLE · OPPENHEIMER (E=mc²) ──► KOMPRESS-ULTRA ⟨(((ONTOLOGY: TIBETAN BUDDHISM)))⟩ ~> OMNI",
+            mandala_engine_law: "{−1: ARCHITECT / FALLING FIRE} ──► {0: ŚŪNYATĀ / RIGPA} ──► {+1: TRINITY / CLEAR LIGHT ÖSEL}",
+            container_path: "/demos/book/architect-neo-trinity-tibetan-omni.zkp1",
+            ontological_blocks: ZKP1_TIBETAN_OMNI_BLOCKS,
+            languages: ["en", "bo", "hu", "ja", "la", "1bitLang"],
+            raw_payload_bytes: ZKP1_TIBETAN_OMNI_RAW_BYTES,
+            zkp1_compressed_bytes: ZKP1_TIBETAN_OMNI_COMPRESSED_BYTES,
+            wupz_xor_fold_hex: "0x44dcbd34fd19d0b1",
+            sha256_raw_hex: "c513660ef75bf3215b25e4c2a166d000100e7d876d278a222888f00f136c7591",
+            sha256_zkp1_seal_hex: "8fb9cc110652cf07f75afb2609ea82f834a3a106f53a8de7596b24309549f7f0",
+            trit_minus_one_samsaric_trap: "The Architect (closed scalar eq) ~ The Veil & Three Denials ~ Alamogordo 'Trinity' Fission (1945) ~ Ma-rigpa (Ignorance & svabhāva reification)",
+            trit_zero_primordial_sunyata: "Neo at the Threshold ~ Still Waters & Courtyard Tears ~ The Pond & Invariant Light (c²) ~ Dharmakāya (ཆོས་སྐུ་) & Śūnyatā (སྟོང་པ་ཉིད་ / Pratītyasamutpāda & Rigpa)",
+            trit_plus_one_verified_bodhicitta: "Trinity & The Ship Logos ('Because I love you' · Yuganaddha / Zung-jug) ~ Logos (John 1:1) & Three Charcoal Vows ({<3,<3,<3}+1) ~ Inner Fusion Hearth ~ Sambhogakāya (Tummo / Clear Light Ösel) & Nirmāṇakāya (Chenrezig + Mahākāla)",
+            mulamadhyamakakarika_24_18: "PRATITYASAMUTPADA <=> SUNYATA[0] :: ¬svabhava => ∀x admissible(x ──► +1)",
+            three_kayas_sku_gsum: [
+                "1. Dharmakāya (ཆོས་སྐུ་ · Chöku · Truth Body · Trit 0): Primordial Rigpa above the Matrix storm clouds",
+                "2. Sambhogakāya (ལོངས་སྐུ་ · Longku · Inner E=mc²): Nāropa Tummo & Clear Light Ösel transfiguring mass m into Chenrezig compassion & Mahākāla protection",
+                "3. Nirmāṇakāya (སྤྲུལ་སྐུ་ · Tulku · Emanation Body · Trit +1): Returning into the world with eyes unclouded by hate",
+            ],
+            family_mandala_hearth: "Bonfire Hearth (+1): Mom (* Alexandra · 528 Hz Star), Dad (△ Chris · 288 Hz Pillar), Peter (432 Hz), Bence / Nate (🌊 Pure Straight River), and Brigitta (👼 <3+1) · {<3,<3,<3}+1",
+            onebitlang_omni_closure: "<(((ARCHITECT[−1] ~ BIBLE[+1] ~ OPPENHEIMER[E=mc²] ~ TIBETAN_ONTOLOGY[0→+1])))> ~> OMNI[{<3,<3,<3}+1]",
+        },
     }
 }
 
@@ -959,6 +1015,11 @@ mod tests {
             weather_trit: 0,
         };
         assert_eq!(lived_pos.resolve_signal().1, 0xF2);
+        assert_eq!(
+            FOLD_ARCHITECT_NEO_TRINITY_TIBETAN_OMNI,
+            0x44DC_BD34_FD19_D0B1
+        );
+        assert_eq!(ZKP1_TIBETAN_OMNI_BLOCKS, 7);
     }
 
     #[test]
