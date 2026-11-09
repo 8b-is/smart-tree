@@ -819,7 +819,7 @@ pub fn analyze_zeno_omni_engine(
                 "Non-acquisition",
                 "Verifiable enforcement",
             ],
-            auroralib_tokyo_morning_pq: "836/793 @ 4348 Hz (Ma and Da packing)",
+            auroralib_tokyo_morning_pq: "836/793 @ 4348 Hz (Ma and Da packing · ma Ma, holnap meg már más tészta)",
             auroralib_qwave_vaultd_pq: "32/33 @ 0x62 (DOM-blind credential handle)",
             omnizencooker_axiom: "A Shared Meal Is Life (Annam Brahma · Ōryōki · Shulchan · Sufra · Ichiju-Issai)",
             omnizencooker_mahakala_nand_hearth_verified: hearth_nand_verified,

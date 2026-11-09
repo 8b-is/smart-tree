@@ -1493,6 +1493,42 @@ pub fn felix_count_utf8_leads_nand64(word: u64) -> u32 {
     }
 }
 
+// ============================================================================
+// 11. AGP-ISA 0x40–0x43 DYADIC Z[1/2] & TERNARY WAVE CONTRACTION (`ma Ma` 836/793)
+// ============================================================================
+
+/// Tokyo Morning `Ma and Da` interval numerator (`836`).
+pub const FELIX_TOKYO_MA_DA_NUM: u64 = 836;
+/// Tokyo Morning `Ma and Da` interval denominator (`793`).
+pub const FELIX_TOKYO_MA_DA_DEN: u64 = 793;
+/// Tokyo Morning `Ma and Da` carrier frequency in Hz (`4348`).
+pub const FELIX_TOKYO_MA_DA_HZ: u32 = 4348;
+
+/// Fused AGP-ISA (`0x40–0x43`) 64-lane balanced-ternary wave contraction in $\mathbb{Z}[1/2]$:
+/// - `0x40`: 64-lane ternary dot product $\text{dot} = \sum_{i=0}^{63} \text{wave}[i] \cdot \text{sgn}(\text{trits}[i])$
+/// - `0x41`: 64-lane $L_1$ wave energy $E_1 = \sum_{i=0}^{63} |\text{wave}[i]|$
+/// - `0x42`: Dyadic $\mathbb{Z}[1/2]$ contraction step $\text{contracted} = \text{acc} + (\text{dot} \gg \text{dyadic\_shift})$
+/// - `0x43`: Tokyo Morning *Ma and Da* (`836/793 @ 4348 Hz` — *"ma Ma, holnap meg már más tészta"*) exact integer resonance $\lfloor E_1 \cdot 836 / 793 \rfloor$.
+#[inline(always)]
+pub fn felix_agp_ternary_wave_contraction_64_i32(
+    wave: &[i16; 64],
+    trits: &[i8; 64],
+    acc: i32,
+    dyadic_shift: u32,
+) -> (i32, u32, i32, u64) {
+    let dot = felix_ternary_gemm_i32(wave, trits);
+    let mut l1_energy = 0u32;
+    let mut i = 0usize;
+    while i < 64 {
+        l1_energy = l1_energy.wrapping_add((wave[i] as i32).unsigned_abs());
+        i += 1;
+    }
+    let shift = dyadic_shift & 31;
+    let contracted = acc.wrapping_add(dot >> shift);
+    let ma_da_resonance = ((l1_energy as u64) * FELIX_TOKYO_MA_DA_NUM) / FELIX_TOKYO_MA_DA_DEN;
+    (dot, l1_energy, contracted, ma_da_resonance)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1710,5 +1746,18 @@ mod tests {
             }
             assert_eq!(felix_crc32_ieee(slice), !ref_crc, "crc32 mismatch at {len}");
         }
+
+        // Verify AGP-ISA 0x40–0x43 64-lane dyadic Z[1/2] & Ma-and-Da (836/793) wave contraction
+        let wave64 = [100i16; 64];
+        let trits64 = [1i8; 64];
+        let (dot64, l1_64, contracted64, ma_da64) =
+            felix_agp_ternary_wave_contraction_64_i32(&wave64, &trits64, 50, 2);
+        assert_eq!(dot64, 6400);
+        assert_eq!(l1_64, 6400);
+        assert_eq!(contracted64, 50 + (6400 >> 2));
+        assert_eq!(
+            ma_da64,
+            (6400 * FELIX_TOKYO_MA_DA_NUM) / FELIX_TOKYO_MA_DA_DEN
+        );
     }
 }
