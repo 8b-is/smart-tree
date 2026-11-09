@@ -105,13 +105,24 @@ impl LlmProxy {
 }
 
 impl LlmProxy {
-    /// Create a proxy with auto-detection of local LLMs (Ollama, LM Studio)
-    /// This is async because it needs to probe local ports
+    /// Create a proxy with auto-detection of local LLMs (Ollama, LM Studio, Caveman + Kompress)
+    /// This is async because it needs to probe local ports concurrently.
     pub async fn with_local_detection() -> Self {
         let mut proxy = Self::default();
+        let caveman_probe = caveman::CavemanProvider::new();
 
-        // Auto-detect local LLM servers
-        let local_llms = ollama::detect_local_llms().await;
+        // Concurrently probe local Ollama/LM Studio and Caveman/Kompress-Super-Ultra (:8787 / :8799)
+        let (local_llms, (caveman_alive, kompress_alive)) =
+            tokio::join!(ollama::detect_local_llms(), caveman_probe.unified_health());
+
+        if caveman_alive || kompress_alive {
+            eprintln!(
+                "🪨 Detected Sovereign Local Gateway (caveman:8787={}, kompress-super-ultra:8799={})",
+                caveman_alive, kompress_alive
+            );
+            proxy.add_provider(Box::new(caveman_probe));
+        }
+
         for info in local_llms {
             match info.server_type {
                 ollama::LocalLlmType::Ollama => {
