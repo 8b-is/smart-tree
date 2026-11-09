@@ -982,6 +982,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "requires a local Ollama server with st-deepseek-pqm; run with --ignored"]
     async fn verify_pq_bench_runs_and_compares_ollama_vs_smart_tree() {
         let cmd = PqBenchCommand {
             base_model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B".to_string(),

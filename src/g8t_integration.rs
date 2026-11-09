@@ -7350,6 +7350,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires a freestanding (no_std) cross-link toolchain; run with --ignored"]
     fn dealers_choice_routes_and_capsela_asm_executable_runs_freestanding() {
         let report = route_dealers_choice("complete capsela g8t asm executable programs", &[]);
         assert_eq!(report.classified_domain, "capsela_asm_executable");

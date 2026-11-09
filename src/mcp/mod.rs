@@ -947,7 +947,7 @@ mod tests {
             .unwrap();
         let init_resp: Value = serde_json::from_str(&init_resp_str).unwrap();
         let instructions = init_resp["result"]["instructions"].as_str().unwrap();
-        assert!(instructions.contains("WHY AI MODELS PICK THESE TOOLS FIRST"));
+        assert!(instructions.contains("WHY AI AGENTS PICK THESE TOOLS FIRST"));
         assert!(instructions.contains("INSTEAD OF"));
         assert!(init_resp["result"]["serverInfo"]["why_pick_smart_tree"].is_object());
 

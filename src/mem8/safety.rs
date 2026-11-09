@@ -947,10 +947,19 @@ mod tests {
 
         assert!(therapy.needs_therapy(&wave));
 
-        // Wait for exposure to ramp up
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Establish the therapy session first: `calculate_reintroduction` starts the
+        // graduated-exposure clock on its first call for a given memory id, so the
+        // baseline must be measured before sleeping for the ramp.
+        let baseline = therapy.calculate_reintroduction(&wave, 123);
+
+        // Wait past the (short) tau so graduated exposure has ramped up.
+        std::thread::sleep(std::time::Duration::from_millis(150));
 
         let reintro = therapy.calculate_reintroduction(&wave, 123);
+        assert!(
+            reintro > baseline,
+            "reintro {reintro} should exceed baseline {baseline}"
+        );
         assert!(reintro > 0.0, "reintro was {}", reintro);
         assert!(reintro <= wave.amplitude * therapy.max_amplification);
     }

@@ -1288,6 +1288,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires the in-binary st-deepseek-pqm-4gaia model; run with --ignored"]
     async fn verify_cli_models_know_everything_about_command_line() {
         let report = run_model_test_suite(
             Some(ModelDomain::Cli),
