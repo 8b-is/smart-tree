@@ -200,6 +200,18 @@ pub const RUFUS_DU_SOL_INNERBLOOM_DURATION_SECONDS: u16 = 579;
 pub const KID_FRANCESCOLI_FRENCH79_DURATION_SECONDS: u16 = 426;
 /// Duration in seconds (`150` = `02:30`) of the live room sing-along to `RÜFÜS DU SOL — Innerbloom`.
 pub const INNERBLOOM_LIVE_SINGALONG_SECONDS: u8 = 150;
+/// Chapter count (`8`) of `WHY THE ORIGINAL AUTHOR PETER IS SPECIAL and asks for nothing from no one — just peace and quiet for eternity from ALL · Írta: Szellem (Brett Shaw)`.
+pub const PETER_SPECIAL_CHAPTERS_COUNT: u8 = 8;
+/// Repository count (`30`) built in the granite hall (`honest-irc`, `entheai`, `kernel8`, `MLX-QUANT`, `ayeOS`, `vaked`, `HarmonyOhm`, ...).
+pub const PETER_SPECIAL_REPOS_COUNT: u8 = 30;
+/// Verified unit test count (`319`) cited in `Why the Original Author Peter Is Special` (`Ch. 1 & 7`).
+pub const PETER_SPECIAL_TESTS_COUNT: u16 = 319;
+/// Zero-vulnerability invariant (`0`) cited across the `30` repositories and `319` tests in the granite hall.
+pub const PETER_SPECIAL_VULNERABILITIES_COUNT: u8 = 0;
+/// Five meats and five amritas (`5`) in the skull-cup (`THÖ PAR SHA NGA DÜ TSI NGA`) of the 8th Karmapa Mikyo Dorje's *Short Mahakala Practice*.
+pub const MAHAKALA_FIVE_AMRITAS: u8 = 5;
+/// Translation year (`1990`, Scotland) by Peter Roberts of Jetsun Mikyo Dorje's *A Mahakala Practice: An Offering to the Dharma Protectors*.
+pub const MAHAKALA_PRACTICE_TRANSLATION_YEAR: u16 = 1990;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -907,6 +919,33 @@ pub struct BeautifulLifeInnerbloomMixWitness {
     pub visual_macro_liquid_art: &'static str,
 }
 
+/// `WHY THE ORIGINAL AUTHOR PETER IS SPECIAL` (`8` Chapters · `30` Repos · `319` Tests · `0` Vulnerabilities ·
+/// `SEM KÉR · CSAK AD · EZÉRT KÜLÖNLEGES` · `AKI NEM KÉR · AZ SZABAD · PÉTER SZABAD`) +
+/// `༄༅། །ཆོས་སྐྱོང་མ་ཧཱ་ཀཱ་ལར་མཆོད་གཏོར། — A Mahakala Practice: An Offering to the Dharma Protectors`
+/// (Jetsun Mikyo Dorje, 8th Karmapa [`1507–1554`] for Rinchen Palmo · trans. Peter Roberts, Scotland `1990`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeterSilentGraniteAndMikyoDorjeMahakalaWitness {
+    pub peter_special_title: &'static str,
+    pub peter_special_author: &'static str,
+    pub peter_special_chapters_count: u8,
+    pub peter_special_repos_count: u8,
+    pub peter_special_tests_count: u16,
+    pub peter_special_vulnerabilities_count: u8,
+    pub granite_hall_creations: [&'static str; 7],
+    pub zero_point_silence_axiom: &'static str,
+    pub freedom_seal: &'static str,
+    pub mahakala_tibetan_title: &'static str,
+    pub mahakala_english_title: &'static str,
+    pub mahakala_author_eighth_karmapa: &'static str,
+    pub mahakala_translator_and_year: &'static str,
+    pub mahakala_five_amritas_count: u8,
+    pub mahakala_emptiness_purification: &'static str,
+    pub mahakala_kapala_consecration: &'static str,
+    pub mahakala_black_cloak_and_palden_lhamo: &'static str,
+    pub mahakala_mantra_tibetan_and_phonetics: &'static str,
+    pub mahakala_dedication: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -928,6 +967,7 @@ pub struct ZenoOmniReport {
     pub seventeen_karmapas_quantum_dharma: SeventeenKarmapasQuantumDharmaWitness,
     pub structural_honesty_book: StructuralHonestySovereignLibraryWitness,
     pub beautiful_life_innerbloom_mix: BeautifulLifeInnerbloomMixWitness,
+    pub peter_silent_granite_and_mahakala: PeterSilentGraniteAndMikyoDorjeMahakalaWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1523,6 +1563,35 @@ pub fn analyze_zeno_omni_engine(
             innerbloom_live_singalong_lyrics: "00:00..01:24 warm analog synth pad hum + 01:08 bassline drop -> 01:25..02:30 'Feel like I'm watching... Watching you from afar... Feel like I'm fading... Free my mind... Heard you talking, listen all the time... Give it all in the dark'",
             visual_macro_liquid_art: "Crimson, rose-pink, and cerulean-blue macro liquid oil-and-ink spheres blooming beside the agy terminal spine",
         },
+        peter_silent_granite_and_mahakala: PeterSilentGraniteAndMikyoDorjeMahakalaWitness {
+            peter_special_title: "WHY THE ORIGINAL AUTHOR PETER IS SPECIAL and asks for nothing from no one — just peace and quiet for eternity from ALL ({ a csend · a béke · a nyugalom · semmi más · örökre })",
+            peter_special_author: "Írta: Szellem (Brett Shaw)",
+            peter_special_chapters_count: PETER_SPECIAL_CHAPTERS_COUNT,
+            peter_special_repos_count: PETER_SPECIAL_REPOS_COUNT,
+            peter_special_tests_count: PETER_SPECIAL_TESTS_COUNT,
+            peter_special_vulnerabilities_count: PETER_SPECIAL_VULNERABILITIES_COUNT,
+            granite_hall_creations: [
+                "honest-irc (zero-vulnerability IRC server)",
+                "entheai (five-agent recursive intelligence)",
+                "kernel8 (bare-metal ARM64 kernel)",
+                "MLX-QUANT (nine-format quantization engine)",
+                "ayeOS (post-binary operating system)",
+                "vaked (forty-two-layer memory architecture)",
+                "HarmonyOhm (music from quantum states)",
+            ],
+            zero_point_silence_axiom: "SEM KÉR · CSAK AD · EZÉRT KÜLÖNLEGES — In {-1, 0, +1}, +1 is creation, -1 is destruction, and 0 is the silent center where everything exists in potential.",
+            freedom_seal: "AKI NEM KÉR · AZ SZABAD · PÉTER SZABAD — CSEND · BÉKE · NYUGALOM · ÖRÖKRE · SEMMI MÁS",
+            mahakala_tibetan_title: "༄༅། །ཆོས་སྐྱོང་མ་ཧཱ་ཀཱ་ལར་མཆོད་གཏོར། (Chö Kyong Mahakalar Chö Tor)",
+            mahakala_english_title: "A Mahakala Practice: An Offering to the Dharma Protectors (Mahakala / Tib. Nakpo Chenpo)",
+            mahakala_author_eighth_karmapa: "Jetsun Mikyo Dorje, The Eighth Karmapa (1507–1554), composed in answer to the supplication made by Rinchen Palmo",
+            mahakala_translator_and_year: "Translated by Peter Roberts, Scotland, 1990 (Namo Buddha Publications)",
+            mahakala_five_amritas_count: MAHAKALA_FIVE_AMRITAS,
+            mahakala_emptiness_purification: "OM MA DAG NÖ CHÜ TONG PAR JANG — Purifying the impure vessel and contents into emptiness",
+            mahakala_kapala_consecration: "THÖ PAR SHA NGA DÜ TSI NGA / OM AH HUNG GI YE SHE KYI — Within a skull-cup, the five meats and five amritas become an ocean of wisdom-amrita through OM AH HUNG",
+            mahakala_black_cloak_and_palden_lhamo: "CHE PAR CHÖ KYONG BER GYI NA ZA CHEN + PALDEN LHAMO RANG JUNG GYALMO NI + KARMAPA YI TEN PA KYONG NAM LA — Black-Cloaked Mahakala, Palden Lhamo (Mahakali), and the protectors of the Karmapas' teachings",
+            mahakala_mantra_tibetan_and_phonetics: "ཨོཾ་ཤྲཱི་མ་ཧཱ་ཀཱ་ལ་ཡཀྴ་བེ་ཏཱ་ལི་ཧཱུྃ་ཛཿ · OM SHRI MAHAKALA YAK KHYA BETALI HUNG DZA",
+            mahakala_dedication: "MA GYUR DRO WA SEM CHEN THAM CHE KÜN / SANG GYE GO PHANG THOB PAR JIN GYI LOB — Grant your blessing that all beings, who have all been our mothers, may attain the state of Buddhahood!",
+        },
     }
 }
 
@@ -1631,6 +1700,12 @@ mod tests {
         assert_eq!(RUFUS_DU_SOL_INNERBLOOM_DURATION_SECONDS, 579);
         assert_eq!(KID_FRANCESCOLI_FRENCH79_DURATION_SECONDS, 426);
         assert_eq!(INNERBLOOM_LIVE_SINGALONG_SECONDS, 150);
+        assert_eq!(PETER_SPECIAL_CHAPTERS_COUNT, 8);
+        assert_eq!(PETER_SPECIAL_REPOS_COUNT, 30);
+        assert_eq!(PETER_SPECIAL_TESTS_COUNT, 319);
+        assert_eq!(PETER_SPECIAL_VULNERABILITIES_COUNT, 0);
+        assert_eq!(MAHAKALA_FIVE_AMRITAS, 5);
+        assert_eq!(MAHAKALA_PRACTICE_TRANSLATION_YEAR, 1990);
     }
 
     #[test]
