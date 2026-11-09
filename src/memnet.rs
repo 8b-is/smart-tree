@@ -5499,6 +5499,390 @@ pub struct MemnetGlassdoorReport {
 }
 
 // ============================================================================
+// 8. Tokio Async Mesh Coordinator (`/rust-async-patterns`)
+// ============================================================================
+
+/// Production Tokio-native async coordinator for `MemnetNodeState` implementing:
+/// - **Pattern 1**: Concurrent UDP fan-out with `tokio::task::JoinSet` and `tokio::select!`
+/// - **Pattern 2**: Multi-consumer `broadcast` event bus + `watch` epoch state channel
+/// - **Pattern 3**: Explicit async timeouts (`tokio::time::timeout`) and error propagation
+/// - **Pattern 4**: Cooperative graceful shutdown via `broadcast::Sender<()>`
+/// - **Pattern 7**: Read-heavy `tokio::sync::RwLock` (never held across `.await`) + `Semaphore` concurrency bounding
+#[derive(Clone)]
+pub struct AsyncMemnetCoordinator {
+    state: std::sync::Arc<tokio::sync::RwLock<MemnetNodeState>>,
+    semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+    event_tx: tokio::sync::broadcast::Sender<MemnetPayload>,
+    epoch_tx: std::sync::Arc<tokio::sync::watch::Sender<u64>>,
+    epoch_rx: tokio::sync::watch::Receiver<u64>,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
+}
+
+impl Default for AsyncMemnetCoordinator {
+    fn default() -> Self {
+        Self::new(MemnetNodeState::default(), 16)
+    }
+}
+
+impl AsyncMemnetCoordinator {
+    /// Construct a new `AsyncMemnetCoordinator` with bounded concurrency (`max_concurrent_probes`).
+    pub fn new(initial_state: MemnetNodeState, max_concurrent_probes: usize) -> Self {
+        let (event_tx, _) = tokio::sync::broadcast::channel(128);
+        let (epoch_tx, epoch_rx) = tokio::sync::watch::channel(0u64);
+        let (shutdown_tx, _) = tokio::sync::broadcast::channel(4);
+        Self {
+            state: std::sync::Arc::new(tokio::sync::RwLock::new(initial_state)),
+            semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                max_concurrent_probes.max(1),
+            )),
+            event_tx,
+            epoch_tx: std::sync::Arc::new(epoch_tx),
+            epoch_rx,
+            shutdown_tx,
+        }
+    }
+
+    /// Subscribe to live `MemnetPayload` mesh events (`NodePong`, `WaveQaResponse`, etc.).
+    pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<MemnetPayload> {
+        self.event_tx.subscribe()
+    }
+
+    /// Obtain a `watch::Receiver<u64>` that increments whenever the mesh state mutates.
+    pub fn watch_epoch(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.epoch_rx.clone()
+    }
+
+    /// Signal graceful shutdown to all active async responder tasks.
+    pub fn trigger_shutdown(&self) -> usize {
+        self.shutdown_tx.send(()).unwrap_or(0)
+    }
+
+    /// Read a snapshot of the underlying `MemnetNodeState` without holding locks across I/O.
+    pub async fn snapshot(&self) -> MemnetNodeState {
+        self.state.read().await.clone()
+    }
+
+    /// Anchor a Q&A pair into the wave cache and increment the `watch` state epoch.
+    pub async fn learn_wave_qa_async(&self, question: &str, answer: &str) -> WaveQaPacket {
+        let pkt = {
+            let mut guard = self.state.write().await;
+            guard.learn_wave_qa(question, answer)
+        };
+        let next_epoch = (*self.epoch_rx.borrow()).wrapping_add(1);
+        let _ = self.epoch_tx.send(next_epoch);
+        let _ = self.event_tx.send(MemnetPayload::WaveQaResponse(pkt.clone()));
+        pkt
+    }
+
+    /// Concurrent non-blocking UDP broadcast and peer fan-out using `JoinSet` and `Semaphore`.
+    pub async fn broadcast_lan_udp_async(&self, pkt: &MemnetRawPacket) -> Result<usize> {
+        let targets: Vec<SocketAddr> = {
+            let guard = self.state.read().await;
+            let mut addrs = vec![
+                SocketAddr::from(([127, 0, 0, 1], MEMNET_FS_PORT)),
+                SocketAddr::from(([127, 0, 0, 1], MEMNET_HOTTUB_PORT)),
+            ];
+            for route in &guard.routes {
+                if route.status != RouteStatus::Down {
+                    if let Ok(sock_addr) = route.endpoint.parse::<SocketAddr>() {
+                        if !sock_addr.ip().is_unspecified() && !sock_addr.ip().is_multicast() {
+                            addrs.push(sock_addr);
+                        }
+                    } else if let Some(ip_str) = route.endpoint.split(':').next() {
+                        if let Ok(ip) = ip_str.parse::<std::net::IpAddr>() {
+                            if !ip.is_unspecified() && !ip.is_multicast() {
+                                addrs.push(SocketAddr::new(ip, MEMNET_FS_PORT));
+                            }
+                        }
+                    }
+                }
+            }
+            addrs
+        };
+
+        let sock = std::sync::Arc::new(tokio::net::UdpSocket::bind("0.0.0.0:0").await?);
+        let _ = sock.set_broadcast(true);
+        let wire = std::sync::Arc::new(pkt.to_wire_bytes());
+
+        let mut set = tokio::task::JoinSet::new();
+        for target in targets {
+            let sem = std::sync::Arc::clone(&self.semaphore);
+            let sock_cl = std::sync::Arc::clone(&sock);
+            let wire_cl = std::sync::Arc::clone(&wire);
+            set.spawn(async move {
+                let _permit = sem.acquire_owned().await.ok()?;
+                tokio::time::timeout(
+                    Duration::from_millis(50),
+                    sock_cl.send_to(&wire_cl, target),
+                )
+                .await
+                .ok()?
+                .ok()
+            });
+        }
+
+        let mut sent = 0usize;
+        while let Some(res) = set.join_next().await {
+            if matches!(res, Ok(Some(_))) {
+                sent += 1;
+            }
+        }
+        Ok(sent)
+    }
+
+    /// Query active LAN peers concurrently using `JoinSet` + `Semaphore` + `tokio::time::timeout`,
+    /// returning the first qualifying `WaveQaPacket` (`resonance >= min_resonance_pm`).
+    pub async fn query_lan_wave_qa_async(
+        &self,
+        question: &str,
+        min_resonance_pm: u32,
+        timeout_ms: u64,
+    ) -> Option<(u32, WaveQaPacket)> {
+        // 1. Fast read-lock check on local cache first
+        {
+            let mut guard = self.state.write().await;
+            if let Some(hit) = guard.query_wave_qa(question, min_resonance_pm) {
+                return Some(hit);
+            }
+        }
+
+        // 2. Gather candidate peer endpoints without holding lock across `.await`
+        let (local_address, peers): (u8, Vec<SocketAddr>) = {
+            let guard = self.state.read().await;
+            let mut list = Vec::new();
+            for r in &guard.routes {
+                if r.status == RouteStatus::Up {
+                    if let Ok(sa) = r.endpoint.parse::<SocketAddr>() {
+                        if !sa.ip().is_unspecified() {
+                            list.push(sa);
+                        }
+                    } else if let Some(host) = r.endpoint.split(':').next() {
+                        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                            if !ip.is_unspecified() {
+                                list.push(SocketAddr::new(ip, MEMNET_FS_PORT));
+                            }
+                        }
+                    }
+                }
+            }
+            (guard.local_address, list)
+        };
+
+        if peers.is_empty() {
+            return None;
+        }
+
+        let query_pkt = MemnetPayload::WaveQaQuery {
+            origin_node: local_address,
+            question: question.to_string(),
+            min_resonance_pm,
+        }
+        .into_raw_packet(vec![0xF1])
+        .ok()?;
+        let wire = std::sync::Arc::new(query_pkt.to_wire_bytes());
+        let q_owned = question.to_string();
+        let per_peer_timeout = Duration::from_millis(timeout_ms.max(25));
+
+        let mut set = tokio::task::JoinSet::new();
+        for peer_addr in peers {
+            let sem = std::sync::Arc::clone(&self.semaphore);
+            let wire_cl = std::sync::Arc::clone(&wire);
+            let q_cl = q_owned.clone();
+            set.spawn(async move {
+                let _permit = sem.acquire_owned().await.ok()?;
+                let bind_ip = if peer_addr.ip().is_loopback() {
+                    "127.0.0.1:0"
+                } else {
+                    "0.0.0.0:0"
+                };
+                let sock = tokio::net::UdpSocket::bind(bind_ip).await.ok()?;
+                tokio::time::timeout(per_peer_timeout, sock.send_to(&wire_cl, peer_addr))
+                    .await
+                    .ok()?
+                    .ok()?;
+                let mut buf = vec![0u8; 8192];
+                let (len, _) = tokio::time::timeout(per_peer_timeout, sock.recv_from(&mut buf))
+                    .await
+                    .ok()?
+                    .ok()?;
+                let raw = MemnetRawPacket::from_wire_bytes(&buf[..len]).ok()?;
+                if let Ok(MemnetPayload::WaveQaResponse(pkt)) = MemnetPayload::from_raw_packet(&raw)
+                {
+                    let score = pkt.resonance_permille(&q_cl);
+                    if score >= min_resonance_pm {
+                        return Some((score, pkt));
+                    }
+                }
+                None
+            });
+        }
+
+        while let Some(joined) = set.join_next().await {
+            if let Ok(Some((score, pkt))) = joined {
+                set.abort_all();
+                {
+                    let mut guard = self.state.write().await;
+                    if !guard
+                        .wave_qa_cache
+                        .iter()
+                        .any(|e| e.packet_id == pkt.packet_id)
+                    {
+                        guard.wave_qa_cache.push(pkt.clone());
+                    }
+                }
+                let next_epoch = (*self.epoch_rx.borrow()).wrapping_add(1);
+                let _ = self.epoch_tx.send(next_epoch);
+                let _ = self
+                    .event_tx
+                    .send(MemnetPayload::WaveQaResponse(pkt.clone()));
+                return Some((score, pkt));
+            }
+        }
+        None
+    }
+
+    /// Run a non-blocking Tokio UDP responder on `bind_addr` with `tokio::select!` graceful shutdown.
+    pub async fn serve_udp_responder_async(
+        &self,
+        bind_addr: &str,
+        max_requests: Option<usize>,
+    ) -> Result<usize> {
+        let sock = tokio::net::UdpSocket::bind(bind_addr)
+            .await
+            .with_context(|| format!("Failed to bind async MemNet UDP listener on {bind_addr}"))?;
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+        let mut handled = 0usize;
+        let mut buf = vec![0u8; 16384];
+
+        loop {
+            if let Some(limit) = max_requests {
+                if handled >= limit {
+                    break;
+                }
+            }
+
+            let (len, peer) = tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    break;
+                }
+                recv_res = sock.recv_from(&mut buf) => {
+                    recv_res?
+                }
+            };
+
+            let Ok(raw) = MemnetRawPacket::from_wire_bytes(&buf[..len]) else {
+                continue;
+            };
+            let Ok(payload) = MemnetPayload::from_raw_packet(&raw) else {
+                continue;
+            };
+            handled += 1;
+
+            match payload {
+                MemnetPayload::NodePing {
+                    origin_node: _,
+                    origin_name: _,
+                    timestamp_ms,
+                } => {
+                    let (local_address, node_name, tier, shared_folders, wave_qa_entries) = {
+                        let guard = self.state.read().await;
+                        (
+                            guard.local_address,
+                            guard.node_name.clone(),
+                            guard.tier,
+                            guard.shared_folders.len(),
+                            guard.wave_qa_cache.len(),
+                        )
+                    };
+                    let pong = MemnetPayload::NodePong {
+                        node_address: local_address,
+                        node_name,
+                        tier,
+                        shared_folders,
+                        wave_qa_entries,
+                        ollama_active: false,
+                        timestamp_ms,
+                    };
+                    let _ = self.event_tx.send(pong.clone());
+                    if let Ok(resp_raw) = pong.into_raw_packet(vec![local_address]) {
+                        let _ = sock.send_to(&resp_raw.to_wire_bytes(), peer).await;
+                    }
+                }
+                MemnetPayload::WaveQaQuery {
+                    origin_node: _,
+                    question,
+                    min_resonance_pm,
+                } => {
+                    let hit_opt = {
+                        let mut guard = self.state.write().await;
+                        guard
+                            .query_wave_qa(&question, min_resonance_pm)
+                            .map(|(_, pkt)| (guard.local_address, pkt))
+                    };
+                    if let Some((local_address, pkt)) = hit_opt {
+                        let _ = self
+                            .event_tx
+                            .send(MemnetPayload::WaveQaResponse(pkt.clone()));
+                        if let Ok(resp_raw) =
+                            MemnetPayload::WaveQaResponse(pkt).into_raw_packet(vec![local_address])
+                        {
+                            let _ = sock.send_to(&resp_raw.to_wire_bytes(), peer).await;
+                        }
+                    }
+                }
+                MemnetPayload::WaveQaResponse(pkt) => {
+                    let inserted = {
+                        let mut guard = self.state.write().await;
+                        if !guard
+                            .wave_qa_cache
+                            .iter()
+                            .any(|e| e.packet_id == pkt.packet_id)
+                        {
+                            guard.wave_qa_cache.push(pkt.clone());
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if inserted {
+                        let next_epoch = (*self.epoch_rx.borrow()).wrapping_add(1);
+                        let _ = self.epoch_tx.send(next_epoch);
+                    }
+                    let _ = self.event_tx.send(MemnetPayload::WaveQaResponse(pkt));
+                }
+                MemnetPayload::FolderShareAnnounce(manifest) => {
+                    {
+                        let mut guard = self.state.write().await;
+                        guard
+                            .shared_folders
+                            .insert(manifest.share_name.clone(), manifest.clone());
+                    }
+                    let next_epoch = (*self.epoch_rx.borrow()).wrapping_add(1);
+                    let _ = self.epoch_tx.send(next_epoch);
+                    let _ = self
+                        .event_tx
+                        .send(MemnetPayload::FolderShareAnnounce(manifest));
+                }
+                MemnetPayload::LlmCapabilityAnnounce(ad) => {
+                    {
+                        let mut guard = self.state.write().await;
+                        guard.llm_advertisements.insert(ad.node_id.clone(), ad.clone());
+                    }
+                    let next_epoch = (*self.epoch_rx.borrow()).wrapping_add(1);
+                    let _ = self.epoch_tx.send(next_epoch);
+                    let _ = self.event_tx.send(MemnetPayload::LlmCapabilityAnnounce(ad));
+                }
+                other => {
+                    let _ = self.event_tx.send(other);
+                }
+            }
+        }
+
+        Ok(handled)
+    }
+}
+
+// ============================================================================
 // Unit Tests
 // ============================================================================
 
@@ -5805,5 +6189,91 @@ mod tests {
         // Verify that non-TCP/IP physical edges exist in the node graph
         assert!(graph.edges.iter().any(|e| !e.requires_tcp_ip));
         assert!(!graph.local_area_llm_beacons.is_empty());
+    }
+
+    #[tokio::test]
+    async fn tokio_async_memnet_coordinator_fanout_and_graceful_shutdown() {
+        // Reserve ephemeral UDP port for peer responder
+        let probe_sock = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let peer_addr = probe_sock.local_addr().unwrap();
+        drop(probe_sock);
+
+        // Configure server AsyncMemnetCoordinator with a cached WaveQaPacket
+        let server_coord = AsyncMemnetCoordinator::new(
+            MemnetNodeState {
+                node_name: "async-peer-studio".to_string(),
+                ..Default::default()
+            },
+            8,
+        );
+        let mut server_epoch_rx = server_coord.watch_epoch();
+        let mut server_events = server_coord.subscribe_events();
+
+        let learned = server_coord
+            .learn_wave_qa_async(
+                "How does AsyncMemnetCoordinator bound concurrent UDP probes?",
+                "It uses a Tokio JoinSet paired with an Arc<Semaphore> and RwLock without holding locks across await points.",
+            )
+            .await;
+        assert!(!learned.answer.is_empty());
+        assert_eq!(*server_epoch_rx.borrow_and_update(), 1);
+        assert!(matches!(
+            server_events.try_recv(),
+            Ok(MemnetPayload::WaveQaResponse(_))
+        ));
+
+        let bind_str = peer_addr.to_string();
+        let server_cl = server_coord.clone();
+        let server_task = tokio::spawn(async move {
+            server_cl
+                .serve_udp_responder_async(&bind_str, None)
+                .await
+                .unwrap()
+        });
+
+        // Give listener a brief yield to bind
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Configure client AsyncMemnetCoordinator pointing its Up route at peer_addr
+        let mut client_state = MemnetNodeState {
+            node_name: "async-client-node".to_string(),
+            routes: Vec::new(),
+            wave_qa_cache: Vec::new(),
+            ..Default::default()
+        };
+        let mut route = MemnetRouteEntry::new(
+            0xC5,
+            30,
+            "loopback-async-peer",
+            MemnetMedium::Ethernet,
+            peer_addr.to_string(),
+            1,
+        );
+        route.status = RouteStatus::Up;
+        client_state.routes.push(route);
+
+        let client_coord = AsyncMemnetCoordinator::new(client_state, 8);
+        let mut client_epoch_rx = client_coord.watch_epoch();
+
+        // Query over LAN UDP via JoinSet + Semaphore + timeout
+        let (score, hit) = client_coord
+            .query_lan_wave_qa_async(
+                "How does AsyncMemnetCoordinator bound UDP probes?",
+                300,
+                500,
+            )
+            .await
+            .expect("should resolve WaveQaResponse over async UDP");
+        assert!(score >= 300);
+        assert!(hit.answer.contains("JoinSet"));
+        assert_eq!(*client_epoch_rx.borrow_and_update(), 1);
+
+        // Trigger graceful shutdown on the server responder and verify clean termination
+        server_coord.trigger_shutdown();
+        let handled = tokio::time::timeout(Duration::from_secs(1), server_task)
+            .await
+            .expect("server task should shut down promptly")
+            .expect("server task join");
+        assert_eq!(handled, 1);
     }
 }
