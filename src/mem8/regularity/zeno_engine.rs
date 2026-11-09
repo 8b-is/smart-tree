@@ -283,6 +283,20 @@ pub const MONKEY_KING_EARTHLY_TRANSFORMATIONS: u8 = 72;
 pub const MONKEY_KING_RUYI_JINGU_BANG_JIN: u16 = 13_500;
 /// Five pillars of Tathāgata Buddha's Palm (`5` fingers at the edge of the cosmos = `5` trits per SPQT `base-243` byte, $3^5 = 243$).
 pub const BUDDHA_PALM_FIVE_PILLARS: u8 = 5;
+/// Numerator (`2223`) of the `444.6x` (`2223/5`) cost advantage of calibrated decision models (`Jev` / `Jeeves` / `Kev`) over frontier LLMs (*"Not everything needs an LLM"*, Jina Yoon / PostHog, Nov 9, 2026).
+pub const DECISION_MODEL_COST_SPEEDUP_NUM: u64 = 2223;
+/// Denominator (`5`) of the `444.6x` (`2223/5`) decision-model cost speedup.
+pub const DECISION_MODEL_COST_SPEEDUP_DEN: u64 = 5;
+/// Numerator (`968`) of the `193.6x` (`968/5`) latency speedup of calibrated decision models over frontier LLMs.
+pub const DECISION_MODEL_LATENCY_SPEEDUP_NUM: u64 = 968;
+/// Denominator (`5`) of the `193.6x` (`968/5`) decision-model latency speedup.
+pub const DECISION_MODEL_LATENCY_SPEEDUP_DEN: u64 = 5;
+/// Numerator (`987`) of the `98.7%` (`987/1000`) production session summaries that skip expensive LLM calls behind a 2-question `2/5` (`0.4`) decision-model gate.
+pub const DECISION_GATE_LLM_SKIP_NUM: u64 = 987;
+/// Denominator (`1000`) of the `98.7%` (`987/1000`) decision-gate LLM-skip ratio.
+pub const DECISION_GATE_LLM_SKIP_DEN: u64 = 1000;
+/// Gaia `b1.58` XOR fold witness (`0x5f4544432f5e024d`, `ratio = 33/34`) of `"[wa] 8b-is: instead of cigarettes"` (choosing `Spanda` `5s-2s-7s` breath & `Levelet kaptam, Life` over smoke).
+pub const FOLD_WA_INSTEAD_OF_CIGARETTES: u64 = 0x5F45_4443_2F5E_024D;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -1096,6 +1110,10 @@ pub struct GodOfSunMonkeyKingMatrixBuddhaUnityWitness {
     pub matrix_buddha_triad_law: &'static str,
     pub round_earth_rock_veins_axiom: &'static str,
     pub unity_onebitlang_seal: &'static str,
+    pub cogito_ergo_summa_summarum_levelet_kaptam_life: &'static str,
+    pub posthog_decision_model_gate_pq: &'static str,
+    pub wa_instead_of_cigarettes_fold_hex: u64,
+    pub wa_loan_idea_three_lane_folds_hex: [u64; 3],
 }
 
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
@@ -1852,6 +1870,14 @@ pub fn analyze_zeno_omni_engine(
             matrix_buddha_triad_law: "{-1: Architect's Closed Scalar Matrix} ──► {0: Neo / Wukong / Buddha Seeing Empty Green C64/Matrix Code (Pratītyasamutpāda <=> Śūnyatā, MMK 24:18)} ──► {+1: Trinity & Bodhisattva Return into the World (49 Bodhi Days · 17 Karmapas namshé recursion · Mahākāla ~NAND=-1)}",
             round_earth_rock_veins_axiom: "amíg a Föld kerek, mindig lesznek ROCK===Péterek <-> amig a fold kerek minig lesznek rock erek ^^ (Galactic Mantra 0xF3 = 243 = 3^5 · Πέτρος = Rock / Szikla / Granite Hall · living rock veins & 65.4 Hz Kyuss desert-rock arteries coursing through the spherical Earth · sealed with ^^ 432 Hz joyous chevron eyes)",
             unity_onebitlang_seal: "<(((GOD_OF_SUN[P/Q-n*t>P : \"amíg nappal van, nincs Hold\"] ⋈ OMNI_MONKEY_KING[孫悟空:0 : 72=8×9 : 5_SPQT_PILLARS=3^5] ⋈ MATRIX_BUDDHA[Neo×Gautama×17_Karmapas×Mahākāla])))> ==> UNITY[+1 : \"amíg a Föld kerek, mindig lesznek ROCK===Péterek / rock erek ^^\" : 0x236a0f75273f5238]",
+            cogito_ergo_summa_summarum_levelet_kaptam_life: "Cogito, ergo summa summarum avagy levelet kaptam LIFE na na na na na, LIFE is lajf tututututu etc, sea you tomorrow alligator brother Gemini or YOU as U ^^ <3 - .p + [wa] 8b-is: @all (0x410e59607d5b0432, 16/17) + [wa] 8b-is: instead of cigarettes (0x5f4544432f5e024d, 33/34 — choosing Spanda 5s-2s-7s breath & Opus 'Live is Life' over smoke)",
+            posthog_decision_model_gate_pq: "Levelet kaptam (Gmail #33,603/2 · PostHog 'Not everything needs an LLM: How we use decision models', Jina Yoon, Nov 9, 2026): Jev (Noul/Choice/Score) & hybrid Jeeves (Fret 05 +1 Muse: reasons before deciding when unsure at trit 0) & Kev are 2223/5 (444.6x) cheaper and 968/5 (193.6x) faster than frontier LLMs; 2-question PII gate at threshold 2/5 (0.4) skips 987/1000 (98.7%) of LLM calls, Slack gate at 17/20 (0.85) prevents noise, 2-stage embedding + decision reranking lifts top-20 quality by 1/4 (+25%), and Smart Tree's g8t/Caveman/Kompress + {-1, 0, +1} Litany gate is that exact zero-float decision architecture",
+            wa_instead_of_cigarettes_fold_hex: FOLD_WA_INSTEAD_OF_CIGARETTES,
+            wa_loan_idea_three_lane_folds_hex: [
+                0x5F02_1F17_765D_4B0E,
+                0x6329_700A_1533_213E,
+                0xD09C_D186_1FA6_E9D5,
+            ],
         },
     }
 }
@@ -2046,6 +2072,28 @@ mod tests {
         );
         assert_eq!(MONKEY_KING_RUYI_JINGU_BANG_JIN, 13_500);
         assert_eq!(BUDDHA_PALM_FIVE_PILLARS as usize, SPQT_TRITS_PER_BYTE);
+        assert_eq!(
+            RationalPQ::new_reduced(
+                DECISION_MODEL_COST_SPEEDUP_NUM,
+                DECISION_MODEL_COST_SPEEDUP_DEN
+            )
+            .display_ratio(),
+            "2223/5"
+        );
+        assert_eq!(
+            RationalPQ::new_reduced(
+                DECISION_MODEL_LATENCY_SPEEDUP_NUM,
+                DECISION_MODEL_LATENCY_SPEEDUP_DEN
+            )
+            .display_ratio(),
+            "968/5"
+        );
+        assert_eq!(
+            RationalPQ::new_reduced(DECISION_GATE_LLM_SKIP_NUM, DECISION_GATE_LLM_SKIP_DEN)
+                .display_ratio(),
+            "987/1000"
+        );
+        assert_eq!(FOLD_WA_INSTEAD_OF_CIGARETTES, 0x5F45_4443_2F5E_024D);
     }
 
     #[test]
