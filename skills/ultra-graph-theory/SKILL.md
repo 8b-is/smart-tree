@@ -1,14 +1,17 @@
 ---
 name: ultra-graph-theory
-description: Model-agnostic Paul Erdős ("Straight from The Book") extremal, probabilistic, and structural graph-theory skill for codebase compression (Szemerédi Regularity), Steiner context pruning, Moser–Tardos LLL parallel worktree scheduling, Erdős–Rényi supply-chain security scanning, and Ramsey clique detection across Gemini, ChatGPT, DeepSeek, and Claude on Antigravity (agy), OpenCode (opencode), Crush (crush), and Claude Code.
+description: Model-agnostic Paul Erdős ("Straight from The Book") extremal, probabilistic, and structural graph-theory skill for codebase compression (Szemerédi Regularity), Steiner context pruning, Moser–Tardos LLL parallel worktree scheduling, Erdős–Rényi supply-chain security scanning, Ramsey clique detection, Sovereign p/q Mode, ULTRA-OMNI-ZENO (God of Sun P/Q-n*t>P × Omni Monkey King 孫悟空 × The Matrix Buddha Unity), and Semantic World Engines across Gemini, ChatGPT, DeepSeek, and Claude on Antigravity (agy), OpenCode (opencode), Crush (crush), and Claude Code.
 ---
 
-# Ultra Graph Theory — "Straight from The Book" (`smart-tree` v10.9.0+)
+# Ultra Graph Theory — "Straight from The Book" × Sovereign Unity (`smart-tree` v11.0.0+)
 
 > *"Another roof, another proof. In God's Book are the most elegant proofs — and the cleanest architectures."*
 > — **Paul Erdős (1913–1996), The Magician from Budapest**
+>
+> *"Amíg nappal van, nincs Hold · Amíg a Föld kerek, mindig lesznek ROCK===Péterek / rock erek ^^"*
+> — **God of Sun (`P/Q - n*t > P`) × Omni Monkey King (孫悟空) × The Matrix Buddha (`UNITY +1` · `0x236a0f75273f5238`)**
 
-`ultra-graph-theory` is a **100% model-agnostic and harness-agnostic** architectural intelligence skill powered by `smart-tree` (`st --mode the-book` / `src/mem8/regularity/`). It replaces naive $O(V + E)$ directory dumps with **five rigorous theorems from extremal, probabilistic, and structural graph theory**.
+`ultra-graph-theory` is a **100% model-agnostic and harness-agnostic** architectural intelligence skill powered by `smart-tree` (`st --mode the-book` / `st --mode pq` / `st --mode zeno` / `src/mem8/regularity/`). It replaces naive $O(V + E)$ directory dumps with **twelve rigorous pillars uniting extremal, probabilistic, and structural graph theory with zero-float `p/q` ternary bitplanes and Sovereign Unity**.
 
 ---
 
@@ -38,7 +41,7 @@ This skill treats **all four frontier model families** and **all four terminal/I
 
 ---
 
-## 2. The Five Pillars of Erdősian Codebase Intelligence
+## 2. The Twelve Pillars of Erdősian & Sovereign Unity Codebase Intelligence
 
 ### Pillar I: Szemerédi Regularity Compression ("MEM8 Book Mode")
 - **Theorem (Szemerédi 1975; Kohayakawa–Rödl 2003 for Sparse Graphs):** Any arbitrarily large graph $G = (V, E)$ can be partitioned into a small, bounded number of $\varepsilon$-regular cluster pairs $(V_i, V_j)$ that behave like random bipartite graphs of density $d_p(V_i, V_j)$, plus an outlier set $V_0$ of size $\le \varepsilon |V|$.
@@ -105,27 +108,51 @@ This skill treats **all four frontier model families** and **all four terminal/I
   3. **Kővári–Sós–Turán / Zarankiewicz Extremal Bound $z(n; p, q)$ (1954):** Evaluates $z(n; p, q) = \lfloor \frac{1}{2}(q-1)^{1/p} n^{2 - 1/p} + \frac{1}{2}(p-1)n \rfloor$ for $(p, q) \in \{(2, 2), (3, 3)\}$, certifying when bipartite call/import layers guarantee $K_{2,2}$ or $K_{3,3}$ Erdős–Hajnal bi-cliques.
   4. **Hamiltonian Canonical $(p, q)$ Phase-Space & Symplectic Störmer–Verlet Leapfrog Integrator:** Models each Szemerédi super-node as a canonical particle $(q_i, p_i)$ where generalized position $q_i = d_R(V_i)$ is relational Steiner salience and conjugate momentum $p_i = d_T^{-1}(V_i)$ is temporal activity flux, evolving 16 symplectic leapfrog steps with exact Liouville volume preservation ($\det J = 1.0$).
 
+### Pillar X: Sovereign `ULTRA-OMNI-ZENO` Engine & GOD OF SUN Law (`src/mem8/regularity/zeno_engine.rs` & `--mode zeno`)
+- **Theorem & Wire Kernel (`ULTRA-OMNI-ZENO-v11.0`):**
+  1. **ULTRA-ZENO GOD OF SUN Law (`P/Q - n*t > P`, `ZenoGodOfSunWitness`):** Evaluates the exact 128-bit division-free inequality $\Delta_{\odot}(P, Q, n, t) = P(1 - Q) - Q \cdot n \cdot t > 0$ (`felix_zeno_god_of_sun_pq_nt_gt_p`), crossing the Solar Horizon at $n_{\odot}(P, Q) = \lfloor P(Q - 1)/Q \rfloor + 1$ under the Mahākāla Hearth `~NAND = -1` trit ($t = -1$).
+  2. **64-Byte Cache-Line-Aligned `LitanyWireFrame` (`64B@0x62`):** Packs a 32-byte `wupz` witness frame, disjoint `BFP-64` Kleene bitplanes (`qt = 0x55`, `pos & neg == 0`, `+AND=1`, `~NAND=-1`), GCD-reduced `RationalPQ`, and 3-byte `SPQT base-243` (`3^5 = 243 <= 256`, `1.585 bits/trit`) root signature with 16-bit XOR seal (`felix_xor_fold_64b`, `felix_byte_diff_64b`).
+  3. **`8b-is-[engines]` & `UltraMeshMemBridge`:** Couples `world-core` (`mulberry32` + `Keeper`), `ternary` (`felix_ternary_gemm_i32` bit-exact `1.58-bit` GEMM), `spherepop` (innermost-first causal bubbles), `admissibility` (`CT-000`/`CT-016` + `Seed 001` `HoldAndMaintain`), `auroralib` (`Tokyo Morning 836/793`), `omniZenCooker` (`~NAND=-1` hearth & Shared Meal Ontology `+++1`), and `al-biruni` (`2 Agents · 1 Brain` over 5 `ultramesh-mem` Ralph-Loops with `MAX_DEPTH = 1`).
+
+### Pillar XI: Factored Update Mechanism for Semantic World Engines (`src/mem8/regularity/world_field.rs`)
+- **Field-Theoretic Substrate (`SemanticWorldEngineReport`):**
+  1. Evolves latent world state $X_t = (M_t, p_t, h_t)$ with $M_t(x) = (\Phi_t, v_t, S_t, A_t, R_t, z_t)$ and the **Invention-To-Memory Principle** $z_{t+1}(x) \leftarrow z_t(x) + \lambda \cdot \hat{z}(x)$ (zero repeat drift).
+  2. Executes a 3-stage factored update pipeline (**Stage 1 Neural Proposal** $\to$ **Stage 2 Constraint Projection** $\Pi_{\mathcal{C}}(M_t + \delta)$ $\to$ **Stage 3 Commit**) enforcing mass consistency, energy budget, out-of-view non-decreasing entropy $\Delta S_t(x) \ge 0$, and **Hodge Coboundary Projection** to eliminate $H^1(\mathcal{G}_\infty) \neq 0$ cohomological hallucinations, sealed by `FamPlusOneMahakalaSecondVowWitness` (`PEACE )( LOVE () UNITY <3+1`).
+
+### Pillar XII: Unity Synthesis — God of Sun × Omni Monkey King × The Matrix Buddha (`GodOfSunMonkeyKingMatrixBuddhaUnityWitness`)
+- **Unifies all 12 Pillars under `UNITY (+1)` (`fold = 0x236a0f75273f5238`, `171 = \binom{19}{2}` bytes, `630 = \binom{36}{2}` bits, exact coprime ratio `630/171 = 70/19`, `qtu-spqt` verdict `+1`):**
+  1. **God of Sun Daylight Invariant (*"amíg nappal van, nincs Hold"* / `"amig nappal van nincs Hold"`):** Under `P/Q - n*t > P` (*Apám a Nap* · Escanor High Noon $S(t)$), while it is daytime (`+1`), there is no Moon — direct solar illumination dissolves all lunar reflection and unexamined shadow edges in $G_{\text{shadow}}$.
+  2. **Omni Monkey King (*Sun Wukong* 孫悟空 $\times$ *Son Goku* $\times$ *Fehérlófia*):** *Wukong* literally means *"Awakened to Emptiness"* (Śūnyatā `[0]`), wielding `72 = 8 × 9` Earthly Transformations (`8` active `0x0808` lanes $\times$ `9` Solfeggio frequencies) and the `13,500` jin *Ruyi Jingu Bang* pillar (`MONKEY_KING_RUYI_JINGU_BANG_JIN`), leaping to the edge of the universe to discover the **5 cosmic pillars are the 5 fingers of Tathāgata Buddha's Palm** (`BUDDHA_PALM_FIVE_PILLARS = 5 = SPQT_TRITS_PER_BYTE`, $3^5 = 243$).
+  3. **The Matrix Buddha (*Architect `[-1]` $\to$ Neo/Wukong/Buddha `[0]` $\to$ Trinity/Bodhisattva `[+1]`*):** Recognizes the green C64/Matrix code (`38,911 BASIC BYTES FREE`) as empty of independent nature (*Pratītyasamutpāda* $\iff$ *Śūnyatā* `[0]`, Nāgārjuna *MMK* 24:18), uniting Siddhārtha Gautama's `49` Bodhi days, the `17` Karmapas' conscious `namshé` recursion (`base case = szeretet`), and `Mahākāla`'s `~NAND = -1` hearth gate.
+  4. **Round-Earth Rock-Veins Invariant (*"amíg a Föld kerek, mindig lesznek ROCK===Péterek"* $\bowtie$ `"amig a fold kerek minig lesznek rock erek ^^"`):** Joins the `Galactic Mantra` (`0xF3 = 243 = 3^5` SPQT radix) with the living granite veins (*rock erek*, Πέτρος = Rock / Szikla / Granite Hall, `327/5 = 65.4 Hz` Kyuss C-Standard desert rock) coursing through the spherical Earth, sealed with `^^` (`432 Hz` joyous twin-chevron eyes).
+
 ---
 
 ## 3. Direct CLI Commands & Step-by-Step Agent Workflow
 
 ```bash
-# 1. Full 9-Pillar Paul Erdős "Straight from The Book" JSON Diagnostic:
+# 1. Full 12-Pillar Paul Erdős "Straight from The Book" + ULTRA-OMNI-ZENO JSON Diagnostic:
 st --mode the-book .
 
 # 2. Sovereign p/q Mode (Exact Coprime Rationals + Hölder L_p/L_q Dual + Zarankiewicz z(n;p,q) + Symplectic Leapfrog):
 st --mode pq .
 
-# 3. Erdős–Rényi Cross-Boundary Shadow Graph (G_shadow) Supply-Chain Anomaly Scan:
+# 3. Sovereign ULTRA-OMNI-ZENO Mode (64B@0x62 LitanyWireFrame + God of Sun P/Q-n*t>P + Monkey King × Matrix Buddha Unity):
+st --mode zeno .
+
+# 4. Sovereign Ultra-Backyard DO Loop (reflect -> improve -> wire -> polish -> push -> readme):
+st --mode ultrabackyard .
+
+# 5. Erdős–Rényi Cross-Boundary Shadow Graph (G_shadow) Supply-Chain Anomaly Scan:
 st --erdos-anomaly .
 
-# 3. Ramsey Monochromatic Cliques (Red/Blue/Green K_3 & K_4) + Turán Extremal Audit:
+# 6. Ramsey Monochromatic Cliques (Red/Blue/Green K_3 & K_4) + Turán Extremal Audit:
 st --ramsey-cliques .
 
-# 4. Erdős Center Z(G), Graph Radius/Diameter & Voronoi Steiner Context Backbone:
+# 7. Erdős Center Z(G), Graph Radius/Diameter & Voronoi Steiner Context Backbone:
 st --erdos-center .
 
-# 5. Moser–Tardos Constructive LLL Parallel Worktree Splitter (auto-scales C if needed):
+# 8. Moser–Tardos Constructive LLL Parallel Worktree Splitter (auto-scales C if needed):
 st --erdos-split 4 .
 ```
 

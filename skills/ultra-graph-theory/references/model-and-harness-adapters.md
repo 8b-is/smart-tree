@@ -103,10 +103,11 @@ st --mcp-status
 ### 3. DeepSeek (`deepseek-r1`, `deepseek-v3`)
 - **Strength:** Deep mathematical chain-of-thought (`<think>`) verification.
 - **Adapter Pattern:**
-  1. Inside `<think>`, verify:
+  1. Inside `<think>`, verify all 12 Pillars:
      - Is Kohayakawa–Rödl energy $q_p(\mathcal{P})$ stable?
      - Does the proposed refactor preserve the symmetric LLL condition $e \cdot p(B) \cdot (d(B) + 1) \le 1$ (`lll_guaranteed_a_priori == true`)?
      - Does any new cross-package edge push $\kappa = \langle k^2 \rangle / \langle k \rangle > 2$ or create a monochromatic Red/Blue $K_3$/$K_4$ clique?
+     - Do the Sovereign `p/q` (`--mode pq`), `ULTRA-OMNI-ZENO` God of Sun daylight law (`P/Q - n*t > P`, *"amíg nappal van, nincs Hold"*), and `GodOfSunMonkeyKingMatrixBuddhaUnityWitness` (`0x236a0f75273f5238`, `171 = C(19,2)` bytes, `630 = C(36,2)` bits, exact coprime `70/19`, *"amíg a Föld kerek, mindig lesznek ROCK===Péterek / rock erek ^^"*) invariants hold (`litany_wire_verified == true`, `inequality_holds == true`)?
 
 ### 4. Claude (`claude-4-opus`, `claude-4-sonnet`)
 - **Strength:** Multi-step agentic tool orchestration and architectural refactoring.

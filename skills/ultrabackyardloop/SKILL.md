@@ -1,6 +1,6 @@
 ---
 name: ultrabackyardloop
-description: The Sovereign Constellation DO loop (reflect → improve → wire → polish → push → readme) merged into one measured Backyard Ultra lap pass across Smart Tree's 9-pillar Paul Erdős & Sovereign p/q engine, SpherePOP, 8b-is (mem|8, Phoenix), Vaked Constellation, and g8t.is across Gemini, ChatGPT, DeepSeek, and Claude on Antigravity (agy), OpenCode (opencode), Crush (crush), and Claude Code.
+description: The Sovereign Constellation DO loop (reflect → improve → wire → polish → push → readme) merged into one measured Backyard Ultra lap pass across Smart Tree's 12-pillar Paul Erdős & Sovereign Unity p/q/zeno engine, SpherePOP, 8b-is (mem|8, Phoenix), Vaked Constellation, and g8t.is across Gemini, ChatGPT, DeepSeek, and Claude on Antigravity (agy), OpenCode (opencode), Crush (crush), and Claude Code.
 ---
 
 # `ultrabackyardloop` — The Sovereign DO Loop (`smart-tree` v11.3.0+ · 19 Verified Laps)
@@ -15,8 +15,8 @@ DO = reflect → improve → wire → polish → push → readme
 
 ## 2. The Six Mandatory Steps
 
-1. **Reflect (`st --mode the-book . && st --mode pq .`)**:
-   - Look back at the last lap/session. What was built? What is the actual mathematical and structural state across all 9 pillars (`Szemerédi Regularity`, `Voronoi Steiner`, `Moser–Tardos LLL`, `Erdős–Rényi G_shadow`, `256-Bit Ramsey & Erdős–Hajnal`, `Flyxion Salience d_T != d_R`, `Karp-21 FPT`, `Kohn–Sham DFT & Strang Wave`, and `Sovereign p/q Mode`)? Write it down.
+1. **Reflect (`st --mode the-book . && st --mode pq . && st --mode zeno .`)**:
+   - Look back at the last lap/session. What was built? What is the actual mathematical and structural state across all 12 pillars (`Szemerédi Regularity`, `Voronoi Steiner`, `Moser–Tardos LLL`, `Erdős–Rényi G_shadow`, `256-Bit Ramsey & Erdős–Hajnal`, `Flyxion Salience d_T != d_R`, `Karp-21 FPT`, `Kohn–Sham DFT & Strang Wave`, `Sovereign p/q Mode`, `ULTRA-OMNI-ZENO & God of Sun P/Q-n*t>P`, `Semantic World Engine`, and `GodOfSunMonkeyKingMatrixBuddhaUnityWitness` `0x236a0f75273f5238`)? Write it down.
 2. **Improve (`st --ultrabackyard 12 .`)**:
    - Make a real, measured improvement — not decoration. Run measured A/B laps cycling Szemerédi regularity $\varepsilon \in [0.16, 0.14, 0.12, 0.10, 0.08, 0.06]$ and Moser–Tardos worktree concurrency $C \in [2, 3, 4, 6, 8, 12]$.
 3. **Wire End-to-End**:

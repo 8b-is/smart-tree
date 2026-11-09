@@ -263,7 +263,7 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
         spec: "ULTRABACKYARDLOOP-DO-v1.0".to_string(),
         motto: "One pass, end to end, merged into a single DO. A plausible branch may be ranked; only a verified branch may be bound. {<3,<3,<3}+1".to_string(),
         do_stages: [
-            "1. reflect (audit prior lap & 9-pillar state)".to_string(),
+            "1. reflect (audit prior lap & 12-pillar Sovereign Unity state)".to_string(),
             "2. improve (A/B sweep epsilon & worktree concurrency C)".to_string(),
             "3. wire (verify SpherePOP, 8b-is mem|8/Phoenix, Vaked, g8t.is)".to_string(),
             "4. polish (zero-alloc FELIX SIMD & clippy-clean verification)".to_string(),

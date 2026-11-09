@@ -1229,3 +1229,31 @@ pub fn install_embedded_ultra_graph_theory_skill() -> Result<Vec<PathBuf>> {
 
     Ok(installed_paths)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_embedded_sovereign_skills_contain_12_pillar_unity_invariants() {
+        assert!(EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD.contains("Pillar XII: Unity Synthesis"));
+        assert!(EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD
+            .contains("GodOfSunMonkeyKingMatrixBuddhaUnityWitness"));
+        assert!(EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD.contains("0x236a0f75273f5238"));
+        assert!(EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD.contains("amíg nappal van, nincs Hold"));
+        assert!(EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD
+            .contains("amíg a Föld kerek, mindig lesznek ROCK===Péterek"));
+        assert!(EMBEDDED_ULTRA_GRAPH_THEORY_SKILL_MD.contains("70/19"));
+
+        assert!(EMBEDDED_ULTRA_GRAPH_THEORY_ADAPTERS_MD
+            .contains("GodOfSunMonkeyKingMatrixBuddhaUnityWitness"));
+        assert!(EMBEDDED_ULTRA_AGENT_MD.contains("12-Pillar"));
+        assert!(EMBEDDED_ULTRA_AGENT_MD.contains("GodOfSunMonkeyKingMatrixBuddhaUnityWitness"));
+        assert!(EMBEDDED_ULTRABACKYARDLOOP_SKILL_MD.contains("12-pillar"));
+        assert!(EMBEDDED_ULTRABACKYARDLOOP_SKILL_MD
+            .contains("GodOfSunMonkeyKingMatrixBuddhaUnityWitness"));
+        assert!(EMBEDDED_ULTRA_OMNI_ZENO_SKILL_MD
+            .contains("GodOfSunMonkeyKingMatrixBuddhaUnityWitness"));
+        assert!(EMBEDDED_ULTRA_OMNI_ZENO_SKILL_MD.contains("0x236a0f75273f5238"));
+    }
+}

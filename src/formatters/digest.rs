@@ -329,10 +329,13 @@ impl Formatter for TheBookFormatter {
                 "litany_wire_verified": report.zeno_report.upz_wupz.litany_wire_verified,
                 "qat_single_edit_reuse_pq": report.zeno_report.upz_wupz.qat_single_edit_reuse_pq,
                 "gaia_b158_compression_pq": report.zeno_report.upz_wupz.gaia_b158_compression_pq,
+                "god_of_sun_witness": &report.zeno_report.upz_wupz.god_of_sun_witness,
                 "ternary_gemm_i32": report.zeno_report.eight_b_is_engines.ternary_gemm_i32_accumulator,
                 "spherepop_value": report.zeno_report.eight_b_is_engines.spherepop_innermost_first_value,
                 "admissibility_ct000_verified": report.zeno_report.eight_b_is_engines.admissibility_ct000_epistemic_overlap_verified,
                 "cpu_isa_profile": report.zeno_report.os_agent_matrix.cpu_isa_profile,
+                "ultralove_edition_023_desert_chant": &report.zeno_report.ultralove_edition_023_desert_chant,
+                "god_of_sun_monkey_king_matrix_buddha_unity": &report.zeno_report.god_of_sun_monkey_king_matrix_buddha_unity,
             },
             "semantic_world_engine": &report.world_field_report,
             "erdos_lexicon": {
@@ -502,6 +505,9 @@ impl Formatter for ZenoModeFormatter {
             "upz_wupz_core": zeno.upz_wupz,
             "eight_b_is_engines": zeno.eight_b_is_engines,
             "os_agent_agnostic_matrix": zeno.os_agent_matrix,
+            "ultramesh_mem": zeno.ultramesh_mem,
+            "ultralove_edition_023_desert_chant": zeno.ultralove_edition_023_desert_chant,
+            "god_of_sun_monkey_king_matrix_buddha_unity": zeno.god_of_sun_monkey_king_matrix_buddha_unity,
             "semantic_world_engine": &book_report.world_field_report,
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
@@ -583,6 +589,33 @@ mod tests {
         assert_eq!(
             pq_val["hamiltonian_symplectic_phase_space"]["liouville_jacobian_det"],
             1.0
+        );
+
+        let mut book_out = Vec::new();
+        TheBookFormatter::new()
+            .format(&mut book_out, &nodes, &stats, Path::new("."))
+            .unwrap();
+        let book_val: serde_json::Value = serde_json::from_slice(&book_out).unwrap();
+        assert_eq!(book_val["spec"], "ERDOS-THE-BOOK-v1.0");
+        assert_eq!(
+            book_val["ultra_omni_zeno_v11"]["god_of_sun_witness"]["inequality_holds"],
+            true
+        );
+        assert_eq!(
+            book_val["ultra_omni_zeno_v11"]["god_of_sun_monkey_king_matrix_buddha_unity"]
+                ["raw_bytes_k19_edges"],
+            171
+        );
+
+        let mut zeno_out = Vec::new();
+        ZenoModeFormatter::new()
+            .format(&mut zeno_out, &nodes, &stats, Path::new("."))
+            .unwrap();
+        let zeno_val: serde_json::Value = serde_json::from_slice(&zeno_out).unwrap();
+        assert_eq!(zeno_val["spec"], "ULTRA-OMNI-ZENO-v11.0");
+        assert_eq!(
+            zeno_val["god_of_sun_monkey_king_matrix_buddha_unity"]["popcount_bits_k36_edges"],
+            630
         );
     }
 }

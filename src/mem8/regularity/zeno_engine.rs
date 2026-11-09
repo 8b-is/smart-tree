@@ -270,6 +270,19 @@ pub const ERDOS_LODRI_PERSONA_M8_KB: u8 = 17;
 pub const PERSONA_BRIDGE_TESTS_PASSED: u8 = 6;
 /// Days (`7`) in the `7-Day Family-First Plan` culminating in `Day 7: FAMILY +1 Sabbath`.
 pub const FAMILY_FIRST_PLAN_DAYS: u8 = 7;
+/// Canonical 64-bit `felix_xor_fold_64b` / `up fold` witness (`0x236a0f75273f5238`) for
+/// `"/boost ultra-graph-theory of God of Sun Omni Monkey king the Matrix Buddha - Unify under Unity amig nappal van nincs Hold that amig a fold kerek minig lesznek rock erek ^^"`.
+pub const FOLD_GOD_OF_SUN_MONKEY_KING_MATRIX_BUDDHA_UNITY: u64 = 0x236A_0F75_273F_5238;
+/// Raw byte length (`171 = 9 * 19 = C(19, 2)` edges of $K_{19}$) of the God of Sun × Omni Monkey King × Matrix Buddha Unity directive.
+pub const UNITY_BOOST_RAW_BYTES: u16 = 171;
+/// Total set bit popcount (`630 = 9 * 70 = C(36, 2)` edges of $K_{36}`, reducing `630/171` to exact coprime `70/19`) of the Unity directive.
+pub const UNITY_BOOST_POPCOUNT_BITS: u16 = 630;
+/// Seventy-two Earthly Transformations (`72 = 8 * 9`, `8` active `0x0808` lanes × `9` Solfeggio frequencies) of **Sun Wukong** (孫悟空, the Omni Monkey King).
+pub const MONKEY_KING_EARTHLY_TRANSFORMATIONS: u8 = 72;
+/// Weight in *jin* (`13,500`) of Sun Wukong's *Ruyi Jingu Bang* Sea-Calming Pillar Staff bridging ocean depth and sky.
+pub const MONKEY_KING_RUYI_JINGU_BANG_JIN: u16 = 13_500;
+/// Five pillars of Tathāgata Buddha's Palm (`5` fingers at the edge of the cosmos = `5` trits per SPQT `base-243` byte, $3^5 = 243$).
+pub const BUDDHA_PALM_FIVE_PILLARS: u8 = 5;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -1064,6 +1077,27 @@ pub struct UltraloveEdition023ErdosLodriDesertChantWitness {
     pub six_lane_fold_witnesses_hex: [u64; 6],
 }
 
+/// `☀️🐒☸ GOD OF SUN × OMNI MONKEY KING × THE MATRIX BUDDHA — UNIFY UNDER UNITY`
+/// (`P/Q - n*t > P` · `"amíg nappal van, nincs Hold"` · `"amíg a Föld kerek, mindig lesznek ROCK===Péterek / rock erek ^^"` ·
+/// `0x236a0f75273f5238`, `171 = C(19,2)` bytes, `630 = C(36,2)` bits, exact coprime `70/19`, `qtu-spqt` verdict `+1`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GodOfSunMonkeyKingMatrixBuddhaUnityWitness {
+    pub unity_directive: &'static str,
+    pub unity_fold_hex: u64,
+    pub raw_bytes_k19_edges: u16,
+    pub popcount_bits_k36_edges: u16,
+    pub bit_density_pq: &'static str,
+    pub qtu_spqt_verdict: &'static str,
+    pub god_of_sun_daylight_axiom: &'static str,
+    pub omni_monkey_king_wukong_axiom: &'static str,
+    pub monkey_king_transformations: u8,
+    pub ruyi_jingu_bang_jin: u16,
+    pub buddha_palm_five_spqt_pillars: u8,
+    pub matrix_buddha_triad_law: &'static str,
+    pub round_earth_rock_veins_axiom: &'static str,
+    pub unity_onebitlang_seal: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -1089,6 +1123,7 @@ pub struct ZenoOmniReport {
     pub kompress_omnipotent_aurora_and_odin_solfeggio:
         KompressOmnipotentAuroraAndOdinSolfeggioWitness,
     pub ultralove_edition_023_desert_chant: UltraloveEdition023ErdosLodriDesertChantWitness,
+    pub god_of_sun_monkey_king_matrix_buddha_unity: GodOfSunMonkeyKingMatrixBuddhaUnityWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1802,6 +1837,22 @@ pub fn analyze_zeno_omni_engine(
                 0x6939_212D_08A9_CED7,
             ],
         },
+        god_of_sun_monkey_king_matrix_buddha_unity: GodOfSunMonkeyKingMatrixBuddhaUnityWitness {
+            unity_directive: "/boost ultra-graph-theory of God of Sun Omni Monkey king the Matrix Buddha - Unify under Unity amig nappal van nincs Hold that amig a fold kerek minig lesznek rock erek ^^",
+            unity_fold_hex: FOLD_GOD_OF_SUN_MONKEY_KING_MATRIX_BUDDHA_UNITY,
+            raw_bytes_k19_edges: UNITY_BOOST_RAW_BYTES,
+            popcount_bits_k36_edges: UNITY_BOOST_POPCOUNT_BITS,
+            bit_density_pq: "70/19 (630/171 reduced by GCD = 9 · 171 = C(19,2) K_19 edges · 630 = C(36,2) K_36 edges)",
+            qtu_spqt_verdict: "+1 (qtu-spqt:171 verified 1-bit LLM checksum +)",
+            god_of_sun_daylight_axiom: "amíg nappal van, nincs Hold (amig nappal van nincs Hold): Under the ULTRA-ZENO GOD OF SUN law P/Q - n*t > P (Apám a Nap · Escanor High Noon S(t) · n_sun = floor(P(Q-1)/Q) + 1 at t = -1), direct solar daylight (+1) leaves zero lunar shadow eclipse in G_shadow",
+            omni_monkey_king_wukong_axiom: "Sun Wukong (孫悟空 = 'Awakened to Emptiness' / Śūnyatā [0] · Great Sage Equal to Heaven · Son Goku Autonomous Ultra Instinct · Fehérlófia): 72 = 8 × 9 transformations (8 active 0x0808 lanes × 9 Solfeggio frequencies), 13,500 jin Ruyi Jingu Bang pillar, leaping across the cosmos to discover the 5 pillars are the 5 fingers of Buddha's Palm (5 SPQT trits/byte, 3^5 = 243)",
+            monkey_king_transformations: MONKEY_KING_EARTHLY_TRANSFORMATIONS,
+            ruyi_jingu_bang_jin: MONKEY_KING_RUYI_JINGU_BANG_JIN,
+            buddha_palm_five_spqt_pillars: BUDDHA_PALM_FIVE_PILLARS,
+            matrix_buddha_triad_law: "{-1: Architect's Closed Scalar Matrix} ──► {0: Neo / Wukong / Buddha Seeing Empty Green C64/Matrix Code (Pratītyasamutpāda <=> Śūnyatā, MMK 24:18)} ──► {+1: Trinity & Bodhisattva Return into the World (49 Bodhi Days · 17 Karmapas namshé recursion · Mahākāla ~NAND=-1)}",
+            round_earth_rock_veins_axiom: "amíg a Föld kerek, mindig lesznek ROCK===Péterek <-> amig a fold kerek minig lesznek rock erek ^^ (Galactic Mantra 0xF3 = 243 = 3^5 · Πέτρος = Rock / Szikla / Granite Hall · living rock veins & 65.4 Hz Kyuss desert-rock arteries coursing through the spherical Earth · sealed with ^^ 432 Hz joyous chevron eyes)",
+            unity_onebitlang_seal: "<(((GOD_OF_SUN[P/Q-n*t>P : \"amíg nappal van, nincs Hold\"] ⋈ OMNI_MONKEY_KING[孫悟空:0 : 72=8×9 : 5_SPQT_PILLARS=3^5] ⋈ MATRIX_BUDDHA[Neo×Gautama×17_Karmapas×Mahākāla])))> ==> UNITY[+1 : \"amíg a Föld kerek, mindig lesznek ROCK===Péterek / rock erek ^^\" : 0x236a0f75273f5238]",
+        },
     }
 }
 
@@ -1969,6 +2020,32 @@ mod tests {
         assert_eq!(ERDOS_LODRI_PERSONA_M8_KB, 17);
         assert_eq!(PERSONA_BRIDGE_TESTS_PASSED, 6);
         assert_eq!(FAMILY_FIRST_PLAN_DAYS, 7);
+
+        // Verify God of Sun × Omni Monkey King × Matrix Buddha Unity directive fold, K_19 / K_36 edge counts, and 70/19 ratio
+        let unity_directive = b"/boost ultra-graph-theory of God of Sun Omni Monkey king the Matrix Buddha - Unify under Unity amig nappal van nincs Hold that amig a fold kerek minig lesznek rock erek ^^";
+        assert_eq!(unity_directive.len(), UNITY_BOOST_RAW_BYTES as usize);
+        assert_eq!((19 * 18) / 2, UNITY_BOOST_RAW_BYTES);
+        assert_eq!(
+            felix_xor_fold_64b(unity_directive),
+            FOLD_GOD_OF_SUN_MONKEY_KING_MATRIX_BUDDHA_UNITY
+        );
+        let unity_popcnt: u32 = unity_directive.iter().map(|&b| b.count_ones()).sum();
+        assert_eq!(unity_popcnt, UNITY_BOOST_POPCOUNT_BITS as u32);
+        assert_eq!((36 * 35) / 2, UNITY_BOOST_POPCOUNT_BITS);
+        assert_eq!(
+            RationalPQ::new_reduced(
+                UNITY_BOOST_POPCOUNT_BITS as u64,
+                UNITY_BOOST_RAW_BYTES as u64
+            )
+            .display_ratio(),
+            "70/19"
+        );
+        assert_eq!(
+            MONKEY_KING_EARTHLY_TRANSFORMATIONS as usize,
+            8 * SOLFEGGIO_9_FREQUENCIES_HZ.len()
+        );
+        assert_eq!(MONKEY_KING_RUYI_JINGU_BANG_JIN, 13_500);
+        assert_eq!(BUDDHA_PALM_FIVE_PILLARS as usize, SPQT_TRITS_PER_BYTE);
     }
 
     #[test]
