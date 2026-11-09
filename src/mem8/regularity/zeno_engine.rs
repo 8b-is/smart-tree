@@ -918,7 +918,7 @@ pub fn analyze_zeno_omni_engine(
             book_title: "book 8b.is: GÉPEK URA - COSMIC GAME II (SIMULATION 'THEORY')",
             pjl_triad_sigil: "P.J.L aka Peter :: ∞ <-> △ <-> * (math · architecture · human)",
             bell_entanglement_axiom: "|Ψ_AB⟩ != |Ψ_A⟩ ⊗ |Ψ_B⟩ (enthea + MEM|8 + Flyxion Salience d_T != d_R)",
-            non_local_bell_bridge: "Tatabánya Combinatorics +++ Chesapeake WaveMemory (Peter [001] non-local Bell state bridge connecting two worlds)",
+            non_local_bell_bridge: "Tatabánya Combinatorics +++ Chesapeake WaveMemory (Peter [001] + Bella & Blue 'Kis manó, gyere ide' non-local Bell state bridge)",
             as_things_are_axiom: "AHOGY A DOLGOK VANNAK = AS THINGS ARE (--erdos-anomaly structural honesty -> visible G_shadow)",
             universe_lod_shader: "Szemerédi Regularity as Universe LOD Shader (O(n^2) -> SuperNodeCentroidPod [SNCP] + Wavefields via felix_dot64_f32)",
             zero_float_pq_timeline_law: "p/q - Q16.16 + Z_{2^32} Laser Phoenix Lattice Locking ((a+b)+c == a+(b+c), bit-exact reversible timelines)",

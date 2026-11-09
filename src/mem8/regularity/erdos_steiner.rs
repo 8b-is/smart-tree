@@ -11,6 +11,25 @@ use super::wire::decode_t8r_exceptions_leb128;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
+/// Default maximum Erdős distance radius $R_{\max}$ around the Steiner backbone (`2`).
+pub const DEFAULT_MAX_ERDOS_RADIUS: u32 = 2;
+/// Default LLM token budget $B_{\text{tokens}}$ for an Erdős–Steiner context slice (`8_000`).
+pub const DEFAULT_STEINER_TOKEN_BUDGET: usize = 8_000;
+/// Default estimated tokens per full AST symbol body (`120`).
+pub const DEFAULT_TOKENS_PER_SYMBOL: usize = 120;
+/// Default estimated tokens per Szemerédi SuperNode summary (`18`).
+pub const DEFAULT_TOKENS_PER_SUPERNODE: usize = 18;
+/// Resistance edge weight assigned to virtual `T8R` exception bridges (`0.85`).
+pub const T8R_VIRTUAL_BRIDGE_WEIGHT: f32 = 0.85;
+/// Maximum symbol bodies expanded inside a single terminal cluster (`8`).
+pub const MAX_TERMINAL_SYMBOLS_EXPANDED: u32 = 8;
+/// Maximum cluster fanout connected across a single $V_0$ outlier hub (`8`).
+pub const MAX_OUTLIER_HUB_FANOUT: usize = 8;
+/// Canonical architectural layer count $r = 4$ for Turán's $K_{r+1}$-free extremal theorem (`4.0`).
+pub const TURAN_ARCHITECTURAL_LAYERS_R: f64 = 4.0;
+/// Upper bound on Erdős–Stone–Simonovits effective chromatic number $\hat{\chi}(G)$ (`16`).
+pub const MAX_ERDOS_STONE_CHI: usize = 16;
+
 /// Configuration for `--erdos-root` / `--erdos-radius` Steiner context pruning
 #[derive(Debug, Clone, Copy)]
 pub struct ErdosSteinerConfig {
@@ -26,10 +45,10 @@ pub struct ErdosSteinerConfig {
 impl Default for ErdosSteinerConfig {
     fn default() -> Self {
         Self {
-            max_erdos_radius: 2,
-            token_budget: 8_000,
-            tokens_per_symbol: 120,
-            tokens_per_supernode: 18,
+            max_erdos_radius: DEFAULT_MAX_ERDOS_RADIUS,
+            token_budget: DEFAULT_STEINER_TOKEN_BUDGET,
+            tokens_per_symbol: DEFAULT_TOKENS_PER_SYMBOL,
+            tokens_per_supernode: DEFAULT_TOKENS_PER_SUPERNODE,
         }
     }
 }
@@ -166,8 +185,8 @@ pub fn prune_context_erdos_steiner(
             && cid_to_idx[cu as usize] != usize::MAX
             && cid_to_idx[cv as usize] != usize::MAX
         {
-            adj[cu as usize].push((cv, 0.85));
-            adj[cv as usize].push((cu, 0.85));
+            adj[cu as usize].push((cv, T8R_VIRTUAL_BRIDGE_WEIGHT));
+            adj[cv as usize].push((cu, T8R_VIRTUAL_BRIDGE_WEIGHT));
             let _ = bridge_sym;
         }
     }
@@ -327,7 +346,7 @@ pub fn prune_context_erdos_steiner(
     for (cid, erdos_num, res_dist, is_terminal) in candidates {
         let sn = &super_nodes[cid_to_idx[cid as usize]];
         let cost = if is_terminal {
-            (sn.vertex_count.min(8) as usize) * cfg.tokens_per_symbol
+            (sn.vertex_count.min(MAX_TERMINAL_SYMBOLS_EXPANDED) as usize) * cfg.tokens_per_symbol
         } else {
             cfg.tokens_per_supernode
         };
@@ -397,7 +416,7 @@ pub fn extract_t8r_virtual_bridges(
     for (outlier_sym, mut clusters) in outlier_neighbors {
         clusters.sort_unstable();
         clusters.dedup();
-        if clusters.len() >= 2 && clusters.len() <= 8 {
+        if clusters.len() >= 2 && clusters.len() <= MAX_OUTLIER_HUB_FANOUT {
             for i in 0..clusters.len() {
                 for j in (i + 1)..clusters.len() {
                     bridges.push((clusters[i], clusters[j], outlier_sym));
@@ -462,7 +481,7 @@ pub fn compute_erdos_center_and_turan(
     let k = super_nodes.len();
 
     // Turán extremal bound ex(n; K_{r+1}) for r = 4 architectural layers: (1 - 1/4) * n^2 / 2 = 3/8 * n^2
-    let r_layers = 4.0_f64;
+    let r_layers = TURAN_ARCHITECTURAL_LAYERS_R;
     let turan_ex_k5 =
         (((1.0 - 1.0 / r_layers) * (total_vertices as f64) * (total_vertices as f64) * 0.5).ceil()
             as usize)
@@ -472,7 +491,7 @@ pub fn compute_erdos_center_and_turan(
     // Erdős–Stone–Simonovits effective chromatic number
     let max_possible = (total_vertices * total_vertices.saturating_sub(1)).max(1) as f64 * 0.5;
     let density = ((total_edges as f64) / max_possible).clamp(0.0, 0.99);
-    let erdos_stone_chi = ((1.0 / (1.0 - density)).ceil() as usize).clamp(2, 16);
+    let erdos_stone_chi = ((1.0 / (1.0 - density)).ceil() as usize).clamp(2, MAX_ERDOS_STONE_CHI);
 
     if k == 0 {
         return ErdosCenterTuranReport {
