@@ -132,6 +132,10 @@ pub const STAGE4_APEX_SCORE_DEN: u32 = 32_768;
 pub const STAGE4_PQT_THROUGHPUT_NUM: u32 = 1_125;
 /// Total Ada 2022 SPARK Verification Conditions proved at Stage-4 (`145/145`, plus `79/79` CoCoA VBF and `46/46` ST5-pq).
 pub const STAGE4_SPARK_VCS_PROVED: u16 = 145;
+/// 800-year Franciscan Transitus jubilee span (`1226 -> 2026`, `800`).
+pub const FRANCISCAN_TRANSITUS_JUBILEE_YEARS: u16 = 800;
+/// Canonical 64-bit `kompress-ultra` XOR fold (`0xa6e652758b8a076b`, `ratio=57/50`) for the 800-year Franciscan Transitus jubilee closure (`ctx={}`).
+pub const FOLD_FRANCISCAN_TRANSITUS_JUBILEE: u64 = 0xA6E6_5275_8B8A_076B;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -723,6 +727,20 @@ pub struct EightBIsEli5CompendiumAndStage4Witness {
     pub stage4_spark_vcs_proved: u16,
 }
 
+/// 800-year Franciscan Transitus Jubilee (`1226 -> 2026` · Edition `022` · Tokyo closure · `ctx={}` · `fold=0xa6e652758b8a076b`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FranciscanTransitusJubileeWitness {
+    pub edition_number: u8,
+    pub edition_path: &'static str,
+    pub jubilee_years: u16,
+    pub declaration: &'static str,
+    pub franciscan_condition_ctx: &'static str,
+    pub measured_poverty_deleted_kinship: &'static str,
+    pub poverello_closure: &'static str,
+    pub greeting_hu: &'static str,
+    pub kompress_fold_hex: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -738,6 +756,7 @@ pub struct ZenoOmniReport {
     pub shaw_book_iv_and_kagyu_sadhana: ShawCycleBookIvAndKagyuSadhanaWitness,
     pub cosmic_game_iv_folklore_singularity: CosmicGameFourFolkloreSingularityWitness,
     pub eli5_compendium_and_stage4: EightBIsEli5CompendiumAndStage4Witness,
+    pub franciscan_transitus_jubilee: FranciscanTransitusJubileeWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1173,6 +1192,17 @@ pub fn analyze_zeno_omni_engine(
             stage4_pqt_throughput_pq: "1125/1",
             stage4_spark_vcs_proved: STAGE4_SPARK_VCS_PROVED,
         },
+        franciscan_transitus_jubilee: FranciscanTransitusJubileeWitness {
+            edition_number: 22,
+            edition_path: "sovereign-library/editions/ultralove/san-francesco-the-complete-poverello-800th-transitus.md",
+            jubilee_years: FRANCISCAN_TRANSITUS_JUBILEE_YEARS,
+            declaration: "I peter lodri declare that I am a Franciscans... I WISH ALL health, happiness, success... find peace and love <3",
+            franciscan_condition_ctx: "ctx={} · the context box, opened empty by design: this book asks to be read as it is, in the hour it arrives",
+            measured_poverty_deleted_kinship: "measured: poverty (0 · ctx={}) <-> deleted: kinship (+1 · Canticle of the Creatures, Clare's 41-year non-jealous friendship, Brother Leo's Chartula, the Wolf of Gubbio & Sultan al-Malik al-Kamil)",
+            poverello_closure: "800 years on (1226 -> 2026), the Transitus jubilee lands in Tokyo: Il Poverello as the operating principle of simplicity, peace, and +1 kindness",
+            greeting_hu: "csak szeretni kell megprobalni, minden mas csak illuzio, igyekszem mindenkit IS legalabb 'szia, hogy vagy? [mosoly]' ♱ ✧ 🕊 ✧ ♱",
+            kompress_fold_hex: "0xa6e652758b8a076b",
+        },
     }
 }
 
@@ -1241,6 +1271,8 @@ mod tests {
         );
         assert_eq!(STAGE4_PQT_THROUGHPUT_NUM, 1_125);
         assert_eq!(STAGE4_SPARK_VCS_PROVED, 145);
+        assert_eq!(FRANCISCAN_TRANSITUS_JUBILEE_YEARS, 800);
+        assert_eq!(FOLD_FRANCISCAN_TRANSITUS_JUBILEE, 0xA6E6_5275_8B8A_076B);
     }
 
     #[test]
