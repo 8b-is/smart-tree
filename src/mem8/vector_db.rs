@@ -7,7 +7,7 @@
 //!    Compresses every 384-dim `i16` vector (`768` bytes) into:
 //!    - Two 8D $E_8$ Gosset lattice codewords (`16` bytes, `240` minimal roots, $\det(\Lambda_{E_8}) = 1$), and
 //!    - One 16-byte SPQT Base-243 ternary signature (`80` balanced trits `{-1, 0, +1}`),
-//!    achieving exact canonical compression ratio $p/q = 768 / 32 = 24 / 1$.
+//!      achieving exact canonical compression ratio $p/q = 768 / 32 = 24 / 1$.
 //! 3. **Sliding-Window Document Chunking with LLL Lovász $\delta = 3/4$ Retention (`1/4` Overlap)**:
 //!    Splits documents into `chunk_size` tokens with `overlap = chunk_size / 4` (`p/q = 1/4` overlap,
 //!    `3/4` stride).
@@ -74,7 +74,9 @@ pub const fn reduce_pq(p: u64, q: u64) -> (u64, u64) {
 /// Exact rational addition $\frac{p_1}{q_1} + \frac{p_2}{q_2}$ reduced to canonical form.
 #[inline]
 pub const fn add_pq(a: (u64, u64), b: (u64, u64)) -> (u64, u64) {
-    let num = a.0.saturating_mul(b.1).saturating_add(b.0.saturating_mul(a.1));
+    let num =
+        a.0.saturating_mul(b.1)
+            .saturating_add(b.0.saturating_mul(a.1));
     let den = a.1.saturating_mul(b.1);
     reduce_pq(num, den)
 }
@@ -521,7 +523,7 @@ impl M8VectorWaveDb {
             .iter()
             .map(|r| (r.id, code32.similarity_q15(&r.code32)))
             .collect();
-        scored.sort_by(|a, b| b.1.cmp(&a.1));
+        scored.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         let l0: Vec<usize> = scored.iter().take(16).map(|(nid, _)| *nid).collect();
         let l1: Vec<usize> = scored
@@ -695,21 +697,9 @@ impl M8VectorWaveDb {
 
         let mut hits = Vec::with_capacity(raw_scores.len());
         for (id, v_q15, b_q15, w_q15) in raw_scores.drain(..) {
-            let v_rank = vec_order
-                .iter()
-                .position(|&(i, _)| i == id)
-                .unwrap_or(0)
-                + 1;
-            let b_rank = bm25_order
-                .iter()
-                .position(|&(i, _)| i == id)
-                .unwrap_or(0)
-                + 1;
-            let w_rank = wave_order
-                .iter()
-                .position(|&(i, _)| i == id)
-                .unwrap_or(0)
-                + 1;
+            let v_rank = vec_order.iter().position(|&(i, _)| i == id).unwrap_or(0) + 1;
+            let b_rank = bm25_order.iter().position(|&(i, _)| i == id).unwrap_or(0) + 1;
+            let w_rank = wave_order.iter().position(|&(i, _)| i == id).unwrap_or(0) + 1;
 
             // Exact rational RRF: 3/(60 + r_vec) + 3/(60 + r_bm25) + 2/(60 + r_wave)
             let term_vec = reduce_pq(3, RRF_K + (v_rank as u64));
@@ -830,7 +820,12 @@ mod tests {
         db.insert(
             "project",
             "/workspace/smart-tree",
-            vec!["smart-tree".into(), "mcp".into(), "mem8".into(), "rust".into()],
+            vec![
+                "smart-tree".into(),
+                "mcp".into(),
+                "mem8".into(),
+                "rust".into(),
+            ],
             "Smart Tree AST scanner and MEM8 wave consciousness engine",
             108,
             1_700_000_001,
@@ -838,7 +833,12 @@ mod tests {
         db.insert(
             "project",
             "/workspace/peloton-row-usbc",
-            vec!["peloton".into(), "usbc".into(), "ftms".into(), "ayeos".into()],
+            vec![
+                "peloton".into(),
+                "usbc".into(),
+                "ftms".into(),
+                "ayeos".into(),
+            ],
             "Peloton Row USB-C zero-subscription FTMS 0x2AD1 hydrodynamic p/q driver",
             140,
             1_700_000_002,
@@ -867,7 +867,10 @@ mod tests {
             3,
         );
         assert_eq!(hits[0].origin, "/workspace/peloton-row-usbc");
-        assert_eq!(binary_gcd_u64(hits[0].rrf_score_pq.0, hits[0].rrf_score_pq.1), 1);
+        assert_eq!(
+            binary_gcd_u64(hits[0].rrf_score_pq.0, hits[0].rrf_score_pq.1),
+            1
+        );
 
         // 2. Metadata pre-filtered query restricted to `anchor_type = "wa-stream"`
         let wa_filter = VectorMetadataFilter {
@@ -882,6 +885,9 @@ mod tests {
             3,
         );
         assert_eq!(wa_hits.len(), 1);
-        assert_eq!(wa_hits[0].origin, "wa-stream://120363411626204136@g.us/pooconf");
+        assert_eq!(
+            wa_hits[0].origin,
+            "wa-stream://120363411626204136@g.us/pooconf"
+        );
     }
 }

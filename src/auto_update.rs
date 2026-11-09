@@ -332,7 +332,7 @@ mod unix {
             || url.host_str() != Some("i1.is")
             || !url.path().starts_with("/releases/smart-tree/")
             || !url.username().is_empty()
-            || !url.password().is_some()
+            || url.password().is_none()
             || url.port().is_some()
         {
             bail!("Untrusted asset URL");
