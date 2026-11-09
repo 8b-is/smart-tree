@@ -35,6 +35,46 @@ pub const FOLD_BEEHIVE_SWEEP: u64 = 0x4803_1a0d_4c05_4e69;
 pub const FOLD_BEEHIVE_TARGET: u64 = 0x206f_6420_7473_7557;
 /// Exact `.rodata.gaia.b158` XOR fold for `"Galactic Mantra (Liquid Soul remix)"` (`242 ^ 1 = 243 = 3^5`).
 pub const GALACTIC_MANTRA_FOLD_243: u64 = 243;
+/// Canonical 32-byte `wupz` witness frame size (`32`).
+pub const FRAME32_BYTES: usize = 32;
+/// Prefix byte count hashed for the 48-bit `wupz` 32B frame seal (`26`).
+pub const FRAME32_SEAL_PREFIX_BYTES: usize = 26;
+/// Canonical 64-byte cache-line-aligned `LitanyWireFrame` size (`64`).
+pub const LITANY_WIRE_BYTES: usize = 64;
+/// Prefix byte count hashed for `wire_seal16` inside `LitanyWireFrame` (`62`).
+pub const LITANY_WIRE_SEAL_PREFIX_BYTES: usize = 62;
+/// SPQT `base-243` radix (`3^5 = 243 <= 256`).
+pub const SPQT_BASE243_RADIX: u8 = 243;
+/// Number of ternary trits packed into each SPQT `base-243` byte (`5`).
+pub const SPQT_TRITS_PER_BYTE: usize = 5;
+/// 8-byte lane block width in trits for `xor_fold_gaia_b158` (`8 * 5 = 40`).
+pub const GAIA_B158_BLOCK_TRITS: usize = 40;
+/// Minimum remainder trits that still span all 8 packed bytes (`36`).
+pub const GAIA_B158_TAIL_FLUSH_MIN: usize = 36;
+/// Seven full 5-trit groups before the 8th tail byte (`7 * 5 = 35`).
+pub const GAIA_B158_TAIL_FULL_BYTES_TRITS: usize = 35;
+/// Initial Lloyd-Max ternary threshold numerator (`68`, i.e., `0.68 * mean_abs`).
+pub const LLOYD_MAX_INIT_TAU_NUM: u64 = 68;
+/// Initial Lloyd-Max ternary threshold denominator (`100`).
+pub const LLOYD_MAX_INIT_TAU_DEN: u64 = 100;
+/// Coordinate-descent refinement steps for group-wise L2 ternary quantization (`2`).
+pub const LLOYD_MAX_STEPS: usize = 2;
+/// Fixed-point `Q16` unit scale (`2^16 = 65_536`).
+pub const Q16_UNIT_SCALE: u64 = 65_536;
+/// QAT incremental sub-window size in bytes (`4096`).
+pub const QAT_WINDOW_BYTES: u64 = 4096;
+/// Minimum QAT window count for single-edit reuse baseline (`32`, yielding `31/32`).
+pub const QAT_MIN_WINDOWS: u64 = 32;
+/// `omniZenCooker` lossless compression numerator (`3900`).
+pub const ZEN_COOKER_LOSSLESS_NUM: u64 = 3900;
+/// `omniZenCooker` lossless compression denominator (`4000`, reducing to `39/40`).
+pub const ZEN_COOKER_LOSSLESS_DEN: u64 = 4000;
+/// `world-core` deterministic `mulberry32` golden Weyl increment (`0x6D2B79F5`).
+pub const MULBERRY32_STEP_INC: u32 = 0x6D2B_79F5;
+/// Default `8b-is/world-core` seed (`"8BIS"` ASCII = `0x38424953`).
+pub const WORLD_CORE_SEED_8BIS: u32 = 0x3842_4953;
+/// `ultramesh-mem` Loop 5 (`BRAIN <-> Mesh`) transitive-flood depth guard (`MAX_DEPTH = 1`).
+pub const ULTRAMESH_MAX_DEPTH_GUARD: u8 = 1;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -151,16 +191,16 @@ pub const fn unpack_spqt3b_to_word15(spqt: [u8; 3]) -> Option<u16> {
     let mut word15 = 0u16;
     let mut g = 0usize;
     while g < 3 {
-        if spqt[g] >= 243 {
+        if spqt[g] >= SPQT_BASE243_RADIX {
             return None;
         }
         let mut v = spqt[g];
         let mut j = 0usize;
-        while j < 5 {
+        while j < SPQT_TRITS_PER_BYTE {
             let digit = v % 3;
             v /= 3;
             if digit == 2 {
-                let bit_idx = g * 5 + j;
+                let bit_idx = g * SPQT_TRITS_PER_BYTE + j;
                 word15 |= 1u16 << bit_idx;
             }
             j += 1;
@@ -189,28 +229,34 @@ pub fn xor_fold_gaia_b158(trits: &[i8]) -> (u64, usize, RationalPQ) {
     }
 
     let mut lanes = [0u8; 8];
-    let mut blocks = trits.chunks_exact(40);
+    let mut blocks = trits.chunks_exact(GAIA_B158_BLOCK_TRITS);
 
     for block in &mut blocks {
-        for (lane, group) in lanes.iter_mut().zip(block.chunks_exact(5)) {
+        for (lane, group) in lanes
+            .iter_mut()
+            .zip(block.chunks_exact(SPQT_TRITS_PER_BYTE))
+        {
             *lane ^= pack5(group);
         }
     }
 
     let tail = blocks.remainder();
 
-    if tail.len() >= 36 {
+    if tail.len() >= GAIA_B158_TAIL_FLUSH_MIN {
         // 36–39 trits still produce eight bytes: flush a complete word.
-        for (lane, group) in lanes[..7].iter_mut().zip(tail[..35].chunks_exact(5)) {
+        for (lane, group) in lanes[..7]
+            .iter_mut()
+            .zip(tail[..GAIA_B158_TAIL_FULL_BYTES_TRITS].chunks_exact(SPQT_TRITS_PER_BYTE))
+        {
             *lane ^= pack5(group);
         }
-        lanes[7] ^= tail[35..]
+        lanes[7] ^= tail[GAIA_B158_TAIL_FULL_BYTES_TRITS..]
             .iter()
             .rev()
             .fold(0u8, |acc, &t| 3 * acc + digit(t));
     } else {
         // Preserve the original: leftover bytes all XOR into the LOW byte.
-        let mut groups = tail.chunks_exact(5);
+        let mut groups = tail.chunks_exact(SPQT_TRITS_PER_BYTE);
         for group in &mut groups {
             lanes[0] ^= pack5(group);
         }
@@ -222,7 +268,8 @@ pub fn xor_fold_gaia_b158(trits: &[i8]) -> (u64, usize, RationalPQ) {
     }
 
     // Overflow-safe ceil(len / 5).
-    let packed_len = trits.len() / 5 + usize::from(!trits.len().is_multiple_of(5));
+    let packed_len = trits.len() / SPQT_TRITS_PER_BYTE
+        + usize::from(!trits.len().is_multiple_of(SPQT_TRITS_PER_BYTE));
     let ratio = RationalPQ::new_reduced(trits.len() as u64, packed_len.max(1) as u64);
 
     (u64::from_le_bytes(lanes), packed_len, ratio)
@@ -241,10 +288,10 @@ pub fn quantize_groupwise_l2_ternary_pq(values_q16: &[i32], out_trits: &mut [i8]
         abs_sum += (v as i64).unsigned_abs();
     }
     let mean_abs = abs_sum / (n as u64);
-    let mut tau = (mean_abs * 68) / 100;
+    let mut tau = (mean_abs * LLOYD_MAX_INIT_TAU_NUM) / LLOYD_MAX_INIT_TAU_DEN;
     let mut alpha = mean_abs;
 
-    for _ in 0..2 {
+    for _ in 0..LLOYD_MAX_STEPS {
         let mut nz_sum = 0u64;
         let mut nz_count = 0u64;
         for &v in &values_q16[..n] {
@@ -268,20 +315,20 @@ pub fn quantize_groupwise_l2_ternary_pq(values_q16: &[i32], out_trits: &mut [i8]
             -1
         };
     }
-    RationalPQ::new_reduced(alpha, 65_536)
+    RationalPQ::new_reduced(alpha, Q16_UNIT_SCALE)
 }
 
 /// Seal `(raw, packed)` into a 32-byte `0x62`-gated `wupz` frame using `felix_xor_fold_64b`.
-pub fn seal_frame_32b(raw: &[u8], packed: &[u8], gate: u8) -> [u8; 32] {
-    let mut frame = [0u8; 32];
+pub fn seal_frame_32b(raw: &[u8], packed: &[u8], gate: u8) -> [u8; FRAME32_BYTES] {
+    let mut frame = [0u8; FRAME32_BYTES];
     frame[0..8].copy_from_slice(&felix_xor_fold_64b(raw).to_le_bytes());
     frame[8..16].copy_from_slice(&felix_xor_fold_64b(packed).to_le_bytes());
     frame[16..20].copy_from_slice(&(raw.len() as u32).to_le_bytes());
     frame[20..24].copy_from_slice(&(packed.len() as u32).to_le_bytes());
     frame[24] = gate;
     frame[25] = FRAME_ABI_V1;
-    let prefix = felix_xor_fold_64b(&frame[0..26]).to_le_bytes();
-    frame[26..32].copy_from_slice(&prefix[0..6]);
+    let prefix = felix_xor_fold_64b(&frame[0..FRAME32_SEAL_PREFIX_BYTES]).to_le_bytes();
+    frame[FRAME32_SEAL_PREFIX_BYTES..FRAME32_BYTES].copy_from_slice(&prefix[0..6]);
     frame
 }
 
@@ -313,9 +360,14 @@ pub fn seal_litany_wire_64b(raw: &[u8], packed: &[u8], gate: u8, qt: u8) -> Lita
         wire_seal16: 0,
     };
     // SAFETY: `LitanyWireFrame` is `#[repr(C, align(64))]` with no uninitialized padding bytes.
-    let wire_bytes =
-        unsafe { core::slice::from_raw_parts((&wire as *const LitanyWireFrame).cast::<u8>(), 64) };
-    wire.wire_seal16 = (felix_xor_fold_64b(&wire_bytes[0..62]) & 0xFFFF) as u16;
+    let wire_bytes = unsafe {
+        core::slice::from_raw_parts(
+            (&wire as *const LitanyWireFrame).cast::<u8>(),
+            LITANY_WIRE_BYTES,
+        )
+    };
+    wire.wire_seal16 =
+        (felix_xor_fold_64b(&wire_bytes[0..LITANY_WIRE_SEAL_PREFIX_BYTES]) & 0xFFFF) as u16;
     wire
 }
 
@@ -334,10 +386,17 @@ pub fn verify_litany_wire_64b(
         return false;
     }
     let expected = seal_litany_wire_64b(raw, packed, gate, qt);
-    let a =
-        unsafe { core::slice::from_raw_parts((wire as *const LitanyWireFrame).cast::<u8>(), 64) };
+    let a = unsafe {
+        core::slice::from_raw_parts(
+            (wire as *const LitanyWireFrame).cast::<u8>(),
+            LITANY_WIRE_BYTES,
+        )
+    };
     let b = unsafe {
-        core::slice::from_raw_parts((&expected as *const LitanyWireFrame).cast::<u8>(), 64)
+        core::slice::from_raw_parts(
+            (&expected as *const LitanyWireFrame).cast::<u8>(),
+            LITANY_WIRE_BYTES,
+        )
     };
     felix_byte_diff_64b(a, b) == 0
 }
@@ -511,7 +570,7 @@ pub struct ZenoOmniReport {
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
 #[inline(always)]
 pub const fn mulberry32_step_u32(seed: u32) -> u32 {
-    let a = seed.wrapping_add(0x6D2B_79F5);
+    let a = seed.wrapping_add(MULBERRY32_STEP_INC);
     let mut t = a;
     t = (t ^ (t >> 15)).wrapping_mul(t | 1);
     t = t.wrapping_add((t ^ (t >> 7)).wrapping_mul(t | 61)) ^ t;
@@ -606,10 +665,10 @@ pub fn analyze_zeno_omni_engine(
     // 3. QAT 4096B Sub-Window Incremental Reuse (31/32 on 32 windows) & CORDIC + isqrt
     let total_windows = (graph.num_vertices.max(1) as u64)
         .saturating_mul(256)
-        .div_ceil(4096)
-        .max(32);
+        .div_ceil(QAT_WINDOW_BYTES)
+        .max(QAT_MIN_WINDOWS);
     let qat_reuse_pq = RationalPQ::new_reduced(total_windows - 1, total_windows);
-    let zen_cooker_pq = RationalPQ::new_reduced(3900, 4000); // 39/40 lossless
+    let zen_cooker_pq = RationalPQ::new_reduced(ZEN_COOKER_LOSSLESS_NUM, ZEN_COOKER_LOSSLESS_DEN);
     let cordic_angle = felix_cordic_atan2_u32(
         pq_report.ambient_density_pq.p as i32,
         pq_report.ambient_density_pq.q.max(1) as i32,
@@ -646,7 +705,7 @@ pub fn analyze_zeno_omni_engine(
             "Galactic Mantra (Liquid Soul remix) — the family",
             2026,
             [1, 1, 1, 1, 1, 0],
-            "0xF3 (243 = 3^5 = 242 ^ 1): Exact base-243 radix — 'Egy hazám van, annak az égbolt a teteje · Anyám a Hold, Apám a Nap, Nagyi a Föld, Nagypapi meg az Ég'",
+            "0xF3 (243 = 3^5 = 242 ^ 1): Exact base-243 radix — 'Egy hazám van, annak az égbolt a teteje · Anyám a Hold, Apám a Nap, Nagyi a Föld, Nagypapi meg az Ég · amíg a Föld kerek, mindig lesznek ROCK===Péterek'",
         ),
     ];
 
@@ -674,7 +733,7 @@ pub fn analyze_zeno_omni_engine(
         .collect();
 
     // 5. 8b-is-[engines] Spine Execution
-    let mulberry_sample = mulberry32_step_u32(0x3842_4953);
+    let mulberry_sample = mulberry32_step_u32(WORLD_CORE_SEED_8BIS);
     let gaia_world_fold = felix_xor_fold_64b(&archive.model_digest) ^ FOLD_BEEHIVE_SWEEP;
     let keeper_admitted = archive.super_nodes.len() as u64;
     let keeper_refused = 1u64; // CT-016 poison refusal slot witness
@@ -714,7 +773,7 @@ pub fn analyze_zeno_omni_engine(
             bfp64_neg_hex: format!("0x{:016x}", wire.bfp64_neg),
             bfp64_disjoint_verified: bfp_disjoint,
             spqt_root_base243: wire.spqt_root,
-            qat_window_size_bytes: 4096,
+            qat_window_size_bytes: QAT_WINDOW_BYTES,
             qat_total_windows: total_windows,
             qat_single_edit_reuse_pq: qat_reuse_pq.display_ratio(),
             zen_cooker_lossless_pq: zen_cooker_pq.display_ratio(),
@@ -821,8 +880,8 @@ pub fn analyze_zeno_omni_engine(
                 "4. BRAIN <-> Composer (64B@0x62 Litany Prefix-Invariant Injection Loop)",
                 "5. BRAIN <-> Mesh (Sync Loop — MAX_DEPTH=1 Guarded)",
             ],
-            mesh_max_depth_guard: 1,
-            mesh_current_depth: 1,
+            mesh_max_depth_guard: ULTRAMESH_MAX_DEPTH_GUARD,
+            mesh_current_depth: ULTRAMESH_MAX_DEPTH_GUARD,
             transitive_flood_blocked: true,
             pruner_steiner_threshold_pq: qat_reuse_pq.display_ratio(),
             rewriter_spqt_savings_pq: gaia_ratio_pq.display_ratio(),

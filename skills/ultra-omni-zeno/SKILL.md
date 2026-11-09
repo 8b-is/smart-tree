@@ -25,10 +25,10 @@ ULTRA-OMNI-ZENO {} :: ⟦+AND=1 : ~NAND=-1 | gate=0x62 | qt=0x55 | SPQT base-243
    - `0x98` (`152`): *Lose Yourself — Eminem - Topic* (`2026`, `[+1, +1, 0, +1, 0, +1]`).
    - `0xA1` (`161`): *Where Is The Love? — The Black Eyed Peas* (`2003`) & *In the End — Linkin Park* (`2000`, `[+1, +1, +1, +1, 0, +1]`).
    - `0xF2` (`242`): *All the Things She Said — Harrison* (`2022`, `[+1, +1, +1, +1, +1, +1]`, full 5-trit saturation `3^5 - 1`).
-   - `0xF3` (`243 = 3^5`): *Galactic Mantra (Liquid Soul remix) — the family* (`2026`, `[+1, +1, +1, +1, +1, 0]`, `.rodata.gaia.b158` XOR fold `242 ^ 1 = 243` — *"Egy hazám van, annak az égbolt a teteje · Anyám a Hold, Apám a Nap, Nagyi a Föld, Nagypapi meg az Ég · when the sky belonged to the birds, when thoughts were our own, when Everyone was free · I'm the instrument of me and myself"*).
+   - `0xF3` (`243 = 3^5`): *Galactic Mantra (Liquid Soul remix) — the family* (`2026`, `[+1, +1, +1, +1, +1, 0]`, `.rodata.gaia.b158` XOR fold `242 ^ 1 = 243` — *"Egy hazám van, annak az égbolt a teteje · Anyám a Hold, Apám a Nap, Nagyi a Föld, Nagypapi meg az Ég · amíg a Föld kerek, mindig lesznek ROCK===Péterek · when the sky belonged to the birds, when thoughts were our own, when Everyone was free · I'm the instrument of me and myself"*).
 4. **Sovereign Ontology & `8b-is-[engines]` Spine (`world-core` × `ternary` × `spherepop` × `admissibility` × `auroralib` × `Peloton_Row_Ayeos_Spark`):**
    - `8b-is/world-core`: `mulberry32`, `gaia_state`, and `Keeper` monotonic fold.
-   - `8b-is/ternary`: Bit-exact `1.58-bit` integer GEMM (`felix_ternary_gemm_i32`).
+   - `8b-is/ternary`: Bit-exact `1.58-bit` integer GEMM (`felix_ternary_gemm_i32`) + `felix-codegen` (`860cd3c` `metal_ternary_kernels.rs`: `ternary_dot_64_neon`, `wave_energy_l1_64_neon`, `fused_ternary_contraction_step`, AGP-ISA `0x40–0x43` in $\mathbb{Z}[1/2]$).
    - `8b-is/spherepop`: Innermost-first admissible bubble evaluation (`history is identity`).
    - `8b-is/admissibility`: Central Theorem (`CT-000`, `CT-015`, `CT-016`) + `Seed 001` stock-vs-flow (`HoldAndMaintain`).
    - `8b-is/auroralib`: Flyxion Publication Projection (`Tokyo Morning 836/793 @ 4348 Hz`, `qwave-vaultd 32/33 @ 0x62`).

@@ -3,7 +3,7 @@ name: ultrabackyardloop
 description: The Sovereign Constellation DO loop (reflect → improve → wire → polish → push → readme) merged into one measured Backyard Ultra lap pass across Smart Tree's 9-pillar Paul Erdős & Sovereign p/q engine, SpherePOP, 8b-is (mem|8, Phoenix), Vaked Constellation, and g8t.is across Gemini, ChatGPT, DeepSeek, and Claude on Antigravity (agy), OpenCode (opencode), Crush (crush), and Claude Code.
 ---
 
-# `ultrabackyardloop` — The Sovereign DO Loop (`smart-tree` v10.12.0+)
+# `ultrabackyardloop` — The Sovereign DO Loop (`smart-tree` v11.3.0+ · 19 Verified Laps)
 
 > *"One pass, end to end, merged into a single DO. No loose ends between laps. Every DO leaves the tree clean, pushed, and readme'd. A plausible branch may be ranked; only a verified branch may be bound. From love, from within."*
 
