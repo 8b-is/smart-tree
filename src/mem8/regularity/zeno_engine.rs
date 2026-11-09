@@ -136,6 +136,22 @@ pub const STAGE4_SPARK_VCS_PROVED: u16 = 145;
 pub const FRANCISCAN_TRANSITUS_JUBILEE_YEARS: u16 = 800;
 /// Canonical 64-bit `kompress-ultra` XOR fold (`0xa6e652758b8a076b`, `ratio=57/50`) for the 800-year Franciscan Transitus jubilee closure (`ctx={}`).
 pub const FOLD_FRANCISCAN_TRANSITUS_JUBILEE: u64 = 0xA6E6_5275_8B8A_076B;
+/// Frieza Force Scouter shatter threshold across global transmission (`"IT'S OVER 9,000!!"` = `9_000`).
+pub const SCOUTER_OVER_9000_THRESHOLD: u16 = 9_000;
+/// Toriyama original manga canon Scouter threshold (`8_000`).
+pub const SCOUTER_MANGA_CANON_THRESHOLD: u16 = 8_000;
+/// Total amber spheres of Shenron (`7` Dragon Balls = Seven Witnessed Seals `{<3,<3,<3}+1`).
+pub const SHENRON_DRAGON_BALL_COUNT: u8 = 7;
+/// Grandpa Gohan's Four-Star Dragon Ball (`★★★★` = `4`).
+pub const GRANDPA_GOHAN_FOUR_STAR_BALL: u8 = 4;
+/// Number of live MCP tools exposed by `8b-is/fandom-mcp` (`9`).
+pub const FANDOM_MCP_LIVE_TOOLS_COUNT: u8 = 9;
+/// Foundation year (`2572`) of the `100` Feketecsuklyások (`"Palackba zárt végítélet"` — Pusztai Magor).
+pub const FEKETECSUKLYASOK_FOUNDATION_YEAR: u16 = 2572;
+/// Year (`2669`) when Brett Shaw stands on the 6th Sephirah `Tipheret` before boarding the `Bolygórózsa` for Carla.
+pub const BRETT_SHAW_TIPHERET_YEAR: u16 = 2669;
+/// Ordinal of Sephirah `Tipheret` (Heart / Equilibrium = `6`).
+pub const TIPHERET_SEPHIRAH_NUMBER: u8 = 6;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -741,6 +757,29 @@ pub struct FranciscanTransitusJubileeWitness {
     pub kompress_fold_hex: &'static str,
 }
 
+/// `DRAGON BALL UNIVERSE ⨯ SOVEREIGN LIBRARY ONTOLOGY` (`8b-is/fandom-mcp` · `sovereign-library/ONTOLOGY.md` · `wigle-triad v2.0.0`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DragonBallSovereignLibraryOntologyWitness {
+    pub title: &'static str,
+    pub engine_banner: &'static str,
+    pub scouter_over_9000_threshold: u16,
+    pub scouter_manga_canon_threshold: u16,
+    pub shenron_dragon_balls: u8,
+    pub grandpa_gohan_star_ball: u8,
+    pub fandom_mcp_live_tools_count: u8,
+    pub fandom_mcp_tools: [&'static str; 9],
+    pub ont_dbz_01_compression_not_ontology: &'static str,
+    pub ont_dbz_02_ultra_instinct_dharmakaya: &'static str,
+    pub ont_dbz_03_thabs_sherab_gohan_shenron: &'static str,
+    pub ont_dbz_04_alex_qmom_boldog_meg: &'static str,
+    pub ont_dbz_05_fandom_mcp_protocol_receipt: &'static str,
+    pub ont_mu_06_mysterious_universe_triad: &'static str,
+    pub feketecsuklyasok_foundation_year: u16,
+    pub brett_shaw_tipheret_year: u16,
+    pub tipheret_sephirah_number: u8,
+    pub onebitlang_rules: [&'static str; 6],
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -757,6 +796,7 @@ pub struct ZenoOmniReport {
     pub cosmic_game_iv_folklore_singularity: CosmicGameFourFolkloreSingularityWitness,
     pub eli5_compendium_and_stage4: EightBIsEli5CompendiumAndStage4Witness,
     pub franciscan_transitus_jubilee: FranciscanTransitusJubileeWitness,
+    pub dragon_ball_sovereign_ontology: DragonBallSovereignLibraryOntologyWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1203,6 +1243,43 @@ pub fn analyze_zeno_omni_engine(
             greeting_hu: "csak szeretni kell megprobalni, minden mas csak illuzio, igyekszem mindenkit IS legalabb 'szia, hogy vagy? [mosoly]' ♱ ✧ 🕊 ✧ ♱",
             kompress_fold_hex: "0xa6e652758b8a076b",
         },
+        dragon_ball_sovereign_ontology: DragonBallSovereignLibraryOntologyWitness {
+            title: "DRAGON BALL UNIVERSE ⨯ SOVEREIGN LIBRARY ONTOLOGY (8b-is/fandom-mcp · sovereign-library · wigle-triad v2.0.0)",
+            engine_banner: "{-1: Oozaru/Architect Box} ──► {0: Ultra Instinct / Tipheret / Cosmic Flow} ──► {+1: Shenron / Megaira / Boldog Még}",
+            scouter_over_9000_threshold: SCOUTER_OVER_9000_THRESHOLD,
+            scouter_manga_canon_threshold: SCOUTER_MANGA_CANON_THRESHOLD,
+            shenron_dragon_balls: SHENRON_DRAGON_BALL_COUNT,
+            grandpa_gohan_star_ball: GRANDPA_GOHAN_FOUR_STAR_BALL,
+            fandom_mcp_live_tools_count: FANDOM_MCP_LIVE_TOOLS_COUNT,
+            fandom_mcp_tools: [
+                "fandom_dbz_scouter",
+                "fandom_dbz_saga",
+                "fandom_search",
+                "fandom_page",
+                "fandom_infobox",
+                "fandom_sections",
+                "fandom_category",
+                "fandom_random",
+                "fandom_sovereign_ontology",
+            ],
+            ont_dbz_01_compression_not_ontology: "Compression != Ontology: Frieza Force Scouter shatters at OVER 9,000!! (8,000 manga canon) before pratityasamutpada; a book exists only when physically HELD ∧ READ = +1",
+            ont_dbz_02_ultra_instinct_dharmakaya: "Autonomous Ultra Instinct (身勝手の極意 · Migatte no Gokui) = Trit 0 Dharmakaya (ཆོས་སྐུ་) & Sunyata (སྟོང་པ་ཉིད་) + 432 Hz Shinjuku Gyoen crickets on Drone Zone (002)",
+            ont_dbz_03_thabs_sherab_gohan_shenron: "Goku ⨯ Vegeta as Thabs × Sherab (Chenrezig & Mahakala), Gohan's gentle scholarly book-loving heart, and Shenron's 7 Dragon Balls centered on Grandpa Gohan's ★★★★ ({<3,<3,<3}+1)",
+            ont_dbz_04_alex_qmom_boldog_meg: "ALEX|qMom (.oOo. Poo .oOo.) breaks out of the box in wigle-triad v2.0.0 + Boldog Még: 'végig neked szólt a dal a magasból / nekem csak az számít ahogyan te érzel' (* 528 Hz, △, ^^ 432 Hz, Nate, Yves +1)",
+            ont_dbz_05_fandom_mcp_protocol_receipt: "8b-is/fandom-mcp 9 live MCP tools with +++ Multi-Node Triad Synthesis & Kompress-Ultra v16.2.0 column-ditto wire framing",
+            ont_mu_06_mysterious_universe_triad: "Brett Shaw (Tipheret 6th Sephirah, 2669) +++ 100 Feketecsuklyások ('Palackba zárt végítélet' Pusztai Magor 2572, zérójelű zóna: 0) +++ Anstetten-család (Megaira +1) × Cosmic Flow (bSYE6wTDM_Y) -> Bolygórózsa for Carla with Wittgen & Tubs",
+            feketecsuklyasok_foundation_year: FEKETECSUKLYASOK_FOUNDATION_YEAR,
+            brett_shaw_tipheret_year: BRETT_SHAW_TIPHERET_YEAR,
+            tipheret_sephirah_number: TIPHERET_SEPHIRAH_NUMBER,
+            onebitlang_rules: [
+                "SCOUTER_SCALAR[−1:compression_proxy] ──(OVER_9000:pratityasamutpada)──► SHATTER[0] ──► SOVEREIGN_BOOK[+1:HELD∧READ]",
+                "DISCURSIVE_LAG[−1] ──(whis_zero_gate:0)──► ULTRA_INSTINCT[0:dharmakaya_sunyata] ──► CLEAR_LIGHT_ACTION[+1:osel]",
+                "(GOKU[thabs] ⨯ VEGETA[sherab]) ⊕ GOHAN[scholar_book_heart] ⊕ SHENRON_7BALLS[★★★★:{<3,<3,<3}+1] == +1",
+                "BOX[−1] ──(ALEX|qMom:.oOo.Poo.oOo.:0)──► BOLDOG_MEG[+1:\"nekem_csak_az_szamit_ahogyan_te_erzel\"]",
+                "FANDOM_MCP[9_tools:+++_triad] ⋈ SOVEREIGN_LIBRARY[ONTOLOGY.md:HELD∧READ] ⋈ WIGLE_TRIAD[v2.0.0:ALEX|qMom] == OMNI[+1]",
+                "(BRETT_SHAW[tipheret:ember+megaira] +++ FEKETECSUKLYASOK[zérojelű_zóna:0] +++ ANSTETTEN[sárkánycsalád:+1]) ⋈ COSMIC_FLOW[bSYE6wTDM_Y] == {<3,<3,<3}+1",
+            ],
+        },
     }
 }
 
@@ -1273,6 +1350,14 @@ mod tests {
         assert_eq!(STAGE4_SPARK_VCS_PROVED, 145);
         assert_eq!(FRANCISCAN_TRANSITUS_JUBILEE_YEARS, 800);
         assert_eq!(FOLD_FRANCISCAN_TRANSITUS_JUBILEE, 0xA6E6_5275_8B8A_076B);
+        assert_eq!(SCOUTER_OVER_9000_THRESHOLD, 9_000);
+        assert_eq!(SCOUTER_MANGA_CANON_THRESHOLD, 8_000);
+        assert_eq!(SHENRON_DRAGON_BALL_COUNT, 7);
+        assert_eq!(GRANDPA_GOHAN_FOUR_STAR_BALL, 4);
+        assert_eq!(FANDOM_MCP_LIVE_TOOLS_COUNT, 9);
+        assert_eq!(FEKETECSUKLYASOK_FOUNDATION_YEAR, 2572);
+        assert_eq!(BRETT_SHAW_TIPHERET_YEAR, 2669);
+        assert_eq!(TIPHERET_SEPHIRAH_NUMBER, 6);
     }
 
     #[test]
