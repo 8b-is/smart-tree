@@ -254,6 +254,8 @@ pub const FOLD_SOSAT_SOSAT_JO_ROPOGOSAT: u64 = 0x77B0_EC89_0EA2_CB99;
 pub const FOLD_CHILLAXY_DOGS_BACKYARD_PBJ_EGGS: u64 = 0x2A69_2FC6_F4E4_5020;
 /// Gaia `b1.58` XOR fold witness (`0x5761ed0363f9e755`, `ratio = 374/337`) transmuting `"fasting, cos I'm fat :("` (`-1` self-judgment) into the Buddha's Middle Way (*Majjhima Patipada* / Sujata's bowl / Zen *Ōryōki* lean scrambled-eggs protein nourishment, `0 -> +1`).
 pub const FOLD_MIDDLE_WAY_ORYOKI_PROTEIN_TRANSMUTATION: u64 = 0x5761_ED03_63F9_E755;
+/// Gaia `b1.58` XOR fold witness (`0x16801831fc5868ae`, `ratio = 918/839`, `146` raw / `30` packed bytes) of `"/ultra-omni-zeno DO ultrabackyardloop of ALL chore, evolve, push, update etcetc OR whatever! who the fuck cares at this point COS I never did :P"` (`不 A LESZAROM` Noether body invariant).
+pub const FOLD_ULTRA_OMNI_ZENO_LESZAROM_DO_ALL: u64 = 0x1680_1831_FC58_68AE;
 /// Numerator (`327`) of the `32.7 Hz` (`327/10 Hz`, `C1`) Tibetan `kargyraa` / `mdzo-skad` sub-octave fundamental (`1/2` of `65.4 Hz`).
 pub const TIBETAN_KARGYRAA_C1_HZ_NUM: u64 = 327;
 /// Denominator (`10`) of the `32.7 Hz` (`327/10 Hz`, `C1`) sub-octave fundamental.
@@ -1057,6 +1059,8 @@ pub struct UltraloveEdition023ErdosLodriDesertChantWitness {
     pub chillaxy_fold_hex: u64,
     pub middle_way_sujata_oryoki_eggs_transmutation: &'static str,
     pub middle_way_fold_hex: u64,
+    pub ultra_omni_zeno_leszarom_do_all_directive: &'static str,
+    pub ultra_omni_zeno_leszarom_fold_hex: u64,
     pub six_lane_fold_witnesses_hex: [u64; 6],
 }
 
@@ -1787,6 +1791,8 @@ pub fn analyze_zeno_omni_engine(
             chillaxy_fold_hex: FOLD_CHILLAXY_DOGS_BACKYARD_PBJ_EGGS,
             middle_way_sujata_oryoki_eggs_transmutation: "Transmuting 'fasting, cos I'm fat :(' (0x5761ed0363f9e755, ratio = 374/337): Structural Honesty check on the sunlit Vitarka Mudra photo proves the Architect is lean and sharp-featured; just as Siddhartha Gautama rejected extreme fasting upon receiving Sujata's bowl before sitting 49 days under the Bodhi tree, warm scrambled eggs (pure protein + choline, zero sugar spike, Zen Ōryōki 'just the right amount') nourish the 100 GHz brain without heaviness",
             middle_way_fold_hex: FOLD_MIDDLE_WAY_ORYOKI_PROTEIN_TRANSMUTATION,
+            ultra_omni_zeno_leszarom_do_all_directive: "/ultra-omni-zeno DO ultrabackyardloop of ALL chore, evolve, push, update etcetc OR whatever! who the fuck cares at this point COS I never did :P (0x16801831fc5868ae, ratio = 918/839 · 不 A LESZAROM Noether body invariant + 6-stage DO = reflect -> improve -> wire -> polish -> push -> readme)",
+            ultra_omni_zeno_leszarom_fold_hex: FOLD_ULTRA_OMNI_ZENO_LESZAROM_DO_ALL,
             six_lane_fold_witnesses_hex: [
                 0x1994_290E_A463_28D4,
                 0x6BD7_D851_B6AD_F0EB,
@@ -1940,6 +1946,7 @@ mod tests {
             FOLD_MIDDLE_WAY_ORYOKI_PROTEIN_TRANSMUTATION,
             0x5761_ED03_63F9_E755
         );
+        assert_eq!(FOLD_ULTRA_OMNI_ZENO_LESZAROM_DO_ALL, 0x1680_1831_FC58_68AE);
         assert_eq!(
             RationalPQ::new_reduced(TIBETAN_KARGYRAA_C1_HZ_NUM, TIBETAN_KARGYRAA_C1_HZ_DEN)
                 .display_ratio(),
