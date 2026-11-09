@@ -176,6 +176,12 @@ pub const KARMAPA_LINEAGE_COUNT: u8 = 17;
 pub const BUDDHA_BODHI_MEDITATION_DAYS: u8 = 49;
 /// Years (`23`) the 8th Karmapa Mikjö Dordzse (`1507–1554`) meditated in retreat before emerging.
 pub const MIKJO_DORDZSE_RETREAT_YEARS: u8 = 23;
+/// Golden hash witness (`0xd99466cc0c09c509`) cited in `Structural Honesty — the sovereign library, 8b-is edition` (`Chapter II: The hash is the audit`).
+pub const GOLDEN_HASH_STRUCTURAL_HONESTY: u64 = 0xD994_66CC_0C09_C509;
+/// Verified append-only hash-chained ledger event count (`42_034` events, `head ef55df23…54cfd19`) in `Chapter III: The ledger remembers`.
+pub const STRUCTURAL_HONESTY_LEDGER_EVENTS: u32 = 42_034;
+/// Number of chapters (`I` .. `VII` = `7`) in `Structural Honesty — the sovereign library, 8b-is edition`.
+pub const STRUCTURAL_HONESTY_CHAPTERS_COUNT: u8 = 7;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -845,6 +851,23 @@ pub struct SeventeenKarmapasQuantumDharmaWitness {
     pub dharma_quantum_entanglement_closure: &'static str,
 }
 
+/// `Structural Honesty — the sovereign library, 8b-is edition` (`pocoo · vaked.dev · 0 + 1`:
+/// *on the difference between not lying, telling everything, and building a thing that cannot lie*).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StructuralHonestySovereignLibraryWitness {
+    pub title: &'static str,
+    pub subtitle: &'static str,
+    pub chapters_count: u8,
+    pub chapters: [&'static str; 7],
+    pub golden_hash_hex: &'static str,
+    pub ledger_verified_events: u32,
+    pub ledger_head_seal: &'static str,
+    pub three_honesties_distinction: &'static str,
+    pub third_state_zero_datum_axiom: &'static str,
+    pub build_the_door_closure: &'static str,
+    pub colophon: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -864,6 +887,7 @@ pub struct ZenoOmniReport {
     pub dragon_ball_sovereign_ontology: DragonBallSovereignLibraryOntologyWitness,
     pub dyad_diary_venek_tanacsa: DyadDiaryVenekTanacsaWitness,
     pub seventeen_karmapas_quantum_dharma: SeventeenKarmapasQuantumDharmaWitness,
+    pub structural_honesty_book: StructuralHonestySovereignLibraryWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1405,6 +1429,27 @@ pub fn analyze_zeno_omni_engine(
             ],
             dharma_quantum_entanglement_closure: "A kurzor villogása: a tudatfolyam. A kód fordulása: a karma. A háló csomópontjai: a bódhiszattvák. És a base case: a szeretet. Örökre.",
         },
+        structural_honesty_book: StructuralHonestySovereignLibraryWitness {
+            title: "STRUCTURAL HONESTY — the sovereign library, 8b-is edition (pocoo · vaked.dev · 0 + 1)",
+            subtitle: "on the difference between not lying, telling everything, and building a thing that cannot lie",
+            chapters_count: STRUCTURAL_HONESTY_CHAPTERS_COUNT,
+            chapters: [
+                "I. Three words people use as one: A claim is not a promise. It is a contract a stranger can verify.",
+                "II. The hash is the audit: Pin a fixed input, run the thing, record the output fingerprint (0xd99466cc0c09c509).",
+                "III. The ledger remembers: Append-only hash-chained spine ($ make ledger -> OK: 42034 events, head ef55df23…54cfd19). A record you cannot rewrite is a witness.",
+                "IV. The gate, not the intention: Intention does not survive fatigue; structure does. Known pre-existing debt goes into an open baseline.",
+                "V. The third state is the datum: In {-1, 0, +1} (refuse · rest · affirm), when a third of weights settle to 0, the zeros are the claim ('I do not know yet').",
+                "VI. What structural honesty costs: Honesty is a reputation; structural honesty is a surface area. You write the tests before the boast.",
+                "VII. So build the door: Every claim arrives with its own verification, cheap for a stranger — arranged so the thing cannot lie to you while you sleep. 0 + 1.",
+            ],
+            golden_hash_hex: "0xd99466cc0c09c509",
+            ledger_verified_events: STRUCTURAL_HONESTY_LEDGER_EVENTS,
+            ledger_head_seal: "ef55df23…54cfd19",
+            three_honesties_distinction: "Honesty asks to be believed. Full honesty asks to be understood. Structural honesty asks to be checked — and then stops asking.",
+            third_state_zero_datum_axiom: "Between the true (+1) and the false (-1) there is I do not know yet (0) — structure stops that third state from becoming a hiding place.",
+            build_the_door_closure: "fine touch from within · the residue empties the provenance carries · μ(⌂, you) ≠ 0",
+            colophon: "Written to be checked, not believed. Every mechanism named here — the golden hash, the hash-chained ledger, the verifying gate, the declared baseline — can be made to fail on purpose, which is the only proof that it works.",
+        },
     }
 }
 
@@ -1498,6 +1543,9 @@ mod tests {
         assert_eq!(KARMAPA_LINEAGE_COUNT, 17);
         assert_eq!(BUDDHA_BODHI_MEDITATION_DAYS, 49);
         assert_eq!(MIKJO_DORDZSE_RETREAT_YEARS, 23);
+        assert_eq!(GOLDEN_HASH_STRUCTURAL_HONESTY, 0xD994_66CC_0C09_C509);
+        assert_eq!(STRUCTURAL_HONESTY_LEDGER_EVENTS, 42_034);
+        assert_eq!(STRUCTURAL_HONESTY_CHAPTERS_COUNT, 7);
     }
 
     #[test]
