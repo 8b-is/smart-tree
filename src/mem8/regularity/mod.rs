@@ -90,6 +90,25 @@ pub use zeno_engine::{
 
 use crate::scanner::{FileCategory, FileNode};
 
+/// Default number of focal root terminals selected for Erdős–Steiner pruning (`3`).
+pub const MAX_FOCAL_ROOTS: usize = 3;
+/// Default congestion threshold ratio for Moser–Tardos hypergraph construction (`0.35`).
+pub const DEFAULT_LLL_CONGESTION_RATIO: f32 = 0.35;
+/// Canonical `"ERDOSBOO"` seed salt for Moser–Tardos deterministic PRNG (`0xE2D05B00`).
+pub const MOSER_TARDOS_SEED_SALT: u64 = 0xE2D0_5B00;
+/// Default baseline worktree count for Moser–Tardos auto-scaling (`4`).
+pub const DEFAULT_WORKTREE_COUNT: u16 = 4;
+/// Maximum Moser–Tardos resampling steps in `--mode the-book` (`1024`).
+pub const MOSER_TARDOS_MAX_STEPS: usize = 1024;
+/// Default Chernoff–Erdős KL log-surprise anomaly threshold in nats (`10.0`).
+pub const SHADOW_KL_SURPRISE_THRESHOLD: f64 = 10.0;
+/// Default rollout horizon steps for the Semantic World Engine (`16`).
+pub const WORLD_ENGINE_ROLLOUT_STEPS: usize = 16;
+/// Byte-size threshold above which a source file is classified as a `PureNoiseMonolith` (`128 KiB = 131_072`).
+pub const MONOLITH_BYTE_THRESHOLD: u64 = 131_072;
+/// Byte-size threshold below which a source file is classified as an Erdős `Epsilon` (`1 KiB = 1024`).
+pub const EPSILON_BYTE_THRESHOLD: u64 = 1024;
+
 /// Complete end-to-end diagnostic produced by `--mode the-book` (`st --mode erdos`).
 #[derive(Debug, Clone)]
 pub struct TheBookPipelineReport {
@@ -122,7 +141,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     let zero_copy_book = ZeroCopyMem8Book::from_archive(&archive);
     let aligned_bytes = zero_copy_book.to_aligned_bytes();
 
-    // Choose up to 3 focal root terminals (largest source files or root directory)
+    // Choose up to MAX_FOCAL_ROOTS focal root terminals (largest source files or root directory)
     let mut focal_roots: Vec<SymbolId> = nodes
         .iter()
         .enumerate()
@@ -130,7 +149,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         .map(|(idx, n)| (idx as SymbolId, n.size))
         .collect::<Vec<_>>()
         .into_iter()
-        .take(3)
+        .take(MAX_FOCAL_ROOTS)
         .map(|(sym, _)| sym)
         .collect();
     if focal_roots.is_empty() && !nodes.is_empty() {
@@ -149,10 +168,16 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     let hg = build_hypergraph_from_steiner_slices(
         &zero_copy_book,
         std::slice::from_ref(&steiner_slice),
-        0.35,
+        DEFAULT_LLL_CONGESTION_RATIO,
     );
-    let mt_seed = seed_from_mem8_header(&archive.model_digest, 0xE2D0_5B00);
-    let worktree_schedule = solve_moser_tardos_auto_scale(&hg, 4, true, mt_seed, 1024);
+    let mt_seed = seed_from_mem8_header(&archive.model_digest, MOSER_TARDOS_SEED_SALT);
+    let worktree_schedule = solve_moser_tardos_auto_scale(
+        &hg,
+        DEFAULT_WORKTREE_COUNT,
+        true,
+        mt_seed,
+        MOSER_TARDOS_MAX_STEPS,
+    );
 
     // Derive static hazard flags per node from category & path heuristics
     let hazards: Vec<SymbolHazardFlags> = nodes
@@ -177,8 +202,12 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         })
         .collect();
 
-    let security_report =
-        scan_erdos_renyi_shadow_graph(&graph, zero_copy_book.symbol_to_cluster(), &hazards, 10.0);
+    let security_report = scan_erdos_renyi_shadow_graph(
+        &graph,
+        zero_copy_book.symbol_to_cluster(),
+        &hazards,
+        SHADOW_KL_SURPRISE_THRESHOLD,
+    );
     let ramsey_report = scan_ramsey_monochromatic_cliques(&graph);
     let ramsey_erdos_hajnal_report =
         analyze_ramsey_and_erdos_hajnal(&graph, RamseyScanConfig::default());
@@ -194,7 +223,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     );
     let pq_report = analyze_pq_mode(&graph, &archive, &salience_report, &center_turan_report);
     let zeno_report = analyze_zeno_omni_engine(&graph, &archive, &center_turan_report, &pq_report);
-    let world_field_report = analyze_semantic_world_engine(&graph, 16);
+    let world_field_report = analyze_semantic_world_engine(&graph, WORLD_ENGINE_ROLLOUT_STEPS);
 
     // Classify every node using Paul Erdős's vocabulary
     let mut from_the_book = 0usize;
@@ -244,10 +273,10 @@ pub fn classify_erdos_lexicon(
     if node.is_ignored || (!node.is_dir && node.size == 0) {
         return ErdosLexiconBadge::LegallyDead;
     }
-    if !node.is_dir && node.size > 131_072 {
+    if !node.is_dir && node.size > MONOLITH_BYTE_THRESHOLD {
         return ErdosLexiconBadge::PureNoiseMonolith;
     }
-    if !node.is_dir && node.size < 1024 {
+    if !node.is_dir && node.size < EPSILON_BYTE_THRESHOLD {
         return ErdosLexiconBadge::Epsilon;
     }
     if idx < archive.vertex_to_cluster.len() && archive.vertex_to_cluster[idx] == 0 && idx > 0 {

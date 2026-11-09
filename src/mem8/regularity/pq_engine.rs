@@ -24,6 +24,25 @@ use crate::felix_asm::{
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
+/// Denominator lattice scale for rationalized Kohayakawa–Rödl partition energy (`1_000_000`).
+pub const KOHAYAKAWA_RODL_LATTICE_DEN: u64 = 1_000_000;
+/// Nonlinear dual-space power-iteration steps for Hölder operator norm (`24`).
+pub const HOLDER_POWER_ITERS: usize = 24;
+/// Symplectic Störmer–Verlet leapfrog integration steps (`16`).
+pub const LEAPFROG_STEPS: usize = 16;
+/// Symplectic Störmer–Verlet leapfrog time step `dt` (`0.025`).
+pub const LEAPFROG_DT: f64 = 0.025;
+/// Harmonic confinement spring constant toward equilibrium relational depth (`1.25`).
+pub const HARMONIC_CONFINEMENT_K: f64 = 1.25;
+/// Half-harmonic confinement coefficient for potential energy (`0.625`).
+pub const HARMONIC_POTENTIAL_HALF_K: f64 = 0.625;
+/// Maximum number of top Hamiltonian phase-space orbitals retained (`8`).
+pub const MAX_PHASE_SPACE_ORBITALS: usize = 8;
+/// Numerical zero-floor for operator norm denominators (`1e-12`).
+pub const NORM_ZERO_FLOOR: f64 = 1e-12;
+/// Numerical floor for relative symplectic drift denominator (`1e-9`).
+pub const DRIFT_DENOM_FLOOR: f64 = 1e-9;
+
 /// Exact coprime rational number $p / q$ reduced via Stein's Binary GCD (`tzcnt`, zero `udiv`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct RationalPQ {
@@ -176,7 +195,7 @@ fn compute_holder_operator_norm(
             lq_sum += sum.abs().powf(q);
         }
         op_norm = lq_sum.powf(1.0 / q);
-        if op_norm < 1e-12 {
+        if op_norm < NORM_ZERO_FLOOR {
             return 0.0;
         }
 
@@ -187,7 +206,7 @@ fn compute_holder_operator_norm(
         for &val in &y {
             lp_sum += val.abs().powf(p);
         }
-        let lp_norm = lp_sum.powf(1.0 / p).max(1e-12);
+        let lp_norm = lp_sum.powf(1.0 / p).max(NORM_ZERO_FLOOR);
         for i in 0..k {
             x[i] = y[i] / lp_norm;
         }
@@ -255,9 +274,11 @@ pub fn analyze_pq_mode(
     let approx_undir_edges = (m as u64).div_ceil(2);
     let turan_k5_ratio_pq = RationalPQ::new_reduced(approx_undir_edges, turan_k5_bound);
 
-    // Kohayakawa-Rödl energy rationalized on a 1,000,000 denominator lattice
-    let energy_num = (archive.final_energy.clamp(0.0, 100.0) * 1_000_000.0).round() as u64;
-    let kohayakawa_rodl_energy_pq = RationalPQ::new_reduced(energy_num, 1_000_000);
+    // Kohayakawa-Rödl energy rationalized on a KOHAYAKAWA_RODL_LATTICE_DEN denominator lattice
+    let energy_num = (archive.final_energy.clamp(0.0, 100.0) * (KOHAYAKAWA_RODL_LATTICE_DEN as f64))
+        .round() as u64;
+    let kohayakawa_rodl_energy_pq =
+        RationalPQ::new_reduced(energy_num, KOHAYAKAWA_RODL_LATTICE_DEN);
 
     // -------------------------------------------------------------------------
     // Pillar 2: Hölder Conjugate (L_p, L_q) Dual-Space Spectral Operator Norm
@@ -279,10 +300,11 @@ pub fn analyze_pq_mode(
     }
 
     // Conjugate pair p = 3/2, q = 3 (1/(3/2) + 1/3 = 2/3 + 1/3 = 1)
-    let holder_3_2_to_3_norm = compute_holder_operator_norm(&sym_adj, k, 3, 2, 24);
+    let holder_3_2_to_3_norm = compute_holder_operator_norm(&sym_adj, k, 3, 2, HOLDER_POWER_ITERS);
     // Classical Hilbert space p = 2, q = 2 (1/2 + 1/2 = 1)
-    let hilbert_l2_norm = compute_holder_operator_norm(&sym_adj, k, 2, 1, 24);
-    let holder_hub_concentration_ratio = holder_3_2_to_3_norm / hilbert_l2_norm.max(1e-9);
+    let hilbert_l2_norm = compute_holder_operator_norm(&sym_adj, k, 2, 1, HOLDER_POWER_ITERS);
+    let holder_hub_concentration_ratio =
+        holder_3_2_to_3_norm / hilbert_l2_norm.max(DRIFT_DENOM_FLOOR);
 
     // -------------------------------------------------------------------------
     // Pillar 3: Kővári–Sós–Turán / Zarankiewicz Extremal Problem z(n; p, q)
@@ -334,7 +356,7 @@ pub fn analyze_pq_mode(
     let compute_forces = |q: &[f64], forces: &mut [f64]| {
         for i in 0..k {
             // Harmonic confinement toward equilibrium relational depth q_eq[i]
-            let mut d_v_dq = 1.25 * (q[i] - q_eq[i]);
+            let mut d_v_dq = HARMONIC_CONFINEMENT_K * (q[i] - q_eq[i]);
             // Pairwise super-edge spring coupling sum_j w_ij (q_i - q_j)
             for j in 0..k {
                 if i != j {
@@ -353,7 +375,7 @@ pub fn analyze_pq_mode(
         let mut total_h = 0.0_f64;
         for i in 0..k {
             let kinetic = (p[i] * p[i]) / (2.0 * mass[i]);
-            let mut potential = 0.625 * (q[i] - q_eq[i]) * (q[i] - q_eq[i]);
+            let mut potential = HARMONIC_POTENTIAL_HALF_K * (q[i] - q_eq[i]) * (q[i] - q_eq[i]);
             for j in 0..k {
                 if i != j {
                     let w = sym_adj[i * k + j];
@@ -370,12 +392,12 @@ pub fn analyze_pq_mode(
 
     let (symplectic_initial_h0, _) = compute_hamiltonian(&q_pos, &p_mom);
 
-    // Execute S = 16 second-order symplectic Störmer–Verlet leapfrog steps (dt = 0.025)
-    let dt = 0.025_f64;
+    // Execute S = LEAPFROG_STEPS second-order symplectic Störmer–Verlet leapfrog steps
+    let dt = LEAPFROG_DT;
     let mut forces = vec![0.0_f64; k];
     compute_forces(&q_pos, &mut forces);
 
-    for _step in 0..16 {
+    for _step in 0..LEAPFROG_STEPS {
         // 1. Half-step momentum kick: p(t + dt/2) = p(t) + (dt/2) * F(q(t))
         for i in 0..k {
             p_mom[i] += 0.5 * dt * forces[i];
@@ -392,8 +414,8 @@ pub fn analyze_pq_mode(
     }
 
     let (symplectic_final_h, local_h_vec) = compute_hamiltonian(&q_pos, &p_mom);
-    let symplectic_energy_drift =
-        (symplectic_final_h - symplectic_initial_h0).abs() / symplectic_initial_h0.abs().max(1e-9);
+    let symplectic_energy_drift = (symplectic_final_h - symplectic_initial_h0).abs()
+        / symplectic_initial_h0.abs().max(DRIFT_DENOM_FLOOR);
 
     let mut phase_space_orbitals: Vec<SymplecticParticlePQ> = archive
         .super_nodes
@@ -408,7 +430,7 @@ pub fn analyze_pq_mode(
         .collect();
 
     phase_space_orbitals.sort_by(|a, b| b.local_hamiltonian_h.total_cmp(&a.local_hamiltonian_h));
-    phase_space_orbitals.truncate(8);
+    phase_space_orbitals.truncate(MAX_PHASE_SPACE_ORBITALS);
 
     PqModeReport {
         ambient_density_pq,
