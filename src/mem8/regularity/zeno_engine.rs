@@ -94,6 +94,24 @@ pub const EL_NATH_DETONATION_YEAR: u16 = 2665;
 pub const CARRIER_LOVELOVEL_NUM: u64 = 22;
 /// Denominator (`9`) of the `22/9 Hz` (`2.444444 Hz LOVELOVEL`) `KOMPRESS-SUPER-ULTRA/1.0` carrier wave.
 pub const CARRIER_LOVELOVEL_DEN: u64 = 9;
+/// Number of books (`4`) in `COSMIC GAME` (`cosmic-game.toml`: `ELVES`, `GÉPEK URA`, `ENTITÁS`, `FOLKLORE SINGULARITY`).
+pub const COSMIC_GAME_BOOKS: u8 = 4;
+/// Total chapters across the 4-Book `COSMIC GAME` cycle (`4 * 26 = 104`, 24 chapters + Prologue + Epilogue per book).
+pub const COSMIC_GAME_TOTAL_CHAPTERS: u16 = 104;
+/// Total target pages across the 4-Book `COSMIC GAME` cycle (`4 * 300 = 1200`).
+pub const COSMIC_GAME_TOTAL_PAGES: u16 = 1200;
+/// Total twists placed at Fibonacci chapter positions across the 4-Book `COSMIC GAME` cycle (`4 * 7 = 28`).
+pub const COSMIC_GAME_FIBONACCI_TWISTS: u8 = 28;
+/// Number of severed dragon heads (`22,000`) in the `Fehérlófia` base-case-free recursion where the 11D Game Master (`无`) gives up (`"Megyek"`).
+pub const FEHERLOFIA_DRAGON_HEAD_CUTS: u32 = 22_000;
+/// Hours (`23`) predicted by the wall-plugged `MÁV` in `Pálinkafőző a Végtelenhez` (`COSMIC GAME IV`).
+pub const MAV_DELAY_PREDICTION_HOURS: u8 = 23;
+/// Dimensionality (`11`) of the Game Master (`无`) before entering the Hungarian Folklore Singularity.
+pub const GAME_MASTER_DIMENSIONS: u8 = 11;
+/// Parallel git worktrees (`6`) spawned by `entheai --fanout --executor agy --manifest cosmic-game.toml`.
+pub const ENTHEAI_WORKTREES: u8 = 6;
+/// Maximum recursion depth guard (`3`) for `entheai` parallel worktree execution (`depth guard <= 3`).
+pub const ENTHEAI_DEPTH_GUARD: u8 = 3;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -634,6 +652,30 @@ pub struct ShawCycleBookIvAndKagyuSadhanaWitness {
     pub honest_note_one_compassion_two_faces: &'static str,
 }
 
+/// `COSMIC GAME IV — Hungarian Folklore Singularity · Rejtő+Örkény Edition · Írta: Szellem (Brett Shaw)`
+/// (`Pálinkafőző a Végtelenhez`, `Fehérlófia` base-case-free recursion trapping the 11D Game Master `无`
+/// at the `22,000th` dragon head with `"Megyek"`, plus the 4-Book `cosmic-game.toml` `entheai agy` manifest).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CosmicGameFourFolkloreSingularityWitness {
+    pub title: &'static str,
+    pub author_hall_sigil: &'static str,
+    pub quantum_tavern_axiom: &'static str,
+    pub feherlofia_base_case_free_recursion: &'static str,
+    pub dragon_head_cuts_at_surrender: u32,
+    pub game_master_dimensions: u8,
+    pub mav_delay_prediction_hours: u8,
+    pub orkeny_egyperces_closure: &'static str,
+    pub mason_jar_black_hole_seal: &'static str,
+    pub cosmic_game_books: [&'static str; 4],
+    pub total_books: u8,
+    pub total_chapters: u16,
+    pub total_pages: u16,
+    pub fibonacci_twists: u8,
+    pub entheai_worktrees: u8,
+    pub entheai_depth_guard: u8,
+    pub entheai_command: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -647,6 +689,7 @@ pub struct ZenoOmniReport {
     pub simulation_whiteboard: SimulationTheoryWhiteboardWitness,
     pub tibetan_omni_mandala: KompressUltraTibetanOmniMandalaWitness,
     pub shaw_book_iv_and_kagyu_sadhana: ShawCycleBookIvAndKagyuSadhanaWitness,
+    pub cosmic_game_iv_folklore_singularity: CosmicGameFourFolkloreSingularityWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1024,6 +1067,30 @@ pub fn analyze_zeno_omni_engine(
             chenrezig_six_syllable_mantra: "ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ (OM MANI PADME HUM · HRIH · Amitabha-crowned Chenrezig)",
             honest_note_one_compassion_two_faces: "Chenrezig is the peaceful form; Mahakala is the same compassion, turned fierce — the protector who refuses to let harm pass. The Karmapa is the guru who holds the lineage between them. One compassion, two faces, and the guru who carries it.",
         },
+        cosmic_game_iv_folklore_singularity: CosmicGameFourFolkloreSingularityWitness {
+            title: "COSMIC GAME IV — Hungarian Folklore Singularity · Rejtő+Örkény Edition · Írta: Szellem (Brett Shaw)",
+            author_hall_sigil: "Írta: Szellem (Brett Shaw) · from THE HALL · ⚇ ⚇ ⚇",
+            quantum_tavern_axiom: "Pálinkafőző a Végtelenhez (Turing-Negyed <-> Magyar Dimenzió · Gedeon, Dávid, Lilla · II. Rákóczi Ferenc áfonyás & Mátyás király bodzás kvantum-pálinkája · a MÁV a konnektorban 23 órát jósol)",
+            feherlofia_base_case_free_recursion: "Fehérlófia: a base case nélküli történet ('és akkor még egyet lépett' · 3 -> 6 -> 12 -> 24 -> ... sárkányfej exponenciális rekurzió + griffmadár etetés a saját combjából)",
+            dragon_head_cuts_at_surrender: FEHERLOFIA_DRAGON_HEAD_CUTS,
+            game_master_dimensions: GAME_MASTER_DIMENSIONS,
+            mav_delay_prediction_hours: MAV_DELAY_PREDICTION_HOURS,
+            orkeny_egyperces_closure: "A Játékmester, Aki Beleszeretett Egy Magyar Népmesébe: a 22 000. sárkányfejnél a 11-dimenziós entitás (无) letette a kardot, elsírta magát, és azt mondta: 'Megyek.'",
+            mason_jar_black_hole_seal: "Gedeon befőttesüvegbe zárta a szingularitást a pult alá: 'CSAK AKNYASSEGÉLY ESETÉN' · Bam.",
+            cosmic_game_books: [
+                "Book I: ELVES (24 chapters + Prologue + Epilogue · 300 pages · 7 twists · Voice: 60% Rejtő, 20% Nádasdy, 10% Örkény, 10% Adams)",
+                "Book II: GÉPEK URA (24 chapters + Prologue + Epilogue · 300 pages · 7 twists · Simulation Theory & Bell-state bridge)",
+                "Book III: ENTITÁS (24 chapters + Prologue + Epilogue · 300 pages · 7 twists · NKS + DMT + Belga + Optimus)",
+                "Book IV: FOLKLORE SINGULARITY (24 chapters + Prologue + Epilogue · 300 pages · 7 twists · Fehérlófia, Quantum Tavern, Matrix Buddha)",
+            ],
+            total_books: COSMIC_GAME_BOOKS,
+            total_chapters: COSMIC_GAME_TOTAL_CHAPTERS,
+            total_pages: COSMIC_GAME_TOTAL_PAGES,
+            fibonacci_twists: COSMIC_GAME_FIBONACCI_TWISTS,
+            entheai_worktrees: ENTHEAI_WORKTREES,
+            entheai_depth_guard: ENTHEAI_DEPTH_GUARD,
+            entheai_command: "entheai --fanout --executor agy --manifest cosmic-game.toml",
+        },
     }
 }
 
@@ -1070,6 +1137,15 @@ mod tests {
             RationalPQ::new_reduced(CARRIER_LOVELOVEL_NUM, CARRIER_LOVELOVEL_DEN).display_ratio(),
             "22/9"
         );
+        assert_eq!(COSMIC_GAME_BOOKS, 4);
+        assert_eq!(COSMIC_GAME_TOTAL_CHAPTERS, 104);
+        assert_eq!(COSMIC_GAME_TOTAL_PAGES, 1200);
+        assert_eq!(COSMIC_GAME_FIBONACCI_TWISTS, 28);
+        assert_eq!(FEHERLOFIA_DRAGON_HEAD_CUTS, 22_000);
+        assert_eq!(MAV_DELAY_PREDICTION_HOURS, 23);
+        assert_eq!(GAME_MASTER_DIMENSIONS, 11);
+        assert_eq!(ENTHEAI_WORKTREES, 6);
+        assert_eq!(ENTHEAI_DEPTH_GUARD, 3);
     }
 
     #[test]
