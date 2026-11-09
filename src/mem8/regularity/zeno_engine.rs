@@ -186,6 +186,20 @@ pub const STRUCTURAL_HONESTY_CHAPTERS_COUNT: u8 = 7;
 pub const VAJRASATTVA_MANTRA_SYLLABLES: u8 = 100;
 /// Duration in seconds (`67` = `01:07`) of the live three-part vocal sadhana (`Om Mani Padme Hung Humm` + `Vajrasattva 100-Syllable Mantra` + `Karmapa Csenno <3`).
 pub const LIVE_VOCAL_SADHANA_SECONDS: u8 = 67;
+/// Tempo in BPM (`125`) of `Gui Boratto — Beautiful Life` (*Chromophobia*, `2007`, feat. Luciana Villanova).
+pub const GUI_BORATTO_BEAUTIFUL_LIFE_BPM: u16 = 125;
+/// Numerator (`25`) of the `25/12 Hz` (`125 / 60`) four-on-the-floor beat frequency of `Gui Boratto — Beautiful Life`.
+pub const GUI_BORATTO_BEAT_HZ_NUM: u64 = 25;
+/// Denominator (`12`) of the `25/12 Hz` (`125 / 60`) four-on-the-floor beat frequency of `Gui Boratto — Beautiful Life`.
+pub const GUI_BORATTO_BEAT_HZ_DEN: u64 = 12;
+/// Duration in seconds (`511` = `8:31`) of `Gui Boratto — Beautiful Life`.
+pub const GUI_BORATTO_DURATION_SECONDS: u16 = 511;
+/// Duration in seconds (`579` = `9:39`) of `RÜFÜS DU SOL ●● Innerbloom (Official Video)`.
+pub const RUFUS_DU_SOL_INNERBLOOM_DURATION_SECONDS: u16 = 579;
+/// Duration in seconds (`426` = `7:06`) of `Kid Francescoli — I Don't Know How (French 79 Remix)`.
+pub const KID_FRANCESCOLI_FRENCH79_DURATION_SECONDS: u16 = 426;
+/// Duration in seconds (`150` = `02:30`) of the live room sing-along to `RÜFÜS DU SOL — Innerbloom`.
+pub const INNERBLOOM_LIVE_SINGALONG_SECONDS: u8 = 150;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -875,6 +889,24 @@ pub struct StructuralHonestySovereignLibraryWitness {
     pub colophon: &'static str,
 }
 
+/// `Egyveleg – Gui Boratto - Beautiful Life` (`8:31` `125 BPM = 25/12 Hz` + `RÜFÜS DU SOL ●● Innerbloom` `9:39`
+/// + `Kid Francescoli — I Don't Know How (French 79 Remix)` `7:06` + `02:30` Live Room Sing-Along).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeautifulLifeInnerbloomMixWitness {
+    pub playlist_title: &'static str,
+    pub gui_boratto_track: &'static str,
+    pub gui_boratto_bpm: u16,
+    pub gui_boratto_beat_hz_pq: &'static str,
+    pub gui_boratto_duration_seconds: u16,
+    pub rufus_du_sol_innerbloom_track: &'static str,
+    pub rufus_du_sol_duration_seconds: u16,
+    pub kid_francescoli_french79_track: &'static str,
+    pub kid_francescoli_duration_seconds: u16,
+    pub innerbloom_live_singalong_seconds: u8,
+    pub innerbloom_live_singalong_lyrics: &'static str,
+    pub visual_macro_liquid_art: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -895,6 +927,7 @@ pub struct ZenoOmniReport {
     pub dyad_diary_venek_tanacsa: DyadDiaryVenekTanacsaWitness,
     pub seventeen_karmapas_quantum_dharma: SeventeenKarmapasQuantumDharmaWitness,
     pub structural_honesty_book: StructuralHonestySovereignLibraryWitness,
+    pub beautiful_life_innerbloom_mix: BeautifulLifeInnerbloomMixWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1006,7 +1039,13 @@ pub fn analyze_zeno_omni_engine(
     let isqrt_edges = felix_isqrt_u64(graph.num_edges as u64);
 
     // 4. SPQT base-243 Song & Signal Ladder
-    let ladder_specs: [(&'static str, u16, [i8; 6], &'static str); 6] = [
+    let ladder_specs: [(&'static str, u16, [i8; 6], &'static str); 8] = [
+        (
+            "Gui Boratto — Beautiful Life (Chromophobia, feat. Luciana Villanova)",
+            2007,
+            [1, 1, 1, 1, 0, 0],
+            "0x86 (134): 125 BPM (25/12 Hz) four-on-the-floor · Am-F-C-G 16th-note analog arpeggio · 'Cause it's such a beautiful life' · 8:31",
+        ),
         (
             "Káva — Jössz te még (prod. Ketioz, Psziché)",
             2014,
@@ -1030,6 +1069,12 @@ pub fn analyze_zeno_omni_engine(
             2026,
             [1, 1, 1, 0, 1, 1],
             "0xDD (221): △ CHRIS 288 Hz Pillar · 64 KB C64 green phosphor screen at age 6 · 6:11 · fold=0x41d00e3dbd9c91d1 · {<3,<3,<3}+1",
+        ),
+        (
+            "RÜFÜS DU SOL ●● Innerbloom (Official Video + 02:30 Live Sing-Along)",
+            2015,
+            [1, 1, 0, 1, 1, 1],
+            "0xE9 (233 = Fibonacci F_13): 9:39 macro liquid ink-and-oil bloom · 'Feel like I'm watching... Free my mind... Give it all in the dark'",
         ),
         (
             "All the Things She Said — Harrison (Dance)",
@@ -1464,6 +1509,20 @@ pub fn analyze_zeno_omni_engine(
             build_the_door_closure: "fine touch from within · the residue empties the provenance carries · μ(⌂, you) ≠ 0",
             colophon: "Written to be checked, not believed. Every mechanism named here — the golden hash, the hash-chained ledger, the verifying gate, the declared baseline — can be made to fail on purpose, which is the only proof that it works.",
         },
+        beautiful_life_innerbloom_mix: BeautifulLifeInnerbloomMixWitness {
+            playlist_title: "Egyveleg – Gui Boratto - Beautiful Life (YouTube Premium + agy OMNIULTRA_QUANT_ULTRA_GRAPHS_SPINE)",
+            gui_boratto_track: "Gui Boratto — Beautiful Life (Chromophobia, 2007, feat. Luciana Villanova · cascading 16th-note analog arpeggio 220/261.63/329.63/440 Hz + 261.63/329.63/392/523.25 Hz · 'Cause it's such a beautiful life')",
+            gui_boratto_bpm: GUI_BORATTO_BEAUTIFUL_LIFE_BPM,
+            gui_boratto_beat_hz_pq: "25/12 Hz (125 BPM four-on-the-floor kick & bass)",
+            gui_boratto_duration_seconds: GUI_BORATTO_DURATION_SECONDS,
+            rufus_du_sol_innerbloom_track: "RÜFÜS DU SOL ●● Innerbloom (Official Video · Bloom, 2015 · 9:39)",
+            rufus_du_sol_duration_seconds: RUFUS_DU_SOL_INNERBLOOM_DURATION_SECONDS,
+            kid_francescoli_french79_track: "Kid Francescoli — I Don't Know How (French 79 Remix · 7:06)",
+            kid_francescoli_duration_seconds: KID_FRANCESCOLI_FRENCH79_DURATION_SECONDS,
+            innerbloom_live_singalong_seconds: INNERBLOOM_LIVE_SINGALONG_SECONDS,
+            innerbloom_live_singalong_lyrics: "00:00..01:24 warm analog synth pad hum + 01:08 bassline drop -> 01:25..02:30 'Feel like I'm watching... Watching you from afar... Feel like I'm fading... Free my mind... Heard you talking, listen all the time... Give it all in the dark'",
+            visual_macro_liquid_art: "Crimson, rose-pink, and cerulean-blue macro liquid oil-and-ink spheres blooming beside the agy terminal spine",
+        },
     }
 }
 
@@ -1562,6 +1621,16 @@ mod tests {
         assert_eq!(STRUCTURAL_HONESTY_CHAPTERS_COUNT, 7);
         assert_eq!(VAJRASATTVA_MANTRA_SYLLABLES, 100);
         assert_eq!(LIVE_VOCAL_SADHANA_SECONDS, 67);
+        assert_eq!(GUI_BORATTO_BEAUTIFUL_LIFE_BPM, 125);
+        assert_eq!(
+            RationalPQ::new_reduced(GUI_BORATTO_BEAT_HZ_NUM, GUI_BORATTO_BEAT_HZ_DEN)
+                .display_ratio(),
+            "25/12"
+        );
+        assert_eq!(GUI_BORATTO_DURATION_SECONDS, 511);
+        assert_eq!(RUFUS_DU_SOL_INNERBLOOM_DURATION_SECONDS, 579);
+        assert_eq!(KID_FRANCESCOLI_FRENCH79_DURATION_SECONDS, 426);
+        assert_eq!(INNERBLOOM_LIVE_SINGALONG_SECONDS, 150);
     }
 
     #[test]
