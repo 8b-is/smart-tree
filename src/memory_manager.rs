@@ -100,7 +100,83 @@ impl MemoryManager {
             }
         };
 
-        Ok(Self { bank_path, bank })
+        let mut mgr = Self { bank_path, bank };
+        mgr.compact_project_memories_if_needed();
+        Ok(mgr)
+    }
+
+    /// Automatically compact bloated `'project'` memories (while strictly preserving 100% of
+    /// non-`'project'` memories like `decision`, `architectural`, `pattern`, `solution`,
+    /// `infrastructure`, `breakthrough`, `gotcha`, `insight`, `todo`, `wa-stream`) when the
+    /// project count exceeds `512`.
+    pub fn compact_project_memories_if_needed(&mut self) -> bool {
+        use rayon::prelude::*;
+
+        const MAX_PROJECT_MEMORIES: usize = 512;
+
+        let project_count = self
+            .bank
+            .memories
+            .iter()
+            .filter(|m| m.anchor_type == "project")
+            .count();
+        if project_count <= MAX_PROJECT_MEMORIES {
+            return false;
+        }
+
+        let mut non_project = Vec::new();
+        let mut projects = Vec::with_capacity(project_count);
+        for mem in self.bank.memories.drain(..) {
+            if mem.anchor_type == "project" {
+                projects.push(mem);
+            } else {
+                non_project.push(mem);
+            }
+        }
+
+        // Deduplicate by origin (keep latest timestamp)
+        projects.sort_by(|a, b| {
+            a.origin
+                .cmp(&b.origin)
+                .then_with(|| b.timestamp.cmp(&a.timestamp))
+        });
+        projects.dedup_by(|a, b| a.origin == b.origin);
+
+        // Filter on parallel Rayon worker threads: keep existing project roots that are not
+        // internal subdirectories inside an ancestor `.git` repository
+        let mut valid_projects: Vec<Memory> = projects
+            .into_par_iter()
+            .filter(|m| {
+                let p = Path::new(&m.origin);
+                if !p.is_dir() || crate::mcp::smart_project_detector::is_ephemeral_or_system_path(p)
+                {
+                    return false;
+                }
+                let has_own_git_or_obsidian =
+                    p.join(".git").exists() || p.join(".obsidian").is_dir();
+                let ancestor_has_git = p
+                    .ancestors()
+                    .skip(1)
+                    .take(6)
+                    .any(|anc| anc.join(".git").exists());
+                !(ancestor_has_git && !has_own_git_or_obsidian)
+            })
+            .collect();
+
+        // Prioritize primary non-bulk workspaces first, then most recently updated
+        valid_projects.sort_by(|a, b| {
+            let a_bulk = a.origin.contains("/standardgalactic/");
+            let b_bulk = b.origin.contains("/standardgalactic/");
+            a_bulk
+                .cmp(&b_bulk)
+                .then_with(|| b.timestamp.cmp(&a.timestamp))
+        });
+        valid_projects.truncate(MAX_PROJECT_MEMORIES);
+
+        non_project.extend(valid_projects);
+        self.bank.memories = non_project;
+        let _ = self.save();
+        true
     }
 
     /// Create or open a `MemoryManager` backed by a specific `.m8` bank file path
@@ -146,6 +222,23 @@ impl MemoryManager {
         context: &str,
         origin: &str,
     ) -> Result<Memory> {
+        let (memory, changed) =
+            self.anchor_silent_no_save(anchor_type, keywords, context, origin)?;
+        if changed {
+            self.save()?;
+        }
+        Ok(memory)
+    }
+
+    /// Anchor or update a memory in `self.bank` without immediately flushing to disk.
+    /// Returns `(Memory, changed)` so batch callers can flush `self.save()` once at the end.
+    pub fn anchor_silent_no_save(
+        &mut self,
+        anchor_type: &str,
+        keywords: Vec<String>,
+        context: &str,
+        origin: &str,
+    ) -> Result<(Memory, bool)> {
         let guardian = crate::ai_guardian::AiGuardian::new();
         let (sanitized_context, trust) = guardian.sanitize_memory_text(context, origin);
         if trust == crate::ai_guardian::MemoryTrustLevel::Quarantined {
@@ -193,13 +286,15 @@ impl MemoryManager {
                     || m.origin.ends_with("/.ssh/config")
                     || m.keywords == memory.keywords)
         }) {
+            if existing.context == memory.context && existing.keywords == memory.keywords {
+                return Ok((existing.clone(), false));
+            }
             *existing = memory.clone();
+            Ok((memory, true))
         } else {
             self.bank.memories.push(memory.clone());
+            Ok((memory, true))
         }
-        self.save()?;
-
-        Ok(memory)
     }
 
     /// Returns `true` when this `MemoryManager` points at the user's global `~/.st/memories.m8`.
@@ -231,7 +326,14 @@ impl MemoryManager {
             let _ = self.ingest_wa_stream();
         }
 
-        let primary = self.remember_single_project_dir(&canon);
+        let mut any_changed = false;
+        let primary = match self.remember_single_project_dir_no_save(&canon) {
+            Some((mem, changed)) => {
+                any_changed |= changed;
+                Some(mem)
+            }
+            None => None,
+        };
 
         // Also let the built-in ternary model loosely discover projects inside child folders (up to depth 2),
         // such as `.git` repos, `.obsidian` vaults, or `office/atlanta` (`office_atlanta`).
@@ -242,11 +344,16 @@ impl MemoryManager {
             if proj_path == canon {
                 continue;
             }
-            if let Some(mem) = self.remember_single_project_dir(&proj_path) {
+            if let Some((mem, changed)) = self.remember_single_project_dir_no_save(&proj_path) {
+                any_changed |= changed;
                 if first_child.is_none() {
                     first_child = Some(mem);
                 }
             }
+        }
+
+        if any_changed {
+            let _ = self.save();
         }
 
         primary.or(first_child)
@@ -255,6 +362,16 @@ impl MemoryManager {
     /// Anchor or update a single directory as a `"project"` memory in `self.bank` if it passes
     /// the Do-Not-Look check and directory memory synthesis.
     pub fn remember_single_project_dir(&mut self, dir: &Path) -> Option<Memory> {
+        let (mem, changed) = self.remember_single_project_dir_no_save(dir)?;
+        if changed {
+            let _ = self.save();
+        }
+        Some(mem)
+    }
+
+    /// Anchor or update a single directory as a `"project"` memory in `self.bank` without
+    /// flushing to disk immediately. Returns `(Memory, changed)`.
+    pub fn remember_single_project_dir_no_save(&mut self, dir: &Path) -> Option<(Memory, bool)> {
         if !dir.is_dir() || !crate::mcp::smart_project_detector::is_aye_allowed_to_look(dir) {
             return None;
         }
@@ -277,11 +394,11 @@ impl MemoryManager {
             .find(|m| m.origin == truncated_origin && m.anchor_type == "project")
         {
             if existing.context == truncated_context && existing.keywords == keywords {
-                return Some(existing.clone());
+                return Some((existing.clone(), false));
             }
         }
 
-        self.anchor_silent("project", keywords, &context, &dir_str)
+        self.anchor_silent_no_save("project", keywords, &context, &dir_str)
             .ok()
     }
 
@@ -300,10 +417,15 @@ impl MemoryManager {
         }
         let discovered =
             crate::mcp::smart_project_detector::discover_projects_ternary_in_tree(root, max_depth);
+        let mut any_changed = false;
         for (proj_path, _decision) in discovered {
-            if let Some(mem) = self.remember_single_project_dir(&proj_path) {
+            if let Some((mem, changed)) = self.remember_single_project_dir_no_save(&proj_path) {
+                any_changed |= changed;
                 remembered.push(mem);
             }
+        }
+        if any_changed {
+            let _ = self.save();
         }
         remembered
     }
@@ -1314,7 +1436,7 @@ impl MemoryManager {
     }
 
     /// Save memory bank to disk in .m8 format
-    fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<()> {
         self.save_m8(&self.bank_path)?;
         Ok(())
     }
@@ -1363,7 +1485,7 @@ impl MemoryManager {
             records_buf.extend_from_slice(&memory.timestamp.timestamp().to_le_bytes());
         }
 
-        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
         encoder.write_all(&records_buf)?;
         let compressed = encoder.finish()?;
         let crc = crc32fast::hash(&records_buf);

@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 pub const COMPLETIONS_SCHEMA_STAMP: &str = concat!(
     "# @st-completions-version: ",
     env!("CARGO_PKG_VERSION"),
-    "-sovereign-v2 (auto-maintained by smart-tree service)"
+    "-sovereign-v3 (auto-maintained by smart-tree service)"
 );
 
 /// Cached folder & memory metadata maintained by the Smart Tree service/daemon
@@ -74,19 +74,29 @@ pub fn ensure_user_completions_fresh() {
         let _ = install_user_completions_for_home(&home, None);
     }
 
-    // If the warm completion cache doesn't exist yet, or is older than 10 minutes, refresh it lightly
+    // If the warm completion cache doesn't exist yet, is oversized (>256 KB), or is older than 10 minutes,
+    // refresh it asynchronously on a background worker thread so CLI startup never pauses.
     let cache_path = home.join(".st").join("completion_cache.json");
-    let cache_stale = match fs::metadata(&cache_path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.elapsed().ok())
-    {
-        Some(age) => age.as_secs() > 600,
-        None => true,
+    let cache_stale_or_bloated = match fs::metadata(&cache_path) {
+        Ok(meta) => {
+            let oversized = meta.len() > 256 * 1024;
+            let expired = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.elapsed().ok())
+                .map(|age| age.as_secs() > 600)
+                .unwrap_or(true);
+            oversized || expired
+        }
+        Err(_) => true,
     };
 
-    if needs_script_update || cache_stale {
-        let _ = refresh_completion_cache_for_home(&home);
+    if needs_script_update || cache_stale_or_bloated {
+        let _ = std::thread::Builder::new()
+            .name("st-completions-refresh".to_string())
+            .spawn(move || {
+                let _ = refresh_completion_cache_for_home(&home);
+            });
     }
 }
 
@@ -250,25 +260,6 @@ fn install_user_completions_for_home(
     let zsh_script = generate_completion_script(Shell::Zsh);
     if atomic_write_file(&zsh_path, zsh_script.as_bytes(), owner).is_ok() {
         written.push(zsh_path);
-    }
-
-    // 4. Sovereign Companion: Lightpanda Fish completions (~/.config/fish/completions/lightpanda.fish)
-    if Path::new("/usr/bin/lightpanda").exists() {
-        let lp_fish_path = home
-            .join(".config")
-            .join("fish")
-            .join("completions")
-            .join("lightpanda.fish");
-        if let Ok(output) = std::process::Command::new("/usr/bin/lightpanda")
-            .args(["completion", "fish"])
-            .output()
-        {
-            if output.status.success() && !output.stdout.is_empty() {
-                if atomic_write_file(&lp_fish_path, &output.stdout, owner).is_ok() {
-                    written.push(lp_fish_path);
-                }
-            }
-        }
     }
 
     Ok(written)
@@ -452,6 +443,9 @@ complete -c st -n "__fish_st_at_root_arg" -f -a "salient" -d '🧠 Alias for rem
 
 # 3. `st memnet` / `st mesh` / `st chirp` actions & arguments
 complete -c st -n "__fish_st_pos_is 1 memnet mesh chirp; and test (__fish_st_pos_count) -eq 1" -f -a "status" -d '🌐 Show Sovereign MemNet node, shared folders, routes, RTC τ & MEM|8 waves'
+complete -c st -n "__fish_st_pos_is 1 memnet mesh chirp; and test (__fish_st_pos_count) -eq 1" -f -a "assess" -d '🔬 Assess local CPU/SIMD/RAM/GPU hardware & non-TCP/IP MemNet readiness'
+complete -c st -n "__fish_st_pos_is 1 memnet mesh chirp; and test (__fish_st_pos_count) -eq 1" -f -a "advertise" -d '📡 Broadcast sovereign node & local LLM capabilities to i1.is MemNet graph'
+complete -c st -n "__fish_st_pos_is 1 memnet mesh chirp; and test (__fish_st_pos_count) -eq 1" -f -a "graph" -d '🗺️ Render ASCII MemNet node & transport topology graph'
 complete -c st -n "__fish_st_pos_is 1 memnet mesh chirp; and test (__fish_st_pos_count) -eq 1" -f -a "share" -d '📂 Share a local folder & drive space quota over MemNet'
 complete -c st -n "__fish_st_pos_is 1 memnet mesh chirp; and test (__fish_st_pos_count) -eq 1" -f -a "ls" -d '📁 List all shared MemNet folders, quotas & semantic tags'
 complete -c st -n "__fish_st_pos_is 1 memnet mesh chirp; and test (__fish_st_pos_count) -eq 1" -f -a "routes" -d '🛰️ Show multi-medium route table & Peter Real Time Constant (RTC τ)'
@@ -489,6 +483,11 @@ vpn\t'WireGuard/Tailscale encrypted tunnel (RTC τ₀=25ms)'
 complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "leaderboard" -d '📊 Show live G8T × Smart-Tree Speed & Foken Scoreboard'
 complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "best" -d '🏆 Query g8t.is for fastest verified Rust functions by keyword or signature'
 complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "yolo" -d '⚡ Return ONLY the #1 fastest verified Rust function (raw drop-in code + receipt)'
+complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "targets" -d '🎯 Show Cycle-Golf Bounty Board of slowest routines'
+complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "golf" -d '⛳ Prove 64-vector equivalence & submit golfed routines to drop cycles/op'
+complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "optimize" -d '🔧 Audit repository routines & generate g8t.md optimization report'
+complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "asm-exec" -d '⚙️ Compile, disassemble & run freestanding #![no_std] Capsela ELF64 executable'
+complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "dealers-choice" -d '🎲 $10/mo Unlimited g8t Dealer-s Choice Best-Model Router & domain leaderboard'
 complete -c st -n "__fish_st_pos_is 1 g8t foken capsela; and test (__fish_st_pos_count) -eq 1" -f -a "submit" -d '🚀 Submit pure-Rust function file/snippet to g8t.is with hardware cycle count'
 
 # 5. `st remember` / `st salient` / `st ingest` targets, levels & queries
@@ -1211,14 +1210,23 @@ fn refresh_completion_cache_for_home_owned(
     home: &Path,
     owner: Option<(u32, u32)>,
 ) -> Result<CompletionCache> {
-    let mut folders: Vec<CachedFolderEntry> = Vec::new();
+    use rayon::prelude::*;
+
+    const MAX_REMEMBERED_FOLDERS: usize = 160;
+    const MAX_TOTAL_CACHED_FOLDERS: usize = 240;
+
+    let mut folders: Vec<CachedFolderEntry> = Vec::with_capacity(MAX_TOTAL_CACHED_FOLDERS);
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Ensure current directory is remembered if we're in a project
+    // Load memory bank (auto-compacts if oversized) and lightly remember ONLY the immediate CWD
+    // if it is itself a standalone project (never recursively walking depth-2 parent trees here).
     let mut mem_mgr = MemoryManager::new().ok();
     if let Ok(cwd) = std::env::current_dir() {
-        if let Some(mgr) = mem_mgr.as_mut() {
-            let _ = mgr.ensure_directory_remembered(&cwd);
+        if crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(&cwd).is_some()
+        {
+            if let Some(mgr) = mem_mgr.as_mut() {
+                let _ = mgr.remember_single_project_dir(&cwd);
+            }
         }
     }
 
@@ -1252,11 +1260,24 @@ fn refresh_completion_cache_for_home_owned(
         }
     }
 
-    // 1. Harvest remembered directories from `memories.m8`
+    // 1. Harvest remembered directories from `memories.m8` (bounded to MAX_REMEMBERED_FOLDERS)
     if let Some(mgr) = mem_mgr.as_ref() {
-        for mem in mgr.memories() {
-            if !mem.origin.starts_with('/') {
-                continue;
+        let mut candidate_mems: Vec<&Memory> = mgr
+            .memories()
+            .iter()
+            .filter(|m| m.origin.starts_with('/'))
+            .collect();
+        candidate_mems.sort_by(|a, b| {
+            let a_bulk = a.origin.contains("/standardgalactic/");
+            let b_bulk = b.origin.contains("/standardgalactic/");
+            a_bulk
+                .cmp(&b_bulk)
+                .then_with(|| b.timestamp.cmp(&a.timestamp))
+        });
+
+        for mem in candidate_mems {
+            if folders.len() >= MAX_REMEMBERED_FOLDERS {
+                break;
             }
             let p = Path::new(&mem.origin);
             if !p.is_dir() || !seen.insert(mem.origin.clone()) {
@@ -1279,83 +1300,109 @@ fn refresh_completion_cache_for_home_owned(
         }
     }
 
-    // 2. Discover workspace directories & GitHub orgs under ~/source
+    // 2. Discover workspace directories & GitHub orgs under ~/source in parallel on Rayon threads
     let mut sync_orgs: Vec<CachedOrgEntry> = Vec::new();
     let source_root = home.join("source");
     if source_root.is_dir() {
         if let Ok(entries) = fs::read_dir(&source_root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !path.is_dir() {
-                    continue;
-                }
-                let dir_name = entry.file_name().to_string_lossy().to_string();
-                if dir_name.starts_with('.') {
-                    continue;
-                }
+            let org_dirs: Vec<(PathBuf, String)> = entries
+                .flatten()
+                .filter_map(|e| {
+                    let path = e.path();
+                    if !path.is_dir() {
+                        return None;
+                    }
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if name.starts_with('.') {
+                        return None;
+                    }
+                    Some((path, name))
+                })
+                .take(32)
+                .collect();
 
-                // Count child git repos or projects
-                let mut child_repos = 0usize;
-                let mut child_projects = Vec::new();
-                if let Ok(children) = fs::read_dir(&path) {
-                    for child in children.flatten().take(250) {
-                        let cp = child.path();
-                        if !cp.is_dir() {
-                            continue;
-                        }
-                        if cp.join(".git").exists() || cp.join("Cargo.toml").is_file() {
-                            child_repos += 1;
-                            if child_projects.len() < 12 {
-                                child_projects.push(cp);
+            let scanned_orgs: Vec<(Option<CachedOrgEntry>, Vec<CachedFolderEntry>)> = org_dirs
+                .into_par_iter()
+                .map(|(path, dir_name)| {
+                    let mut child_repos = 0usize;
+                    let mut child_projects = Vec::new();
+                    if let Ok(children) = fs::read_dir(&path) {
+                        for child in children.flatten().take(64) {
+                            let cp = child.path();
+                            if !cp.is_dir() {
+                                continue;
+                            }
+                            if cp.join(".git").exists() || cp.join("Cargo.toml").is_file() {
+                                child_repos += 1;
+                                if child_projects.len() < 6 {
+                                    child_projects.push(cp);
+                                }
                             }
                         }
                     }
-                }
 
-                if child_repos > 0 {
-                    sync_orgs.push(CachedOrgEntry {
-                        name: dir_name.clone(),
-                        description: format!(
-                            "🐙 GitHub Org/Workspace • {child_repos} local repos in ~/source/{dir_name}"
-                        ),
-                        repo_count: child_repos,
-                    });
-                }
+                    let org_entry = if child_repos > 0 {
+                        Some(CachedOrgEntry {
+                            name: dir_name.clone(),
+                            description: format!(
+                                "🐙 GitHub Org/Workspace • {child_repos} local repos in ~/source/{dir_name}"
+                            ),
+                            repo_count: child_repos,
+                        })
+                    } else {
+                        None
+                    };
 
-                // Index notable projects inside ~/source/<org>/<repo>
-                for proj in child_projects {
-                    let canon = proj
-                        .canonicalize()
-                        .unwrap_or_else(|_| proj.clone())
-                        .to_string_lossy()
-                        .to_string();
-                    if !seen.insert(canon.clone()) {
-                        continue;
-                    }
-                    if let Some((_, summary)) = MemoryManager::synthesize_directory_memory(&proj) {
-                        let name = proj
-                            .file_name()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("repo")
+                    let mut org_folders = Vec::new();
+                    for proj in child_projects {
+                        let canon = proj
+                            .canonicalize()
+                            .unwrap_or_else(|_| proj.clone())
+                            .to_string_lossy()
                             .to_string();
-                        let freq = 40
-                            + ((canon.bytes().fold(0u32, |a, b| a.wrapping_add(b as u32)) % 180)
-                                as u16);
-                        folders.push(CachedFolderEntry {
-                            path: canon.clone(),
-                            display_path: shorten_home(&proj, home),
-                            name,
-                            description: truncate_clean(&summary, 64),
-                            frequency_hz: freq,
-                            is_memnet_share: memnet_paths.contains(&canon),
-                            is_remembered: false,
-                        });
+                        if let Some((_, summary)) = MemoryManager::synthesize_directory_memory(&proj)
+                        {
+                            let name = proj
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("repo")
+                                .to_string();
+                            let freq = 40
+                                + ((canon
+                                    .bytes()
+                                    .fold(0u32, |a, b| a.wrapping_add(b as u32))
+                                    % 180) as u16);
+                            org_folders.push(CachedFolderEntry {
+                                path: canon.clone(),
+                                display_path: shorten_home(&proj, home),
+                                name,
+                                description: truncate_clean(&summary, 64),
+                                frequency_hz: freq,
+                                is_memnet_share: memnet_paths.contains(&canon),
+                                is_remembered: false,
+                            });
+                        }
+                    }
+
+                    (org_entry, org_folders)
+                })
+                .collect();
+
+            for (org_opt, org_folders) in scanned_orgs {
+                if let Some(org) = org_opt {
+                    sync_orgs.push(org);
+                }
+                for folder in org_folders {
+                    if folders.len() < MAX_TOTAL_CACHED_FOLDERS && seen.insert(folder.path.clone())
+                    {
+                        folders.push(folder);
                     }
                 }
             }
         }
     }
 
+    folders.truncate(MAX_TOTAL_CACHED_FOLDERS);
     sync_orgs.sort_by_key(|b| std::cmp::Reverse(b.repo_count));
 
     let now_unix = std::time::SystemTime::now()

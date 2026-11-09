@@ -968,20 +968,312 @@ fn atomic_install_executable(src: &Path, dst: &Path) -> Result<bool> {
     Ok(true)
 }
 
-/// Copy the current binary to the system install path.
+/// Canonical root installation directory on Unix systems.
+pub const CANONICAL_UNIX_BIN_DIR: &str = "/usr/local/bin";
+
+/// Canonical root `st` executable path on Unix systems.
+pub const CANONICAL_UNIX_ST_BIN: &str = "/usr/local/bin/st";
+
+/// Managed Smart Tree binary names that belong exclusively in the canonical root bin directory.
+pub const MANAGED_ST_BINARIES: &[&str] = &["st", "std", "m8", "n8x", "mq", "smart-tree"];
+
+/// Return the canonical system-wide `st` executable path for the current platform.
+pub fn canonical_st_binary_path() -> PathBuf {
+    #[cfg(unix)]
+    {
+        PathBuf::from(CANONICAL_UNIX_ST_BIN)
+    }
+    #[cfg(windows)]
+    {
+        let prog = env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".to_string());
+        PathBuf::from(prog).join("SmartTree").join("st.exe")
+    }
+}
+
+/// Collect user home directories (current user, `SUDO_USER`, and `/home/*` or `/Users/*`)
+/// so root/sudo installations can clean up per-user duplicate binaries and agent configs.
+fn collect_candidate_home_dirs() -> Vec<PathBuf> {
+    let mut homes = Vec::new();
+    let mut push_unique = |p: PathBuf| {
+        if !p.as_os_str().is_empty() && !homes.contains(&p) {
+            homes.push(p);
+        }
+    };
+
+    if let Some(h) = dirs::home_dir() {
+        push_unique(h);
+    }
+    if let Ok(sudo_user) = env::var("SUDO_USER") {
+        let trimmed = sudo_user.trim();
+        if !trimmed.is_empty() && trimmed != "root" {
+            let linux_home = PathBuf::from("/home").join(trimmed);
+            if linux_home.is_dir() {
+                push_unique(linux_home);
+            }
+            let mac_home = PathBuf::from("/Users").join(trimmed);
+            if mac_home.is_dir() {
+                push_unique(mac_home);
+            }
+        }
+    }
+
+    for root in ["/home", "/Users"] {
+        if let Ok(entries) = fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_dir() {
+                    push_unique(p);
+                }
+            }
+        }
+    }
+
+    homes
+}
+
+/// Replace `stale` with `canonical` only when `stale` appears as a complete path token
+/// (i.e. not preceded or followed by path/identifier characters like alphanumeric, `/`, `.`, `_`, `-`).
+/// This prevents `"/bin/st"` from matching as a suffix inside `"/usr/local/bin/st"` or `"/home/user/.local/bin/st"`.
+fn replace_st_path_tokens(content: &str, stale: &str, canonical: &str) -> String {
+    if stale.is_empty() || stale == canonical || !content.contains(stale) {
+        return content.to_string();
+    }
+    let is_path_char =
+        |c: char| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '_' | '-' | '~');
+
+    let mut out = String::with_capacity(content.len());
+    let mut rest = content;
+    let mut prefix_last_char: Option<char> = None;
+
+    while let Some(pos) = rest.find(stale) {
+        let before = &rest[..pos];
+        if let Some(ch) = before.chars().last() {
+            prefix_last_char = Some(ch);
+        }
+        let after = &rest[pos + stale.len()..];
+        let next_char = after.chars().next();
+
+        let prev_is_path = prefix_last_char.map(is_path_char).unwrap_or(false);
+        let next_is_path = next_char.map(is_path_char).unwrap_or(false);
+
+        out.push_str(before);
+        if !prev_is_path && !next_is_path {
+            out.push_str(canonical);
+            prefix_last_char = canonical.chars().last();
+        } else {
+            out.push_str(stale);
+            prefix_last_char = stale.chars().last();
+        }
+        rest = after;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Rewrite any agent MCP/hook configuration files (`mcp_config.json`, `hooks.json`,
+/// `opencode.json`, `crush.json`, `.claude/settings.json`) that reference non-canonical
+/// `st` paths (`~/.local/bin/st`, `~/.cargo/bin/st`, `~/bin/st`, `/usr/bin/st`, `/opt/homebrew/bin/st`)
+/// so they point to `canonical_st` (`/usr/local/bin/st`).
+pub fn rewrite_agent_configs_to_canonical_st(canonical_st: &Path) -> Vec<PathBuf> {
+    let canonical_str = canonical_st.to_string_lossy();
+    let homes = collect_candidate_home_dirs();
+    let mut updated_files = Vec::new();
+
+    let rel_configs = [
+        ".gemini/config/mcp_config.json",
+        ".gemini/antigravity/mcp_config.json",
+        ".gemini/mcp_config.json",
+        ".gemini/config/hooks.json",
+        ".agents/hooks.json",
+        ".claude/settings.json",
+        ".claude/hooks.json",
+        ".config/opencode/opencode.json",
+        ".config/crush/crush.json",
+        ".config/Claude/claude_desktop_config.json",
+        "Library/Application Support/Claude/claude_desktop_config.json",
+    ];
+
+    let mut stale_paths = vec![
+        "/usr/local/usr/local/bin/st".to_string(),
+        "/opt/homebrew/bin/st".to_string(),
+        "/usr/bin/st".to_string(),
+        "/bin/st".to_string(),
+    ];
+    for home in &homes {
+        for sub in [
+            ".local/usr/local/bin/st",
+            ".cargo/usr/local/bin/st",
+            ".local/bin/st",
+            ".cargo/bin/st",
+            "bin/st",
+        ] {
+            stale_paths.push(home.join(sub).to_string_lossy().to_string());
+        }
+    }
+    stale_paths.sort_by_key(|b| std::cmp::Reverse(b.len()));
+    stale_paths.dedup();
+
+    for home in &homes {
+        for rel in &rel_configs {
+            let cfg_path = home.join(rel);
+            if !cfg_path.is_file() {
+                continue;
+            }
+            let Ok(content) = fs::read_to_string(&cfg_path) else {
+                continue;
+            };
+            let mut new_content = content.clone();
+            for stale in &stale_paths {
+                new_content = replace_st_path_tokens(&new_content, stale, canonical_str.as_ref());
+            }
+            if new_content != content && fs::write(&cfg_path, new_content).is_ok() {
+                println!(
+                    "  🔧 Updated agent config to canonical root binary: {}",
+                    cfg_path.display()
+                );
+                updated_files.push(cfg_path);
+            }
+        }
+    }
+
+    updated_files
+}
+
+/// Remove duplicate Smart Tree binaries (`st`, `std`, `m8`, `n8x`, `mq`, `smart-tree`)
+/// from the specified `candidate_dirs` while strictly preserving `canonical_dir`.
+pub fn purge_duplicate_st_binaries_in_dirs(
+    canonical_dir: &Path,
+    candidate_dirs: &[PathBuf],
+    allow_sudo: bool,
+) -> Vec<PathBuf> {
+    let canonical_dir_resolved = canonical_dir
+        .canonicalize()
+        .unwrap_or_else(|_| canonical_dir.to_path_buf());
+    let macos_helper_dir = PathBuf::from("/Library/PrivilegedHelperTools/is.8b.smart-tree");
+    let macos_helper_resolved = macos_helper_dir
+        .canonicalize()
+        .unwrap_or(macos_helper_dir.clone());
+
+    let mut seen_dirs = Vec::new();
+    let mut removed = Vec::new();
+
+    // Also retire legacy `std` binary inside `canonical_dir` (`/usr/local/bin/std`)
+    let legacy_canonical_std = canonical_dir.join("std");
+    if legacy_canonical_std.exists() || fs::symlink_metadata(&legacy_canonical_std).is_ok() {
+        let unlink_ok = match fs::remove_file(&legacy_canonical_std) {
+            Ok(()) => true,
+            Err(_) if allow_sudo && !is_elevated() => Command::new("sudo")
+                .args(["rm", "-f", legacy_canonical_std.to_string_lossy().as_ref()])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false),
+            Err(_) => false,
+        };
+        if unlink_ok {
+            println!(
+                "  🧹 Retired legacy binary: {}",
+                legacy_canonical_std.display()
+            );
+            removed.push(legacy_canonical_std);
+        }
+    }
+
+    for dir in candidate_dirs {
+        if !dir.exists() {
+            continue;
+        }
+        let dir_resolved = dir.canonicalize().unwrap_or_else(|_| dir.clone());
+        // Never purge inside the canonical root directory or macOS PrivilegedHelperTools
+        if dir_resolved == canonical_dir_resolved || dir_resolved == macos_helper_resolved {
+            continue;
+        }
+        if seen_dirs.contains(&dir_resolved) {
+            continue;
+        }
+        seen_dirs.push(dir_resolved);
+
+        for bin_name in MANAGED_ST_BINARIES {
+            let dup_path = dir.join(bin_name);
+            let Ok(meta) = fs::symlink_metadata(&dup_path) else {
+                continue;
+            };
+            if meta.is_dir() {
+                continue;
+            }
+            let canonical_bin = canonical_dir.join(bin_name);
+            if dup_path == canonical_bin {
+                continue;
+            }
+
+            // If the canonical root binary does not exist yet and this duplicate is a real file,
+            // do not delete the last surviving `st` binary before `/usr/local/bin/st` exists.
+            if *bin_name == "st" && !canonical_bin.exists() {
+                continue;
+            }
+
+            let unlink_ok = match fs::remove_file(&dup_path) {
+                Ok(()) => true,
+                Err(_) if allow_sudo && !is_elevated() => Command::new("sudo")
+                    .args(["rm", "-f", dup_path.to_string_lossy().as_ref()])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false),
+                Err(_) => false,
+            };
+
+            if unlink_ok {
+                println!("  🧹 Removed duplicate binary: {}", dup_path.display());
+                removed.push(dup_path);
+            }
+        }
+    }
+
+    removed
+}
+
+/// Scan standard system & user binary directories (`/usr/bin`, `~/.local/bin`, `~/.cargo/bin`,
+/// `~/bin`, `/opt/homebrew/bin`, and `PATH`) and remove duplicate copies of Smart Tree binaries
+/// so `/usr/local/bin` is always the single authoritative root installation.
+pub fn purge_duplicate_st_binaries(canonical_dir: &Path, allow_sudo: bool) -> Vec<PathBuf> {
+    let mut candidate_dirs = vec![
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+        PathBuf::from("/opt/homebrew/bin"),
+    ];
+
+    for home in collect_candidate_home_dirs() {
+        candidate_dirs.push(home.join(".local/bin"));
+        candidate_dirs.push(home.join(".cargo/bin"));
+        candidate_dirs.push(home.join("bin"));
+    }
+
+    if let Some(path_os) = env::var_os("PATH") {
+        for entry in env::split_paths(&path_os) {
+            if !entry.as_os_str().is_empty() {
+                candidate_dirs.push(entry);
+            }
+        }
+    }
+
+    purge_duplicate_st_binaries_in_dirs(canonical_dir, &candidate_dirs, allow_sudo)
+}
+
+/// Copy the current binary (and any sibling companion binaries) to the canonical root install path,
+/// rewrite agent configs to point to the canonical root binary, and purge duplicate copies.
 /// Returns the path where the binary was installed.
 fn install_binary() -> Result<PathBuf> {
     let current_exe = env::current_exe().context("Failed to get current executable path")?;
 
     #[cfg(unix)]
     let install_path = {
+        let usr_local_dir = PathBuf::from(CANONICAL_UNIX_BIN_DIR);
+        let usr_local_st = usr_local_dir.join("st");
         let helper_dir = PathBuf::from("/Library/PrivilegedHelperTools/is.8b.smart-tree");
         if cfg!(target_os = "macos") && helper_dir.is_dir() {
-            let usr_local = PathBuf::from("/usr/local/bin/st");
-            let _ = atomic_install_executable(&current_exe, &usr_local);
+            let _ = atomic_install_executable(&current_exe, &usr_local_st);
             helper_dir.join("st")
         } else {
-            PathBuf::from("/usr/local/bin/st")
+            usr_local_st
         }
     };
 
@@ -997,6 +1289,33 @@ fn install_binary() -> Result<PathBuf> {
         println!("  Installed binary to {}.", install_path.display());
     } else {
         println!("  Binary already at {}.", install_path.display());
+    }
+
+    // Also install sibling companion binaries (m8, n8x, mq) into /usr/local/bin if present
+    #[cfg(unix)]
+    if let Some(src_dir) = current_exe.parent() {
+        let canonical_dir = Path::new(CANONICAL_UNIX_BIN_DIR);
+        for companion in ["m8", "n8x", "mq"] {
+            let src_companion = src_dir.join(companion);
+            let dst_companion = canonical_dir.join(companion);
+            if src_companion.is_file() {
+                if let Ok(true) = atomic_install_executable(&src_companion, &dst_companion) {
+                    println!(
+                        "  Installed companion binary to {}.",
+                        dst_companion.display()
+                    );
+                }
+            }
+        }
+    }
+
+    // Rewrite agent configs and remove duplicate binaries in ~/.local/bin, ~/.cargo/bin, /usr/bin, etc.
+    #[cfg(unix)]
+    {
+        let canonical_dir = Path::new(CANONICAL_UNIX_BIN_DIR);
+        let canonical_st = canonical_dir.join("st");
+        rewrite_agent_configs_to_canonical_st(&canonical_st);
+        purge_duplicate_st_binaries(canonical_dir, false);
     }
 
     // Keep .auto-update worker synchronized and clear any stale rollback state on manual install
@@ -1426,5 +1745,88 @@ mod tests {
         assert!(unit.contains("Environment=HOME=/var/lib/smart-tree"));
         assert!(unit.contains("Environment=ST_TOKEN_PATH=/var/lib/smart-tree/daemon.token"));
         assert!(unit.contains("WorkingDirectory=/var/lib/smart-tree"));
+    }
+
+    #[test]
+    fn test_purge_duplicate_st_binaries_preserves_canonical_and_removes_duplicates() -> Result<()> {
+        let root = TempDir::new()?;
+        let canonical = root.path().join("usr_local_bin");
+        let user_local = root.path().join("home_local_bin");
+        let cargo_bin = root.path().join("home_cargo_bin");
+        let usr_bin = root.path().join("usr_bin");
+
+        fs::create_dir_all(&canonical)?;
+        fs::create_dir_all(&user_local)?;
+        fs::create_dir_all(&cargo_bin)?;
+        fs::create_dir_all(&usr_bin)?;
+
+        fs::write(canonical.join("st"), b"canonical-st")?;
+        fs::write(canonical.join("m8"), b"canonical-m8")?;
+
+        fs::write(user_local.join("st"), b"dup-local-st")?;
+        fs::write(user_local.join("m8"), b"dup-local-m8")?;
+        fs::write(user_local.join("other-tool"), b"keep-me")?;
+
+        fs::write(cargo_bin.join("st"), b"dup-cargo-st")?;
+        fs::write(cargo_bin.join("n8x"), b"dup-cargo-n8x")?;
+
+        fs::write(usr_bin.join("st"), b"dup-usr-st")?;
+
+        let candidates = vec![
+            canonical.clone(),
+            user_local.clone(),
+            cargo_bin.clone(),
+            usr_bin.clone(),
+        ];
+
+        let removed = purge_duplicate_st_binaries_in_dirs(&canonical, &candidates, false);
+        assert_eq!(removed.len(), 5);
+
+        // Canonical binaries must remain untouched
+        assert!(canonical.join("st").exists());
+        assert!(canonical.join("m8").exists());
+
+        // Duplicates must be gone, unrelated binaries preserved
+        assert!(!user_local.join("st").exists());
+        assert!(!user_local.join("m8").exists());
+        assert!(user_local.join("other-tool").exists());
+        assert!(!cargo_bin.join("st").exists());
+        assert!(!cargo_bin.join("n8x").exists());
+        assert!(!usr_bin.join("st").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn test_replace_st_path_tokens_is_idempotent_and_self_heals() {
+        let canonical = "/usr/local/bin/st";
+        let sample = r#"{
+  "command": "/home/hue/.local/bin/st --agy-hook PreToolUse",
+  "corrupted": "/home/hue/.local/usr/local/bin/st --mcp",
+  "already_ok": "/usr/local/bin/st --agy-hook PostToolUse",
+  "bin_st": "/bin/st --version"
+}"#;
+        let stale_list = [
+            "/home/hue/.local/usr/local/bin/st",
+            "/home/hue/.local/bin/st",
+            "/usr/bin/st",
+            "/bin/st",
+        ];
+        let mut out = sample.to_string();
+        for s in stale_list {
+            out = replace_st_path_tokens(&out, s, canonical);
+        }
+        assert!(out.contains(r#""command": "/usr/local/bin/st --agy-hook PreToolUse""#));
+        assert!(out.contains(r#""corrupted": "/usr/local/bin/st --mcp""#));
+        assert!(out.contains(r#""already_ok": "/usr/local/bin/st --agy-hook PostToolUse""#));
+        assert!(out.contains(r#""bin_st": "/usr/local/bin/st --version""#));
+        assert!(!out.contains(".local/usr/local/bin/st"));
+        assert!(!out.contains("/usr/local/usr/local/bin/st"));
+
+        // Running a second time must be 100% idempotent
+        let mut second = out.clone();
+        for s in stale_list {
+            second = replace_st_path_tokens(&second, s, canonical);
+        }
+        assert_eq!(out, second);
     }
 }

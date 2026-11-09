@@ -354,24 +354,42 @@ pub fn build_von_chenoweth_lodri_finance_json() -> serde_json::Value {
     let tier3_save_share_pq = reduce_pq(20, 100);
     let seed_dilution_pq = reduce_pq(5_000_000, 25_000_000);
 
-    let cohorts: [(u8, u64, u64, u64, u64, u64, u32, u64, i64); 5] = [
+    type CohortRow = (u8, u64, u64, u64, u64, u64, u32, u64, i64);
+    let cohorts: [CohortRow; 5] = [
         (1, 1_200, 2_500, 900, 240, 800, 6, 135_000_000, 500_000_000),
         (2, 4_500, 9_000, 3_500, 900, 3_200, 12, 280_000_000, 0),
         (3, 12_000, 25_000, 10_000, 2_600, 9_500, 24, 590_000_000, 0),
-        (4, 25_000, 55_000, 22_000, 5_800, 22_000, 40, 1_020_000_000, 0),
-        (5, 48_000, 110_000, 45_000, 12_000, 50_000, 60, 1_580_000_000, 0),
+        (
+            4,
+            25_000,
+            55_000,
+            22_000,
+            5_800,
+            22_000,
+            40,
+            1_020_000_000,
+            0,
+        ),
+        (
+            5,
+            48_000,
+            110_000,
+            45_000,
+            12_000,
+            50_000,
+            60,
+            1_580_000_000,
+            0,
+        ),
     ];
 
     let mut cash_cents: i64 = 25_000_000; // $250K initial bootstrap cash
     let mut years_json = Vec::with_capacity(5);
 
     for (yr, t1, t2, t3, t4, t5, hc, opex_cents, fundraise_cents) in cohorts {
-        let gross_mrr_cents =
-            t1 * 500 + t2 * 1_000 + t3 * 2_900 + t4 * 25_000 + t5 * 2_000;
-        let retained_m12_mrr_cents =
-            (gross_mrr_cents * retention_m12_pq.0) / retention_m12_pq.1;
-        let expanded_ndr_mrr_cents =
-            (retained_m12_mrr_cents * bonobo_ndr_pq.0) / bonobo_ndr_pq.1;
+        let gross_mrr_cents = t1 * 500 + t2 * 1_000 + t3 * 2_900 + t4 * 25_000 + t5 * 2_000;
+        let retained_m12_mrr_cents = (gross_mrr_cents * retention_m12_pq.0) / retention_m12_pq.1;
+        let expanded_ndr_mrr_cents = (retained_m12_mrr_cents * bonobo_ndr_pq.0) / bonobo_ndr_pq.1;
         let arr_cents = expanded_ndr_mrr_cents * 12;
         let p10_arr_cents = (arr_cents * 7) / 10;
         let p90_arr_cents = (arr_cents * 13) / 10;
@@ -435,7 +453,11 @@ pub fn build_von_chenoweth_lodri_finance_json() -> serde_json::Value {
 
 /// GET /v1/finance — Returns the 8b.is E2E 5-Year Financial Model (`von Chenoweth-Lodri Era`).
 async fn von_chenoweth_lodri_finance_endpoint() -> Response {
-    (StatusCode::OK, Json(build_von_chenoweth_lodri_finance_json())).into_response()
+    (
+        StatusCode::OK,
+        Json(build_von_chenoweth_lodri_finance_json()),
+    )
+        .into_response()
 }
 
 #[cfg(test)]
@@ -445,11 +467,25 @@ mod tests {
     #[test]
     fn test_von_chenoweth_lodri_finance_json_invariants() {
         let payload = build_von_chenoweth_lodri_finance_json();
-        assert_eq!(payload["unit_economics_pq"]["gross_margin_pq"], serde_json::json!([17, 20]));
-        assert_eq!(payload["unit_economics_pq"]["ltv_to_cac_pq"], serde_json::json!([9, 1]));
-        assert_eq!(payload["unit_economics_pq"]["tier3_save_share_pq"], serde_json::json!([1, 5]));
-        assert_eq!(payload["unit_economics_pq"]["seed_dilution_pq"], serde_json::json!([1, 5]));
-        let yrs = payload["five_year_projections"].as_array().expect("5 years");
+        assert_eq!(
+            payload["unit_economics_pq"]["gross_margin_pq"],
+            serde_json::json!([17, 20])
+        );
+        assert_eq!(
+            payload["unit_economics_pq"]["ltv_to_cac_pq"],
+            serde_json::json!([9, 1])
+        );
+        assert_eq!(
+            payload["unit_economics_pq"]["tier3_save_share_pq"],
+            serde_json::json!([1, 5])
+        );
+        assert_eq!(
+            payload["unit_economics_pq"]["seed_dilution_pq"],
+            serde_json::json!([1, 5])
+        );
+        let yrs = payload["five_year_projections"]
+            .as_array()
+            .expect("5 years");
         assert_eq!(yrs.len(), 5);
         assert_eq!(yrs[0]["arr_cents"], 179_685_000u64);
         assert_eq!(yrs[4]["arr_cents"], 8_970_750_000u64);

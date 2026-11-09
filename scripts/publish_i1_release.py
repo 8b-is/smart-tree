@@ -21,7 +21,7 @@ def publish(source, root):
     version = manifest['version']
     if not re.fullmatch(r'\d+\.\d+\.\d+-[a-f0-9]{12}', build) or build.rsplit('-', 1)[0] != version:
         raise ValueError('Invalid version or immutable build ID')
-    if manifest['cargo_features'] != ['full'] or manifest['binaries'] != ['st', 'std', 'm8', 'n8x']:
+    if manifest['cargo_features'] != ['full'] or manifest['binaries'] not in (['st', 'm8', 'n8x'], ['st', 'std', 'm8', 'n8x']):
         raise ValueError('Expected the supported full-feature binary set')
     assets = [manifest['source'], *manifest['assets']]
     if len(assets) < 2:
@@ -55,8 +55,14 @@ def publish(source, root):
         if destination.is_symlink():
             raise ValueError('Existing release path is a symlink')
         existing_files = {p.name for p in destination.iterdir() if p.is_file()}
-        # All previously published archives/metadata (except manifest.json which gains new target assets)
+        # All previously published archives/metadata (except manifest.json gaining new target assets)
         # must remain byte-for-byte identical.
+        if 'manifest.json' in existing_files:
+            old_manifest = json.loads((destination / 'manifest.json').read_text())
+            old_meta = {k: v for k, v in old_manifest.items() if k != 'assets'}
+            new_meta = {k: v for k, v in manifest.items() if k != 'assets'}
+            if old_meta != new_meta:
+                raise ValueError('Refusing to change an immutable release file: manifest.json')
         for name in existing_files - {'manifest.json'}:
             if name in names and sha256(destination / name) != sha256(source / name):
                 raise ValueError(f'Refusing to change an immutable release file: {name}')

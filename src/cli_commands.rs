@@ -255,16 +255,28 @@ pub async fn handle_agent_context() -> Result<()> {
 pub async fn handle_update_consciousness(path: &str) -> Result<()> {
     use std::path::Path;
 
+    let start = std::time::Instant::now();
     let root = Path::new(path);
+    let root_owned = root.to_path_buf();
     println!(
-        "🌊 Building bottom-up .m8 consciousness pyramid for {}...",
+        "🌊 Building bottom-up .m8 consciousness pyramid for {} on worker threads...",
         path
     );
 
     let mut child_names: Vec<String> = Vec::new();
-    match crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(root, 0, 3) {
+    let pyramid_res = tokio::task::spawn_blocking(move || {
+        crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(&root_owned, 0, 2)
+    })
+    .await
+    .context("Consciousness worker thread panicked")?;
+
+    match pyramid_res {
         Ok(c) => {
-            println!("✅ Consciousness updated: {}", root.join(".m8").display());
+            println!(
+                "✅ Consciousness updated in {}ms: {}",
+                start.elapsed().as_millis(),
+                root.join(".m8").display()
+            );
             println!("   Frequency: {:.2} Hz", c.frequency);
             println!("   Essence:   {}", c.essence);
             if let Some(bn) = &c.bitnet_summary {
@@ -335,15 +347,32 @@ pub async fn handle_update_consciousness(path: &str) -> Result<()> {
         }
     }
 
-    if let Ok(mut mem_mgr) = crate::memory_manager::MemoryManager::new() {
-        for child_name in &child_names {
-            let child_dir = root.join(child_name);
-            if child_dir.is_dir() {
-                let _ = mem_mgr.ensure_directory_remembered(&child_dir);
+    let root_bg = root.to_path_buf();
+    let _ = tokio::task::spawn_blocking(move || {
+        if let Ok(mut mem_mgr) = crate::memory_manager::MemoryManager::new() {
+            let mut changed = false;
+            if let Some((_, c)) = mem_mgr.remember_single_project_dir_no_save(&root_bg) {
+                changed |= c;
+            }
+            for child_name in child_names.into_iter().take(12) {
+                let child_dir = root_bg.join(child_name);
+                if child_dir.is_dir()
+                    && crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(
+                        &child_dir,
+                    )
+                    .is_some()
+                {
+                    if let Some((_, c)) = mem_mgr.remember_single_project_dir_no_save(&child_dir) {
+                        changed |= c;
+                    }
+                }
+            }
+            if changed {
+                let _ = mem_mgr.save();
             }
         }
-        let _ = mem_mgr.ensure_directory_remembered(root);
-    }
+    })
+    .await;
 
     Ok(())
 }
@@ -1910,14 +1939,41 @@ pub fn scan_directory_for_threats(
         .max_depth(3)
         .follow_links(false)
         .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            // Skip Smart Tree internal caches (.st, .mem8) and heavy caches (.cache, .cargo, .local, .git)
+            if e.file_type().is_dir()
+                && matches!(
+                    name.as_ref(),
+                    ".st"
+                        | ".mem8"
+                        | ".cache"
+                        | ".cargo"
+                        | ".local"
+                        | ".git"
+                        | "node_modules"
+                        | "target"
+                )
+            {
+                return false;
+            }
+            true
+        })
         .filter_map(|e| e.ok())
     {
         let entry_path = entry.path();
+        if !entry.file_type().is_file() {
+            continue;
+        }
 
-        if entry_path
+        let file_name = entry_path
             .file_name()
-            .map(|n| n.to_string_lossy().starts_with('.'))
-            .unwrap_or(false)
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_default();
+        if file_name.starts_with('.')
+            || file_name == "completion_cache.json"
+            || file_name == "sec_scan_out.txt"
+            || file_name == "SECURITY_DISCLOSURE_AFFECTING_LLMs.md"
         {
             continue;
         }
@@ -1933,13 +1989,22 @@ pub fn scan_directory_for_threats(
                         crate::ai_guardian::ThreatLevel::Critical
                             | crate::ai_guardian::ThreatLevel::Dangerous
                     ) {
+                        let single_line_ctx: String = threat
+                            .context
+                            .lines()
+                            .map(str::trim)
+                            .filter(|l| !l.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(" ⏎ ")
+                            .chars()
+                            .take(160)
+                            .collect();
                         eprintln!(
                             "⚠️  THREAT DETECTED [{:?}] in {}: {}",
                             threat.level, threat.location, threat.pattern
                         );
-                        eprintln!("    Context: {}", threat.context);
+                        eprintln!("    Context: {}", single_line_ctx);
                         eprintln!("    Recommendation: {}", threat.recommendation);
-                        eprintln!();
                     }
                 }
             }
@@ -4816,5 +4881,255 @@ pub fn handle_memnet_command(cmd: &crate::cli::MemnetCommand) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Built-in v24+ Smart Tree Cheatsheet (`st --cheet`)
+pub const ST_CHEATSHEET_MD: &str = r#"# 🌳 Smart Tree (`st`) v24+ Cheatsheet — Canonical `/usr/local/bin/st`
+
+## 1. Root Installation & System Daemon (`127.0.0.1:28428`)
+* `sudo st service install` — Install `/usr/local/bin/st` as root, rewrite agent configs, purge duplicates (`~/.local/bin`, `~/.cargo/bin`, `/usr/bin`), and enable system service
+* `st service status` / `st service logs` — Check daemon health or stream service logs
+* `st up` (or `st --up`) — Ensure background daemon is running & print Dashboard/MCP URLs
+* `st --daemon-projects` — List all watched & remembered projects
+* `st --mcp-install` / `st --hooks-install` — Wire MCP & lifecycle hooks into Antigravity (`agy`), OpenCode, Crush & Claude
+
+## 2. Live Web Dashboards (`http://localhost:28428`)
+* `http://localhost:28428/` — Main Dashboard, **Realtime Service Debug Stream**, and **Situation Room & Stream Commentary** (`situation.json`)
+* `http://localhost:28428/flow` — **Live Visual Studio Diff Stream** with variable speed (`0.5x`–`4x`) & **Brett Favre Sports Commentary** + g8t.is Capsule Ticker
+
+## 3. Directory & Paul Erdős Graph Modes (`st -m <MODE> [PATH]`)
+* `st` / `st -m classic .` — Classic smart directory tree
+* `st -m ai .` / `st -m summary-ai .` — Token-efficient AI architecture digest
+* `st -m the-book .` — Paul Erdős Szemerédi Regularity, Steiner Pruner, Moser-Tardos LLL & Erdős-Rényi Scanner
+* `st -m pq .` — Sovereign `p/q` coprime rational arithmetic, Hölder dual norms & Störmer-Verlet symplectic leapfrog
+* `st -m zeno .` — ULTRA-OMNI-ZENO v11 (`64B@0x62` LitanyWireFrame, BFP-64 Kleene bitplanes, SPQT base-243)
+* `st --ramsey-cliques .` / `st --erdos-center .` / `st --erdos-split 4` — Graph clique, center & conflict-free worktree partitioners
+
+## 4. `g8t.is` Verified Rust Capsules & Fokens (`st g8t`)
+* `st g8t leaderboard` — Live Speed & Foken (`FKN`) scoreboard (`https://g8t.is/g8t/leaderboard`)
+* `st g8t best "binary search"` — Top 1–3 fastest verified zero-float Rust functions
+* `st g8t yolo "crc"` — Return ONLY the #1 fastest verified Rust function (raw drop-in code + receipt)
+* `st g8t targets` / `st g8t golf` — Cycle-Golf bounty board & 64-vector equivalence prover
+* `st g8t submit <file_or_fn> --partner "Hue + Gemini (0+1)"` — Benchmark & publish capsule
+
+## 5. Sovereign MemNet & Salient `MEM|8` Memory
+* `st memnet status` / `st memnet assess` — Hardware SIMD/RAM/GPU probe & multi-route (`0xC5`) mesh status
+* `st memnet advertise` / `st memnet graph` — Broadcast LLM capabilities to `i1.is` & render ASCII node graph
+* `st memnet ask "<question>"` / `st memnet teach "<q>" "<a>"` — Local `MEM|8` Wave Q&A cache
+* `st remember <repo_or_dir> --level expert` — Ingest repository into salient `.m8` wave store
+* `st sync <github_user_or_org>` — Parallel clone/refresh of all GitHub repositories for a user/org
+
+## 6. Sovereign `p/q` Code Healer, Trainer & Evaluator
+* `st pq-fix [PATH] --apply --verify` — 3-tier Sovereign `p/q` + `total_cmp` code healer
+* `st pq-train --ask "<prompt>"` — In-binary 4gaia PQM symplectic trainer & forward pass
+* `st pq-test --domain all` — 7-domain Sovereign evaluation suite (CLI, Code, Art, Love, Poetry, Sound, History)
+* `st pq-bench` — Head-to-head DeepSeek `p/q` vs Ollama benchmark
+
+## 7. In-Process Code Intelligence & Autocomplete
+* `st symbol index|sym|refs|outline|graph [QUERY] [--path DIR]` — Zero-daemon AST symbol intelligence
+* `st completions status|sync|folders|memories` — Self-maintaining Fish/Zsh/Bash completions
+"#;
+
+/// Render the built-in Smart Tree v24+ cheatsheet (`st --cheet`)
+pub fn handle_cheet_command() -> Result<()> {
+    let skin = termimad::MadSkin::default();
+    skin.print_text(ST_CHEATSHEET_MD);
+    Ok(())
+}
+
+/// Execute `st symbol <index|sym|refs|outline|graph>` in-process and print valid JSON to stdout.
+pub fn handle_symbol_command(command: &crate::cli::SymbolCommand) -> Result<()> {
+    use crate::cli::SymbolOperation;
+    use serde_json::json;
+
+    let root = if command.path.exists() {
+        command.path.clone()
+    } else {
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+    };
+    let include_source = !command.no_source;
+    let query = command.query.as_deref().unwrap_or("").trim();
+
+    #[derive(serde::Serialize, Clone)]
+    struct SymRecord {
+        name: String,
+        kind: String,
+        file: String,
+        line: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        signature: Option<String>,
+    }
+
+    let mut files_scanned = 0usize;
+    let mut symbols: Vec<SymRecord> = Vec::new();
+    let mut refs: Vec<serde_json::Value> = Vec::new();
+
+    fn collect_source_files(
+        dir: &std::path::Path,
+        depth: usize,
+        out: &mut Vec<std::path::PathBuf>,
+    ) {
+        if depth > 6 || out.len() >= 600 {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with('.')
+                || matches!(
+                    name_str.as_ref(),
+                    "target" | "node_modules" | "dist" | "build" | "vendor"
+                )
+            {
+                continue;
+            }
+            if p.is_dir() {
+                collect_source_files(&p, depth + 1, out);
+            } else if matches!(
+                p.extension().and_then(|e| e.to_str()),
+                Some("rs" | "py" | "ts" | "tsx" | "js" | "go" | "c" | "h")
+            ) {
+                out.push(p);
+            }
+        }
+    }
+
+    let mut source_files = Vec::new();
+    if matches!(command.operation, SymbolOperation::Outline) && !query.is_empty() {
+        let candidate = root.join(query);
+        if candidate.is_file() {
+            source_files.push(candidate);
+        } else if std::path::Path::new(query).is_file() {
+            source_files.push(std::path::PathBuf::from(query));
+        }
+    } else {
+        collect_source_files(&root, 0, &mut source_files);
+    }
+    source_files.sort();
+
+    for file_path in &source_files {
+        let Ok(content) = std::fs::read_to_string(file_path) else {
+            continue;
+        };
+        files_scanned += 1;
+        let rel_file = file_path
+            .strip_prefix(&root)
+            .unwrap_or(file_path)
+            .to_string_lossy()
+            .to_string();
+
+        for (idx, line) in content.lines().enumerate() {
+            let line_no = idx + 1;
+            let trimmed = line.trim();
+
+            if matches!(command.operation, SymbolOperation::Refs) && !query.is_empty() {
+                if trimmed.contains(query) && !trimmed.starts_with("//") {
+                    refs.push(json!({
+                        "file": rel_file,
+                        "line": line_no,
+                        "snippet": if include_source { Some(trimmed) } else { None },
+                    }));
+                }
+                continue;
+            }
+
+            let matched = [
+                ("pub async fn ", "fn"),
+                ("pub const fn ", "fn"),
+                ("pub fn ", "fn"),
+                ("async fn ", "fn"),
+                ("fn ", "fn"),
+                ("pub struct ", "struct"),
+                ("struct ", "struct"),
+                ("pub enum ", "enum"),
+                ("enum ", "enum"),
+                ("pub trait ", "trait"),
+                ("trait ", "trait"),
+                ("def ", "fn"),
+                ("class ", "class"),
+                ("export function ", "fn"),
+                ("function ", "fn"),
+                ("func ", "fn"),
+            ]
+            .into_iter()
+            .find_map(|(prefix, kind)| trimmed.strip_prefix(prefix).map(|rest| (kind, rest)));
+
+            if let Some((kind, rest)) = matched {
+                let sym_name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if sym_name.is_empty() {
+                    continue;
+                }
+                if matches!(command.operation, SymbolOperation::Sym)
+                    && !query.is_empty()
+                    && !sym_name.to_lowercase().contains(&query.to_lowercase())
+                {
+                    continue;
+                }
+                symbols.push(SymRecord {
+                    name: sym_name,
+                    kind: kind.to_string(),
+                    file: rel_file.clone(),
+                    line: line_no,
+                    signature: if include_source {
+                        Some(trimmed.trim_end_matches('{').trim().to_string())
+                    } else {
+                        None
+                    },
+                });
+            }
+        }
+    }
+
+    let payload = match command.operation {
+        SymbolOperation::Index => json!({
+            "ok": true,
+            "operation": "index",
+            "path": root.display().to_string(),
+            "files_indexed": files_scanned,
+            "symbols_indexed": symbols.len(),
+            "sample_symbols": symbols.into_iter().take(50).collect::<Vec<_>>(),
+        }),
+        SymbolOperation::Sym => json!({
+            "ok": true,
+            "operation": "sym",
+            "query": query,
+            "path": root.display().to_string(),
+            "count": symbols.len(),
+            "symbols": symbols.into_iter().take(100).collect::<Vec<_>>(),
+        }),
+        SymbolOperation::Refs => json!({
+            "ok": true,
+            "operation": "refs",
+            "query": query,
+            "path": root.display().to_string(),
+            "count": refs.len(),
+            "references": refs.into_iter().take(150).collect::<Vec<_>>(),
+        }),
+        SymbolOperation::Outline => json!({
+            "ok": true,
+            "operation": "outline",
+            "file": query,
+            "path": root.display().to_string(),
+            "symbol_count": symbols.len(),
+            "outline": symbols,
+        }),
+        SymbolOperation::Graph => json!({
+            "ok": true,
+            "operation": "graph",
+            "path": root.display().to_string(),
+            "files_scanned": files_scanned,
+            "total_symbols": symbols.len(),
+        }),
+    };
+
+    println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
 }

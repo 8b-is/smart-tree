@@ -57,7 +57,7 @@ find "$RELEASE_DIR/source/smart-tree" -exec touch {} +
         -v "$HOME/.cargo/registry:/cargo/registry" \
         -v "$HOME/.cargo/git:/cargo/git" \
         smart-tree-cli-build \
-        cargo build --locked --release --features full --bin st --bin std --bin m8 --bin n8x
+        cargo build --locked --release --features full --bin st --bin m8 --bin n8x
 ) &
 LINUX_PID=$!
 
@@ -75,12 +75,14 @@ REMOTE_WORK="/tmp/st-mac-release-${BUILD_ID}"
         export SMART_TREE_NO_UPDATE_CHECK=1
         export CARGO_TARGET_DIR=\"$MAC_CACHE_TARGET_DIR\"
         touch src/main.rs build.rs
-        cargo build --locked --release --features full --bin st --bin std --bin m8 --bin n8x
-        mkdir -p \"$REMOTE_WORK/out\" \"\$HOME/.local/bin\"
-        for bin in st std m8 n8x; do
+        cargo build --locked --release --features full --bin st --bin m8 --bin n8x
+        mkdir -p \"$REMOTE_WORK/out\"
+        for bin in st m8 n8x; do
             cp \"\$CARGO_TARGET_DIR/release/\$bin\" \"$REMOTE_WORK/out/\$bin\"
-            install -m 0755 \"\$CARGO_TARGET_DIR/release/\$bin\" \"\$HOME/.local/bin/\$bin\"
+            sudo -n install -m 0755 \"\$CARGO_TARGET_DIR/release/\$bin\" \"/usr/local/bin/\$bin\" 2>/dev/null || install -m 0755 \"\$CARGO_TARGET_DIR/release/\$bin\" \"/usr/local/bin/\$bin\" 2>/dev/null || true
+            rm -f \"\$HOME/.local/bin/\$bin\" \"\$HOME/.cargo/bin/\$bin\" \"/opt/homebrew/bin/\$bin\" 2>/dev/null || true
         done
+        sudo -n rm -f /usr/local/bin/std \"\$HOME/.local/bin/std\" \"\$HOME/.cargo/bin/std\" /opt/homebrew/bin/std 2>/dev/null || true
     '"
 ) &
 MAC_PID=$!
@@ -102,7 +104,6 @@ cp "$RELEASE_DIR/st-x86_64-unknown-linux-gnu.tar.gz" "$RELEASE_DIR/smart-tree-x8
 MAC_BIN_DIR="${STAGE_ROOT}/mac-bins"
 mkdir -p "$MAC_BIN_DIR"
 scp -q "${MAC_HOST}:${REMOTE_WORK}/out/st" \
-       "${MAC_HOST}:${REMOTE_WORK}/out/std" \
        "${MAC_HOST}:${REMOTE_WORK}/out/m8" \
        "${MAC_HOST}:${REMOTE_WORK}/out/n8x" \
        "$MAC_BIN_DIR/"

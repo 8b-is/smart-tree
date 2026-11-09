@@ -5570,7 +5570,9 @@ impl AsyncMemnetCoordinator {
         };
         let next_epoch = (*self.epoch_rx.borrow()).wrapping_add(1);
         let _ = self.epoch_tx.send(next_epoch);
-        let _ = self.event_tx.send(MemnetPayload::WaveQaResponse(pkt.clone()));
+        let _ = self
+            .event_tx
+            .send(MemnetPayload::WaveQaResponse(pkt.clone()));
         pkt
     }
 
@@ -5611,13 +5613,10 @@ impl AsyncMemnetCoordinator {
             let wire_cl = std::sync::Arc::clone(&wire);
             set.spawn(async move {
                 let _permit = sem.acquire_owned().await.ok()?;
-                tokio::time::timeout(
-                    Duration::from_millis(50),
-                    sock_cl.send_to(&wire_cl, target),
-                )
-                .await
-                .ok()?
-                .ok()
+                tokio::time::timeout(Duration::from_millis(50), sock_cl.send_to(&wire_cl, target))
+                    .await
+                    .ok()?
+                    .ok()
             });
         }
 
@@ -5866,7 +5865,9 @@ impl AsyncMemnetCoordinator {
                 MemnetPayload::LlmCapabilityAnnounce(ad) => {
                     {
                         let mut guard = self.state.write().await;
-                        guard.llm_advertisements.insert(ad.node_id.clone(), ad.clone());
+                        guard
+                            .llm_advertisements
+                            .insert(ad.node_id.clone(), ad.clone());
                     }
                     let next_epoch = (*self.epoch_rx.borrow()).wrapping_add(1);
                     let _ = self.epoch_tx.send(next_epoch);

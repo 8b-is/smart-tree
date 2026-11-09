@@ -10,11 +10,39 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-/// Smart Tree CLI - intelligent directory visualization
+/// Smart Tree CLI - intelligent directory visualization & sovereign agent engine
 #[derive(Parser, Debug)]
 #[command(
     name = "st",
-    about = "Smart Tree - An intelligent directory visualization tool. Not just a tree, it's a smart-tree!",
+    about = "Smart Tree (st) — Sovereign directory intelligence, MEM|8 wave memory, MCP server, and local p/q engine (/usr/local/bin/st)",
+    after_help = "QUICK REFERENCE (v24+):
+  Directory & Graph Modes:
+    st [PATH]                        Smart context-aware directory visualization
+    st -m ai [PATH]                  Token-compressed AI overview (10x-100x smaller)
+    st -m the-book [PATH]            Paul Erdős Szemerédi Regularity, Steiner Backbone & LLL
+    st -m pq [PATH]                  Sovereign p/q coprime rational & symplectic analysis
+    st -m zeno [PATH]                ULTRA-OMNI-ZENO v11 (64B@0x62 LitanyWireFrame & SPQT)
+    st --ramsey-cliques [PATH]       Ramsey monochromatic clique & Turán density detector
+    st --erdos-center [PATH]         Erdős Center Z(G) & Voronoi Steiner Context Backbone
+
+  Root Service, Daemon & Live Dashboards (127.0.0.1:28428):
+    sudo st service install          Install canonical root binary (/usr/local/bin/st) + system service
+    st service status | logs         Check daemon status or tail real-time service logs
+    st up                            Start background HTTP/MCP daemon & print dashboard URLs
+    st --daemon-projects             List all watched & remembered projects
+    http://localhost:28428/          Main Dashboard + Realtime Service Debug Stream + Situation Room
+    http://localhost:28428/flow      Live Visual Studio Diff Stream + Brett Favre Sports Commentary
+
+  Subcommands:
+    st g8t leaderboard | best <Q>    Query g8t.is Rust capsules, YOLO #1 pick, golf, or submit
+    st memnet status | assess | ask  Sovereign MemNet hardware assessment, node graph & Wave Q&A
+    st remember <REPO_OR_DIR>        Ingest git forge or directory into salient MEM|8 wave store
+    st sync <GITHUB_USER_OR_ORG>     Clone/refresh all GitHub repos for a user or organization
+    st pq-fix [PATH] --apply         3-tier Sovereign p/q + total_cmp code healer
+    st pq-train | pq-test | pq-bench In-binary 4gaia PQM trainer, 7-domain evaluator & Ollama bench
+    st symbol <index|sym|refs|outline|graph> [QUERY]   In-process AST code intelligence
+    st completions status | sync     Self-maintaining Fish/Zsh/Bash autocomplete + MEM|8 cache
+    st --cheet                       Display the full Smart Tree v24+ command cheatsheet",
     author
 )]
 pub struct Cli {
@@ -776,6 +804,10 @@ pub enum Cmd {
     /// Special full treatment for StandardGalactic. Auto-detects non-git and limits generic sources.
     #[command(alias = "salient", alias = "ingest")]
     Remember(RememberCommand),
+
+    /// Start the canonical background daemon on 127.0.0.1:28428, update MCP configs, and print dashboard/flow URLs
+    #[command(alias = "start-daemon")]
+    Up,
 
     /// Manage the smart-tree daemon (Linux: systemd, macOS: launchctl, Windows: Task Scheduler)
     #[command(subcommand)]

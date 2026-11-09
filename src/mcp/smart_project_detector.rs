@@ -638,17 +638,24 @@ pub fn inspect_directory_ternary(dir: &Path) -> TernaryProjectDecision {
     }
     sample_names.sort();
 
+    // Check if any ancestor up to 6 levels up is already a Git repository
+    let ancestor_has_git = dir
+        .ancestors()
+        .skip(1)
+        .take(6)
+        .any(|anc| anc.join(".git").exists());
+
     // Check if an ancestor (1 or 2 levels up) is already a Git repo or manifest project
-    let ancestor_is_repo = [dir.parent(), dir.parent().and_then(|p| p.parent())]
-        .into_iter()
-        .flatten()
-        .any(|anc| {
-            anc.join(".git").exists()
-                || anc.join("Cargo.toml").is_file()
-                || anc.join("package.json").is_file()
-                || anc.join("pyproject.toml").is_file()
-                || anc.join("go.mod").is_file()
-        });
+    let ancestor_is_repo = ancestor_has_git
+        || [dir.parent(), dir.parent().and_then(|p| p.parent())]
+            .into_iter()
+            .flatten()
+            .any(|anc| {
+                anc.join("Cargo.toml").is_file()
+                    || anc.join("package.json").is_file()
+                    || anc.join("pyproject.toml").is_file()
+                    || anc.join("go.mod").is_file()
+            });
 
     let is_structural_subdir = is_structural_subdir_name(dir_name);
 
@@ -794,9 +801,10 @@ pub fn inspect_directory_ternary(dir: &Path) -> TernaryProjectDecision {
     }
 
     // Inside an existing Git repo or manifest workspace, only treat subdirectories as separate
-    // projects if they have their own .git, their own package manifest, their own .obsidian vault,
-    // or an explicit organizational hub parent (like `office/atlanta`).
-    let blocked_by_ancestor_repo = ancestor_is_repo && !has_own_strong_marker && !is_org_hub_parent;
+    // projects if they have their own .git or .obsidian vault (when inside an ancestor .git repo),
+    // or their own manifest / organizational hub parent (when not inside an ancestor .git repo).
+    let blocked_by_ancestor_repo = (ancestor_has_git && !has_git && !has_obsidian_vault)
+        || (ancestor_is_repo && !has_own_strong_marker && !is_org_hub_parent);
 
     let is_project = best_score_q8 >= THRESHOLD_Q8 && !blocked_by_ancestor_repo;
     if !is_project {
@@ -901,43 +909,75 @@ pub fn evaluate_directory_as_project_ternary(dir: &Path) -> Option<TernaryProjec
     }
 }
 
-/// Walk `root` up to `max_depth` and return all directories that the built-in SPQT Base-243
-/// ternary model classifies as projects, skipping any folder where Aye is told not to look.
+/// Walk `root` up to `max_depth` with bounded directory sampling and parallel Rayon worker threads,
+/// returning directories that the built-in SPQT Base-243 ternary model classifies as projects
+/// while skipping any folder where Aye is told not to look.
 pub fn discover_projects_ternary_in_tree(
     root: &Path,
     max_depth: usize,
 ) -> Vec<(PathBuf, TernaryProjectDecision)> {
+    use rayon::prelude::*;
+    use std::collections::VecDeque;
+
+    const MAX_DIRS_PER_LEVEL: usize = 48;
+    const MAX_CANDIDATE_DIRS: usize = 96;
+    const MAX_DISCOVERED_PROJECTS: usize = 24;
+
     if !root.is_dir() || !is_aye_allowed_to_look(root) {
         return Vec::new();
     }
 
-    let mut out = Vec::new();
-    let walker = walkdir::WalkDir::new(root)
-        .max_depth(max_depth)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| {
-            if !e.file_type().is_dir() {
-                return false;
-            }
-            if e.depth() > 0 {
-                let name = e.file_name().to_string_lossy();
-                if name.starts_with('.') {
-                    return false;
-                }
-            }
-            is_aye_allowed_to_look(e.path())
-        });
+    let mut candidates = Vec::with_capacity(32);
+    let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::new();
+    queue.push_back((root.to_path_buf(), 0));
 
-    for entry in walker.flatten() {
-        if !entry.file_type().is_dir() {
+    while let Some((curr, depth)) = queue.pop_front() {
+        candidates.push(curr.clone());
+        if candidates.len() >= MAX_CANDIDATE_DIRS || depth >= max_depth {
             continue;
         }
-        if let Some(decision) = evaluate_directory_as_project_ternary(entry.path()) {
-            out.push((entry.path().to_path_buf(), decision));
+        // Do not descend into subdirectories of a folder that is already a Git repo or Obsidian vault
+        if curr.join(".git").exists() || curr.join(".obsidian").is_dir() {
+            continue;
+        }
+
+        let Ok(rd) = fs::read_dir(&curr) else {
+            continue;
+        };
+        let mut subdirs = Vec::new();
+        for entry in rd.flatten() {
+            let Ok(ft) = entry.file_type() else {
+                continue;
+            };
+            if !ft.is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') || is_structural_subdir_name(&name) {
+                continue;
+            }
+            let path = entry.path();
+            if is_aye_allowed_to_look(&path) {
+                subdirs.push(path);
+                if subdirs.len() >= MAX_DIRS_PER_LEVEL {
+                    break;
+                }
+            }
+        }
+        subdirs.sort();
+        for sub in subdirs {
+            if candidates.len() + queue.len() >= MAX_CANDIDATE_DIRS {
+                break;
+            }
+            queue.push_back((sub, depth + 1));
         }
     }
 
+    let mut out: Vec<(PathBuf, TernaryProjectDecision)> = candidates
+        .into_par_iter()
+        .filter_map(|dir| evaluate_directory_as_project_ternary(&dir).map(|dec| (dir, dec)))
+        .collect();
+    out.truncate(MAX_DISCOVERED_PROJECTS);
     out
 }
 

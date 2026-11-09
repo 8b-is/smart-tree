@@ -12,7 +12,7 @@ import subprocess
 import tarfile
 import tomllib
 
-BINARIES = ("st", "std", "m8", "n8x")
+BINARIES = ("st", "m8", "n8x")
 ORIGIN = "https://i1.is/releases/smart-tree"
 
 
