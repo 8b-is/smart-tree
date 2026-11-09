@@ -21,8 +21,8 @@ pub struct CavemanProvider {
 
 impl CavemanProvider {
     pub fn new() -> Self {
-        let base_url = std::env::var("CAVEMAN_BASE_URL")
-            .unwrap_or_else(|_| DEFAULT_CAVEMAN_URL.to_string());
+        let base_url =
+            std::env::var("CAVEMAN_BASE_URL").unwrap_or_else(|_| DEFAULT_CAVEMAN_URL.to_string());
         let api_key = std::env::var("CAVEMAN_AUTH_TOKEN")
             .or_else(|_| std::env::var("ANTHROPIC_API_KEY"))
             .or_else(|_| std::env::var("OPENAI_API_KEY"))
@@ -143,7 +143,10 @@ struct CavemanUsagePayload {
 #[async_trait]
 impl LlmProvider for CavemanProvider {
     async fn complete(&self, request: LlmRequest) -> Result<LlmResponse> {
-        let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        );
 
         let mut req_builder = self.client.post(&url).json(&CavemanChatRequest {
             model: &request.model,

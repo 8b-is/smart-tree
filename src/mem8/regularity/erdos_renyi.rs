@@ -144,6 +144,16 @@ pub struct ErdosRenyiSecurityReport {
     pub spectral_radius_lambda1: f64,
     /// Füredi–Komlós expected random spectral radius $\max(c, \sqrt{\Delta_{\max}})$
     pub expected_random_lambda1: f64,
+    /// Vertex-Duplication Shadow Graph $D(G)$ Golden-Ratio ($\varphi = \frac{1+\sqrt{5}}{2}$) top eigenvalue $\lambda_1(D(G)) = \varphi \cdot \lambda_1(A_{\text{shadow}})$ (`A_{D(G)} = [[1,1],[1,0]] ⊗ A`)
+    pub shadow_dg_phi_lambda1: f64,
+    /// Conjugate Fibonacci mirror eigenvalue $-\varphi^{-1} \cdot \lambda_1(A_{\text{shadow}})$ of $D(G)$
+    pub shadow_dg_conjugate_lambda: f64,
+    /// Mycielski construction $M(G_{\text{shadow}})$ vertex count $2|V_{\text{active}}| + 1$ ($\omega(M(G)) = \omega(G)$, $\chi(M(G)) = \chi(G) + 1$)
+    pub mycielski_vertices_2n_plus_1: usize,
+    /// Mycielski construction $M(G_{\text{shadow}})$ edge count $3|E_{\text{shadow}}| + |V_{\text{active}}|$
+    pub mycielski_edges_3m_plus_n: usize,
+    /// Kruskal–Katona / Sperner lower hypergraph shadow bound $|\partial \mathcal{H}|$ over anomalous component hyperedges
+    pub kruskal_katona_shadow_lower_bound: usize,
     /// Overall phase regime of the scanned dependency graph
     pub regime: PhaseRegime,
     /// Ranked list of anomalous dense cliques, C2 bridges, or cyclic hook injectors
@@ -247,6 +257,11 @@ pub fn scan_erdos_renyi_shadow_graph(
             critical_scale_n_two_thirds: (n as f64).powf(2.0 / 3.0),
             spectral_radius_lambda1: 0.0,
             expected_random_lambda1: 0.0,
+            shadow_dg_phi_lambda1: 0.0,
+            shadow_dg_conjugate_lambda: 0.0,
+            mycielski_vertices_2n_plus_1: 2 * n + 1,
+            mycielski_edges_3m_plus_n: n,
+            kruskal_katona_shadow_lower_bound: 0,
             regime: PhaseRegime::SubcriticalForest,
             anomalies: Vec::new(),
         };
@@ -521,6 +536,23 @@ pub fn scan_erdos_renyi_shadow_graph(
         )
     };
 
+    // Golden-Ratio φ = (1 + sqrt(5))/2 spectral scaling for D(G) vertex-duplication shadow graph:
+    // A_{D(G)} = [[1, 1], [1, 0]] ⊗ A => eigenvalues { φ * λ_k(G), -φ^{-1} * λ_k(G) }
+    let phi = (1.0_f64 + 5.0_f64.sqrt()) * 0.5;
+    let shadow_dg_phi_lambda1 = phi * spectral_radius_lambda1;
+    let shadow_dg_conjugate_lambda = -(spectral_radius_lambda1 / phi);
+    let mycielski_vertices_2n_plus_1 = 2 * active_n + 1;
+    let mycielski_edges_3m_plus_n = 3 * m_shadow + active_n;
+    // Kruskal–Katona / Sperner lower shadow bound over k-vertex anomalous component hyperedges
+    let kruskal_katona_shadow_lower_bound: usize = anomalies
+        .iter()
+        .map(|a| {
+            a.vertex_count
+                .saturating_mul(a.vertex_count.saturating_sub(1))
+                / 2
+        })
+        .sum();
+
     ErdosRenyiSecurityReport {
         num_vertices: n,
         num_edges: m,
@@ -542,6 +574,11 @@ pub fn scan_erdos_renyi_shadow_graph(
         critical_scale_n_two_thirds: critical_scale,
         spectral_radius_lambda1,
         expected_random_lambda1,
+        shadow_dg_phi_lambda1,
+        shadow_dg_conjugate_lambda,
+        mycielski_vertices_2n_plus_1,
+        mycielski_edges_3m_plus_n,
+        kruskal_katona_shadow_lower_bound,
         regime,
         anomalies,
     }

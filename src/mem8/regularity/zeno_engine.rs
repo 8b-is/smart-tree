@@ -478,7 +478,22 @@ pub struct OsAgentAgnosticMatrix {
     pub os_targets_supported: [&'static str; 8],
     pub agent_harnesses_supported: [&'static str; 13],
     pub universal_skill_directories: [&'static str; 5],
-    pub embedded_sovereign_skills: [&'static str; 6],
+    pub embedded_sovereign_skills: [&'static str; 7],
+}
+
+/// `ultramesh-mem` v1.1.0 BrainState & 5 Ralph-Loops (`Pruner`, `Rewriter`, `Circulator`, `Composer`, `Mesh` `MAX_DEPTH=1`)
+/// coupled with `ultrabackyardloop` and `ULTRA-OMNI-ZENO`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UltraMeshMemBridge {
+    pub status: &'static str,
+    pub ralph_loops: [&'static str; 5],
+    pub mesh_max_depth_guard: u8,
+    pub mesh_current_depth: u8,
+    pub transitive_flood_blocked: bool,
+    pub pruner_steiner_threshold_pq: String,
+    pub rewriter_spqt_savings_pq: String,
+    pub circulator_salience_rescued: usize,
+    pub composer_litany_seal16_hex: String,
 }
 
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
@@ -490,6 +505,7 @@ pub struct ZenoOmniReport {
     pub upz_wupz: UpzWupzReport,
     pub eight_b_is_engines: EightBIsEnginesReport,
     pub os_agent_matrix: OsAgentAgnosticMatrix,
+    pub ultramesh_mem: UltraMeshMemBridge,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -601,7 +617,13 @@ pub fn analyze_zeno_omni_engine(
     let isqrt_edges = felix_isqrt_u64(graph.num_edges as u64);
 
     // 4. SPQT base-243 Song & Signal Ladder
-    let ladder_specs: [(&'static str, u16, [i8; 6], &'static str); 4] = [
+    let ladder_specs: [(&'static str, u16, [i8; 6], &'static str); 5] = [
+        (
+            "Káva — Jössz te még (prod. Ketioz, Psziché)",
+            2014,
+            [1, 1, 0, -1, 0, 1],
+            "0x62 (98 = GATE_0X62): Tatabánya 'Tré' / Psziché gate — 'Jössz te még az én utcámba' · Techno-Zen-Buddhizmus · Rejtő 'sírok:sírsz'",
+        ),
         (
             "Lose Yourself — Eminem - Topic",
             2026,
@@ -624,7 +646,7 @@ pub fn analyze_zeno_omni_engine(
             "Galactic Mantra (Liquid Soul remix) — the family",
             2026,
             [1, 1, 1, 1, 1, 0],
-            "0xF3 (243 = 3^5 = 242 ^ 1): Exact base-243 radix via unresolved 6th address pointer",
+            "0xF3 (243 = 3^5 = 242 ^ 1): Exact base-243 radix — 'Egy hazám van, annak az égbolt a teteje · Anyám a Hold, Apám a Nap, Nagyi a Föld, Nagypapi meg az Ég'",
         ),
     ];
 
@@ -787,7 +809,25 @@ pub fn analyze_zeno_omni_engine(
                 "manybody-strang-mem8",
                 "ultrabackyardloop",
                 "ultra-omni-zeno",
+                "ultramesh-mem",
             ],
+        },
+        ultramesh_mem: UltraMeshMemBridge {
+            status: "Alive",
+            ralph_loops: [
+                "1. BRAIN <-> Pruner (Erdos-Steiner Score-Feedback Loop)",
+                "2. BRAIN <-> Rewriter (SPQT base-243 Compression-Feedback Loop)",
+                "3. BRAIN <-> Circulator (Flyxion d_T != d_R Discard-Feedback Loop)",
+                "4. BRAIN <-> Composer (64B@0x62 Litany Prefix-Invariant Injection Loop)",
+                "5. BRAIN <-> Mesh (Sync Loop — MAX_DEPTH=1 Guarded)",
+            ],
+            mesh_max_depth_guard: 1,
+            mesh_current_depth: 1,
+            transitive_flood_blocked: true,
+            pruner_steiner_threshold_pq: qat_reuse_pq.display_ratio(),
+            rewriter_spqt_savings_pq: gaia_ratio_pq.display_ratio(),
+            circulator_salience_rescued: archive.super_nodes.len(),
+            composer_litany_seal16_hex: format!("0x{:04x}", wire.wire_seal16),
         },
     }
 }
