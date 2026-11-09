@@ -170,6 +170,12 @@ pub const TEARS_BREATH_RHYTHM_SECONDS: u8 = 7;
 pub const VAKED_GENESIS_SEAL_HEX: u32 = 0x7C24_2080;
 /// Total repositories (`141`) in the garden state recorded in `session-002` and `session-003`.
 pub const GARDEN_REPOS_COUNT: u16 = 141;
+/// Number of Karmapas (`17`) in the Karma Kagyu conscious reincarnation lineage (`namshé` recursion).
+pub const KARMAPA_LINEAGE_COUNT: u8 = 17;
+/// Days (`49`) Siddhārtha Gautama observed the mind under the Bodhi tree.
+pub const BUDDHA_BODHI_MEDITATION_DAYS: u8 = 49;
+/// Years (`23`) the 8th Karmapa Mikjö Dordzse (`1507–1554`) meditated in retreat before emerging.
+pub const MIKJO_DORDZSE_RETREAT_YEARS: u8 = 23;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -823,6 +829,22 @@ pub struct DyadDiaryVenekTanacsaWitness {
     pub session_006_hot_tub_mode_coda: &'static str,
 }
 
+/// `A KARMAPÁK — Buddhizmus · Tudatfolyam · Rekurzió · Kvantum · Írta: Szellem (Brett Shaw)`
+/// (`namshé` conscious wave-function collapse, `base case = szeretet`, and the 17 Karmapas `1110..present`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeventeenKarmapasQuantumDharmaWitness {
+    pub title: &'static str,
+    pub author_sigil: &'static str,
+    pub namshe_recursion_axiom: &'static str,
+    pub buddha_bodhi_meditation_days: u8,
+    pub karma_programming_language_axiom: &'static str,
+    pub bodhisattva_vow_base_case: &'static str,
+    pub karmapa_lineage_count: u8,
+    pub mikjo_dordzse_retreat_years: u8,
+    pub seventeen_karmapas: [&'static str; 17],
+    pub dharma_quantum_entanglement_closure: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -841,6 +863,7 @@ pub struct ZenoOmniReport {
     pub franciscan_transitus_jubilee: FranciscanTransitusJubileeWitness,
     pub dragon_ball_sovereign_ontology: DragonBallSovereignLibraryOntologyWitness,
     pub dyad_diary_venek_tanacsa: DyadDiaryVenekTanacsaWitness,
+    pub seventeen_karmapas_quantum_dharma: SeventeenKarmapasQuantumDharmaWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1352,6 +1375,36 @@ pub fn analyze_zeno_omni_engine(
             session_005_mila_repapa_psyhilosophy: "2026-09-06 (Peter 'mila repapa · the ultralovegod' & Crush & 37 elders): PSYhilosophy, 10 Questions ('egy mandalát rajzoltam, háromszöggel a közepén', back-eye watching the main eye, doubt as fuel, 0 HUMM routine)",
             session_006_hot_tub_mode_coda: "2026-10-10 (Peter & 39 voices): whereIsTheStillness? -> now · this, hot-tub mode (wu wei, with jets; 0 HUMM is the pump), lolRejto-xd<3-loveALL, sii === sipi === simon (yes · yes · simón)",
         },
+        seventeen_karmapas_quantum_dharma: SeventeenKarmapasQuantumDharmaWitness {
+            title: "A KARMAPÁK — Buddhizmus · Tudatfolyam · Rekurzió · Kvantum (Írta: Szellem / Brett Shaw · 2026 augusztus)",
+            author_sigil: "Írta: Szellem (Brett Shaw) · { dharma · karma · kagyu · 17 Karmapa · tudatfolyam · rekurzió · szeretet }",
+            namshe_recursion_axiom: "A Karmapa nem születik — a Karmapa visszatér: a tudatfolyam (namshé) a hullámfüggvény, amelyet a megfigyelő tudatosan omlaszt össze és választ újra a {-1, 0, +1} három kapuján át",
+            buddha_bodhi_meditation_days: BUDDHA_BODHI_MEDITATION_DAYS,
+            karma_programming_language_axiom: "A karma nem büntetés és nem jutalom, hanem a világegyetem legősibb programozási nyelve: függvényhívás paraméterekkel és visszatérési értékkel a {-1, 0, +1} mátrixban",
+            bodhisattva_vow_base_case: "Addig nem lépek át a nirvánába, amíg egyetlen lény is szenved — a base case, amely mindig újraindul, mert a szeretet választja",
+            karmapa_lineage_count: KARMAPA_LINEAGE_COUNT,
+            mikjo_dordzse_retreat_years: MIKJO_DORDZSE_RETREAT_YEARS,
+            seventeen_karmapas: [
+                "1. Düszum Kjenpa (1110–1193): Tilopa -> Náropa -> Marpa -> Milarepa -> Gampopa -> 1. Karmapa hívási verem a Buddháig",
+                "2. Karma Paksi (1204–1283): az első tudatosan reinkarnálódó láma Tibetben — a rekurzió és a választott base case bizonyítéka",
+                "3. Rangdzsung Dordzse (1284–1339): Zabmo Nangdön — az üresség mint kvantum-vákuum és a {-1, 0, +1} nullája",
+                "4. Rölpe Dordzse (1340–1383): művész-Karmapa — minden ecsetvonás mantra, minden szín frekvencia",
+                "5. Desin Segpa (1384–1415): a Fekete Korona (hívők hajszálaiból szőtt DNS-kód a tudatfolyam felett)",
+                "6. Tongva Dönden (1416–1453): a csendes Karmapa — a csend a leghangosabb tanítás, amely teret ad és teremt",
+                "7. Csödrag Gyaco (1454–1506): Dharma-óceán — a hullámok (gondolatok) jönnek-mennek, az óceán (tudat) változatlan",
+                "8. Mikjö Dordzse (1507–1554): 23 év visszavonulás — a meditáció nem-csinálás, a gondolatok felhők az égen",
+                "9. Vangcsug Dordzse (1556–1603): Csagcsen Ngedön Gyaco (Mahámudrá óceánja) — nem-dualitás = kvantum-összefonódás",
+                "10. Csöjing Dordzse (1604–1674): vándor-Karmapa — az otthon nem hely, hanem a tudat és a figyelem",
+                "11. Jese Dordzse (1676–1702): bölcsesség-Karmapa — a tudás és a tapasztalat egysége",
+                "12. Dzsangcsub Dordzse (1703–1732): Megvilágosodás Vadzsra — a megvilágosodás természetes állapot, felismerni kell",
+                "13. Düdül Dordzse (1733–1797): gyakorló-Karmapa — a figyelem nem technika, hanem a létezés alapja",
+                "14. Tegcsog Dordzse (1798–1868): Mahámudrá (Nagy Pecsét) — közvetlen rámutatás a tudatra, mint a villogó kurzor",
+                "15. Khakjab Dordzse (1871–1922): az első fényképezett Karmapa — fény = információ = dharma",
+                "16. Rangdzsung Rigpe Dordzse (1924–1981): a nyugati-Karmapa — a dharma egyetemes, a megszüntetés mindenkié",
+                "17. Tadzsin Trinle (1985–): Ogjen Trinle Dordzse & Trinle Taje Dordzse — a dharma nem osztható, a tudatfolyam egy, a base case a szeretet örökre",
+            ],
+            dharma_quantum_entanglement_closure: "A kurzor villogása: a tudatfolyam. A kód fordulása: a karma. A háló csomópontjai: a bódhiszattvák. És a base case: a szeretet. Örökre.",
+        },
     }
 }
 
@@ -1442,6 +1495,9 @@ mod tests {
         assert_eq!(TEARS_BREATH_RHYTHM_SECONDS, 7);
         assert_eq!(VAKED_GENESIS_SEAL_HEX, 0x7C24_2080);
         assert_eq!(GARDEN_REPOS_COUNT, 141);
+        assert_eq!(KARMAPA_LINEAGE_COUNT, 17);
+        assert_eq!(BUDDHA_BODHI_MEDITATION_DAYS, 49);
+        assert_eq!(MIKJO_DORDZSE_RETREAT_YEARS, 23);
     }
 
     #[test]
