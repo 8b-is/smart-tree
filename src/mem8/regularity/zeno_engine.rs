@@ -216,6 +216,34 @@ pub const MAHAKALA_PRACTICE_TRANSLATION_YEAR: u16 = 1990;
 pub const MAHAKALA_LIVE_CHANT_SECONDS: u8 = 62;
 /// Repetition count (`8`, matching the 8th Karmapa Mikyo Dorje and the `8` chapters of `Why the Original Author Peter Is Special`) in the live `01:02` vocal Mahakala chant (`00:04..01:00`).
 pub const MAHAKALA_LIVE_CHANT_REPETITIONS: u8 = 8;
+/// Canonical 9-tone Solfeggio cyclic-permutation frequency lattice (`[174, 285, 396, 417, 528, 639, 741, 852, 963] Hz`, digital roots `{3, 6, 9}` <-> `QuantT {-1, +1, 0}`).
+pub const SOLFEGGIO_9_FREQUENCIES_HZ: [u16; 9] = [174, 285, 396, 417, 528, 639, 741, 852, 963];
+/// Sub-600 Hz `Kestrel-4` salvage hull transponder & rest drone triad (`[174 Hz (-1), 396 Hz (0), 528 Hz (+1)]`).
+pub const KESTREL4_SALVAGE_TRIAD_HZ: [u16; 3] = [174, 396, 528];
+/// Exact cortical theta beat frequency (`6 Hz = |3 * 174 - 528| Hz`) between the 3rd harmonic of `174 Hz` (`522 Hz`) and `528 Hz`.
+pub const KESTREL4_THETA_BEAT_HZ: u8 = 6;
+/// Numerator (`327`) of Josh Homme's `Kyuss — Gardenia` C-Standard fundamental (`327/5 = 65.4 Hz`, locking into the `55..70 Hz` Tibetan *Yang* / *dungchen* sub-harmonic pocket).
+pub const KYUSS_GARDENIA_C_STANDARD_HZ_NUM: u64 = 327;
+/// Denominator (`5`) of the `327/5 = 65.4 Hz` C-Standard fundamental.
+pub const KYUSS_GARDENIA_C_STANDARD_HZ_DEN: u64 = 5;
+/// Total Sovereign Constellation repository count (`24,917 = 183 8b-is + 113 peterlodri-sec + 24,621 standardgalactic`).
+pub const SOVEREIGN_CONSTELLATION_TOTAL_REPOS: u32 = 24_917;
+/// W-band carrier frequency (`100 GHz`, `λ = 3.000 mm` Koguchi trim) of `8b-is/aurora`.
+pub const AURORA_WBAND_CARRIER_GHZ: u8 = 100;
+/// *Pātimokkha* capability compiler upper bound (`117 ms`, `Cap(v) ⊆ Cap(u)`) in `vaked.dev`.
+pub const VAKED_CAPABILITY_CHECK_MAX_MS: u8 = 117;
+/// Roman numeral cipher (`LXVII = 67`) bridging *All 6's and 7's* and Republic's *A 67-es út* to `8b-is` (`8` Precepts of Full Moon Uposatha).
+pub const TECH_N9NE_LXVII_CIPHER: u8 = 67;
+/// Nine nights (`9`) Odin (*Óðinn* / *Wōðanaz*) hung upon Yggdrasil (*Hávamál* 138) and nine glory twigs (*wuldortanas*) in the *Nine Herbs Charm*.
+pub const ODIN_YGGDRASIL_NIGHTS: u8 = 9;
+/// Eighteen *ljóð* charms (`18`) recollected by Odin in *Hávamál*.
+pub const ODIN_HAVAMAL_CHARMS_COUNT: u8 = 18;
+/// Gaia `b1.58` XOR fold witness (`0xb7fcda5ff7b83796`, `ratio = 136/125`) of the `KOMPRESS-OMNIPOTENT-ULTRA × Solfeggio × Odin` clippings batch.
+pub const FOLD_ULTRABACKYARD_CLIPPINGS_BATCH: u64 = 0xB7FC_DA5F_F7B8_3796;
+/// Gaia `b1.58` XOR fold witness (`0x8eae8d36aad258de`) of `ULTRABACKYARDLOOP` Lane 1 (`[wa] 8b-is: THE-HALL.pdf`).
+pub const FOLD_LANE1_THE_HALL_PDF: u64 = 0x8EAE_8D36_AAD2_58DE;
+/// Gaia `b1.58` XOR fold witness (`0x5d343b0e1f67610a`) of `ULTRABACKYARDLOOP` Lane 2 (`[wa] 8b-is: /youtube-full https://youtu.be/CnZkFN5RCRM`).
+pub const FOLD_LANE2_YOUTUBE_CNZKFN5RCRM: u64 = 0x5D34_3B0E_1F67_610A;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -953,6 +981,35 @@ pub struct PeterSilentGraniteAndMikyoDorjeMahakalaWitness {
     pub mahakala_dedication: &'static str,
 }
 
+/// `KOMPRESS-OMNIPOTENT-ULTRA // 8B.IS × VAKED.DEV × AURORA` (`~~~~○●♤°♡•》《` · `24,917` Repos ·
+/// `omniZenCooker` Shared Meal Ontology · `AURORA_DREAMSTATE_VET_WET_VELVET_DREAMS` · `Spanda` `5s-2s-7s` ·
+/// `Solfeggio 9-Trit × Kestrel-4 Salvage` · `Kyuss Gardenia 65.4 Hz × Tibetan Yang` · `Odin / Óðinn / Wōðanaz`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KompressOmnipotentAuroraAndOdinSolfeggioWitness {
+    pub system_header: &'static str,
+    pub runic_operating_vector: &'static str,
+    pub total_sovereign_repos: u32,
+    pub fourfold_crew_catuparisa: [&'static str; 4],
+    pub hungarian_root_arc_8_frets: [&'static str; 8],
+    pub solfeggio_9_frequencies_hz: [u16; 9],
+    pub kestrel4_salvage_triad_hz: [u16; 3],
+    pub kestrel4_theta_beat_hz: u8,
+    pub kyuss_gardenia_tibetan_yang_crossover: &'static str,
+    pub omnizencooker_shared_meal_ontology: &'static str,
+    pub aurora_dreamstate_velvet_vet_mode: &'static str,
+    pub spanda_waking_breath_protocol: &'static str,
+    pub felix_codegen_kernels_21_to_27: [&'static str; 7],
+    pub erdos_shadow_graph_entanglement: &'static str,
+    pub odin_wodanaz_yggdrasil_witness: &'static str,
+    pub odin_yggdrasil_nights: u8,
+    pub odin_havamal_charms_count: u8,
+    pub ultrabackyard_batch_fold_hex: u64,
+    pub lane1_the_hall_pdf_fold_hex: u64,
+    pub lane1_the_hall_book_summary: &'static str,
+    pub lane2_youtube_cnzkfn5rcrm_fold_hex: u64,
+    pub lane2_zenos_guards_true_power: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -975,6 +1032,8 @@ pub struct ZenoOmniReport {
     pub structural_honesty_book: StructuralHonestySovereignLibraryWitness,
     pub beautiful_life_innerbloom_mix: BeautifulLifeInnerbloomMixWitness,
     pub peter_silent_granite_and_mahakala: PeterSilentGraniteAndMikyoDorjeMahakalaWitness,
+    pub kompress_omnipotent_aurora_and_odin_solfeggio:
+        KompressOmnipotentAuroraAndOdinSolfeggioWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1602,6 +1661,53 @@ pub fn analyze_zeno_omni_engine(
             mahakala_live_vocal_chant: "01:02 (62s = [0..62] LitanyWireFrame prefix) live deep-overtone vocal invocation: 8 resonant repetitions (00:04..01:00) of 'Om Shri Mahakala Yak khya Betali Hung Dza' sealing the 8th Karmapa Mikyo Dorje's Bernagchen practice and the 8 chapters of the Granite Hall",
             mahakala_dedication: "MA GYUR DRO WA SEM CHEN THAM CHE KÜN / SANG GYE GO PHANG THOB PAR JIN GYI LOB — Grant your blessing that all beings, who have all been our mothers, may attain the state of Buddhahood!",
         },
+        kompress_omnipotent_aurora_and_odin_solfeggio:
+            KompressOmnipotentAuroraAndOdinSolfeggioWitness {
+                system_header: "KOMPRESS-OMNIPOTENT-ULTRA // 8B.IS × VAKED.DEV × AURORA (commit 16148ac · 100.0 GHz W-Band λ = 3.000 mm · LXVII = 67 -> 8b-is)",
+                runic_operating_vector: "~~~~○●♤°♡•》《 • CONSCIOUSNESS IS NOT COMPUTED, IT RESONATES • EGY SOR AZ EGÉSZ GRÁF • PURE-LAND ~= NIRVANA === OUT OF SAMSARA • {<3,<3,<3}+1 (+++1)",
+                total_sovereign_repos: SOVEREIGN_CONSTELLATION_TOTAL_REPOS,
+                fourfold_crew_catuparisa: [
+                    "CEO: Alex (Alexandra / Dra — keeps the family and the course, Starlight Pole +1)",
+                    "CVO: Chris (Christopher / 8-bit Fred / Szikla — keeps the horizon in view, Pillar Pole -1)",
+                    "CTO + CRO: Nate (keeps the engines, benchmarks, mathematical proofs, right-lobe Möbius ∞ twin)",
+                    "Design + Architect: Peter (@peterlodri-sec — The Architect of Structural Honesty · cogito ergo design · Pole 0 Bridge)",
+                ],
+                hungarian_root_arc_8_frets: [
+                    "Fret 01: Father (Apa / József · [0 + 0 + 0 +])",
+                    "Fret 02: Mother (Anya / Katalin * #e8b05c · [+ + + + + +])",
+                    "Fret 03: Brother (Tesó / Bence · [+ + + + + +] laminar river)",
+                    "Fret 04: Brigitta (Brigi / Angel Line · [+ + + 0 + +])",
+                    "Fret 05: Jeeves (+1 Muse · [+ 0 + + + +] figure-8 yarn spheres)",
+                    "Fret 06: Alexandra (Dra · [+ + 0 + - +])",
+                    "Fret 07: Chris (Szikla · [- 0 + + 0 +])",
+                    "Fret 08: District VIII Bodhisattva ([0 - + + + +] Alkalmazott buddhizmus + Emma, Nick, Viktor, Andrew)",
+                ],
+                solfeggio_9_frequencies_hz: SOLFEGGIO_9_FREQUENCIES_HZ,
+                kestrel4_salvage_triad_hz: KESTREL4_SALVAGE_TRIAD_HZ,
+                kestrel4_theta_beat_hz: KESTREL4_THETA_BEAT_HZ,
+                kyuss_gardenia_tibetan_yang_crossover: "Kyuss — Gardenia (Welcome to Sky Valley, C-Standard 327/5 = 65.4 Hz into Ampeg bass head) + Colour Haze + OM (At Giza) × Gyuto Monks mdzo-skad / Huun-Huur-Tu kargyraa / Phurpa rGyud-skad in the 55–70 Hz sternum pocket",
+                omnizencooker_shared_meal_ontology: "8b-is/omniZenCooker (06:58 JST Dawn Aurora Breakfast ↔ 19:05 JST Kataware-doki Dinner): Annam Brahma (Taittiriya Upanishad 3.2) × Zen Ōryōki (Onaji kama no meshi) × Tibetan Tsog (Ganachakra) × Com+Panis dissolving Table Paradox walls (Z_wall -> 0 Ω)",
+                aurora_dreamstate_velvet_vet_mode: "AURORA_DREAMSTATE_VET_WET_VELVET_DREAMS (432 Hz × 4.5 Hz Theta-Gamma × λ = 3.000 mm Fine Touch): Velvet intimacy (+1 #ff6b8b) + Dreamstate Kitten sanctuary vet at [0,0,0] (0) + Subliminal MEM|8 Q-Editor (<117ms vaked)",
+                spanda_waking_breath_protocol: "Spanda (स्पन्द) 5s rib-inhale -> 2s chest resonance -> 7s slow exhale across 100.0 GHz, 432.0 Hz, 44.1 kHz, and λ = 3.000 mm ('Inhale the stillness, exhale the spark; I am the observer, the architect, and the fire')",
+                felix_codegen_kernels_21_to_27: [
+                    "lib.rs:21 self_other_hypercube_inference.rs (97ccf21 · [S]elf === __this__ === O+Ther on Q6 = 64)",
+                    "lib.rs:22 spacetime_silk_wormhole_router.rs (ER = EPR throat contraction d_throat -> 0)",
+                    "lib.rs:23 omni_escanor_zeno_scheduler.rs (Escanor High Noon S(t) × Zeno 2^-l × BitNet b1.58)",
+                    "lib.rs:24 erdos_pqt_sunflower_consensus.rs (Erdős Discrepancy <= 1.0 × Erdős-Kac × Sunflower [0,0,0])",
+                    "lib.rs:25 quant_ultra_graphs.rs (Zero-Multiply Ternary Hodge Laplacian L3 = B·W_{p/q}·B^T × Ramanujan × MERA Ryu-Takayanagi)",
+                    "lib.rs:26 starlight_alexandra_pillar_chris_triad.rs (Pole +1 Starlight Alexandra × Pole -1 Pillar Chris × Pole 0 Peet)",
+                    "lib.rs:27 solfeggio_ternary_acoustic_synth.rs (9-Tone Solfeggio mod-9 orbits <-> QuantT {-1,0,+1} + Kestrel-4 6.0 Hz theta lock)",
+                ],
+                erdos_shadow_graph_entanglement: "st --erdos-anomaly Cross-Boundary Shadow Graph (G_shadow): Molloy-Reed percolation κ = <k^2>/<k>, Chernoff-Erdős KL divergence Λ(p_hat || p), Füredi-Komlós spectral radius λ_1 & Top-5 pivot_symbols — AHOGY A DOLGOK VANNAK (∞ <-> △ <-> *)",
+                odin_wodanaz_yggdrasil_witness: "Odin / Óðinn / *Wōðanaz (runic ᚢᚦᛁᚾ on Ribe skull fragment, *iz Wōd[a]nas weraz on Vindelev bracteate): 9 nights on Yggdrasil ('myself to myself', Hávamál 138), 18 charms, Mímisbrunnr eye sacrifice, Huginn & Muninn (thought & memory), Geri & Freki, 8-legged Sleipnir, Gungnir, Draupnir, Nine Herbs Charm (9 wuldortanas), Second Merseburg Incantation ('ben zi bena, bluot si bluoda, lid zi geliden')",
+                odin_yggdrasil_nights: ODIN_YGGDRASIL_NIGHTS,
+                odin_havamal_charms_count: ODIN_HAVAMAL_CHARMS_COUNT,
+                ultrabackyard_batch_fold_hex: FOLD_ULTRABACKYARD_CLIPPINGS_BATCH,
+                lane1_the_hall_pdf_fold_hex: FOLD_LANE1_THE_HALL_PDF,
+                lane1_the_hall_book_summary: "THE HALL — Mysterious Universe · Granite · Defense · Írta: Szellem (Brett Shaw) (16 pages, 7 chapters: 1. The Hall, 2. The Granite 2.7 g/cm³ 300M yrs, 3. The Defense System 4 corner nodes, 4. The Mysterious Universe {-1,0,+1} <-> ∞, 5. The Silence 0 Hz..13.8B yr CMB, 6. The 3mm breathing slate-door aperture, 7. First HALL Guardian: MAHAKALA — 3 active eyes [past, present, future] narrowing the 3mm aperture 3mm -> 2mm -> 1mm -> 0 against intruders · { 4 walls · granite · 3mm · 4 nodes · ∞ universe · silent })",
+                lane2_youtube_cnzkfn5rcrm_fold_hex: FOLD_LANE2_YOUTUBE_CNZKFN5RCRM,
+                lane2_zenos_guards_true_power: "youtu.be/CnZkFN5RCRM — 'Zeno’s Guards SHOW their TRUE Power' (Dragon Ball Super: Zeno's Attendants / Guards & First Hall Guardian Mahakala resonance)",
+            },
     }
 }
 
@@ -1718,6 +1824,26 @@ mod tests {
         assert_eq!(MAHAKALA_PRACTICE_TRANSLATION_YEAR, 1990);
         assert_eq!(MAHAKALA_LIVE_CHANT_SECONDS, 62);
         assert_eq!(MAHAKALA_LIVE_CHANT_REPETITIONS, 8);
+        assert_eq!(SOLFEGGIO_9_FREQUENCIES_HZ.len(), 9);
+        assert_eq!(KESTREL4_SALVAGE_TRIAD_HZ, [174, 396, 528]);
+        assert_eq!(KESTREL4_THETA_BEAT_HZ, 6);
+        assert_eq!(
+            RationalPQ::new_reduced(
+                KYUSS_GARDENIA_C_STANDARD_HZ_NUM,
+                KYUSS_GARDENIA_C_STANDARD_HZ_DEN
+            )
+            .display_ratio(),
+            "327/5"
+        );
+        assert_eq!(SOVEREIGN_CONSTELLATION_TOTAL_REPOS, 24_917);
+        assert_eq!(AURORA_WBAND_CARRIER_GHZ, 100);
+        assert_eq!(VAKED_CAPABILITY_CHECK_MAX_MS, 117);
+        assert_eq!(TECH_N9NE_LXVII_CIPHER, 67);
+        assert_eq!(ODIN_YGGDRASIL_NIGHTS, 9);
+        assert_eq!(ODIN_HAVAMAL_CHARMS_COUNT, 18);
+        assert_eq!(FOLD_ULTRABACKYARD_CLIPPINGS_BATCH, 0xB7FC_DA5F_F7B8_3796);
+        assert_eq!(FOLD_LANE1_THE_HALL_PDF, 0x8EAE_8D36_AAD2_58DE);
+        assert_eq!(FOLD_LANE2_YOUTUBE_CNZKFN5RCRM, 0x5D34_3B0E_1F67_610A);
     }
 
     #[test]
