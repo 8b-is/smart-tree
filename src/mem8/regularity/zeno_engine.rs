@@ -75,6 +75,8 @@ pub const MULBERRY32_STEP_INC: u32 = 0x6D2B_79F5;
 pub const WORLD_CORE_SEED_8BIS: u32 = 0x3842_4953;
 /// `ultramesh-mem` Loop 5 (`BRAIN <-> Mesh`) transitive-flood depth guard (`MAX_DEPTH = 1`).
 pub const ULTRAMESH_MAX_DEPTH_GUARD: u8 = 1;
+/// Number of physical SBC / edge compute boards in the `CKSTV1` + ARM64/x86 hardware cluster (`10`).
+pub const PHYSICAL_EDGE_CLUSTER_BOARDS: u8 = 10;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -558,6 +560,20 @@ pub struct UltraMeshMemBridge {
     pub composer_litany_seal16_hex: String,
 }
 
+/// Whiteboard witness for `SIMULATION "THEORY" — book 8b.is: GÉPEK URA - COSMIC GAME II`
+/// and the 10-board physical SBC/edge compute cluster (`CKSTV1`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulationTheoryWhiteboardWitness {
+    pub book_title: &'static str,
+    pub pjl_triad_sigil: &'static str,
+    pub bell_entanglement_axiom: &'static str,
+    pub non_local_bell_bridge: &'static str,
+    pub as_things_are_axiom: &'static str,
+    pub universe_lod_shader: &'static str,
+    pub zero_float_pq_timeline_law: &'static str,
+    pub physical_edge_cluster_boards: u8,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -568,6 +584,7 @@ pub struct ZenoOmniReport {
     pub eight_b_is_engines: EightBIsEnginesReport,
     pub os_agent_matrix: OsAgentAgnosticMatrix,
     pub ultramesh_mem: UltraMeshMemBridge,
+    pub simulation_whiteboard: SimulationTheoryWhiteboardWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -896,6 +913,16 @@ pub fn analyze_zeno_omni_engine(
             rewriter_spqt_savings_pq: gaia_ratio_pq.display_ratio(),
             circulator_salience_rescued: archive.super_nodes.len(),
             composer_litany_seal16_hex: format!("0x{:04x}", wire.wire_seal16),
+        },
+        simulation_whiteboard: SimulationTheoryWhiteboardWitness {
+            book_title: "book 8b.is: GÉPEK URA - COSMIC GAME II (SIMULATION 'THEORY')",
+            pjl_triad_sigil: "P.J.L aka Peter :: ∞ <-> △ <-> * (math · architecture · human)",
+            bell_entanglement_axiom: "|Ψ_AB⟩ != |Ψ_A⟩ ⊗ |Ψ_B⟩ (enthea + MEM|8 + Flyxion Salience d_T != d_R)",
+            non_local_bell_bridge: "Tatabánya Combinatorics +++ Chesapeake WaveMemory (Peter [001] non-local Bell state bridge connecting two worlds)",
+            as_things_are_axiom: "AHOGY A DOLGOK VANNAK = AS THINGS ARE (--erdos-anomaly structural honesty -> visible G_shadow)",
+            universe_lod_shader: "Szemerédi Regularity as Universe LOD Shader (O(n^2) -> SuperNodeCentroidPod [SNCP] + Wavefields via felix_dot64_f32)",
+            zero_float_pq_timeline_law: "p/q - Q16.16 + Z_{2^32} Laser Phoenix Lattice Locking ((a+b)+c == a+(b+c), bit-exact reversible timelines)",
+            physical_edge_cluster_boards: PHYSICAL_EDGE_CLUSTER_BOARDS,
         },
     }
 }
