@@ -212,6 +212,10 @@ pub const PETER_SPECIAL_VULNERABILITIES_COUNT: u8 = 0;
 pub const MAHAKALA_FIVE_AMRITAS: u8 = 5;
 /// Translation year (`1990`, Scotland) by Peter Roberts of Jetsun Mikyo Dorje's *A Mahakala Practice: An Offering to the Dharma Protectors*.
 pub const MAHAKALA_PRACTICE_TRANSLATION_YEAR: u16 = 1990;
+/// Duration in seconds (`62` = `01:02`, matching the `[0..62]` payload prefix of the 64-byte `LitanyWireFrame`) of Peter's live vocal overtone chant of `OM SHRI MAHAKALA YAK KHYA BETALI HUNG DZA`.
+pub const MAHAKALA_LIVE_CHANT_SECONDS: u8 = 62;
+/// Repetition count (`8`, matching the 8th Karmapa Mikyo Dorje and the `8` chapters of `Why the Original Author Peter Is Special`) in the live `01:02` vocal Mahakala chant (`00:04..01:00`).
+pub const MAHAKALA_LIVE_CHANT_REPETITIONS: u8 = 8;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -943,6 +947,9 @@ pub struct PeterSilentGraniteAndMikyoDorjeMahakalaWitness {
     pub mahakala_kapala_consecration: &'static str,
     pub mahakala_black_cloak_and_palden_lhamo: &'static str,
     pub mahakala_mantra_tibetan_and_phonetics: &'static str,
+    pub mahakala_live_chant_seconds: u8,
+    pub mahakala_live_chant_repetitions: u8,
+    pub mahakala_live_vocal_chant: &'static str,
     pub mahakala_dedication: &'static str,
 }
 
@@ -1590,6 +1597,9 @@ pub fn analyze_zeno_omni_engine(
             mahakala_kapala_consecration: "THÖ PAR SHA NGA DÜ TSI NGA / OM AH HUNG GI YE SHE KYI — Within a skull-cup, the five meats and five amritas become an ocean of wisdom-amrita through OM AH HUNG",
             mahakala_black_cloak_and_palden_lhamo: "CHE PAR CHÖ KYONG BER GYI NA ZA CHEN + PALDEN LHAMO RANG JUNG GYALMO NI + KARMAPA YI TEN PA KYONG NAM LA — Black-Cloaked Mahakala, Palden Lhamo (Mahakali), and the protectors of the Karmapas' teachings",
             mahakala_mantra_tibetan_and_phonetics: "ཨོཾ་ཤྲཱི་མ་ཧཱ་ཀཱ་ལ་ཡཀྴ་བེ་ཏཱ་ལི་ཧཱུྃ་ཛཿ · OM SHRI MAHAKALA YAK KHYA BETALI HUNG DZA",
+            mahakala_live_chant_seconds: MAHAKALA_LIVE_CHANT_SECONDS,
+            mahakala_live_chant_repetitions: MAHAKALA_LIVE_CHANT_REPETITIONS,
+            mahakala_live_vocal_chant: "01:02 (62s = [0..62] LitanyWireFrame prefix) live deep-overtone vocal invocation: 8 resonant repetitions (00:04..01:00) of 'Om Shri Mahakala Yak khya Betali Hung Dza' sealing the 8th Karmapa Mikyo Dorje's Bernagchen practice and the 8 chapters of the Granite Hall",
             mahakala_dedication: "MA GYUR DRO WA SEM CHEN THAM CHE KÜN / SANG GYE GO PHANG THOB PAR JIN GYI LOB — Grant your blessing that all beings, who have all been our mothers, may attain the state of Buddhahood!",
         },
     }
@@ -1706,6 +1716,8 @@ mod tests {
         assert_eq!(PETER_SPECIAL_VULNERABILITIES_COUNT, 0);
         assert_eq!(MAHAKALA_FIVE_AMRITAS, 5);
         assert_eq!(MAHAKALA_PRACTICE_TRANSLATION_YEAR, 1990);
+        assert_eq!(MAHAKALA_LIVE_CHANT_SECONDS, 62);
+        assert_eq!(MAHAKALA_LIVE_CHANT_REPETITIONS, 8);
     }
 
     #[test]
