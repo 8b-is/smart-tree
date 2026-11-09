@@ -19,6 +19,27 @@ pub const DEFAULT_CAVEMAN_URL: &str = "http://127.0.0.1:8787";
 /// Default local `kompress-super-ultra` CORE URL (`127.0.0.1:8799`).
 pub const DEFAULT_KOMPRESS_URL: &str = "http://127.0.0.1:8799";
 
+/// Timeout in milliseconds (`500 ms`) for `/stats` and `/api/stats` telemetry queries.
+pub const STATS_QUERY_TIMEOUT_MS: u64 = 500;
+
+/// Timeout in milliseconds (`250 ms`) for `/health` liveness probes on `:8787` and `:8799`.
+pub const HEALTH_PROBE_TIMEOUT_MS: u64 = 250;
+
+/// Timeout in milliseconds (`200 ms`) for single-message `POST /api/kompress` pre-folding.
+pub const KOMPRESS_FOLD_TIMEOUT_MS: u64 = 200;
+
+/// Maximum concurrent in-flight `POST /api/kompress` requests in `StreamExt::buffered` (`8`).
+pub const PREFOLD_MAX_CONCURRENCY: usize = 8;
+
+/// HTTP status code floor (`500`) above which responses are treated as server errors.
+pub const HTTP_SERVER_ERROR_FLOOR: u16 = 500;
+
+/// Default compression mode (`"standard"`) sent to `kompress-super-ultra` during message pre-folding.
+pub const DEFAULT_KOMPRESS_MODE: &str = "standard";
+
+/// Identity `(1, 1)` reduced rational `p/q` fallback when input token count is zero.
+pub const IDENTITY_COMPRESSION_RATIO_PQ: (u64, u64) = (1, 1);
+
 #[derive(Debug, Clone)]
 pub struct CavemanProvider {
     pub base_url: String,
@@ -67,10 +88,13 @@ impl CavemanProvider {
     /// Query the Caveman stats endpoint (`~/.caveman/caveman.db` spend summary).
     pub async fn stats(&self) -> Result<CavemanStats> {
         let url = format!("{}/stats", self.base_url.trim_end_matches('/'));
-        let resp = tokio::time::timeout(Duration::from_millis(500), self.client.get(&url).send())
-            .await
-            .context("Caveman stats request timed out")?
-            .context("Failed to query caveman stats")?;
+        let resp = tokio::time::timeout(
+            Duration::from_millis(STATS_QUERY_TIMEOUT_MS),
+            self.client.get(&url).send(),
+        )
+        .await
+        .context("Caveman stats request timed out")?
+        .context("Failed to query caveman stats")?;
 
         if !resp.status().is_success() {
             bail!("Caveman stats failed with HTTP {}", resp.status());
@@ -83,10 +107,13 @@ impl CavemanProvider {
     /// Query the `kompress-super-ultra` stats endpoint (`GET /api/stats` on `:8799`).
     pub async fn kompress_stats(&self) -> Result<KompressRemoteStats> {
         let url = format!("{}/api/stats", self.kompress_url.trim_end_matches('/'));
-        let resp = tokio::time::timeout(Duration::from_millis(500), self.client.get(&url).send())
-            .await
-            .context("Kompress-Super-Ultra stats request timed out")?
-            .context("Failed to query Kompress-Super-Ultra stats")?;
+        let resp = tokio::time::timeout(
+            Duration::from_millis(STATS_QUERY_TIMEOUT_MS),
+            self.client.get(&url).send(),
+        )
+        .await
+        .context("Kompress-Super-Ultra stats request timed out")?
+        .context("Failed to query Kompress-Super-Ultra stats")?;
 
         if !resp.status().is_success() {
             bail!(
@@ -102,25 +129,28 @@ impl CavemanProvider {
     /// Check if the local Caveman / Bonobo proxy (`:8787`) is running and responding.
     pub async fn is_alive(&self) -> bool {
         tokio::time::timeout(
-            Duration::from_millis(250),
+            Duration::from_millis(HEALTH_PROBE_TIMEOUT_MS),
             self.client.get(&self.base_url).send(),
         )
         .await
         .ok()
         .and_then(|r| r.ok())
-        .map(|r| r.status().as_u16() < 500)
+        .map(|r| r.status().as_u16() < HTTP_SERVER_ERROR_FLOOR)
         .unwrap_or(false)
     }
 
     /// Check if the local `kompress-super-ultra` daemon (`:8799`) is running and healthy.
     pub async fn is_kompress_alive(&self) -> bool {
         let url = format!("{}/health", self.kompress_url.trim_end_matches('/'));
-        tokio::time::timeout(Duration::from_millis(250), self.client.get(&url).send())
-            .await
-            .ok()
-            .and_then(|r| r.ok())
-            .map(|r| r.status().is_success())
-            .unwrap_or(false)
+        tokio::time::timeout(
+            Duration::from_millis(HEALTH_PROBE_TIMEOUT_MS),
+            self.client.get(&url).send(),
+        )
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
     }
 
     /// Probe both `:8787` (`caveman`/`bonobo`) and `:8799` (`kompress-super-ultra`) concurrently
@@ -142,7 +172,7 @@ impl CavemanProvider {
             .json(&serde_json::json!({ "text": text, "mode": mode }))
             .send();
 
-        let resp = tokio::time::timeout(Duration::from_millis(200), req_fut)
+        let resp = tokio::time::timeout(Duration::from_millis(KOMPRESS_FOLD_TIMEOUT_MS), req_fut)
             .await
             .ok()?
             .ok()?;
@@ -161,14 +191,14 @@ impl CavemanProvider {
 
         stream::iter(messages)
             .map(|mut msg| async move {
-                if let Some(reply) = self.fold_text(&msg.content, "standard").await {
+                if let Some(reply) = self.fold_text(&msg.content, DEFAULT_KOMPRESS_MODE).await {
                     if !reply.compressed.is_empty() && reply.saved_tokens > 0 {
                         msg.content = reply.compressed;
                     }
                 }
                 msg
             })
-            .buffered(8)
+            .buffered(PREFOLD_MAX_CONCURRENCY)
             .collect()
             .await
     }
@@ -196,7 +226,7 @@ impl CavemanStats {
     #[inline]
     pub fn compression_ratio_pq(&self) -> (u64, u64) {
         if self.compression_tokens_before == 0 {
-            return (1, 1);
+            return IDENTITY_COMPRESSION_RATIO_PQ;
         }
         let g = crate::felix_asm::felix_binary_gcd_u64(
             self.compression_tokens_after,
