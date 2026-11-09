@@ -10,6 +10,27 @@ use super::erdos_steiner::ErdosSteinerSlice;
 use super::mmap_view::ZeroCopyMem8Book;
 use super::wire::decode_t8r_exceptions_leb128;
 
+/// SplitMix64 golden-ratio Weyl increment (`0x9E3779B97F4A7C15`).
+pub const SPLITMIX64_GOLDEN_GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
+/// Non-zero fallback seed if `seed_from_mem8_header` hashes to zero (`0xCAFEBABEDEADBEEF`).
+pub const SPLITMIX64_FALLBACK_SEED: u64 = 0xCAFE_BABE_DEAD_BEEF;
+/// Minimum worktree colors $C \ge 2$ required for non-trivial LLL coloring (`2`).
+pub const MIN_WORKTREE_COLORS: u16 = 2;
+/// Maximum worktree colors $C$ considered during LLL auto-scaling (`16`).
+pub const MAX_AUTO_SCALE_WORKTREES: u16 = 16;
+/// Multiplier on $\lceil \ln |\mathcal{U}| \rceil$ for Moser Witness Tree depth cap (`6`).
+pub const WITNESS_HEIGHT_LOG_FACTOR: u32 = 6;
+/// Minimum Moser Witness Tree height cap before bottleneck isolation (`32`).
+pub const MIN_WITNESS_HEIGHT_CAP: u32 = 32;
+/// Preallocated capacity for each round's Maximal Independent Set batch (`64`).
+pub const INDEPENDENT_BATCH_CAPACITY: usize = 64;
+/// Preallocated capacity for local neighborhood $\Gamma^+(B)$ re-evaluation (`128`).
+pub const AFFECTED_EVENTS_CAPACITY: usize = 128;
+/// Maximum witness bottleneck events reported when LLL phase threshold is exceeded (`8`).
+pub const MAX_WITNESS_BOTTLENECK_EVENTS: usize = 8;
+/// Superscalar lane width of `felix_splitmix64_x4` (`4`).
+pub const SPLITMIX64_BATCH_LANES: usize = 4;
+
 /// Identifier for a refactorable unit (either a `ClusterId` in $R$ or an outlier `SymbolId` in $V_0$)
 pub type WorkUnitId = u32;
 /// Identifier for a "Bad Event" $B_e$ (merge/type/lock collision constraint)
@@ -147,7 +168,7 @@ impl LllHypergraph {
     /// Computes the prior probability $p(B_e) = \mathbb{P}[B_e]$ under uniform $C$-coloring.
     #[inline]
     pub fn event_probability(&self, ev: BadEventId, num_colors: u16) -> f64 {
-        let c = (num_colors.max(2)) as f64;
+        let c = (num_colors.max(MIN_WORKTREE_COLORS)) as f64;
         let r = self.event_scope(ev).len();
         if r <= 1 {
             return 0.0;
@@ -238,9 +259,9 @@ impl LllHypergraph {
 pub fn seed_from_mem8_header(model_digest: &[u8; 32], git_oid: u64) -> u64 {
     let lo = u64::from_le_bytes(model_digest[0..8].try_into().unwrap_or([0; 8]));
     let hi = u64::from_le_bytes(model_digest[8..16].try_into().unwrap_or([0; 8]));
-    let s = lo ^ hi.rotate_left(31) ^ git_oid ^ 0x9E37_79B9_7F4A_7C15;
+    let s = lo ^ hi.rotate_left(31) ^ git_oid ^ SPLITMIX64_GOLDEN_GAMMA;
     if s == 0 {
-        0xCAFE_BABE_DEAD_BEEF
+        SPLITMIX64_FALLBACK_SEED
     } else {
         s
     }
@@ -268,17 +289,17 @@ pub fn solve_moser_tardos_auto_scale(
 ) -> MoserTardosSchedule {
     let n = hg.num_units;
     let m = hg.num_events;
-    let mut c = initial_worktrees.max(2);
+    let mut c = initial_worktrees.max(MIN_WORKTREE_COLORS);
 
     // 1. Check LLL sufficient criterion & optionally scale worktree count C until e * p * (d + 1) <= 1
     let (mut lll_ok, max_dep_degree) = hg.check_lll_criterion(c);
-    while !lll_ok && auto_scale_colors && c < 16 {
+    while !lll_ok && auto_scale_colors && c < MAX_AUTO_SCALE_WORKTREES {
         c += 1;
         let (ok, _) = hg.check_lll_criterion(c);
         lll_ok = ok;
     }
 
-    let mut rng = SplitMix64::new(seed ^ 0x9E37_79B9_7F4A_7C15);
+    let mut rng = SplitMix64::new(seed ^ SPLITMIX64_GOLDEN_GAMMA);
 
     // 2. Initial independent uniform product distribution X_u ~ Uniform(0..C)
     let mut coloring: Vec<WorktreeColor> = (0..n).map(|_| rng.next_color(c)).collect();
@@ -317,11 +338,12 @@ pub fn solve_moser_tardos_auto_scale(
     let mut unit_resample_depth = vec![0u32; n];
     let mut event_witness_height = vec![0u32; m];
     let mut max_witness_tree_depth = 0u32;
-    let witness_height_cap = ((n as f64).ln().ceil() as u32 * 6).max(32);
+    let witness_height_cap =
+        ((n as f64).ln().ceil() as u32 * WITNESS_HEIGHT_LOG_FACTOR).max(MIN_WITNESS_HEIGHT_CAP);
 
     let mut unit_locked_in_round = vec![false; n];
-    let mut independent_batch: Vec<BadEventId> = Vec::with_capacity(64);
-    let mut affected_events: Vec<BadEventId> = Vec::with_capacity(128);
+    let mut independent_batch: Vec<BadEventId> = Vec::with_capacity(INDEPENDENT_BATCH_CAPACITY);
+    let mut affected_events: Vec<BadEventId> = Vec::with_capacity(AFFECTED_EVENTS_CAPACITY);
 
     let mut total_resamples = 0usize;
     let mut parallel_rounds = 0usize;
@@ -416,7 +438,7 @@ pub fn solve_moser_tardos_auto_scale(
     if !remaining_conflicts.is_empty() {
         remaining_conflicts
             .sort_unstable_by_key(|&ev| std::cmp::Reverse(event_witness_height[ev as usize]));
-        remaining_conflicts.truncate(8);
+        remaining_conflicts.truncate(MAX_WITNESS_BOTTLENECK_EVENTS);
     }
 
     let mut worktree_buckets = vec![Vec::new(); c as usize];
@@ -507,7 +529,7 @@ pub fn build_hypergraph_from_steiner_slices(
 /// Ultra-fast 4-lane superscalar SplitMix64 PRNG (`felix_asm::felix_splitmix64_x4`, zero heap state)
 struct SplitMix64 {
     state: u64,
-    batch: [u64; 4],
+    batch: [u64; SPLITMIX64_BATCH_LANES],
     cursor: usize,
 }
 
@@ -516,14 +538,14 @@ impl SplitMix64 {
     const fn new(seed: u64) -> Self {
         Self {
             state: seed,
-            batch: [0; 4],
-            cursor: 4,
+            batch: [0; SPLITMIX64_BATCH_LANES],
+            cursor: SPLITMIX64_BATCH_LANES,
         }
     }
 
     #[inline(always)]
     fn next_u64(&mut self) -> u64 {
-        if self.cursor >= 4 {
+        if self.cursor >= SPLITMIX64_BATCH_LANES {
             self.batch = crate::felix_asm::felix_splitmix64_x4(&mut self.state);
             self.cursor = 0;
         }
