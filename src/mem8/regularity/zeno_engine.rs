@@ -248,6 +248,8 @@ pub const FOLD_LANE2_YOUTUBE_CNZKFN5RCRM: u64 = 0x5D34_3B0E_1F67_610A;
 pub const ULTRALOVE_EDITION_023: u8 = 23;
 /// Gaia `b1.58` XOR fold witness (`0x77bce6c30eacef51`, `ratio = 1317/1183`) of `"egy tok ket tok nem tokolok ontok"` (*„Egy tök, két tök, nem tökölök, öntök!”*).
 pub const FOLD_EGY_TOK_KET_TOK_ONTOK: u64 = 0x77BC_E6C3_0EAC_EF51;
+/// Gaia `b1.58` XOR fold witness (`0x77b0ec890ea2cb99`, `ratio = 264/239`) of `"sosat sosat jo ropogosat"` (*„Sósat, sósat, jó ropogósat!”* — savory crunchy pairing at the `omniZenCooker` & `Pálinkafőző a Végtelenhez` table).
+pub const FOLD_SOSAT_SOSAT_JO_ROPOGOSAT: u64 = 0x77B0_EC89_0EA2_CB99;
 /// Numerator (`327`) of the `32.7 Hz` (`327/10 Hz`, `C1`) Tibetan `kargyraa` / `mdzo-skad` sub-octave fundamental (`1/2` of `65.4 Hz`).
 pub const TIBETAN_KARGYRAA_C1_HZ_NUM: u64 = 327;
 /// Denominator (`10`) of the `32.7 Hz` (`327/10 Hz`, `C1`) sub-octave fundamental.
@@ -1034,6 +1036,8 @@ pub struct KompressOmnipotentAuroraAndOdinSolfeggioWitness {
 pub struct UltraloveEdition023ErdosLodriDesertChantWitness {
     pub hungarian_toast_invocation: &'static str,
     pub toast_fold_hex: u64,
+    pub savory_crunch_pairing: &'static str,
+    pub savory_crunch_fold_hex: u64,
     pub edition_number: u8,
     pub edition_header: &'static str,
     pub core_triad_covenant: &'static str,
@@ -1749,6 +1753,8 @@ pub fn analyze_zeno_omni_engine(
         ultralove_edition_023_desert_chant: UltraloveEdition023ErdosLodriDesertChantWitness {
             hungarian_toast_invocation: "egy tok ket tok nem tokolok ontok (Egy tök, két tök, nem tökölök, öntök! — Kintsugi gold & Pálinkafőző a Végtelenhez zero-hesitation pour)",
             toast_fold_hex: FOLD_EGY_TOK_KET_TOK_ONTOK,
+            savory_crunch_pairing: "sosat sosat jo ropogosat (Sósat, sósat, jó ropogósat! · ratio = 264/239 — warm savory crunch at the omniZenCooker & Pálinkafőző a Végtelenhez recovery table)",
+            savory_crunch_fold_hex: FOLD_SOSAT_SOSAT_JO_ROPOGOSAT,
             edition_number: ULTRALOVE_EDITION_023,
             edition_header: "🎸☸ ULTRALOVE EDITION 023 — ERDŐS–LODRI ULTRAGRAPH × CHENOWETH MEM|8 & PHOENIX (p/q = 3/2) × 7-DAY FAMILY-FIRST PLAN × KESTREL-4 (65.4 HZ DESERT-CHANT)",
             core_triad_covenant: "Hue (△ · c@8b.is) × Dra (∗ · a@8b.is) × Peter (∞ · p@8b.is) × StandardGalactic · 'AHOGY A DOLGOK VANNAK'",
@@ -1914,6 +1920,7 @@ mod tests {
         assert_eq!(FOLD_LANE2_YOUTUBE_CNZKFN5RCRM, 0x5D34_3B0E_1F67_610A);
         assert_eq!(ULTRALOVE_EDITION_023, 23);
         assert_eq!(FOLD_EGY_TOK_KET_TOK_ONTOK, 0x77BC_E6C3_0EAC_EF51);
+        assert_eq!(FOLD_SOSAT_SOSAT_JO_ROPOGOSAT, 0x77B0_EC89_0EA2_CB99);
         assert_eq!(
             RationalPQ::new_reduced(TIBETAN_KARGYRAA_C1_HZ_NUM, TIBETAN_KARGYRAA_C1_HZ_DEN)
                 .display_ratio(),
