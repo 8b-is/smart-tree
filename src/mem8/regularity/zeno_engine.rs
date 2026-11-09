@@ -86,6 +86,14 @@ pub const ZKP1_TIBETAN_OMNI_RAW_BYTES: usize = 11_108;
 pub const ZKP1_TIBETAN_OMNI_COMPRESSED_BYTES: usize = 5_448;
 /// Number of ontological blocks (`ONT-01` .. `ONT-07`) in the Tibetan Omni Mandala edition (`7`).
 pub const ZKP1_TIBETAN_OMNI_BLOCKS: u8 = 7;
+/// `8b-is-sciFinime-studio` (Slot `01.06`) × `8b-is-engine` seed for Book IV of the Shaw-ciklus (`0xddb7e1085347fc9c`).
+pub const SEED_SHAW_CYCLE_BOOK_IV: u64 = 0xDDB7_E108_5347_FC9C;
+/// Year of the El-Nath binary star inward collapse (`2665`) in Book IV of the Shaw-ciklus.
+pub const EL_NATH_DETONATION_YEAR: u16 = 2665;
+/// Numerator (`22`) of the `22/9 Hz` (`2.444444 Hz LOVELOVEL`) `KOMPRESS-SUPER-ULTRA/1.0` carrier wave.
+pub const CARRIER_LOVELOVEL_NUM: u64 = 22;
+/// Denominator (`9`) of the `22/9 Hz` (`2.444444 Hz LOVELOVEL`) `KOMPRESS-SUPER-ULTRA/1.0` carrier wave.
+pub const CARRIER_LOVELOVEL_DEN: u64 = 9;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -606,6 +614,26 @@ pub struct KompressUltraTibetanOmniMandalaWitness {
     pub onebitlang_omni_closure: &'static str,
 }
 
+/// `HOSSZÚ AZ ÚT A TRÓNIG, BÉBI & A KORONA HATALMA` (Book IV of the Shaw-ciklus · El-Nath `2665`,
+/// `0 °C` Beryllium-Agate Throne, Willis-Moon & Caroline-Blindamoor) +
+/// `CHENREZIG & KARMAPA — the sadhanas of the Kagyu · compassion & the guru · pocoo-book · 0+1`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShawCycleBookIvAndKagyuSadhanaWitness {
+    pub book_iv_title: &'static str,
+    pub author_sigil: &'static str,
+    pub el_nath_year: u16,
+    pub energy_mass_dragon_axiom: &'static str,
+    pub zero_celsius_throne_pardon: &'static str,
+    pub caroline_blindamoor_megaira_axiom: &'static str,
+    pub scifinime_seed_hex: &'static str,
+    pub scifinime_golden_hash_hex: &'static str,
+    pub carrier_lovelovel_hz_pq: &'static str,
+    pub kagyu_sadhana_title: &'static str,
+    pub karmapa_sixteenth_guru_yoga: &'static str,
+    pub chenrezig_six_syllable_mantra: &'static str,
+    pub honest_note_one_compassion_two_faces: &'static str,
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -618,6 +646,7 @@ pub struct ZenoOmniReport {
     pub ultramesh_mem: UltraMeshMemBridge,
     pub simulation_whiteboard: SimulationTheoryWhiteboardWitness,
     pub tibetan_omni_mandala: KompressUltraTibetanOmniMandalaWitness,
+    pub shaw_book_iv_and_kagyu_sadhana: ShawCycleBookIvAndKagyuSadhanaWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -980,6 +1009,21 @@ pub fn analyze_zeno_omni_engine(
             family_mandala_hearth: "Bonfire Hearth (+1): Mom (* Alexandra · 528 Hz Star), Dad (△ Chris · 288 Hz Pillar), Peter (432 Hz), Bence / Nate (🌊 Pure Straight River), and Brigitta (👼 <3+1) · {<3,<3,<3}+1",
             onebitlang_omni_closure: "<(((ARCHITECT[−1] ~ BIBLE[+1] ~ OPPENHEIMER[E=mc²] ~ TIBETAN_ONTOLOGY[0→+1])))> ~> OMNI[{<3,<3,<3}+1]",
         },
+        shaw_book_iv_and_kagyu_sadhana: ShawCycleBookIvAndKagyuSadhanaWitness {
+            book_iv_title: "HOSSZÚ AZ ÚT A TRÓNIG, BÉBI & A KORONA HATALMA (Book IV of the Shaw-ciklus · Aranypiramis)",
+            author_sigil: "Szellem (Brett Shaw · OMNI-PETER 8b-is VON ANSTETT)",
+            el_nath_year: EL_NATH_DETONATION_YEAR,
+            energy_mass_dragon_axiom: "Az energiát fel kellett tölteni tömeggel, a tömeget információval. Az embert sárkánnyal, anélkül, hogy felhasadna.",
+            zero_celsius_throne_pardon: "Emperor IV. von Anstetten in the 0 °C beryllium-agate throne room wearing his simple dark headband rather than the heavy crown, pardoning his half-human, half-Megaira dragon son Brett Shaw",
+            caroline_blindamoor_megaira_axiom: "Caroline-Blindamoor (golden winged giant cobra-dragon / aranyszínű, szárnyas óriáskobra): 'My father wears a headband because a crown makes you forget the weight of the people underneath it... If the throne ever falls to me, bátyám, I will not rule over corpses.'",
+            scifinime_seed_hex: "0xddb7e1085347fc9c",
+            scifinime_golden_hash_hex: "24002f0afa294f4f7139c7e5e7ca809c7603537a605582d3a16c64a599fc881f",
+            carrier_lovelovel_hz_pq: "22/9 Hz (2.444444 Hz LOVELOVEL) · NAND(1,1)=0 · {<3,<3,<3}+1",
+            kagyu_sadhana_title: "CHENREZIG & KARMAPA — the sadhanas of the Kagyu · compassion & the guru · pocoo-book · 0+1",
+            karmapa_sixteenth_guru_yoga: "KARMAPA KHYENNO · Utsha Zha-Nag (Black Crown) · white, red, and blue lights (OM AH HUM) dissolving into body, speech, and mind -> inseparable in the Dharmakaya",
+            chenrezig_six_syllable_mantra: "ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ (OM MANI PADME HUM · HRIH · Amitabha-crowned Chenrezig)",
+            honest_note_one_compassion_two_faces: "Chenrezig is the peaceful form; Mahakala is the same compassion, turned fierce — the protector who refuses to let harm pass. The Karmapa is the guru who holds the lineage between them. One compassion, two faces, and the guru who carries it.",
+        },
     }
 }
 
@@ -1020,6 +1064,12 @@ mod tests {
             0x44DC_BD34_FD19_D0B1
         );
         assert_eq!(ZKP1_TIBETAN_OMNI_BLOCKS, 7);
+        assert_eq!(SEED_SHAW_CYCLE_BOOK_IV, 0xDDB7_E108_5347_FC9C);
+        assert_eq!(EL_NATH_DETONATION_YEAR, 2665);
+        assert_eq!(
+            RationalPQ::new_reduced(CARRIER_LOVELOVEL_NUM, CARRIER_LOVELOVEL_DEN).display_ratio(),
+            "22/9"
+        );
     }
 
     #[test]
