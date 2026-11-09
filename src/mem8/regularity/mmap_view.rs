@@ -4,6 +4,15 @@
 use super::types::{ClusterId, Mem8BookArchive};
 use super::wire::*;
 
+/// Byte width (`2`) of each `ClusterId` entry in the `symbol_to_cluster` section.
+pub const CLUSTER_ID_ENTRY_BYTES: usize = 2;
+
+/// `Mem8BookHeader` flag bit (`0x0001`) indicating 64-byte SIMD-aligned centroids.
+pub const HEADER_FLAG_SIMD_ALIGNED: u16 = 0x0001;
+
+/// Sentinel `u32::MAX` for unused anchor symbol slots in `SuperNodeMetaPod`.
+pub const UNUSED_ANCHOR_SYMBOL: u32 = u32::MAX;
+
 /// Zero-copy view over a `MEM8BOOK` archive with 64-byte aligned POD tables.
 #[derive(Debug, Clone)]
 pub struct ZeroCopyMem8Book {
@@ -18,7 +27,7 @@ pub struct ZeroCopyMem8Book {
 impl ZeroCopyMem8Book {
     #[inline]
     fn align64(offset: usize) -> usize {
-        (offset + 63) & !63
+        (offset + (MEM8_BOOK_CACHE_LINE_ALIGN - 1)) & !(MEM8_BOOK_CACHE_LINE_ALIGN - 1)
     }
 
     /// Constructs a `ZeroCopyMem8Book` directly from a `Mem8BookArchive`, sorting
@@ -46,14 +55,24 @@ impl ZeroCopyMem8Book {
         let mut super_nodes = Vec::with_capacity(k);
 
         for sn in &archive.super_nodes {
-            let mut lanes = [0.0_f32; 64];
-            for (i, &v) in sn.centroid_embedding.iter().take(64).enumerate() {
+            let mut lanes = [0.0_f32; SUPER_NODE_CENTROID_LANES];
+            for (i, &v) in sn
+                .centroid_embedding
+                .iter()
+                .take(SUPER_NODE_CENTROID_LANES)
+                .enumerate()
+            {
                 lanes[i] = v;
             }
             centroids.push(SuperNodeCentroidPod { lanes });
 
-            let mut anchors = [u32::MAX; 3];
-            for (i, &sym) in sn.representative_symbols.iter().take(3).enumerate() {
+            let mut anchors = [UNUSED_ANCHOR_SYMBOL; SUPER_NODE_ANCHOR_SLOTS];
+            for (i, &sym) in sn
+                .representative_symbols
+                .iter()
+                .take(SUPER_NODE_ANCHOR_SLOTS)
+                .enumerate()
+            {
                 anchors[i] = sym;
             }
 
@@ -66,7 +85,7 @@ impl ZeroCopyMem8Book {
 
             super_nodes.push(SuperNodeMetaPod {
                 cluster_id: sn.cluster_id,
-                flags: 1,
+                flags: HEADER_FLAG_SIMD_ALIGNED,
                 vertex_count: sn.vertex_count,
                 internal_p_density: sn.internal_p_density,
                 anchor_symbols: anchors,
@@ -90,18 +109,21 @@ impl ZeroCopyMem8Book {
 
         let t8r_raw_bytes = encode_t8r_exceptions_leb128(&archive.exception_ledger);
 
-        let offset_centroids = 128usize;
-        let offset_super_nodes = Self::align64(offset_centroids + centroids.len() * 256);
-        let offset_reduced_edges = Self::align64(offset_super_nodes + super_nodes.len() * 32);
+        let offset_centroids = MEM8_BOOK_HEADER_BYTES;
+        let offset_super_nodes =
+            Self::align64(offset_centroids + centroids.len() * SUPER_NODE_CENTROID_BYTES);
+        let offset_reduced_edges =
+            Self::align64(offset_super_nodes + super_nodes.len() * SUPER_NODE_META_BYTES);
         let offset_symbol_to_cluster =
-            Self::align64(offset_reduced_edges + reduced_edges.len() * 8);
-        let offset_t8r_exceptions =
-            Self::align64(offset_symbol_to_cluster + archive.vertex_to_cluster.len() * 2);
+            Self::align64(offset_reduced_edges + reduced_edges.len() * REGULAR_SUPER_EDGE_BYTES);
+        let offset_t8r_exceptions = Self::align64(
+            offset_symbol_to_cluster + archive.vertex_to_cluster.len() * CLUSTER_ID_ENTRY_BYTES,
+        );
 
         let header = Mem8BookHeader {
             magic: MEM8_BOOK_MAGIC,
             version: MEM8_BOOK_VERSION,
-            flags: 0x0001, // bit 0: SIMD-aligned centroids
+            flags: HEADER_FLAG_SIMD_ALIGNED, // bit 0: SIMD-aligned centroids
             total_symbols: archive.total_symbol_count,
             num_super_nodes: k as u16,
             num_outliers: archive.outlier_vertices.len() as u16,
@@ -134,30 +156,30 @@ impl ZeroCopyMem8Book {
             Self::align64((self.header.offset_t8r_exceptions as usize) + self.t8r_raw_bytes.len());
         let mut buf = vec![0u8; total_size];
 
-        buf[0..128].copy_from_slice(&self.header.to_bytes());
+        buf[0..MEM8_BOOK_HEADER_BYTES].copy_from_slice(&self.header.to_bytes());
 
         let mut cursor = self.header.offset_centroids as usize;
         for c in &self.centroids {
-            buf[cursor..cursor + 256].copy_from_slice(&c.to_bytes());
-            cursor += 256;
+            buf[cursor..cursor + SUPER_NODE_CENTROID_BYTES].copy_from_slice(&c.to_bytes());
+            cursor += SUPER_NODE_CENTROID_BYTES;
         }
 
         cursor = self.header.offset_super_nodes as usize;
         for sn in &self.super_nodes {
-            buf[cursor..cursor + 32].copy_from_slice(&sn.to_bytes());
-            cursor += 32;
+            buf[cursor..cursor + SUPER_NODE_META_BYTES].copy_from_slice(&sn.to_bytes());
+            cursor += SUPER_NODE_META_BYTES;
         }
 
         cursor = self.header.offset_reduced_edges as usize;
         for re in &self.reduced_edges {
-            buf[cursor..cursor + 8].copy_from_slice(&re.to_bytes());
-            cursor += 8;
+            buf[cursor..cursor + REGULAR_SUPER_EDGE_BYTES].copy_from_slice(&re.to_bytes());
+            cursor += REGULAR_SUPER_EDGE_BYTES;
         }
 
         cursor = self.header.offset_symbol_to_cluster as usize;
         for &cid in &self.symbol_to_cluster {
-            buf[cursor..cursor + 2].copy_from_slice(&cid.to_le_bytes());
-            cursor += 2;
+            buf[cursor..cursor + CLUSTER_ID_ENTRY_BYTES].copy_from_slice(&cid.to_le_bytes());
+            cursor += CLUSTER_ID_ENTRY_BYTES;
         }
 
         let t8r_start = self.header.offset_t8r_exceptions as usize;
@@ -179,57 +201,57 @@ impl ZeroCopyMem8Book {
 
         let k = header.num_super_nodes as usize;
         let c_start = header.offset_centroids as usize;
-        let c_end = c_start + k * 256;
+        let c_end = c_start + k * SUPER_NODE_CENTROID_BYTES;
         if c_end > bytes.len() {
             return Err("Corrupt centroids section offset");
         }
         let mut centroids = Vec::with_capacity(k);
         for idx in 0..k {
-            let off = c_start + idx * 256;
+            let off = c_start + idx * SUPER_NODE_CENTROID_BYTES;
             centroids.push(
-                SuperNodeCentroidPod::from_bytes(&bytes[off..off + 256])
+                SuperNodeCentroidPod::from_bytes(&bytes[off..off + SUPER_NODE_CENTROID_BYTES])
                     .ok_or("Corrupt centroid record")?,
             );
         }
 
         let sn_start = header.offset_super_nodes as usize;
-        let sn_end = sn_start + k * 32;
+        let sn_end = sn_start + k * SUPER_NODE_META_BYTES;
         if sn_end > bytes.len() {
             return Err("Corrupt super_nodes section offset");
         }
         let mut super_nodes = Vec::with_capacity(k);
         for idx in 0..k {
-            let off = sn_start + idx * 32;
+            let off = sn_start + idx * SUPER_NODE_META_BYTES;
             super_nodes.push(
-                SuperNodeMetaPod::from_bytes(&bytes[off..off + 32])
+                SuperNodeMetaPod::from_bytes(&bytes[off..off + SUPER_NODE_META_BYTES])
                     .ok_or("Corrupt super_node record")?,
             );
         }
 
         let re_count = header.num_reduced_edges as usize;
         let re_start = header.offset_reduced_edges as usize;
-        let re_end = re_start + re_count * 8;
+        let re_end = re_start + re_count * REGULAR_SUPER_EDGE_BYTES;
         if re_end > bytes.len() {
             return Err("Corrupt reduced_edges section offset");
         }
         let mut reduced_edges = Vec::with_capacity(re_count);
         for idx in 0..re_count {
-            let off = re_start + idx * 8;
+            let off = re_start + idx * REGULAR_SUPER_EDGE_BYTES;
             reduced_edges.push(
-                RegularSuperEdgePod::from_bytes(&bytes[off..off + 8])
+                RegularSuperEdgePod::from_bytes(&bytes[off..off + REGULAR_SUPER_EDGE_BYTES])
                     .ok_or("Corrupt reduced_edge record")?,
             );
         }
 
         let sym_count = header.total_symbols as usize;
         let sym_start = header.offset_symbol_to_cluster as usize;
-        let sym_end = sym_start + sym_count * 2;
+        let sym_end = sym_start + sym_count * CLUSTER_ID_ENTRY_BYTES;
         if sym_end > bytes.len() {
             return Err("Corrupt symbol_to_cluster section offset");
         }
         let mut symbol_to_cluster = Vec::with_capacity(sym_count);
         for idx in 0..sym_count {
-            let off = sym_start + idx * 2;
+            let off = sym_start + idx * CLUSTER_ID_ENTRY_BYTES;
             let cid = u16::from_le_bytes([bytes[off], bytes[off + 1]]);
             symbol_to_cluster.push(cid);
         }
