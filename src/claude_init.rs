@@ -693,33 +693,26 @@ impl McpInstaller {
         self
     }
 
-    /// Find the st binary in common locations
+    /// Find the canonical root `st` binary (`/usr/local/bin/st` on Unix).
     fn find_st_binary() -> Result<PathBuf> {
-        // First, try the current executable
-        if let Ok(exe) = std::env::current_exe() {
-            if exe.file_name().map(|n| n == "st").unwrap_or(false) {
-                return Ok(exe);
-            }
+        #[cfg(unix)]
+        {
+            Ok(crate::service_manager::canonical_st_binary_path())
         }
 
-        // Try common install locations
-        let candidates = vec![
-            // User's cargo bin
-            dirs::home_dir().map(|h| h.join(".cargo/bin/st")),
-            // /usr/local/bin (common for manual installs)
-            Some(PathBuf::from("/usr/local/bin/st")),
-            // homebrew (macOS)
-            Some(PathBuf::from("/opt/homebrew/bin/st")),
-        ];
-
-        for candidate in candidates.into_iter().flatten() {
-            if candidate.exists() {
-                return Ok(candidate);
+        #[cfg(not(unix))]
+        {
+            if let Ok(exe) = std::env::current_exe() {
+                if exe.file_name().map(|n| n == "st.exe").unwrap_or(false) {
+                    return Ok(exe);
+                }
             }
+            let canonical = crate::service_manager::canonical_st_binary_path();
+            if canonical.exists() {
+                return Ok(canonical);
+            }
+            Ok(PathBuf::from("st"))
         }
-
-        // Fall back to just "st" and hope it's in PATH
-        Ok(PathBuf::from("st"))
     }
 
     /// Get MCP target config paths for all known local desktop AI setups

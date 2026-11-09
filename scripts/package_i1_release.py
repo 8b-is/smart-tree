@@ -11,8 +11,9 @@ from pathlib import Path
 import subprocess
 import tarfile
 import tomllib
+import zipfile
 
-BINARIES = ("st", "std", "m8", "n8x")
+BINARIES = ("st", "m8", "n8x")
 ORIGIN = "https://i1.is/releases/smart-tree"
 
 
@@ -30,6 +31,16 @@ def archive(path, files):
                 entry.mode = 0o755 if executable else 0o644
                 entry.mtime = 0
                 bundle.addfile(entry, io.BytesIO(data))
+    path.with_name(path.name + ".sha256").write_text(f"{digest(path)}  {path.name}\n")
+
+
+def archive_zip(path, files):
+    with zipfile.ZipFile(path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
+        for name, data, executable in sorted(files):
+            info = zipfile.ZipInfo(filename=name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (0o755 if executable else 0o644) << 16
+            bundle.writestr(info, data)
     path.with_name(path.name + ".sha256").write_text(f"{digest(path)}  {path.name}\n")
 
 
@@ -93,21 +104,43 @@ def binaries(args):
     destination = Path(args.release).resolve()
     manifest = json.loads((destination / "manifest.json").read_text())
     source = Path(args.binaries).resolve()
+    is_windows = "windows" in args.target
+    st_bin = source / ("st.exe" if is_windows and (source / "st.exe").exists() else "st")
     environment = dict(os.environ, SMART_TREE_NO_UPDATE_CHECK="1")
-    try:
-        version = subprocess.check_output([str(source / "st"), "--version"], env=environment, text=True)
-        if manifest["build_id"] not in version or f"v{manifest['version']}" not in version:
-            raise ValueError("The binary does not identify this source snapshot")
-    except OSError:
-        st_bytes = (source / "st").read_bytes()
+    if is_windows:
+        st_bytes = st_bin.read_bytes()
         if manifest["build_id"].encode() not in st_bytes or manifest["version"].encode() not in st_bytes:
             raise ValueError("The cross-platform binary does not identify this source snapshot")
-    files = [(name, (source / name).read_bytes(), True) for name in BINARIES]
-    files.append(("BUILD_INFO.json", json.dumps(manifest, indent=2).encode(), False))
-    path = destination / f"st-{args.target}.tar.gz"
-    if path.exists() and not getattr(args, "force", False):
-        raise ValueError("Refusing to overwrite an immutable binary bundle")
-    archive(path, files)
+    else:
+        try:
+            version = subprocess.check_output([str(st_bin), "--version"], env=environment, text=True)
+            if manifest["build_id"] not in version or f"v{manifest['version']}" not in version:
+                raise ValueError("The binary does not identify this source snapshot")
+        except OSError:
+            st_bytes = st_bin.read_bytes()
+            if manifest["build_id"].encode() not in st_bytes or manifest["version"].encode() not in st_bytes:
+                raise ValueError("The cross-platform binary does not identify this source snapshot")
+    if is_windows:
+        files = [
+            (
+                f"{name}.exe",
+                (source / (f"{name}.exe" if (source / f"{name}.exe").exists() else name)).read_bytes(),
+                True,
+            )
+            for name in BINARIES
+        ]
+        files.append(("BUILD_INFO.json", json.dumps(manifest, indent=2).encode(), False))
+        path = destination / f"st-{args.target}.zip"
+        if path.exists() and not getattr(args, "force", False):
+            raise ValueError("Refusing to overwrite an immutable binary bundle")
+        archive_zip(path, files)
+    else:
+        files = [(name, (source / name).read_bytes(), True) for name in BINARIES]
+        files.append(("BUILD_INFO.json", json.dumps(manifest, indent=2).encode(), False))
+        path = destination / f"st-{args.target}.tar.gz"
+        if path.exists() and not getattr(args, "force", False):
+            raise ValueError("Refusing to overwrite an immutable binary bundle")
+        archive(path, files)
     new_asset = asset(path, manifest["build_id"])
     manifest["assets"] = [a for a in manifest["assets"] if a.get("name") != path.name]
     manifest["assets"].append(new_asset)
@@ -123,7 +156,18 @@ create.set_defaults(run=snapshot)
 add = commands.add_parser("binaries")
 add.add_argument("--release", required=True)
 add.add_argument("--binaries", required=True)
-add.add_argument("--target", required=True, choices=["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"])
+add.add_argument(
+    "--target",
+    required=True,
+    choices=[
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+        "x86_64-pc-windows-msvc",
+        "aarch64-pc-windows-msvc",
+    ],
+)
 add.add_argument("--force", action="store_true", help="Replace existing target archive if present")
 add.set_defaults(run=binaries)
 arguments = parser.parse_args()

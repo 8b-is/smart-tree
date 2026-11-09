@@ -513,7 +513,7 @@ EXAMPLES:
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": ["anchor", "find", "projects", "do_not_look", "allow_look", "persona_list", "persona_ask", "persona_recall", "persona_inspect", "persona_train", "persona_specialties"],
+                        "enum": ["anchor", "find", "projects", "do_not_look", "allow_look", "persona_list", "persona_ask", "persona_recall", "persona_inspect", "persona_train", "persona_specialties", "persona_e2e", "persona_zeno"],
                         "description": "Memory operation ('anchor', 'find', 'projects' to list/discover ternary projects, 'do_not_look' to tell Aye not to look in a folder, 'allow_look' to re-enable looking, or 'persona_*' bridge operations)"
                     },
                     "context": {

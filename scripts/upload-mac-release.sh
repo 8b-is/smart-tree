@@ -67,20 +67,18 @@ ssh -o BatchMode=yes "$MAC_HOST" "zsh -lic '
     export CARGO_TARGET_DIR=\"$MAC_CACHE_TARGET_DIR\"
     # Touch src/main.rs so ST_BUILD_ID is guaranteed to be baked into st
     touch src/main.rs build.rs
-    cargo build --locked --release --features full --bin st --bin std --bin m8 --bin n8x
+    cargo build --locked --release --features full --bin st --bin m8 --bin n8x
     \"\$CARGO_TARGET_DIR/release/st\" --version
     \"\$CARGO_TARGET_DIR/release/st\" --help >/dev/null
-    \"\$CARGO_TARGET_DIR/release/std\" --help >/dev/null
     \"\$CARGO_TARGET_DIR/release/m8\" --help >/dev/null
     \"\$CARGO_TARGET_DIR/release/n8x\" --help >/dev/null
-    mkdir -p \"$REMOTE_WORK/out\" \"\$HOME/.local/bin\"
-    for bin in st std m8 n8x; do
+    mkdir -p \"$REMOTE_WORK/out\"
+    for bin in st m8 n8x; do
         cp \"\$CARGO_TARGET_DIR/release/\$bin\" \"$REMOTE_WORK/out/\$bin\"
-        install -m 0755 \"\$CARGO_TARGET_DIR/release/\$bin\" \"\$HOME/.local/bin/\$bin\"
-        if [[ -d /opt/homebrew/bin && -w /opt/homebrew/bin ]]; then
-            install -m 0755 \"\$CARGO_TARGET_DIR/release/\$bin\" \"/opt/homebrew/bin/\$bin\"
-        fi
+        sudo -n install -m 0755 \"\$CARGO_TARGET_DIR/release/\$bin\" \"/usr/local/bin/\$bin\" 2>/dev/null || install -m 0755 \"\$CARGO_TARGET_DIR/release/\$bin\" \"/usr/local/bin/\$bin\" 2>/dev/null || true
+        rm -f \"\$HOME/.local/bin/\$bin\" \"\$HOME/.cargo/bin/\$bin\" \"/opt/homebrew/bin/\$bin\" 2>/dev/null || true
     done
+    sudo -n rm -f /usr/local/bin/std \"\$HOME/.local/bin/std\" \"\$HOME/.cargo/bin/std\" /opt/homebrew/bin/std 2>/dev/null || true
 '"
 
 # 3. Pull compiled macOS binaries back and package signed archive
@@ -88,7 +86,6 @@ MAC_BIN_DIR="${STAGE_DIR}/mac-bins"
 mkdir -p "$MAC_BIN_DIR"
 info "Retrieving compiled macOS binaries from ${MAC_HOST}..."
 scp -q "${MAC_HOST}:${REMOTE_WORK}/out/st" \
-       "${MAC_HOST}:${REMOTE_WORK}/out/std" \
        "${MAC_HOST}:${REMOTE_WORK}/out/m8" \
        "${MAC_HOST}:${REMOTE_WORK}/out/n8x" \
        "$MAC_BIN_DIR/"

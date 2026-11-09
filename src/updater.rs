@@ -345,52 +345,74 @@ fn parse_dns_txt_and_rrsig_response(
 }
 
 /// Query `_smart-tree.i1.is` (and `_smart-tree.8b.is`) via EDNS0 DNSSEC (`DO=1`) UDP DNS
+/// in parallel across worker threads (racing all `HARMONY_DNS_SERVERS` with a 350ms timeout)
 /// and verify both the RFC 4034/8080 DNSSEC `RRSIG` (`rtype=46`, `alg=15`, `keytag=3313`)
 /// and the inner `ST-DNS-v1` Ed25519 signature (`keytag=3313`).
 /// Falls back to HTTPS `/releases/smart-tree/dns-txt` if UDP/53 is blocked (with `dnssec_rrsig_verified = false`).
 pub async fn query_secure_dns_version() -> Result<SecureDnsRelease> {
-    let tx_id: u16 = 0x5431;
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|d| d.as_secs());
-    for qname in ["_smart-tree.i1.is", "_smart-tree.8b.is"] {
-        let query_pkt = build_dns_txt_query_packet(qname, tx_id);
-        for &ns in HARMONY_DNS_SERVERS {
-            if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
-                let _ = sock.set_read_timeout(Some(Duration::from_millis(750)));
-                let _ = sock.set_write_timeout(Some(Duration::from_millis(750)));
-                if sock.send_to(&query_pkt, ns).is_ok() {
-                    let mut buf = [0u8; 1500];
-                    if let Ok((n, _)) = sock.recv_from(&mut buf) {
-                        if let Some((txts, rrsigs)) =
-                            parse_dns_txt_and_rrsig_response(&buf[..n], tx_id)
-                        {
-                            for (txt, txt_rdata) in txts {
-                                if txt.contains("v=ST1") {
-                                    if let Ok(mut verified) = verify_dns_version_txt(&txt) {
-                                        let rrsig_ok = rrsigs.iter().any(|rrsig| {
-                                            verify_dnssec_rrsig_for_txt(
-                                                qname, &txt_rdata, rrsig, now,
-                                            )
-                                            .is_ok()
-                                        });
-                                        verified.dnssec_rrsig_verified = rrsig_ok;
-                                        return Ok(verified);
+    let udp_hit = tokio::task::spawn_blocking(|| -> Option<SecureDnsRelease> {
+        let tx_id: u16 = 0x5431;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs());
+        let (tx, rx) = std::sync::mpsc::channel::<SecureDnsRelease>();
+
+        for qname in ["_smart-tree.i1.is", "_smart-tree.8b.is"] {
+            let query_pkt = std::sync::Arc::new(build_dns_txt_query_packet(qname, tx_id));
+            for &ns in HARMONY_DNS_SERVERS {
+                let tx_clone = tx.clone();
+                let pkt = std::sync::Arc::clone(&query_pkt);
+                let _ = std::thread::Builder::new()
+                    .name(format!("st-dns-{}", ns))
+                    .spawn(move || {
+                        let Ok(sock) = UdpSocket::bind("0.0.0.0:0") else {
+                            return;
+                        };
+                        let _ = sock.set_read_timeout(Some(Duration::from_millis(350)));
+                        let _ = sock.set_write_timeout(Some(Duration::from_millis(250)));
+                        if sock.send_to(&pkt, ns).is_ok() {
+                            let mut buf = [0u8; 1500];
+                            if let Ok((n, _)) = sock.recv_from(&mut buf) {
+                                if let Some((txts, rrsigs)) =
+                                    parse_dns_txt_and_rrsig_response(&buf[..n], tx_id)
+                                {
+                                    for (txt, txt_rdata) in txts {
+                                        if txt.contains("v=ST1") {
+                                            if let Ok(mut verified) = verify_dns_version_txt(&txt) {
+                                                let rrsig_ok = rrsigs.iter().any(|rrsig| {
+                                                    verify_dnssec_rrsig_for_txt(
+                                                        qname, &txt_rdata, rrsig, now,
+                                                    )
+                                                    .is_ok()
+                                                });
+                                                verified.dnssec_rrsig_verified = rrsig_ok;
+                                                let _ = tx_clone.send(verified);
+                                                return;
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                }
+                    });
             }
         }
+        drop(tx);
+        rx.recv_timeout(Duration::from_millis(400)).ok()
+    })
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(verified) = udp_hit {
+        return Ok(verified);
     }
 
     // Fallback to HTTPS tiny TXT endpoint (~237 bytes) if outbound UDP/53 is blocked by firewall
     let client = reqwest::Client::builder()
         .user_agent("smart-tree-dns-updater")
-        .timeout(Duration::from_secs(4))
+        .timeout(Duration::from_secs(3))
         .build()?;
     let txt = client
         .get(SECURE_DNS_HTTPS_TXT)
@@ -420,8 +442,9 @@ pub async fn query_secure_dns_version_strict_dnssec() -> Result<SecureDnsRelease
 const UPDATE_CHECK_INTERVAL_SECS: u64 = 86400;
 
 /// Binaries included in the release tarball
-/// Note: "n8x" replaces "tree" to avoid shadowing the real tree command
-const BINARIES: &[&str] = &["st", "std", "m8", "n8x"];
+/// Note: "n8x" replaces "tree" to avoid shadowing the real tree command;
+/// legacy "std" is retired (daemon management lives in `st service` / `st up`).
+const BINARIES: &[&str] = &["st", "m8", "n8x"];
 
 /// Current version from Cargo.toml
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -640,36 +663,42 @@ fn cleanup_temp_dir(path: &Path) {
     let _ = fs::remove_dir_all(path);
 }
 
-/// Find where the current binary is installed
+/// Find the canonical root installation directory (`/usr/local/bin` on Unix).
 fn find_install_dir() -> Result<PathBuf> {
-    // Try to find where 'st' is installed
-    let current_exe = env::current_exe().context("Could not determine current executable path")?;
-    let install_dir = current_exe
-        .parent()
-        .context("Could not determine installation directory")?
-        .to_path_buf();
-
-    Ok(install_dir)
+    #[cfg(unix)]
+    {
+        Ok(PathBuf::from(
+            crate::service_manager::CANONICAL_UNIX_BIN_DIR,
+        ))
+    }
+    #[cfg(not(unix))]
+    {
+        let current_exe =
+            env::current_exe().context("Could not determine current executable path")?;
+        let install_dir = current_exe
+            .parent()
+            .context("Could not determine installation directory")?
+            .to_path_buf();
+        Ok(install_dir)
+    }
 }
 
-/// Check if we need elevated permissions
+/// Check if we need elevated permissions (Smart Tree is always a root program on Unix).
 #[cfg_attr(not(unix), allow(unused_variables))]
 fn needs_sudo(install_dir: &Path) -> bool {
     #[cfg(unix)]
     {
+        let euid = unsafe { libc::geteuid() };
+        if euid == 0 {
+            return false;
+        }
+        if install_dir == Path::new(crate::service_manager::CANONICAL_UNIX_BIN_DIR) {
+            return true;
+        }
         use std::os::unix::fs::MetadataExt;
         if let Ok(meta) = install_dir.metadata() {
-            // Check if we're the owner or if we can write
-            let uid = unsafe { libc::getuid() };
-            if meta.uid() != uid {
-                // Not owner, check if writable
-                return fs::metadata(install_dir)
-                    .and_then(|_| {
-                        fs::OpenOptions::new()
-                            .write(true)
-                            .open(install_dir.join(".test_write"))
-                    })
-                    .is_err();
+            if meta.uid() != euid {
+                return true;
             }
         }
         false
@@ -755,14 +784,18 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         bail!("Invalid release asset URL");
     }
 
-    println!("Downloading {}...", archive_name);
+    println!(
+        "\x1b[36m[2/4]\x1b[0m ⬇️  Downloading \x1b[1m{}\x1b[0m...",
+        archive_name
+    );
 
     // Create temp directory
     let temp_dir = create_temp_dir()?;
     let archive_path = temp_dir.join(&archive_name);
 
-    // Download
-    let response = client
+    // Download with live streaming progress, transfer rate (MB/s), and ETA estimate
+    let dl_start = std::time::Instant::now();
+    let mut response = client
         .get(download_url)
         .send()
         .await
@@ -772,14 +805,67 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         bail!("Download failed: HTTP {}", response.status());
     }
 
-    let bytes = response.bytes().await?;
+    let total_bytes = response.content_length().unwrap_or(0);
+    let mut bytes = Vec::with_capacity(total_bytes.clamp(1024 * 1024, 64 * 1024 * 1024) as usize);
+    let mut last_print = std::time::Instant::now();
+
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .context("Failed while streaming release archive")?
+    {
+        bytes.extend_from_slice(&chunk);
+        if last_print.elapsed() >= Duration::from_millis(120) {
+            let elapsed_ms = (dl_start.elapsed().as_millis() as u64).max(1);
+            let done_kb = (bytes.len() as u64) / 1024;
+            let speed_kbs = (done_kb * 1000) / elapsed_ms.max(1);
+            let elapsed_tenths = elapsed_ms / 100;
+            if total_bytes > 0 {
+                let total_kb = total_bytes / 1024;
+                let pct = ((bytes.len() as u64) * 100 / total_bytes.max(1)).min(100);
+                let rem_kb = total_kb.saturating_sub(done_kb);
+                let eta_tenths = (rem_kb * 10).checked_div(speed_kbs).unwrap_or(0);
+                eprint!(
+                    "\r      ⏳ {:3}% ({}/{} KB) • {} KB/s • elapsed {}.{}s • ETA {}.{}s   ",
+                    pct,
+                    done_kb,
+                    total_kb,
+                    speed_kbs,
+                    elapsed_tenths / 10,
+                    elapsed_tenths % 10,
+                    eta_tenths / 10,
+                    eta_tenths % 10
+                );
+            } else {
+                eprint!(
+                    "\r      ⏳ {} KB downloaded • {} KB/s • elapsed {}.{}s   ",
+                    done_kb,
+                    speed_kbs,
+                    elapsed_tenths / 10,
+                    elapsed_tenths % 10
+                );
+            }
+            let _ = io::stderr().flush();
+            last_print = std::time::Instant::now();
+        }
+    }
+    if total_bytes > 0 || !bytes.is_empty() {
+        let elapsed_ms = (dl_start.elapsed().as_millis() as u64).max(1);
+        let done_kb = (bytes.len() as u64) / 1024;
+        let speed_kbs = (done_kb * 1000) / elapsed_ms.max(1);
+        eprintln!(
+            "\r      \x1b[32m✓\x1b[0m Downloaded {} KB in {}ms ({} KB/s)                                ",
+            done_kb, elapsed_ms, speed_kbs
+        );
+    }
+
     verify_asset_digest(&bytes, &asset.digest)?;
     if archive_name == "st-x86_64-unknown-linux-gnu.tar.gz" {
         if let Ok(dns_rel) = query_secure_dns_version().await {
             if dns_rel.version == version.trim_start_matches('v') {
                 verify_asset_digest(&bytes, &format!("sha256:{}", dns_rel.sha256))?;
                 println!(
-                    "🔐 Verified Ed25519 Secure DNS signature (keytag={}) & SHA-256 digest",
+                    "      🔐 Verified Ed25519 Secure DNS signature (keytag={}) & SHA-256 digest",
                     dns_rel.key_tag
                 );
             }
@@ -787,54 +873,71 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     }
     fs::write(&archive_path, &bytes)?;
 
-    println!("Extracting...");
+    println!(
+        "\x1b[36m[3/4]\x1b[0m 📦 Extracting archive on worker thread... \x1b[2m(est. ~0.3s)\x1b[0m"
+    );
+    let extract_start = std::time::Instant::now();
 
-    // Extract archive
-    #[cfg(unix)]
-    {
-        let output = Command::new("tar")
-            .args(["-xzf", archive_path.to_str().unwrap()])
-            .current_dir(&temp_dir)
-            .output()
-            .context("Failed to extract archive")?;
+    // Extract archive on blocking worker thread so async runtime stays responsive
+    let archive_path_clone = archive_path.clone();
+    let temp_dir_clone = temp_dir.clone();
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        #[cfg(unix)]
+        {
+            let output = Command::new("tar")
+                .args(["-xzf", archive_path_clone.to_str().unwrap()])
+                .current_dir(&temp_dir_clone)
+                .output()
+                .context("Failed to extract archive")?;
 
-        if !output.status.success() {
-            bail!(
-                "Failed to extract archive: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            if !output.status.success() {
+                bail!(
+                    "Failed to extract archive: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
-    }
 
-    #[cfg(windows)]
-    {
-        // On Windows, use powershell to extract zip
-        let output = Command::new("powershell")
-            .args([
-                "-Command",
-                &format!(
-                    "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
-                    archive_path.display(),
-                    temp_dir.display()
-                ),
-            ])
-            .output()
-            .context("Failed to extract archive")?;
+        #[cfg(windows)]
+        {
+            let output = Command::new("powershell")
+                .args([
+                    "-Command",
+                    &format!(
+                        "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                        archive_path_clone.display(),
+                        temp_dir_clone.display()
+                    ),
+                ])
+                .output()
+                .context("Failed to extract archive")?;
 
-        if !output.status.success() {
-            bail!(
-                "Failed to extract archive: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            if !output.status.success() {
+                bail!(
+                    "Failed to extract archive: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
-    }
+        Ok(())
+    })
+    .await
+    .context("Archive extraction worker thread panicked")??;
+
+    println!(
+        "      \x1b[32m✓\x1b[0m Extracted in {}ms",
+        extract_start.elapsed().as_millis()
+    );
 
     // Require the primary executable before replacing any installed companion.
     find_binary_in_dir(&temp_dir, if cfg!(windows) { "st.exe" } else { "st" })
         .context("Release archive is missing the primary st executable")?;
 
     // Install binaries
-    println!("Installing binaries...");
+    println!(
+        "\x1b[36m[4/4]\x1b[0m 🔧 Installing root binaries & syncing configs/completions on worker threads... \x1b[2m(est. ~0.2s)\x1b[0m"
+    );
+    let install_start = std::time::Instant::now();
 
     let mut installed_count = 0;
     for binary in BINARIES {
@@ -910,6 +1013,26 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
         bail!("No binaries were installed from the archive");
     }
 
+    #[cfg(unix)]
+    {
+        let install_dir_bg = install_dir.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let canonical_st = install_dir_bg.join("st");
+            std::thread::scope(|s| {
+                s.spawn(|| {
+                    crate::service_manager::rewrite_agent_configs_to_canonical_st(&canonical_st);
+                });
+                s.spawn(|| {
+                    crate::service_manager::purge_duplicate_st_binaries(&install_dir_bg, use_sudo);
+                });
+                s.spawn(|| {
+                    let _ = crate::completions::maintain_service_completions(false);
+                });
+            });
+        })
+        .await;
+    }
+
     // Update cache
     let mut cache = load_cache();
     cache.latest_version = Some(version.to_string());
@@ -919,7 +1042,11 @@ pub async fn download_and_install(version: &str, yes: bool) -> Result<()> {
     cleanup_temp_dir(&temp_dir);
 
     println!();
-    println!("\x1b[32m✨ Successfully updated to {}!\x1b[0m", version);
+    println!(
+        "\x1b[32m✨ Successfully updated to {}!\x1b[0m \x1b[2m(installed & synced in {}ms)\x1b[0m",
+        version,
+        install_start.elapsed().as_millis()
+    );
 
     #[cfg(windows)]
     {
@@ -955,18 +1082,55 @@ fn find_binary_in_dir(dir: &Path, binary_name: &str) -> Result<PathBuf> {
     bail!("Could not find {} in downloaded archive", binary_name)
 }
 
-/// Run the update command - async version
+/// Run the update command - async version with worker-thread offloading and time estimates
 pub async fn run_update(yes: bool) -> Result<()> {
-    println!("Checking for updates...");
+    let total_start = std::time::Instant::now();
+    println!(
+        "\x1b[36m[1/4]\x1b[0m 🔍 Checking Secure DNS & release catalogue on worker threads... \x1b[2m(est. <0.4s)\x1b[0m"
+    );
 
-    match check_for_update().await? {
+    let check_start = std::time::Instant::now();
+    let update_opt = check_for_update().await?;
+    let check_ms = check_start.elapsed().as_millis();
+
+    match update_opt {
         Some(version) => {
+            println!(
+                "      \x1b[32m✓\x1b[0m Update found: \x1b[1mv{}\x1b[0m -> \x1b[1;32m{}\x1b[0m \x1b[2m(checked in {}ms)\x1b[0m",
+                CURRENT_VERSION, version, check_ms
+            );
             download_and_install(&version, yes).await?;
         }
         None => {
+            // Also verify canonical agent configs and warm completion cache in parallel on worker threads
+            #[cfg(unix)]
+            if let Ok(install_dir) = find_install_dir() {
+                let _ = tokio::task::spawn_blocking(move || {
+                    let canonical_st = install_dir.join("st");
+                    std::thread::scope(|s| {
+                        s.spawn(|| {
+                            crate::service_manager::rewrite_agent_configs_to_canonical_st(
+                                &canonical_st,
+                            );
+                        });
+                        s.spawn(|| {
+                            crate::service_manager::purge_duplicate_st_binaries(
+                                &install_dir,
+                                false,
+                            );
+                        });
+                        s.spawn(|| {
+                            crate::completions::ensure_user_completions_fresh();
+                        });
+                    });
+                })
+                .await;
+            }
             println!(
-                "\x1b[32m✓\x1b[0m Already up to date! (v{})",
-                CURRENT_VERSION
+                "\x1b[32m✓\x1b[0m Already up to date! (\x1b[1mv{}\x1b[0m) \x1b[2m— DNS & config check completed in {}ms (total {}ms)\x1b[0m",
+                CURRENT_VERSION,
+                check_ms,
+                total_start.elapsed().as_millis()
             );
         }
     }

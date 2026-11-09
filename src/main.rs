@@ -42,7 +42,11 @@ async fn main() -> Result<()> {
         return st::completions::handle_dynamic_completion(args);
     }
 
-    // Fast-path completion script generation
+    // Fast-path cheatsheet & completion script generation
+    if cli.cheet {
+        return st::cli_commands::handle_cheet_command();
+    }
+
     if let Some(shell) = cli.completions {
         st::completions::print_completions(shell);
         return Ok(());
@@ -53,23 +57,22 @@ async fn main() -> Result<()> {
     }
 
     // Self-maintaining autocomplete: ensure Fish/Bash/Zsh completion scripts and folder/memory cache
-    // are installed and up to date automatically without user intervention.
-    if !cli.mcp && cli.agy_hook.is_none() {
+    // are installed and up to date automatically without blocking CLI startup or `st --update`.
+    if !cli.mcp
+        && cli.agy_hook.is_none()
+        && !cli.update
+        && !cli.auto_update
+        && !cli.version
+        && !cli.man
+    {
         st::completions::ensure_user_completions_fresh();
     }
 
     // Code intelligence is entirely local and in-process. It needs neither a
     // running daemon nor startup network checks, and stdout stays valid JSON.
-    // Symbol command removed (requires crabcc dependency)
-    // if let Some(st::cli::Cmd::Symbol(command)) = &cli.cmd {
-    //     let result = st::mcp::symbol::execute(
-    //         command.parameters(),
-    //         &std::env::current_dir()?,
-    //         &st::mcp::load_config()?,
-    //     )?;
-    //     println!("{}", serde_json::to_string_pretty(&result)?);
-    //     return Ok(());
-    // }
+    if let Some(st::cli::Cmd::Symbol(command)) = &cli.cmd {
+        return st::cli_commands::handle_symbol_command(command);
+    }
 
     // Antigravity (agy) lifecycle hooks must output strict JSON on stdout with
     // zero startup banners, update checks, or daemon auto-start delays.
@@ -412,10 +415,7 @@ async fn main() -> Result<()> {
 
     // Handle exclusive action flags first.
     if cli.cheet {
-        let markdown = std::fs::read_to_string("docs/st-cheetsheet.md")?;
-        let skin = termimad::MadSkin::default();
-        skin.print_text(&markdown);
-        return Ok(());
+        return st::cli_commands::handle_cheet_command();
     }
     if let Some(shell) = cli.completions {
         st::completions::print_completions(shell);
@@ -476,6 +476,10 @@ async fn main() -> Result<()> {
                 unreachable!(
                     "symbol, g8t, memnet, completions, and pq-fix commands return before daemon startup"
                 )
+            }
+            st::cli::Cmd::Up => {
+                return handle_up(cli.scan_opts.sse_port, cli.open_browser, is_interactive_tty)
+                    .await;
             }
             st::cli::Cmd::Sync(sync_cmd) => {
                 return handle_sync_user(&sync_cmd).await;

@@ -1615,7 +1615,7 @@ impl Scanner {
 
     /// Inspect `self.root` and shallow directory nodes (`depth <= 2`) with the built-in
     /// SPQT Base-243 ternary project classifier and remember any discovered projects into
-    /// `~/.st/memories.m8`, unless Aye is told not to look in the folder.
+    /// `~/.st/memories.m8` on a worker thread (capped & batched so scanning never blocks).
     #[cfg(not(test))]
     fn auto_remember_scanned_projects(&self, nodes: &[FileNode]) {
         if crate::mcp::smart_project_detector::is_ephemeral_or_system_path(&self.root)
@@ -1624,20 +1624,23 @@ impl Scanner {
             return;
         }
 
-        let mut candidate_dirs: Vec<&Path> = Vec::with_capacity(32);
+        let mut candidate_dirs: Vec<PathBuf> = Vec::with_capacity(12);
         if crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(&self.root)
             .is_some()
         {
-            candidate_dirs.push(self.root.as_path());
+            candidate_dirs.push(self.root.clone());
         }
-        for node in nodes.iter().filter(|n| n.is_dir && n.depth <= 2).take(48) {
+        for node in nodes.iter().filter(|n| n.is_dir && n.depth <= 2).take(24) {
+            if candidate_dirs.len() >= 12 {
+                break;
+            }
             if node.path != self.root
                 && crate::mcp::smart_project_detector::evaluate_directory_as_project_ternary(
                     &node.path,
                 )
                 .is_some()
             {
-                candidate_dirs.push(node.path.as_path());
+                candidate_dirs.push(node.path.clone());
             }
         }
 
@@ -1645,11 +1648,21 @@ impl Scanner {
             return;
         }
 
-        if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
-            for dir in candidate_dirs {
-                let _ = mgr.remember_single_project_dir(dir);
-            }
-        }
+        let _ = std::thread::Builder::new()
+            .name("st-auto-remember".to_string())
+            .spawn(move || {
+                if let Ok(mut mgr) = crate::memory_manager::MemoryManager::new() {
+                    let mut changed = false;
+                    for dir in &candidate_dirs {
+                        if let Some((_, c)) = mgr.remember_single_project_dir_no_save(dir) {
+                            changed |= c;
+                        }
+                    }
+                    if changed {
+                        let _ = mgr.save();
+                    }
+                }
+            });
     }
 
     /// Save the current scan state for future change detection

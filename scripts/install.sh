@@ -154,13 +154,8 @@ case "$architecture" in
         ;;
 esac
 
-# On Apple Silicon, prefer homebrew's default directory if it exists and the
-# user has not specified a custom INSTALL_DIR.
-if [[ "$os" == "apple-darwin" && "$arch" == "aarch64" && -d "/opt/homebrew/bin" ]]; then
-    if [[ "$INSTALL_DIR" == "/usr/local/bin" ]]; then
-        INSTALL_DIR="/opt/homebrew/bin"
-    fi
-fi
+# Always install Smart Tree to /usr/local/bin as a canonical root system binary
+INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 # 2. Determine Version to Install
 if [[ -z "${VERSION:-}" ]]; then
@@ -246,7 +241,7 @@ fi
 print_info "Extracting the binary bundle..."
 tar -xzf "$tmp_dir/$archive_name" -C "$tmp_dir"
 
-# 5. Install the binary (and companion binaries std, m8, n8x if present)
+# 5. Install the binary (and companion binaries m8, n8x, mq if present)
 print_info "Installing to $INSTALL_DIR..."
 binary_path="$tmp_dir/$BINARY_NAME"
 if [[ ! -f "$binary_path" ]]; then
@@ -258,26 +253,38 @@ if [[ ! -f "$binary_path" ]]; then
     binary_path=$found_binary
 fi
 
-if [[ -w "$INSTALL_DIR" ]]; then
-    mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
-    chmod 0755 "$INSTALL_DIR/$BINARY_NAME"
-    for extra_bin in std m8 n8x mq; do
+if [[ "$(id -u)" -eq 0 ]]; then
+    install -m 0755 "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
+    for extra_bin in m8 n8x mq; do
         if [[ -f "$tmp_dir/$extra_bin" ]]; then
-            mv "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
-            chmod 0755 "$INSTALL_DIR/$extra_bin"
+            install -m 0755 "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
         fi
     done
+    rm -f "$INSTALL_DIR/std" 2>/dev/null || true
 else
-    print_info "Need sudo access to install to $INSTALL_DIR"
-    sudo mv "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
-    sudo chmod 0755 "$INSTALL_DIR/$BINARY_NAME"
-    for extra_bin in std m8 n8x mq; do
+    print_info "Installing as root program to $INSTALL_DIR (sudo)..."
+    sudo install -m 0755 "$binary_path" "$INSTALL_DIR/$BINARY_NAME"
+    for extra_bin in m8 n8x mq; do
         if [[ -f "$tmp_dir/$extra_bin" ]]; then
-            sudo mv "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
-            sudo chmod 0755 "$INSTALL_DIR/$extra_bin"
+            sudo install -m 0755 "$tmp_dir/$extra_bin" "$INSTALL_DIR/$extra_bin"
         fi
     done
+    sudo rm -f "$INSTALL_DIR/std" 2>/dev/null || true
 fi
+
+# Purge any duplicate copies in ~/.local/bin, ~/.cargo/bin, ~/bin, /opt/homebrew/bin, and /usr/bin
+for dup_bin in st std m8 n8x mq smart-tree; do
+    for dup_dir in "$HOME/.local/bin" "$HOME/.cargo/bin" "$HOME/bin" "/opt/homebrew/bin"; do
+        if [[ "$dup_dir" != "$INSTALL_DIR" && ( -e "$dup_dir/$dup_bin" || -L "$dup_dir/$dup_bin" ) ]]; then
+            rm -f "$dup_dir/$dup_bin" 2>/dev/null || sudo rm -f "$dup_dir/$dup_bin" 2>/dev/null || true
+            print_info "Removed duplicate binary: $dup_dir/$dup_bin"
+        fi
+    done
+    if [[ "/usr/bin" != "$INSTALL_DIR" && ( -e "/usr/bin/$dup_bin" || -L "/usr/bin/$dup_bin" ) ]]; then
+        sudo rm -f "/usr/bin/$dup_bin" 2>/dev/null || true
+        print_info "Removed duplicate binary: /usr/bin/$dup_bin"
+    fi
+done
 
 # 6. Verify Installation
 if ! command_exists "$BINARY_NAME"; then

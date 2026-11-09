@@ -397,9 +397,9 @@ impl AiInstaller {
             self.target,
             AiTarget::Gemini | AiTarget::Antigravity | AiTarget::Universal
         ) {
-            let st_bin = which::which("st")
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| "/usr/local/bin/st".to_string());
+            let st_bin = crate::service_manager::canonical_st_binary_path()
+                .to_string_lossy()
+                .to_string();
             let agy_hooks_file = match self.scope {
                 InstallScope::Project => self.project_path.join(".agents").join("hooks.json"),
                 InstallScope::User => {
@@ -1181,6 +1181,16 @@ impl SecurityCleanup {
 
         // Phase 5: Scan parent directory .mcp.json files
         self.scan_parent_mcp_files()?;
+
+        // Phase 6: Enforce canonical root binary (/usr/local/bin/st) and purge duplicate user/system copies
+        #[cfg(unix)]
+        {
+            let canonical_dir =
+                std::path::Path::new(crate::service_manager::CANONICAL_UNIX_BIN_DIR);
+            let canonical_st = crate::service_manager::canonical_st_binary_path();
+            crate::service_manager::rewrite_agent_configs_to_canonical_st(&canonical_st);
+            crate::service_manager::purge_duplicate_st_binaries(canonical_dir, self.yes);
+        }
 
         // Display findings
         self.display_findings();

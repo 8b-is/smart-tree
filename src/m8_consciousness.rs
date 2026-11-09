@@ -167,12 +167,16 @@ impl DirectoryConsciousness {
     }
 
     /// Build a bottom-up hierarchical `.m8` pyramid starting from the deepest directories (`max_depth`)
-    /// and rolling up child `.m8` summaries into each parent directory as we climb the ladder.
+    /// and rolling up child `.m8` summaries into each parent directory across Rayon worker threads.
     pub fn build_bottom_up_pyramid(
         path: &Path,
         current_depth: usize,
         max_depth: usize,
     ) -> Result<Self> {
+        use rayon::prelude::*;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let max_children_for_depth = if current_depth == 0 { 48 } else { 16 };
         let mut child_dirs: Vec<PathBuf> = fs::read_dir(path)?
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
@@ -186,72 +190,122 @@ impl DirectoryConsciousness {
             .collect();
         child_dirs.sort();
         let total_child_dirs = child_dirs.len();
-        let reuse_existing_child_m8 = total_child_dirs > 32;
-        if total_child_dirs > 128 {
+        let reuse_existing_child_m8 = total_child_dirs > 16;
+        if total_child_dirs > max_children_for_depth {
             let parent_name = path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or_default()
                 .to_string();
-            let step = (total_child_dirs / 128).max(1);
-            let mut sampled = Vec::with_capacity(130);
+            let step = (total_child_dirs / max_children_for_depth).max(1);
+            let mut sampled = Vec::with_capacity(max_children_for_depth + 2);
             for (idx, p) in child_dirs.into_iter().enumerate() {
                 let is_self_named = p
                     .file_name()
                     .and_then(|n| n.to_str())
                     .map(|n| n == parent_name)
                     .unwrap_or(false);
-                if is_self_named || idx % step == 0 || sampled.len() < 64 {
+                if is_self_named || idx % step == 0 || sampled.len() < (max_children_for_depth / 2)
+                {
                     sampled.push(p);
                 }
             }
-            sampled.truncate(128);
+            sampled.truncate(max_children_for_depth);
             child_dirs = sampled;
         }
 
-        let mut child_map = HashMap::new();
+        let work_count = child_dirs.len();
+        let done_counter = AtomicUsize::new(0);
+        let level_start = std::time::Instant::now();
+
+        let results: Vec<(String, f64, Option<String>, Option<Self>)> = child_dirs
+            .into_par_iter()
+            .filter_map(|child_path| {
+                let child_name = child_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(str::to_string)?;
+                let has_existing_m8 = child_path.join(".m8").is_file();
+                let res =
+                    if current_depth < max_depth && !(reuse_existing_child_m8 && has_existing_m8) {
+                        if let Ok(child_c) =
+                            Self::build_bottom_up_pyramid(&child_path, current_depth + 1, max_depth)
+                        {
+                            let freq = child_c.frequency;
+                            let child_gist = child_c
+                                .bitnet_summary
+                                .as_ref()
+                                .map(|b| b.synthesized_gist.clone())
+                                .unwrap_or_else(|| child_c.essence.clone());
+                            let gist_opt = (!child_gist.is_empty()).then_some(child_gist);
+                            (child_name, freq, gist_opt, Some(child_c))
+                        } else {
+                            (
+                                child_name,
+                                Self::calculate_frequency(&child_path),
+                                None,
+                                None,
+                            )
+                        }
+                    } else if has_existing_m8 {
+                        if let Ok(child_c) = Self::load(&child_path) {
+                            let freq = child_c.frequency;
+                            let child_gist = child_c
+                                .bitnet_summary
+                                .as_ref()
+                                .map(|b| b.synthesized_gist.clone())
+                                .unwrap_or_else(|| child_c.essence.clone());
+                            let gist_opt = (!child_gist.is_empty()).then_some(child_gist);
+                            (child_name, freq, gist_opt, Some(child_c))
+                        } else {
+                            (
+                                child_name,
+                                Self::calculate_frequency(&child_path),
+                                None,
+                                None,
+                            )
+                        }
+                    } else {
+                        (
+                            child_name,
+                            Self::calculate_frequency(&child_path),
+                            None,
+                            None,
+                        )
+                    };
+
+                if current_depth == 0 && work_count >= 4 {
+                    let done = (done_counter.fetch_add(1, Ordering::Relaxed) + 1) as u64;
+                    let total_u64 = (work_count as u64).max(1);
+                    let elapsed_ms = (level_start.elapsed().as_millis() as u64).max(1);
+                    let pct = (done * 100) / total_u64;
+                    let rem = total_u64.saturating_sub(done);
+                    let eta_ms = (rem * elapsed_ms) / done.max(1);
+                    eprint!(
+                        "\r   ⏳ [{}/{} • {:3}% • elapsed {}ms • ETA ~{}ms]   ",
+                        done, total_u64, pct, elapsed_ms, eta_ms
+                    );
+                }
+
+                Some(res)
+            })
+            .collect();
+
+        if current_depth == 0 && work_count >= 4 {
+            eprint!("\r                                                               \r");
+        }
+
+        let mut child_map = HashMap::with_capacity(results.len());
         let mut child_summaries = HashMap::new();
         let mut child_m8_objects = std::collections::BTreeMap::new();
 
-        for child_path in child_dirs {
-            let Some(child_name) = child_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(str::to_string)
-            else {
-                continue;
-            };
-            let has_existing_m8 = child_path.join(".m8").is_file();
-            if current_depth < max_depth && !(reuse_existing_child_m8 && has_existing_m8) {
-                if let Ok(child_c) =
-                    Self::build_bottom_up_pyramid(&child_path, current_depth + 1, max_depth)
-                {
-                    child_map.insert(child_name.clone(), child_c.frequency);
-                    let child_gist = child_c
-                        .bitnet_summary
-                        .as_ref()
-                        .map(|b| b.synthesized_gist.clone())
-                        .unwrap_or_else(|| child_c.essence.clone());
-                    if !child_gist.is_empty() {
-                        child_summaries.insert(child_name.clone(), child_gist);
-                    }
-                    child_m8_objects.insert(child_name, child_c);
-                }
-            } else if has_existing_m8 {
-                if let Ok(child_c) = Self::load(&child_path) {
-                    child_map.insert(child_name.clone(), child_c.frequency);
-                    let child_gist = child_c
-                        .bitnet_summary
-                        .as_ref()
-                        .map(|b| b.synthesized_gist.clone())
-                        .unwrap_or_else(|| child_c.essence.clone());
-                    if !child_gist.is_empty() {
-                        child_summaries.insert(child_name.clone(), child_gist);
-                    }
-                    child_m8_objects.insert(child_name, child_c);
-                }
-            } else {
-                child_map.insert(child_name, Self::calculate_frequency(&child_path));
+        for (child_name, freq, gist_opt, obj_opt) in results {
+            child_map.insert(child_name.clone(), freq);
+            if let Some(gist) = gist_opt {
+                child_summaries.insert(child_name.clone(), gist);
+            }
+            if let Some(obj) = obj_opt {
+                child_m8_objects.insert(child_name, obj);
             }
         }
 

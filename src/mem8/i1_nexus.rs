@@ -1375,7 +1375,7 @@ set -eu
 
 I1_TOOL="{clean}"
 I1_VERSION="{version}"
-I1_PREFIX="${{I1_PREFIX:-$HOME/.local/bin}}"
+I1_PREFIX="${{I1_PREFIX:-/usr/local/bin}}"
 I1_HTTPS_URL="${{I1_HTTPS_URL:-https://i1.is}}"
 
 OS="$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo linux)"
@@ -1523,7 +1523,11 @@ if [ "${{I1_PLAN:-0}}" = "1" ]; then
   exit 0
 fi
 
-mkdir -p "$I1_PREFIX"
+if [ -w "$I1_PREFIX" ]; then
+  mkdir -p "$I1_PREFIX"
+else
+  sudo mkdir -p "$I1_PREFIX"
+fi
 
 if [ "$OS" = "linux" ] && [ "$ARCH" = "x86_64" ]; then
   TAR_NAME="smart-tree-x86_64-unknown-linux-gnu.tar.gz"
@@ -1550,12 +1554,28 @@ else
 fi
 
 tar -xzf "$TMP_DIR/pkg.tar.gz" -C "$TMP_DIR"
-for bin in st m8 std st-hub n8x; do
+for bin in st m8 st-hub n8x mq; do
   if [ -f "$TMP_DIR/$bin" ]; then
-    install -m 0755 "$TMP_DIR/$bin" "$I1_PREFIX/$bin"
-    echo "✅ Installed $I1_PREFIX/$bin"
+    if [ "$(id -u)" -eq 0 ] || [ -w "$I1_PREFIX" ]; then
+      install -m 0755 "$TMP_DIR/$bin" "$I1_PREFIX/$bin"
+    else
+      sudo install -m 0755 "$TMP_DIR/$bin" "$I1_PREFIX/$bin"
+    fi
+    echo "✅ Installed root binary $I1_PREFIX/$bin"
   fi
 done
+for dup_bin in st std m8 st-hub n8x mq smart-tree; do
+  for dup_dir in "$HOME/.local/bin" "$HOME/.cargo/bin" "$HOME/bin" "/opt/homebrew/bin"; do
+    if [ "$dup_dir" != "$I1_PREFIX" ] && [ -e "$dup_dir/$dup_bin" ]; then
+      rm -f "$dup_dir/$dup_bin" 2>/dev/null || sudo rm -f "$dup_dir/$dup_bin" 2>/dev/null || true
+      echo "🧹 Removed duplicate $dup_dir/$dup_bin"
+    fi
+  done
+done
+if [ -e "$I1_PREFIX/std" ]; then
+  rm -f "$I1_PREFIX/std" 2>/dev/null || sudo rm -f "$I1_PREFIX/std" 2>/dev/null || true
+  echo "🧹 Retired legacy $I1_PREFIX/std"
+fi
 
 if [ "$CAN_ADVERTISE_MEMNET" = "1" ] && [ -x "$I1_PREFIX/st" ]; then
   "$I1_PREFIX/st" memnet advertise >/dev/null 2>&1 || true

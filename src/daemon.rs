@@ -1017,19 +1017,24 @@ struct MemnetShareRequest {
 }
 
 async fn memnet_peers_handler() -> Json<serde_json::Value> {
-    let state = crate::memnet::MemnetNodeState::load_or_default();
-    Json(serde_json::json!({
-        "node": state.node_name,
-        "address": state.local_address,
-        "tier": format!("{:?}", state.tier),
-        "wave_qa_entries": state.wave_qa_cache.len(),
-        "routes_total": state.routes.len(),
-        "routes_up": state.routes.iter().filter(|r| r.status == crate::memnet::RouteStatus::Up).count(),
-        "port": crate::memnet::MEMNET_FS_PORT,
-        "composite_rtc_tau_ms": state.composite_rtc_tau_ms(0xC5),
-        "shares": state.shared_folders.len(),
-        "mcp_tool": "memnet {operation:'peers'}",
-    }))
+    let val = tokio::task::spawn_blocking(|| {
+        let state = crate::memnet::MemnetNodeState::load_or_default();
+        serde_json::json!({
+            "node": state.node_name,
+            "address": state.local_address,
+            "tier": format!("{:?}", state.tier),
+            "wave_qa_entries": state.wave_qa_cache.len(),
+            "routes_total": state.routes.len(),
+            "routes_up": state.routes.iter().filter(|r| r.status == crate::memnet::RouteStatus::Up).count(),
+            "port": crate::memnet::MEMNET_FS_PORT,
+            "composite_rtc_tau_ms": state.composite_rtc_tau_ms(0xC5),
+            "shares": state.shared_folders.len(),
+            "mcp_tool": "memnet {operation:'peers'}",
+        })
+    })
+    .await
+    .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() }));
+    Json(val)
 }
 
 async fn memnet_ask_handler(

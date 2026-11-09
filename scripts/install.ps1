@@ -1,4 +1,4 @@
-# Smart Tree Windows Installer Script
+﻿# Smart Tree Windows Installer Script
 # 
 # This script installs the 'st' binary on Windows
 #
@@ -154,9 +154,11 @@ if ([string]::IsNullOrEmpty($Version)) {
     }
 }
 
-# 3. Construct Download URL
-$archiveName = "st-$Version-$targetArch-pc-windows-msvc.zip"
+# 3. Construct Download URL (canonical st-<arch>-pc-windows-msvc.zip with i1.is + legacy fallback)
+$archiveName = "st-$targetArch-pc-windows-msvc.zip"
 $downloadUrl = "https://github.com/$GitHubRepo/releases/download/$Version/$archiveName"
+$fallbackUrl = "https://i1.is/releases/smart-tree/current/$archiveName"
+$legacyUrl   = "https://github.com/$GitHubRepo/releases/download/$Version/st-$Version-$targetArch-pc-windows-msvc.zip"
 
 # 4. Download and Extract
 $tempDir = New-Item -ItemType Directory -Path "$env:TEMP\st-install-$(Get-Random)" -Force
@@ -164,22 +166,31 @@ $archivePath = Join-Path $tempDir $archiveName
 
 Write-Info "Downloading from $downloadUrl"
 try {
-    # Use WebRequest for better progress display
     $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing
+    try {
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing
+    } catch {
+        try {
+            Write-Info "Trying sovereign mirror $fallbackUrl ..."
+            Invoke-WebRequest -Uri $fallbackUrl -OutFile $archivePath -UseBasicParsing
+        } catch {
+            Write-Info "Trying legacy asset name $legacyUrl ..."
+            Invoke-WebRequest -Uri $legacyUrl -OutFile $archivePath -UseBasicParsing
+        }
+    }
     $ProgressPreference = 'Continue'
 } catch {
     Write-Error "Download failed: $_"
 }
 
-Write-Info "Extracting the binary..."
+Write-Info "Extracting the binaries..."
 try {
     Expand-Archive -Path $archivePath -DestinationPath $tempDir -Force
 } catch {
     Write-Error "Extraction failed: $_"
 }
 
-# 5. Install the binary
+# 5. Install the binaries (st.exe, m8.exe, n8x.exe)
 Write-Info "Installing to $InstallDir..."
 
 # Create install directory if it doesn't exist
@@ -187,17 +198,18 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-$binaryPath = Join-Path $tempDir $BinaryName
-if (-not (Test-Path $binaryPath)) {
-    # Sometimes the binary is in a subdirectory
-    $binaryPath = Get-ChildItem -Path $tempDir -Filter $BinaryName -Recurse | Select-Object -First 1 -ExpandProperty FullName
-    if ([string]::IsNullOrEmpty($binaryPath)) {
+foreach ($bin in @("st.exe", "m8.exe", "n8x.exe")) {
+    $cand = Join-Path $tempDir $bin
+    if (-not (Test-Path $cand)) {
+        $cand = Get-ChildItem -Path $tempDir -Filter $bin -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not [string]::IsNullOrEmpty($cand) -and (Test-Path $cand)) {
+        Copy-Item -Path $cand -Destination (Join-Path $InstallDir $bin) -Force
+    } elseif ($bin -eq $BinaryName) {
         Write-Error "Could not find the '$BinaryName' binary in the downloaded archive."
     }
 }
-
 $destinationPath = Join-Path $InstallDir $BinaryName
-Copy-Item -Path $binaryPath -Destination $destinationPath -Force
 
 # 6. Update PATH if necessary
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
