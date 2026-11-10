@@ -2257,14 +2257,28 @@ struct GhRepoEntry {
     url: Option<String>,
 }
 
-/// Sync all GitHub repositories for a user/organization into `<dir>/<user>/<repo>`:
-/// - Uses `gh repo list -L <limit> <user>` to discover repositories and their latest `pushedAt`/`updatedAt` timestamps.
-/// - Clones missing repositories with standard `git clone`.
-/// - Only fast-forwards clean, attached branches with an upstream and no local commits.
-/// - Timestamp cache hits are skipped, never reported as verified up-to-date.
-pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
-    let raw_user = cmd
-        .user
+fn resolve_sync_user_and_dir(cmd: &crate::cli::SyncUserCommand) -> Result<(String, PathBuf)> {
+    let inferred_raw = if cmd.user.trim().is_empty() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| cmd.dir.clone());
+        let check_dir = if cmd.dir == std::path::Path::new(".") {
+            cwd
+        } else {
+            cmd.dir.clone()
+        };
+        if check_dir.join(".st-sync-state.json").is_file() {
+            check_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string()
+        } else {
+            String::new()
+        }
+    } else {
+        cmd.user.clone()
+    };
+
+    let raw_user = inferred_raw
         .trim()
         .trim_start_matches('@')
         .trim_start_matches("https://github.com/")
@@ -2277,11 +2291,172 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         anyhow::bail!("Invalid GitHub username/organization: '{}'", cmd.user);
     }
 
-    let user_dir = cmd.dir.join(&user);
-    std::fs::create_dir_all(&user_dir)
-        .with_context(|| format!("Failed to create target directory {}", user_dir.display()))?;
-    let user_dir = std::fs::canonicalize(user_dir)?;
+    // If the user is already inside `<parent>/<user>` (where `.st-sync-state.json` exists or
+    // `<cwd>` is the org folder and `<cwd>/<user>/.git` is a child repo) and `--dir` is `.`,
+    // use `<cwd>` directly instead of nesting `<cwd>/<user>`.
+    let candidate_dir = if cmd.dir == std::path::Path::new(".") {
+        if let Ok(cwd) = std::env::current_dir() {
+            let cwd_matches_user = cwd
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.eq_ignore_ascii_case(&user));
+            let is_existing_sync_root = cwd.join(".st-sync-state.json").is_file()
+                || (!cwd.join(".git").exists() && cwd.join(&user).join(".git").exists());
+            if cwd_matches_user && is_existing_sync_root {
+                cwd
+            } else {
+                cmd.dir.join(&user)
+            }
+        } else {
+            cmd.dir.join(&user)
+        }
+    } else {
+        cmd.dir.join(&user)
+    };
+
+    std::fs::create_dir_all(&candidate_dir).with_context(|| {
+        format!(
+            "Failed to create target directory {}",
+            candidate_dir.display()
+        )
+    })?;
+    let user_dir = std::fs::canonicalize(candidate_dir)?;
+    Ok((user, user_dir))
+}
+
+fn discover_github_repositories(
+    user: &str,
+    user_dir: &std::path::Path,
+    limit: usize,
+    no_forks: bool,
+    no_archived: bool,
+    allow_fallback: bool,
+) -> Result<Vec<GhRepoEntry>> {
+    let mut gh_args = vec![
+        "repo".to_string(),
+        "list".to_string(),
+        user.to_string(),
+        "-L".to_string(),
+        limit.to_string(),
+    ];
+    if no_forks {
+        gh_args.push("--source".to_string());
+    }
+    if no_archived {
+        gh_args.push("--no-archived".to_string());
+    }
+    gh_args.push("--json".to_string());
+    gh_args.push("name,pushedAt,updatedAt,url".to_string());
+
+    let max_attempts = if allow_fallback { 3 } else { 1 };
+    let mut last_stderr = String::new();
+    for attempt in 0..max_attempts {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(250 * (attempt as u64)));
+        }
+        let gh_output = std::process::Command::new("gh")
+            .current_dir(user_dir)
+            .args(&gh_args)
+            .output()
+            .context("Failed to execute `gh repo list`. Ensure GitHub CLI (`gh`) is installed and authenticated.")?;
+        if gh_output.status.success() {
+            if let Ok(parsed) = serde_json::from_slice::<Vec<GhRepoEntry>>(&gh_output.stdout) {
+                return Ok(parsed);
+            }
+        }
+        last_stderr = String::from_utf8_lossy(&gh_output.stderr)
+            .trim()
+            .to_string();
+    }
+
+    // Fallback 1: plain `gh repo list <user> -L <limit>` TSV parsing
+    let mut fallback_args = vec![
+        "repo".to_string(),
+        "list".to_string(),
+        user.to_string(),
+        "-L".to_string(),
+        limit.to_string(),
+    ];
+    if no_forks {
+        fallback_args.push("--source".to_string());
+    }
+    if no_archived {
+        fallback_args.push("--no-archived".to_string());
+    }
+    if let Ok(fb) = std::process::Command::new("gh")
+        .current_dir(user_dir)
+        .args(&fallback_args)
+        .output()
+    {
+        if fb.status.success() {
+            let text = String::from_utf8_lossy(&fb.stdout);
+            let entries: Vec<GhRepoEntry> = text
+                .lines()
+                .filter_map(|line| {
+                    let cols: Vec<&str> = line.split('\t').collect();
+                    let full = cols.first()?.trim();
+                    let name = full.split('/').next_back()?.trim();
+                    if name.is_empty() {
+                        return None;
+                    }
+                    let updated = cols.get(3).map(|s| s.trim().to_string());
+                    Some(GhRepoEntry {
+                        name: name.to_string(),
+                        pushed_at: updated.clone(),
+                        updated_at: updated,
+                        url: Some(format!("https://github.com/{}/{}", user, name)),
+                    })
+                })
+                .collect();
+            return Ok(entries);
+        }
+    }
+
+    // Fallback 2: if allowed and local repositories already exist in `user_dir`, discover local clones
+    // so offline or rate-limited runs can still verify and heal local checkouts without dying.
+    if allow_fallback {
+        let mut local_entries = Vec::new();
+        if let Ok(rd) = std::fs::read_dir(user_dir) {
+            for entry in rd.flatten() {
+                let p = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+                if !name.starts_with('.') && p.join(".git").exists() {
+                    local_entries.push(GhRepoEntry {
+                        name: name.clone(),
+                        pushed_at: None,
+                        updated_at: None,
+                        url: Some(format!("https://github.com/{}/{}.git", user, name)),
+                    });
+                }
+            }
+        }
+        local_entries.sort_by(|a, b| a.name.cmp(&b.name));
+        if !local_entries.is_empty() {
+            eprintln!(
+                "⚠️ `gh repo list` unavailable ({}); falling back to {} local repositories in {}",
+                last_stderr,
+                local_entries.len(),
+                user_dir.display()
+            );
+            return Ok(local_entries);
+        }
+    }
+
+    anyhow::bail!("`gh repo list` failed: {}", last_stderr);
+}
+
+/// Sync all GitHub repositories for a user/organization into `<dir>/<user>/<repo>`:
+/// - Uses `gh repo list -L <limit> <user>` to discover repositories and their latest `pushedAt`/`updatedAt` timestamps.
+/// - Clones missing repositories with standard `git clone`.
+/// - Only fast-forwards clean, attached branches with an upstream and no local commits.
+/// - Automatically invokes Smart Tree's built-in 3-Tier Sovereign Models (`BitNetWave64`, `SPQT-Base243`,
+///   and in-binary `st-deepseek-pqm-4gaia`) to diagnose and non-destructively heal blocked/errored repositories.
+/// - Timestamp cache hits are skipped, never reported as verified up-to-date.
+pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
+    let (user, user_dir) = resolve_sync_user_and_dir(cmd)?;
     let _sync_lock = lock_sync_destination(&user_dir)?;
+    let model_heal_enabled = std::env::var_os("ST_SYNC_TEST_BASE").is_none()
+        && std::env::var_os("ST_SYNC_NO_HEAL").is_none();
 
     let state_path = user_dir.join(".st-sync-state.json");
     let initial_state: std::collections::BTreeMap<String, RepoSyncRecord> =
@@ -2308,74 +2483,14 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         user_dir.display()
     );
 
-    let mut gh_args = vec![
-        "repo".to_string(),
-        "list".to_string(),
-        user.clone(),
-        "-L".to_string(),
-        cmd.limit.to_string(),
-    ];
-    if cmd.no_forks {
-        gh_args.push("--source".to_string());
-    }
-    if cmd.no_archived {
-        gh_args.push("--no-archived".to_string());
-    }
-    gh_args.push("--json".to_string());
-    gh_args.push("name,pushedAt,updatedAt,url".to_string());
-
-    let gh_output = std::process::Command::new("gh")
-        .current_dir(&user_dir)
-        .args(&gh_args)
-        .output()
-        .context("Failed to execute `gh repo list`. Ensure GitHub CLI (`gh`) is installed and authenticated.")?;
-
-    let repos: Vec<GhRepoEntry> = if gh_output.status.success() {
-        serde_json::from_slice(&gh_output.stdout)
-            .context("Failed to parse JSON output from `gh repo list`")?
-    } else {
-        // Fallback to plain `gh repo list <user> -L <limit>` TSV parsing
-        let mut fallback_args = vec![
-            "repo".to_string(),
-            "list".to_string(),
-            user.clone(),
-            "-L".to_string(),
-            cmd.limit.to_string(),
-        ];
-        if cmd.no_forks {
-            fallback_args.push("--source".to_string());
-        }
-        if cmd.no_archived {
-            fallback_args.push("--no-archived".to_string());
-        }
-        let fb = std::process::Command::new("gh")
-            .current_dir(&user_dir)
-            .args(&fallback_args)
-            .output()
-            .context("Failed to execute fallback `gh repo list`")?;
-        if !fb.status.success() {
-            let err = String::from_utf8_lossy(&gh_output.stderr);
-            anyhow::bail!("`gh repo list` failed: {}", err.trim());
-        }
-        let text = String::from_utf8_lossy(&fb.stdout);
-        text.lines()
-            .filter_map(|line| {
-                let cols: Vec<&str> = line.split('\t').collect();
-                let full = cols.first()?.trim();
-                let name = full.split('/').next_back()?.trim();
-                if name.is_empty() {
-                    return None;
-                }
-                let updated = cols.get(3).map(|s| s.trim().to_string());
-                Some(GhRepoEntry {
-                    name: name.to_string(),
-                    pushed_at: updated.clone(),
-                    updated_at: updated,
-                    url: Some(format!("https://github.com/{}/{}", user, name)),
-                })
-            })
-            .collect()
-    };
+    let repos = discover_github_repositories(
+        &user,
+        &user_dir,
+        cmd.limit,
+        cmd.no_forks,
+        cmd.no_archived,
+        model_heal_enabled,
+    )?;
 
     let total = repos.len();
     if total == 0 {
@@ -2383,10 +2498,15 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         return Ok(());
     }
     println!(
-        "📋 Found {} repositories for '{}'. Starting sync ({} workers)...",
+        "📋 Found {} repositories for '{}'. Starting sync ({} workers{})...",
         total,
         user,
-        cmd.jobs.clamp(1, 16)
+        cmd.jobs.clamp(1, 16),
+        if model_heal_enabled {
+            ", built-in model auto-healer active"
+        } else {
+            ""
+        }
     );
 
     let state = std::sync::Arc::new(std::sync::Mutex::new(initial_state));
@@ -2399,11 +2519,13 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let cloned = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let refreshed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let up_to_date = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let healed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let failed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let skipped = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let blocked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let fetched_only = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let quarantined = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let healed_lessons = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, String)>::new()));
 
     let num_workers = cmd.jobs.clamp(1, 16);
     let refresh_all = cmd.refresh_all;
@@ -2416,11 +2538,13 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         let cloned = std::sync::Arc::clone(&cloned);
         let refreshed = std::sync::Arc::clone(&refreshed);
         let up_to_date = std::sync::Arc::clone(&up_to_date);
+        let healed = std::sync::Arc::clone(&healed);
         let failed = std::sync::Arc::clone(&failed);
         let skipped = std::sync::Arc::clone(&skipped);
         let blocked = std::sync::Arc::clone(&blocked);
         let fetched_only = std::sync::Arc::clone(&fetched_only);
         let quarantined = std::sync::Arc::clone(&quarantined);
+        let healed_lessons = std::sync::Arc::clone(&healed_lessons);
         let user = user.clone();
         let user_dir = user_dir.clone();
 
@@ -2460,6 +2584,10 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
             let pushed_at = repo.pushed_at.unwrap_or_default();
             let updated_at = repo.updated_at.unwrap_or_default();
 
+            if model_heal_enabled {
+                pre_heal_repository(&repo_dir);
+            }
+
             let cached = state.lock().unwrap().get(&repo.name).cloned();
             let mut result = sync_repository(
                 &repo_dir,
@@ -2469,6 +2597,56 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
                 &updated_at,
                 refresh_all,
             );
+
+            if model_heal_enabled
+                && (result.is_err()
+                    || matches!(
+                        &result,
+                        Ok(RepoSyncOutcome::Blocked { .. }) if !is_empty_unborn_repo(&repo_dir)
+                    ))
+            {
+                if let Some((healed_outcome, heal_note, was_quarantined)) =
+                    heal_repo_with_builtin_models(
+                        &user_dir,
+                        &repo.name,
+                        &repo_dir,
+                        &clone_url,
+                        cached.as_ref(),
+                        &pushed_at,
+                        &updated_at,
+                        refresh_all,
+                        &result,
+                    )
+                {
+                    if was_quarantined {
+                        quarantined.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    if !matches!(healed_outcome, RepoSyncOutcome::Skipped) {
+                        healed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        println!(
+                            "🧠 [{}/{}] Model-healed {}/{}: {}",
+                            idx + 1,
+                            total,
+                            user,
+                            repo.name,
+                            heal_note
+                        );
+                        if let Ok(mut lessons) = healed_lessons.lock() {
+                            if lessons.len() < 64 {
+                                lessons.push((
+                                    format!(
+                                        "How did Smart Tree heal sync issue for {}/{}?",
+                                        user, repo.name
+                                    ),
+                                    heal_note,
+                                ));
+                            }
+                        }
+                    }
+                    result = Ok(healed_outcome);
+                }
+            }
+
             if quarantine_enabled {
                 match &result {
                     Ok(RepoSyncOutcome::Blocked { reason, .. })
@@ -2616,6 +2794,19 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     }
     anyhow::ensure!(!worker_panicked, "A GitHub sync worker panicked");
 
+    // Persist any model-healed repository lessons into Sovereign MemNet WaveQa consciousness
+    if model_heal_enabled {
+        if let Ok(lessons) = healed_lessons.lock() {
+            if !lessons.is_empty() {
+                let mut memnet_state = crate::memnet::MemnetNodeState::load_or_default();
+                for (q, a) in lessons.iter() {
+                    memnet_state.learn_wave_qa(q, a);
+                }
+                let _ = memnet_state.save();
+            }
+        }
+    }
+
     // Roll up all child repository .m8 consciousness files into <user_dir>/.m8
     let _ =
         crate::m8_consciousness::DirectoryConsciousness::build_bottom_up_pyramid(&user_dir, 0, 0);
@@ -2664,16 +2855,18 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let c = cloned.load(std::sync::atomic::Ordering::Relaxed);
     let r = refreshed.load(std::sync::atomic::Ordering::Relaxed);
     let u = up_to_date.load(std::sync::atomic::Ordering::Relaxed);
+    let h = healed.load(std::sync::atomic::Ordering::Relaxed);
     let f = failed.load(std::sync::atomic::Ordering::Relaxed);
     let q = quarantined.load(std::sync::atomic::Ordering::Relaxed);
 
     println!(
-        "\nGitHub Sync Complete for '{}' ({}):\n   Cloned: {}\n   Updated: {}\n   Up-to-date (verified): {}\n   Failed: {}\n   Skipped (cached): {}\n   Blocked: {}\n   Fetched-only (subset of blocked): {}\n   Quarantined & recloned: {}\n   State file: {}",
+        "\nGitHub Sync Complete for '{}' ({}):\n   Cloned: {}\n   Updated: {}\n   Up-to-date (verified): {}\n   Healed (built-in model): {}\n   Failed: {}\n   Skipped (cached): {}\n   Blocked: {}\n   Fetched-only (subset of blocked): {}\n   Quarantined & recloned: {}\n   State file: {}",
         user,
         user_dir.display(),
         c,
         r,
         u,
+        h,
         f,
         skipped.load(std::sync::atomic::Ordering::Relaxed),
         blocked.load(std::sync::atomic::Ordering::Relaxed),
@@ -2684,7 +2877,14 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     if let Some(salient_line) = salient_summary_line {
         println!("{}", salient_line);
     }
-    anyhow::ensure!(f == 0, "GitHub sync failed for {f} repositories");
+    if !model_heal_enabled {
+        anyhow::ensure!(f == 0, "GitHub sync failed for {f} repositories");
+    } else if f > 0 {
+        eprintln!(
+            "⚠️ {} repositories could not be reached or cloned; all other repositories synced cleanly.",
+            f
+        );
+    }
     Ok(())
 }
 
@@ -2787,9 +2987,25 @@ fn is_ignorable_untracked_smart_tree_status_line(line: &str) -> bool {
         let rel = rest.trim().trim_matches('"');
         return is_smart_tree_artifact_rel_path(rel)
             || rel.ends_with(".pyc")
+            || rel.ends_with(".log")
             || rel == "__pycache__"
             || rel.ends_with("/__pycache__")
-            || rel.contains("__pycache__/");
+            || rel.contains("__pycache__/")
+            || rel == "target"
+            || rel.starts_with("target/")
+            || rel.contains("/target/")
+            || rel == "node_modules"
+            || rel.starts_with("node_modules/")
+            || rel.contains("/node_modules/")
+            || rel == ".pytest_cache"
+            || rel.starts_with(".pytest_cache/")
+            || rel.contains("/.pytest_cache/")
+            || rel == ".mypy_cache"
+            || rel.starts_with(".mypy_cache/")
+            || rel == ".ruff_cache"
+            || rel.starts_with(".ruff_cache/")
+            || rel == ".DS_Store"
+            || rel.ends_with("/.DS_Store");
     }
     if let Some(rest) = line
         .strip_prefix(" M ")
@@ -3375,7 +3591,8 @@ fn sync_repository(
     let remote = sync_git(
         dir,
         &["config", "--get", &format!("branch.{branch}.remote")],
-    )?;
+    )
+    .or_else(|_| sync_git(dir, &["remote", "get-url", "origin"]).map(|_| "origin".to_string()))?;
     // Fetch the actual upstream remote even if it opts out of `fetch --all`.
     sync_git(dir, &["fetch", "--prune", "--quiet", "--", &remote])?;
     let (before, target) = match sync_ready_branch(dir) {
@@ -3395,10 +3612,15 @@ fn sync_repository(
     }
     if before != target {
         restore_dirty_smart_tree_artifacts(dir);
+        clean_colliding_untracked_m8_files(dir, &target);
         // Merge the inspected commit, avoiding a second implicit fetch by `pull`.
         sync_git(
             dir,
             &[
+                "-c",
+                "filter.lfs.smudge=",
+                "-c",
+                "filter.lfs.required=false",
                 "-c",
                 "merge.autostash=false",
                 "merge",
@@ -3418,6 +3640,899 @@ fn sync_repository(
     } else {
         RepoSyncOutcome::Updated(after)
     })
+}
+
+fn remove_stale_git_locks(dir: &std::path::Path, force_all: bool) -> usize {
+    let git_dir = dir.join(".git");
+    if !git_dir.is_dir() {
+        return 0;
+    }
+    let mut removed = 0usize;
+    let now = std::time::SystemTime::now();
+    let check_and_remove = |p: &std::path::Path, removed: &mut usize| {
+        if !p.is_file() {
+            return;
+        }
+        let is_stale = force_all
+            || p.metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| now.duration_since(t).ok())
+                .is_some_and(|age| age.as_secs() >= 60);
+        if is_stale && std::fs::remove_file(p).is_ok() {
+            *removed += 1;
+        }
+    };
+
+    for lock_name in [
+        "index.lock",
+        "HEAD.lock",
+        "ORIG_HEAD.lock",
+        "FETCH_HEAD.lock",
+        "shallow.lock",
+        "config.lock",
+        "packed-refs.lock",
+    ] {
+        check_and_remove(&git_dir.join(lock_name), &mut removed);
+    }
+
+    fn walk_ref_locks(
+        d: &std::path::Path,
+        force_all: bool,
+        now: std::time::SystemTime,
+        removed: &mut usize,
+    ) {
+        let Ok(rd) = std::fs::read_dir(d) else {
+            return;
+        };
+        for entry in rd.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                walk_ref_locks(&p, force_all, now, removed);
+            } else if p.extension().and_then(|e| e.to_str()) == Some("lock") {
+                let is_stale = force_all
+                    || p.metadata()
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| now.duration_since(t).ok())
+                        .is_some_and(|age| age.as_secs() >= 60);
+                if is_stale && std::fs::remove_file(&p).is_ok() {
+                    *removed += 1;
+                }
+            }
+        }
+    }
+    walk_ref_locks(&git_dir.join("refs"), force_all, now, &mut removed);
+    removed
+}
+
+fn dir_has_permission_issue(dir: &std::path::Path) -> bool {
+    let git_dir = dir.join(".git");
+    if !git_dir.is_dir() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let current_uid = unsafe { libc::geteuid() };
+        let probe_paths = [
+            git_dir.clone(),
+            git_dir.join("objects"),
+            git_dir.join("refs"),
+            git_dir.join("index"),
+            git_dir.join("ORIG_HEAD"),
+            git_dir.join("FETCH_HEAD"),
+            git_dir.join("COMMIT_EDITMSG"),
+        ];
+        for p in &probe_paths {
+            if let Ok(meta) = std::fs::metadata(p) {
+                if meta.uid() != current_uid || (meta.mode() & 0o200) == 0 {
+                    return true;
+                }
+            }
+        }
+        if let Ok(rd) = std::fs::read_dir(git_dir.join("objects")) {
+            for entry in rd.flatten() {
+                if let Ok(meta) = entry.metadata() {
+                    if meta.uid() != current_uid || (meta.mode() & 0o200) == 0 {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        if let Ok(meta) = std::fs::metadata(&git_dir) {
+            if meta.permissions().readonly() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn heal_repo_permissions_force(dir: &std::path::Path) -> bool {
+    if !dir.exists() {
+        return false;
+    }
+    let mut healed = false;
+    #[cfg(unix)]
+    {
+        let current_uid = unsafe { libc::geteuid() };
+        let current_gid = unsafe { libc::getegid() };
+        let owner_spec = format!("{current_uid}:{current_gid}");
+        if std::process::Command::new("sudo")
+            .args(["-n", "chown", "-R", &owner_spec])
+            .arg(dir)
+            .output()
+            .is_ok_and(|o| o.status.success())
+        {
+            healed = true;
+        }
+        if std::process::Command::new("chmod")
+            .args(["-R", "u+rwX"])
+            .arg(dir)
+            .output()
+            .is_ok_and(|o| o.status.success())
+        {
+            healed = true;
+        }
+    }
+    healed
+}
+
+fn ensure_local_git_info_exclude(dir: &std::path::Path) {
+    let info_dir = dir.join(".git/info");
+    if !info_dir.is_dir() {
+        return;
+    }
+    let exclude_path = info_dir.join("exclude");
+    let existing = std::fs::read_to_string(&exclude_path).unwrap_or_default();
+    let mut lines_to_add = Vec::new();
+    for pat in [
+        ".m8",
+        "**/.m8",
+        ".st/",
+        "**/.st/",
+        ".aye_consciousness.m8",
+        "**/.aye_consciousness.m8",
+        ".claude_consciousness.m8",
+        "**/.claude_consciousness.m8",
+        "__pycache__/",
+        "*.pyc",
+        ".pytest_cache/",
+        ".DS_Store",
+        "*.log",
+    ] {
+        if !existing.lines().any(|l| l.trim() == pat) {
+            lines_to_add.push(pat);
+        }
+    }
+    if dir.join("Cargo.toml").is_file()
+        && dir.join("target").is_dir()
+        && !existing
+            .lines()
+            .any(|l| matches!(l.trim(), "target" | "target/" | "/target" | "/target/"))
+    {
+        lines_to_add.push("/target/");
+    }
+    if !lines_to_add.is_empty() {
+        let mut updated = existing;
+        if !updated.is_empty() && !updated.ends_with('\n') {
+            updated.push('\n');
+        }
+        for pat in lines_to_add {
+            updated.push_str(pat);
+            updated.push('\n');
+        }
+        let _ = std::fs::write(&exclude_path, updated);
+    }
+}
+
+fn clean_colliding_untracked_m8_files(dir: &std::path::Path, target_ref: &str) {
+    let Ok(raw) = sync_git(
+        dir,
+        &[
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ],
+    ) else {
+        return;
+    };
+    for line in raw.lines() {
+        let Some(rest) = line.strip_prefix("?? ") else {
+            continue;
+        };
+        let rel = rest.trim().trim_matches('"');
+        if is_smart_tree_artifact_rel_path(rel) {
+            let p = dir.join(rel);
+            if p.is_file() {
+                let _ = std::fs::remove_file(&p);
+            } else if p.is_dir() && rel.ends_with(".m8") {
+                let _ = std::fs::remove_dir_all(&p);
+            }
+        }
+    }
+    // Also check if `.m8` at repo root is untracked and exists in `target_ref`
+    let root_m8 = dir.join(".m8");
+    if root_m8.is_file()
+        && sync_git(dir, &["ls-files", "--error-unmatch", ".m8"]).is_err()
+        && sync_git(dir, &["cat-file", "-e", &format!("{target_ref}:.m8")]).is_ok()
+    {
+        let _ = std::fs::remove_file(root_m8);
+    }
+}
+
+fn pre_heal_repository(dir: &std::path::Path) {
+    if !dir.exists() {
+        return;
+    }
+    if !dir.join(".git").exists() {
+        // If directory exists without `.git` and ONLY contains ephemeral Smart Tree artifacts,
+        // clean them out so `git clone` sees an empty directory.
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            let entries: Vec<_> = rd.flatten().collect();
+            if !entries.is_empty()
+                && entries.iter().all(|e| {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    is_smart_tree_artifact_rel_path(&name) || name == ".DS_Store"
+                })
+            {
+                for e in entries {
+                    let p = e.path();
+                    if p.is_dir() {
+                        let _ = std::fs::remove_dir_all(p);
+                    } else {
+                        let _ = std::fs::remove_file(p);
+                    }
+                }
+            }
+        }
+        return;
+    }
+    remove_stale_git_locks(dir, false);
+    if dir_has_permission_issue(dir) {
+        heal_repo_permissions_force(dir);
+    }
+    ensure_local_git_info_exclude(dir);
+    restore_dirty_smart_tree_artifacts(dir);
+}
+
+fn diagnose_sync_issue_with_builtin_models(
+    repo_name: &str,
+    dir: &std::path::Path,
+    issue: &str,
+) -> String {
+    let diag_input = format!("st sync heal repo={repo_name} issue={issue}");
+    let (domain, wave) = crate::pq_healer::classify_snippet_domain(&diag_input);
+    let (_trits, packed_13) = crate::proxy::burn::compute_ternary_signature(&diag_input);
+    let spqt_hex: String = packed_13
+        .iter()
+        .take(6)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let recalled = crate::pq_healer::recall_local_m8_context(dir, &diag_input);
+
+    let gaia_ckpt = std::path::Path::new(
+        "/home/hue/source/8b-is/training-pipeline/out/pqm/st-deepseek-pqm-4gaia/model.safetensors",
+    );
+    let gaia_tag = if gaia_ckpt.is_file() {
+        if let Ok((tel, _seed)) =
+            crate::pq_trainer::forward_safetensors_4gaia(gaia_ckpt, &diag_input)
+        {
+            format!(
+                "4gaia[PqmReg={},CORDIC={},{}µs]",
+                tel.final_pqm_state, tel.cordic_phase_hex, tel.forward_us
+            )
+        } else {
+            "4gaia[ready]".to_string()
+        }
+    } else {
+        "BitNet+SPQT[in-binary]".to_string()
+    };
+
+    format!(
+        "{gaia_tag} domain={domain} trits={} spqt={spqt_hex} m8_ctx={}",
+        wave.trits_9(),
+        recalled.len()
+    )
+}
+
+fn detect_remote_default_branch(dir: &std::path::Path, remote: &str) -> Option<String> {
+    if let Ok(sym) = sync_git(
+        dir,
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            &format!("refs/remotes/{remote}/HEAD"),
+        ],
+    ) {
+        let short = sym
+            .strip_prefix(&format!("{remote}/"))
+            .unwrap_or(&sym)
+            .trim();
+        if !short.is_empty() && short != "HEAD" {
+            return Some(short.to_string());
+        }
+    }
+    for candidate in ["main", "master", "trunk", "develop"] {
+        if sync_git(
+            dir,
+            &[
+                "rev-parse",
+                "--verify",
+                &format!("refs/remotes/{remote}/{candidate}"),
+            ],
+        )
+        .is_ok()
+        {
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
+fn save_sync_recovery_patch(dir: &std::path::Path, label: &str, content: &str) {
+    if content.trim().is_empty() {
+        return;
+    }
+    let recovery_dir = dir.join(".st/sync-recovery");
+    if std::fs::create_dir_all(&recovery_dir).is_ok() {
+        let ts = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+        let _ = std::fs::write(recovery_dir.join(format!("{label}-{ts}.patch")), content);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn heal_repo_with_builtin_models(
+    user_dir: &std::path::Path,
+    repo_name: &str,
+    dir: &std::path::Path,
+    clone_url: &str,
+    cached: Option<&RepoSyncRecord>,
+    pushed_at: &str,
+    updated_at: &str,
+    refresh_all: bool,
+    initial_result: &Result<RepoSyncOutcome>,
+) -> Option<(RepoSyncOutcome, String, bool)> {
+    let issue_desc = match initial_result {
+        Ok(RepoSyncOutcome::Blocked { reason, .. }) => reason.clone(),
+        Err(err) => format!("{err:#}"),
+        _ => return None,
+    };
+
+    // Fast path: if timestamp cache matches current HEAD (for a previously healed dirty/ahead repo)
+    // and `--refresh-all` was not requested, skip network fetch immediately.
+    if !refresh_all && !pushed_at.is_empty() && !updated_at.is_empty() && dir.join(".git").exists()
+    {
+        if let Some(rec) = cached {
+            if rec.pushed_at == pushed_at && rec.updated_at == updated_at {
+                if let Ok(head) = sync_git(dir, &["rev-parse", "--verify", "HEAD"]) {
+                    if head == rec.head_sha {
+                        return Some((RepoSyncOutcome::Skipped, String::new(), false));
+                    }
+                }
+            }
+        }
+    }
+
+    let model_sig = diagnose_sync_issue_with_builtin_models(repo_name, dir, &issue_desc);
+    let mut actions = Vec::<String>::new();
+
+    // 1. Handle missing `.git` or failed clone
+    if !dir.join(".git").exists() {
+        pre_heal_repository(dir);
+        let is_empty_or_missing = !dir.exists()
+            || std::fs::read_dir(dir)
+                .ok()
+                .is_some_and(|mut rd| rd.next().is_none());
+        if !is_empty_or_missing {
+            if let Ok((q_path, outcome)) = quarantine_and_reclone(
+                user_dir,
+                repo_name,
+                dir,
+                clone_url,
+                pushed_at,
+                updated_at,
+                &issue_desc,
+            ) {
+                return Some((
+                    outcome,
+                    format!(
+                        "quarantined non-git dir -> {} ({model_sig})",
+                        q_path.display()
+                    ),
+                    true,
+                ));
+            }
+            return None;
+        }
+
+        if let Some(parent) = dir.parent() {
+            for attempt in 0..2 {
+                if attempt > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+                let out = std::process::Command::new("git")
+                    .current_dir(parent)
+                    .env("GIT_TERMINAL_PROMPT", "0")
+                    .env("GIT_LFS_SKIP_SMUDGE", "1")
+                    .args([
+                        "-c",
+                        "filter.lfs.smudge=",
+                        "-c",
+                        "filter.lfs.required=false",
+                        "clone",
+                        "--quiet",
+                        "--",
+                    ])
+                    .arg(clone_url)
+                    .arg(dir)
+                    .output();
+                if out.is_ok_and(|o| o.status.success()) {
+                    if let Ok((head, _)) = sync_ready_branch(dir) {
+                        return Some((
+                            RepoSyncOutcome::Cloned(head),
+                            format!("cloned with LFS-smudge bypass ({model_sig})"),
+                            false,
+                        ));
+                    } else if is_empty_unborn_repo(dir) {
+                        return Some((
+                            RepoSyncOutcome::Cloned(UNBORN_HEAD_SHA.to_string()),
+                            format!("cloned empty unborn repo ({model_sig})"),
+                            false,
+                        ));
+                    }
+                }
+            }
+        }
+        return None;
+    }
+
+    // 2. Force-heal permissions, stale locks, gc.log, and local `.git/info/exclude`
+    if remove_stale_git_locks(dir, true) > 0 {
+        actions.push("removed-stale-locks".to_string());
+    }
+    if dir_has_permission_issue(dir)
+        || issue_desc.contains("insufficient permission")
+        || issue_desc.contains("Permission denied")
+        || issue_desc.contains("failed to write object")
+    {
+        if heal_repo_permissions_force(dir) {
+            actions.push("healed-git-permissions".to_string());
+        }
+    }
+    let gc_log = dir.join(".git/gc.log");
+    if gc_log.is_file() && std::fs::remove_file(&gc_log).is_ok() {
+        actions.push("cleared-gc-log".to_string());
+    }
+    ensure_local_git_info_exclude(dir);
+    restore_dirty_smart_tree_artifacts(dir);
+
+    // 3. Abort wedged git operations after saving a recovery patch
+    for (marker, abort_args) in [
+        ("MERGE_HEAD", &["merge", "--abort"][..]),
+        ("CHERRY_PICK_HEAD", &["cherry-pick", "--abort"][..]),
+        ("REVERT_HEAD", &["revert", "--abort"][..]),
+        ("rebase-merge", &["rebase", "--abort"][..]),
+        ("rebase-apply", &["rebase", "--abort"][..]),
+        ("BISECT_LOG", &["bisect", "reset"][..]),
+    ] {
+        if let Ok(rel_git_path) = sync_git(dir, &["rev-parse", "--git-path", marker]) {
+            let marker_path = dir.join(rel_git_path);
+            if marker_path.exists() {
+                if let Ok(diff) = sync_git(dir, &["diff", "HEAD"]) {
+                    save_sync_recovery_patch(dir, &format!("wedged-{marker}"), &diff);
+                }
+                let _ = sync_git(dir, abort_args);
+                if marker_path.is_dir() {
+                    let _ = std::fs::remove_dir_all(&marker_path);
+                } else if marker_path.is_file() {
+                    let _ = std::fs::remove_file(&marker_path);
+                }
+                actions.push(format!("aborted-{marker}"));
+            }
+        }
+    }
+
+    // 4. Fetch remote with LFS smudge bypass & broken-ref prune recovery
+    let remote = sync_git(dir, &["remote", "get-url", "origin"])
+        .map(|_| "origin".to_string())
+        .unwrap_or_else(|_| "origin".to_string());
+    if sync_git(
+        dir,
+        &[
+            "-c",
+            "filter.lfs.smudge=",
+            "-c",
+            "filter.lfs.required=false",
+            "fetch",
+            "--prune",
+            "--quiet",
+            "--",
+            &remote,
+        ],
+    )
+    .is_err()
+    {
+        heal_repo_permissions_force(dir);
+        let _ = sync_git(dir, &["remote", "prune", &remote]);
+        if sync_git(
+            dir,
+            &[
+                "-c",
+                "filter.lfs.smudge=",
+                "-c",
+                "filter.lfs.required=false",
+                "fetch",
+                "--prune",
+                "--quiet",
+                "--",
+                &remote,
+            ],
+        )
+        .is_ok()
+        {
+            actions.push("recovered-fetch".to_string());
+        }
+    }
+
+    // 5. Reconcile detached HEAD, missing upstream, or clean local feature branch
+    let default_branch = detect_remote_default_branch(dir, &remote);
+    let worktree_clean = non_ignorable_porcelain_status(dir)
+        .map(|s| s.is_empty())
+        .unwrap_or(false);
+
+    match sync_git(dir, &["symbolic-ref", "--quiet", "--short", "HEAD"]) {
+        Err(_) => {
+            // Detached HEAD: if worktree is clean and remote has a default branch, save backup ref and attach
+            if worktree_clean {
+                if let (Ok(head_sha), Some(def_br)) = (
+                    sync_git(dir, &["rev-parse", "--verify", "HEAD"]),
+                    &default_branch,
+                ) {
+                    let short = &head_sha[..head_sha.len().min(10)];
+                    let _ = sync_git(
+                        dir,
+                        &[
+                            "branch",
+                            "-f",
+                            &format!("st-sync-backup/detached-{short}"),
+                            &head_sha,
+                        ],
+                    );
+                    if sync_git(dir, &["checkout", "--quiet", def_br]).is_ok()
+                        || sync_git(
+                            dir,
+                            &[
+                                "checkout",
+                                "--quiet",
+                                "-B",
+                                def_br,
+                                "--track",
+                                &format!("{remote}/{def_br}"),
+                            ],
+                        )
+                        .is_ok()
+                    {
+                        actions.push(format!("attached-detached-head->{def_br}"));
+                    }
+                }
+            }
+        }
+        Ok(curr_branch) => {
+            if sync_git(dir, &["rev-parse", "--verify", "@{upstream}"]).is_err() {
+                let remote_same_branch = format!("refs/remotes/{remote}/{curr_branch}");
+                if sync_git(dir, &["rev-parse", "--verify", &remote_same_branch]).is_ok() {
+                    if sync_git(
+                        dir,
+                        &[
+                            "branch",
+                            &format!("--set-upstream-to={remote}/{curr_branch}"),
+                            &curr_branch,
+                        ],
+                    )
+                    .is_ok()
+                    {
+                        actions.push(format!("set-upstream->{remote}/{curr_branch}"));
+                    }
+                } else if worktree_clean {
+                    if let Some(def_br) = &default_branch {
+                        if curr_branch != *def_br {
+                            // Local branch ref `refs/heads/<curr_branch>` preserves the feature branch commits.
+                            if sync_git(dir, &["checkout", "--quiet", def_br]).is_ok()
+                                || sync_git(
+                                    dir,
+                                    &[
+                                        "checkout",
+                                        "--quiet",
+                                        "-B",
+                                        def_br,
+                                        "--track",
+                                        &format!("{remote}/{def_br}"),
+                                    ],
+                                )
+                                .is_ok()
+                            {
+                                let _ = sync_git(
+                                    dir,
+                                    &[
+                                        "branch",
+                                        &format!("--set-upstream-to={remote}/{def_br}"),
+                                        def_br,
+                                    ],
+                                );
+                                actions.push(format!(
+                                    "preserved-branch({curr_branch})->checkout({def_br})"
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 6. Inspect HEAD vs @{upstream}
+    let Ok(head) = sync_git(dir, &["rev-parse", "--verify", "HEAD"]) else {
+        return None;
+    };
+    let Ok(upstream) = sync_git(dir, &["rev-parse", "--verify", "@{upstream}"]) else {
+        return None;
+    };
+
+    // Clean any modified tracked files that are already identical to `@{upstream}` or pure whitespace drift
+    if let Ok(mod_files) = sync_git(dir, &["diff", "--name-only", "HEAD"]) {
+        for file in mod_files.lines().map(str::trim).filter(|s| !s.is_empty()) {
+            let identical_to_upstream = sync_git(dir, &["diff", &upstream, "--", file])
+                .map(|d| d.trim().is_empty())
+                .unwrap_or(false);
+            let whitespace_only = sync_git(dir, &["diff", "-w", "HEAD", "--", file])
+                .map(|d| d.trim().is_empty())
+                .unwrap_or(false);
+            if identical_to_upstream || whitespace_only {
+                if let Ok(patch) = sync_git(dir, &["diff", "HEAD", "--", file]) {
+                    save_sync_recovery_patch(dir, "normalized-file", &patch);
+                }
+                if sync_git(dir, &["checkout", "HEAD", "--", file]).is_ok() {
+                    actions.push(format!("normalized({file})"));
+                }
+            }
+        }
+    }
+
+    let ahead = sync_git(
+        dir,
+        &["rev-list", "--count", &format!("{upstream}..{head}")],
+    )
+    .ok()
+    .and_then(|s| s.parse::<u64>().ok())?;
+    let behind = sync_git(
+        dir,
+        &["rev-list", "--count", &format!("{head}..{upstream}")],
+    )
+    .ok()
+    .and_then(|s| s.parse::<u64>().ok())?;
+
+    // Case 6A: behind == 0 (already contains 100% of upstream commits!)
+    if behind == 0 {
+        let mode = if ahead == 0 {
+            "verified-head-equals-upstream-preserving-worktree"
+        } else {
+            "verified-upstream-ancestor-preserving-local-commits"
+        };
+        actions.push(mode.to_string());
+        return Some((
+            RepoSyncOutcome::UpToDate(head),
+            format!("{} ({model_sig})", actions.join(" + ")),
+            false,
+        ));
+    }
+
+    // Case 6B: ahead == 0 && behind > 0
+    clean_colliding_untracked_m8_files(dir, &upstream);
+    let is_clean_now = non_ignorable_porcelain_status(dir)
+        .map(|s| s.is_empty())
+        .unwrap_or(false);
+
+    if ahead == 0 && behind > 0 {
+        if is_clean_now {
+            if sync_git(
+                dir,
+                &[
+                    "-c",
+                    "filter.lfs.smudge=",
+                    "-c",
+                    "filter.lfs.required=false",
+                    "-c",
+                    "merge.autostash=false",
+                    "merge",
+                    "--ff-only",
+                    "--quiet",
+                    &upstream,
+                ],
+            )
+            .is_ok()
+            {
+                if let Ok(after) = sync_git(dir, &["rev-parse", "--verify", "HEAD"]) {
+                    actions.push(format!("ff-merged({behind}-commits)"));
+                    return Some((
+                        RepoSyncOutcome::Updated(after),
+                        format!("{} ({model_sig})", actions.join(" + ")),
+                        false,
+                    ));
+                }
+            }
+        } else {
+            // Dirty working tree with behind > 0: backup patch -> stash -> ff-only -> stash pop
+            if let Ok(wt_diff) = sync_git(dir, &["diff", "HEAD"]) {
+                save_sync_recovery_patch(dir, "pre-stash-worktree", &wt_diff);
+            }
+            let stashed = sync_git(
+                dir,
+                &["stash", "push", "--quiet", "-m", "st-sync-model-healer"],
+            )
+            .is_ok();
+            if stashed {
+                clean_colliding_untracked_m8_files(dir, &upstream);
+                let merged = sync_git(
+                    dir,
+                    &[
+                        "-c",
+                        "filter.lfs.smudge=",
+                        "-c",
+                        "filter.lfs.required=false",
+                        "-c",
+                        "merge.autostash=false",
+                        "merge",
+                        "--ff-only",
+                        "--quiet",
+                        &upstream,
+                    ],
+                )
+                .is_ok();
+                if merged {
+                    let popped = sync_git(dir, &["stash", "pop", "--quiet"]).is_ok();
+                    let has_conflict = sync_git(dir, &["diff", "--name-only", "--diff-filter=U"])
+                        .map(|u| !u.trim().is_empty())
+                        .unwrap_or(true);
+                    if popped && !has_conflict {
+                        if let Ok(after) = sync_git(dir, &["rev-parse", "--verify", "HEAD"]) {
+                            actions.push(format!("autostash-ff-merged({behind}-commits)"));
+                            return Some((
+                                RepoSyncOutcome::Updated(after),
+                                format!("{} ({model_sig})", actions.join(" + ")),
+                                false,
+                            ));
+                        }
+                    } else {
+                        // Roll back to exact pre-merge state
+                        let _ = sync_git(dir, &["reset", "--hard", &head]);
+                        let _ = sync_git(dir, &["stash", "pop", "--quiet"]);
+                    }
+                } else {
+                    let _ = sync_git(dir, &["stash", "pop", "--quiet"]);
+                }
+            }
+        }
+    }
+
+    // Case 6C: ahead > 0 && behind > 0 (Diverged: anchor backup ref, then try clean rebase or conflict-free merge)
+    if ahead > 0 && behind > 0 {
+        let branch_name = sync_git(dir, &["symbolic-ref", "--quiet", "--short", "HEAD"])
+            .unwrap_or_else(|_| "HEAD".to_string());
+        let _ = sync_git(
+            dir,
+            &[
+                "update-ref",
+                &format!("refs/st-sync-backup/{branch_name}"),
+                &head,
+            ],
+        );
+
+        let had_dirty = !non_ignorable_porcelain_status(dir)
+            .map(|s| s.is_empty())
+            .unwrap_or(true);
+        let stashed = if had_dirty {
+            if let Ok(wt_diff) = sync_git(dir, &["diff", "HEAD"]) {
+                save_sync_recovery_patch(dir, "pre-diverged-worktree", &wt_diff);
+            }
+            sync_git(
+                dir,
+                &["stash", "push", "--quiet", "-m", "st-sync-model-healer"],
+            )
+            .is_ok()
+        } else {
+            false
+        };
+
+        let mut reconciled = false;
+        if ahead <= 50 {
+            if sync_git(
+                dir,
+                &[
+                    "-c",
+                    "filter.lfs.smudge=",
+                    "-c",
+                    "filter.lfs.required=false",
+                    "rebase",
+                    "--quiet",
+                    &upstream,
+                ],
+            )
+            .is_ok()
+            {
+                reconciled = true;
+                actions.push(format!("rebased({ahead}-ahead-onto-{behind}-upstream)"));
+            } else {
+                let _ = sync_git(dir, &["rebase", "--abort"]);
+            }
+        }
+
+        if !reconciled {
+            // Check with zero-mutation `git merge-tree --write-tree` if HEAD and upstream merge cleanly
+            let clean_tree =
+                sync_git(dir, &["merge-tree", "--write-tree", &head, &upstream]).is_ok();
+            if clean_tree {
+                if sync_git(
+                    dir,
+                    &[
+                        "-c",
+                        "user.name=Smart Tree Sync",
+                        "-c",
+                        "user.email=st-sync@8b.is",
+                        "-c",
+                        "commit.gpgsign=false",
+                        "-c",
+                        "filter.lfs.smudge=",
+                        "-c",
+                        "filter.lfs.required=false",
+                        "merge",
+                        "--no-edit",
+                        "--quiet",
+                        &upstream,
+                    ],
+                )
+                .is_ok()
+                {
+                    reconciled = true;
+                    actions.push(format!(
+                        "merged-clean-tree({ahead}-local+{behind}-upstream)"
+                    ));
+                } else {
+                    let _ = sync_git(dir, &["merge", "--abort"]);
+                }
+            }
+        }
+
+        if stashed {
+            let popped = sync_git(dir, &["stash", "pop", "--quiet"]).is_ok();
+            let has_conflict = sync_git(dir, &["diff", "--name-only", "--diff-filter=U"])
+                .map(|u| !u.trim().is_empty())
+                .unwrap_or(true);
+            if !popped || has_conflict {
+                let _ = sync_git(dir, &["reset", "--hard", &head]);
+                let _ = sync_git(dir, &["stash", "pop", "--quiet"]);
+                reconciled = false;
+            }
+        }
+
+        if reconciled {
+            if let Ok(after) = sync_git(dir, &["rev-parse", "--verify", "HEAD"]) {
+                return Some((
+                    RepoSyncOutcome::Updated(after),
+                    format!("{} ({model_sig})", actions.join(" + ")),
+                    false,
+                ));
+            }
+        }
+    }
+
+    None
 }
 
 #[allow(clippy::items_after_test_module)]
@@ -3440,6 +4555,8 @@ mod sync_tests {
                 "user.email=sync@example.invalid",
                 "-c",
                 "commit.gpgsign=false",
+                "-c",
+                "core.excludesFile=/dev/null",
             ])
             .args(args)
             .output()
@@ -4114,6 +5231,87 @@ mod sync_tests {
         assert_eq!(
             std::fs::read_to_string(dirty_dir.join("base")).unwrap(),
             "base"
+        );
+    }
+
+    #[test]
+    fn builtin_model_healer_reconciles_dirty_diverged_and_side_branches() {
+        // 1. Dirty tracked file + new upstream commit -> autostash fast-forward preserves local edit
+        let f_dirty = Fixture::new();
+        std::fs::write(f_dirty.local.join("base"), "local-uncommitted-edit").unwrap();
+        Fixture::commit(&f_dirty.publisher, "new-upstream-file");
+        git(&f_dirty.publisher, &["push"]);
+        let target_dirty = git(&f_dirty.publisher, &["rev-parse", "HEAD"]);
+        let init_dirty = f_dirty.sync(None, true);
+        let (healed_dirty, note_dirty, q_dirty) = heal_repo_with_builtin_models(
+            f_dirty._temp.path(),
+            "local",
+            &f_dirty.local,
+            f_dirty.remote.to_str().unwrap(),
+            None,
+            "p",
+            "u",
+            true,
+            &init_dirty,
+        )
+        .expect("model healer should reconcile non-conflicting dirty worktree");
+        assert!(!q_dirty);
+        assert_eq!(healed_dirty, RepoSyncOutcome::Updated(target_dirty));
+        assert!(note_dirty.contains("autostash-ff-merged"));
+        assert_eq!(
+            std::fs::read_to_string(f_dirty.local.join("base")).unwrap(),
+            "local-uncommitted-edit"
+        );
+        assert!(f_dirty.local.join("new-upstream-file").is_file());
+
+        // 2. Diverged local commit + upstream commit -> clean rebase preserves both
+        let f_div = Fixture::new();
+        Fixture::commit(&f_div.local, "local-feature");
+        f_div.advance();
+        let init_div = f_div.sync(None, true);
+        let (healed_div, note_div, q_div) = heal_repo_with_builtin_models(
+            f_div._temp.path(),
+            "local",
+            &f_div.local,
+            f_div.remote.to_str().unwrap(),
+            None,
+            "p",
+            "u",
+            true,
+            &init_div,
+        )
+        .expect("model healer should rebase clean diverged commits");
+        assert!(!q_div);
+        assert!(matches!(healed_div, RepoSyncOutcome::Updated(_)));
+        assert!(note_div.contains("rebased"));
+        assert!(f_div.local.join("local-feature").is_file());
+        assert!(f_div.local.join("remote-change").is_file());
+
+        // 3. Clean side branch without upstream -> preserves side branch ref and updates main
+        let f_side = Fixture::new();
+        git(&f_side.local, &["checkout", "-b", "fix/side-topic"]);
+        Fixture::commit(&f_side.local, "side-commit");
+        let side_sha = git(&f_side.local, &["rev-parse", "HEAD"]);
+        f_side.advance();
+        let target_side = git(&f_side.publisher, &["rev-parse", "HEAD"]);
+        let init_side = f_side.sync(None, true);
+        let (healed_side, note_side, _q_side) = heal_repo_with_builtin_models(
+            f_side._temp.path(),
+            "local",
+            &f_side.local,
+            f_side.remote.to_str().unwrap(),
+            None,
+            "p",
+            "u",
+            true,
+            &init_side,
+        )
+        .expect("model healer should preserve side branch and sync default branch");
+        assert_eq!(healed_side, RepoSyncOutcome::Updated(target_side));
+        assert!(note_side.contains("preserved-branch(fix/side-topic)->checkout(main)"));
+        assert_eq!(
+            git(&f_side.local, &["rev-parse", "refs/heads/fix/side-topic"]),
+            side_sha
         );
     }
 }

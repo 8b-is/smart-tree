@@ -1031,7 +1031,8 @@ pub struct G8tCommand {
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct SyncUserCommand {
-    /// GitHub username or organization (e.g. standardgalactic, 8b-is)
+    /// GitHub username or organization (e.g. standardgalactic, 8b-is; inferred from current folder if omitted)
+    #[arg(default_value = "")]
     pub user: String,
     /// Base directory where <user>/<repo> will be synced (default: current directory)
     #[arg(short = 'd', long = "dir", default_value = ".")]
