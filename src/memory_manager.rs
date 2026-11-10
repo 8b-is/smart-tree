@@ -1501,7 +1501,19 @@ impl MemoryManager {
         buffer.extend_from_slice(&crc.to_le_bytes());
         buffer.extend_from_slice(&compressed);
 
-        fs::write(path, buffer)?;
+        let parent = path.parent().unwrap_or_else(|| Path::new("."));
+        let tmp_path = parent.join(format!(
+            ".{}.tmp.{}",
+            path.file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("memories.m8"),
+            std::process::id()
+        ));
+        fs::write(&tmp_path, &buffer)?;
+        if let Err(err) = fs::rename(&tmp_path, path) {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(err.into());
+        }
         Ok(())
     }
 
@@ -1545,6 +1557,7 @@ impl MemoryManager {
             DateTime::from_timestamp(i64::from_le_bytes(last_accessed), 0).unwrap_or_else(Utc::now);
 
         let decompressed_records: Vec<u8>;
+        let mut partial_salvage = false;
         let mut records_cursor: Cursor<&[u8]> = if version[0] == 0x02 || version[0] == 0x03 {
             let mut raw_len_bytes = [0u8; 4];
             cursor.read_exact(&mut raw_len_bytes)?;
@@ -1557,81 +1570,98 @@ impl MemoryManager {
             let pos = cursor.position() as usize;
             let mut decoder = ZlibDecoder::new(&data[pos..]);
             let mut inflated = Vec::with_capacity(raw_len);
-            decoder.read_to_end(&mut inflated)?;
+            if let Err(err) = decoder.read_to_end(&mut inflated) {
+                if inflated.is_empty() {
+                    return Err(err.into());
+                }
+                partial_salvage = true;
+            }
             decompressed_records = if version[0] == 0x03 {
-                crate::mem8::token_codec::decode(&inflated, raw_len)?
-            } else if inflated.len() == raw_len && crc32fast::hash(&inflated) == expected_crc {
+                crate::mem8::token_codec::decode(&inflated, raw_len).unwrap_or(inflated)
+            } else if partial_salvage
+                || (inflated.len() == raw_len && crc32fast::hash(&inflated) == expected_crc)
+            {
                 inflated
             } else {
-                crate::mem8::token_codec::decode(&inflated, raw_len)?
+                crate::mem8::token_codec::decode(&inflated, raw_len).unwrap_or(inflated)
             };
-            anyhow::ensure!(
-                crc32fast::hash(&decompressed_records) == expected_crc,
-                "M8MEM CRC32 mismatch"
-            );
+            if !partial_salvage {
+                anyhow::ensure!(
+                    crc32fast::hash(&decompressed_records) == expected_crc,
+                    "M8MEM CRC32 mismatch"
+                );
+            }
             Cursor::new(decompressed_records.as_slice())
         } else {
             let pos = cursor.position() as usize;
             Cursor::new(&data[pos..])
         };
 
-        // Read memories
+        // Read memories (salvaging all complete records if partial_salvage is set)
         let mut memories = Vec::with_capacity(mem_count);
 
         for _ in 0..mem_count {
-            // Type
-            let mut type_len = [0u8; 1];
-            records_cursor.read_exact(&mut type_len)?;
-            let mut anchor_type = vec![0u8; type_len[0] as usize];
-            records_cursor.read_exact(&mut anchor_type)?;
-            let anchor_type = String::from_utf8_lossy(&anchor_type).to_string();
+            let step = (|| -> Result<Memory> {
+                // Type
+                let mut type_len = [0u8; 1];
+                records_cursor.read_exact(&mut type_len)?;
+                let mut anchor_type = vec![0u8; type_len[0] as usize];
+                records_cursor.read_exact(&mut anchor_type)?;
+                let anchor_type = String::from_utf8_lossy(&anchor_type).to_string();
 
-            // Keywords
-            let mut keyword_count = [0u8; 1];
-            records_cursor.read_exact(&mut keyword_count)?;
-            let mut keywords = Vec::with_capacity(keyword_count[0] as usize);
+                // Keywords
+                let mut keyword_count = [0u8; 1];
+                records_cursor.read_exact(&mut keyword_count)?;
+                let mut keywords = Vec::with_capacity(keyword_count[0] as usize);
 
-            for _ in 0..keyword_count[0] {
-                let mut kw_len = [0u8; 1];
-                records_cursor.read_exact(&mut kw_len)?;
-                let mut keyword = vec![0u8; kw_len[0] as usize];
-                records_cursor.read_exact(&mut keyword)?;
-                keywords.push(String::from_utf8_lossy(&keyword).to_string());
+                for _ in 0..keyword_count[0] {
+                    let mut kw_len = [0u8; 1];
+                    records_cursor.read_exact(&mut kw_len)?;
+                    let mut keyword = vec![0u8; kw_len[0] as usize];
+                    records_cursor.read_exact(&mut keyword)?;
+                    keywords.push(String::from_utf8_lossy(&keyword).to_string());
+                }
+
+                // Context
+                let mut context_len = [0u8; 2];
+                records_cursor.read_exact(&mut context_len)?;
+                let mut context = vec![0u8; u16::from_le_bytes(context_len) as usize];
+                records_cursor.read_exact(&mut context)?;
+                let context = String::from_utf8_lossy(&context).to_string();
+
+                // Origin
+                let mut origin_len = [0u8; 1];
+                records_cursor.read_exact(&mut origin_len)?;
+                let mut origin = vec![0u8; origin_len[0] as usize];
+                records_cursor.read_exact(&mut origin)?;
+                let origin = String::from_utf8_lossy(&origin).to_string();
+
+                // Frequency
+                let mut frequency = [0u8; 8];
+                records_cursor.read_exact(&mut frequency)?;
+                let frequency = f64::from_le_bytes(frequency);
+
+                // Timestamp
+                let mut timestamp = [0u8; 8];
+                records_cursor.read_exact(&mut timestamp)?;
+                let timestamp = DateTime::from_timestamp(i64::from_le_bytes(timestamp), 0)
+                    .unwrap_or_else(Utc::now);
+
+                Ok(Memory {
+                    timestamp,
+                    anchor_type,
+                    keywords,
+                    context,
+                    origin,
+                    frequency,
+                })
+            })();
+
+            match step {
+                Ok(mem) => memories.push(mem),
+                Err(_) if partial_salvage && !memories.is_empty() => break,
+                Err(e) => return Err(e),
             }
-
-            // Context
-            let mut context_len = [0u8; 2];
-            records_cursor.read_exact(&mut context_len)?;
-            let mut context = vec![0u8; u16::from_le_bytes(context_len) as usize];
-            records_cursor.read_exact(&mut context)?;
-            let context = String::from_utf8_lossy(&context).to_string();
-
-            // Origin
-            let mut origin_len = [0u8; 1];
-            records_cursor.read_exact(&mut origin_len)?;
-            let mut origin = vec![0u8; origin_len[0] as usize];
-            records_cursor.read_exact(&mut origin)?;
-            let origin = String::from_utf8_lossy(&origin).to_string();
-
-            // Frequency
-            let mut frequency = [0u8; 8];
-            records_cursor.read_exact(&mut frequency)?;
-            let frequency = f64::from_le_bytes(frequency);
-
-            // Timestamp
-            let mut timestamp = [0u8; 8];
-            records_cursor.read_exact(&mut timestamp)?;
-            let timestamp =
-                DateTime::from_timestamp(i64::from_le_bytes(timestamp), 0).unwrap_or_else(Utc::now);
-
-            memories.push(Memory {
-                timestamp,
-                anchor_type,
-                keywords,
-                context,
-                origin,
-                frequency,
-            });
         }
 
         Ok(MemoryBank {
