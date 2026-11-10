@@ -543,9 +543,10 @@ async fn main() -> Result<()> {
             | st::cli::Cmd::G8t(_)
             | st::cli::Cmd::Memnet(_)
             | st::cli::Cmd::Completions(_)
-            | st::cli::Cmd::PqFix(_) => {
+            | st::cli::Cmd::PqFix(_)
+            | st::cli::Cmd::Ollama(_) => {
                 unreachable!(
-                    "symbol, g8t, memnet, completions, and pq-fix commands return before daemon startup"
+                    "symbol, g8t, memnet, completions, pq-fix, and ollama commands return before daemon startup"
                 )
             }
             st::cli::Cmd::Up => {
