@@ -280,6 +280,77 @@ async fn main() -> Result<()> {
     if let Some(st::cli::Cmd::PqBench(bench_cmd)) = &cli.cmd {
         return st::pq_bench::handle_pq_bench_command(bench_cmd).await;
     }
+    if cli.ollama_serve {
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], cli.ollama_port));
+        return st::ollama_emulator::run_ollama_emulator_server(
+            addr,
+            cli.ollama_context_dir.clone(),
+        )
+        .await;
+    }
+    if let Some(st::cli::Cmd::Ollama(ollama_cmd)) = &cli.cmd {
+        let act = ollama_cmd.action.to_ascii_lowercase();
+        match act.as_str() {
+            "serve" | "start" | "run" | "daemon" => {
+                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], ollama_cmd.port));
+                return st::ollama_emulator::run_ollama_emulator_server(
+                    addr,
+                    ollama_cmd.context_dir.clone(),
+                )
+                .await;
+            }
+            "ask" | "query" | "generate" | "chat" => {
+                let q = ollama_cmd
+                    .prompt
+                    .as_deref()
+                    .unwrap_or("Summarize Smart-Tree Sovereign Context Engine");
+                let wici_dir = if std::path::Path::new("/data/wici-ai").exists() {
+                    std::path::PathBuf::from("/data/wici-ai")
+                } else {
+                    std::path::PathBuf::from("/home/hue/source/wici-ai")
+                };
+                let ctx = st::ollama_emulator::gather_smart_tree_context_for_prompt(
+                    q,
+                    &ollama_cmd.context_dir,
+                    &wici_dir,
+                );
+                let resp = st::ollama_emulator::synthesize_sovereign_response(
+                    "st-mem8-context:latest",
+                    None,
+                    q,
+                    &ctx,
+                );
+                if ollama_cmd.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "model": "st-mem8-context:latest",
+                            "response": resp,
+                            "st_context": ctx,
+                            "float_count": 0
+                        }))?
+                    );
+                } else {
+                    println!("{}", resp);
+                }
+                return Ok(());
+            }
+            _ => {
+                let wici_dir = if std::path::Path::new("/data/wici-ai").exists() {
+                    std::path::PathBuf::from("/data/wici-ai")
+                } else {
+                    std::path::PathBuf::from("/home/hue/source/wici-ai")
+                };
+                let ctx = st::ollama_emulator::gather_smart_tree_context_for_prompt(
+                    "smart-tree a6000-orchestrator alexiai g8t inferssd",
+                    &ollama_cmd.context_dir,
+                    &wici_dir,
+                );
+                println!("{}", serde_json::to_string_pretty(&ctx)?);
+                return Ok(());
+            }
+        }
+    }
 
     // Initialize Logging
     let log_level_str = if let Some(level) = cli.log_level {

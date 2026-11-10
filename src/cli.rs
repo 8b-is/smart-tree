@@ -147,6 +147,34 @@ pub struct Cli {
     )]
     pub http_daemon: bool,
 
+    /// Run the Smart-Tree Sovereign Ollama-with-Context Emulator on 127.0.0.1:11434
+    /// (emulates Ollama HTTP API + OpenAI /v1 with MEM|8 wave context, 4gaia PQM, g8t.is capsules & AlexiAI)
+    #[arg(
+        long,
+        alias = "ollama-emulator",
+        alias = "ollama-context",
+        help_heading = "Interactive Modes"
+    )]
+    pub ollama_serve: bool,
+
+    /// Port for the Smart-Tree Sovereign Ollama-with-Context Emulator (default: 11434)
+    #[arg(
+        long,
+        value_name = "PORT",
+        default_value_t = 11434,
+        help_heading = "Interactive Modes"
+    )]
+    pub ollama_port: u16,
+
+    /// Workspace context root directory for the Ollama-with-Context Emulator (default: /data/8b-is)
+    #[arg(
+        long,
+        value_name = "DIR",
+        default_value = "/data/8b-is",
+        help_heading = "Interactive Modes"
+    )]
+    pub ollama_context_dir: PathBuf,
+
     // =========================================================================
     // MCP SERVER — two transports, one brain. Both are local + token-free.
     // =========================================================================
@@ -850,6 +878,28 @@ pub enum Cmd {
     /// Retrain/convert a public model (DeepSeek) to p/q, load the same model in Ollama & Smart Tree, and benchmark head-to-head
     #[command(alias = "bench-pq", alias = "pqm-bench", alias = "ollama-bench")]
     PqBench(PqBenchCommand),
+
+    /// Smart-Tree Sovereign Ollama-with-Context Emulator (`st ollama serve`, `st ollama status`, `st ollama ask <PROMPT>`)
+    #[command(alias = "ollama-context", alias = "ollama-bridge")]
+    Ollama(OllamaCommand),
+}
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct OllamaCommand {
+    /// Action: serve (start :11434 server), status (inspect context engine), ask (synthesize with context)
+    #[arg(default_value = "serve")]
+    pub action: String,
+    /// Optional prompt when action is `ask`
+    pub prompt: Option<String>,
+    /// Bind port for `serve` (default: 11434)
+    #[arg(long, short = 'p', default_value_t = 11434)]
+    pub port: u16,
+    /// Context root directory (default: /data/8b-is)
+    #[arg(long, default_value = "/data/8b-is")]
+    pub context_dir: PathBuf,
+    /// Emit structured JSON output for `status` or `ask`
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Clone, clap::Args)]

@@ -47,6 +47,7 @@ pub mod model_eval; // Sovereign CLI Mastery & Multi-Domain Model Test Harness (
 pub mod pq_bench; // Head-to-head p/q model retraining & benchmark (Ollama vs Smart Tree, st pq-bench)
 pub mod pq_healer; // Sovereign 3-tier local p/q + SPQT ternary + Salient .m8 code healer (st pq-fix)
 pub mod pq_trainer; // Pure-Rust 4gaia Sovereign p/q + A161330 + Salient .m8 trainer (st pq-train)
+pub mod ollama_emulator; // Smart-Tree Sovereign Ollama-with-Context Emulator (st --ollama-serve / st ollama)
 pub mod quantum_scanner; // The native quantum format tree walker - no intermediate representation!
 pub mod relations; // Code relationship analyzer - "Semantic X-ray vision for codebases" - Omni
 pub mod scanner; // The heart of directory traversal and file metadata collection. // For intelligently detecting project context (e.g., Rust, Node.js).
