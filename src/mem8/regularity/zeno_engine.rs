@@ -297,6 +297,13 @@ pub const DECISION_GATE_LLM_SKIP_NUM: u64 = 987;
 pub const DECISION_GATE_LLM_SKIP_DEN: u64 = 1000;
 /// Gaia `b1.58` XOR fold witness (`0x5f4544432f5e024d`, `ratio = 33/34`) of `"[wa] 8b-is: instead of cigarettes"` (choosing `Spanda` `5s-2s-7s` breath & `Levelet kaptam, Life` over smoke).
 pub const FOLD_WA_INSTEAD_OF_CIGARETTES: u64 = 0x5F45_4443_2F5E_024D;
+/// Canonical 64-bit `felix_xor_fold_64b` witness (`0x5e670a443e1a2055`) for
+/// `"also E2E + ELI5 + 8b-is-debris >> stremio for THE FAMILY soverign setup WITH soverign Youtube too + OS agnostic APPS ^^ <3"`.
+pub const FOLD_8B_IS_DEBRIS_STREMIO_SOVEREIGN_YOUTUBE_FAMILY: u64 = 0x5E67_0A44_3E1A_2055;
+/// Raw byte length (`122 = 2 * 61`) of the `8b-is-debris >> stremio + sovereign YouTube` family setup directive.
+pub const DEBRIS_STREMIO_DIRECTIVE_RAW_BYTES: u16 = 122;
+/// Set bit popcount (`433`, prime, yielding exact coprime ratio `433/122`) of the `8b-is-debris >> stremio` family setup directive.
+pub const DEBRIS_STREMIO_DIRECTIVE_POPCOUNT_BITS: u16 = 433;
 
 /// 64-byte cache-line-aligned `upz` / `wupz-core` Litany Wire Frame (`#[repr(C, align(64))]`).
 ///
@@ -1116,6 +1123,22 @@ pub struct GodOfSunMonkeyKingMatrixBuddhaUnityWitness {
     pub wa_loan_idea_three_lane_folds_hex: [u64; 3],
 }
 
+/// `🎬📺☸ E2E + ELI5 + 8b-is-debris >> Stremio for THE FAMILY Sovereign Setup + Sovereign YouTube + OS-Agnostic Apps`
+/// (`0x5e670a443e1a2055`, `122` bytes, `433` bits, exact coprime `433/122`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EightBIsDebrisStremioSovereignYoutubeFamilyWitness {
+    pub directive: &'static str,
+    pub directive_fold_hex: u64,
+    pub raw_bytes: u16,
+    pub popcount_bits: u16,
+    pub bit_density_pq: &'static str,
+    pub eli5_magic_remote_summary: &'static str,
+    pub eight_b_is_debris_stremio_architecture: &'static str,
+    pub sovereign_youtube_architecture: &'static str,
+    pub os_agnostic_apps_matrix: [&'static str; 8],
+    pub e2e_five_step_family_setup: [&'static str; 5],
+}
+
 /// Complete `ULTRA-OMNI-ZENO` (`v11.0.0`) Report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenoOmniReport {
@@ -1142,6 +1165,8 @@ pub struct ZenoOmniReport {
         KompressOmnipotentAuroraAndOdinSolfeggioWitness,
     pub ultralove_edition_023_desert_chant: UltraloveEdition023ErdosLodriDesertChantWitness,
     pub god_of_sun_monkey_king_matrix_buddha_unity: GodOfSunMonkeyKingMatrixBuddhaUnityWitness,
+    pub eight_b_is_debris_stremio_sovereign_youtube:
+        EightBIsDebrisStremioSovereignYoutubeFamilyWitness,
 }
 
 /// `world-core` deterministic `mulberry32` step (`a = a + 0x6D2B79F5`).
@@ -1879,6 +1904,34 @@ pub fn analyze_zeno_omni_engine(
                 0xD09C_D186_1FA6_E9D5,
             ],
         },
+        eight_b_is_debris_stremio_sovereign_youtube:
+            EightBIsDebrisStremioSovereignYoutubeFamilyWitness {
+                directive: "also E2E + ELI5 + 8b-is-debris >> stremio for THE FAMILY soverign setup WITH soverign Youtube too + OS agnostic APPS ^^ <3",
+                directive_fold_hex: FOLD_8B_IS_DEBRIS_STREMIO_SOVEREIGN_YOUTUBE_FAMILY,
+                raw_bytes: DEBRIS_STREMIO_DIRECTIVE_RAW_BYTES,
+                popcount_bits: DEBRIS_STREMIO_DIRECTIVE_POPCOUNT_BITS,
+                bit_density_pq: "433/122 (433 prime bits / 122 = 2 * 61 bytes)",
+                eli5_magic_remote_summary: "ELI5: Imagine one magic family remote (for Mom, Dad, Bence/Nate, Brigi, and Peter). Instead of paying for 6 different streaming services, dealing with ads, or waiting for downloads, 8b-is-debris keeps a high-speed encrypted cloud vault of already-downloaded 4K movies & shows and beams them straight into Stremio on every TV, phone, tablet, and laptop in <2 seconds — while Sovereign YouTube strips 100% of ads, sponsors, and tracking across every device.",
+                eight_b_is_debris_stremio_architecture: "8b-is-debris (Real-Debrid / TorBox / StremThru HTTPS cache proxy + Torrentio / Comet / MediaFusion / Jackettio / OpenSubtitles v3 hu+en): filters strictly to [8B+]/[RD+] pre-cached HTTPS streams (zero P2P traffic on family devices, zero ISP/VPN friction, 4K HDR10/Dolby Vision instant seek)",
+                sovereign_youtube_architecture: "Sovereign YouTube Stack: Stremio YouTube Addon + SmartTube on Android TV/Google TV/Fire TV + FreeTube & Grayjay on macOS/Windows/Linux + NewPipe/Grayjay/ReVanced on Android + Yattee/Vinegar/Brave on iOS/iPadOS/tvOS + Invidious/Piped self-hosted feed with SponsorBlock & ReturnYouTubeDislike built in",
+                os_agnostic_apps_matrix: [
+                    "1. macOS (Apple Silicon & Intel): Stremio Desktop + IINA/MPV external player + FreeTube / Grayjay / Brave",
+                    "2. Windows (x86_64 & ARM64): Stremio 5 Desktop + FreeTube / Grayjay Desktop",
+                    "3. Linux (NixOS / Ubuntu / Steam Deck): Flatpak com.stremio.Stremio + FreeTube",
+                    "4. Android Phone & Tablet: Stremio Android APK + Grayjay / NewPipe / ReVanced",
+                    "5. Android TV / Google TV / Shield / Fire TV: Stremio TV + SmartTube (zero ads + SponsorBlock)",
+                    "6. iOS & iPadOS: Stremio Web PWA (web.stremio.com -> Outplayer / VLC external player) + Yattee / Brave",
+                    "7. Apple tvOS: Vidi / Infuse / Outplayer (connected to 8b-is-debris WebDAV & Stremio addons) + Yattee",
+                    "8. Samsung Tizen & LG webOS Smart TVs: Native Stremio TV App from TV Store (1-QR instant family sync)",
+                ],
+                e2e_five_step_family_setup: [
+                    "1. Create 1 shared Family Stremio account on a laptop/phone and copy the 8b-is-debris (Real-Debrid / TorBox / StremThru) API token.",
+                    "2. Configure Torrentio + Comet + MediaFusion once with the 8b-is-debris token and check 'Don't show download to debrid links' so only instant [8B+]/[RD+] streams appear; add OpenSubtitles v3 (Magyar + English) and Cyberflix Catalog.",
+                    "3. Install the Sovereign YouTube layer: add the YouTube addon inside Stremio for subscribed channels, and install SmartTube (TV), FreeTube/Grayjay (Desktop/Android), or Yattee/Brave (iOS/tvOS) with SponsorBlock enabled.",
+                    "4. Open Stremio on every family TV, phone, tablet, or laptop and scan the 1-QR login code — all addons, subtitles, and watch progress sync automatically across all 8 OS platforms with zero per-device setup.",
+                    "5. E2E Smoke Test: Play a 4K movie with Hungarian/English subtitles + play the Gui Boratto — Beautiful Life / RÜFÜS DU SOL — Innerbloom mix on Sovereign YouTube -> verify <2s HTTPS start, 0 ads, and 0 P2P packets.",
+                ],
+            },
     }
 }
 
@@ -2094,6 +2147,28 @@ mod tests {
             "987/1000"
         );
         assert_eq!(FOLD_WA_INSTEAD_OF_CIGARETTES, 0x5F45_4443_2F5E_024D);
+        let debris_stremio_directive = b"also E2E + ELI5 + 8b-is-debris >> stremio for THE FAMILY soverign setup WITH soverign Youtube too + OS agnostic APPS ^^ <3";
+        assert_eq!(
+            debris_stremio_directive.len(),
+            DEBRIS_STREMIO_DIRECTIVE_RAW_BYTES as usize
+        );
+        assert_eq!(
+            felix_xor_fold_64b(debris_stremio_directive),
+            FOLD_8B_IS_DEBRIS_STREMIO_SOVEREIGN_YOUTUBE_FAMILY
+        );
+        let debris_popcnt: u32 = debris_stremio_directive
+            .iter()
+            .map(|&b| b.count_ones())
+            .sum();
+        assert_eq!(debris_popcnt, DEBRIS_STREMIO_DIRECTIVE_POPCOUNT_BITS as u32);
+        assert_eq!(
+            RationalPQ::new_reduced(
+                DEBRIS_STREMIO_DIRECTIVE_POPCOUNT_BITS as u64,
+                DEBRIS_STREMIO_DIRECTIVE_RAW_BYTES as u64
+            )
+            .display_ratio(),
+            "433/122"
+        );
     }
 
     #[test]

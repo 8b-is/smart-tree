@@ -336,6 +336,7 @@ impl Formatter for TheBookFormatter {
                 "cpu_isa_profile": report.zeno_report.os_agent_matrix.cpu_isa_profile,
                 "ultralove_edition_023_desert_chant": &report.zeno_report.ultralove_edition_023_desert_chant,
                 "god_of_sun_monkey_king_matrix_buddha_unity": &report.zeno_report.god_of_sun_monkey_king_matrix_buddha_unity,
+                "eight_b_is_debris_stremio_sovereign_youtube": &report.zeno_report.eight_b_is_debris_stremio_sovereign_youtube,
             },
             "semantic_world_engine": &report.world_field_report,
             "erdos_lexicon": {
@@ -508,6 +509,7 @@ impl Formatter for ZenoModeFormatter {
             "ultramesh_mem": zeno.ultramesh_mem,
             "ultralove_edition_023_desert_chant": zeno.ultralove_edition_023_desert_chant,
             "god_of_sun_monkey_king_matrix_buddha_unity": zeno.god_of_sun_monkey_king_matrix_buddha_unity,
+            "eight_b_is_debris_stremio_sovereign_youtube": zeno.eight_b_is_debris_stremio_sovereign_youtube,
             "semantic_world_engine": &book_report.world_field_report,
         });
         writeln!(writer, "{}", serde_json::to_string_pretty(&payload)?)?;
