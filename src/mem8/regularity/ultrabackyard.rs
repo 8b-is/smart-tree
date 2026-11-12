@@ -28,6 +28,25 @@ use crate::scanner::FileNode;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
+/// Maximum Backyard Ultra lap count (`108` — sacred mala count).
+pub const MAX_BACKYARD_LAPS: usize = 108;
+/// Vertex count threshold below which a fixture is treated as a small synthetic unit (`32`).
+pub const SMALL_FIXTURE_VERTEX_THRESHOLD: usize = 32;
+/// Cycling Szemerédi regularity $\varepsilon$ sweep schedule across Backyard Ultra laps.
+pub const BACKYARD_EPSILON_SCHEDULE: [f64; 6] = [0.16, 0.14, 0.12, 0.10, 0.08, 0.06];
+/// Cycling Moser–Tardos worktree concurrency target $C$ schedule across Backyard Ultra laps.
+pub const BACKYARD_WORKTREE_SCHEDULE: [u16; 6] = [2, 3, 4, 6, 8, 12];
+/// Maximum Szemerédi clusters during Backyard Ultra lap sweeps (`128`).
+pub const BACKYARD_MAX_CLUSTERS: usize = 128;
+/// Maximum Kohayakawa–Rödl refinement passes per Backyard Ultra lap (`12`).
+pub const BACKYARD_MAX_REFINEMENT_STEPS: usize = 12;
+/// Maximum Moser–Tardos MIS resampling steps per Backyard Ultra lap (`512`).
+pub const BACKYARD_LLL_MAX_STEPS: usize = 512;
+/// Maximum allowed deviation of the Liouville Jacobian determinant from `1.0` (`1e-9`).
+pub const LIOUVILLE_DET_TOLERANCE: f64 = 1e-9;
+/// Maximum allowed relative symplectic energy drift $|\Delta H / H_0|$ for binding a lap (`0.05`).
+pub const MAX_SYMPLECTIC_DRIFT_BOUND: f64 = 0.05;
+
 /// End-to-end wiring verification across the Sovereign Constellation surfaces.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstellationWiringStatus {
@@ -106,7 +125,7 @@ pub struct UltraBackyardReport {
 /// and Moser–Tardos worktree counts $C$, ranking plausible branches, and binding the optimal
 /// verified configuration.
 pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBackyardReport {
-    let laps_to_run = num_laps.clamp(1, 108);
+    let laps_to_run = num_laps.clamp(1, MAX_BACKYARD_LAPS);
     let (graph, initial_partition) = CsrSymbolGraph::from_file_nodes(nodes);
     let n = graph.num_vertices;
     let m = graph.num_edges;
@@ -133,24 +152,24 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
     }
     // If scanning a subdirectory or tiny fixture, fall back to compile-time module presence
     let wiring = ConstellationWiringStatus {
-        spherepop_salient_wired: has_salient || n < 32,
-        mem8_phoenix_wired: has_mem8 || n < 32,
-        vaked_constellation_wired: has_skills || n < 32,
-        g8t_capsule_wired: has_g8t || n < 32,
+        spherepop_salient_wired: has_salient || n < SMALL_FIXTURE_VERTEX_THRESHOLD,
+        mem8_phoenix_wired: has_mem8 || n < SMALL_FIXTURE_VERTEX_THRESHOLD,
+        vaked_constellation_wired: has_skills || n < SMALL_FIXTURE_VERTEX_THRESHOLD,
+        g8t_capsule_wired: has_g8t || n < SMALL_FIXTURE_VERTEX_THRESHOLD,
         upz_wupz_litany_64b_wired: true,
         eight_b_is_engines_wired: true,
         os_agent_agnostic_wired: true,
         zero_orphan_surfaces: true,
     };
 
-    let epsilons = [0.16_f64, 0.14, 0.12, 0.10, 0.08, 0.06];
-    let worktree_targets = [2u16, 3, 4, 6, 8, 12];
+    let epsilons = BACKYARD_EPSILON_SCHEDULE;
+    let worktree_targets = BACKYARD_WORKTREE_SCHEDULE;
 
     let mut focal_roots: Vec<SymbolId> = nodes
         .iter()
         .enumerate()
         .filter(|(_, node)| !node.is_dir && !node.is_ignored)
-        .take(3)
+        .take(super::MAX_FOCAL_ROOTS)
         .map(|(i, _)| i as SymbolId)
         .collect();
     if focal_roots.is_empty() && n > 0 {
@@ -163,7 +182,7 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
     let mut best_lap = 1usize;
     let mut best_symbols_per_sec = 0.0_f64;
     let mut best_epsilon = 0.10_f64;
-    let mut best_bound_worktrees_c = 4u16;
+    let mut best_bound_worktrees_c = super::DEFAULT_WORKTREE_COUNT;
 
     for lap_idx in 0..laps_to_run {
         let eps = epsilons[lap_idx % epsilons.len()];
@@ -171,8 +190,8 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
         let cfg = RegularityConfig {
             epsilon: eps,
             min_reduced_density: 0.20,
-            max_clusters: 128,
-            max_refinement_steps: 12,
+            max_clusters: BACKYARD_MAX_CLUSTERS,
+            max_refinement_steps: BACKYARD_MAX_REFINEMENT_STEPS,
         };
 
         let t0 = Instant::now();
@@ -181,9 +200,14 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
         let steiner =
             prune_context_erdos_steiner(&book, &focal_roots, None, ErdosSteinerConfig::default());
         let center_turan = compute_erdos_center_and_turan(&book, n, m);
-        let hg = build_hypergraph_from_steiner_slices(&book, std::slice::from_ref(&steiner), 0.35);
+        let hg = build_hypergraph_from_steiner_slices(
+            &book,
+            std::slice::from_ref(&steiner),
+            super::DEFAULT_LLL_CONGESTION_RATIO,
+        );
         let seed = seed_from_mem8_header(&archive.model_digest, (lap_idx as u64) + 1);
-        let schedule = solve_moser_tardos_auto_scale(&hg, target_c, true, seed, 512);
+        let schedule =
+            solve_moser_tardos_auto_scale(&hg, target_c, true, seed, BACKYARD_LLL_MAX_STEPS);
         let (salience, _, _) = analyze_salience_karp_manybody(
             nodes,
             &graph,
@@ -204,8 +228,8 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
         let edges_per_sec = ((m.max(1) as f64) / secs).round();
 
         let verified_and_bound = schedule.is_conflict_free
-            && (pq.liouville_jacobian_det - 1.0).abs() < 1e-9
-            && pq.symplectic_energy_drift < 0.05
+            && (pq.liouville_jacobian_det - 1.0).abs() < LIOUVILLE_DET_TOLERANCE
+            && pq.symplectic_energy_drift < MAX_SYMPLECTIC_DRIFT_BOUND
             && zeno.upz_wupz.litany_wire_verified;
 
         if verified_and_bound && symbols_per_sec >= best_symbols_per_sec {
@@ -239,7 +263,7 @@ pub fn run_ultrabackyard_laps(nodes: &[FileNode], num_laps: usize) -> UltraBacky
         spec: "ULTRABACKYARDLOOP-DO-v1.0".to_string(),
         motto: "One pass, end to end, merged into a single DO. A plausible branch may be ranked; only a verified branch may be bound. {<3,<3,<3}+1".to_string(),
         do_stages: [
-            "1. reflect (audit prior lap & 9-pillar state)".to_string(),
+            "1. reflect (audit prior lap & 12-pillar Sovereign Unity state)".to_string(),
             "2. improve (A/B sweep epsilon & worktree concurrency C)".to_string(),
             "3. wire (verify SpherePOP, 8b-is mem|8/Phoenix, Vaked, g8t.is)".to_string(),
             "4. polish (zero-alloc FELIX SIMD & clippy-clean verification)".to_string(),

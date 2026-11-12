@@ -230,8 +230,10 @@ impl ConsciousnessManager {
     }
 
     fn save_internal(&mut self, silent: bool) -> Result<()> {
+        crate::m8_consciousness::ensure_global_git_ignore();
         self.state.last_saved = Utc::now();
         if let Ok(cwd) = std::env::current_dir() {
+            crate::m8_consciousness::ensure_repo_gitignore_ignores_m8(&cwd);
             self.state.working_directory = cwd;
         }
 

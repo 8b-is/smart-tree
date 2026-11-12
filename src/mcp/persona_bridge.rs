@@ -1425,4 +1425,67 @@ mod tests {
             json!(true)
         );
     }
+
+    #[tokio::test]
+    async fn erdos_lodri_ultragraph_mem8_phoenix_persona_e2e_seal() {
+        let sovereign_book = PathBuf::from(
+            "/Users/peterlodri/workspace/peterlodri-sec/sovereign-library/editions/ultralove/erdos-lodri-ultragraph-chenoweth-mem8-phoenix-kyuss-tibetan-omni.md",
+        );
+        let tmp = TempDir::new().expect("tempdir");
+        let train_target = if sovereign_book.exists() {
+            sovereign_book
+        } else {
+            let fallback = tmp.path().join("erdos-lodri-ultragraph.md");
+            std::fs::write(
+                &fallback,
+                "# ERDŐS–LODRI ULTRAGRAPH × CHENOWETH MEM|8 & PHOENIX (p/q = 3/2)\n\n\
+                 Peace must be earned, Respect must be given as a gesture, Smile should be the price for the visit.\n\n\
+                 AHOGY A DOLGOK VANNAK — Kohayakawa-Rodl sparse Szemeredi regularity (K <= 256) and Shadow Graph G_shadow.",
+            )
+            .expect("write fallback");
+            fallback
+        };
+
+        let server = crate::mcp::McpServer::new(crate::mcp::McpConfig::default());
+        let ctx = server.context.clone();
+
+        let train_resp = handle_persona(
+            Some(json!({
+                "operation": "train",
+                "name": "Erdos Lodri UltraGraph",
+                "path": train_target.to_string_lossy(),
+                "specialty": "code-reviewer"
+            })),
+            ctx.clone(),
+        )
+        .await
+        .expect("train Erdos Lodri UltraGraph");
+        assert_eq!(train_resp["train"]["ok"], true);
+        assert_eq!(train_resp["train"]["slug"], "erdos-lodri-ultragraph");
+        assert_eq!(train_resp["train"]["bonobo_rung0_pq"], "3/2");
+        assert_eq!(
+            train_resp["train"]["zeno_capsule"]["seal_verified"],
+            json!(true)
+        );
+
+        let e2e_resp = handle_persona(
+            Some(json!({
+                "operation": "do_e2e",
+                "name": "erdos-lodri-ultragraph",
+                "probe_do": false
+            })),
+            ctx,
+        )
+        .await
+        .expect("do_e2e Erdos Lodri UltraGraph");
+        assert_eq!(e2e_resp["do_e2e"]["ok"], true);
+        assert_eq!(
+            e2e_resp["do_e2e"]["persona_verified"]["slug"],
+            "erdos-lodri-ultragraph"
+        );
+        assert_eq!(
+            e2e_resp["do_e2e"]["zeno_capsule"]["seal_verified"],
+            json!(true)
+        );
+    }
 }

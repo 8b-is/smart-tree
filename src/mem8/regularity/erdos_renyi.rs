@@ -12,6 +12,46 @@
 
 use super::types::{CsrSymbolGraph, EdgeKind, SymbolId};
 
+/// Floor (`1e-12`) and ceiling (`1.0 - 1e-12`) clamp margin for empirical Erdős–Rényi probability $\hat{p}$.
+pub const EMPIRICAL_P_FLOOR: f64 = 1e-12;
+
+/// Erdős–Rényi critical percolation window exponent ($2/3$ so $|C_1| \approx \Theta(n^{2/3})$).
+pub const CRITICAL_PERCOLATION_EXPONENT: f64 = 2.0 / 3.0;
+
+/// Power-iteration steps (`12`) for the global Füredi–Komlós shadow spectral radius $\lambda_1(A_{\text{shadow}})$.
+pub const SHADOW_SPECTRAL_ITERATIONS: usize = 12;
+
+/// Power-iteration steps (`5`) for per-component spectral radius estimation $\lambda_1(A_C)$.
+pub const COMPONENT_SPECTRAL_ITERATIONS: usize = 5;
+
+/// Number of top eigenvector-centrality pivot symbols (`5`) retained per anomalous component.
+pub const TOP_PIVOT_SYMBOLS: usize = 5;
+
+/// Maximum number of top monochromatic cliques (`12`) retained in `RamseyCliqueReport`.
+pub const TOP_RAMSEY_CLIQUES: usize = 12;
+
+/// Classical 3-color Ramsey threshold $R(3, 3, 3) = 17$.
+pub const RAMSEY_NUMBER_R333: usize = 17;
+
+/// Minimum L2 norm threshold (`1e-12`) during spectral power iteration.
+pub const SPECTRAL_NORM_FLOOR: f64 = 1e-12;
+
+/// Surprise multiplier (`1.25`) above `surprise_threshold_nats` that triggers `PhaseRegime::AnomalousC2Clique`.
+pub const C2_SURPRISE_MULTIPLIER: f64 = 1.25;
+
+/// Füredi–Komlós spectral ratio threshold (`2.2`) for `PhaseRegime::AnomalousC2Clique`.
+pub const C2_SPECTRAL_RATIO_THRESHOLD: f64 = 2.2;
+
+/// Floor (`1.5`) on expected random spectral radius $\expected(\lambda_1)$ in C2 ratio check.
+pub const C2_EXPECTED_LAMBDA_FLOOR: f64 = 1.5;
+
+/// Discount factor (`0.5`) on `surprise_threshold_nats` for tight intra-cluster Tarjan SCC cycles.
+pub const SCC_SURPRISE_DISCOUNT: f64 = 0.5;
+
+/// Sovereign PL-LpqNt-Belli Witness (`PL Peter Loves Life and LpqNt · Morning, Belli!`).
+pub const SOVEREIGN_PL_LPQNT_BELLI_WITNESS: &str =
+    "PL Peter Loves Life and LpqNt · Morning, Belli!";
+
 /// Bitflags representing static AST capability hazards per symbol (`0..N`)
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -144,6 +184,16 @@ pub struct ErdosRenyiSecurityReport {
     pub spectral_radius_lambda1: f64,
     /// Füredi–Komlós expected random spectral radius $\max(c, \sqrt{\Delta_{\max}})$
     pub expected_random_lambda1: f64,
+    /// Vertex-Duplication Shadow Graph $D(G)$ Golden-Ratio ($\varphi = \frac{1+\sqrt{5}}{2}$) top eigenvalue $\lambda_1(D(G)) = \varphi \cdot \lambda_1(A_{\text{shadow}})$ (`A_{D(G)} = [[1,1],[1,0]] ⊗ A`)
+    pub shadow_dg_phi_lambda1: f64,
+    /// Conjugate Fibonacci mirror eigenvalue $-\varphi^{-1} \cdot \lambda_1(A_{\text{shadow}})$ of $D(G)$
+    pub shadow_dg_conjugate_lambda: f64,
+    /// Mycielski construction $M(G_{\text{shadow}})$ vertex count $2|V_{\text{active}}| + 1$ ($\omega(M(G)) = \omega(G)$, $\chi(M(G)) = \chi(G) + 1$)
+    pub mycielski_vertices_2n_plus_1: usize,
+    /// Mycielski construction $M(G_{\text{shadow}})$ edge count $3|E_{\text{shadow}}| + |V_{\text{active}}|$
+    pub mycielski_edges_3m_plus_n: usize,
+    /// Kruskal–Katona / Sperner lower hypergraph shadow bound $|\partial \mathcal{H}|$ over anomalous component hyperedges
+    pub kruskal_katona_shadow_lower_bound: usize,
     /// Overall phase regime of the scanned dependency graph
     pub regime: PhaseRegime,
     /// Ranked list of anomalous dense cliques, C2 bridges, or cyclic hook injectors
@@ -244,9 +294,14 @@ pub fn scan_erdos_renyi_shadow_graph(
             percolation_diagnostic: "Subcritical (< 2 vertices)".to_string(),
             giant_component_size: n,
             second_component_size: 0,
-            critical_scale_n_two_thirds: (n as f64).powf(2.0 / 3.0),
+            critical_scale_n_two_thirds: (n as f64).powf(CRITICAL_PERCOLATION_EXPONENT),
             spectral_radius_lambda1: 0.0,
             expected_random_lambda1: 0.0,
+            shadow_dg_phi_lambda1: 0.0,
+            shadow_dg_conjugate_lambda: 0.0,
+            mycielski_vertices_2n_plus_1: 2 * n + 1,
+            mycielski_edges_3m_plus_n: n,
+            kruskal_katona_shadow_lower_bound: 0,
             regime: PhaseRegime::SubcriticalForest,
             anomalies: Vec::new(),
         };
@@ -351,13 +406,14 @@ pub fn scan_erdos_renyi_shadow_graph(
     };
 
     let total_pairs = (n as f64) * ((n - 1) as f64);
-    let empirical_p = ((2 * m_shadow) as f64 / total_pairs).clamp(1e-12, 1.0 - 1e-12);
+    let empirical_p =
+        ((2 * m_shadow) as f64 / total_pairs).clamp(EMPIRICAL_P_FLOOR, 1.0 - EMPIRICAL_P_FLOOR);
     let critical_p_c = 1.0 / (active_n as f64);
-    let critical_scale = (active_n as f64).powf(2.0 / 3.0);
+    let critical_scale = (active_n as f64).powf(CRITICAL_PERCOLATION_EXPONENT);
 
     // 3. Füredi–Komlós Spectral Radius & Eigenvector Centrality via 12-Step Power Iteration
     let (spectral_radius_lambda1, eigen_centrality) =
-        compute_shadow_spectral_radius(n, &shadow_edges_undirected, 12);
+        compute_shadow_spectral_radius(n, &shadow_edges_undirected, SHADOW_SPECTRAL_ITERATIONS);
     let expected_random_lambda1 = mean_degree_c.max((max_deg as f64).sqrt());
 
     // 4. Iterative Tarjan SCC to count directed feedback cycles per Union-Find component root
@@ -432,7 +488,7 @@ pub fn scan_erdos_renyi_shadow_graph(
                 .map(|&sym| (sym, eigen_centrality[sym as usize]))
                 .collect();
             pivots.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
-            pivots.truncate(5);
+            pivots.truncate(TOP_PIVOT_SYMBOLS);
 
             let comp_spec_rad = estimate_component_spectral_radius(graph, &root_vertices[r]);
 
@@ -484,10 +540,11 @@ pub fn scan_erdos_renyi_shadow_graph(
     // - WHEN kappa > 2 (sum_k2 > 2 * sum_k): a giant transitive reachability component forms
     //   across package boundaries allowing a single poisoned leaf dependency to reach core application state.
     let has_c2_anomaly = anomalies.iter().any(|a| {
-        a.erdos_log_surprise_nats > surprise_threshold_nats * 1.25
+        a.erdos_log_surprise_nats > surprise_threshold_nats * C2_SURPRISE_MULTIPLIER
             || a.combined_hazards.distinct_capabilities() >= 3
             || (a.directed_scc_cycles > 0 && a.combined_hazards.is_hazardous())
-    }) || (spectral_radius_lambda1 > 2.2 * expected_random_lambda1.max(1.5)
+    }) || (spectral_radius_lambda1
+        > C2_SPECTRAL_RATIO_THRESHOLD * expected_random_lambda1.max(C2_EXPECTED_LAMBDA_FLOOR)
         && !anomalies.is_empty());
 
     let regime = if has_c2_anomaly {
@@ -521,6 +578,23 @@ pub fn scan_erdos_renyi_shadow_graph(
         )
     };
 
+    // Golden-Ratio φ = (1 + sqrt(5))/2 spectral scaling for D(G) vertex-duplication shadow graph:
+    // A_{D(G)} = [[1, 1], [1, 0]] ⊗ A => eigenvalues { φ * λ_k(G), -φ^{-1} * λ_k(G) }
+    let phi = (1.0_f64 + 5.0_f64.sqrt()) * 0.5;
+    let shadow_dg_phi_lambda1 = phi * spectral_radius_lambda1;
+    let shadow_dg_conjugate_lambda = -(spectral_radius_lambda1 / phi);
+    let mycielski_vertices_2n_plus_1 = 2 * active_n + 1;
+    let mycielski_edges_3m_plus_n = 3 * m_shadow + active_n;
+    // Kruskal–Katona / Sperner lower shadow bound over k-vertex anomalous component hyperedges
+    let kruskal_katona_shadow_lower_bound: usize = anomalies
+        .iter()
+        .map(|a| {
+            a.vertex_count
+                .saturating_mul(a.vertex_count.saturating_sub(1))
+                / 2
+        })
+        .sum();
+
     ErdosRenyiSecurityReport {
         num_vertices: n,
         num_edges: m,
@@ -542,6 +616,11 @@ pub fn scan_erdos_renyi_shadow_graph(
         critical_scale_n_two_thirds: critical_scale,
         spectral_radius_lambda1,
         expected_random_lambda1,
+        shadow_dg_phi_lambda1,
+        shadow_dg_conjugate_lambda,
+        mycielski_vertices_2n_plus_1,
+        mycielski_edges_3m_plus_n,
+        kruskal_katona_shadow_lower_bound,
         regime,
         anomalies,
     }
@@ -619,7 +698,7 @@ fn compute_shadow_spectral_radius(
         }
         rayleigh = dot_num;
         let norm = norm_sq.sqrt() as f32;
-        if norm <= 1e-12 {
+        if (norm as f64) <= SPECTRAL_NORM_FLOOR {
             break;
         }
         let inv_norm = 1.0 / norm;
@@ -783,7 +862,7 @@ pub fn scan_ramsey_monochromatic_cliques(graph: &CsrSymbolGraph) -> RamseyClique
                         if w_neighbors.binary_search(&z).is_ok() {
                             *counter += 1;
                             found_k4 = true;
-                            if top_cliques.len() < 12 {
+                            if top_cliques.len() < TOP_RAMSEY_CLIQUES {
                                 top_cliques.push(MonochromaticClique {
                                     color,
                                     order_k: 4,
@@ -792,7 +871,7 @@ pub fn scan_ramsey_monochromatic_cliques(graph: &CsrSymbolGraph) -> RamseyClique
                             }
                         }
                     }
-                    if !found_k4 && top_cliques.len() < 12 {
+                    if !found_k4 && top_cliques.len() < TOP_RAMSEY_CLIQUES {
                         top_cliques.push(MonochromaticClique {
                             color,
                             order_k: 3,
@@ -807,7 +886,7 @@ pub fn scan_ramsey_monochromatic_cliques(graph: &CsrSymbolGraph) -> RamseyClique
     top_cliques.sort_unstable_by_key(|a| std::cmp::Reverse(a.order_k));
 
     RamseyCliqueReport {
-        ramsey_number_r333: 17,
+        ramsey_number_r333: RAMSEY_NUMBER_R333,
         red_cliques,
         blue_cliques,
         green_cliques,
@@ -823,7 +902,7 @@ fn compute_erdos_chernoff_surprise(n: usize, s: usize, edges: usize, p: f64) -> 
         return 0.0;
     }
     let m_s = (s * (s - 1)) as f64;
-    let q = ((edges as f64) / m_s).clamp(1e-12, 1.0 - 1e-12);
+    let q = ((edges as f64) / m_s).clamp(EMPIRICAL_P_FLOOR, 1.0 - EMPIRICAL_P_FLOOR);
     if q <= p {
         return 0.0;
     }
@@ -921,7 +1000,7 @@ fn detect_tarjan_scc_anomalies(
                             compute_erdos_chernoff_surprise(n, s, internal_edges, empirical_p);
                         let cyc = (internal_edges as isize) - (s as isize) + 1;
 
-                        if surprise >= surprise_threshold_nats * 0.5
+                        if surprise >= surprise_threshold_nats * SCC_SURPRISE_DISCOUNT
                             || combined_haz.distinct_capabilities() >= 2
                         {
                             let spec_rad = estimate_component_spectral_radius(graph, &scc_verts);
@@ -934,7 +1013,7 @@ fn detect_tarjan_scc_anomalies(
                                 })
                                 .collect();
                             pivots.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
-                            pivots.truncate(5);
+                            pivots.truncate(TOP_PIVOT_SYMBOLS);
 
                             out_anomalies.push(ComponentAnomaly {
                                 component_id: *comp_id_counter,
@@ -969,7 +1048,7 @@ fn estimate_component_spectral_radius(graph: &CsrSymbolGraph, verts: &[SymbolId]
     let mut vec_y = vec![0.0_f64; s];
     let mut lambda = 0.0_f64;
 
-    for _ in 0..5 {
+    for _ in 0..COMPONENT_SPECTRAL_ITERATIONS {
         for (i, &u) in verts.iter().enumerate() {
             let es = graph.row_ptr[u as usize] as usize;
             let ee = graph.row_ptr[u as usize + 1] as usize;
@@ -982,7 +1061,7 @@ fn estimate_component_spectral_radius(graph: &CsrSymbolGraph, verts: &[SymbolId]
             vec_y[i] = sum;
         }
         lambda = vec_y.iter().map(|v| v * v).sum::<f64>().sqrt();
-        if lambda < 1e-12 {
+        if lambda < SPECTRAL_NORM_FLOOR {
             return 0.0;
         }
         for i in 0..s {

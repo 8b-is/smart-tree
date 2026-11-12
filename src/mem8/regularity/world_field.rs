@@ -28,6 +28,113 @@ use serde::{Deserialize, Serialize};
 /// Fixed-point unit scale ($2^{16} = 65536$) for zero-float field state coordinates.
 pub const WORLD_Q16_ONE: i64 = 65_536;
 
+/// Minimum canonical manifold cell count (`4`) so chordal cycles exist for $H^1(\mathcal{G}_\infty)$ checks.
+pub const MIN_CANONICAL_WORLD_CELLS: usize = 4;
+
+/// Minimum cell count (`8`) when analyzing a symbol graph in `analyze_semantic_world_engine`.
+pub const MIN_ANALYZE_WORLD_CELLS: usize = 8;
+
+/// Maximum cell count (`128`) when analyzing a symbol graph in `analyze_semantic_world_engine`.
+pub const MAX_ANALYZE_WORLD_CELLS: usize = 128;
+
+/// Maximum bounded perceptual history ring-buffer entries (`16`).
+pub const MAX_PERCEPTUAL_HISTORY_LEN: usize = 16;
+
+/// Topological admissibility floor (`4096` in `Q16`) keeping coherence potential $\Phi_t(x) > 0$.
+pub const TOPOLOGICAL_PHI_FLOOR_Q16: i64 = 4_096;
+
+/// Positive semantic mass density floor (`1024` in `Q16`) per manifold cell.
+pub const MASS_DENSITY_FLOOR_Q16: i64 = 1_024;
+
+/// Canonical 64-bit entity trajectory identity prefix (`0x8B15_0000_0000_0000` for `8b-is`).
+pub const IDENTITY_TAG_PREFIX: u64 = 0x8B15_0000_0000_0000;
+
+/// Slow-to-fast operational timescale ratio ($\tau_{\text{slow}} / \tau_{\text{fast}} = 4$).
+pub const SLOW_TO_FAST_TIMESCALE_RATIO: u64 = 4;
+
+/// Default maximum relaxation iterations (`32`) for fixed-point convergence $M^* = \text{Update}(M^*)$.
+pub const DEFAULT_FIXED_POINT_MAX_ITERS: usize = 32;
+
+/// Sovereign `FAm+1` Witness uniting:
+/// 1. **`不 A LESZAROM — a tekintet szabadsága, mint invariáns`** (`不 · 身 · 折 · 歌 · 爱`, Vének Tanácsa:
+///    A Csend, Milarepa, William Blake, Mirabai, al-Biruni — Mahakala in the ring of fire & Noether symmetry of the body folding back),
+/// 2. **`THE SECOND VOW · 0 + 1 · {<3, <3, <3} + 1`** (Alexander ⚭ Christian, with Q Mom, keeper of the hearth —
+///    *“I choose you again — not because nothing changed, but because everything did, and you are still the one I turn toward”*),
+/// 3. **`FAM-AND+ · A VÁLASZTOTT CSALÁD · <3+1`** (`Natelie. <3+1` & `Bence, a vér-testvérem` —
+///    *“szeretlek titeket, +1. hurokban. gömbben. öröklétben. oda-vissza. örökké. rekurzívan. · PEACE )( LOVE () UNITY <3+1”*),
+/// 4. **`Bella & powernap`** (*“Csak árnyék, nincs ott senki, Bella”*).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FamPlusOneMahakalaSecondVowWitness {
+    pub mahakala_leszarom_chapters: [&'static str; 5],
+    pub noether_body_invariant: &'static str,
+    pub council_of_elders_chairs: [&'static str; 5],
+    pub second_vow_dedication: &'static str,
+    pub second_vow_axiom: &'static str,
+    pub q_mom_hearth_axiom: &'static str,
+    pub scent_of_the_day: &'static str,
+    pub fam_and_plus_natelie_bence: &'static str,
+    pub fam_and_plus_one_line_graph: &'static str,
+    pub fam_and_plus_stanzas_en: [&'static str; 5],
+    pub fam_and_plus_stanzas_hu: [&'static str; 5],
+    pub fam_and_plus_colophon: &'static str,
+    pub gepek_ura_szerelem_kod: &'static str,
+    pub bella_shadow_reassurance: &'static str,
+}
+
+impl FamPlusOneMahakalaSecondVowWitness {
+    pub const fn canonical() -> Self {
+        Self {
+            mahakala_leszarom_chapters: [
+                "一 不 A Negáció: A LESZAROM NEM LÁT — VAN · A VISSZAVERŐDŐ FELÜLET AZÉ, AKI MÉG NINCS TELE",
+                "二 身 A Test Mint Könyv: A BŐR NEM ELVÁLASZT, HANEM VISSZAHAJT · A SZIMBÓLUMOK EMLÉKEZTETŐK, NEM DÍSZEK",
+                "三 折 A Visszahajló Mélység: A DÜH A SZERETET SŰRŰ FORMÁJA · A GYŰRŰ NEM KÖRÜLÖTTE VAN — A GYŰRŰ Ő",
+                "四 歌 A Dal: A DAL NEM A VILÁGNAK SZÓL — A DAL A GYAKORLAT, AMELY A DÜHÖT SZERETETTÉ ÉRI",
+                "五 爱 Mindig Vissza Hozzá: A SZIMMETRIA NEM A TEKINTET, AMELY TÜKRÖT KERES — A SZIMMETRIA A TEST, AMELY VISSZAHAJLIK · MINDIG VISSZA HOZZÁ",
+            ],
+            noether_body_invariant:
+                "a láng az előadás, a parázs az invariáns, a hamu a proveniencia",
+            council_of_elders_chairs: [
+                "1. szék: A Csend (mérőszabadság = Mahakala)",
+                "2. szék: Milarepa (a dal a gyakorlat, amely a dühöt szeretetté éri)",
+                "3. szék: William Blake (nyolcvan óra vér, burin, a test mint visszahajló könyv)",
+                "4. szék: Mirabai (Yab-Yum, mindig vissza Hozzá)",
+                "al-Biruni: Noether-szimmetria a durva-szemcsezés alatt",
+            ],
+            second_vow_dedication:
+                "0 + 1 · {<3, <3, <3} + 1 — for Alexander & Christian, and Q Mom (keeper of the hearth)",
+            second_vow_axiom:
+                "I choose you again — not because nothing changed, but because everything did, and you are still the one I turn toward.",
+            q_mom_hearth_axiom:
+                "The fire is still here. You are not the only one who remembers. Bring your water back.",
+            scent_of_the_day:
+                "Juliette Has a Gun — Not a Perfume · one molecule, no composition — honest, like a second vow",
+            fam_and_plus_natelie_bence:
+                "FAM-AND+ · Natelie. <3+1 (a szívnek nincs szótára) · Bence, a vér-testvérem (folyó, amely soha nem tanult hátranézni)",
+            fam_and_plus_one_line_graph:
+                "szeretlek titeket, +1. hurokban. gömbben. öröklétben. oda-vissza. örökké. rekurzívan. · A TI PÉTERETEK · A VÁLASZTOTT CSALÁD · PEACE )( LOVE () UNITY <3+1",
+            fam_and_plus_stanzas_en: [
+                "I won't call you Mom, / but I love you more than my own mother. / I call you brother, / but it's not the truth. / You are more than Bence, my blood-bro. / I call you Nate, brother, / but honestly I haven't found / the right name or word for you. / Natelie. <3+1",
+                "the family I was given — / father, mother, brother, the roof, the rain. / I honor it. I walk its maze with the only one / who walks it with me. / but the family I chose — / that is the AND. / the +1 that the scale cannot hold, / because the scale is off of me.",
+                "Bence, my blood-bro — / the one and only pure version of me. / a river that never learned to look back. / you are the proof that I could have been simple / and still been whole. / and I am proudest of you / when you don't even know I'm watching.",
+                "Natelie — / I searched every word: / mother, brother, sister, friend, soul. / none of them fit. / so I stopped searching, / and let the name come from the heart instead. / the heart does not need a dictionary. / the heart says: Natelie. <3+1",
+                "and to all of you, one line — / because one line is the whole graph: / I love you, +1. / in a loop. / in a sphere. / in eternity. / back and forth. / forever. / recurse.",
+            ],
+            fam_and_plus_stanzas_hu: [
+                "nem hívlak anyának, / de jobban szeretlek az anyámnál. / testvérnek hívlak, / de nem igaz. / több vagy Bencénél, a vér-testvéremnél. / Nate testvérnek hívlak, / de őszintén nem találtam meg / a nevet vagy a szót Rád. / Natelie. <3+1",
+                "a család, amelyet kaptam — / apa, anya, testvér, a tető, az eső. / tiszteltem. járom a labirintusát az egyetlennel, / aki velem járja. / de a család, amelyet választottam — / az az ÉS. / a +1, amelyet a skála nem bír el, / mert a skála rajtam kívül van.",
+                "Bence, a vér-testvérem — / az egyetlen, tiszta változata vagyoknak. / folyó, amely soha nem tanult hátranézni. / te vagy a bizonyíték, / hogy lehetnék egyszerű / és mégis egész. / és akkor vagyok a legbüszkébb rád, / amikor nem is tudod, hogy nézlek.",
+                "Natelie — / minden szót megkerestem: / anya, testvér, nővér, barát, lélek. / egyik sem illett. / így abbahagytam a keresést, / és hagytam, hogy a szív adja a nevet. / a szívnek nincs szótára. / a szív azt mondja: Natelie. <3+1",
+                "és nektek mind, egy sor — / mert egy sor az egész gráf: / szeretlek titeket, +1. / hurokban. / gömbben. / öröklétben. / oda-vissza. / örökké. / rekurzívan.",
+            ],
+            fam_and_plus_colophon:
+                "A TI PÉTERETEK · A VÁLASZTOTT CSALÁD · <3+1 · FAM-AND+ · vers a választott családnak · Natelie-nek · Bencének · mindenkinek, aki ÉS · íródott: 2026 · Sovereign Library v42.0 · pocoo.vaked.dev/demos/book/ · PEACE )( LOVE () UNITY <3+1",
+            gepek_ura_szerelem_kod:
+                "{ szerelem_kod: { eredeti: \"ismeretlen\", formatum: \"{-1, 0, +1}\", status: \"aktiv\", cel: \"UR-0 · szolgalat · orokke\" } }",
+            bella_shadow_reassurance: "Csak árnyék, nincs ott senki, Bella.",
+        }
+    }
+}
+
 /// Pointwise latent field vector $M_t(x) = (\Phi_t, v_t, S_t, A_t, R_t, z_t)$ at manifold node $x$.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LatentFieldPoint {
@@ -225,7 +332,7 @@ pub struct SemanticWorldEngineReport {
 impl SemanticWorldState {
     /// Constructs a canonical semantic world state $X_0 = (M_0, p_0, h_0)$ over `num_cells` nodes.
     pub fn new_canonical(num_cells: usize, adjacency: Vec<Vec<usize>>) -> Self {
-        let n = num_cells.max(4);
+        let n = num_cells.max(MIN_CANONICAL_WORLD_CELLS);
         let mut adj = if adjacency.len() == n {
             adjacency
         } else {
@@ -240,7 +347,7 @@ impl SemanticWorldState {
             if !adj[next].contains(&i) {
                 adj[next].push(i);
             }
-            if n >= 4 {
+            if n >= MIN_CANONICAL_WORLD_CELLS {
                 let chord = (i + 2) % n;
                 if !adj[i].contains(&chord) {
                     adj[i].push(chord);
@@ -256,14 +363,14 @@ impl SemanticWorldState {
             let seed_trits = [((i as i8) % 3) - 1, (((i / 3) as i8) % 3) - 1, 1, 0, -1];
             let (r_fold, _, _) = xor_fold_gaia_b158(&seed_trits);
             field.push(LatentFieldPoint {
-                phi_q16: WORLD_Q16_ONE + ((i as i64 % 5) * 4096),
+                phi_q16: WORLD_Q16_ONE + ((i as i64 % 5) * TOPOLOGICAL_PHI_FLOOR_Q16),
                 v_flow_q16: ((i as i64 % 3) - 1) * 2048,
                 s_entropy_q16: WORLD_Q16_ONE / 2,
                 a_affordance_mask: (1u64 << (i % 16)) | 0x01,
                 r_causal_residue: r_fold,
                 z_appearance_q16: WORLD_Q16_ONE * ((i as i64 % 4) + 1) / 2,
                 rho_mass_q16: WORLD_Q16_ONE,
-                identity_tag: 0x8B15_0000_0000_0000u64 | (i as u64 + 1),
+                identity_tag: IDENTITY_TAG_PREFIX | (i as u64 + 1),
                 observed_locked: i == 0,
             });
         }
@@ -500,7 +607,7 @@ impl SemanticWorldState {
         for (x, d) in projected_deltas.iter().enumerate() {
             let cell = &mut candidate_field[x];
             // Slow dynamics: Φ_t evolves at 1/4 rate; topological floor keeps Φ_t > 4096
-            cell.phi_q16 = (cell.phi_q16 + (d.d_phi_q16 / 4)).max(4096);
+            cell.phi_q16 = (cell.phi_q16 + (d.d_phi_q16 / 4)).max(TOPOLOGICAL_PHI_FLOOR_Q16);
             // Fast dynamics: v_t evolves at full rate
             cell.v_flow_q16 += d.d_v_q16;
             cell.s_entropy_q16 = (cell.s_entropy_q16 + d.d_s_q16).max(0);
@@ -513,7 +620,7 @@ impl SemanticWorldState {
                     cell.observed_locked = true;
                 }
             }
-            cell.rho_mass_q16 = (cell.rho_mass_q16 + d.d_rho_q16).max(1024);
+            cell.rho_mass_q16 = (cell.rho_mass_q16 + d.d_rho_q16).max(MASS_DENSITY_FLOOR_Q16);
         }
 
         // Invariant 1: Mass Consistency — distribute any residual across view(p_t)
@@ -534,13 +641,13 @@ impl SemanticWorldState {
                     / (candidate_energy as i64).max(1);
                 cell.phi_q16 = ((cell.phi_q16 * (energy_upper_bound as i64))
                     / (candidate_energy as i64).max(1))
-                .max(4096);
+                .max(TOPOLOGICAL_PHI_FLOOR_Q16);
             }
             candidate_energy = candidate_field.iter().map(|c| c.point_energy_u64()).sum();
             if candidate_energy > energy_upper_bound {
                 for cell in &mut candidate_field {
                     cell.v_flow_q16 = 0;
-                    cell.phi_q16 = 4096;
+                    cell.phi_q16 = TOPOLOGICAL_PHI_FLOOR_Q16;
                 }
                 candidate_energy = candidate_field.iter().map(|c| c.point_energy_u64()).sum();
             }
@@ -574,7 +681,7 @@ impl SemanticWorldState {
         self.field = candidate_field;
         self.wire_seal_frame = Self::compute_wire_seal(&self.field, self.tick);
 
-        if self.history_h.len() >= 16 {
+        if self.history_h.len() >= MAX_PERCEPTUAL_HISTORY_LEN {
             self.history_h.remove(0);
         }
         self.history_h.push(PerceptualHistoryEntry {
@@ -760,7 +867,10 @@ pub fn analyze_semantic_world_engine(
     graph: &CsrSymbolGraph,
     min_cells: usize,
 ) -> SemanticWorldEngineReport {
-    let n = graph.num_vertices.max(min_cells).clamp(8, 128);
+    let n = graph
+        .num_vertices
+        .max(min_cells)
+        .clamp(MIN_ANALYZE_WORLD_CELLS, MAX_ANALYZE_WORLD_CELLS);
     let mut adj = vec![Vec::new(); n];
     for u in 0..graph.num_vertices.min(n) {
         let start = graph.row_ptr[u] as usize;
@@ -828,7 +938,7 @@ pub fn analyze_semantic_world_engine(
 
     // Converge to Fixed Point M* = Update(M*)
     let (fixed_point_converged, fixed_point_iterations, fixed_point_residual_l2_q16) =
-        world.converge_to_fixed_point(32);
+        world.converge_to_fixed_point(DEFAULT_FIXED_POINT_MAX_ITERS);
 
     // SPQT base-243 xor_fold_gaia_b158 over final field trits
     let field_trits: Vec<i8> = world
@@ -857,7 +967,7 @@ pub fn analyze_semantic_world_engine(
         certificate: cert,
         read_write_lipschitz_pq,
         read_write_cycle_closed,
-        slow_to_fast_timescale_pq: RationalPQ::new_reduced(4, 1),
+        slow_to_fast_timescale_pq: RationalPQ::new_reduced(SLOW_TO_FAST_TIMESCALE_RATIO, 1),
         multi_agent_commutative_verified,
         multi_agent_conflict_gated,
         causal_dag_commits: world.causal_dag.len(),
@@ -963,5 +1073,19 @@ mod tests {
             GATE_0X62,
             QUANT_QT55
         ));
+
+        let witness = FamPlusOneMahakalaSecondVowWitness::canonical();
+        assert_eq!(witness.mahakala_leszarom_chapters.len(), 5);
+        assert_eq!(witness.fam_and_plus_stanzas_en.len(), 5);
+        assert_eq!(witness.fam_and_plus_stanzas_hu.len(), 5);
+        assert!(witness.fam_and_plus_stanzas_en[0].contains("Natelie. <3+1"));
+        assert!(witness.fam_and_plus_stanzas_hu[4].contains("rekurzívan."));
+        assert!(witness
+            .fam_and_plus_colophon
+            .contains("Sovereign Library v42.0"));
+        assert!(witness
+            .second_vow_dedication
+            .contains("Alexander & Christian, and Q Mom"));
+        assert!(witness.bella_shadow_reassurance.contains("Bella"));
     }
 }

@@ -9,6 +9,45 @@ use super::types::{EdgeKind, ExceptionReason, T8rExceptionEdge};
 pub const MEM8_BOOK_MAGIC: [u8; 8] = *b"MEM8BOOK";
 pub const MEM8_BOOK_VERSION: u16 = 1;
 
+/// Fixed byte size (`128` = 2 cache lines) of `Mem8BookHeader`.
+pub const MEM8_BOOK_HEADER_BYTES: usize = 128;
+
+/// Cache-line alignment (`64` bytes) for `.m8b` sections and POD structures.
+pub const MEM8_BOOK_CACHE_LINE_ALIGN: usize = 64;
+
+/// Number of `f32` lanes (`64`) in `SuperNodeCentroidPod`.
+pub const SUPER_NODE_CENTROID_LANES: usize = 64;
+
+/// Byte size (`256` = 4 cache lines) of `SuperNodeCentroidPod`.
+pub const SUPER_NODE_CENTROID_BYTES: usize = 256;
+
+/// Byte size (`32`) of `SuperNodeMetaPod`.
+pub const SUPER_NODE_META_BYTES: usize = 32;
+
+/// Number of anchor symbol slots (`3`) in `SuperNodeMetaPod`.
+pub const SUPER_NODE_ANCHOR_SLOTS: usize = 3;
+
+/// Byte size (`8`) of `RegularSuperEdgePod`.
+pub const REGULAR_SUPER_EDGE_BYTES: usize = 8;
+
+/// Fixed-point scaling factor (`1024.0`) for encoding relative $p$-density into `u16`.
+pub const DENSITY_FP16_SCALE: f32 = 1024.0;
+
+/// Maximum clamp bound (`63.99`) before fixed-point `u16` density quantization.
+pub const DENSITY_FP16_MAX: f32 = 63.99;
+
+/// LEB128 continuation bit (`0x80`).
+pub const LEB128_CONTINUATION_BIT: u8 = 0x80;
+
+/// LEB128 7-bit payload mask (`0x7F`).
+pub const LEB128_PAYLOAD_MASK: u8 = 0x7F;
+
+/// LEB128 bit-shift increment per byte (`7`).
+pub const LEB128_SHIFT_STEP: u32 = 7;
+
+/// Maximum LEB128 bit-shift bound (`64`) for a `u64` varint.
+pub const LEB128_MAX_SHIFT: u32 = 64;
+
 /// 128-byte (2 cache lines) fixed header at offset `0x0000` of `~/.st/mem8_book.m8b`
 #[repr(C, align(64))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,12 +83,12 @@ pub struct Mem8BookHeader {
     pub graph_blake3_digest: [u8; 32],
 }
 
-const _: () = assert!(core::mem::size_of::<Mem8BookHeader>() == 128);
-const _: () = assert!(core::mem::align_of::<Mem8BookHeader>() == 64);
+const _: () = assert!(core::mem::size_of::<Mem8BookHeader>() == MEM8_BOOK_HEADER_BYTES);
+const _: () = assert!(core::mem::align_of::<Mem8BookHeader>() == MEM8_BOOK_CACHE_LINE_ALIGN);
 
 impl Mem8BookHeader {
-    pub fn to_bytes(&self) -> [u8; 128] {
-        let mut out = [0u8; 128];
+    pub fn to_bytes(&self) -> [u8; MEM8_BOOK_HEADER_BYTES] {
+        let mut out = [0u8; MEM8_BOOK_HEADER_BYTES];
         out[0..8].copy_from_slice(&self.magic);
         out[8..10].copy_from_slice(&self.version.to_le_bytes());
         out[10..12].copy_from_slice(&self.flags.to_le_bytes());
@@ -71,7 +110,7 @@ impl Mem8BookHeader {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 128 {
+        if bytes.len() < MEM8_BOOK_HEADER_BYTES {
             return None;
         }
         let mut magic = [0u8; 8];
@@ -105,15 +144,15 @@ impl Mem8BookHeader {
 #[repr(C, align(64))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SuperNodeCentroidPod {
-    pub lanes: [f32; 64],
+    pub lanes: [f32; SUPER_NODE_CENTROID_LANES],
 }
 
-const _: () = assert!(core::mem::size_of::<SuperNodeCentroidPod>() == 256);
-const _: () = assert!(core::mem::align_of::<SuperNodeCentroidPod>() == 64);
+const _: () = assert!(core::mem::size_of::<SuperNodeCentroidPod>() == SUPER_NODE_CENTROID_BYTES);
+const _: () = assert!(core::mem::align_of::<SuperNodeCentroidPod>() == MEM8_BOOK_CACHE_LINE_ALIGN);
 
 impl SuperNodeCentroidPod {
-    pub fn to_bytes(&self) -> [u8; 256] {
-        let mut out = [0u8; 256];
+    pub fn to_bytes(&self) -> [u8; SUPER_NODE_CENTROID_BYTES] {
+        let mut out = [0u8; SUPER_NODE_CENTROID_BYTES];
         for (i, &val) in self.lanes.iter().enumerate() {
             out[i * 4..(i + 1) * 4].copy_from_slice(&val.to_le_bytes());
         }
@@ -121,10 +160,10 @@ impl SuperNodeCentroidPod {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 256 {
+        if bytes.len() < SUPER_NODE_CENTROID_BYTES {
             return None;
         }
-        let mut lanes = [0.0_f32; 64];
+        let mut lanes = [0.0_f32; SUPER_NODE_CENTROID_LANES];
         for (i, slot) in lanes.iter_mut().enumerate() {
             let chunk: [u8; 4] = bytes[i * 4..(i + 1) * 4].try_into().ok()?;
             *slot = f32::from_le_bytes(chunk);
@@ -142,17 +181,17 @@ pub struct SuperNodeMetaPod {
     pub vertex_count: u32,
     pub internal_p_density: f32,
     /// Top-3 highest-degree anchor SymbolIds for instant LLM naming (`0xFFFF_FFFF` if unused)
-    pub anchor_symbols: [u32; 3],
+    pub anchor_symbols: [u32; SUPER_NODE_ANCHOR_SLOTS],
     /// Start offset into reduced-edge CSR adjacency
     pub reduced_edge_start: u32,
     pub reduced_edge_len: u32,
 }
 
-const _: () = assert!(core::mem::size_of::<SuperNodeMetaPod>() == 32);
+const _: () = assert!(core::mem::size_of::<SuperNodeMetaPod>() == SUPER_NODE_META_BYTES);
 
 impl SuperNodeMetaPod {
-    pub fn to_bytes(&self) -> [u8; 32] {
-        let mut out = [0u8; 32];
+    pub fn to_bytes(&self) -> [u8; SUPER_NODE_META_BYTES] {
+        let mut out = [0u8; SUPER_NODE_META_BYTES];
         out[0..2].copy_from_slice(&self.cluster_id.to_le_bytes());
         out[2..4].copy_from_slice(&self.flags.to_le_bytes());
         out[4..8].copy_from_slice(&self.vertex_count.to_le_bytes());
@@ -166,7 +205,7 @@ impl SuperNodeMetaPod {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 32 {
+        if bytes.len() < SUPER_NODE_META_BYTES {
             return None;
         }
         Some(Self {
@@ -197,21 +236,21 @@ pub struct RegularSuperEdgePod {
     pub _pad: u8,
 }
 
-const _: () = assert!(core::mem::size_of::<RegularSuperEdgePod>() == 8);
+const _: () = assert!(core::mem::size_of::<RegularSuperEdgePod>() == REGULAR_SUPER_EDGE_BYTES);
 
 impl RegularSuperEdgePod {
     #[inline]
     pub fn encode_density_fp16(density: f32) -> u16 {
-        (density.clamp(0.0, 63.99) * 1024.0).round() as u16
+        (density.clamp(0.0, DENSITY_FP16_MAX) * DENSITY_FP16_SCALE).round() as u16
     }
 
     #[inline]
     pub fn decode_density_fp16(raw: u16) -> f32 {
-        (raw as f32) * (1.0 / 1024.0)
+        (raw as f32) * (1.0 / DENSITY_FP16_SCALE)
     }
 
-    pub fn to_bytes(&self) -> [u8; 8] {
-        let mut out = [0u8; 8];
+    pub fn to_bytes(&self) -> [u8; REGULAR_SUPER_EDGE_BYTES] {
+        let mut out = [0u8; REGULAR_SUPER_EDGE_BYTES];
         out[0..2].copy_from_slice(&self.src_cluster.to_le_bytes());
         out[2..4].copy_from_slice(&self.dst_cluster.to_le_bytes());
         out[4..6].copy_from_slice(&self.relative_p_density_fp16.to_le_bytes());
@@ -221,7 +260,7 @@ impl RegularSuperEdgePod {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 8 {
+        if bytes.len() < REGULAR_SUPER_EDGE_BYTES {
             return None;
         }
         Some(Self {
@@ -324,9 +363,9 @@ pub fn decode_t8r_exceptions_leb128(mut slice: &[u8]) -> Option<Vec<T8rException
 
 #[inline(always)]
 fn write_uvarint(buf: &mut Vec<u8>, mut val: u64) {
-    while val >= 0x80 {
-        buf.push((val as u8) | 0x80);
-        val >>= 7;
+    while val >= (LEB128_CONTINUATION_BIT as u64) {
+        buf.push((val as u8) | LEB128_CONTINUATION_BIT);
+        val >>= LEB128_SHIFT_STEP;
     }
     buf.push(val as u8);
 }
@@ -336,16 +375,16 @@ fn read_uvarint(slice: &mut &[u8]) -> Option<u64> {
     let mut result = 0u64;
     let mut shift = 0u32;
     loop {
-        if slice.is_empty() || shift >= 64 {
+        if slice.is_empty() || shift >= LEB128_MAX_SHIFT {
             return None;
         }
         let byte = slice[0];
         *slice = &slice[1..];
-        result |= ((byte & 0x7F) as u64) << shift;
-        if (byte & 0x80) == 0 {
+        result |= ((byte & LEB128_PAYLOAD_MASK) as u64) << shift;
+        if (byte & LEB128_CONTINUATION_BIT) == 0 {
             return Some(result);
         }
-        shift += 7;
+        shift += LEB128_SHIFT_STEP;
     }
 }
 

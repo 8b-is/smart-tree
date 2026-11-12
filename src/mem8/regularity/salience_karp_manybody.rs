@@ -29,6 +29,31 @@ use crate::scanner::FileNode;
 use serde::{Deserialize, Serialize};
 use std::time::UNIX_EPOCH;
 
+/// Fallback Steiner resistance distance for clusters outside the active Steiner slice (`4.0`).
+pub const FALLBACK_CLUSTER_RESISTANCE_DIST: f32 = 4.0;
+/// Maximum resistance distance cap for Erdős Center clusters (`0.35`).
+pub const CENTER_CLUSTER_MAX_DIST: f32 = 0.35;
+/// Weight of cluster Steiner resistance distance in relational distance $d_R(x, q)$ (`0.7`).
+pub const SALIENCE_CLUSTER_WEIGHT: f32 = 0.7;
+/// Weight of degree centrality bonus in relational distance $d_R(x, q)$ (`0.3`).
+pub const SALIENCE_DEGREE_WEIGHT: f32 = 0.3;
+/// Top-$k$ frontier width for evaluating proxy disagreement $\Pr[x^*_T \neq x^*_R]$ (`10`).
+pub const PROXY_DISAGREEMENT_FRONTIER_K: usize = 10;
+/// Maximum relational candidates inspected for Load-Bearing Old ("Corrugated Iron") rescue (`16`).
+pub const MAX_LOAD_BEARING_CANDIDATES: usize = 16;
+/// Maximum Load-Bearing Old ("Corrugated Iron") artifacts reported (`5`).
+pub const MAX_LOAD_BEARING_ARTIFACTS: usize = 5;
+/// Proxy disagreement threshold triggering `SalienceRegime::RelationalShiftActive` (`0.4`).
+pub const RELATIONAL_SHIFT_DISAGREEMENT_THRESHOLD: f64 = 0.4;
+/// Admissibility change ratio $\Delta_R / N$ threshold triggering `RelationalShiftActive` (`0.25`).
+pub const RELATIONAL_SHIFT_CHANGE_RATIO_THRESHOLD: f64 = 0.25;
+/// Second-order Strang Split-Operator propagation step $h$ (`0.25`).
+pub const STRANG_STEP_H: f32 = 0.25;
+/// Maximum number of dominant Kohn–Sham salience orbitals retained (`5`).
+pub const MAX_DOMINANT_SALIENCE_ORBITALS: usize = 5;
+/// Rational denominator lattice for Strang split-operator wave coherence (`10_000`).
+pub const STRANG_COHERENCE_LATTICE_DEN: u64 = 10_000;
+
 /// Regime classification for whether observable recency ($d_T$) is a valid proxy for
 /// relational salience ($d_R$).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -165,7 +190,7 @@ fn compute_salience_ontology(
     }
 
     // Map each cluster to its Steiner resistance distance (or fallback radius)
-    let mut cluster_dist = vec![4.0_f32; archive.super_nodes.len() + 2];
+    let mut cluster_dist = vec![FALLBACK_CLUSTER_RESISTANCE_DIST; archive.super_nodes.len() + 2];
     for sn in &steiner.steiner_super_nodes {
         let cid = sn.cluster_id as usize;
         if cid < cluster_dist.len() {
@@ -175,7 +200,7 @@ fn compute_salience_ontology(
     for &c_id in &center_turan.center_clusters {
         let cid = c_id as usize;
         if cid < cluster_dist.len() {
-            cluster_dist[cid] = cluster_dist[cid].min(0.35);
+            cluster_dist[cid] = cluster_dist[cid].min(CENTER_CLUSTER_MAX_DIST);
         }
     }
 
@@ -198,7 +223,10 @@ fn compute_salience_ontology(
             .unwrap_or(0);
 
         let cid = archive.vertex_to_cluster.get(i).copied().unwrap_or(0) as usize;
-        let base_c_dist = cluster_dist.get(cid).copied().unwrap_or(4.0);
+        let base_c_dist = cluster_dist
+            .get(cid)
+            .copied()
+            .unwrap_or(FALLBACK_CLUSTER_RESISTANCE_DIST);
         let deg = if i < graph.num_vertices {
             (graph.row_ptr[i + 1] - graph.row_ptr[i])
                 + (graph.transpose_row_ptr[i + 1] - graph.transpose_row_ptr[i])
@@ -207,7 +235,7 @@ fn compute_salience_ontology(
         };
         // Relational distance d_R(x, q): lower when on the Steiner backbone / Erdős Center and high structural degree
         let deg_bonus = 1.0 / (1.0 + (deg as f32).ln_1p());
-        rel_dist[i] = base_c_dist * 0.7 + deg_bonus * 0.3;
+        rel_dist[i] = base_c_dist * SALIENCE_CLUSTER_WEIGHT + deg_bonus * SALIENCE_DEGREE_WEIGHT;
     }
 
     // Sort by Observable Temporal Distance d_T (descending modified timestamp = newest first; tie-break by reverse index)
@@ -229,7 +257,7 @@ fn compute_salience_ontology(
     }
 
     // Evaluate proxy disagreement probability Pr[x*_T != x*_R] across the top-k frontier
-    let frontier_k = file_indices.len().clamp(1, 10);
+    let frontier_k = file_indices.len().clamp(1, PROXY_DISAGREEMENT_FRONTIER_K);
     let mut disagreements = 0usize;
     for pos in 0..frontier_k {
         if temporal_order[pos] != relational_order[pos] {
@@ -242,7 +270,10 @@ fn compute_salience_ontology(
     // Files in the top relational salience half where temporal rank is significantly older
     let mut load_bearing_old = Vec::new();
     let half_m = (file_indices.len() / 2).max(1);
-    for &sym in relational_order.iter().take(half_m.min(16)) {
+    for &sym in relational_order
+        .iter()
+        .take(half_m.min(MAX_LOAD_BEARING_CANDIDATES))
+    {
         let r_t = temporal_rank[sym];
         let r_r = relational_rank[sym];
         if r_t > r_r {
@@ -257,13 +288,15 @@ fn compute_salience_ontology(
         }
     }
     load_bearing_old.sort_by_key(|a| std::cmp::Reverse(a.amnesia_displacement));
-    load_bearing_old.truncate(5);
+    load_bearing_old.truncate(MAX_LOAD_BEARING_ARTIFACTS);
 
     let admissibility_change_ratio = ((archive.exception_ledger.len()
         + archive.outlier_vertices.len()) as f64)
         / (n.max(1) as f64);
 
-    let regime = if proxy_disagreement_prob > 0.4 || admissibility_change_ratio > 0.25 {
+    let regime = if proxy_disagreement_prob > RELATIONAL_SHIFT_DISAGREEMENT_THRESHOLD
+        || admissibility_change_ratio > RELATIONAL_SHIFT_CHANGE_RATIO_THRESHOLD
+    {
         SalienceRegime::RelationalShiftActive
     } else {
         SalienceRegime::QuasiStaticRecencyValid
@@ -387,7 +420,7 @@ fn compute_manybody_dft_strang(
     let mut psi = vec![inv_sqrt_k; k];
 
     // Step 1: Half-step kinetic temporal operator exp((h/2) * A_temporal)
-    let h = 0.25_f32;
+    let h = STRANG_STEP_H;
     let drift_rate = (salience.admissibility_change_ratio as f32).clamp(0.01, 0.5);
     for (idx, amp) in psi.iter_mut().enumerate() {
         let sn_density = super_nodes[idx].internal_p_density.clamp(0.0, 2.0);
@@ -499,7 +532,7 @@ fn compute_manybody_dft_strang(
         .collect();
 
     dominant_salience_orbitals.sort_by(|a, b| b.1.total_cmp(&a.1));
-    dominant_salience_orbitals.truncate(5);
+    dominant_salience_orbitals.truncate(MAX_DOMINANT_SALIENCE_ORBITALS);
 
     // Coherence inner product |<\Psi(0) | \Psi(h)>|
     let coherence: f32 = psi
@@ -508,10 +541,12 @@ fn compute_manybody_dft_strang(
         .sum::<f32>()
         .clamp(0.0, 1.0);
 
-    let xc_q16 = ((exchange_energy * 65536.0).round() as i64).max(1);
+    let xc_q16 =
+        ((exchange_energy * (super::zeno_engine::Q16_UNIT_SCALE as f64)).round() as i64).max(1);
     let xc_pqm = crate::pq_trainer::normalize_symplectic_pqm(xc_q16, 1, -16);
-    let coh_num = (((coherence as f64) * 10_000.0).round() as u64).clamp(0, 10_000);
-    let coh_rat = super::pq_engine::RationalPQ::new_reduced(coh_num, 10_000);
+    let coh_num = (((coherence as f64) * (STRANG_COHERENCE_LATTICE_DEN as f64)).round() as u64)
+        .clamp(0, STRANG_COHERENCE_LATTICE_DEN);
+    let coh_rat = super::pq_engine::RationalPQ::new_reduced(coh_num, STRANG_COHERENCE_LATTICE_DEN);
 
     ManyBodyDftWaveReport {
         kohn_sham_orbitals_k: k,

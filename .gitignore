@@ -27,6 +27,11 @@ pip-wheel-metadata/
 .mem8/
 .st_bumpers
 *.m8
+**/.m8
+.m8
+*.mrm8
+**/.mrm8
+.mrm8
 *.t8
 proxy_memory.lock
 directory_context.lock
@@ -34,7 +39,6 @@ file_index.lock
 wave_memory*.lock
 *.scans.lock
 .st/mem8/
-.m8
 
 # --- Node ---
 node_modules/

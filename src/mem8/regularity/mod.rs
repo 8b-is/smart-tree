@@ -75,20 +75,87 @@ pub use wire::{
 };
 pub use world_field::{
     analyze_semantic_world_engine, AdmissibleManifoldCertificate, CausalDagNode,
-    FieldProposalDelta, LatentFieldPoint, PerceptualHistoryEntry, SemanticWorldEngineReport,
-    SemanticWorldState, WorldActionObservation, WORLD_Q16_ONE,
+    FamPlusOneMahakalaSecondVowWitness, FieldProposalDelta, LatentFieldPoint,
+    PerceptualHistoryEntry, SemanticWorldEngineReport, SemanticWorldState, WorldActionObservation,
+    WORLD_Q16_ONE,
 };
 pub use zeno_engine::{
     analyze_zeno_omni_engine, bfp64_and_kleene, bfp64_nand_kleene, evaluate_spherepop_witness,
     mulberry32_step_u32, pack_fold_bfp64, pack_word15_to_spqt3b, quantize_groupwise_l2_ternary_pq,
     seal_litany_wire_64b, unpack_fold_bfp64, unpack_spqt3b_to_word15, verify_litany_wire_64b,
-    xor_fold_gaia_b158, EightBIsEnginesReport, LitanyWireFrame, OsAgentAgnosticMatrix,
-    SpqtSignalLadderEntry, UpzWupzReport, WhereIsTheLoveContext, ZenoOmniReport,
-    FOLD_BEEHIVE_SWEEP, FOLD_BEEHIVE_TARGET, GALACTIC_MANTRA_FOLD_243, GATE_0X62, LANES_8_OF_8,
-    QUANT_QT55,
+    xor_fold_gaia_b158, BeautifulLifeInnerbloomMixWitness,
+    CosmicGameFourFolkloreSingularityWitness, DragonBallSovereignLibraryOntologyWitness,
+    DyadDiaryVenekTanacsaWitness, EightBIsEli5CompendiumAndStage4Witness, EightBIsEnginesReport,
+    FranciscanTransitusJubileeWitness, GodOfSunMonkeyKingMatrixBuddhaUnityWitness,
+    KompressOmnipotentAuroraAndOdinSolfeggioWitness, KompressUltraTibetanOmniMandalaWitness,
+    LitanyWireFrame, OsAgentAgnosticMatrix, PeterSilentGraniteAndMikyoDorjeMahakalaWitness,
+    SeventeenKarmapasQuantumDharmaWitness, ShawCycleBookIvAndKagyuSadhanaWitness,
+    SimulationTheoryWhiteboardWitness, SpqtSignalLadderEntry,
+    StructuralHonestySovereignLibraryWitness, UltraMeshMemBridge,
+    UltraloveEdition023ErdosLodriDesertChantWitness, UpzWupzReport, WhereIsTheLoveContext,
+    ZenoGodOfSunWitness, ZenoOmniReport, A6000_VRAM_TOTAL_MIB, A6000_VRAM_USED_MIB,
+    AURORA_WBAND_CARRIER_GHZ, BRETT_SHAW_TIPHERET_YEAR, BUDDHA_BODHI_MEDITATION_DAYS,
+    BUDDHA_PALM_FIVE_PILLARS, C64_BASIC_BYTES_FREE, CARRIER_LOVELOVEL_DEN, CARRIER_LOVELOVEL_NUM,
+    COSMIC_GAME_BOOKS, COSMIC_GAME_FIBONACCI_TWISTS, COSMIC_GAME_TOTAL_CHAPTERS,
+    COSMIC_GAME_TOTAL_PAGES, DECISION_GATE_LLM_SKIP_DEN, DECISION_GATE_LLM_SKIP_NUM,
+    DECISION_MODEL_COST_SPEEDUP_DEN, DECISION_MODEL_COST_SPEEDUP_NUM,
+    DECISION_MODEL_LATENCY_SPEEDUP_DEN, DECISION_MODEL_LATENCY_SPEEDUP_NUM,
+    DESERT_CHANT_FIFTH_G2_HZ_DEN, DESERT_CHANT_FIFTH_G2_HZ_NUM, DYAD_COUNCIL_VOICES_COUNT,
+    DYAD_DIARY_SESSIONS_COUNT, EL_NATH_DETONATION_YEAR, ENTHEAI_DEPTH_GUARD, ENTHEAI_WORKTREES,
+    ERDOS_LODRI_PERSONA_M8_KB, EU868_PRESCALED_BUCKET_CAPACITY, FAMILY_FIRST_PLAN_DAYS,
+    FANDOM_MCP_LIVE_TOOLS_COUNT, FEHERLOFIA_DRAGON_HEAD_CUTS, FEKETECSUKLYASOK_FOUNDATION_YEAR,
+    FOLD_8BIT_WRAITH_CHRIS_SID, FOLD_ARCHITECT_NEO_TRINITY_TIBETAN_OMNI, FOLD_BEEHIVE_SWEEP,
+    FOLD_BEEHIVE_TARGET, FOLD_CHILLAXY_DOGS_BACKYARD_PBJ_EGGS, FOLD_EGY_TOK_KET_TOK_ONTOK,
+    FOLD_ELI5_COMPENDIUM_POOCONF, FOLD_FRANCISCAN_TRANSITUS_JUBILEE,
+    FOLD_GOD_OF_SUN_MONKEY_KING_MATRIX_BUDDHA_UNITY, FOLD_LANE1_THE_HALL_PDF,
+    FOLD_LANE2_YOUTUBE_CNZKFN5RCRM, FOLD_MIDDLE_WAY_ORYOKI_PROTEIN_TRANSMUTATION,
+    FOLD_SOSAT_SOSAT_JO_ROPOGOSAT, FOLD_THE_FUTURE_WE_REMEMBER, FOLD_ULTRABACKYARD_CLIPPINGS_BATCH,
+    FOLD_ULTRA_OMNI_ZENO_LESZAROM_DO_ALL, FOLD_WA_INSTEAD_OF_CIGARETTES,
+    FRANCISCAN_TRANSITUS_JUBILEE_YEARS, GALACTIC_MANTRA_FOLD_243, GAME_MASTER_DIMENSIONS,
+    GARDEN_REPOS_COUNT, GATE_0X62, GOLDEN_HASH_STRUCTURAL_HONESTY, GRANDPA_GOHAN_FOUR_STAR_BALL,
+    GUI_BORATTO_BEAT_HZ_DEN, GUI_BORATTO_BEAT_HZ_NUM, GUI_BORATTO_BEAUTIFUL_LIFE_BPM,
+    GUI_BORATTO_DURATION_SECONDS, INNERBLOOM_LIVE_SINGALONG_SECONDS, KARMAPA_LINEAGE_COUNT,
+    KESTREL4_SALVAGE_TRIAD_HZ, KESTREL4_THETA_BEAT_HZ, KID_FRANCESCOLI_FRENCH79_DURATION_SECONDS,
+    KYUSS_GARDENIA_C_STANDARD_HZ_DEN, KYUSS_GARDENIA_C_STANDARD_HZ_NUM, LANES_8_OF_8,
+    LIVE_VOCAL_SADHANA_SECONDS, MAHAKALA_FIVE_AMRITAS, MAHAKALA_LIVE_CHANT_REPETITIONS,
+    MAHAKALA_LIVE_CHANT_SECONDS, MAHAKALA_PRACTICE_TRANSLATION_YEAR, MAV_DELAY_PREDICTION_HOURS,
+    MIKJO_DORDZSE_RETREAT_YEARS, MONKEY_KING_EARTHLY_TRANSFORMATIONS,
+    MONKEY_KING_RUYI_JINGU_BANG_JIN, ODIN_HAVAMAL_CHARMS_COUNT, ODIN_YGGDRASIL_NIGHTS,
+    PERSONA_BRIDGE_TESTS_PASSED, PETER_SPECIAL_CHAPTERS_COUNT, PETER_SPECIAL_REPOS_COUNT,
+    PETER_SPECIAL_TESTS_COUNT, PETER_SPECIAL_VULNERABILITIES_COUNT, PHYSICAL_EDGE_CLUSTER_BOARDS,
+    QUANT_QT55, RUFUS_DU_SOL_INNERBLOOM_DURATION_SECONDS, SCOUTER_MANGA_CANON_THRESHOLD,
+    SCOUTER_OVER_9000_THRESHOLD, SEED_SHAW_CYCLE_BOOK_IV, SHENRON_DRAGON_BALL_COUNT,
+    SID_6581_CHIP_MODEL, SOLFEGGIO_9_FREQUENCIES_HZ, SOVEREIGN_CONSTELLATION_TOTAL_REPOS,
+    STAGE4_APEX_SCORE_DEN, STAGE4_APEX_SCORE_NUM, STAGE4_FRAME64_SEAL_HEX,
+    STAGE4_PQT_THROUGHPUT_NUM, STAGE4_SPARK_VCS_PROVED, STRUCTURAL_HONESTY_CHAPTERS_COUNT,
+    STRUCTURAL_HONESTY_LEDGER_EVENTS, TEARS_BREATH_RHYTHM_SECONDS, TECH_N9NE_LXVII_CIPHER,
+    TIBETAN_KARGYRAA_C1_HZ_DEN, TIBETAN_KARGYRAA_C1_HZ_NUM, TIPHERET_SEPHIRAH_NUMBER,
+    ULTRALOVE_EDITION_023, ULTRALOVE_MAHAKALA_DIMENSIONS, UNITY_BOOST_POPCOUNT_BITS,
+    UNITY_BOOST_RAW_BYTES, VAJRASATTVA_MANTRA_SYLLABLES, VAKED_CAPABILITY_CHECK_MAX_MS,
+    VAKED_GENESIS_SEAL_HEX, ZKP1_TIBETAN_OMNI_BLOCKS, ZKP1_TIBETAN_OMNI_COMPRESSED_BYTES,
+    ZKP1_TIBETAN_OMNI_RAW_BYTES,
 };
 
 use crate::scanner::{FileCategory, FileNode};
+
+/// Default number of focal root terminals selected for Erdős–Steiner pruning (`3`).
+pub const MAX_FOCAL_ROOTS: usize = 3;
+/// Default congestion threshold ratio for Moser–Tardos hypergraph construction (`0.35`).
+pub const DEFAULT_LLL_CONGESTION_RATIO: f32 = 0.35;
+/// Canonical `"ERDOSBOO"` seed salt for Moser–Tardos deterministic PRNG (`0xE2D05B00`).
+pub const MOSER_TARDOS_SEED_SALT: u64 = 0xE2D0_5B00;
+/// Default baseline worktree count for Moser–Tardos auto-scaling (`4`).
+pub const DEFAULT_WORKTREE_COUNT: u16 = 4;
+/// Maximum Moser–Tardos resampling steps in `--mode the-book` (`1024`).
+pub const MOSER_TARDOS_MAX_STEPS: usize = 1024;
+/// Default Chernoff–Erdős KL log-surprise anomaly threshold in nats (`10.0`).
+pub const SHADOW_KL_SURPRISE_THRESHOLD: f64 = 10.0;
+/// Default rollout horizon steps for the Semantic World Engine (`16`).
+pub const WORLD_ENGINE_ROLLOUT_STEPS: usize = 16;
+/// Byte-size threshold above which a source file is classified as a `PureNoiseMonolith` (`128 KiB = 131_072`).
+pub const MONOLITH_BYTE_THRESHOLD: u64 = 131_072;
+/// Byte-size threshold below which a source file is classified as an Erdős `Epsilon` (`1 KiB = 1024`).
+pub const EPSILON_BYTE_THRESHOLD: u64 = 1024;
 
 /// Complete end-to-end diagnostic produced by `--mode the-book` (`st --mode erdos`).
 #[derive(Debug, Clone)]
@@ -122,7 +189,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     let zero_copy_book = ZeroCopyMem8Book::from_archive(&archive);
     let aligned_bytes = zero_copy_book.to_aligned_bytes();
 
-    // Choose up to 3 focal root terminals (largest source files or root directory)
+    // Choose up to MAX_FOCAL_ROOTS focal root terminals (largest source files or root directory)
     let mut focal_roots: Vec<SymbolId> = nodes
         .iter()
         .enumerate()
@@ -130,7 +197,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         .map(|(idx, n)| (idx as SymbolId, n.size))
         .collect::<Vec<_>>()
         .into_iter()
-        .take(3)
+        .take(MAX_FOCAL_ROOTS)
         .map(|(sym, _)| sym)
         .collect();
     if focal_roots.is_empty() && !nodes.is_empty() {
@@ -149,10 +216,16 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     let hg = build_hypergraph_from_steiner_slices(
         &zero_copy_book,
         std::slice::from_ref(&steiner_slice),
-        0.35,
+        DEFAULT_LLL_CONGESTION_RATIO,
     );
-    let mt_seed = seed_from_mem8_header(&archive.model_digest, 0xE2D0_5B00);
-    let worktree_schedule = solve_moser_tardos_auto_scale(&hg, 4, true, mt_seed, 1024);
+    let mt_seed = seed_from_mem8_header(&archive.model_digest, MOSER_TARDOS_SEED_SALT);
+    let worktree_schedule = solve_moser_tardos_auto_scale(
+        &hg,
+        DEFAULT_WORKTREE_COUNT,
+        true,
+        mt_seed,
+        MOSER_TARDOS_MAX_STEPS,
+    );
 
     // Derive static hazard flags per node from category & path heuristics
     let hazards: Vec<SymbolHazardFlags> = nodes
@@ -177,8 +250,12 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
         })
         .collect();
 
-    let security_report =
-        scan_erdos_renyi_shadow_graph(&graph, zero_copy_book.symbol_to_cluster(), &hazards, 10.0);
+    let security_report = scan_erdos_renyi_shadow_graph(
+        &graph,
+        zero_copy_book.symbol_to_cluster(),
+        &hazards,
+        SHADOW_KL_SURPRISE_THRESHOLD,
+    );
     let ramsey_report = scan_ramsey_monochromatic_cliques(&graph);
     let ramsey_erdos_hajnal_report =
         analyze_ramsey_and_erdos_hajnal(&graph, RamseyScanConfig::default());
@@ -194,7 +271,7 @@ pub fn analyze_the_book_pipeline(nodes: &[FileNode]) -> TheBookPipelineReport {
     );
     let pq_report = analyze_pq_mode(&graph, &archive, &salience_report, &center_turan_report);
     let zeno_report = analyze_zeno_omni_engine(&graph, &archive, &center_turan_report, &pq_report);
-    let world_field_report = analyze_semantic_world_engine(&graph, 16);
+    let world_field_report = analyze_semantic_world_engine(&graph, WORLD_ENGINE_ROLLOUT_STEPS);
 
     // Classify every node using Paul Erdős's vocabulary
     let mut from_the_book = 0usize;
@@ -244,10 +321,10 @@ pub fn classify_erdos_lexicon(
     if node.is_ignored || (!node.is_dir && node.size == 0) {
         return ErdosLexiconBadge::LegallyDead;
     }
-    if !node.is_dir && node.size > 131_072 {
+    if !node.is_dir && node.size > MONOLITH_BYTE_THRESHOLD {
         return ErdosLexiconBadge::PureNoiseMonolith;
     }
-    if !node.is_dir && node.size < 1024 {
+    if !node.is_dir && node.size < EPSILON_BYTE_THRESHOLD {
         return ErdosLexiconBadge::Epsilon;
     }
     if idx < archive.vertex_to_cluster.len() && archive.vertex_to_cluster[idx] == 0 && idx > 0 {
@@ -518,6 +595,20 @@ mod tests {
                 .world_field_report
                 .invention_to_memory_repeat_drift_q16,
             0
+        );
+        assert!(
+            report
+                .zeno_report
+                .upz_wupz
+                .god_of_sun_witness
+                .inequality_holds
+        );
+        assert_eq!(
+            report
+                .zeno_report
+                .god_of_sun_monkey_king_matrix_buddha_unity
+                .unity_fold_hex,
+            FOLD_GOD_OF_SUN_MONKEY_KING_MATRIX_BUDDHA_UNITY
         );
     }
 
