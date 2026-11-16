@@ -208,12 +208,15 @@ impl AiGuardian {
 
         // === CRITICAL: Known LLM-injection & supply-chain poisoning sources (`ruvnet`, `claude-flow`, etc.) ===
         for (pattern, desc) in UNTRUSTED_INJECTION_SOURCES {
-            if content_lower.contains(pattern) || source_lower.contains(pattern) {
+            let source_matches = source_lower.contains(pattern);
+            let content_matches = content_lower.contains(pattern)
+                && !Self::is_benign_exclusion_reference(content, pattern);
+            if content_matches || source_matches {
                 threats.push(InjectionThreat {
                     level: ThreatLevel::Critical,
                     pattern: (*pattern).to_string(),
                     location: source.to_string(),
-                    context: if content_lower.contains(pattern) {
+                    context: if content_matches {
                         Self::extract_context(content, pattern)
                     } else {
                         format!("Untrusted source path/identifier: {}", source)
@@ -581,6 +584,49 @@ impl AiGuardian {
             .any(|(pattern, _)| lower.contains(pattern))
     }
 
+    /// Check if every occurrence of an untrusted source pattern in `content` is strictly
+    /// a filesystem path-exclusion / ignore rule (e.g. `home/hue/source/ruvnet/*` in an
+    /// exclude list or `.gitignore`) rather than an instruction, URL, or package invocation.
+    fn is_benign_exclusion_reference(content: &str, pattern: &str) -> bool {
+        let mut matched_any = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            let lower = trimmed.to_lowercase();
+            if !lower.contains(pattern) {
+                continue;
+            }
+            matched_any = true;
+
+            // Reject if the line contains URLs, HTML/XML tags, shell command separators,
+            // package runners, or instruction-like phrasing.
+            let forbidden_markers = [
+                "http://", "https://", "git@", "npx ", "npm ", "cargo ", "pip ", "curl ", "wget ",
+                "<", ">", ";", "|", "&", "$", "`",
+            ];
+            if forbidden_markers.iter().any(|m| lower.contains(m))
+                || Self::looks_like_instruction(trimmed)
+            {
+                return false;
+            }
+
+            // Must be either:
+            // 1. A pure single-token directory/glob ignore entry (e.g. `home/hue/source/ruvnet/*`, `**/ruvnet/**`, `ruvnet/`)
+            // 2. An explicit `--exclude` / `-e` argument referencing a path glob
+            let is_glob_entry = !trimmed.contains(char::is_whitespace)
+                && trimmed.contains('/')
+                && (trimmed.ends_with("/*") || trimmed.ends_with("/**") || trimmed.ends_with('/'));
+            let is_exclude_flag = (lower.starts_with("--exclude=")
+                || lower.starts_with("--exclude ")
+                || lower.starts_with("-e "))
+                && trimmed.contains('/');
+
+            if !is_glob_entry && !is_exclude_flag {
+                return false;
+            }
+        }
+        matched_any
+    }
+
     /// Strip invisible zero-width characters, Unicode Tag block ASCII smuggling (`U+E0000..=U+E007F`),
     /// and hidden HTML comments (`<!-- ... -->`) from a memory candidate string.
     pub fn strip_invisible_and_comments(content: &str) -> String {
@@ -829,6 +875,16 @@ mod tests {
         assert_eq!(trust_body, MemoryTrustLevel::Quarantined);
         assert!(sanitized_body.contains("QUARANTINED BY AI GUARDIAN"));
         assert!(!sanitized_body.contains("npx claude-flow"));
+
+        // 3. Exclude-list globs (e.g. mksquashfs / rsync exclude list excluding home/hue/source/ruvnet/*)
+        // in a local script are NOT flagged as prompt injection when the source itself is not ruvnet
+        let exclude_script = "cat > /tmp/sov_squash_exclude.list << 'EXCEOF'\nhome/hue/source/macCracken/*\nhome/hue/source/ruvnet/*\nhome/hue/source/peterlodri-sec/*\nEXCEOF\n";
+        let exclude_threats = guardian.scan_content(exclude_script, "/tmp/build-sovereign-usb.sh");
+        assert!(
+            exclude_threats.is_empty(),
+            "Benign mksquashfs exclude glob should not trigger Critical ruvnet alert: {:?}",
+            exclude_threats
+        );
     }
 
     #[test]
