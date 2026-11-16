@@ -97,6 +97,14 @@ fn rink_wave_presets_preserve_rational_operands_and_units() {
             "wave 440 Hz, 343 m/s",
         ),
         (
+            json!({"operation":"wave", "frequency":"440 Hz", "speed":"343 m/s", "elapsed":"(1/1760) s"}),
+            "wave 440 Hz, 343 m/s, (1/1760) s",
+        ),
+        (
+            json!({"operation":"wave", "frequency":"440 Hz", "speed":"343 m/s", "elapsed":"-(1/1760) s"}),
+            "wave 440 Hz, 343 m/s, -(1/1760) s",
+        ),
+        (
             json!({"expression":"(1/3) m to fraction cm"}),
             "(1/3) m to fraction cm",
         ),
@@ -122,6 +130,7 @@ fn rink_wave_presets_preserve_rational_operands_and_units() {
         json!({"operation":"period"}),
         json!({"operation":"unknown"}),
         json!({"operation":"wave", "frequency":"440 Hz", "speed":"343 m/s, extra"}),
+        json!({"operation":"wave", "frequency":"440 Hz", "speed":"343 m/s", "elapsed":"1 s, extra"}),
         json!({"expression":"1", "timeout":999}),
     ] {
         assert!(serde_json::from_value::<Request>(invalid)

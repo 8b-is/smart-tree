@@ -40,6 +40,8 @@ environment, working directory, or memory directory.
 {"operation":"period","frequency":"432 Hz"}
 {"operation":"wavelength","speed":"343 m/s","frequency":"432 Hz"}
 {"operation":"beat","frequency":"432 Hz","other_frequency":"440 Hz"}
+{"operation":"wave","frequency":"440 Hz","speed":"343 m/s"}
+{"operation":"wave","frequency":"440 Hz","speed":"343 m/s","elapsed":"(1/1760) s"}
 {"expression":"(1/3) meter to fraction cm","remember":true}
 {"operation":"recall","memory_id":"<UUID returned by remember>"}
 ```
@@ -71,6 +73,12 @@ For example `1/3 kHz` is normalized to `(1/3) kHz` before forming the preset.
 Beat inputs must each be positive, but their beat difference may legitimately
 be zero. Use the general `query` operation for other bounded Rink expressions;
 that lane makes no positive-frequency claim.
+
+The `wave` operation sends `wave <frequency>, <speed>` and, when `elapsed` is
+present, appends `, <elapsed>`. Omitting `elapsed` keeps the two-argument query.
+A comma inside speed or elapsed is rejected because it is the separator. Phase
+output requires a Rink build that accepts the optional third argument; an older
+build fails closed. This is classical kinematics, not quantum memory.
 
 This adapter does not infer a physical medium, model wave propagation/interference,
 or operate quantum hardware. Symbolic family frequencies carry cultural meaning;

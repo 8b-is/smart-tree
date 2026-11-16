@@ -31,6 +31,7 @@ struct Request {
     frequency: Option<String>,
     other_frequency: Option<String>,
     speed: Option<String>,
+    elapsed: Option<String>,
     remember: bool,
     memory_id: Option<String>,
     interpret: bool,
@@ -41,7 +42,7 @@ struct Request {
 pub fn definition() -> Value {
     json!({
         "name": "rink",
-        "description": "Offline, opt-in external Rink quantities and classical wave math. Operations: query (expression), period (frequency), wavelength (speed/frequency), beat (frequency/other_frequency), wave (exact frequency/speed query; requires a Rink build with that command, otherwise it fails closed), recall (memory_id). Requires operator ST_RINK_BIN absolute path and Linux /usr/bin/prlimit. Fixed CPU/memory/time/output limits; no shell or currency fetch. Results retain Rink text, not a universal exactness guarantee (Rink has float fallbacks). remember:true explicitly stores provenance using Smart Tree native MEM8 in ST_RINK_MEMORY_DIR. No quantum hardware claim.",
+        "description": "Offline, opt-in external Rink quantities and classical wave math. Operations: query (expression), period (frequency), wavelength (speed/frequency), beat (frequency/other_frequency), wave (exact frequency/speed query, optional elapsed time for phase; requires a Rink build with that command, otherwise it fails closed), recall (memory_id). Requires operator ST_RINK_BIN absolute path and Linux /usr/bin/prlimit. Fixed CPU/memory/time/output limits; no shell or currency fetch. Results retain Rink text, not a universal exactness guarantee (Rink has float fallbacks). remember:true explicitly stores provenance using Smart Tree native MEM8 in ST_RINK_MEMORY_DIR. No quantum hardware claim.",
         "inputSchema": {
             "type": "object", "additionalProperties": false,
             "properties": {
@@ -50,6 +51,7 @@ pub fn definition() -> Value {
                 "frequency": {"type": "string", "maxLength": 128, "description": "Strictly positive ordinary cycle frequency: integer or p/q plus Hz, kHz, MHz, GHz, mHz, uHz or nHz; e.g. 432 Hz or (1/3) kHz. Not rad/s; angular omega = 2*pi*f."},
                 "other_frequency": {"type": "string", "maxLength": 128},
                 "speed": {"type": "string", "maxLength": 128, "description": "Propagation speed, e.g. 343 m/s"},
+                "elapsed": {"type": "string", "maxLength": 128, "description": "Optional elapsed time for wave phase, e.g. (1/1760) s. Omit it to keep the two-argument query. A comma is rejected because it is the wave separator."},
                 "remember": {"type": "boolean", "default": false, "description": "Explicitly consent to durable provenance storage; requires ST_RINK_MEMORY_DIR"},
                 "interpret": {"type": "boolean", "default": false, "description": "Show Rink's input interpretation. Default false keeps the answer compact."},
                 "definitions": {"type": "string", "maxLength": 4096, "description": "Optional unit definitions for this query only, including ! directives, quantities, docs, and substances. They are not read from the home directory. Shadowing a built-in requires a Rink build that keeps duplicate definitions as warnings."},
@@ -252,7 +254,17 @@ fn expression(request: &Request) -> Result<String> {
                 !speed.contains(','),
                 "Wave phase speed must not contain a comma"
             );
-            format!("wave {}, {speed}", frequency.text)
+            let mut query = format!("wave {}, {speed}", frequency.text);
+            if request.elapsed.is_some() {
+                let elapsed = field(&request.elapsed, "elapsed")?;
+                ensure!(
+                    !elapsed.contains(','),
+                    "Wave elapsed time must not contain a comma"
+                );
+                query.push_str(", ");
+                query.push_str(elapsed);
+            }
+            query
         }
         _ => bail!("Unknown Rink operation: {operation}"),
     };
@@ -486,7 +498,7 @@ pub async fn handle(args: Value) -> Result<Value> {
         "arithmetic": "Rink text retained without numeric coercion; rational operations may be exact; external Rink has floating-point fallbacks",
         "limits": {"wall_seconds": 3, "cpu_seconds": 2, "address_space_bytes": 536870912u64, "output_bytes_per_stream": MAX_OUTPUT},
         "scope": "quantity conversion and classical wave relationships, not quantum hardware",
-        "wave_convention": "Presets require positive ordinary cycle frequency f in Hz-family units: T=1/f, wavelength=v/f; angular omega=2*pi*f, so angular inputs need an explicit conversion and are rejected by presets. The wave operation asks Rink for exact period, wavelength, and omega/pi. It is classical and fails closed on a Rink build without that command.",
+        "wave_convention": "Presets require positive ordinary cycle frequency f in Hz-family units: T=1/f, wavelength=v/f; angular omega=2*pi*f, so angular inputs need an explicit conversion and are rejected by presets. The wave operation asks Rink for exact period, wavelength, and omega/pi. Optional elapsed time asks for phase in turns and needs a Rink build that accepts the third argument. It is classical and fails closed on a Rink build without that command.",
         "offline": "currency disabled; no network operation requested; trusted external binary, not a network sandbox"
     }))
 }
