@@ -15,9 +15,7 @@
 
 use crate::bitnet_m8::{BitNetWave64, BITNET_DOMAINS};
 use crate::pq_healer::{classify_snippet_domain, condition_mem8_prompt};
-use crate::pq_trainer::{
-    gaia_binary_gcd, gaia_cordic_atan2_u32, gaia_ternary_mac_i32, PqmReg,
-};
+use crate::pq_trainer::{gaia_binary_gcd, gaia_cordic_atan2_u32, gaia_ternary_mac_i32, PqmReg};
 use anyhow::{Context, Result};
 use axum::{
     extract::State,
@@ -276,7 +274,8 @@ pub fn query_local_alexiai_gaia(prompt_hint: &str) -> String {
     if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(180)) {
         let _ = stream.set_read_timeout(Some(Duration::from_millis(300)));
         let _ = stream.set_write_timeout(Some(Duration::from_millis(200)));
-        let req = format!(
+        let req =
+            format!(
             "GET /api/gaia?prompt={} HTTP/1.0\r\nHost: 127.0.0.1:8787\r\nConnection: close\r\n\r\n",
             if clean_q.is_empty() { "smart_tree" } else { &clean_q }
         );
@@ -786,8 +785,7 @@ async fn handle_generate(
         .unwrap_or("status");
     let system_prompt = payload.get("system").and_then(|v| v.as_str());
 
-    let ctx =
-        gather_smart_tree_context_for_prompt(prompt, &state.context_root, &state.wici_root);
+    let ctx = gather_smart_tree_context_for_prompt(prompt, &state.context_root, &state.wici_root);
     let response_text = synthesize_sovereign_response(model, system_prompt, prompt, &ctx);
 
     let elapsed_ns = (t0.elapsed().as_nanos() as u64).max(100_000);
@@ -848,12 +846,8 @@ async fn handle_chat(
         &state.context_root,
         &state.wici_root,
     );
-    let response_text = synthesize_sovereign_response(
-        model,
-        system_prompt.as_deref(),
-        &last_user_prompt,
-        &ctx,
-    );
+    let response_text =
+        synthesize_sovereign_response(model, system_prompt.as_deref(), &last_user_prompt, &ctx);
 
     let elapsed_ns = (t0.elapsed().as_nanos() as u64).max(100_000);
     let prompt_tokens = (last_user_prompt.split_whitespace().count() as u64).max(1);
@@ -975,12 +969,8 @@ async fn handle_v1_chat_completions(
         &state.context_root,
         &state.wici_root,
     );
-    let response_text = synthesize_sovereign_response(
-        model,
-        system_prompt.as_deref(),
-        &last_user_prompt,
-        &ctx,
-    );
+    let response_text =
+        synthesize_sovereign_response(model, system_prompt.as_deref(), &last_user_prompt, &ctx);
 
     let prompt_tokens = (last_user_prompt.split_whitespace().count() as u64).max(1);
     let completion_tokens = (response_text.split_whitespace().count() as u64).max(12);
@@ -1010,9 +1000,7 @@ async fn handle_v1_chat_completions(
     }))
 }
 
-async fn handle_context_status(
-    State(state): State<Arc<OllamaEmulatorState>>,
-) -> impl IntoResponse {
+async fn handle_context_status(State(state): State<Arc<OllamaEmulatorState>>) -> impl IntoResponse {
     state.total_requests.fetch_add(1, Ordering::Relaxed);
     let sample_ctx = gather_smart_tree_context_for_prompt(
         "smart-tree a6000-orchestrator alexiai g8t inferssd",
@@ -1037,9 +1025,7 @@ async fn handle_context_status(
     }))
 }
 
-async fn handle_noop_lifecycle(
-    State(state): State<Arc<OllamaEmulatorState>>,
-) -> impl IntoResponse {
+async fn handle_noop_lifecycle(State(state): State<Arc<OllamaEmulatorState>>) -> impl IntoResponse {
     state.total_requests.fetch_add(1, Ordering::Relaxed);
     Json(json!({
         "status": "success",
@@ -1084,14 +1070,21 @@ pub async fn run_ollama_emulator_server(
     };
 
     let state = Arc::new(OllamaEmulatorState::new(resolved_root.clone(), bind_addr));
-    let app = build_ollama_emulator_router(state);
+    let mut app = build_ollama_emulator_router(state);
+    if let Some(bridge) = crate::ollama_inference::InferenceBridge::from_env(resolved_root.clone())?
+    {
+        app = app.layer(axum::middleware::from_fn_with_state(
+            bridge,
+            crate::ollama_inference::handle,
+        ));
+    }
 
     eprintln!(
-        "🧠 Smart-Tree Sovereign Context Engine (Ollama-Compatible Bridge · Zero Floats) listening on http://{}",
+        "🧠 Smart Tree local inference bridge (backend-defined arithmetic) listening on http://{}",
         bind_addr
     );
     eprintln!(
-        "   • Context Root: {} | Models: {} | AlexiAI Loopback: 127.0.0.1:8787",
+        "   • Context Root: {} | Legacy fallback catalog: {} (configured inference aliases are listed by /api/tags)",
         resolved_root.display(),
         SOVEREIGN_MODEL_CATALOG.len()
     );
@@ -1190,7 +1183,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body_bytes = axum::body::to_bytes(resp.into_body(), 65_536).await.unwrap();
+        let body_bytes = axum::body::to_bytes(resp.into_body(), 65_536)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
         assert_eq!(
             count_floating_point_literals_in_text(&body_str),
@@ -1231,7 +1226,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let chat_bytes = axum::body::to_bytes(resp.into_body(), 65_536).await.unwrap();
+        let chat_bytes = axum::body::to_bytes(resp.into_body(), 65_536)
+            .await
+            .unwrap();
         let chat_str = String::from_utf8(chat_bytes.to_vec()).unwrap();
         assert_eq!(count_floating_point_literals_in_text(&chat_str), 0);
 

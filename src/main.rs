@@ -631,6 +631,9 @@ async fn main() -> Result<()> {
             st::cli::Cmd::PqBench(ref bench_cmd) => {
                 return st::pq_bench::handle_pq_bench_command(bench_cmd).await;
             }
+            st::cli::Cmd::Ollama(_) => {
+                anyhow::bail!("Ollama command must be dispatched before initialization");
+            }
         }
     }
 
