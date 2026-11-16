@@ -1180,6 +1180,61 @@ pub fn felix_crc32_ieee(bytes: &[u8]) -> u32 {
     !crc
 }
 
+/// CPU-agnostic bounded scalar truncation with an ASCII SIMD fast path.
+///
+/// Byte-identical replacement for the `context.rs` `truncate_string` helper: strings of at
+/// most `max_len` Unicode scalar values are returned unchanged, otherwise the first
+/// `max_len.saturating_sub(3)` scalars are followed by `"..."`.
+///
+/// The leading prefix is classified with one **bounded** `felix_find_high_byte` sweep
+/// (`x86_64` `pcmpeqb`/`pmovmskb`, `aarch64` NEON `vcgeq` + `vmaxv`, then 8-byte SWAR and
+/// scalar tails). When `max_len + 1` leading bytes are ASCII, byte index equals scalar
+/// index, so the cut is a plain slice and the result is built in one exact-capacity
+/// allocation — no `chars().count()` over the whole string and no second traversal.
+/// Non-ASCII prefixes fall back to a bounded scalar decode that stops after `max_len + 1`
+/// scalars instead of counting the entire string.
+///
+/// # Complexity
+/// - ASCII prefix: $O(\min(n, max\_len + 1))$ bytes scanned, one allocation, no UTF-8 decode.
+/// - Non-ASCII: at most `max_len + 1` scalars decoded before the decision is exact.
+#[inline]
+pub fn felix_truncate_chars(s: &str, max_len: usize) -> String {
+    let bytes = s.as_bytes();
+    let probe = bytes.len().min(max_len.saturating_add(1));
+
+    // ASCII prefix => byte index == scalar index.
+    if felix_find_high_byte(&bytes[..probe]).is_none() {
+        if bytes.len() <= max_len {
+            return s.to_string();
+        }
+        let keep = max_len.saturating_sub(3);
+        if let Some(prefix) = s.get(..keep) {
+            let mut out = String::with_capacity(prefix.len() + 3);
+            out.push_str(prefix);
+            out.push_str("...");
+            return out;
+        }
+    }
+
+    // Exact scalar semantics for non-ASCII input: stop once the outcome is known.
+    let mut scalars = s.chars();
+    let mut seen = 0usize;
+    while seen <= max_len {
+        if scalars.next().is_none() {
+            return s.to_string();
+        }
+        seen += 1;
+    }
+
+    let keep = max_len.saturating_sub(3);
+    // 4 bytes is the widest UTF-8 scalar, so this capacity can never reallocate.
+    let cap = keep.saturating_mul(4).saturating_add(3);
+    let mut out = String::with_capacity(cap.min(s.len().saturating_add(3)));
+    out.extend(s.chars().take(keep));
+    out.push_str("...");
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1352,6 +1407,103 @@ mod tests {
                 ref_crc = (ref_crc >> 8) ^ FELIX_CRC32_SLICE4_LUT[0][idx];
             }
             assert_eq!(felix_crc32_ieee(slice), !ref_crc, "crc32 mismatch at {len}");
+        }
+    }
+
+    /// The original `context.rs` helper, kept verbatim as the parity oracle.
+    fn reference_truncate(s: &str, max_len: usize) -> String {
+        if s.chars().count() <= max_len {
+            s.to_string()
+        } else {
+            let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+            format!("{}...", truncated)
+        }
+    }
+
+    #[test]
+    fn test_felix_truncate_chars_ascii_simd_and_unicode_parity() {
+        let ascii_samples: Vec<String> = vec![
+            String::new(),
+            "a".to_string(),
+            "hello".to_string(),
+            "x".repeat(15),
+            "x".repeat(16),
+            "x".repeat(17),
+            "x".repeat(23),
+            "x".repeat(24),
+            "x".repeat(25),
+            "x".repeat(99),
+            "x".repeat(100),
+            "x".repeat(101),
+            "x".repeat(4096),
+            "The quick brown fox jumps over the lazy dog 0123456789".to_string(),
+        ];
+        for sample in &ascii_samples {
+            for max_len in 0..=110usize {
+                assert_eq!(
+                    felix_truncate_chars(sample, max_len),
+                    reference_truncate(sample, max_len),
+                    "ascii mismatch len={} max_len={max_len}",
+                    sample.len()
+                );
+            }
+            for max_len in [255usize, 4096, usize::MAX] {
+                assert_eq!(
+                    felix_truncate_chars(sample, max_len),
+                    reference_truncate(sample, max_len),
+                    "ascii wide-limit mismatch len={} max_len={max_len}",
+                    sample.len()
+                );
+            }
+        }
+
+        // A high byte at every offset inside the probe window, so each
+        // SIMD/SWAR/scalar branch of `felix_find_high_byte` is exercised.
+        for offset in 0..=40usize {
+            let mut s = "x".repeat(120);
+            s.replace_range(offset..offset + 1, "é");
+            for max_len in 0..=110usize {
+                assert_eq!(
+                    felix_truncate_chars(&s, max_len),
+                    reference_truncate(&s, max_len),
+                    "high-byte offset {offset} max_len {max_len}"
+                );
+            }
+        }
+
+        let unicode_samples = [
+            "héllo wörld",
+            "日本語のプロジェクト説明",
+            "😀😀😀😀😀",
+            "aé漢😀z",
+            "Ω≈ç√∫˜µ≤≥÷",
+            "ﬀﬁﬂﬃﬄ",
+            "e\u{0301}\u{0301}\u{0301}",
+            "x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀x😀",
+        ];
+        for sample in unicode_samples {
+            for max_len in 0..=90usize {
+                assert_eq!(
+                    felix_truncate_chars(sample, max_len),
+                    reference_truncate(sample, max_len),
+                    "unicode mismatch {sample:?} max_len={max_len}"
+                );
+            }
+        }
+
+        // Output stays well-formed and never exceeds the requested scalar budget
+        // (except the fixed three-byte ellipsis when max_len < 3).
+        let mut mixed = String::new();
+        for c in "aé日😀x".chars().cycle().take(400) {
+            mixed.push(c);
+        }
+        for max_len in 0..=120usize {
+            let out = felix_truncate_chars(&mixed, max_len);
+            assert!(
+                mixed.starts_with(out.trim_end_matches("...")),
+                "truncation is not a prefix at max_len={max_len}"
+            );
+            assert!(out.chars().count() <= max_len.max(3));
         }
     }
 }
