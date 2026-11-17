@@ -241,6 +241,7 @@ pub mod collab;
 // Smart Tree × g8t.is Rust Function Recommender, YOLO Fastest-Pick,
 // Architecture-Aware Benchmark Submitter, Partnership Attribution & Foken Scoreboard
 pub mod g8t_integration;
+pub mod g8t_scout;
 pub use g8t_integration as g8t_capsela;
 
 // Google Drive + Gmail integration - backup, sync, warm storage, file intelligence

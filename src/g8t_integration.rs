@@ -4244,149 +4244,17 @@ fn line_has_float_type_token(line: &str) -> bool {
         .any(|t| *t == f_32 || *t == f_64 || *t == "float" || *t == "double")
 }
 
+/// Standalone leaf-function candidates in one Rust file, as
+/// `(name, line, "<rel_path>:<line>", source)`, found by the `syn` AST scout
+/// (`crate::g8t_scout`). The scout only filters; `prove_capsule_with_rustc` decides.
 fn extract_pure_rust_candidates_from_file(
     rel_path: &str,
     content: &str,
 ) -> Vec<(String, usize, String, String)> {
-    let lines: Vec<&str> = content.lines().collect();
-    let mut out = Vec::new();
-    let mut i = 0usize;
-    let f_32 = ['f', '3', '2'].iter().collect::<String>();
-    let f_64 = ['f', '6', '4'].iter().collect::<String>();
-
-    while i < lines.len() {
-        let trimmed = lines[i].trim();
-        let is_fn_prefix = (trimmed.starts_with("pub fn ")
-            || trimmed.starts_with("pub const fn ")
-            || trimmed.starts_with("fn ")
-            || trimmed.starts_with("const fn "))
-            && trimmed.contains('(');
-
-        if !is_fn_prefix {
-            i += 1;
-            continue;
-        }
-
-        // Gather header across up to 8 lines until `{` is reached
-        let mut header_joined = String::new();
-        let mut header_end_line = None;
-        for (j, line_j) in lines.iter().enumerate().skip(i).take(8) {
-            let clean = line_j.split("//").next().unwrap_or("").trim();
-            if !clean.is_empty() {
-                if !header_joined.is_empty() {
-                    header_joined.push(' ');
-                }
-                header_joined.push_str(clean);
-            }
-            if clean.ends_with('{') {
-                header_end_line = Some(j);
-                break;
-            }
-            if clean.ends_with(';') {
-                break;
-            }
-        }
-
-        let Some(_hdr_end) = header_end_line else {
-            i += 1;
-            continue;
-        };
-        if !header_joined.contains("->") || !header_joined.ends_with('{') {
-            i += 1;
-            continue;
-        }
-
-        // Extract function name
-        let after_fn = header_joined.split("fn ").nth(1).unwrap_or("").trim();
-        let fn_name: String = after_fn
-            .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-            .collect();
-        if fn_name.is_empty() || fn_name == "main" || fn_name.starts_with("test_") {
-            i += 1;
-            continue;
-        }
-
-        // Check signature uses primitive integers / slices only
-        let sig_part = after_fn.trim_end_matches('{').trim();
-        let has_primitive_int = [
-            "u64", "i64", "u32", "i32", "u16", "i16", "u8", "i8", "usize", "u128", "i128", "bool",
-        ]
-        .iter()
-        .any(|t| sig_part.contains(t));
-        let has_non_standalone = [
-            "self", "Self", "&mut", "Result", "Option", "String", "Vec", "Path", "Value", "async",
-            "<",
-        ]
-        .iter()
-        .any(|t| sig_part.contains(t));
-
-        if !has_primitive_int || has_non_standalone {
-            i += 1;
-            continue;
-        }
-
-        // Find matching closing brace within 55 lines
-        let mut depth: i64 = 0;
-        let mut end_idx = None;
-        for (j, line_j) in lines.iter().enumerate().skip(i).take(55) {
-            for ch in line_j.chars() {
-                if ch == '{' {
-                    depth += 1;
-                } else if ch == '}' {
-                    depth -= 1;
-                }
-            }
-            if depth == 0 && j >= _hdr_end {
-                end_idx = Some(j);
-                break;
-            }
-        }
-
-        let Some(end_line) = end_idx else {
-            i += 1;
-            continue;
-        };
-
-        let body_lines = &lines[i..=end_line];
-        let full_fn = body_lines.join("\n");
-        let forbidden = [
-            f_32.as_str(),
-            f_64.as_str(),
-            "unsafe",
-            "std::fs",
-            "println!",
-            "eprintln!",
-            "Command::",
-            "crate::",
-            "super::",
-            "self::",
-        ];
-        if forbidden.iter().any(|bad| full_fn.contains(bad)) {
-            i = end_line + 1;
-            continue;
-        }
-
-        // Verify the function body does not call sibling helper functions not defined inside it
-        let normalized_fn = if full_fn.trim_start().starts_with("pub ") {
-            full_fn
-        } else {
-            format!("pub {}", full_fn.trim_start())
-        };
-
-        out.push((
-            fn_name,
-            i + 1,
-            format!("{rel_path}:{}", i + 1),
-            normalized_fn,
-        ));
-        i = end_line + 1;
-        if out.len() >= 16 {
-            break;
-        }
-    }
-
-    out
+    crate::g8t_scout::scout_rust_candidates(rel_path, content)
+        .into_iter()
+        .map(|c| (c.name, c.line, c.file_loc, c.source))
+        .collect()
 }
 
 /// Scan a project directory in parallel across CPU cores, identify optimization opportunities
@@ -4611,6 +4479,16 @@ pub fn optimize_project_with_g8t(
             },
         );
     }
+
+    // Structurally identical functions (same signature and body up to local renaming)
+    // would produce the same capsule, so prove and benchmark only the first of each.
+    let mut seen_structures = std::collections::HashSet::new();
+    raw_candidates.retain(|(_, _, _, src)| {
+        match crate::g8t_scout::structural_hash_of_source(src) {
+            Some(hash) => seen_structures.insert(hash),
+            None => true,
+        }
+    });
 
     // Benchmark discovered pure-Rust candidate functions locally on uncontested hardware
     let candidate_capsules: Vec<CandidateCapsule> = raw_candidates

@@ -161,7 +161,7 @@ ipnet = "2.9"
 gix = { version = "0.87", default-features = false, features = ["blocking-network-client", "sha1"] }
 
 # Proc macro support
-syn = { version = "2.0", features = ["full", "parsing"] }
+syn = { version = "2.0", features = ["full", "parsing", "visit"] }
 quote = "1.0"
 cc = "1.2"
 shlex = "1.3"
