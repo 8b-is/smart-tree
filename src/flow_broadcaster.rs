@@ -65,50 +65,13 @@ pub struct FlowFeedResponse {
     pub partnership_rules: Vec<String>,
 }
 
-/// Check on Capsela `g8t` capsules for cycle-count improvements (zero floats).
+/// Capsela `g8t` capsule cycle-count improvements backed by recorded measurements.
+///
+/// No measured before/after history is wired in yet, so this returns an empty list.
+/// It previously returned a fixed set of example "records"; those were not measurements
+/// and must not be shown as results. Populate this only from real benchmark receipts.
 pub fn check_capsela_improvements() -> Vec<CapselaImprovementEntry> {
-    vec![
-        CapselaImprovementEntry {
-            capsule_id: "capsela_i32_TernaryDot16".to_string(),
-            signature: "fn([i16; 16], [i8; 16]) -> i32".to_string(),
-            domain: "spqt-ternary-gemm".to_string(),
-            previous_cycles_pq: "64/1".to_string(),
-            current_cycles_pq: "8/1".to_string(),
-            speedup_ratio_pq: "8/1".to_string(),
-            status_badge: "🔥 NEW RECORD (8x FASTER)".to_string(),
-            booth_note: "Unrolled branchless sign-mux eliminated 14 branch mispredicts — runs a 4.2 forty in snow cleats!".to_string(),
-        },
-        CapselaImprovementEntry {
-            capsule_id: "capsela_u64_PopcntXor64".to_string(),
-            signature: "fn(u64, u64) -> u64".to_string(),
-            domain: "bitboard-hamming".to_string(),
-            previous_cycles_pq: "18/1".to_string(),
-            current_cycles_pq: "3/1".to_string(),
-            speedup_ratio_pq: "6/1".to_string(),
-            status_badge: "⚡ HARDWARE POPCNT LOCKED".to_string(),
-            booth_note: "Fused XOR + hardware POPCNT in 1 freestanding #![no_std] capsule — 6/1x improvement over byte-table!".to_string(),
-        },
-        CapselaImprovementEntry {
-            capsule_id: "capsela_str_Fnv1a64".to_string(),
-            signature: "fn(&[u8]) -> u64".to_string(),
-            domain: "symbol-table-hash".to_string(),
-            previous_cycles_pq: "44/1".to_string(),
-            current_cycles_pq: "11/1".to_string(),
-            speedup_ratio_pq: "4/1".to_string(),
-            status_badge: "🏆 4x IMPROVEMENT".to_string(),
-            booth_note: "Zero-allocation register-pinned prime multiply — no heap, no panic handler, pure speed.".to_string(),
-        },
-        CapselaImprovementEntry {
-            capsule_id: "capsela_pq_ReducedRatio64".to_string(),
-            signature: "fn(i64, i64) -> (i64, i64)".to_string(),
-            domain: "exact-rational-pq".to_string(),
-            previous_cycles_pq: "95/1".to_string(),
-            current_cycles_pq: "19/1".to_string(),
-            speedup_ratio_pq: "5/1".to_string(),
-            status_badge: "⚡ BINARY STEIN GCD (5x)".to_string(),
-            booth_note: "Replaced modulo division loop with trailing-zeros Stein binary GCD — 5/1x faster with zero floats!".to_string(),
-        },
-    ]
+    Vec::new()
 }
 
 /// Generate Brett Favre Monday-Night Football play-by-play commentary with a light touch
@@ -919,8 +882,7 @@ diff --git a/src/service_debug.rs b/src/service_debug.rs
         assert!(cards[0].favre_commentary.contains("src/service_debug.rs"));
         assert!(cards[0].g8t_callout.contains("G8T"));
 
-        let caps = check_capsela_improvements();
-        assert!(!caps.is_empty());
-        assert_eq!(caps[0].speedup_ratio_pq, "8/1");
+        // No measured improvement history is wired in, so nothing may be reported.
+        assert!(check_capsela_improvements().is_empty());
     }
 }

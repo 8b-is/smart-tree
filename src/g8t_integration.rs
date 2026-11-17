@@ -1029,78 +1029,25 @@ pub fn format_partnership_aye_id(partner: &str, arch: &str) -> String {
 /// Measure hardware cycles locally over `8` windows × `100,000` iterations (`800,000` ops)
 /// by compiling `source_code` with `rustc --edition 2021 -C opt-level=3` (`#[inline(never)]`)
 /// and timing real native calls with `_rdtsc` / `cntvct_el0` and `Instant`.
-pub fn benchmark_rust_function_locally(source_code: &str) -> LocalHardwareBenchmark {
-    let hardware = detect_hardware_arch();
-
-    // Compile and execute the real function via rustc -C opt-level=3 + _rdtsc when valid Rust fn source is provided
-    if let Ok(proof) = prove_capsule_with_rustc(source_code) {
-        return LocalHardwareBenchmark {
-            hardware,
-            ops_completed: proof.ops_completed,
-            processing_time_ns: proof.processing_time_ns,
-            cpu_cycles: proof.cpu_cycles,
-            sample_durations_ns: proof.sample_durations_ns,
-            cycles_per_op_pq: proof.cycles_per_op_pq,
-            cycles_per_op: proof.cycles_per_op,
-            ns_per_op_pq: proof.ns_per_op_pq,
-            ns_per_op: proof.ns_per_op,
-        };
-    }
-
-    const WINDOWS: usize = 8;
-    const ITERS_PER_WINDOW: u64 = 100_000;
-    const TOTAL_OPS: u64 = (WINDOWS as u64) * ITERS_PER_WINDOW;
-
-    // Seed derived from the function's BLAKE3 digest so the hardware pipeline exercises real ALU paths.
-    let hash_hex = blake3_hash_hex(source_code.trim().as_bytes());
-    let seed = u64::from_str_radix(&hash_hex[..16], 16).unwrap_or(0x9E37_79B9_7F4A_7C15);
-
-    let mut sample_durations_ns = [0u64; WINDOWS];
-    let mut sample_cycles = [0u64; WINDOWS];
-    let mut acc = std::hint::black_box(seed);
-
-    for (win_idx, sample_slot) in sample_durations_ns.iter_mut().enumerate() {
-        let t0 = Instant::now();
-        let c0 = read_hardware_cycle_counter();
-        for i in 0..ITERS_PER_WINDOW {
-            let v = std::hint::black_box(i.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ acc);
-            acc = std::hint::black_box(v.rotate_left(17).wrapping_add(seed));
-        }
-        let c1 = read_hardware_cycle_counter();
-        let elapsed_ns = t0.elapsed().as_nanos() as u64;
-        let win_ns = elapsed_ns.max(1);
-        let win_cycles = c1.wrapping_sub(c0).max(ITERS_PER_WINDOW);
-        *sample_slot = win_ns;
-        sample_cycles[win_idx] = win_cycles;
-    }
-    let _ = std::hint::black_box(acc);
-
-    // Reject OS scheduler preemption outliers by summing the 4 fastest windows * 2
-    let mut sorted_cyc = sample_cycles;
-    sorted_cyc.sort_unstable();
-    let mut sorted_ns = sample_durations_ns;
-    sorted_ns.sort_unstable();
-    let total_cycles = (sorted_cyc[0] + sorted_cyc[1] + sorted_cyc[2] + sorted_cyc[3])
-        .saturating_mul(2)
-        .max(1);
-    let total_ns = (sorted_ns[0] + sorted_ns[1] + sorted_ns[2] + sorted_ns[3])
-        .saturating_mul(2)
-        .max(1);
-
-    let cycles_per_op = RationalPq::from_u64(total_cycles, TOTAL_OPS);
-    let ns_per_op = RationalPq::from_u64(total_ns, TOTAL_OPS);
-
-    LocalHardwareBenchmark {
-        hardware,
-        ops_completed: TOTAL_OPS,
-        processing_time_ns: total_ns.max(1),
-        cpu_cycles: total_cycles.max(1),
-        sample_durations_ns,
-        cycles_per_op_pq: cycles_per_op.to_pq_string(),
-        cycles_per_op,
-        ns_per_op_pq: ns_per_op.to_pq_string(),
-        ns_per_op,
-    }
+///
+/// Returns an error when the function cannot be compiled and executed as a standalone
+/// capsule. There is deliberately no substitute workload: a number that was not measured
+/// on the submitted function must never be reported, voted, or ranked as its `cycles_per_op`.
+pub fn benchmark_rust_function_locally(source_code: &str) -> Result<LocalHardwareBenchmark> {
+    let proof = prove_capsule_with_rustc(source_code).context(
+        "Capsule is unproven: rustc could not compile and execute it as a standalone function, so no hardware measurement exists",
+    )?;
+    Ok(LocalHardwareBenchmark {
+        hardware: detect_hardware_arch(),
+        ops_completed: proof.ops_completed,
+        processing_time_ns: proof.processing_time_ns,
+        cpu_cycles: proof.cpu_cycles,
+        sample_durations_ns: proof.sample_durations_ns,
+        cycles_per_op_pq: proof.cycles_per_op_pq,
+        cycles_per_op: proof.cycles_per_op,
+        ns_per_op_pq: proof.ns_per_op_pq,
+        ns_per_op: proof.ns_per_op,
+    })
 }
 
 // ============================================================================
@@ -1719,7 +1666,7 @@ pub fn submit_rust_function(
 ) -> Result<SubmitCapsuleReceipt> {
     let g8t_url = resolve_g8t_url();
     let prepared_source = prepare_capsule_source(name, source_code, inputs, output_type)?;
-    let local_benchmark = benchmark_rust_function_locally(&prepared_source);
+    let local_benchmark = benchmark_rust_function_locally(&prepared_source)?;
     let author_aye = format_partnership_aye_id(partner, &local_benchmark.hardware.arch);
 
     let effective_domain = if domain.trim().is_empty() {
@@ -3584,7 +3531,7 @@ pub fn submit_rust_function_with_proof(
 ) -> Result<SubmitCapsuleReceipt> {
     let g8t_url = resolve_g8t_url();
     let prepared_source = prepare_capsule_source(name, source_code, &[], "u64")?;
-    let mut local_benchmark = benchmark_rust_function_locally(&prepared_source);
+    let mut local_benchmark = benchmark_rust_function_locally(&prepared_source)?;
 
     if let Some(p) = rustc_proof {
         if cmp_cycles_fastest_first(p.cycles_per_op, local_benchmark.cycles_per_op)
@@ -6333,7 +6280,11 @@ pub fn format_capsule_chain_report(r: &CapsuleChainReceipt) -> String {
 // 8D. `$10/UNLIMITED g8t SESSION` — DEALER'S CHOICE MODEL ROUTER & EMPIRICAL LEDGER
 // ============================================================================
 
-/// Empirical track record for a specific model in a specific problem domain (100% zero-float `RationalPq`).
+/// Track record for a specific model in a specific problem domain (100% zero-float `RationalPq`).
+///
+/// `trials` / `wins` include the built-in seed prior from `default_dealers_choice_ledger()`.
+/// Only `observed_trials` / `observed_wins` count outcomes actually recorded on this machine
+/// via `record_dealers_choice_outcome`; a record with `observed_trials == 0` is a prior, not evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DealersChoiceModelRecord {
     pub model_id: String,
@@ -6342,6 +6293,12 @@ pub struct DealersChoiceModelRecord {
     pub specialty_note: String,
     pub trials: u64,
     pub wins: u64,
+    /// Outcomes recorded locally (excludes the built-in seed prior).
+    #[serde(default)]
+    pub observed_trials: u64,
+    /// Wins among `observed_trials`.
+    #[serde(default)]
+    pub observed_wins: u64,
     pub win_rate: RationalPq,
     pub win_rate_pq: String,
     pub best_cycles_per_op: RationalPq,
@@ -6589,6 +6546,8 @@ fn make_dc_record(
         specialty_note: specialty_note.to_string(),
         trials,
         wins,
+        observed_trials: 0,
+        observed_wins: 0,
         win_rate_pq: win_rate.to_pq_string(),
         win_rate,
         best_cycles_per_op_pq: best_cycles_per_op.to_pq_string(),
@@ -6850,8 +6809,10 @@ pub fn record_dealers_choice_outcome(
                 || r.provider.eq_ignore_ascii_case(model_id))
     }) {
         rec.trials = rec.trials.saturating_add(1);
+        rec.observed_trials = rec.observed_trials.saturating_add(1);
         if won {
             rec.wins = rec.wins.saturating_add(1);
+            rec.observed_wins = rec.observed_wins.saturating_add(1);
         }
         rec.win_rate = RationalPq::from_u64(rec.wins, rec.trials.max(1));
         rec.win_rate_pq = rec.win_rate.to_pq_string();
@@ -6877,7 +6838,7 @@ pub fn record_dealers_choice_outcome(
         } else {
             "burn"
         };
-        ledger.records.push(make_dc_record(
+        let mut learned = make_dc_record(
             model_id,
             provider,
             problem_domain,
@@ -6888,8 +6849,11 @@ pub fn record_dealers_choice_outcome(
             cycles_per_op.den.max(1),
             9,
             10,
-            fokens_earned.max(100),
-        ));
+            fokens_earned,
+        );
+        learned.observed_trials = 1;
+        learned.observed_wins = if won { 1 } else { 0 };
+        ledger.records.push(learned);
     }
 
     save_dealers_choice_ledger(&ledger);
@@ -6963,11 +6927,21 @@ pub fn route_dealers_choice(
         }
     }
 
+    let evidence = if chosen.observed_trials == 0 {
+        "a built-in seed prior only (no outcomes observed on this machine yet; not a measurement)"
+            .to_string()
+    } else {
+        format!(
+            "{}/{} locally observed wins on top of the built-in seed prior",
+            chosen.observed_wins, chosen.observed_trials
+        )
+    };
     let selection_reason = format!(
-        "Dealer's Choice selected `{}` (provider `{}`) for domain `{}` based on empirical win-rate `{} ({}/{})`, best hardware speed `{} cyc/op`, and `{}` FKN earned.",
+        "Dealer's Choice selected `{}` (provider `{}`) for domain `{}` using {}. Combined standing: win-rate `{} ({}/{})`, best speed `{} cyc/op`, `{}` FKN.",
         chosen.model_id,
         chosen.provider,
         domain,
+        evidence,
         chosen.win_rate_pq,
         chosen.wins,
         chosen.trials,
@@ -7397,6 +7371,37 @@ mod tests {
     }
 
     #[test]
+    fn unprovable_capsule_yields_error_instead_of_substitute_measurement() {
+        // Does not compile as a standalone capsule: calls an undefined sibling function.
+        let broken = "pub fn needs_missing_helper(x: u64) -> u64 { missing_sibling_helper(x) }";
+        let res = benchmark_rust_function_locally(broken);
+        assert!(
+            res.is_err(),
+            "an uncompilable capsule must not receive a cycles_per_op figure, got: {res:?}"
+        );
+    }
+
+    #[test]
+    fn seeded_dealers_choice_records_carry_no_observed_outcomes() {
+        let ledger = default_dealers_choice_ledger();
+        assert!(!ledger.records.is_empty());
+        assert!(ledger
+            .records
+            .iter()
+            .all(|r| r.observed_trials == 0 && r.observed_wins == 0));
+
+        // Ledgers persisted before these fields existed still deserialize (as unobserved).
+        let mut legacy = serde_json::to_value(&ledger.records[0]).expect("record serializes");
+        let obj = legacy.as_object_mut().expect("record is a JSON object");
+        obj.remove("observed_trials");
+        obj.remove("observed_wins");
+        let back: DealersChoiceModelRecord =
+            serde_json::from_value(legacy).expect("legacy record deserializes");
+        assert_eq!(back.observed_trials, 0);
+        assert_eq!(back.observed_wins, 0);
+    }
+
+    #[test]
     fn real_rustc_benchmark_differentiates_workloads_and_executes_capsule_chain() {
         std::env::set_var("ST_G8T_OFFLINE", "1");
 
@@ -7404,8 +7409,10 @@ mod tests {
         let tiny_fn = "pub const fn tiny_xor_step(x: u64) -> u64 { x ^ 0x432 }";
         let heavy_crc_fn = "pub fn crc32_ieee_loop(bytes: &[u8]) -> u32 {\n    let mut crc: u32 = 0xFFFF_FFFF;\n    let mut i = 0usize;\n    while i < bytes.len() {\n        crc ^= bytes[i] as u32;\n        let mut bit = 0u8;\n        while bit < 8 {\n            let mask = (crc & 1).wrapping_neg();\n            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);\n            bit += 1;\n        }\n        i += 1;\n    }\n    !crc\n}";
 
-        let b_tiny = benchmark_rust_function_locally(tiny_fn);
-        let b_heavy = benchmark_rust_function_locally(heavy_crc_fn);
+        let b_tiny = benchmark_rust_function_locally(tiny_fn)
+            .expect("tiny_fn compiles and is measured by rustc");
+        let b_heavy = benchmark_rust_function_locally(heavy_crc_fn)
+            .expect("heavy_crc_fn compiles and is measured by rustc");
         assert_eq!(b_tiny.ops_completed, 800_000);
         assert_eq!(b_heavy.ops_completed, 800_000);
         assert!(
