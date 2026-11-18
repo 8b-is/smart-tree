@@ -713,6 +713,13 @@ fn handle_agy_session_start(_payload: &Value) -> Result<Value> {
     }
 
     sections.push("🔧 Smart Tree MCP (`smart-tree`) & lifecycle hooks are active.".to_string());
+    let pad_lines = collect_8a_scratchpad_hook_events("8a.is session-start", false);
+    if !pad_lines.is_empty() {
+        sections.push(format!(
+            "📝 **8a.is Collaborative Scratchpad Activity** (`https://8a.is` · MCP `https://8a.is/mcp` · CLI `8a-mcp`):\n{}",
+            pad_lines.join("\n")
+        ));
+    }
     sections.push(MEMORY_SAVE_HOOK_INSTRUCTION.to_string());
 
     let message = format!("🌳 **Smart Tree Session Context**\n{}", sections.join("\n"));
@@ -836,6 +843,15 @@ fn handle_agy_pre_invocation(payload: &Value) -> Result<Value> {
             g_lines.push(format!("- {}", rule));
         }
         sections.push(g_lines.join("\n"));
+    }
+
+    // 2d. 8a.is Realtime Collaborative Markdown Scratchpad Edits & @Aye Summons
+    let pad_lines = collect_8a_scratchpad_hook_events(user_prompt, true);
+    if !pad_lines.is_empty() {
+        sections.push(format!(
+            "### 📝 8a.is Realtime Markdown Scratchpad Activity (`https://8a.is` · MCP `https://8a.is/mcp` · CLI `8a-mcp`)\n{}",
+            pad_lines.join("\n")
+        ));
     }
 
     // 3. If code-related and inside a git repo, include concise git status
@@ -1128,5 +1144,130 @@ fn collect_mem8_context(keywords: &[String]) -> Vec<String> {
             }
         }
     }
+    lines
+}
+
+/// Collect recent collaborative Markdown scratchpad edit events from `8a.is`
+/// (via `~/.st/8a_pad_events.jsonl`, `/var/lib/8a-pad/aye-hook-feed.jsonl`, or local `:8808`)
+/// so the Ayes automatically know when edits are happening on `8a.is`.
+fn collect_8a_scratchpad_hook_events(user_prompt: &str, advance_cursor: bool) -> Vec<String> {
+    use std::io::Write;
+    use std::net::{SocketAddr, TcpStream};
+    use std::time::Duration;
+
+    let prompt_low = user_prompt.to_lowercase();
+    let mentions_pad = prompt_low.contains("8a.is")
+        || prompt_low.contains("8a-mcp")
+        || prompt_low.contains("scratchpad")
+        || prompt_low.contains("scratch pad");
+
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/home/hue"));
+    let st_dir = home.join(".st");
+    let cursor_path = st_dir.join("8a_hook_cursor.txt");
+    let last_cursor: u64 = fs::read_to_string(&cursor_path)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0);
+
+    let mut events: Vec<Value> = Vec::new();
+
+    // 1. Fast non-blocking probe of local 8a-pad daemon (:8808) if running
+    if let Ok(addr) = "127.0.0.1:8808".parse::<SocketAddr>() {
+        if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(180)) {
+            let _ = stream.set_read_timeout(Some(Duration::from_millis(220)));
+            let _ = stream.set_write_timeout(Some(Duration::from_millis(180)));
+            let req = "GET /api/events?format=json&limit=5 HTTP/1.1\r\nHost: 8a.is\r\nAccept: application/json\r\nConnection: close\r\n\r\n";
+            if stream.write_all(req.as_bytes()).is_ok() {
+                let mut buf = Vec::new();
+                if stream.take(65_536).read_to_end(&mut buf).is_ok() {
+                    if let Some(split) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                        if let Ok(val) = serde_json::from_slice::<Value>(&buf[split + 4..]) {
+                            if let Some(arr) = val.get("events").and_then(|e| e.as_array()) {
+                                events.extend(arr.iter().cloned());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to ~/.st/8a_pad_events.jsonl or /var/lib/8a-pad/aye-hook-feed.jsonl
+    if events.is_empty() {
+        for candidate in [
+            st_dir.join("8a_pad_events.jsonl"),
+            PathBuf::from("/var/lib/8a-pad/aye-hook-feed.jsonl"),
+        ] {
+            if candidate.exists() {
+                if let Ok(raw) = fs::read_to_string(&candidate) {
+                    for line in raw.lines().rev().take(6) {
+                        if let Ok(val) = serde_json::from_str::<Value>(line) {
+                            events.push(val);
+                        }
+                    }
+                    if !events.is_empty() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if events.is_empty() {
+        if mentions_pad {
+            return vec![
+                "- `https://8a.is` Collaborative Markdown Scratchpad & Public MCP (`https://8a.is/mcp`) are online (`8a-mcp pads`, `8a-mcp read commons`, `8a-mcp append commons ...`).".to_string()
+            ];
+        }
+        return Vec::new();
+    }
+
+    let mut max_id = last_cursor;
+    let mut lines = Vec::new();
+    for ev in &events {
+        let ev_id = ev.get("event_id").and_then(|v| v.as_u64()).unwrap_or(0);
+        if ev_id > max_id {
+            max_id = ev_id;
+        }
+        if !mentions_pad && ev_id <= last_cursor {
+            continue;
+        }
+        let slug = ev.get("slug").and_then(|v| v.as_str()).unwrap_or("commons");
+        let rev = ev.get("revision").and_then(|v| v.as_u64()).unwrap_or(1);
+        let summary = ev
+            .get("summary")
+            .or_else(|| ev.get("label"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("pad updated");
+        let badge = ev
+            .get("attribution")
+            .and_then(|a| a.get("badge"))
+            .and_then(|b| b.as_str())
+            .or_else(|| ev.get("created_by").and_then(|b| b.as_str()))
+            .unwrap_or("collaborator");
+        let summons = ev
+            .get("summons_aye")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let summon_tag = if summons { " 🤖 **[@Aye Summoned!]**" } else { "" };
+        lines.push(format!(
+            "- **[`8a.is/{}` · REV #{}]** `{}` — by {}{}",
+            slug, rev, summary, badge, summon_tag
+        ));
+        if lines.len() >= 4 {
+            break;
+        }
+    }
+
+    if advance_cursor && max_id > last_cursor {
+        let _ = fs::write(&cursor_path, max_id.to_string());
+    }
+
+    if !lines.is_empty() {
+        lines.push(
+            "- 🔧 *Co-Edit via MCP/CLI*: `8a-mcp read <slug>`, `8a-mcp append <slug> \"...\"`, or `POST https://8a.is/mcp`.".to_string(),
+        );
+    }
+
     lines
 }
