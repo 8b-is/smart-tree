@@ -853,9 +853,8 @@ async fn test_ternary_executable_deck_mcp_tool() {
 
 #[test]
 fn test_adaptive_speculative_controller_enforces_jury_non_oscillatory_certificate() {
-    use mcp_combinatorics_llm::{
-        model_cache::AdaptiveSpeculativeController, ternary_deck::evaluate_jury_pid_certificate,
-    };
+    use mcp_combinatorics_llm::model_cache::AdaptiveSpeculativeController;
+    use st::ternary_deck::evaluate_jury_pid_certificate;
 
     // 1. Prove that the unconstrained heuristic gains (3.20, 0.45, 0.90) violate Jury Condition 2
     //    for the EWMA plant (a = 0.65, b = 0.35): -P(-1) = -0.3575 < 0, spectral_radius > 1.0

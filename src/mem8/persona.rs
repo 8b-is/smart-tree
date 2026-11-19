@@ -35,6 +35,11 @@ type PersonaCacheMap = HashMap<PathBuf, (Option<SystemTime>, Arc<LifePersona>)>;
 
 static PERSONA_CACHE: Lazy<RwLock<PersonaCacheMap>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
+/// Test-only: the `.st_test_personas` directories that `personas_dir_for_source` redirected
+/// temp-dir training into, so by-name lookups can find personas trained in the same test run.
+#[cfg(test)]
+static TEST_PERSONA_DIRS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
 /// Specialty lens for a trained MEM8 Persona
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -412,6 +417,11 @@ impl LifePersona {
                 source.parent().unwrap_or(source).join(".st_test_personas")
             };
             fs::create_dir_all(&test_dir)?;
+            if let Ok(mut registered) = TEST_PERSONA_DIRS.lock() {
+                if !registered.contains(&test_dir) {
+                    registered.push(test_dir.clone());
+                }
+            }
             return Ok(test_dir);
         }
 
@@ -447,6 +457,14 @@ impl LifePersona {
                     if p.is_dir() && !dirs.contains(&p) {
                         dirs.push(p);
                     }
+                }
+            }
+        }
+        #[cfg(test)]
+        if let Ok(registered) = TEST_PERSONA_DIRS.lock() {
+            for p in registered.iter() {
+                if p.is_dir() && !dirs.contains(p) {
+                    dirs.push(p.clone());
                 }
             }
         }

@@ -989,6 +989,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_mcp_symbol_tool_call_finds_definition() {
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::write(
+            repo.path().join("lib.rs"),
+            "// header\npub fn fold_spectrum(x: u32) -> u32 {\n    x\n}\n",
+        )
+        .unwrap();
+
+        let server = McpServer::new(McpConfig::default());
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "tools/call",
+            "params": {
+                "name": "symbol",
+                "arguments": {
+                    "operation": "sym",
+                    "name": "fold_spectrum",
+                    "path": repo.path(),
+                }
+            }
+        });
+        let response_str = server.handle_request(&request.to_string()).await.unwrap();
+        let response: Value = serde_json::from_str(&response_str).unwrap();
+
+        assert!(
+            response.get("error").is_none(),
+            "symbol is advertised in tools/list, so tools/call must dispatch it: {response}"
+        );
+        let text = response["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(payload["operation"], "sym");
+        assert_eq!(payload["count"], 1);
+        assert_eq!(payload["symbols"][0]["name"], "fold_spectrum");
+        assert_eq!(payload["symbols"][0]["file"], "lib.rs");
+        assert_eq!(payload["symbols"][0]["line"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_mcp_symbol_tool_call_rejects_unknown_operation() {
+        let server = McpServer::new(McpConfig::default());
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 8,
+            "method": "tools/call",
+            "params": {
+                "name": "symbol",
+                "arguments": { "operation": "not-an-operation", "name": "x" }
+            }
+        });
+        let response_str = server.handle_request(&request.to_string()).await.unwrap();
+        let response: Value = serde_json::from_str(&response_str).unwrap();
+
+        let message = response["error"]["message"].as_str().unwrap();
+        assert!(
+            message.contains("Unknown symbol operation: not-an-operation"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[tokio::test]
     async fn test_mcp_combinatorics_and_llm_tools_dispatch_and_batch() {
         let server = McpServer::new(McpConfig::default());
 

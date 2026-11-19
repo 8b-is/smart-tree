@@ -1124,6 +1124,50 @@ pub fn ensure_mcp_content_envelope(val: Value) -> Result<Value> {
     }
 }
 
+/// MCP `symbol` tool: runs the same in-process symbol scan as `st symbol`.
+async fn handle_symbol(params: Option<Value>) -> Result<Value> {
+    use crate::cli::{SymbolCommand, SymbolOperation};
+
+    let params = params.unwrap_or_else(|| json!({}));
+    let text = |key: &str| {
+        params
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+
+    let operation = match text("operation").as_deref().unwrap_or("sym") {
+        "sym" => SymbolOperation::Sym,
+        "refs" => SymbolOperation::Refs,
+        "outline" => SymbolOperation::Outline,
+        "index" => SymbolOperation::Index,
+        "graph" => SymbolOperation::Graph,
+        other => {
+            return Err(anyhow::anyhow!(
+                "Unknown symbol operation: {other} (expected sym, refs, outline, index, or graph)"
+            ))
+        }
+    };
+    let query = match operation {
+        SymbolOperation::Outline => text("file").or_else(|| text("name")),
+        _ => text("name"),
+    };
+    let command = SymbolCommand {
+        operation,
+        query,
+        path: text("path").unwrap_or_else(|| ".".to_string()).into(),
+        no_source: !params
+            .get("include_source")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+    };
+    tokio::task::spawn_blocking(move || crate::cli_commands::symbol_payload(&command))
+        .await
+        .context("Symbol worker failed")?
+}
+
 /// Tool dispatcher for consolidated tools
 pub async fn dispatch_consolidated_tool(
     name: &str,
@@ -1185,6 +1229,7 @@ pub async fn dispatch_consolidated_tool(
             super::tools::handle_tools_call(json!({ "name": "ask_user", "arguments": params }), ctx)
                 .await?
         }
+        "symbol" => handle_symbol(params).await?,
         "security" | "custodian" => handle_security(params, ctx).await?,
         "ontology" | "sovereign_ontology" => handle_ontology(params, ctx).await?,
         "partner" | "wa" | "wastream" | "discord" => handle_partner(params, ctx).await?,

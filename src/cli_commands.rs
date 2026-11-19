@@ -1890,9 +1890,15 @@ pub async fn handle_mega_stats() -> Result<()> {
 // AI GUARDIAN - System-wide protection daemon
 // =============================================================================
 
+/// Maximum number of tracked file signatures in the Guardian daemon deduplication cache (C64 bounded capacity).
+const GUARDIAN_SEEN_CACHE_CAPACITY: usize = 16_384;
+
 /// Run the Guardian daemon (called by systemd service)
 pub async fn run_guardian_daemon() -> Result<()> {
     use crate::ai_guardian::AiGuardian;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::time::SystemTime;
     use tokio::time::{sleep, Duration};
 
     println!(
@@ -1907,17 +1913,21 @@ pub async fn run_guardian_daemon() -> Result<()> {
 
     let guardian = AiGuardian::new();
     let watch_paths = vec!["/home", "/tmp", "/var/tmp"];
+    let mut seen_files: HashMap<PathBuf, (Option<SystemTime>, u64)> = HashMap::with_capacity(1024);
 
     println!("Watching paths: {:?}", watch_paths);
     println!("Press Ctrl+C to stop.\n");
 
     loop {
+        if seen_files.len() > GUARDIAN_SEEN_CACHE_CAPACITY {
+            seen_files.clear();
+        }
         for watch_path in &watch_paths {
             let path = std::path::Path::new(watch_path);
             if !path.exists() {
                 continue;
             }
-            scan_directory_for_threats(&guardian, path);
+            scan_directory_for_threats_with_cache(&guardian, path, Some(&mut seen_files));
         }
 
         sleep(Duration::from_secs(60)).await;
@@ -1928,6 +1938,16 @@ pub async fn run_guardian_daemon() -> Result<()> {
 pub fn scan_directory_for_threats(
     guardian: &crate::ai_guardian::AiGuardian,
     path: &std::path::Path,
+) {
+    scan_directory_for_threats_with_cache(guardian, path, None);
+}
+
+fn scan_directory_for_threats_with_cache(
+    guardian: &crate::ai_guardian::AiGuardian,
+    path: &std::path::Path,
+    mut seen_files: Option<
+        &mut std::collections::HashMap<std::path::PathBuf, (Option<std::time::SystemTime>, u64)>,
+    >,
 ) {
     use walkdir::WalkDir;
 
@@ -1981,6 +2001,16 @@ pub fn scan_directory_for_threats(
         if let Some(ext) = entry_path.extension() {
             let ext_str = ext.to_string_lossy().to_lowercase();
             if suspicious_extensions.contains(&ext_str.as_str()) {
+                let file_sig = entry.metadata().ok().map(|m| (m.modified().ok(), m.len()));
+                if let (Some(cache), Some(sig)) = (seen_files.as_deref_mut(), file_sig) {
+                    if cache.get(entry_path) == Some(&sig) {
+                        continue;
+                    }
+                    if cache.len() < GUARDIAN_SEEN_CACHE_CAPACITY {
+                        cache.insert(entry_path.to_path_buf(), sig);
+                    }
+                }
+
                 let threats = guardian.scan_file(entry_path);
 
                 for threat in threats {
@@ -6138,6 +6168,15 @@ pub fn handle_cheet_command() -> Result<()> {
 
 /// Execute `st symbol <index|sym|refs|outline|graph>` in-process and print valid JSON to stdout.
 pub fn handle_symbol_command(command: &crate::cli::SymbolCommand) -> Result<()> {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&symbol_payload(command)?)?
+    );
+    Ok(())
+}
+
+/// Build the JSON result for a symbol operation. Shared by `st symbol` and the MCP `symbol` tool.
+pub fn symbol_payload(command: &crate::cli::SymbolCommand) -> Result<serde_json::Value> {
     use crate::cli::SymbolOperation;
     use serde_json::json;
 
@@ -6328,6 +6367,5 @@ pub fn handle_symbol_command(command: &crate::cli::SymbolCommand) -> Result<()> 
         }),
     };
 
-    println!("{}", serde_json::to_string_pretty(&payload)?);
-    Ok(())
+    Ok(payload)
 }
