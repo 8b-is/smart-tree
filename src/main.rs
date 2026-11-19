@@ -32,6 +32,18 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 // ...
 // ... existing code ...
 // ...
+/// Decide where the Ollama emulator listens, asking the person at the terminal first if
+/// a real Ollama already holds the port. The check prompts and makes short blocking
+/// HTTP calls, so it runs off the async runtime.
+async fn resolve_ollama_listen_addr(
+    requested: std::net::SocketAddr,
+    mode: st::ollama_takeover::TakeoverMode,
+) -> Result<Option<std::net::SocketAddr>> {
+    tokio::task::spawn_blocking(move || st::ollama_takeover::resolve_listen_addr(requested, mode))
+        .await
+        .context("Ollama takeover check did not finish")?
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse the command-line arguments provided by the user.
@@ -284,7 +296,12 @@ async fn main() -> Result<()> {
         return st::pq_bench::handle_pq_bench_command(bench_cmd).await;
     }
     if cli.ollama_serve {
-        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], cli.ollama_port));
+        let requested = std::net::SocketAddr::from(([127, 0, 0, 1], cli.ollama_port));
+        let Some(addr) =
+            resolve_ollama_listen_addr(requested, st::ollama_takeover::TakeoverMode::Ask).await?
+        else {
+            return Ok(());
+        };
         return st::ollama_emulator::run_ollama_emulator_server(
             addr,
             cli.ollama_context_dir.clone(),
@@ -295,7 +312,11 @@ async fn main() -> Result<()> {
         let act = ollama_cmd.action.to_ascii_lowercase();
         match act.as_str() {
             "serve" | "start" | "run" | "daemon" => {
-                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], ollama_cmd.port));
+                let requested = std::net::SocketAddr::from(([127, 0, 0, 1], ollama_cmd.port));
+                let mode = st::ollama_takeover::TakeoverMode::parse(&ollama_cmd.takeover)?;
+                let Some(addr) = resolve_ollama_listen_addr(requested, mode).await? else {
+                    return Ok(());
+                };
                 return st::ollama_emulator::run_ollama_emulator_server(
                     addr,
                     ollama_cmd.context_dir.clone(),

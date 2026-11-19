@@ -914,6 +914,10 @@ pub struct OllamaCommand {
     /// Emit structured JSON output for `status` or `ask`
     #[arg(long)]
     pub json: bool,
+    /// What `serve` does when a real Ollama already holds the port: `ask` (prompt in a
+    /// terminal, never stop it otherwise), `never`, or `always` (stop it without asking)
+    #[arg(long, value_name = "MODE", default_value = "ask")]
+    pub takeover: String,
 }
 
 #[derive(Debug, Clone, clap::Args)]
