@@ -11135,7 +11135,7 @@ dependencies = [
 
 [[package]]
 name = "smart-tree"
-version = "24.4.0"
+version = "24.4.1"
 dependencies = [
  "anyhow",
  "argon2",
@@ -11200,6 +11200,8 @@ dependencies = [
  "reqwest",
  "ring",
  "rusqlite",
+ "rustls",
+ "rustls-pki-types",
  "scraper",
  "serde",
  "serde_json",
@@ -11218,6 +11220,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokenizers",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "toml 0.8.23",
  "tower",

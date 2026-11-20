@@ -181,6 +181,10 @@ fn ct_token_matches(expected: &str, provided: &str) -> bool {
 pub struct AuthState {
     pub tokens: Vec<String>,
     pub allow_external: bool,
+    /// When `true` (always enabled for the HTTPS listener on port 28443), a valid
+    /// Bearer token is REQUIRED for every protected route regardless of peer IP
+    /// (loopback, LAN, or WAN).
+    pub require_token_always: bool,
 }
 
 impl AuthState {
@@ -188,8 +192,53 @@ impl AuthState {
         Self {
             tokens,
             allow_external,
+            require_token_always: false,
         }
     }
+
+    pub fn require_token(tokens: Vec<String>) -> Self {
+        Self {
+            tokens,
+            allow_external: true,
+            require_token_always: true,
+        }
+    }
+
+    fn matches_any(&self, provided: &str) -> bool {
+        if self.tokens.is_empty() || provided.is_empty() {
+            return false;
+        }
+        self.tokens
+            .iter()
+            .fold(false, |acc, t| acc | ct_token_matches(t, provided))
+    }
+}
+
+fn extract_daemon_token_cookie(headers: &axum::http::HeaderMap) -> Option<String> {
+    for value in headers.get_all(axum::http::header::COOKIE) {
+        if let Ok(raw) = value.to_str() {
+            for part in raw.split(';') {
+                if let Some(tok) = part.trim().strip_prefix("st_daemon_token=") {
+                    if !tok.is_empty() {
+                        return Some(tok.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn unauthorized_response(msg: &'static str) -> axum::response::Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        [(
+            axum::http::header::WWW_AUTHENTICATE,
+            axum::http::HeaderValue::from_static("Bearer realm=\"smart-tree\""),
+        )],
+        msg,
+    )
+        .into_response()
 }
 
 /// Returns `true` if `ip` belongs to loopback, RFC1918 private LAN (`10/8`, `172.16/12`, `192.168/16`),
@@ -214,83 +263,105 @@ pub fn is_trusted_internal_lan_ip(ip: std::net::IpAddr) -> bool {
     }
 }
 
-/// Auth middleware: validates Bearer token only for untrusted public WAN origins.
+/// Auth middleware: validates Bearer token for HTTPS port 28443 (always) and for
+/// untrusted public WAN origins on HTTP port 28428.
 ///
-/// - `/health` and `/quantssl/*` CA/status routes are always public.
-/// - Localhost (`127.0.0.1`, `::1`) and internal safe LAN peers (`10/8`, `172.16/12`,
-///   `192.168/16`, `169.254/16` USB-C bridge, `100.64/10` Tailscale, `.local` mDNS)
-///   are trusted internally on LAN with zero Bearer token friction.
-/// - Public WAN connections require a valid `Authorization: Bearer <token>` header
-///   or `?token=<token>` query parameter (constant-time SHA-256 comparison).
+/// - On port 28443 (`require_token_always == true`), ONLY `/health` and
+///   `/quantssl/ca.crt` are public; EVERY other route requires a valid Bearer
+///   token (`Authorization: Bearer <token>`, `?token=<token>`, or
+///   `Cookie: st_daemon_token=<token>`), regardless of peer IP.
+/// - On port 28428 (`require_token_always == false`), `/health` and `/quantssl/*`
+///   are public; localhost and internal safe LAN peers are trusted without a token,
+///   while public WAN connections require a valid Bearer token.
 async fn auth_middleware(
     State(state): State<AuthState>,
     req: Request,
     next: Next,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     let path = req.uri().path();
-    if path == "/health" || path == "/quantssl" || path.starts_with("/quantssl/") {
+    if path == "/health" || path == "/quantssl/ca.crt" {
+        return next.run(req).await;
+    }
+    if !state.require_token_always && (path == "/quantssl" || path.starts_with("/quantssl/")) {
         return next.run(req).await;
     }
 
-    // Localhost-only bind: loopback is trusted by definition.
-    if !state.allow_external {
-        return next.run(req).await;
+    if !state.require_token_always {
+        // Localhost-only bind: loopback is trusted by definition.
+        if !state.allow_external {
+            return next.run(req).await;
+        }
+
+        // Check if peer IP from ConnectInfo is loopback or internal safe LAN
+        let peer_is_lan = req
+            .extensions()
+            .get::<axum::extract::ConnectInfo<SocketAddr>>()
+            .map(|ci| is_trusted_internal_lan_ip(ci.0.ip()));
+
+        let forwarded_untrusted = req
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|xff| xff.split(',').next())
+            .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
+            .is_some_and(|ip| !is_trusted_internal_lan_ip(ip));
+
+        if !forwarded_untrusted && peer_is_lan == Some(true) {
+            return next.run(req).await;
+        }
     }
 
-    // Check if peer IP from ConnectInfo is loopback or internal safe LAN
-    let peer_is_lan = req
-        .extensions()
-        .get::<axum::extract::ConnectInfo<SocketAddr>>()
-        .map(|ci| is_trusted_internal_lan_ip(ci.0.ip()));
-
-    let forwarded_untrusted = req
+    // 1. Check `Authorization: Bearer <token>` header (constant-time SHA-256 comparison).
+    if let Some(header) = req
         .headers()
-        .get("x-forwarded-for")
+        .get("authorization")
         .and_then(|v| v.to_str().ok())
-        .and_then(|xff| xff.split(',').next())
-        .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
-        .is_some_and(|ip| !is_trusted_internal_lan_ip(ip));
-
-    if !forwarded_untrusted && peer_is_lan == Some(true) {
-        return next.run(req).await;
+    {
+        if let Some(provided) = header.strip_prefix("Bearer ") {
+            return if state.matches_any(provided) {
+                next.run(req).await
+            } else {
+                unauthorized_response("Invalid token")
+            };
+        }
     }
 
-    // Check `?token=<token>` query parameter for browser convenience
+    // 2. Check `?token=<token>` query parameter for browser convenience; when valid,
+    //    set an HttpOnly SameSite=Strict cookie so subsequent page loads/links work.
     if let Some(q) = req.uri().query() {
         for pair in q.split('&') {
             if let Some(provided) = pair.strip_prefix("token=") {
-                if state
-                    .tokens
-                    .iter()
-                    .fold(false, |acc, t| acc | ct_token_matches(t, provided))
-                {
-                    return next.run(req).await;
+                let provided = provided.to_string();
+                if state.matches_any(&provided) {
+                    let mut resp = next.run(req).await;
+                    let secure = if state.require_token_always {
+                        "; Secure"
+                    } else {
+                        ""
+                    };
+                    if let Ok(cookie_val) = axum::http::HeaderValue::from_str(&format!(
+                        "st_daemon_token={provided}; Path=/; HttpOnly; SameSite=Strict{secure}"
+                    )) {
+                        resp.headers_mut()
+                            .append(axum::http::header::SET_COOKIE, cookie_val);
+                    }
+                    return resp;
+                } else {
+                    return unauthorized_response("Invalid token");
                 }
             }
         }
     }
 
-    // Externally bound WAN origin: strict Bearer check.
-    let auth_header = req
-        .headers()
-        .get("authorization")
-        .and_then(|v| v.to_str().ok());
-
-    match auth_header {
-        Some(header) if header.starts_with("Bearer ") => {
-            let provided = &header[7..];
-            if state
-                .tokens
-                .iter()
-                .fold(false, |acc, t| acc | ct_token_matches(t, provided))
-            {
-                next.run(req).await
-            } else {
-                (StatusCode::UNAUTHORIZED, "Invalid token").into_response()
-            }
+    // 3. Check `Cookie: st_daemon_token=<token>` (set after browser `?token=` sign-in).
+    if let Some(cookie_tok) = extract_daemon_token_cookie(req.headers()) {
+        if state.matches_any(&cookie_tok) {
+            return next.run(req).await;
         }
-        _ => (StatusCode::UNAUTHORIZED, "Bearer token required").into_response(),
+        return unauthorized_response("Invalid token");
     }
+
+    unauthorized_response("Bearer token required")
 }
 
 /// Daemon configuration
@@ -670,7 +741,7 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
     // Create MCP context for HTTP MCP endpoints
     let mcp_context = create_mcp_context();
 
-    let app = Router::new()
+    let base_app = Router::new()
         // Welcome page
         .route("/", get(welcome_page))
         // Health & Info
@@ -792,12 +863,19 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         // Add MCP before the auth layer so its routes share the same policy.
         .nest_service("/mcp", mcp_router(mcp_context))
         // Realtime Service Debug telemetry layer (captures incoming HTTP traffic & errors)
-        .layer(middleware::from_fn(service_debug_middleware))
-        // Bearer token auth only for untrusted WAN; localhost & internal LAN are trusted.
-        .layer(middleware::from_fn_with_state(
-            AuthState::new(load_all_tokens(), config.allow_external),
-            auth_middleware,
-        ));
+        .layer(middleware::from_fn(service_debug_middleware));
+
+    let daemon_tokens = load_all_tokens();
+    let app = base_app.clone().layer(middleware::from_fn_with_state(
+        AuthState::new(daemon_tokens.clone(), config.allow_external),
+        auth_middleware,
+    ));
+    // HTTPS port 28443 ALWAYS enforces Bearer token auth for every protected route
+    // regardless of client IP (loopback, LAN, or WAN) — never proxied through 127.0.0.1.
+    let https_app = base_app.layer(middleware::from_fn_with_state(
+        AuthState::require_token(daemon_tokens),
+        auth_middleware,
+    ));
 
     // Provision QuantSSL local safe PKI & default LAN network shares
     let https_port: u16 = 28443;
@@ -858,10 +936,33 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
-    // Spawn QuantSSL TLS 1.3 HTTPS terminator on :28443 -> 127.0.0.1:28428
-    if let Some(ref qssl) = quantssl_info {
-        spawn_quantssl_https_proxy(qssl.clone(), config.port, https_port);
-    }
+    // Spawn native pure-Rust QuantSSL TLS 1.3/1.2 HTTPS server directly on :28443
+    // with mandatory Bearer token authentication (replaces insecure raw TCP proxy).
+    let (https_stop_tx, https_stop_rx) = oneshot::channel::<()>();
+    let https_handle = if let Some(ref qssl) = quantssl_info {
+        let https_addr = SocketAddr::from((bind_addr, https_port));
+        let cert_path = PathBuf::from(&qssl.lan_cert_path);
+        let key_path = quantssl_dir().join("lan.key");
+        // Remove any legacy Python raw-TCP proxy script so it cannot be re-run.
+        let _ = std::fs::remove_file(quantssl_dir().join("quantssl_tls_proxy.py"));
+        match spawn_quantssl_https_server(https_addr, cert_path, key_path, https_app, https_stop_rx)
+            .await
+        {
+            Ok(handle) => {
+                println!(
+                    "  🔐 Native TLS 1.3/1.2 HTTPS on https://{} (Bearer token REQUIRED on all routes except /health & /quantssl/ca.crt)",
+                    https_addr
+                );
+                Some(handle)
+            }
+            Err(err) => {
+                tracing::warn!(%err, "QuantSSL HTTPS listener on :{} failed to bind", https_port);
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // Spawn background MemNet UDP responder on :8423 (best-effort if port available)
     std::thread::spawn(|| {
@@ -910,6 +1011,10 @@ pub async fn start_daemon(config: DaemonConfig) -> Result<()> {
         println!("\n🌳 Smart Tree Daemon shutting down gracefully...");
     })
     .await;
+    let _ = https_stop_tx.send(());
+    if let Some(handle) = https_handle {
+        let _ = handle.await;
+    }
     let _ = maintenance_stop.send(());
     maintenance
         .await
@@ -3209,64 +3314,94 @@ pub fn ensure_default_lan_shares() -> Result<()> {
     Ok(())
 }
 
-/// Spawn a lightweight TLS 1.3 / 1.2 QuantSSL HTTPS reverse proxy on `0.0.0.0:https_port` -> `127.0.0.1:http_port`.
-fn spawn_quantssl_https_proxy(qssl: QuantSslInfo, http_port: u16, https_port: u16) {
-    let dir = quantssl_dir();
-    let proxy_py = dir.join("quantssl_tls_proxy.py");
-    let script = r#"#!/usr/bin/env python3
-import asyncio, ssl, sys
+/// Build a `rustls::ServerConfig` from PEM certificate chain and private key files.
+fn load_quantssl_tls_config(
+    cert_path: &std::path::Path,
+    key_path: &std::path::Path,
+) -> Result<Arc<rustls::ServerConfig>> {
+    use rustls_pki_types::pem::PemObject;
+    use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
-CERT_FILE, KEY_FILE, HTTP_PORT, HTTPS_PORT = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_file_iter(cert_path)
+        .with_context(|| format!("Failed to read TLS certificate {}", cert_path.display()))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .with_context(|| format!("Failed to parse TLS certificate {}", cert_path.display()))?;
+    if certs.is_empty() {
+        anyhow::bail!("No PEM certificates found in {}", cert_path.display());
+    }
+    let key = PrivateKeyDer::from_pem_file(key_path)
+        .with_context(|| format!("Failed to read TLS private key {}", key_path.display()))?;
 
-async def pipe(reader, writer):
-    try:
-        while True:
-            data = await reader.read(65536)
-            if not data:
-                break
-            writer.write(data)
-            await writer.drain()
-    except Exception:
-        pass
-    finally:
-        try:
-            writer.close()
-        except Exception:
-            pass
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let mut tls_config = rustls::ServerConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .context("Failed to configure TLS protocol versions")?
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .context("Failed to configure TLS certificate/key pair")?;
+    tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    Ok(Arc::new(tls_config))
+}
 
-async def handle_client(client_reader, client_writer):
-    try:
-        up_reader, up_writer = await asyncio.open_connection("127.0.0.1", HTTP_PORT)
-    except Exception:
-        client_writer.close()
-        return
-    await asyncio.gather(pipe(client_reader, up_writer), pipe(up_reader, client_writer))
+/// Spawn a native pure-Rust TLS 1.3 / 1.2 HTTPS Axum listener directly on `bind_addr` (port 28443).
+///
+/// Serves `https_app` (which wraps all routes in `AuthState::require_token`) directly over TLS
+/// with real peer `ConnectInfo<SocketAddr>`, eliminating the legacy raw-TCP proxy that made all
+/// remote WAN connections appear as `127.0.0.1` loopback.
+async fn spawn_quantssl_https_server(
+    bind_addr: SocketAddr,
+    cert_path: PathBuf,
+    key_path: PathBuf,
+    https_app: Router,
+    mut stop_rx: oneshot::Receiver<()>,
+) -> Result<tokio::task::JoinHandle<()>> {
+    let tls_config = load_quantssl_tls_config(&cert_path, &key_path)?;
+    let acceptor = tokio_rustls::TlsAcceptor::from(tls_config);
+    let listener = tokio::net::TcpListener::bind(bind_addr)
+        .await
+        .with_context(|| format!("Failed to bind QuantSSL HTTPS listener on {}", bind_addr))?;
 
-async def main():
-    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-    ctx.load_cert_chain(certfile=CERT_FILE, keyfile=KEY_FILE)
-    server = await asyncio.start_server(handle_client, "0.0.0.0", HTTPS_PORT, ssl=ctx)
-    async with server:
-        await server.serve_forever()
+    let handle = tokio::spawn(async move {
+        use hyper_util::rt::{TokioExecutor, TokioIo};
+        use hyper_util::server::conn::auto::Builder;
+        use hyper_util::service::TowerToHyperService;
+        use tower::ServiceExt;
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
-"#;
-    let _ = std::fs::write(&proxy_py, script);
-    let _ = std::process::Command::new("python3")
-        .arg(&proxy_py)
-        .arg(&qssl.lan_cert_path)
-        .arg(dir.join("lan.key"))
-        .arg(http_port.to_string())
-        .arg(https_port.to_string())
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+        loop {
+            let accept_res = tokio::select! {
+                _ = &mut stop_rx => break,
+                res = listener.accept() => res,
+            };
+            let (tcp_stream, peer_addr) = match accept_res {
+                Ok(pair) => pair,
+                Err(err) => {
+                    tracing::warn!(%err, "QuantSSL HTTPS accept error");
+                    continue;
+                }
+            };
+            let acceptor = acceptor.clone();
+            let app = https_app.clone();
+            tokio::spawn(async move {
+                let tls_stream = match acceptor.accept(tcp_stream).await {
+                    Ok(s) => s,
+                    Err(_) => return,
+                };
+                let io = TokioIo::new(tls_stream);
+                let svc = tower::service_fn(move |mut req: hyper::Request<hyper::body::Incoming>| {
+                    let app = app.clone();
+                    async move {
+                        req.extensions_mut()
+                            .insert(axum::extract::ConnectInfo(peer_addr));
+                        app.oneshot(req.map(axum::body::Body::new)).await
+                    }
+                });
+                let _ = Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(io, TowerToHyperService::new(svc))
+                    .await;
+            });
+        }
+    });
+    Ok(handle)
 }
 
 async fn quantssl_status_handler(
@@ -5504,5 +5639,166 @@ mod memory_api_tests {
         drop(client);
         server.abort();
         let _ = server.await;
+    }
+
+    #[tokio::test]
+    async fn port_28443_https_always_requires_bearer_token_even_from_loopback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cert_path = tmp.path().join("lan.crt");
+        let key_path = tmp.path().join("lan.key");
+        let status = std::process::Command::new("openssl")
+            .args([
+                "req",
+                "-x509",
+                "-newkey",
+                "ec",
+                "-pkeyopt",
+                "ec_paramgen_curve:prime256v1",
+                "-keyout",
+            ])
+            .arg(&key_path)
+            .arg("-out")
+            .arg(&cert_path)
+            .args(["-days", "1", "-nodes", "-subj", "/CN=localhost"])
+            .status()
+            .expect("openssl available for TLS test");
+        assert!(status.success(), "openssl self-signed cert generation failed");
+
+        let mcp_sub = Router::new().route("/", get(|| async { "mcp-ok" }));
+        let https_app = Router::new()
+            .route("/health", get(health))
+            .route("/quantssl/ca.crt", get(|| async { "ca-pem" }))
+            .route("/quantssl/status", get(|| async { "status-secret" }))
+            .route("/info", get(|| async { "info-ok" }))
+            .nest_service("/mcp", mcp_sub)
+            .layer(middleware::from_fn_with_state(
+                AuthState::require_token(vec!["st_28443_secret".to_string()]),
+                auth_middleware,
+            ));
+
+        // Pick an ephemeral port, then bind the native TLS listener to it.
+        let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let bind_addr = probe.local_addr().unwrap();
+        drop(probe);
+
+        let (stop_tx, stop_rx) = oneshot::channel();
+        let handle = spawn_quantssl_https_server(
+            bind_addr,
+            cert_path,
+            key_path,
+            https_app,
+            stop_rx,
+        )
+        .await
+        .unwrap();
+
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .no_proxy()
+            .build()
+            .unwrap();
+        let base = format!("https://{bind_addr}");
+
+        // Public endpoints on 28443: /health and /quantssl/ca.crt only.
+        assert_eq!(
+            client.get(format!("{base}/health")).send().await.unwrap().status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            client
+                .get(format!("{base}/quantssl/ca.crt"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+
+        // Protected endpoints MUST reject unauthenticated requests even from 127.0.0.1.
+        for path in ["/info", "/mcp", "/quantssl/status"] {
+            let r = client.get(format!("{base}{path}")).send().await.unwrap();
+            assert_eq!(
+                r.status(),
+                StatusCode::UNAUTHORIZED,
+                "expected 401 without token on HTTPS {path}"
+            );
+            assert!(r.headers().contains_key("www-authenticate"));
+        }
+
+        // Wrong token rejected.
+        assert_eq!(
+            client
+                .get(format!("{base}/info"))
+                .header("Authorization", "Bearer st_wrong")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        // Valid Bearer token accepted.
+        assert_eq!(
+            client
+                .get(format!("{base}/info"))
+                .header("Authorization", "Bearer st_28443_secret")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            client
+                .get(format!("{base}/mcp"))
+                .header("Authorization", "Bearer st_28443_secret")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+
+        // Valid ?token= query accepted and sets HttpOnly Secure SameSite=Strict cookie.
+        let q_resp = client
+            .get(format!("{base}/info?token=st_28443_secret"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(q_resp.status(), StatusCode::OK);
+        let set_cookie = q_resp
+            .headers()
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(set_cookie.contains("st_daemon_token=st_28443_secret"));
+        assert!(set_cookie.contains("HttpOnly"));
+        assert!(set_cookie.contains("Secure"));
+
+        // Valid cookie accepted; invalid cookie rejected.
+        assert_eq!(
+            client
+                .get(format!("{base}/mcp"))
+                .header("Cookie", "st_daemon_token=st_28443_secret")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            client
+                .get(format!("{base}/mcp"))
+                .header("Cookie", "st_daemon_token=wrong")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        let _ = stop_tx.send(());
+        let _ = handle.await;
     }
 }
