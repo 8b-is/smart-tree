@@ -557,6 +557,10 @@ async fn main() -> Result<()> {
             no_forks: false,
             no_archived: false,
             quarantine: cli.scan_opts.quarantine,
+            publish_8a: cli.scan_opts.publish_8a,
+            publish_private: cli.scan_opts.publish_private,
+            publish_studio: cli.scan_opts.publish_studio,
+            eighta_origin: cli.scan_opts.eighta_origin.clone(),
         };
         return handle_sync_user(&sync_cmd).await;
     }

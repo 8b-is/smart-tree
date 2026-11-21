@@ -828,6 +828,27 @@ pub struct ScanArgs {
     /// Quarantine diverged/broken repos into .diverged/ or .sync-issues/ with a DIFF_REPORT.md and reclone clean copies
     #[arg(long, alias = "quarantine-blocked", help_heading = "GitHub Sync")]
     pub quarantine: bool,
+
+    /// Filter and upload synced public repositories to 8a.is (fail-closed: private/unknown repos are skipped unless --publish-private + id1.is token)
+    #[arg(long = "publish-8a", help_heading = "GitHub Sync")]
+    pub publish_8a: bool,
+
+    /// Explicitly allow uploading private repositories to 8a.is as private pads (requires id1.is token via EIGHTA_ID1_TOKEN / ID1_TOKEN / ~/.config/8a/id1.token)
+    #[arg(long = "publish-private", help_heading = "GitHub Sync")]
+    pub publish_private: bool,
+
+    /// Trigger Sovereign A6000 Studio (Executive Brief, Study Guide, Mermaid Map & 2-Host Podcast) on 8a.is after publishing
+    #[arg(long = "publish-studio", help_heading = "GitHub Sync")]
+    pub publish_studio: bool,
+
+    /// Destination 8a.is origin URL for --publish-8a (default: https://8a.is)
+    #[arg(
+        long = "eighta-origin",
+        value_name = "URL",
+        default_value = "https://8a.is",
+        help_heading = "GitHub Sync"
+    )]
+    pub eighta_origin: String,
 }
 
 #[derive(Debug, Subcommand)]
@@ -1109,6 +1130,18 @@ pub struct SyncUserCommand {
     /// Quarantine diverged/broken repos into .diverged/ or .sync-issues/ with a DIFF_REPORT.md and reclone clean copies
     #[arg(long, alias = "quarantine-blocked")]
     pub quarantine: bool,
+    /// Filter and upload synced public repositories to 8a.is (fail-closed: private/unknown repos are skipped unless --publish-private + id1.is token)
+    #[arg(long = "publish-8a")]
+    pub publish_8a: bool,
+    /// Explicitly allow uploading private repositories to 8a.is as private pads (requires id1.is token)
+    #[arg(long = "publish-private")]
+    pub publish_private: bool,
+    /// Trigger Sovereign A6000 Studio (Brief, Study Guide, Mermaid Map & 2-Host Podcast) on 8a.is after publishing
+    #[arg(long = "publish-studio")]
+    pub publish_studio: bool,
+    /// Destination 8a.is origin URL for --publish-8a (default: https://8a.is)
+    #[arg(long = "eighta-origin", value_name = "URL", default_value = "https://8a.is")]
+    pub eighta_origin: String,
 }
 
 /// Remember command for salient MEM8 ingestion from git forges or paths.

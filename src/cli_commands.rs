@@ -2285,6 +2285,358 @@ struct GhRepoEntry {
     updated_at: Option<String>,
     #[serde(default)]
     url: Option<String>,
+    #[serde(rename = "isPrivate", default)]
+    is_private: Option<bool>,
+    #[serde(default)]
+    visibility: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Publish8aPermission {
+    PublishPublic,
+    PublishPrivate,
+    SkipPrivateNoPermission,
+    SkipUnknownVisibility,
+}
+
+/// Fail-closed privacy gate for `st sync --publish-8a`:
+/// - Auto-uploads ONLY when GitHub explicitly reports the repository as public (`isPrivate == false`
+///   and visibility is not private/internal).
+/// - Private/internal repositories are skipped unless BOTH `--publish-private` AND an `id1.is` token
+///   are explicitly supplied (and then uploaded strictly with `visibility: "private"`).
+/// - Unknown visibility (e.g. offline/fallback local discovery) is NEVER assumed public.
+fn classify_repo_publish_permission(
+    entry: &GhRepoEntry,
+    publish_private: bool,
+    has_id1_token: bool,
+) -> Publish8aPermission {
+    let vis_upper = entry
+        .visibility
+        .as_deref()
+        .map(|v| v.trim().to_ascii_uppercase());
+    let explicitly_non_public = matches!(vis_upper.as_deref(), Some("PRIVATE") | Some("INTERNAL"));
+    if explicitly_non_public || entry.is_private == Some(true) {
+        if publish_private && has_id1_token {
+            Publish8aPermission::PublishPrivate
+        } else {
+            Publish8aPermission::SkipPrivateNoPermission
+        }
+    } else if entry.is_private == Some(false) || vis_upper.as_deref() == Some("PUBLIC") {
+        Publish8aPermission::PublishPublic
+    } else {
+        Publish8aPermission::SkipUnknownVisibility
+    }
+}
+
+fn resolve_eighta_id1_token() -> Option<String> {
+    for var in ["EIGHTA_ID1_TOKEN", "ID1_TOKEN"] {
+        if let Ok(v) = std::env::var(var) {
+            let trimmed = v.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        let p = home.join(".config").join("8a").join("id1.token");
+        if let Ok(raw) = std::fs::read_to_string(p) {
+            let trimmed = raw.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn is_sensitive_publish_path(rel_path: &str) -> bool {
+    let lower = rel_path.to_ascii_lowercase();
+    for seg in lower.split('/') {
+        if seg == ".git"
+            || seg == "target"
+            || seg == "node_modules"
+            || seg == ".venv"
+            || seg == "venv"
+            || seg == ".env"
+            || seg.starts_with(".env.")
+            || seg.contains("secret")
+            || seg.contains("credential")
+            || seg == "id_rsa"
+            || seg == "id_ed25519"
+            || seg.ends_with(".pem")
+            || seg.ends_with(".key")
+            || seg.ends_with(".p12")
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn contains_8a_secret_material(text: &str) -> bool {
+    const MARKERS: &[&str] = &[
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "-----BEGIN EC PRIVATE KEY-----",
+        "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+        "ghp_",
+        "gho_",
+        "github_pat_",
+        "xoxb-",
+        "xoxp-",
+        "AKIA",
+        "id1_sk_",
+        "AIzaSy",
+        "sk-proj-",
+        "sk-ant-",
+    ];
+    MARKERS.iter().any(|m| text.contains(m))
+}
+
+fn sanitize_8a_slug_segment(s: &str) -> String {
+    let mut out = String::new();
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+            out.push(ch.to_ascii_lowercase());
+        } else if ch == ' ' {
+            out.push('-');
+        }
+    }
+    out.trim_matches('.').to_string()
+}
+
+fn collect_filtered_repo_docs_for_8a(
+    user: &str,
+    repo_name: &str,
+    repo_dir: &std::path::Path,
+    visibility: &str,
+) -> Vec<serde_json::Value> {
+    let prefix = format!(
+        "repos/{}/{}",
+        sanitize_8a_slug_segment(user),
+        sanitize_8a_slug_segment(repo_name)
+    );
+    let mut docs: Vec<serde_json::Value> = Vec::new();
+    let max_docs = 24usize;
+    let max_doc_bytes = 200_000usize;
+
+    // 1. Optional icepick multimodal digest if installed on PATH / ~/.local/bin/icepick
+    let icepick_bin = dirs::home_dir()
+        .map(|h| h.join(".local/bin/icepick"))
+        .filter(|p| p.is_file())
+        .unwrap_or_else(|| PathBuf::from("icepick"));
+    if let Ok(out) = std::process::Command::new(&icepick_bin)
+        .args(["gather", "--format", "markdown"])
+        .arg(repo_dir)
+        .output()
+    {
+        if out.status.success() && !out.stdout.is_empty() {
+            let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
+            if text.len() > max_doc_bytes {
+                let mut cut = max_doc_bytes;
+                while cut > 0 && !text.is_char_boundary(cut) {
+                    cut -= 1;
+                }
+                text.truncate(cut);
+            }
+            if !text.trim().is_empty() && !contains_8a_secret_material(&text) {
+                docs.push(serde_json::json!({
+                    "slug": format!("{prefix}/icepick-digest"),
+                    "content": text,
+                    "visibility": visibility,
+                }));
+            }
+        }
+    }
+
+    // 2. Walk clean Markdown / LaTeX docs in the repository with strict secret filtering
+    let mut stack = vec![repo_dir.to_path_buf()];
+    let mut candidates: Vec<(String, PathBuf, u64)> = Vec::new();
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in rd.flatten() {
+            let p = entry.path();
+            let Ok(rel) = p.strip_prefix(repo_dir) else {
+                continue;
+            };
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            if is_sensitive_publish_path(&rel_str) {
+                continue;
+            }
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if meta.is_dir() {
+                stack.push(p);
+                continue;
+            }
+            if !meta.is_file() || meta.len() == 0 || meta.len() as usize > max_doc_bytes {
+                continue;
+            }
+            let ext = p
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
+            if !matches!(ext.as_str(), "md" | "markdown" | "txt" | "tex") {
+                continue;
+            }
+            let mtime = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            candidates.push((rel_str, p, mtime));
+        }
+    }
+    // Prioritize README first, then shallowest paths alphabetically
+    candidates.sort_by(|a, b| {
+        let a_readme = a.0.to_ascii_lowercase().ends_with("readme.md");
+        let b_readme = b.0.to_ascii_lowercase().ends_with("readme.md");
+        b_readme
+            .cmp(&a_readme)
+            .then_with(|| a.0.matches('/').count().cmp(&b.0.matches('/').count()))
+            .then_with(|| a.0.cmp(&b.0))
+    });
+
+    for (rel_str, p, mtime) in candidates {
+        if docs.len() >= max_docs {
+            break;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        if content.trim().is_empty() || contains_8a_secret_material(&content) {
+            continue;
+        }
+        let stem = rel_str
+            .strip_suffix(".md")
+            .or_else(|| rel_str.strip_suffix(".markdown"))
+            .unwrap_or(&rel_str);
+        let slug_parts: Vec<String> = stem
+            .split('/')
+            .map(sanitize_8a_slug_segment)
+            .filter(|s| !s.is_empty())
+            .collect();
+        if slug_parts.is_empty() {
+            continue;
+        }
+        let slug = format!("{prefix}/{}", slug_parts.join("/"));
+        docs.push(serde_json::json!({
+            "slug": slug,
+            "content": content,
+            "updated_at": mtime,
+            "visibility": visibility,
+        }));
+    }
+    docs
+}
+
+fn publish_repo_to_8a(
+    origin: &str,
+    user: &str,
+    repo: &GhRepoEntry,
+    repo_dir: &std::path::Path,
+    visibility: &str,
+    trigger_studio: bool,
+    id1_token: Option<&str>,
+) -> Result<String> {
+    let base = origin.trim_end_matches('/');
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+
+    let prefix = format!(
+        "repos/{}/{}",
+        sanitize_8a_slug_segment(user),
+        sanitize_8a_slug_segment(&repo.name)
+    );
+
+    if let Some(tok) = id1_token {
+        let docs = collect_filtered_repo_docs_for_8a(user, &repo.name, repo_dir, visibility);
+        if docs.is_empty() {
+            return Ok("0 clean docs found (skipped)".into());
+        }
+        let resp = client
+            .post(format!("{base}/api/import"))
+            .header("X-Id1-Token", tok)
+            .json(&serde_json::json!({ "docs": docs }))
+            .send()?;
+        let status = resp.status();
+        let body: serde_json::Value = resp.json().unwrap_or_default();
+        if !status.is_success() {
+            anyhow::bail!(
+                "8a.is /api/import HTTP {}: {}",
+                status.as_u16(),
+                body.get("error").and_then(|v| v.as_str()).unwrap_or("error")
+            );
+        }
+        let imported = body.get("imported").and_then(|v| v.as_u64()).unwrap_or(0);
+        let mut note = format!("uploaded {imported} filtered {visibility} docs -> {base}/{prefix}");
+        if trigger_studio {
+            let repo_url = repo
+                .url
+                .clone()
+                .unwrap_or_else(|| format!("https://github.com/{}/{}", user, repo.name));
+            let s_resp = client
+                .post(format!("{base}/api/repos/studio"))
+                .header("X-Id1-Token", tok)
+                .json(&serde_json::json!({
+                    "prefix": prefix,
+                    "repo_url": repo_url,
+                    "visibility": visibility,
+                    "generate_podcast": true,
+                }))
+                .send()?;
+            if s_resp.status().is_success() {
+                let sj: serde_json::Value = s_resp.json().unwrap_or_default();
+                let jid = sj
+                    .get("job")
+                    .and_then(|j| j.get("id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("queued");
+                note.push_str(&format!(" + A6000 studio ({jid})"));
+            }
+        }
+        return Ok(note);
+    }
+
+    // Without an id1.is token, ONLY public repos may trigger 8a.is's public repo ingestor.
+    if visibility != "public" {
+        anyhow::bail!("Refused private upload without id1.is token");
+    }
+    let repo_slug = format!("{}/{}", user, repo.name);
+    let resp = client
+        .post(format!("{base}/api/repos/ingest"))
+        .json(&serde_json::json!({
+            "repo": repo_slug,
+            "visibility": "public",
+            "generate_studio": trigger_studio,
+            "generate_podcast": trigger_studio,
+        }))
+        .send()?;
+    let status = resp.status();
+    let body: serde_json::Value = resp.json().unwrap_or_default();
+    if !status.is_success() {
+        anyhow::bail!(
+            "8a.is /api/repos/ingest HTTP {}: {}",
+            status.as_u16(),
+            body.get("error").and_then(|v| v.as_str()).unwrap_or("error")
+        );
+    }
+    let jid = body
+        .get("job")
+        .and_then(|j| j.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("queued");
+    Ok(format!(
+        "queued public ingest on {base}/{prefix} (job {jid}{})",
+        if trigger_studio { " + A6000 studio" } else { "" }
+    ))
 }
 
 fn resolve_sync_user_and_dir(cmd: &crate::cli::SyncUserCommand) -> Result<(String, PathBuf)> {
@@ -2376,7 +2728,7 @@ fn discover_github_repositories(
         gh_args.push("--no-archived".to_string());
     }
     gh_args.push("--json".to_string());
-    gh_args.push("name,pushedAt,updatedAt,url".to_string());
+    gh_args.push("name,pushedAt,updatedAt,url,isPrivate,visibility".to_string());
 
     let max_attempts = if allow_fallback { 3 } else { 1 };
     let mut last_stderr = String::new();
@@ -2429,12 +2781,27 @@ fn discover_github_repositories(
                     if name.is_empty() {
                         return None;
                     }
+                    let vis_col = cols.get(2).map(|s| s.trim().to_ascii_lowercase());
+                    let is_private = match vis_col.as_deref() {
+                        Some(v) if v.starts_with("public") => Some(false),
+                        Some(v) if v.starts_with("private") || v.starts_with("internal") => {
+                            Some(true)
+                        }
+                        _ => None,
+                    };
+                    let visibility = match is_private {
+                        Some(false) => Some("PUBLIC".to_string()),
+                        Some(true) => Some("PRIVATE".to_string()),
+                        None => None,
+                    };
                     let updated = cols.get(3).map(|s| s.trim().to_string());
                     Some(GhRepoEntry {
                         name: name.to_string(),
                         pushed_at: updated.clone(),
                         updated_at: updated,
                         url: Some(format!("https://github.com/{}/{}", user, name)),
+                        is_private,
+                        visibility,
                     })
                 })
                 .collect();
@@ -2456,6 +2823,8 @@ fn discover_github_repositories(
                         pushed_at: None,
                         updated_at: None,
                         url: Some(format!("https://github.com/{}/{}.git", user, name)),
+                        is_private: None,
+                        visibility: None,
                     });
                 }
             }
@@ -2555,11 +2924,39 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     let blocked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let fetched_only = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let quarantined = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let published_8a = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let skipped_private_8a = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let healed_lessons = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, String)>::new()));
 
     let num_workers = cmd.jobs.clamp(1, 16);
     let refresh_all = cmd.refresh_all;
     let quarantine_enabled = cmd.quarantine;
+    let publish_8a_enabled = cmd.publish_8a;
+    let publish_private_enabled = cmd.publish_private;
+    let publish_studio_enabled = cmd.publish_studio;
+    let eighta_origin = cmd.eighta_origin.clone();
+    let eighta_id1_token = if publish_8a_enabled {
+        resolve_eighta_id1_token()
+    } else {
+        None
+    };
+    if publish_8a_enabled {
+        if publish_private_enabled && eighta_id1_token.is_none() {
+            eprintln!(
+                "🔒 --publish-private requested, but no id1.is token found (set EIGHTA_ID1_TOKEN, ID1_TOKEN, or ~/.config/8a/id1.token); private repos will remain skipped (fail-closed)."
+            );
+        }
+        println!(
+            "📡 8a.is auto-publish active → {} (public filter: fail-closed{}, studio: {})",
+            eighta_origin,
+            if publish_private_enabled && eighta_id1_token.is_some() {
+                " + private opt-in via id1.is"
+            } else {
+                ", private repos skipped"
+            },
+            if publish_studio_enabled { "on" } else { "off" }
+        );
+    }
     let mut handles = Vec::with_capacity(num_workers);
 
     for _ in 0..num_workers {
@@ -2574,9 +2971,13 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
         let blocked = std::sync::Arc::clone(&blocked);
         let fetched_only = std::sync::Arc::clone(&fetched_only);
         let quarantined = std::sync::Arc::clone(&quarantined);
+        let published_8a = std::sync::Arc::clone(&published_8a);
+        let skipped_private_8a = std::sync::Arc::clone(&skipped_private_8a);
         let healed_lessons = std::sync::Arc::clone(&healed_lessons);
         let user = user.clone();
         let user_dir = user_dir.clone();
+        let eighta_origin = eighta_origin.clone();
+        let eighta_id1_token = eighta_id1_token.clone();
 
         handles.push(std::thread::spawn(move || loop {
             let item = {
@@ -2611,8 +3012,8 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
                 })
                 .unwrap_or_else(|| format!("https://github.com/{}/{}.git", user, repo.name));
 
-            let pushed_at = repo.pushed_at.unwrap_or_default();
-            let updated_at = repo.updated_at.unwrap_or_default();
+            let pushed_at = repo.pushed_at.clone().unwrap_or_default();
+            let updated_at = repo.updated_at.clone().unwrap_or_default();
 
             if model_heal_enabled {
                 pre_heal_repository(&repo_dir);
@@ -2769,6 +3170,73 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
                             &repo_dir, 0, 2,
                         );
                 }
+
+                if publish_8a_enabled && repo_dir.is_dir() {
+                    let perm = classify_repo_publish_permission(
+                        &repo,
+                        publish_private_enabled,
+                        eighta_id1_token.is_some(),
+                    );
+                    match perm {
+                        Publish8aPermission::PublishPublic | Publish8aPermission::PublishPrivate => {
+                            let vis = if perm == Publish8aPermission::PublishPrivate {
+                                "private"
+                            } else {
+                                "public"
+                            };
+                            match publish_repo_to_8a(
+                                &eighta_origin,
+                                &user,
+                                &repo,
+                                &repo_dir,
+                                vis,
+                                publish_studio_enabled,
+                                eighta_id1_token.as_deref(),
+                            ) {
+                                Ok(msg) => {
+                                    published_8a.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    println!(
+                                        "📡 [{}/{}] 8a.is {}/{}: {}",
+                                        idx + 1,
+                                        total,
+                                        user,
+                                        repo.name,
+                                        msg
+                                    );
+                                }
+                                Err(err) => {
+                                    eprintln!(
+                                        "⚠️ [{}/{}] 8a.is publish failed for {}/{}: {err:#}",
+                                        idx + 1,
+                                        total,
+                                        user,
+                                        repo.name
+                                    );
+                                }
+                            }
+                        }
+                        Publish8aPermission::SkipPrivateNoPermission => {
+                            skipped_private_8a.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            println!(
+                                "🔒 [{}/{}] Skipped private repo {}/{} for 8a.is (pass --publish-private + id1.is token to opt in)",
+                                idx + 1,
+                                total,
+                                user,
+                                repo.name
+                            );
+                        }
+                        Publish8aPermission::SkipUnknownVisibility => {
+                            skipped_private_8a.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            println!(
+                                "🔒 [{}/{}] Skipped {}/{} for 8a.is (visibility unknown — fail-closed)",
+                                idx + 1,
+                                total,
+                                user,
+                                repo.name
+                            );
+                        }
+                    }
+                }
             }
 
             let mut guard = state.lock().unwrap();
@@ -2906,6 +3374,14 @@ pub async fn handle_sync_user(cmd: &crate::cli::SyncUserCommand) -> Result<()> {
     );
     if let Some(salient_line) = salient_summary_line {
         println!("{}", salient_line);
+    }
+    if publish_8a_enabled {
+        println!(
+            "   8a.is publish: {} published, {} private/unknown skipped (fail-closed) -> {}",
+            published_8a.load(std::sync::atomic::Ordering::Relaxed),
+            skipped_private_8a.load(std::sync::atomic::Ordering::Relaxed),
+            eighta_origin
+        );
     }
     if !model_heal_enabled {
         anyhow::ensure!(f == 0, "GitHub sync failed for {f} repositories");
@@ -4942,6 +5418,92 @@ mod sync_tests {
         assert_eq!(git(&empty_clone, &["rev-parse", "HEAD"]), first_sha);
     }
 
+    #[test]
+    fn publish_8a_permission_is_fail_closed_for_private_and_unknown_repos() {
+        let public_repo = GhRepoEntry {
+            name: "dark-energy".into(),
+            pushed_at: None,
+            updated_at: None,
+            url: None,
+            is_private: Some(false),
+            visibility: Some("PUBLIC".into()),
+        };
+        let private_repo = GhRepoEntry {
+            name: "secret-vault".into(),
+            pushed_at: None,
+            updated_at: None,
+            url: None,
+            is_private: Some(true),
+            visibility: Some("PRIVATE".into()),
+        };
+        let unknown_repo = GhRepoEntry {
+            name: "offline-clone".into(),
+            pushed_at: None,
+            updated_at: None,
+            url: None,
+            is_private: None,
+            visibility: None,
+        };
+        let internal_contradiction = GhRepoEntry {
+            name: "corp-internal".into(),
+            pushed_at: None,
+            updated_at: None,
+            url: None,
+            is_private: Some(false),
+            visibility: Some("INTERNAL".into()),
+        };
+
+        // Public repos publish without needing --publish-private or token
+        assert_eq!(
+            classify_repo_publish_permission(&public_repo, false, false),
+            Publish8aPermission::PublishPublic
+        );
+        // Private repos are ALWAYS skipped unless BOTH --publish-private AND an id1.is token are present
+        assert_eq!(
+            classify_repo_publish_permission(&private_repo, false, false),
+            Publish8aPermission::SkipPrivateNoPermission
+        );
+        assert_eq!(
+            classify_repo_publish_permission(&private_repo, false, true),
+            Publish8aPermission::SkipPrivateNoPermission
+        );
+        assert_eq!(
+            classify_repo_publish_permission(&private_repo, true, false),
+            Publish8aPermission::SkipPrivateNoPermission
+        );
+        assert_eq!(
+            classify_repo_publish_permission(&private_repo, true, true),
+            Publish8aPermission::PublishPrivate
+        );
+        // Unknown visibility is strictly fail-closed even if --publish-private + token are set
+        assert_eq!(
+            classify_repo_publish_permission(&unknown_repo, false, false),
+            Publish8aPermission::SkipUnknownVisibility
+        );
+        assert_eq!(
+            classify_repo_publish_permission(&unknown_repo, true, true),
+            Publish8aPermission::SkipUnknownVisibility
+        );
+        // INTERNAL visibility overrides is_private == Some(false)
+        assert_eq!(
+            classify_repo_publish_permission(&internal_contradiction, false, true),
+            Publish8aPermission::SkipPrivateNoPermission
+        );
+    }
+
+    #[test]
+    fn publish_8a_secret_filter_blocks_keys_and_env_files() {
+        assert!(is_sensitive_publish_path(".env"));
+        assert!(is_sensitive_publish_path("config/.env.production"));
+        assert!(is_sensitive_publish_path("keys/id_ed25519"));
+        assert!(is_sensitive_publish_path("secrets/token.md"));
+        assert!(!is_sensitive_publish_path("docs/README.md"));
+        assert!(contains_8a_secret_material("-----BEGIN OPENSSH PRIVATE KEY-----"));
+        assert!(contains_8a_secret_material("key = ghp_1234567890abcdef"));
+        assert!(contains_8a_secret_material("id1_sk_supersecret"));
+        assert!(!contains_8a_secret_material("# Public Physics Paper\nClean markdown."));
+    }
+
     #[tokio::test]
     async fn corrupt_cache_is_preserved_and_lock_released_on_error() {
         let temp = temp_dir();
@@ -4958,6 +5520,10 @@ mod sync_tests {
             no_forks: false,
             no_archived: false,
             quarantine: false,
+            publish_8a: false,
+            publish_private: false,
+            publish_studio: false,
+            eighta_origin: "https://8a.is".into(),
         };
         assert!(handle_sync_user(&cmd)
             .await
@@ -4982,6 +5548,10 @@ mod sync_tests {
             no_forks: false,
             no_archived: false,
             quarantine: false,
+            publish_8a: false,
+            publish_private: false,
+            publish_studio: false,
+            eighta_origin: "https://8a.is".into(),
         };
         let result = tokio::runtime::Runtime::new()
             .unwrap()
