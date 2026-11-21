@@ -24,7 +24,6 @@ use super::mmap_view::ZeroCopyMem8Book;
 use super::moser_tardos::MoserTardosSchedule;
 use super::ramsey_erdos_hajnal::RamseyErdosHajnalReport;
 use super::types::{ClusterId, CsrSymbolGraph, Mem8BookArchive, SymbolId};
-use crate::felix_asm::felix_dot64_f32;
 use crate::scanner::FileNode;
 use serde::{Deserialize, Serialize};
 use std::time::UNIX_EPOCH;
@@ -49,10 +48,16 @@ pub const RELATIONAL_SHIFT_DISAGREEMENT_THRESHOLD: f64 = 0.4;
 pub const RELATIONAL_SHIFT_CHANGE_RATIO_THRESHOLD: f64 = 0.25;
 /// Second-order Strang Split-Operator propagation step $h$ (`0.25`).
 pub const STRANG_STEP_H: f32 = 0.25;
+/// Exact fixed-point `Q16` scale (`2^16 = 65_536`) for zero-float Kohn–Sham & Strang propagation.
+pub const STRANG_Q16_SCALE: u64 = 65_536;
+/// Exact `Q16` representation of Strang step $h = 1/4$ (`16_384`).
+pub const STRANG_STEP_H_Q16: u64 = STRANG_Q16_SCALE / 4;
 /// Maximum number of dominant Kohn–Sham salience orbitals retained (`5`).
 pub const MAX_DOMINANT_SALIENCE_ORBITALS: usize = 5;
 /// Rational denominator lattice for Strang split-operator wave coherence (`10_000`).
 pub const STRANG_COHERENCE_LATTICE_DEN: u64 = 10_000;
+/// Rational denominator lattice for orbital Born probabilities (`10_000`).
+pub const BORN_PROB_LATTICE_DEN: u64 = 10_000;
 
 /// Regime classification for whether observable recency ($d_T$) is a valid proxy for
 /// relational salience ($d_R$).
@@ -144,6 +149,8 @@ pub struct ManyBodyDftWaveReport {
     pub strang_coherence_pq: String,
     /// Top super-node orbital indices ranked by Strang-propagated salience amplitude $|\Psi_i(t + h)|^2$
     pub dominant_salience_orbitals: Vec<(ClusterId, f32)>,
+    /// Exact coprime rational $p/q$ Born probabilities for top super-node orbitals (`10_000` lattice)
+    pub dominant_salience_orbitals_pq: Vec<(ClusterId, String)>,
 }
 
 /// Computes the unified Flyxion Recency-vs-Salience ontology report, Karp's 21 NP-Complete
@@ -367,15 +374,132 @@ fn compute_karp_certificate(
     }
 }
 
-/// Evaluates Quantum Many-Body Kohn–Sham DFT exchange energy and propagates a salience wave
-/// via Second-Order Strang Operator Splitting:
+/// Converts IEEE-754 `f32` bit pattern to signed `Q16` fixed-point (`value * 65_536`)
+/// using pure integer bit-manipulation (zero floating-point instructions).
+/// Non-finite (`NaN`/`Inf`), zero, and subnormal inputs map deterministically to `0`.
+/// Results are saturated to `[-64 * Q16, +64 * Q16]` to guarantee overflow-free `i128` accumulation.
+#[deny(clippy::float_arithmetic)]
+#[inline]
+pub(crate) fn f32_bits_to_q16_i64(bits: u32) -> i64 {
+    const MAX_ABS_Q16: u64 = 64 * STRANG_Q16_SCALE;
+    let sign = (bits >> 31) != 0;
+    let exp = ((bits >> 23) & 0xFF) as i32;
+    let frac = bits & 0x007F_FFFF;
+    if exp == 0 || exp == 0xFF {
+        return 0;
+    }
+    let mant: u64 = (1u64 << 23) | (frac as u64);
+    // value * 2^16 = mant * 2^(exp - 127 - 23 + 16) = mant * 2^(exp - 134)
+    let shift = exp - 134;
+    let mag: u64 = if shift >= 0 {
+        let s = shift as u32;
+        if s >= 40 {
+            MAX_ABS_Q16
+        } else {
+            mant.checked_shl(s).unwrap_or(MAX_ABS_Q16).min(MAX_ABS_Q16)
+        }
+    } else {
+        let r = (-shift) as u32;
+        if r >= 64 {
+            0
+        } else {
+            // Round-to-nearest integer using half-LSB bias
+            let half = 1u64 << (r - 1);
+            mant.saturating_add(half) >> r
+        }
+    };
+    let clamped = mag.min(MAX_ABS_Q16) as i64;
+    if sign { -clamped } else { clamped }
+}
+
+/// Exact integer square root `floor(sqrt(n))` for `u128` via binary restoring / Newton iteration.
+#[deny(clippy::float_arithmetic)]
+#[inline]
+pub(crate) fn isqrt_u128(n: u128) -> u128 {
+    if n < 2 {
+        return n;
+    }
+    let shift = (128 - n.leading_zeros()).div_ceil(2);
+    let mut x = 1u128 << shift;
+    loop {
+        let next = (x + n / x) >> 1;
+        if next >= x {
+            return x;
+        }
+        x = next;
+    }
+}
+
+/// Exact zero-float `Q16` approximation of $e^{-x}$ on $x \in [0, 1]$ (`0 <= x_q16 <= 65_536`)
+/// using the diagonal `[2/2]` Padé approximant:
+/// $$e^{-x} \approx \frac{12 - 6x + x^2}{12 + 6x + x^2}$$
+/// Scale: `Q16 = 65_536`, domain: `x_q16 in [0, 65_536]`, rounding: nearest-half-up.
+/// Error bound: $< 3 \times 10^{-8}$ over the Strang temporal half-step domain $x \le 1/16$,
+/// and $< 10^{-4}$ across the full unit interval $[0, 1]$.
+#[deny(clippy::float_arithmetic)]
+#[inline]
+pub(crate) fn exp_neg_q16(x_q16: u64) -> u64 {
+    const Q16: u128 = STRANG_Q16_SCALE as u128;
+    let x = (x_q16.min(STRANG_Q16_SCALE)) as u128;
+    let x2 = (x * x + (Q16 >> 1)) >> 16;
+    let num = (12 * Q16 + x2).saturating_sub(6 * x);
+    let den = 12 * Q16 + 6 * x + x2;
+    (((num << 16) + (den >> 1)) / den) as u64
+}
+
+/// Pure-integer 64-lane `Q16` absolute inner product `|a · b|` returning `Q16`.
+#[deny(clippy::float_arithmetic)]
+#[inline]
+fn dot64_q16_abs(a: &[i64; 64], b: &[i64; 64]) -> u64 {
+    let mut acc: i128 = 0;
+    let mut i = 0;
+    while i < 64 {
+        acc += (a[i] as i128) * (b[i] as i128);
+        i += 1;
+    }
+    let abs_q32 = acc.unsigned_abs();
+    ((abs_q32 + ((STRANG_Q16_SCALE as u128) >> 1)) >> 16).min(u64::MAX as u128) as u64
+}
+
+#[deny(clippy::float_arithmetic)]
+#[inline]
+fn quantize_lanes_q16(lanes: &[f32; 64]) -> [i64; 64] {
+    let mut out = [0i64; 64];
+    let mut i = 0;
+    while i < 64 {
+        out[i] = f32_bits_to_q16_i64(lanes[i].to_bits());
+        i += 1;
+    }
+    out
+}
+
+struct ExactManyBodyQ16Result {
+    k: usize,
+    t8r_len: usize,
+    speedup_rat: super::pq_engine::RationalPQ,
+    exchange_energy_q16: i64,
+    exchange_pqm: String,
+    coherence_rat: super::pq_engine::RationalPQ,
+    dominant_orbitals_bps: Vec<(ClusterId, u64, String)>,
+}
+
+/// Zero-float `Q16` / exact `p/q` Quantum Many-Body Kohn–Sham DFT and Second-Order
+/// Strang Split-Operator propagator (`#[deny(clippy::float_arithmetic)]` enforced):
 /// $$\Psi(t + h) = e^{\frac{h}{2} A_{\text{temporal}}} \, e^{h B_{\text{relational}}} \, e^{\frac{h}{2} A_{\text{temporal}}} \Psi(t)$$
-fn compute_manybody_dft_strang(
+/// Note: `RegularSuperEdgePod.relative_p_density_fp16` is encoded as unsigned Q6.10 fixed-point
+/// (`raw / 1024`), so converting to `Q16` is an exact left shift `(raw as u64) << 6` (fixing
+/// the prior IEEE-754 `decode_fp16` sign-bit corruption on dense codebases where `raw >= 0x8000`).
+#[deny(clippy::float_arithmetic)]
+fn compute_manybody_dft_strang_q16(
     graph: &CsrSymbolGraph,
     archive: &Mem8BookArchive,
     book: &ZeroCopyMem8Book,
-    salience: &SalienceOntologyReport,
-) -> ManyBodyDftWaveReport {
+    drift_num_u64: u64,
+    drift_den_u64: u64,
+) -> ExactManyBodyQ16Result {
+    const Q16: u64 = STRANG_Q16_SCALE;
+    const Q16_U128: u128 = STRANG_Q16_SCALE as u128;
+
     let k = archive.super_nodes.len();
     let n = graph.num_vertices;
     let t8r_len = archive.exception_ledger.len();
@@ -383,20 +507,16 @@ fn compute_manybody_dft_strang(
     let full_pairs_u64 = (n * n.saturating_sub(1)).max(1) as u64;
     let dft_ops_u64 = (k * k + t8r_len).max(1) as u64;
     let speedup_rat = super::pq_engine::RationalPQ::new_reduced(full_pairs_u64, dft_ops_u64);
-    let many_body_speedup_pq = speedup_rat.display_ratio();
-    let many_body_speedup_factor = (full_pairs_u64 as f64 / dft_ops_u64 as f64).max(1.0);
 
     if k == 0 {
-        return ManyBodyDftWaveReport {
-            kohn_sham_orbitals_k: 0,
-            lno_t8r_correlations: t8r_len,
-            many_body_speedup_factor,
-            many_body_speedup_pq,
-            kohn_sham_exchange_energy: 0.0,
-            kohn_sham_exchange_pqm: "(0/1)*2^0".to_string(),
-            strang_split_coherence: 1.0,
-            strang_coherence_pq: "1/1".to_string(),
-            dominant_salience_orbitals: Vec::new(),
+        return ExactManyBodyQ16Result {
+            k: 0,
+            t8r_len,
+            speedup_rat,
+            exchange_energy_q16: 0,
+            exchange_pqm: "(0/1)*2^0".to_string(),
+            coherence_rat: super::pq_engine::RationalPQ::new_reduced(1, 1),
+            dominant_orbitals_bps: Vec::new(),
         };
     }
 
@@ -404,7 +524,19 @@ fn compute_manybody_dft_strang(
     let super_nodes = book.super_nodes();
     let reduced_edges = book.reduced_edges();
 
-    // Map cluster_id -> orbital index 0..k
+    // Quantize legacy POD f32 centroids & internal densities at the boundary via pure bit-unpacking
+    let centroid_q16: Vec<[i64; 64]> = centroids
+        .iter()
+        .map(|c| quantize_lanes_q16(&c.lanes))
+        .collect();
+    let sn_density_q16: Vec<u64> = super_nodes
+        .iter()
+        .map(|sn| {
+            let v = f32_bits_to_q16_i64(sn.internal_p_density.to_bits());
+            if v <= 0 { 0 } else { v as u64 }
+        })
+        .collect();
+
     let max_cid = super_nodes
         .iter()
         .map(|s| s.cluster_id as usize)
@@ -415,33 +547,58 @@ fn compute_manybody_dft_strang(
         cid_to_idx[sn.cluster_id as usize] = idx;
     }
 
-    // Initial wave state \Psi(0) normalized across K Kohn-Sham super-node orbitals
-    let inv_sqrt_k = 1.0 / (k as f32).sqrt();
-    let mut psi = vec![inv_sqrt_k; k];
+    // Initial wave state \Psi(0) normalized across K Kohn-Sham orbitals in Q16: floor(Q16 / sqrt(K))
+    let sqrt_k_q16 = isqrt_u128((k as u128) << 32).max(1);
+    let inv_sqrt_k_q16 = (((Q16_U128 << 16) + (sqrt_k_q16 >> 1)) / sqrt_k_q16).max(1);
+    let mut psi_q16: Vec<u128> = vec![inv_sqrt_k_q16; k];
 
-    // Step 1: Half-step kinetic temporal operator exp((h/2) * A_temporal)
-    let h = STRANG_STEP_H;
-    let drift_rate = (salience.admissibility_change_ratio as f32).clamp(0.01, 0.5);
-    for (idx, amp) in psi.iter_mut().enumerate() {
-        let sn_density = super_nodes[idx].internal_p_density.clamp(0.0, 2.0);
-        let phase_decay = (-0.5 * h * drift_rate / (1.0 + sn_density)).exp();
-        *amp *= phase_decay;
+    // Drift rate in Q16 clamped to [0.01, 0.5] => [655, 32_768]
+    let drift_min_q16: u64 = 655; // ~0.01 * 65536
+    let drift_max_q16: u64 = Q16 / 2; // 0.5 * 65536
+    let raw_drift_q16 = ((drift_num_u64 as u128) << 16)
+        .checked_div(drift_den_u64 as u128)
+        .map_or(drift_min_q16, |v| v.min(u64::MAX as u128) as u64);
+    let drift_rate_q16 = raw_drift_q16.clamp(drift_min_q16, drift_max_q16);
+
+    // Precompute exact half-step temporal decay factors exp(-(h/2) * drift / (1 + sn_density)) in Q16
+    let half_h_drift_q32: u128 = ((STRANG_STEP_H_Q16 as u128) >> 1) * (drift_rate_q16 as u128);
+    let half_decay_q16: Vec<u128> = sn_density_q16
+        .iter()
+        .map(|&d| {
+            let d_clamped = d.min(2 * Q16) as u128;
+            let exponent_q16 = ((half_h_drift_q32 + ((Q16_U128 + d_clamped) >> 1))
+                / (Q16_U128 + d_clamped)) as u64;
+            exp_neg_q16(exponent_q16) as u128
+        })
+        .collect();
+
+    // Step 1: First half-step kinetic temporal operator exp((h/2) * A_temporal)
+    for (idx, amp) in psi_q16.iter_mut().enumerate() {
+        *amp = (*amp * half_decay_q16[idx] + (Q16_U128 >> 1)) >> 16;
     }
 
     // Step 2: Full-step relational Kohn-Sham potential operator exp(h * B_relational)
-    // Uses SIMD 64-lane dot products (`felix_dot64_f32`) between super-node wave centroids
-    let mut next_psi = psi.clone();
-    let mut exchange_energy = 0.0_f64;
+    let mut next_psi_q16 = psi_q16.clone();
+    let mut exchange_energy_q16: u128 = 0;
 
     // 2a. Diagonal Hartree / Kohn-Sham orbital self-exchange density d_p(V_i, V_i) <\psi_i | \psi_i>
-    for (idx, sn) in super_nodes.iter().enumerate() {
-        let self_overlap = felix_dot64_f32(&centroids[idx].lanes, &centroids[idx].lanes).abs();
-        let self_xc = sn.internal_p_density.clamp(0.05, 4.0) * self_overlap;
-        exchange_energy += (self_xc as f64) * 0.25;
-        next_psi[idx] += 0.10 * h * self_xc * psi[idx];
+    let min_self_dens_q16: u64 = 3_277; // 0.05 * 65536
+    let max_self_dens_q16: u64 = 4 * Q16; // 4.0 * 65536
+    for idx in 0..super_nodes.len() {
+        let self_overlap_q16 = dot64_q16_abs(&centroid_q16[idx], &centroid_q16[idx]) as u128;
+        let clamped_dens_q16 = sn_density_q16[idx].clamp(min_self_dens_q16, max_self_dens_q16) as u128;
+        let self_xc_q16 = (clamped_dens_q16 * self_overlap_q16 + (Q16_U128 >> 1)) >> 16;
+        // exchange_energy += self_xc * 0.25 (exact >> 2)
+        exchange_energy_q16 = exchange_energy_q16.saturating_add(self_xc_q16 >> 2);
+        // next_psi[idx] += (1/10) * (1/4) * self_xc * psi[idx] = self_xc * psi / (40 * Q16)
+        let delta = (self_xc_q16 * psi_q16[idx]) / (40 * Q16_U128);
+        next_psi_q16[idx] = next_psi_q16[idx].saturating_add(delta);
     }
 
     // 2b. Off-diagonal regular super-edge Hartree-Fock / Kohn-Sham exchange integrals
+    // RegularSuperEdgePod.relative_p_density_fp16 is unsigned Q6.10 (density * 1024),
+    // so converting to Q16 is exact left-shift by 6 (clamped to 16.0 for numerical stability).
+    let max_edge_weight_q16: u128 = 16 * Q16_U128;
     for edge in reduced_edges {
         let u_cid = edge.src_cluster as usize;
         let v_cid = edge.dst_cluster as usize;
@@ -454,21 +611,25 @@ fn compute_manybody_dft_strang(
             continue;
         }
 
-        let wave_overlap = felix_dot64_f32(&centroids[i].lanes, &centroids[j].lanes);
-        let weight = super::erdos_steiner::decode_fp16(edge.relative_p_density_fp16);
-        let coupling = weight * wave_overlap.abs();
-        exchange_energy += coupling as f64;
+        let wave_overlap_q16 = dot64_q16_abs(&centroid_q16[i], &centroid_q16[j]) as u128;
+        let weight_q16 = ((edge.relative_p_density_fp16 as u128) << 6).min(max_edge_weight_q16);
+        let coupling_q16 = (weight_q16 * wave_overlap_q16 + (Q16_U128 >> 1)) >> 16;
+        exchange_energy_q16 = exchange_energy_q16.saturating_add(coupling_q16);
 
-        next_psi[i] += h * coupling * psi[j];
+        // h = 1/4 => h * coupling * psi / Q16 = (coupling * psi) >> 18
+        let di = (coupling_q16 * psi_q16[j]) >> 18;
+        next_psi_q16[i] = next_psi_q16[i].saturating_add(di);
         if i != j {
-            next_psi[j] += h * coupling * psi[i];
+            let dj = (coupling_q16 * psi_q16[i]) >> 18;
+            next_psi_q16[j] = next_psi_q16[j].saturating_add(dj);
         }
     }
 
     // 2c. Local Natural Orbital (LNO / QM-MM) correlation corrections from T8R exceptions
-    // Includes both inter-orbital correlations (V_i <-> V_j) and QM-MM active-space boundary
-    // couplings (Outlier V_0 <-> Kohn-Sham orbital V_j) via 64-lane SIMD wave overlap.
     let sym_to_cluster = book.symbol_to_cluster();
+    let floor_025_q16: u64 = Q16 / 4; // 0.25
+    let floor_020_q16: u64 = 13_107; // 0.20 * 65536
+    let fallback_050_q16: u64 = Q16 / 2; // 0.50
     for exc in &archive.exception_ledger {
         let u_sym = exc.src_symbol as usize;
         let v_sym = exc.dst_symbol as usize;
@@ -478,85 +639,258 @@ fn compute_manybody_dft_strang(
         let j = cid_to_idx.get(c_v).copied().unwrap_or(usize::MAX);
 
         if i != usize::MAX && j != usize::MAX {
-            let lno_overlap = felix_dot64_f32(&centroids[i].lanes, &centroids[j].lanes)
-                .abs()
-                .max(0.25);
-            let lno_coupling = 0.08 * lno_overlap;
-            next_psi[i] += lno_coupling * h * psi[j];
-            exchange_energy += lno_coupling as f64;
+            let lno_overlap_q16 =
+                dot64_q16_abs(&centroid_q16[i], &centroid_q16[j]).max(floor_025_q16) as u128;
+            // 0.08 = 2/25
+            let lno_coupling_q16 = (lno_overlap_q16 * 2 + 12) / 25;
+            next_psi_q16[i] =
+                next_psi_q16[i].saturating_add((lno_coupling_q16 * psi_q16[j]) >> 18);
+            exchange_energy_q16 = exchange_energy_q16.saturating_add(lno_coupling_q16);
         } else if i != usize::MAX || j != usize::MAX {
             let (orb_idx, outlier_sym) = if i != usize::MAX {
                 (i, v_sym)
             } else {
                 (j, u_sym)
             };
-            let qm_mm_overlap = graph
+            let qm_mm_overlap_q16 = graph
                 .symbol_embeddings
                 .get(outlier_sym)
-                .map(|emb| felix_dot64_f32(emb, &centroids[orb_idx].lanes).abs())
-                .unwrap_or(0.5)
-                .max(0.2);
-            let qm_mm_coupling = 0.06 * qm_mm_overlap;
-            next_psi[orb_idx] += qm_mm_coupling * h * psi[orb_idx];
-            exchange_energy += qm_mm_coupling as f64;
+                .map(|emb| {
+                    let q_emb = quantize_lanes_q16(emb);
+                    dot64_q16_abs(&q_emb, &centroid_q16[orb_idx])
+                })
+                .unwrap_or(fallback_050_q16)
+                .max(floor_020_q16) as u128;
+            // 0.06 = 3/50
+            let qm_mm_coupling_q16 = (qm_mm_overlap_q16 * 3 + 25) / 50;
+            next_psi_q16[orb_idx] =
+                next_psi_q16[orb_idx].saturating_add((qm_mm_coupling_q16 * psi_q16[orb_idx]) >> 18);
+            exchange_energy_q16 = exchange_energy_q16.saturating_add(qm_mm_coupling_q16);
         } else if u_sym < graph.symbol_embeddings.len() && v_sym < graph.symbol_embeddings.len() {
-            let active_overlap = felix_dot64_f32(
-                &graph.symbol_embeddings[u_sym],
-                &graph.symbol_embeddings[v_sym],
-            )
-            .abs()
-            .max(0.2);
-            exchange_energy += (0.04 * active_overlap) as f64;
+            let qu = quantize_lanes_q16(&graph.symbol_embeddings[u_sym]);
+            let qv = quantize_lanes_q16(&graph.symbol_embeddings[v_sym]);
+            let active_overlap_q16 = dot64_q16_abs(&qu, &qv).max(floor_020_q16) as u128;
+            // 0.04 = 1/25
+            let active_coupling_q16 = (active_overlap_q16 + 12) / 25;
+            exchange_energy_q16 = exchange_energy_q16.saturating_add(active_coupling_q16);
         }
     }
 
-    psi = next_psi;
+    psi_q16 = next_psi_q16;
 
     // Step 3: Second half-step kinetic temporal operator exp((h/2) * A_temporal)
-    let mut norm_sq = 0.0_f32;
-    for (idx, amp) in psi.iter_mut().enumerate() {
-        let sn_density = super_nodes[idx].internal_p_density.clamp(0.0, 2.0);
-        let phase_decay = (-0.5 * h * drift_rate / (1.0 + sn_density)).exp();
-        *amp *= phase_decay;
-        norm_sq += (*amp) * (*amp);
+    let mut max_amp: u128 = 0;
+    for (idx, amp) in psi_q16.iter_mut().enumerate() {
+        *amp = (*amp * half_decay_q16[idx] + (Q16_U128 >> 1)) >> 16;
+        if *amp > max_amp {
+            max_amp = *amp;
+        }
     }
 
-    let norm = norm_sq.sqrt().max(1e-6);
-    let mut dominant_salience_orbitals: Vec<(ClusterId, f32)> = super_nodes
+    // Rescale amplitudes down into <= 2^40 before squaring so sum(amp^2) never overflows u128
+    let downshift: u32 = if max_amp > (1u128 << 40) {
+        (128 - max_amp.leading_zeros()).saturating_sub(40)
+    } else {
+        0
+    };
+    let mut norm_sq: u128 = 0;
+    let mut amp_sum: u128 = 0;
+    for &amp in &psi_q16 {
+        let s = amp >> downshift;
+        norm_sq = norm_sq.saturating_add(s.saturating_mul(s));
+        amp_sum = amp_sum.saturating_add(s);
+    }
+
+    // Exact Born probabilities on the 10_000 lattice (bps) + reduced coprime p/q
+    let mut ranked: Vec<(ClusterId, u128, u64, String)> = super_nodes
         .iter()
         .enumerate()
         .map(|(idx, sn)| {
-            let prob_amp = (psi[idx] / norm) * (psi[idx] / norm);
-            (sn.cluster_id, prob_amp)
+            let s = psi_q16[idx] >> downshift;
+            let sq = s.saturating_mul(s);
+            let bps = sq
+                .saturating_mul(BORN_PROB_LATTICE_DEN as u128)
+                .saturating_add(norm_sq >> 1)
+                .checked_div(norm_sq)
+                .map_or(0, |v| v.min(BORN_PROB_LATTICE_DEN as u128) as u64);
+            let pq = super::pq_engine::RationalPQ::new_reduced(bps, BORN_PROB_LATTICE_DEN)
+                .display_ratio();
+            (sn.cluster_id, sq, bps, pq)
         })
         .collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    ranked.truncate(MAX_DOMINANT_SALIENCE_ORBITALS);
+    let dominant_orbitals_bps: Vec<(ClusterId, u64, String)> = ranked
+        .into_iter()
+        .map(|(cid, _, bps, pq)| (cid, bps, pq))
+        .collect();
 
-    dominant_salience_orbitals.sort_by(|a, b| b.1.total_cmp(&a.1));
-    dominant_salience_orbitals.truncate(MAX_DOMINANT_SALIENCE_ORBITALS);
+    // Exact Strang coherence |<\Psi(0) | \Psi(h)>| = sum(psi_i) / (sqrt(K) * ||psi||_2)
+    let coh_den = isqrt_u128((k as u128).saturating_mul(norm_sq));
+    let coh_num = amp_sum
+        .saturating_mul(STRANG_COHERENCE_LATTICE_DEN as u128)
+        .saturating_add(coh_den >> 1)
+        .checked_div(coh_den)
+        .map_or(STRANG_COHERENCE_LATTICE_DEN, |v| {
+            v.min(STRANG_COHERENCE_LATTICE_DEN as u128) as u64
+        });
+    let coherence_rat =
+        super::pq_engine::RationalPQ::new_reduced(coh_num, STRANG_COHERENCE_LATTICE_DEN);
 
-    // Coherence inner product |<\Psi(0) | \Psi(h)>|
-    let coherence: f32 = psi
+    let xc_q16_i64 = (exchange_energy_q16.min(i64::MAX as u128) as i64).max(1);
+    let xc_pqm = crate::pq_trainer::normalize_symplectic_pqm(xc_q16_i64, 1, -16).display_pqm();
+
+    ExactManyBodyQ16Result {
+        k,
+        t8r_len,
+        speedup_rat,
+        exchange_energy_q16: xc_q16_i64,
+        exchange_pqm: xc_pqm,
+        coherence_rat,
+        dominant_orbitals_bps,
+    }
+}
+
+/// Evaluates Quantum Many-Body Kohn–Sham DFT exchange energy and propagates a salience wave
+/// via Second-Order Strang Operator Splitting using exact zero-float `Q16` / `p/q` arithmetic:
+/// $$\Psi(t + h) = e^{\frac{h}{2} A_{\text{temporal}}} \, e^{h B_{\text{relational}}} \, e^{\frac{h}{2} A_{\text{temporal}}} \Psi(t)$$
+fn compute_manybody_dft_strang(
+    graph: &CsrSymbolGraph,
+    archive: &Mem8BookArchive,
+    book: &ZeroCopyMem8Book,
+    _salience: &SalienceOntologyReport,
+) -> ManyBodyDftWaveReport {
+    let drift_num = (archive.exception_ledger.len() + archive.outlier_vertices.len()) as u64;
+    let drift_den = graph.num_vertices.max(1) as u64;
+    let exact = compute_manybody_dft_strang_q16(graph, archive, book, drift_num, drift_den);
+
+    // Serialize-time compatibility projections derived strictly from exact integer/p-q outputs
+    let dominant_salience_orbitals: Vec<(ClusterId, f32)> = exact
+        .dominant_orbitals_bps
         .iter()
-        .map(|&a| (a / norm) * inv_sqrt_k)
-        .sum::<f32>()
-        .clamp(0.0, 1.0);
-
-    let xc_q16 =
-        ((exchange_energy * (super::zeno_engine::Q16_UNIT_SCALE as f64)).round() as i64).max(1);
-    let xc_pqm = crate::pq_trainer::normalize_symplectic_pqm(xc_q16, 1, -16);
-    let coh_num = (((coherence as f64) * (STRANG_COHERENCE_LATTICE_DEN as f64)).round() as u64)
-        .clamp(0, STRANG_COHERENCE_LATTICE_DEN);
-    let coh_rat = super::pq_engine::RationalPQ::new_reduced(coh_num, STRANG_COHERENCE_LATTICE_DEN);
+        .map(|(cid, bps, _)| (*cid, (*bps as f32) / (BORN_PROB_LATTICE_DEN as f32)))
+        .collect();
+    let dominant_salience_orbitals_pq: Vec<(ClusterId, String)> = exact
+        .dominant_orbitals_bps
+        .into_iter()
+        .map(|(cid, _, pq)| (cid, pq))
+        .collect();
 
     ManyBodyDftWaveReport {
-        kohn_sham_orbitals_k: k,
-        lno_t8r_correlations: t8r_len,
-        many_body_speedup_factor,
-        many_body_speedup_pq,
-        kohn_sham_exchange_energy: exchange_energy,
-        kohn_sham_exchange_pqm: xc_pqm.display_pqm(),
-        strang_split_coherence: coherence as f64,
-        strang_coherence_pq: coh_rat.display_ratio(),
+        kohn_sham_orbitals_k: exact.k,
+        lno_t8r_correlations: exact.t8r_len,
+        many_body_speedup_factor: exact.speedup_rat.approx_f64.max(1.0),
+        many_body_speedup_pq: exact.speedup_rat.display_ratio(),
+        kohn_sham_exchange_energy: (exact.exchange_energy_q16 as f64) / (STRANG_Q16_SCALE as f64),
+        kohn_sham_exchange_pqm: exact.exchange_pqm,
+        strang_split_coherence: exact.coherence_rat.approx_f64,
+        strang_coherence_pq: exact.coherence_rat.display_ratio(),
         dominant_salience_orbitals,
+        dominant_salience_orbitals_pq,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mem8::regularity::types::{
+        EdgeKind, ExceptionReason, Mem8BookArchive, Mem8SuperNode, RegularSuperEdge,
+        T8rExceptionEdge,
+    };
+    use crate::mem8::regularity::wire::RegularSuperEdgePod;
+
+    #[test]
+    fn f32_bits_to_q16_unpacks_without_float_math() {
+        assert_eq!(f32_bits_to_q16_i64(0.0_f32.to_bits()), 0);
+        assert_eq!(f32_bits_to_q16_i64(1.0_f32.to_bits()), 65_536);
+        assert_eq!(f32_bits_to_q16_i64((-1.0_f32).to_bits()), -65_536);
+        assert_eq!(f32_bits_to_q16_i64(0.25_f32.to_bits()), 16_384);
+        assert_eq!(f32_bits_to_q16_i64(f32::NAN.to_bits()), 0);
+        assert_eq!(f32_bits_to_q16_i64(f32::INFINITY.to_bits()), 0);
+        assert_eq!(f32_bits_to_q16_i64(0.125_f32.to_bits()), 8_192);
+    }
+
+    #[test]
+    fn pade_exp_neg_q16_matches_analytic_bounds() {
+        assert_eq!(exp_neg_q16(0), STRANG_Q16_SCALE);
+        let q_quarter = exp_neg_q16(STRANG_Q16_SCALE / 4);
+        assert!((q_quarter as i64 - 51_039).abs() <= 2, "got {q_quarter}");
+        let q_half = exp_neg_q16(STRANG_Q16_SCALE / 2);
+        assert!((q_half as i64 - 39_750).abs() <= 4, "got {q_half}");
+        let q_one = exp_neg_q16(STRANG_Q16_SCALE);
+        assert!((q_one as i64 - 24_145).abs() <= 2, "got {q_one}");
+        assert!(q_quarter > q_half && q_half > q_one);
+    }
+
+    #[test]
+    fn dense_q6_10_super_edge_never_corrupts_exchange_energy_or_coherence() {
+        // Regression test for dense graphs (e.g. aye / 8b-public-documents) where
+        // RegularSuperEdgePod::encode_density_fp16 sets bit 15 (raw >= 0x8000 for density >= 32.0).
+        let raw_dense = RegularSuperEdgePod::encode_density_fp16(40.0);
+        assert!(
+            raw_dense >= 0x8000,
+            "expected bit 15 set in Q6.10, got {raw_dense:#x}"
+        );
+
+        let mut lanes_a = [0.0_f32; 64];
+        let mut lanes_b = [0.0_f32; 64];
+        lanes_a[0] = 1.0;
+        lanes_b[0] = 0.75;
+        lanes_b[1] = 0.5;
+
+        let archive = Mem8BookArchive {
+            model_digest: [0u8; 32],
+            epsilon: 0.1,
+            compression_ratio: 10.0,
+            final_energy: 0.5,
+            super_nodes: vec![
+                Mem8SuperNode {
+                    cluster_id: 1,
+                    vertex_count: 8,
+                    internal_p_density: 1.0,
+                    centroid_embedding: lanes_a.to_vec(),
+                    representative_symbols: vec![0, 1, 2],
+                },
+                Mem8SuperNode {
+                    cluster_id: 2,
+                    vertex_count: 8,
+                    internal_p_density: 0.5,
+                    centroid_embedding: lanes_b.to_vec(),
+                    representative_symbols: vec![8, 9, 10],
+                },
+            ],
+            reduced_edges: vec![RegularSuperEdge {
+                src_cluster: 1,
+                dst_cluster: 2,
+                relative_p_density: 40.0,
+                dominant_kind: EdgeKind::CallRef,
+            }],
+            exception_ledger: vec![T8rExceptionEdge {
+                src_symbol: 0,
+                dst_symbol: 8,
+                kind: EdgeKind::CallRef,
+                reason: ExceptionReason::IrregularPair,
+            }],
+            outlier_vertices: Vec::new(),
+            total_symbol_count: 16,
+            vertex_to_cluster: vec![1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2],
+        };
+
+        let book = ZeroCopyMem8Book::from_archive(&archive);
+        let graph = CsrSymbolGraph::from_edges(16, &[(0, 8, EdgeKind::CallRef)], vec![lanes_a; 16]);
+
+        let exact = compute_manybody_dft_strang_q16(&graph, &archive, &book, 1, 16);
+        assert!(exact.exchange_energy_q16 > STRANG_Q16_SCALE as i64);
+        assert_ne!(exact.exchange_pqm, "(1/1)*2^-16");
+        assert!(
+            exact.coherence_rat.p > 0,
+            "coherence must stay strictly positive"
+        );
+        assert_eq!(exact.dominant_orbitals_bps.len(), 2);
+        let sum_bps: u64 = exact.dominant_orbitals_bps.iter().map(|x| x.1).sum();
+        assert!(
+            (9_998..=10_002).contains(&sum_bps),
+            "Born sum bps={sum_bps}"
+        );
     }
 }

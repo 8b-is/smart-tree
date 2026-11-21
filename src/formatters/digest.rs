@@ -303,6 +303,7 @@ impl Formatter for TheBookFormatter {
                 "strang_split_coherence": (report.manybody_wave_report.strang_split_coherence * 10000.0).round() / 10000.0,
                 "strang_coherence_pq": report.manybody_wave_report.strang_coherence_pq,
                 "dominant_salience_orbitals": report.manybody_wave_report.dominant_salience_orbitals,
+                "dominant_salience_orbitals_pq": report.manybody_wave_report.dominant_salience_orbitals_pq,
             },
             "pq_rational_symplectic_mode": {
                 "ambient_density_pq": report.pq_report.ambient_density_pq.display_ratio(),
